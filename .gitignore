@@ -1,0 +1,19 @@
+﻿# Visual Studio / Rider
+.vs/
+.vscode/
+*.sln
+*.suo
+*.opensdf
+*.sdf
+
+# Unreal Engine
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+Script/
+
+# MacOS / Windows Misc
+.DS_Store
+Thumbs.db
