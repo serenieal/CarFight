@@ -1,0 +1,505 @@
+# CarFight 프로젝트 이관 패킷 (Handover Pack)
+
+이 문서는 Unreal Engine 5.7 기반 "CarFight" 프로젝트의 개발 상황, 아키텍처, 규칙을 포함하며, **다른 AI 세션(ChatGPT 등)으로 개발 맥락을 100% 이관하기 위해 작성되었습니다.**
+
+---
+
+## 0. TL;DR (요약)
+
+* **엔진/프로젝트:** UE 5.7 / Blank 템플릿 시작 / ChaosVehiclesPlugin 활성화됨.
+* **핵심 기술:** 외부 DCC 리깅 없는 **CMVS(Chaos Modular Vehicle System)** 구축 중.
+* **현재 상태:** `BP_ModularVehicle`의 **Construction Script(자동 조립/배치)** 구현 완료.
+* 스태틱 메시 기반 차체/바퀴 자동 배치 (Auto-Fit).
+* 바퀴 4개 독립 제어 및 폴백(Fallback) 로직 적용.
+* `Anchor`(Scene Component)와 `Mesh`(Visual) 분리 구조 적용 완료.
+
+
+* **직전 작업:** `ChaosVehicleWheel` 데이터 생성 및 `VehicleMovementComponent`에 슬롯(0~3) 등록 완료.
+* **다음 단계:** **Event Tick 로직 구현** (물리 시뮬레이션 좌표를 Visual Anchor에 동기화) 필요.
+
+---
+
+## 1. 프로젝트 목표 & 게임 루프
+
+* **장르:** TPS 드라이빙 액션 (Twisted Metal 스타일 지향).
+* **목표:** 차량 운전의 기술적 재미(Drift, Suspension)와 화기 발사의 쾌감 결합.
+* **핵심 파이프라인:** "No-Rigging". 에셋 스토어 차량 모델(Static Mesh)을 가져와 엔진 내에서 즉시 주행 가능한 차량으로 변환.
+
+---
+
+## 2. 기술 스택 및 환경
+
+* **Engine:** Unreal Engine 5.7
+* **Platform:** PC (Target)
+* **Language:** Blueprint (프로토타이핑), C++ (추후 성능 최적화 시)
+* **Key Plugins:**
+* `ChaosVehiclesPlugin` (Enabled) - **필수**
+* `ModelingToolsEditorMode` (Enabled) - 에셋 정규화용
+
+
+* **External Tools:** 없음 (엔진 내 해결 원칙)
+
+---
+
+## 3. 저장소 및 버전 관리
+
+* **VCS:** *[알 수 없음 - 사용자 지정 필요]*
+* **Branch:** *[알 수 없음]*
+* **Commit Rule:** 기능 단위 커밋 권장 (예: `feat: Auto-Fit logic implementation`)
+
+---
+
+## 4. 디렉토리 구조 및 핵심 파일 트리
+
+*(로그 기반 추정 경로 포함)*
+
+```text
+/Content
+├── Blueprints
+│   ├── BP_ModularVehicle.uasset (핵심 Pawn)
+│   ├── BP_Wheel_Front.uasset (ChaosWheel 데이터)
+│   └── BP_Wheel_Rear.uasset (ChaosWheel 데이터)
+├── Data
+│   ├── Base
+│   │   ├── S_WheelConfig.uasset (구조체)
+│   │   └── PDA_VehicleArchetype.uasset (DataAsset 클래스)
+│   └── Assets
+│       └── DA_MyFirstCar.uasset (실제 데이터 인스턴스)
+├── Meshes
+│   ├── SM_Chassis_*.uasset (정규화된 차체)
+│   └── SM_Wheel_*.uasset (정규화된 바퀴)
+└── Maps
+    └── (TestMap)
+
+```
+
+---
+
+## 5. 현재 아키텍처 (CMVS)
+
+### 5.1 컴포넌트 계층 구조 (Component Hierarchy)
+
+**중요:** 물리(Physics)와 시각(Visual)을 분리하기 위해 `Anchor` 패턴을 사용함.
+
+* `Mesh (Inherited)`: **Skeletal Mesh (Empty/Ghost)** - 물리 엔진 루트, 실제 렌더링 안 함.
+* `SM_Chassis` (Static Mesh): 실제 차체 외형.
+* `Anchor_FL` (Scene Component): 물리적 바퀴 위치/회전 담당.
+* `Wheel_Mesh_FL` (Static Mesh): 시각적 바퀴 (좌표: 0,0,0 / 회전: 0,0,0).
+
+
+* `Anchor_FR` (Scene Component): 물리적 바퀴 위치/회전 담당.
+* `Wheel_Mesh_FR` (Static Mesh): 시각적 바퀴 (**Z축 180도 회전됨**).
+
+
+* `Anchor_RL` ...
+* `Anchor_RR` ...
+
+
+
+
+
+### 5.2 데이터 흐름
+
+1. **Input:** `DA_MyFirstCar` (Data Asset)에 메시와 마진(Margin) 정보 입력.
+2. **Processing (Construction Script):**
+* `SM_Chassis` 바운딩 박스 측정 (`GetLocalBounds` -> `Max`).
+* 마진 값을 연산하여 4개 바퀴의 `Anchor` 위치 설정 (`SetRelativeLocation`).
+* 우측 바퀴(`FR`, `RR`)의 **Mesh**만 Z축 180도 회전 (`SetRelativeRotation`).
+
+
+3. **Physics (Runtime - 예정):** `VehicleMovementComponent`가 물리 연산 -> `Anchor` 위치 업데이트.
+
+---
+
+## 6. 구현 완료 목록 (Checklist)
+
+| 기능 | 상태 | 검증 방법 (Reproduction) |
+| --- | --- | --- |
+| **에셋 정규화** | ✅ 완료 | 모델링 모드(`Shift+5`)에서 피벗=Center/Bottom, 전방=X축 확인. |
+| **데이터 구조** | ✅ 완료 | `S_WheelConfig`, `PDA_VehicleArchetype` 생성 확인. |
+| **메시 할당 로직** | ✅ 완료 | `BP_ModularVehicle`에 DA 할당 시 차체/바퀴 메시 변경됨. |
+| **스마트 휠 선택** | ✅ 완료 | `FL`만 설정 시 4개 통일, `RR` 별도 설정 시 개별 적용 확인. |
+| **Auto-Fit (위치)** | ✅ 완료 | `SM_Chassis` 크기에 맞춰 `Anchor`들이 네 귀퉁이로 자동 이동. |
+| **Visual Mirroring** | ✅ 완료 | 우측 바퀴(`Mesh`)가 뒤집혀서 림(Rim)이 바깥을 보는지 확인. |
+| **물리 데이터 설정** | ✅ 완료 | `BP_Wheel_Front/Rear` 생성 및 `MovementComponent` 슬롯 등록. |
+
+---
+
+## 7. 진행 중 (In Progress)
+
+* **Tick Logic (Animation):** 물리 엔진의 바퀴 상태(`GetWheelState`)를 읽어와 `Anchor` 트랜스폼에 적용하는 로직 **(작성 전)**.
+* **Input Mapping:** 차량 조작(WASD/Space)을 위한 IMC(Input Mapping Context) 설정 **(미구현)**.
+
+---
+
+## 8. TODO 백로그 & 리스크
+
+| 우선순위 | 작업명 | 설명/리스크 |
+| --- | --- | --- |
+| **P0** | **Event Tick 로직** | 시각적 바퀴가 물리 바퀴를 따라가게 만듦. (이게 없으면 바퀴가 안 굴러감) |
+| **P0** | **Input Setup** | Enhanced Input System 설정. |
+| **P1** | **Camera Lag** | SpringArm을 이용한 자연스러운 추적 카메라. |
+| **P2** | **Collision Filtering** | 차체와 바퀴 간 물리 충돌 무시 설정 (Jittering 방지). |
+| **Risk** | **Physics Asset** | 스켈레탈 메시는 비워뒀지만, `Physics Asset`이 없으면 차가 땅을 뚫고 떨어질 수 있음. (확인 필요) |
+
+---
+
+## 9. Known Issues / 버그 리포트
+
+* **Anchor vs Mesh Rotation (해결됨):**
+* 이슈: 앵커 자체를 180도 돌리면 물리 연산 시 바퀴가 꼬이는 현상 예상.
+* 해결: `Anchor`는 정면(0도) 유지, 자식인 `Mesh`만 회전시키는 구조로 변경 완료.
+
+
+* **GetLocalBounds Pin Issue (해결됨):**
+* 이슈: `GetLocalBounds`에 `Return Value` 핀이 없어 Split 불가했던 문제.
+* 해결: `Max` 핀을 Split하여 `Max.X`, `Max.Y` 등을 사용하는 방식으로 로직 확정.
+
+
+
+---
+
+## 10. 핵심 결정 사항 (Design Decision Log)
+
+1. **C++ vs Blueprint:**
+* 결정: 초기 구조 및 로직은 **100% Blueprint**로 진행.
+* 이유: 빠른 이터레이션과 시각적 디버깅(Construction Script) 용이. 추후 연산 부하 발생 시 C++ 이관.
+
+
+2. **스마트 폴백(Smart Fallback) 시스템:**
+* 결정: `Wheel_FL`을 마스터로, 나머지 비어있으면 FL 사용.
+* 이유: 바퀴 4개 다 넣기 귀찮은 경우와 디테일한 튜닝(드래그카 등)을 모두 만족.
+
+
+3. **데이터 주도 설계 (Data-Driven):**
+* 결정: `UserConstructionScript`에서 모든 비주얼을 재조립.
+* 이유: 에디터 뷰포트에서 컴파일 없이 즉시 외형/비율 확인 가능 (Live Tuning).
+
+
+
+---
+
+## 11. 컨벤션 (Conventions)
+
+* **네이밍:** PascalCase 사용.
+* **접두사:**
+* 블루프린트: `BP_`
+* 데이터 에셋: `PDA_` (클래스), `DA_` (인스턴스)
+* 구조체: `S_`
+* 스태틱 메시: `SM_`
+
+
+* **파일 이름:** 32자 이내 권장.
+* **주석:** **한국어** 필수. (복잡한 수학 로직엔 노드 그룹화 및 코멘트 박스 사용)
+* **안내 규칙:** 핀 이름이나 노드 이름은 한국어 에디터 기준으로 **"한국어(영어)"** 병기 (예: `구조체 핀 분할(Split Struct Pin)`).
+
+---
+
+## 12. 데이터 에셋 정의
+
+### `PDA_VehicleArchetype` (Primary Data Asset)
+
+| 변수명 | 타입 | 역할 |
+| --- | --- | --- |
+| `ChassisMesh` | StaticMesh | 차체 외형 |
+| `WheelMesh_FL` | StaticMesh | 기본 바퀴 (Master) |
+| `WheelMesh_FR` | StaticMesh | 우측 앞 (Optional) |
+| `WheelMesh_RL` | StaticMesh | 좌측 뒤 (Optional) |
+| `WheelMesh_RR` | StaticMesh | 우측 뒤 (Optional) |
+| `WheelConfig` | `S_WheelConfig` | 배치 마진 및 오프셋 정보 |
+
+### `S_WheelConfig` (Structure)
+
+* `bAutoFit` (Bool): 자동 배치 사용 여부.
+* `SideMargin` (Float): 좌우 폭 조절.
+* `ForwardMargin` (Float): 앞뒤 길이 조절.
+* `HeightOffset` (Float): 지상고 조절.
+
+---
+
+## 13. 다음 1주 스프린트 추천 작업
+
+1. **[즉시] Tick 로직 구현:**
+* `BP_ModularVehicle`의 `Event Graph`에서 `ChaosVehicleMovement` 컴포넌트 접근.
+* `GetWheelState` 등을 이용해 휠의 위치/회전값 획득.
+* 해당 값을 `Anchor_FL` ~ `Anchor_RR`의 `SetWorldLocationAndRotation`에 연결.
+
+
+2. **Physics Asset 생성:**
+* `Mesh (Inherited)`에 할당할 더미 Physics Asset 생성 (단일 박스 형태)하여 차체가 물리 엔진에서 계산되도록 설정.
+
+
+3. **Input Mapping:**
+* `IA_Throttle`, `IA_Steer`, `IA_Brake` 생성 및 `IMC_Default` 매핑.
+* 블루프린트에서 `SetThrottleInput`, `SetSteeringInput` 연결.
+
+
+4. **Test Drive:**
+* 맵에 배치 후 실제 주행 테스트 및 마진(`Data Asset`) 값 튜닝.
+
+
+
+
+============================================================================
+
+
+
+# CarFight 프로젝트 누적 패치 노트 (Cumulative Patch Bundle)
+
+이 문서는 프로젝트 생성부터 현재(Construction Script 구현 및 앵커 시스템 적용)까지의 모든 변경 사항을 재현 가능한 패치 형태로 정리한 것입니다.
+
+---
+
+## 1. 프로젝트 설정 (Project Settings)
+
+### 📂 `CarFight.uproject`
+
+* **작업 유형:** 수정 (Modify)
+* **버전:** v1.0
+* **설명:** 차량 물리를 위한 필수 플러그인 활성화.
+
+```json
+{
+  "Plugins": [
+    {
+      "Name": "ChaosVehiclesPlugin",
+      "Enabled": true
+    },
+    {
+      "Name": "ModelingToolsEditorMode",
+      "Enabled": true
+    }
+  ]
+}
+
+```
+
+---
+
+## 2. 데이터 구조 및 에셋 (Data Structures & Assets)
+
+### 📂 `/Game/Data/Base/S_WheelConfig.uasset` (User Defined Struct)
+
+* **작업 유형:** 신규 (New)
+* **설명:** 차량 자동 배치를 위한 설정값 구조체 정의.
+
+```text
+[Member Variables]
+1. bAutoFit (Boolean)
+   - Default: True
+   - Tooltip: 체크 시 차체 크기에 맞춰 바퀴 자동 배치
+2. SideMargin (Float)
+   - Default: 0.0
+   - Tooltip: 차체 옆면 기준 추가 돌출 거리 (오버펜더)
+3. ForwardMargin (Float)
+   - Default: 20.0
+   - Tooltip: 차체 앞/뒤 끝에서 안쪽으로 들어오는 거리
+4. HeightOffset (Float)
+   - Default: 10.0
+   - Tooltip: 서스펜션 높이 보정값
+
+```
+
+### 📂 `/Game/Data/Base/PDA_VehicleArchetype.uasset` (Primary Data Asset Blueprint)
+
+* **작업 유형:** 신규 (New)
+* **부모 클래스:** `PrimaryDataAsset`
+* **설명:** 차량의 외형과 설정을 정의하는 데이터 에셋 클래스.
+
+```text
+[Member Variables]
+1. ChassisMesh (Static Mesh Object Reference)
+   - Tooltip: 차체 외형 메시
+2. WheelMesh_FL (Static Mesh Object Reference)
+   - Tooltip: 왼쪽 앞바퀴 (기본값/Master)
+3. WheelMesh_FR (Static Mesh Object Reference)
+   - Tooltip: 오른쪽 앞바퀴 (비워두면 FL 사용)
+4. WheelMesh_RL (Static Mesh Object Reference)
+   - Tooltip: 왼쪽 뒷바퀴 (비워두면 FL 사용)
+5. WheelMesh_RR (Static Mesh Object Reference)
+   - Tooltip: 오른쪽 뒷바퀴 (비워두면 FL 사용)
+6. WheelConfig (S_WheelConfig Structure)
+   - Tooltip: 배치 마진 설정
+
+```
+
+---
+
+## 3. 물리 데이터 (Physics Data)
+
+### 📂 `/Game/Blueprints/BP_Wheel_Front.uasset` (ChaosVehicleWheel)
+
+* **작업 유형:** 신규 (New)
+* **부모 클래스:** `ChaosVehicleWheel`
+* **설명:** 앞바퀴 물리 데이터 (조향 O).
+
+```text
+[Class Defaults]
+- Wheel Radius: 32.0 (메시에 맞춰 조정 필요)
+- Wheel Width: 20.0
+- Steer Angle: 40.0 (중요: 앞바퀴 조향각)
+- Affected by Engine: True
+- Axle Type: Front
+
+```
+
+### 📂 `/Game/Blueprints/BP_Wheel_Rear.uasset` (ChaosVehicleWheel)
+
+* **작업 유형:** 신규 (New)
+* **부모 클래스:** `ChaosVehicleWheel`
+* **설명:** 뒷바퀴 물리 데이터 (조향 X, 핸드브레이크 O).
+
+```text
+[Class Defaults]
+- Wheel Radius: 32.0
+- Wheel Width: 20.0
+- Steer Angle: 0.0 (중요: 뒷바퀴 고정)
+- Affected by Engine: True
+- Affected by Handbrake: True
+- Axle Type: Rear
+
+```
+
+---
+
+## 4. 차량 블루프린트 (Vehicle Pawn)
+
+### 📂 `/Game/Blueprints/BP_ModularVehicle.uasset`
+
+* **작업 유형:** 신규/수정 (Modify)
+* **부모 클래스:** `WheeledVehiclePawn` (Chaos)
+* **버전:** v2.1 (앵커 시스템 적용 및 회전 로직 수정됨)
+
+#### A. 컴포넌트 구조 (Components Hierarchy)
+
+```text
+[Root] Mesh (Inherited, Skeletal Mesh) - 비워둠 (Ghost Root)
+  ├── VehicleMovementComponent (Inherited)
+  └── SM_Chassis (Static Mesh)
+      ├── Anchor_FL (Scene Component)
+      │   └── Wheel_Mesh_FL (Static Mesh)
+      ├── Anchor_FR (Scene Component)
+      │   └── Wheel_Mesh_FR (Static Mesh)
+      ├── Anchor_RL (Scene Component)
+      │   └── Wheel_Mesh_RL (Static Mesh)
+      └── Anchor_RR (Scene Component)
+          └── Wheel_Mesh_RR (Static Mesh)
+
+```
+
+#### B. 변수 (Variables)
+
+```text
+1. VehicleData (Type: PDA_VehicleArchetype)
+   - Instance Editable: True
+   - Expose on Spawn: True
+   - Category: Default
+
+```
+
+#### C. 클래스 기본 설정 (Class Defaults)
+
+```text
+[Vehicle Movement Component]
+- Wheel Setups:
+  Index 0: WheelClass=BP_Wheel_Front, BoneName=None (FL)
+  Index 1: WheelClass=BP_Wheel_Front, BoneName=None (FR)
+  Index 2: WheelClass=BP_Wheel_Rear,  BoneName=None (RL)
+  Index 3: WheelClass=BP_Wheel_Rear,  BoneName=None (RR)
+
+```
+
+#### D. Construction Script 로직 (상세 구현)
+
+**주의:** 모든 로직은 `Construction Script` 노드에 연결됩니다.
+
+**Step 1: 유효성 검사 및 차체 설정**
+
+```blueprint
+1. [IsValid] (Input: VehicleData)
+   -> Is Valid: 계속 진행
+   -> Is Not Valid: 종료
+
+2. [Set Static Mesh] (Target: SM_Chassis)
+   -> New Mesh: VehicleData.ChassisMesh
+
+```
+
+**Step 2: 바퀴 메시 설정 (Smart Fallback)**
+
+```blueprint
+[함수 혹은 매크로 없이 펼쳐진 로직]
+
+// 1. FL (Master)
+[Set Static Mesh] (Target: Wheel_Mesh_FL)
+-> New Mesh: VehicleData.WheelMesh_FL
+
+// 2. FR (Fallback to FL)
+[Select] (Wildcard)
+-> Index: [IsValid](VehicleData.WheelMesh_FR)
+-> True: VehicleData.WheelMesh_FR
+-> False: VehicleData.WheelMesh_FL
+-> Return Value를 [Set Static Mesh](Target: Wheel_Mesh_FR)에 연결
+
+// 3. RL (Fallback to FL)
+[Select] (Wildcard)
+-> Index: [IsValid](VehicleData.WheelMesh_RL)
+-> True: VehicleData.WheelMesh_RL
+-> False: VehicleData.WheelMesh_FL
+-> Return Value를 [Set Static Mesh](Target: Wheel_Mesh_RL)에 연결
+
+// 4. RR (Fallback to FL)
+[Select] (Wildcard)
+-> Index: [IsValid](VehicleData.WheelMesh_RR)
+-> True: VehicleData.WheelMesh_RR
+-> False: VehicleData.WheelMesh_FL
+-> Return Value를 [Set Static Mesh](Target: Wheel_Mesh_RR)에 연결
+
+```
+
+**Step 3: Auto-Fit 위치 계산 (Math Logic)**
+
+```blueprint
+// 데이터 준비
+1. [Get Local Bounds] (Target: SM_Chassis) -> Max 핀 분할 (Max X, Max Y, Max Z)
+2. VehicleData -> WheelConfig 분할 (SideMargin, ForwardMargin, HeightOffset)
+
+// 좌표 계산 (Local Variables 사용 권장)
+Loc_X = (Max X) - (ForwardMargin)
+Loc_Y = (Max Y) + (SideMargin)
+Loc_Z = (HeightOffset)  // 피벗이 바닥이므로 0 + Offset
+
+// 앵커 위치 적용 (Target: Anchor_*)
+1. Anchor_FL: SetRelativeLocation( Loc_X,      Loc_Y * -1,  Loc_Z )
+2. Anchor_FR: SetRelativeLocation( Loc_X,      Loc_Y,       Loc_Z )
+3. Anchor_RL: SetRelativeLocation( Loc_X * -1, Loc_Y * -1,  Loc_Z )
+4. Anchor_RR: SetRelativeLocation( Loc_X * -1, Loc_Y,       Loc_Z )
+
+```
+
+**Step 4: 우측 바퀴 시각적 회전 (Visual Mirroring)**
+
+```blueprint
+// 주의: Anchor가 아닌 Mesh 컴포넌트를 회전시킴
+1. [Set Relative Rotation] (Target: Wheel_Mesh_FR)
+   -> New Rotation Z(Yaw): 180.0
+
+2. [Set Relative Rotation] (Target: Wheel_Mesh_RR)
+   -> New Rotation Z(Yaw): 180.0
+
+```
+
+---
+
+## 5. 적용 가이드 (Migration Guide)
+
+1. **플러그인 확인:** 에디터를 켜기 전 `CarFight.uproject`의 플러그인 활성화 여부를 확인하세요.
+2. **에셋 생성 순서:**
+1. `S_WheelConfig` 구조체 생성.
+2. `PDA_VehicleArchetype` 데이터 에셋 클래스 생성.
+3. `BP_Wheel_Front/Rear` 블루프린트 생성.
+4. `BP_ModularVehicle` 생성 및 컴포넌트 구성.
+
+
+3. **컴파일 주의:** `BP_ModularVehicle`의 Construction Script 작성 시, `VehicleData` 변수의 `Instance Editable`이 켜져 있어야 에디터 뷰포트에서 즉시 확인 가능합니다.
+4. **검증:** 레벨에 `BP_ModularVehicle`을 배치하고, `DA_MyFirstCar` 데이터 에셋을 할당했을 때 바퀴가 네 귀퉁이로 펴지고 우측 바퀴의 휠 림이 바깥을 향하는지 확인하십시오.
