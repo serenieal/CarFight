@@ -1,4 +1,4 @@
-# CarFight — 00_Handover (v1.0)
+﻿# CarFight — 00_Handover (v1.0)
 
 > 목적: **다른 세션/다른 AI로 100% 이관**해도 개발 맥락이 끊기지 않도록, 현재까지의 *결정/구조/완료/미완료/검증*을 “재현 가능한 형태”로 고정한다.  
 > 기준 문서: `이관.txt` (원본)  
@@ -85,7 +85,7 @@
       S_WheelConfig.uasset
       PDA_VehicleArchetype.uasset
     /Assets
-      DA_MyFirstCar.uasset
+      DA_PoliceCar.uasset
   /Meshes
     SM_Chassis_*.uasset
     SM_Wheel_*.uasset
@@ -193,7 +193,7 @@
 | `WheelMesh_RR` | StaticMesh | 우측 뒤(없으면 FL) |
 | `WheelConfig` | `S_WheelConfig` | 배치 마진/오프셋 |
 
-### 7.3 `DA_MyFirstCar` (데이터 인스턴스)
+### 7.3 `DA_PoliceCar` (데이터 인스턴스)
 - 실제 테스트용 차량 구성 데이터
 
 ---
@@ -204,7 +204,7 @@
 - [x] 에셋 정규화(모델링 모드에서 피벗/전방축 정리)
 - [x] `S_WheelConfig` 생성
 - [x] `PDA_VehicleArchetype` 생성
-- [x] `DA_MyFirstCar` 생성 및 값 채움
+- [x] `DA_PoliceCar` 생성 및 값 채움
 
 ### 8.2 BP_ModularVehicle(Construction Script)
 - [x] 차체 메시 할당
@@ -236,7 +236,7 @@
 ### 9.2 Construction Script 검증(에디터 뷰포트)
 - 사전 조건: 레벨에 `BP_ModularVehicle` 배치
 - 절차:
-  1) Details에서 `VehicleData = DA_MyFirstCar` 지정
+  1) Details에서 `VehicleData = DA_PoliceCar` 지정
   2) 컴파일/저장 없이도 뷰포트에서 즉시 변화를 확인
 - 기대 결과:
   - 차체 메시가 바뀐다.
@@ -299,7 +299,7 @@
 ### 12.2 에셋 목록
 - `/Game/Data/Base/S_WheelConfig` (Struct)
 - `/Game/Data/Base/PDA_VehicleArchetype` (Primary Data Asset Blueprint)
-- `/Game/Data/Assets/DA_MyFirstCar` (Instance)
+- `/Game/Data/Assets/DA_PoliceCar` (Instance)
 - `/Game/Blueprints/BP_Wheel_Front` (ChaosVehicleWheel)
 - `/Game/Blueprints/BP_Wheel_Rear` (ChaosVehicleWheel)
 - `/Game/Blueprints/BP_ModularVehicle` (WheeledVehiclePawn(Chaos))
@@ -330,7 +330,7 @@
 
 3) 검증
 - 레벨에 `BP_ModularVehicle` 배치
-- `VehicleData = DA_MyFirstCar` 지정
+- `VehicleData = DA_PoliceCar` 지정
 - 바퀴 앵커 자동 배치 + 우측 미러링 확인
 
 ---
