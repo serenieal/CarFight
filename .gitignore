@@ -17,3 +17,4 @@ Script/
 # MacOS / Windows Misc
 .DS_Store
 Thumbs.db
+/enc_temp_folder
