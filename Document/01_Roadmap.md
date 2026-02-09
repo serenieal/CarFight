@@ -1,4 +1,4 @@
-# CarFight — 01_Roadmap (v1.0)
+﻿# CarFight — 01_Roadmap (v1.0)
 
 > 기준: `Document/00_Handover.md`(v1.0) / 원본 `이관.txt`  
 > 마지막 정리: 2026-02-05 (Asia/Seoul)
@@ -45,20 +45,26 @@
 **목표**  
 WASD/Space/Shift 입력이 `VehicleMovementComponent` 입력으로 들어가서 “운전이 된다”.
 
-**생성/수정 대상(예상)**  
-- `/Game/Input/IA_Throttle`
-- `/Game/Input/IA_Steer`
+**생성/수정 대상**  
 - `/Game/Input/IA_Brake`
 - `/Game/Input/IA_Handbrake`
-- `/Game/Input/IMC_Default`
+- `/Game/Input/IA_Headlights`
+- `/Game/Input/IA_LookAround`
+- `/Game/Input/IA_Reset`
+- `/Game/Input/IA_ShifterDown`
+- `/Game/Input/IA_ShifterUp`
+- `/Game/Input/IA_Steering`
+- `/Game/Input/IA_Throttle`
+- `/Game/Input/IA_ToggleCamera`
+- `/Game/Input/IMC_Vehicle_Default`
 - `BP_ModularVehicle`(또는 PlayerController/PlayerPawn 입력 처리)
 
 **완료 조건(Definition of Done)**  
-- [ ] PIE에서 W/S 입력 → 전/후진(Throttle 값 변화)  
-- [ ] PIE에서 A/D 입력 → 조향(Steer 값 변화)  
-- [ ] Space 입력 → 브레이크가 체감됨  
-- [ ] LeftShift 입력 → 핸드브레이크가 체감됨  
-- [ ] 디버그(예: Print String)로 각 입력 값이 들어오는 것을 확인 가능
+- [v] PIE에서 W/S 입력 → 전/후진(Throttle 값 변화)  
+- [v] PIE에서 A/D 입력 → 조향(Steer 값 변화)  
+- [v] Space 입력 → 브레이크가 체감됨  
+- [v] LeftShift 입력 → 핸드브레이크가 체감됨  
+- [v] 디버그(예: Print String)로 각 입력 값이 들어오는 것을 확인 가능
 
 **검증 절차(재현)**  
 1) TestMap에서 BP_ModularVehicle 조종(Possess)  
