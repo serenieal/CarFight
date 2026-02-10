@@ -1,8 +1,20 @@
-﻿# CarFight — 00_Handover (v1.0)
+﻿# CarFight — 00_Handover (v1.1)
 
 > 목적: **다른 세션/다른 AI로 100% 이관**해도 개발 맥락이 끊기지 않도록, 현재까지의 *결정/구조/완료/미완료/검증*을 “재현 가능한 형태”로 고정한다.  
 > 기준 문서: `이관.txt` (원본)  
-> 마지막 정리: 2026-02-05 (Asia/Seoul)
+> 마지막 정리: 2026-02-10 (Asia/Seoul)
+
+## 변경 이력
+- v1.1 (2026-02-10)
+  - Changelog
+    - P0-1 Enhanced Input 완료 반영(IMC/IA 생성 + Add Mapping Context 주입 + Throttle/Steer/Brake/Handbrake 연결)
+    - 차량 Physics Rig(SkeletalMesh + PhysicsAsset) 마이그레이션/적용 완료 반영
+    - 컴포넌트 명세를 실제(`Wheel_Anchor_*`, `Wheel_Mesh_*`)로 정정
+    - Wheel 로컬축/VehicleMovement WheelSetups 확정사항(BoneName=None, Offset=0) 반영
+    - Known Issues의 Physics Asset 리스크 항목 해결 처리
+  - Migration: 없음(문서 갱신)
+- v1.0 (2026-02-05)
+  - 최초 작성
 
 ---
 
@@ -25,16 +37,21 @@
 
 ## 1. TL;DR
 
-- 엔진/프로젝트: **Unreal Engine 5.7 기반**(향후 UE 최신버전 유지), PC 타겟
+- 엔진/프로젝트: **UE 최신버전(현재 5.7 기반)**, PC 타겟
+- 기준 브랜치/커밋(SSOT): `main` / `a497cf3` (Input 경로 변경)
 - 목표: TPS 드라이빙 액션(트위스티드 메탈 감성) — **운전(물리적 재미) + 무기(전투)** 결합
 - 핵심 파이프라인: 외부 DCC 리깅 없이 **Static Mesh 차량 에셋을 엔진에서 바로 주행 가능**하게 만드는 “No-Rigging” 파이프라인
-- 현재까지 완료:
-  - `BP_ModularVehicle`에서 **Construction Script 자동 조립/배치(Auto-Fit) 로직 완료**
-  - 차체/바퀴 메시 할당 + 바퀴 폴백(Smart Fallback) + 우측 바퀴 시각 미러링 완료
-  - `ChaosVehicleWheel` 기반 `BP_Wheel_Front / BP_Wheel_Rear` 생성 및 MovementComponent 슬롯(0~3) 등록 완료
+- 현재까지 완료(확정):
+  - `BP_ModularVehicle`의 `VehicleMesh(=Inherited SkeletalMeshComponent)`에 **SkeletalMesh + PhysicsAsset(Physics Rig)** 적용 완료
+  - `BP_ModularVehicle` Construction Script: **차체/바퀴 자동 조립/배치(Auto-Fit) 로직 완료**
+  - 우측 바퀴 시각 미러링: **우측은 Wheel_Mesh만 Yaw 180**, Anchor는 0 유지 구조로 확정
+  - Wheel 로컬축(확정): **Forward=+X**, 바퀴 회전축(차축)=**+Y**
+  - VehicleMovement WheelSetups(확정):
+    - Index 0~1=`BP_Wheel_Front`, 2~3=`BP_Wheel_Rear`
+    - BoneName=None(전부), Offset=0(전부)
+  - P0-1 Enhanced Input(완료): IMC/IA 생성 + Add Mapping Context 주입 + 입력(Throttle/Steer/Brake/Handbrake) 연결 완료
 - 지금 당장 필요한 P0:
-  - [ ] **Event Tick 로직**: 물리 휠 상태 → 시각 Anchor(및 Wheel Mesh) 동기화
-  - [ ] **Enhanced Input 세팅**: WASD/Space/Shift 입력 연결
+  - [ ] **Event Tick 로직(P0-2)**: Chaos 휠 상태 → `Wheel_Anchor_FL/FR/RL/RR` 및 `Wheel_Mesh_FL/FR/RL/RR` 시각 동기화
 
 ---
 
@@ -103,9 +120,9 @@
 - 에디터에서 즉시 **차체/바퀴가 배치되고**, 런타임에 물리와 동기화해서 **주행 가능**하게 만든다.
 
 ### 5.2 핵심 패턴: Anchor 분리
-- 물리/시각 분리를 위해 `Anchor_*`(Scene Component) 를 사용한다.
-- 시각 바퀴 메시(`Wheel_Mesh_*`)는 Anchor의 자식으로 두고 **(기본은 0,0,0 / 0,0,0)** 를 유지한다.
-- 우측 바퀴 미러링은 **Anchor가 아니라 Mesh만 회전**한다(Anchor 회전은 물리 꼬임 위험).
+- 물리/시각 분리를 위해 `Wheel_Anchor_*`(Scene Component) 를 사용한다.
+- 시각 바퀴 메시(`Wheel_Mesh_*`)는 Wheel_Anchor의 자식으로 두고 **(기본은 0,0,0 / 0,0,0)** 를 유지한다.
+- 우측 바퀴 미러링은 **Wheel_Anchor가 아니라 Wheel_Mesh만 회전**한다(Wheel_Anchor 회전은 물리 꼬임 위험).
 
 ---
 
@@ -118,16 +135,16 @@
 
 ### 6.2 컴포넌트 계층 구조(현 상태)
 ```text
-[Root] Mesh (Inherited, Skeletal Mesh) - Ghost Root(렌더링 목적 아님)
-  ├── VehicleMovementComponent (Inherited)
+[Root] VehicleMesh (Inherited, Skeletal Mesh) - Physics Rig(SkeletalMesh + PhysicsAsset)
+  ├── VehicleMovementComp (Vehicle Movement Component)
   └── SM_Chassis (Static Mesh) - 실제 차체 외형
-      ├── Anchor_FL (Scene)
+      ├── Wheel_Anchor_FL (Scene)
       │   └── Wheel_Mesh_FL (Static Mesh)
-      ├── Anchor_FR (Scene)
+      ├── Wheel_Anchor_FR (Scene)
       │   └── Wheel_Mesh_FR (Static Mesh)  // 우측: Mesh만 Yaw 180
-      ├── Anchor_RL (Scene)
+      ├── Wheel_Anchor_RL (Scene)
       │   └── Wheel_Mesh_RL (Static Mesh)
-      └── Anchor_RR (Scene)
+      └── Wheel_Anchor_RR (Scene)
           └── Wheel_Mesh_RR (Static Mesh)  // 우측: Mesh만 Yaw 180
 ```
 
@@ -137,10 +154,17 @@
   - Expose on Spawn: True
 
 ### 6.4 Vehicle Movement Wheel Setups(등록 완료)
+- 공통 설정(확정):
+  - BoneName: None(전부)
+  - Offset: (0, 0, 0)(전부)
 - Index 0: `BP_Wheel_Front` (FL)
 - Index 1: `BP_Wheel_Front` (FR)
 - Index 2: `BP_Wheel_Rear`  (RL)
 - Index 3: `BP_Wheel_Rear`  (RR)
+
+### 6.4.1 Wheel_Mesh 로컬축(확정)
+- Forward = +X
+- 바퀴 회전축(차축) = +Y
 
 ### 6.5 Construction Script 로직(요약 + 정확한 단계)
 
@@ -171,7 +195,7 @@
 
 #### Step 4) 우측 바퀴 시각 미러링
 - FR/RR은 `Wheel_Mesh_*`만 `Set Relative Rotation`으로 Yaw 180
-- **Anchor는 0도 유지**
+- **Wheel_Anchor는 0도 유지**
 
 ---
 
@@ -258,13 +282,16 @@
 
 ### P0 (막히면 다음 작업이 전부 멈춤)
 - [ ] **Event Tick 휠 동기화**
-  - 목표: 물리 휠 상태(서스펜션/조향/회전)를 읽어, `Anchor_*`와 `Wheel_Mesh_*`가 따라가게 만든다.
+  - 목표: 물리 휠 상태(서스펜션/조향/회전)를 읽어, `Wheel_Anchor_*`와 `Wheel_Mesh_*`가 따라가게 만든다.
   - 완료 조건:
     - 정지 상태에서도 서스펜션 높이가 안정적(심한 튐/꼬임 없음)
     - 주행 시 휠이 회전하고, 조향 시 전륜이 방향 전환이 보인다
-- [ ] **Enhanced Input Setup**
-  - 목표: `IA_Throttle/Steer/Brake/Handbrake` + `IMC_Default`로 기본 조작을 연결한다.
-  - 완료 조건:
+- [x] **Enhanced Input Setup**
+  - 완료 내용(요약):
+    - `IA_Throttle/Steer/Brake/Handbrake` + `IMC_Default` 생성
+    - Add Mapping Context 주입 완료
+    - 입력이 Vehicle 입력(Throttle/Steer/Brake/Handbrake)으로 연결됨
+  - 완료 조건(충족):
     - WASD/Space/Shift 입력이 VehicleMovementComponent 입력으로 들어간다
     - 디버그(예: Print String)로 값이 들어오는 것 확인 가능
 
@@ -280,11 +307,9 @@
   - Anchor 회전은 유지(0도), 우측 바퀴는 Mesh만 회전하는 구조로 확정
 - [x] GetLocalBounds 핀 이슈(해결됨)  
   - Return Value 없이 Max를 Split하는 방식으로 고정
-- [ ] **Physics Asset 리스크(확인 필요)**  
-  - Ghost Root(Skeletal Mesh)에 Physics Asset이 없으면 차가 땅을 뚫고 떨어질 수 있음  
-  - 확인 포인트:
-    - PIE에서 Spawn 시 차체가 바닥과 정상적으로 충돌하는지
-    - 충돌/질량/COM이 이상하지 않은지
+- [x] **Physics Asset 리스크(해결됨)**
+  - `VehicleMesh(Physics Rig)`에 SkeletalMesh + PhysicsAsset 적용 완료
+  - PIE Spawn 시 차체가 바닥과 정상 충돌(땅을 뚫고 떨어지는 문제 재현되지 않음)
 
 ---
 
@@ -324,14 +349,24 @@
 
 2) 에셋 생성 순서
 1. `S_WheelConfig`
-2. `PDA_VehicleArchetype`
+2. `PDA_VehicleArchetype` + `DA_*`(차량 데이터 인스턴스)
 3. `BP_Wheel_Front`, `BP_Wheel_Rear`
 4. `BP_ModularVehicle`(컴포넌트 계층 구성 + Construction Script)
+5. (P0-1) Enhanced Input
+   - `IA_Throttle`, `IA_Steer`, `IA_Brake`, `IA_Handbrake`
+   - `IMC_Default`
 
-3) 검증
+3) Physics Rig 적용(필수)
+- `BP_ModularVehicle`의 `VehicleMesh(=Inherited SkeletalMeshComponent)`에:
+  - SkeletalMesh 지정
+  - PhysicsAsset 지정
+
+4) 검증
 - 레벨에 `BP_ModularVehicle` 배치
-- `VehicleData = DA_PoliceCar` 지정
+- `VehicleData = DA_*` 지정
 - 바퀴 앵커 자동 배치 + 우측 미러링 확인
+- PIE Spawn 시 바닥 충돌 정상(땅을 뚫고 떨어지지 않음)
+- 입력(WASD/Space/Shift) 값이 들어오는 것 확인(P0-1)
 
 ---
 

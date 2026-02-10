@@ -1,7 +1,7 @@
-﻿# CarFight — 01_Roadmap (v1.0)
+﻿# CarFight — 01_Roadmap (v1.1)
 
-> 기준: `Document/00_Handover.md`(v1.0) / 원본 `이관.txt`  
-> 마지막 정리: 2026-02-05 (Asia/Seoul)
+> 기준: `Document/00_Handover.md`(v1.1) / 원본 `이관.txt`  
+> 마지막 정리: 2026-02-10 (Asia/Seoul)
 
 ---
 
@@ -80,11 +80,11 @@ WASD/Space/Shift 입력이 `VehicleMovementComponent` 입력으로 들어가서 
 ### CF-P0-002 — 휠 시각 동기화(Tick)
 
 **목표**  
-물리 휠 상태를 읽어 `Anchor_*`(또는 Wheel_Mesh_*)에 적용하여, 시각 휠이 실제로 굴러간다.
+물리 휠 상태를 읽어 `Wheel_Anchor_*`(또는 `Wheel_Mesh_*`)에 적용하여, 시각 휠이 실제로 굴러간다.
 
 **수정 대상(예상)**  
 - `BP_ModularVehicle` → Event Graph
-- `Anchor_FL/FR/RL/RR`, `Wheel_Mesh_FL/FR/RL/RR`
+- `Wheel_Anchor_FL/FR/RL/RR`, `Wheel_Mesh_FL/FR/RL/RR`
 
 **완료 조건(Definition of Done)**  
 - [ ] 정지 상태에서 바퀴가 이상하게 떨지 않음(심한 지터 X)  
@@ -110,8 +110,8 @@ WASD/Space/Shift 입력이 `VehicleMovementComponent` 입력으로 들어가서 
 Spawn 시 차량이 바닥을 뚫고 떨어지지 않게 “최소 충돌/물리 바디”를 확보한다.
 
 **완료 조건(Definition of Done)**  
-- [ ] PIE 시작 시 차량이 지면 위에서 정상적으로 정지/주행  
-- [ ] 충돌이 아예 없는 상태(Free fall)로 보이지 않음
+- [v] PIE 시작 시 차량이 지면 위에서 정상적으로 정지/주행  
+- [v] 충돌이 아예 없는 상태(Free fall)로 보이지 않음
 
 **검증 절차(재현)**  
 1) TestMap에 바닥 Static Mesh(충돌 있음) 배치  
@@ -150,7 +150,8 @@ Spawn 시 차량이 바닥을 뚫고 떨어지지 않게 “최소 충돌/물리
 
 ## 4. 리스크/확인 필요 항목
 
-- [ ] Physics Asset 존재 여부(또는 대체 충돌 세팅) 확인 필요  
+- [x] Physics Asset 존재 여부(또는 대체 충돌 세팅) 확인 필요  
+  - 해결됨: `VehicleMesh(Physics Rig)`에 SkeletalMesh + PhysicsAsset 적용 완료, PIE Spawn 시 지면 충돌 정상
 - [ ] Wheel Radius/Width 값이 실제 메시와 일치하는지(체감 주행에 영향 큼)  
 - [ ] 우측 바퀴 시각 미러링(Yaw 180)로 인해 회전 방향이 뒤집혀 보이지 않는지
 
@@ -167,7 +168,7 @@ Day 2
 - CF-P0-002(휠 Tick 동기화) 1차 구현(회전/조향/서스펜션 중 2개 이상)
 
 Day 3  
-- CF-P0-003(Physics Asset) 확인/보강 + 지면 관통/튐 체크
+- (완료) CF-P0-003(Physics Asset) 확인/보강 + 지면 관통/튐 체크
 
 Day 4  
 - CF-P0-004(TestMap 루틴) 정리 + 체크리스트화
