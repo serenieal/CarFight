@@ -1,0 +1,6 @@
+[submodule "MCP"]
+	path = MCP
+	url = https://github.com/serenieal/MCP.git
+[submodule "Assetdump"]
+	path = Assetdump
+	url = https://github.com/serenieal/ue-assetdump.git
