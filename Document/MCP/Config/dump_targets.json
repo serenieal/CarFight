@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0",
+  "project": {
+    "name": "CarFight_Re",
+    "assetdump_submodule_path": "UE/Plugins/AssetDump"
+  },
+  "stability": {
+    "preflight": {
+      "enabled": true,
+      "steps": [
+        "hmd_ping",
+        "hmd_repo_info",
+        "hmd_ue_env"
+      ]
+    },
+    "warmup": {
+      "enabled": true,
+      "filter_path": "/Game/Maps"
+    },
+    "serial": {
+      "enabled": true
+    },
+    "retry": {
+      "max_attempts": 5,
+      "backoff_sec": [
+        1,
+        2,
+        4,
+        8,
+        16
+      ],
+      "retry_on_http": [
+        502,
+        503
+      ]
+    }
+  },
+  "targets": [
+    {
+      "id": "player_pawn",
+      "kind": "asset",
+      "enabled": true,
+      "asset_path": "/Game/CarFight/Vehicles/BP_ModularVehicle.BP_ModularVehicle"
+    },
+    {
+      "id": "imc",
+      "kind": "asset",
+      "enabled": true,
+      "asset_path": "/Game/CarFight/Input/IMC_Vehicle_Default.IMC_Vehicle_Default"
+    },
+    {
+      "id": "test_map",
+      "kind": "map",
+      "enabled": true,
+      "map_asset_path": "/Game/Maps/TestMap.TestMap"
+    }
+  ],
+  "meta": {
+    "base_generated_from": "Tools/ue-reviewpack/templates/dump_targets.json"
+  }
+}
