@@ -4,3 +4,6 @@
 [submodule "Assetdump"]
 	path = UE/Plugins/ue-assetdump
 	url = https://github.com/serenieal/ue-assetdump.git
+[submodule "Plan"]
+	path = Plan
+	url = https://github.com/serenieal/Plan.git
