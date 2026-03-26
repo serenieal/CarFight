@@ -1,50 +1,88 @@
-# P0 Verification (Wheel Sync + Enhanced Input)
+# P0 Verification
 
-## 목적
-P0(휠 시각 동기화 + Enhanced Input 세팅)가 "완료"인지 카메라 유무와 관계없이 판정한다.
+> 역할: CarFight 현재 기준 구현의 **PASS / FAIL 판정 문서**  
+> 기준 상태 문서: `00_Handover.md`  
+> 마지막 정리(Asia/Seoul): 2026-03-20
 
 ---
 
-## P0-001 Enhanced Input (완료 조건)
-- [ ] IA/IMC 에셋이 /Game/CarFight/Input 아래에 존재한다.
-- [ ] IMC_Vehicle_Default가 런타임에 1회만 주입된다(SSOT = BP_ModularVehicle).
-- [ ] Throttle / Steer / Brake / Handbrake 입력이 VehicleMovement에 적용되어 차량이 움직인다.
+## 방향 기준
+- 상위 방향은 `03_VisionAlign.md`를 기준으로 본다.
+- 이 문서의 판정은 현재 구현이 **다차종 확장 가능한 공통 차량 코어 기준선**을 만족하는지 보는 데 목적이 있다.
+
+---
+
+## 현재 구현 기준
+- 현재 기준 플레이 차량: `BP_CFVehiclePawn`
+- 현재 기준 Native Pawn: `ACFVehiclePawn`
+- 현재 기준 주행 코어: `UCFVehicleDriveComp`
+- 현재 기준 휠 시각 동기화 코어: `UCFWheelSyncComp`
+- 현재 기준 데이터 축: `UCFVehicleData`
+- 현재 기준 테스트 자산: `DA_PoliceCar`
+
+---
+
+## P0-001 현재 기준 기본 주행 판정
+### 확인 항목
+- [ ] `BP_CFVehiclePawn`가 현재 기준 플레이 차량으로 배치/조종 가능하다.
+- [ ] Enhanced Input 기반 전진 / 조향 / 브레이크 / 핸드브레이크가 동작한다.
+- [ ] `ACFVehiclePawn` + `UCFVehicleDriveComp` 기준으로 기본 주행이 깨지지 않는다.
 
 ### 확인 메모
-- 주입 SSOT: BP_ModularVehicle
+- 맵:
+- 배치 자산:
 - 비고:
 
 ---
 
-## P0-002 Wheel Visual Sync (완료 조건 / 카메라 없이도 가능)
-### A) 디테일 패널 검증(권장)
-PIE 실행 후, World Outliner에서 BP_ModularVehicle 인스턴스 선택:
-- [ ] Wheel_Anchor_FL RelativeLocation.Z 값이 노면/가감속에 따라 변한다 (서스펜션/위치 동기화)
-- [ ] Wheel_Anchor_FL/FR RelativeRotation.Yaw 값이 조향 입력에 따라 변한다 (조향 동기화)
-- [ ] Wheel_Mesh_FL RelativeRotation.Pitch 값이 가속 시 계속 변한다 (스핀 동기화)
+## P0-002 Wheel Sync 판정
+### A) 현재 기준 디테일 패널 검증
+PIE 실행 후, World Outliner에서 `BP_CFVehiclePawn` 인스턴스를 선택한다.
+- [ ] 휠 관련 현재 기준 컴포넌트가 정상 초기화된다.
+- [ ] 주행 / 조향 중 휠 시각 동기화가 현재 기준 구조에서 정상 반응한다.
+- [ ] 현재 구조 기준으로 심한 이중 적용 / 비정상 떨림이 없다.
 
-### B) 디버그 로그 검증(선택)
-- [ ] bDebugWheelVisualSync = true 로 두고, LocZ/Yaw/Pitch 값이 변하는 로그를 확인했다.
-  - NOTE: PrintString 노드 사용 시 "Print to Log" 체크 권장
+### B) 현재 기준 로그 / 디버그 검증
+- [ ] 현재 디버그 옵션으로 Wheel Sync 상태를 확인할 수 있다.
+- [ ] 과도기 기록 없이도 현재 상태를 읽을 수 있다.
 
-### C) 우측 180 규칙 검증(비틀림 방지)
-- [ ] Wheel_Anchor_FR/RR: 회전은 0 유지(특히 Yaw 0 유지)
-- [ ] Wheel_Mesh_FR/RR: Yaw 180(또는 RightWheelYawDeg) 적용
+### C) 공통 코어 관점 판정
+- [ ] 현재 구조가 특정 테스트 차량만을 위한 임시 처리처럼 보이지 않는다.
+- [ ] Wheel Sync 기준을 다른 차량에도 확장할 수 있는지 판단할 수 있다.
 
 ### 확인 메모
+- 사용 맵:
+- 사용 자산:
 - 비고:
 
 ---
 
-## 카메라 이슈(추적 항목: P0 외)
-- [ ] BP_ModularVehicle에 SpringArm+CameraComponent 존재
-- [ ] Auto Possess Player = Player 0
-- [ ] GameMode DefaultPawnClass = BP_ModularVehicle
-- [ ] Possess 이후 ViewTarget 설정 필요 여부 확인
+## P0-003 DriveState 공통 코어 판정
+### 사전 조건
+- `19_DriveState_CoreChecklist.md` 기준으로 확인한다.
+
+### 확인 항목
+- [ ] 전진 / 제동 / 정지 / 후진 기본 상태 흐름이 정상이다.
+- [ ] 작은 요철에서 `Grounded` 유지가 과도하게 흔들리지 않는다.
+- [ ] 분명한 공중 상태에서 `Airborne` 진입이 가능하다.
+- [ ] 현재 판정 구조가 다른 차량에도 옮겨갈 수 있는 공통 규칙처럼 읽힌다.
+
+### 확인 메모
+- VehicleData:
+- Override 사용 여부:
+- 비고:
+
+---
+
+## 카메라 관련 추적 항목
+- [ ] 현재 기준 Pawn에서 플레이 시점이 정상이다.
+- [ ] 카메라 문제를 주행/휠 코어 판정과 분리해서 기록할 수 있다.
+- [ ] 후속 상태 기반 카메라 반응 확장 여지를 남긴다.
 
 ---
 
 ## 최종 판정
 - P0-001: (PASS / FAIL)
 - P0-002: (PASS / FAIL)
-- 작성자/날짜:
+- P0-003: (PASS / FAIL)
+- 작성자 / 날짜:

@@ -1,5 +1,9 @@
 # P0 Implementation Plan
 
+> 상태: **Archive 후보 (작업 지시 문서)**  
+> 역할: 당시 P0 구현 진행용 세부 작업 계획. 현재 살아있는 확정사항/DoD는 `00_Handover.md`, `01_Roadmap.md`, `08_P0_Verification.md`를 우선 기준으로 본다.  
+> 정리 원칙: 본 문서는 추적용으로 보관하고, 신규 작업 기준 문서로 직접 확장하지 않는다.
+
 ## Scope
 - P0-001 Enhanced Input: assets not under Developers, mapping context injection validated
 - P0-002 Wheel visual sync: Wheel_Anchor + Wheel_Mesh follow Chaos wheel state

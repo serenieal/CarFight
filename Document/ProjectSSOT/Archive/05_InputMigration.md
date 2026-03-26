@@ -1,5 +1,9 @@
 # P0-001 Enhanced Input Migration (Developers -> /Game)
 
+> 상태: **Archive 후보 (이관 작업 가이드)**  
+> 역할: 당시 Enhanced Input 에셋 이관/주입 지점 단일화 작업 절차 문서. 현재 완료 여부/판정은 `01_Roadmap.md`, `08_P0_Verification.md`를 우선 기준으로 본다.  
+> 정리 원칙: 재실행이 필요할 때 참조하되, 현재 기준 문서의 상태를 먼저 확인한다.
+
 ## 목표(DoD)
 - IA/IMC 에셋이 Content/Developers 경로가 아니라 /Game/CarFight/Input 아래에 존재
 - 플레이 시 IMC_Vehicle_Default가 정상 주입(Add Mapping Context)되고 차량 입력이 동작
