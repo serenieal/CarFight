@@ -15,7 +15,9 @@ public class CarFight_Re : ModuleRules
 			"Engine", 
 			"InputCore", 
 			"EnhancedInput",
-
+			"UMG",
+			"Slate",
+			"SlateCore",
             "ChaosVehicles", 
 			"ChaosVehiclesCore", 
 			"PhysicsCore"
