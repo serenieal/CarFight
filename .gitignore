@@ -22,3 +22,11 @@ Thumbs.db
 Document/mcpResult*.md 
 Document/temp/ 
 UE/tmp.md
+
+# 로컬 작업 노이즈
+.trash/
+state/
+tmp/
+GoPyMCP/
+Document/_tmp_test.txt
+Document/pfix01.txt
