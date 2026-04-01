@@ -1,8 +1,8 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.8.0
-// Date: 2026-03-17
-// Description: CarFight 차량 루트 DataAsset 최소 확장안
+// Version: 1.9.2
+// Date: 2026-04-01
+// Description: CarFight 차량 루트 DataAsset 최소 확장안 + AutoFit 레거시 가시성 축소
 // Scope: 차량 시각 자산, 기본 레이아웃, Wheel Class 참조, Movement/WheelVisual 최소 슬롯을 Native 타입으로 고정합니다.
 
 #pragma once
@@ -22,16 +22,16 @@ struct FCFVehicleWheelLayout
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ToolTip="True이면 차량 시각 휠 배치를 자동 계산하는 데이터로 사용합니다."))
-	bool bUseAutoFit = true;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Legacy|AutoFit", meta=(ToolTip="레거시 AutoFit 사용 여부 필드입니다. 현재 런타임에서는 사용하지 않으며 수동 Wheel Anchor 배치를 기준으로 삼습니다."))
+	bool bUseAutoFit = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ToolTip="차량 전방 기준으로 앞바퀴 축을 얼마나 안쪽에 둘지 결정하는 마진(cm)입니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Legacy|AutoFit", meta=(ToolTip="레거시 AutoFit 전륜 축 여백 필드입니다. 현재 런타임에서는 사용하지 않습니다."))
 	float FrontAxleMargin = 40.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ToolTip="차량 후방 기준으로 뒷바퀴 축을 얼마나 안쪽에 둘지 결정하는 마진(cm)입니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Legacy|AutoFit", meta=(ToolTip="레거시 AutoFit 후륜 축 여백 필드입니다. 현재 런타임에서는 사용하지 않습니다."))
 	float RearAxleMargin = 40.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ToolTip="차량 기준 로컬 공간에서 바퀴 높이 오프셋(cm)입니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Legacy|AutoFit", meta=(ToolTip="레거시 AutoFit 높이 오프셋 필드입니다. 현재 런타임에서는 사용하지 않습니다."))
 	float HeightOffset = 10.0f;
 };
 
@@ -61,7 +61,7 @@ struct FCFVehicleLayoutConfig
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ToolTip="차량 시각 휠 배치에 사용할 기본 레이아웃 데이터입니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Legacy|AutoFit", meta=(ToolTip="레거시 AutoFit 레이아웃 데이터입니다. 현재 런타임에서는 사용하지 않습니다."))
 	FCFVehicleWheelLayout WheelLayout;
 };
 
@@ -377,7 +377,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ToolTip="차체와 휠 시각 자산 참조를 묶은 설정입니다."))
 	FCFVehicleVisualConfig VehicleVisualConfig;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ToolTip="차량 시각 휠 배치와 기본 레이아웃 설정입니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Legacy|AutoFit", meta=(ToolTip="레거시 AutoFit / WheelLayout 설정입니다. 현재 런타임에서는 사용하지 않습니다.", AdvancedDisplay))
 	FCFVehicleLayoutConfig VehicleLayoutConfig;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ToolTip="VehicleMovement 계열 데이터를 나중에 확장하기 위한 최소 슬롯입니다."))

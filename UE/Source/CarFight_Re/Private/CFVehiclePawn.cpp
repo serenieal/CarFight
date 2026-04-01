@@ -1,7 +1,7 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.9.0
-// Date: 2026-03-19
+// Version: 2.10.6
+// Date: 2026-03-30
 // Description: CarFight 신규 차량 Pawn 기준 클래스 구현
 
 #include "CFVehiclePawn.h"
@@ -27,6 +27,7 @@
 
 namespace
 {
+	// 이름으로 StaticMeshComponent를 찾아 시각 표현 컴포넌트를 식별합니다.
 	UStaticMeshComponent* FindStaticMeshComponentByName(const AActor* OwnerActor, const FName ComponentName)
 	{
 		if (!OwnerActor || ComponentName.IsNone())
@@ -196,6 +197,50 @@ bool ACFVehiclePawn::UpdateVehicleWheelVisuals(float DeltaSeconds)
 	if (!bUpdated)
 	{
 		LastVehicleRuntimeSummary = TEXT("VehicleRuntime: Wheel visual update failed.");
+	}
+	else
+	{
+		// 기존 런타임 요약에서 WheelSyncBuild 접미사가 시작되는 위치입니다.
+		const int32 ExistingWheelSyncBuildIndex = LastVehicleRuntimeSummary.Find(TEXT(" | WheelSyncBuild="));
+
+		// 기존 런타임 요약에서 WheelSyncRuntime 접미사가 시작되는 위치입니다.
+		const int32 ExistingWheelSyncRuntimeIndex = LastVehicleRuntimeSummary.Find(TEXT(" | WheelSyncRuntime="));
+
+		// 기존 WheelSync 접미사 중 가장 먼저 나타나는 시작 위치입니다.
+		int32 ExistingWheelSyncSummaryIndex = INDEX_NONE;
+		if (ExistingWheelSyncBuildIndex != INDEX_NONE && ExistingWheelSyncRuntimeIndex != INDEX_NONE)
+		{
+			ExistingWheelSyncSummaryIndex = FMath::Min(ExistingWheelSyncBuildIndex, ExistingWheelSyncRuntimeIndex);
+		}
+		else if (ExistingWheelSyncBuildIndex != INDEX_NONE)
+		{
+			ExistingWheelSyncSummaryIndex = ExistingWheelSyncBuildIndex;
+		}
+		else if (ExistingWheelSyncRuntimeIndex != INDEX_NONE)
+		{
+			ExistingWheelSyncSummaryIndex = ExistingWheelSyncRuntimeIndex;
+		}
+
+		// WheelSync 접미사를 제외한 기본 런타임 요약 문자열입니다.
+		const FString BaseRuntimeSummary = (ExistingWheelSyncSummaryIndex != INDEX_NONE)
+			? LastVehicleRuntimeSummary.Left(ExistingWheelSyncSummaryIndex)
+			: LastVehicleRuntimeSummary;
+
+		// 현재 프레임 입력 생성 단계 요약 문자열입니다.
+		const FString WheelSyncBuildSummary = WheelSyncComp->LastInputBuildSummary.IsEmpty()
+			? TEXT("NotBuilt")
+			: WheelSyncComp->LastInputBuildSummary;
+
+		// 현재 프레임 적용 단계 요약 문자열입니다.
+		const FString WheelSyncRuntimeSummary = WheelSyncComp->LastValidationSummary.IsEmpty()
+			? TEXT("NotApplied")
+			: WheelSyncComp->LastValidationSummary;
+
+		LastVehicleRuntimeSummary = FString::Printf(
+			TEXT("%s | WheelSyncBuild=%s | WheelSyncRuntime=%s"),
+			*BaseRuntimeSummary,
+			*WheelSyncBuildSummary,
+			*WheelSyncRuntimeSummary);
 	}
 	return bUpdated;
 }
@@ -410,50 +455,8 @@ void ACFVehiclePawn::ApplyVehicleLayoutConfig()
 		LastVehicleRuntimeSummary = TEXT("VehicleLayoutConfig: VehicleData is null.");
 		return;
 	}
-	if (!VehicleData->VehicleLayoutConfig.WheelLayout.bUseAutoFit)
-	{
-		LastVehicleRuntimeSummary = TEXT("VehicleLayoutConfig: AutoFit disabled.");
-		return;
-	}
-	UStaticMeshComponent* ChassisMeshComp = FindStaticMeshComponentByName(this, TEXT("SM_Chassis"));
-	UStaticMeshComponent* WheelMeshCompFL = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_FL"));
-	UStaticMeshComponent* WheelMeshCompFR = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_FR"));
-	UStaticMeshComponent* WheelMeshCompRL = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_RL"));
-	UStaticMeshComponent* WheelMeshCompRR = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_RR"));
-	if (!ChassisMeshComp)
-	{
-		LastVehicleRuntimeSummary = TEXT("VehicleLayoutConfig: SM_Chassis component is missing.");
-		return;
-	}
-	const FBoxSphereBounds ChassisBounds = ChassisMeshComp->CalcBounds(ChassisMeshComp->GetComponentTransform());
-	const FVector ChassisOrigin = ChassisMeshComp->GetComponentTransform().InverseTransformPosition(ChassisBounds.Origin);
-	const FVector ChassisExtent = ChassisBounds.BoxExtent;
-	const float ChassisMinX = ChassisOrigin.X - ChassisExtent.X;
-	const float ChassisMaxX = ChassisOrigin.X + ChassisExtent.X;
-	const FCFVehicleWheelLayout& VehicleWheelLayout = VehicleData->VehicleLayoutConfig.WheelLayout;
-	const float FrontWheelLocationX = ChassisMaxX - VehicleWheelLayout.FrontAxleMargin;
-	const float RearWheelLocationX = ChassisMinX + VehicleWheelLayout.RearAxleMargin;
-	const float WheelLocationZ = VehicleWheelLayout.HeightOffset;
-	int32 AppliedWheelLocationCount = 0;
-	int32 MissingWheelMeshComponentCount = 0;
-	auto ApplyWheelLocation = [&](UStaticMeshComponent* WheelMeshComp, float TargetLocationX)
-	{
-		if (!WheelMeshComp)
-		{
-			++MissingWheelMeshComponentCount;
-			return;
-		}
-		FVector NewRelativeLocation = WheelMeshComp->GetRelativeLocation();
-		NewRelativeLocation.X = TargetLocationX;
-		NewRelativeLocation.Z = WheelLocationZ;
-		WheelMeshComp->SetRelativeLocation(NewRelativeLocation);
-		++AppliedWheelLocationCount;
-	};
-	ApplyWheelLocation(WheelMeshCompFL, FrontWheelLocationX);
-	ApplyWheelLocation(WheelMeshCompFR, FrontWheelLocationX);
-	ApplyWheelLocation(WheelMeshCompRL, RearWheelLocationX);
-	ApplyWheelLocation(WheelMeshCompRR, RearWheelLocationX);
-	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleLayoutConfig: AppliedWheelLocations=%d, MissingWheelMeshComponents=%d, FrontX=%.2f, RearX=%.2f, Z=%.2f"), AppliedWheelLocationCount, MissingWheelMeshComponentCount, FrontWheelLocationX, RearWheelLocationX, WheelLocationZ);
+
+	LastVehicleRuntimeSummary = TEXT("VehicleLayoutConfig: ManualAnchorLayout=Required");
 }
 
 void ACFVehiclePawn::ApplyVehicleMovementConfig()

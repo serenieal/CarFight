@@ -1,11 +1,12 @@
-// Version: 1.1.0
-// Date: 2026-03-19
-// Description: CarFight 휠 시각 동기화 컴포넌트 구현 (운영 경로 정리 + DebugMode 기반 개발용 항목 숨김)
+// Version: 1.1.8
+// Date: 2026-03-31
+// Description: CarFight 휠 시각 동기화 컴포넌트 구현 (운영 경로 정리 + DebugMode 기반 개발용 항목 숨김 + Spin 복구 + 저속 visual spin cap + mesh axis sign fix)
 // Scope: 단일 축 테스트/Phase1Stub 제거. helper 비교/override/상태 관측은 DebugMode에서만 활성화됩니다.
 
 #include "CFWheelSyncComp.h"
 
 #include "CarFightVehicleUtils.h"
+#include "ChaosVehicleWheel.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -13,6 +14,44 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogCFWheelSync, Log, All);
 
+namespace
+{
+	// helper 회전값에서 실제 바퀴 굴림에 가까운 축의 각도를 추출합니다.
+	float ExtractWheelSpinAngleDegFromRotation(const FRotator& InWheelRotation)
+	{
+		// Pitch 축 절대값을 보관합니다.
+		const float PitchAbsDeg = FMath::Abs(InWheelRotation.Pitch);
+
+		// Roll 축 절대값을 보관합니다.
+		const float RollAbsDeg = FMath::Abs(InWheelRotation.Roll);
+
+		return (PitchAbsDeg >= RollAbsDeg) ? InWheelRotation.Pitch : InWheelRotation.Roll;
+	}
+
+	// Chaos 휠 인스턴스에서 현재 누적 회전각(deg)을 안전하게 읽습니다.
+	float GetWheelSpinAngleDegFromRuntimeWheel(const UChaosWheeledVehicleMovementComponent* InMovementComponent, const int32 InWheelIndex)
+	{
+		if (!InMovementComponent || !InMovementComponent->Wheels.IsValidIndex(InWheelIndex) || InMovementComponent->Wheels[InWheelIndex] == nullptr)
+		{
+			return 0.0f;
+		}
+
+		return InMovementComponent->Wheels[InWheelIndex]->GetRotationAngle();
+	}
+
+	// Chaos 휠 인스턴스에서 현재 회전 각속도(deg/s)를 안전하게 읽습니다.
+	float GetWheelSpinAngularVelocityDegPerSecFromRuntimeWheel(const UChaosWheeledVehicleMovementComponent* InMovementComponent, const int32 InWheelIndex)
+	{
+		if (!InMovementComponent || !InMovementComponent->Wheels.IsValidIndex(InWheelIndex) || InMovementComponent->Wheels[InWheelIndex] == nullptr)
+		{
+			return 0.0f;
+		}
+
+		return InMovementComponent->Wheels[InWheelIndex]->GetRotationAngularVelocity();
+	}
+}
+
+// WheelSync 기본 소유 축과 디버그/운영 기본값을 초기화합니다.
 UCFWheelSyncComp::UCFWheelSyncComp()
 {
 	PrimaryComponentTick.bCanEverTick = false;
@@ -42,10 +81,10 @@ UCFWheelSyncComp::UCFWheelSyncComp()
 
 	// [v1.1.0] 축별 C++ 적용 기본값:
 	// - 신규 BP 첫 단계에서는 조향 Yaw만 C++가 소유합니다.
-	// - Z / SpinPitch는 후속 단계에서 확장합니다.
+	// - Z는 후속 단계에서 확장하고, SpinPitch는 현재 기준선에서 C++가 소유합니다.
 	bApplySteeringYawInCpp = true;
 	bApplySuspensionZInCpp = false;
-	bApplySpinPitchInCpp = false;
+	bApplySpinPitchInCpp = true;
 
 	bUseSteeringYawDebugPipe = true;
 	FrontWheelCountForSteering = 2;
@@ -59,9 +98,17 @@ UCFWheelSyncComp::UCFWheelSyncComp()
 	bUseWheelSpinPitchDebugPipe = false;
 	WheelSpinPitchDebugDeg = 0.0f;
 	WheelSpinVisualSign = 1.0f;
+	WheelSpinMeshAxisSign = -1.0f;
+	WheelSpinAngularVelocityDeadZoneDegPerSec = 5.0f;
+	WheelSpinForwardDeadZoneKmh = 1.0f;
+	WheelSpinSlipAngularVelocityThresholdDegPerSec = 360.0f;
+	WheelSpinDirectionChangeHoldTimeSeconds = 0.08f;
+	WheelSpinLowSpeedVisualCapMaxKmh = 12.0f;
+	WheelSpinLowSpeedMaxOverspeedRatio = 1.35f;
 
 	bWheelSyncReady = false;
 	LastValidationSummary = TEXT("NotValidated");
+	LastInputBuildSummary = TEXT("NotBuilt");
 	LastHelperCompareSummary = TEXT("HelperCompare:Disabled");
 	LastHelperCompareWarnWheelIndices = TEXT("None");
 	LastHelperCompareFrontRearSummary = TEXT("HelperCompareFR:Disabled");
@@ -69,6 +116,7 @@ UCFWheelSyncComp::UCFWheelSyncComp()
 	InitializeDefaultWheelNames();
 	ResetBaseVisualCaches();
 	ResetLastWheelStates();
+	ResetRuntimeWheelSpinCaches();
 	ResetHelperCompareStates();
 }
 
@@ -91,6 +139,7 @@ void UCFWheelSyncComp::ResetWheelSyncState()
 	ResetBaseVisualCaches();
 	LastWheelVisualInputs.Reset();
 	ResetLastWheelStates();
+	ResetRuntimeWheelSpinCaches();
 	ResetHelperCompareStates();
 
 	LastHelperCompareSummary = TEXT("HelperCompare:Reset");
@@ -307,6 +356,8 @@ bool UCFWheelSyncComp::BuildWheelVisualInputsFromDebugPipe(float DeltaSeconds, T
 		WheelInput.bIsValidInput = true;
 		WheelInput.SteeringYawDeg = 0.0f;
 		WheelInput.SpinPitchDeg = 0.0f;
+		WheelInput.SpinPitchDeltaDeg = 0.0f;
+		WheelInput.bApplySpinPitchAsDelta = false;
 		WheelInput.SuspensionOffsetZ = 0.0f;
 
 		if (bUseSteeringYawDebugPipe && IsFrontWheelIndexForSteering(WheelIndex))
@@ -496,6 +547,7 @@ void UCFWheelSyncComp::FinalizeHelperCompareSummary()
 		MaxAbsZDelta);
 }
 
+// 현재 프레임에 적용할 휠 시각 입력을 조합하고 필요 시 실제 스핀 회전값을 주입합니다.
 bool UCFWheelSyncComp::BuildWheelVisualInputsPhase2(float DeltaSeconds, TArray<FCFWheelVisualInput>& OutWheelInputs)
 {
 	if (!BuildWheelVisualInputsFromDebugPipe(DeltaSeconds, OutWheelInputs))
@@ -538,43 +590,184 @@ bool UCFWheelSyncComp::BuildWheelVisualInputsPhase2(float DeltaSeconds, TArray<F
 		}
 	}
 
+	// 현재 프레임의 차량 Forward 속도(km/h)입니다.
+	const float CurrentForwardSpeedKmh = GetCurrentForwardSpeedKmhForWheelSpin();
+
+	// 현재 WheelSync가 Mesh SpinPitch를 직접 적용해야 하는지 여부입니다.
+	const bool bUseRuntimeSpinPitch = IsSpinPitchOwnedByCpp() && CachedVehicleMovementComponent != nullptr;
+
+	// 첫 번째 휠의 실제 누적 회전각을 디버그 문자열에 남기기 위한 변수입니다.
+	float FirstWheelRuntimeAngleDeg = 0.0f;
+
+	// 첫 번째 휠의 실제 회전 각속도를 디버그 문자열에 남기기 위한 변수입니다.
+	float FirstWheelRuntimeAngularVelocityDegPerSec = 0.0f;
+
+	// 첫 번째 휠의 이번 프레임 스핀 누적 스텝(deg)을 디버그 문자열에 남기기 위한 변수입니다.
+	float FirstWheelRuntimeSpinStepDeg = 0.0f;
+
+	// 첫 번째 휠에 최종 누적된 스핀 각도를 디버그 문자열에 남기기 위한 변수입니다.
+	float FirstWheelAccumulatedSpinDeg = 0.0f;
+
+	// 첫 번째 휠에 최종 적용된 안정화 방향 부호를 디버그 문자열에 남기기 위한 변수입니다.
+	int32 FirstWheelStableDirectionSign = 0;
+	if (bUseRuntimeSpinPitch)
+	{
+		for (int32 WheelIndex = 0; WheelIndex < OutWheelInputs.Num(); ++WheelIndex)
+		{
+			// 현재 휠의 실제 누적 회전각(deg)입니다.
+			const float RuntimeWheelAngleDeg = GetWheelSpinAngleDegFromRuntimeWheel(CachedVehicleMovementComponent, WheelIndex);
+
+			// 현재 휠의 실제 회전 각속도(deg/s)입니다.
+			const float RuntimeWheelAngularVelocityDegPerSec = GetWheelSpinAngularVelocityDegPerSecFromRuntimeWheel(CachedVehicleMovementComponent, WheelIndex);
+
+			// 현재 휠 각속도의 절대값에서 dead zone을 적용한 회전 크기(deg/s)입니다.
+			const float FilteredWheelAngularVelocityMagnitudeDegPerSec =
+				(FMath::Abs(RuntimeWheelAngularVelocityDegPerSec) >= WheelSpinAngularVelocityDeadZoneDegPerSec)
+				? FMath::Abs(RuntimeWheelAngularVelocityDegPerSec)
+				: 0.0f;
+
+			// 현재 휠 인덱스에 대응하는 runtime wheel 인스턴스가 유효한지 여부입니다.
+			const bool bHasRuntimeWheelInstance =
+				CachedVehicleMovementComponent->Wheels.IsValidIndex(WheelIndex) &&
+				CachedVehicleMovementComponent->Wheels[WheelIndex] != nullptr;
+
+			// 현재 휠 상태를 안전하게 읽을 수 있는지 여부입니다.
+			const bool bHasWheelStatus = WheelIndex >= 0 && WheelIndex < CachedVehicleMovementComponent->GetNumWheels();
+
+			// 현재 휠이 지면과 접촉 중인지 여부입니다.
+			const bool bWheelInContact = bHasWheelStatus
+				? CachedVehicleMovementComponent->GetWheelState(WheelIndex).bInContact
+				: false;
+
+			// 현재 차량 Forward 속도의 절대값(km/h)입니다.
+			const float ForwardSpeedAbsKmh = FMath::Abs(CurrentForwardSpeedKmh);
+
+			// 현재 프레임 시각 스핀 계산에 실제로 사용할 각속도 크기(deg/s)입니다.
+			float VisualWheelAngularVelocityMagnitudeDegPerSec = FilteredWheelAngularVelocityMagnitudeDegPerSec;
+
+			// 저속 visual cap 기능이 활성화될 최대 Forward 속도(km/h)입니다.
+			const float LowSpeedVisualCapMaxKmh = FMath::Max(0.0f, WheelSpinLowSpeedVisualCapMaxKmh);
+
+			// 저속 visual cap에서 허용할 최대 overspeed 배수입니다.
+			const float LowSpeedMaxOverspeedRatio = FMath::Max(1.0f, WheelSpinLowSpeedMaxOverspeedRatio);
+
+			if (bHasRuntimeWheelInstance && bWheelInContact && LowSpeedVisualCapMaxKmh > 0.0f && ForwardSpeedAbsKmh <= LowSpeedVisualCapMaxKmh)
+			{
+				// 현재 runtime wheel 반경(cm)입니다.
+				const float RuntimeWheelRadiusCm = CachedVehicleMovementComponent->Wheels[WheelIndex]->GetWheelRadius();
+
+				if (RuntimeWheelRadiusCm > KINDA_SMALL_NUMBER)
+				{
+					// 현재 차량 Forward 속도의 절대값(cm/s)입니다.
+					const float ForwardSpeedAbsCmPerSec = ForwardSpeedAbsKmh / 0.036f;
+
+					// 무슬립 기준으로 기대되는 휠 각속도(deg/s)입니다.
+					const float ExpectedNoSlipAngularVelocityDegPerSec =
+						FMath::RadiansToDegrees(ForwardSpeedAbsCmPerSec / RuntimeWheelRadiusCm);
+
+					// 저속 접지 상태에서 허용할 최대 시각 휠 각속도(deg/s)입니다.
+					const float MaxAllowedVisualAngularVelocityDegPerSec =
+						ExpectedNoSlipAngularVelocityDegPerSec * LowSpeedMaxOverspeedRatio;
+
+					VisualWheelAngularVelocityMagnitudeDegPerSec = FMath::Min(
+						VisualWheelAngularVelocityMagnitudeDegPerSec,
+						MaxAllowedVisualAngularVelocityDegPerSec);
+				}
+			}
+
+			// 현재 프레임에 원하는 휠 회전 방향 후보 부호입니다.
+			const int32 DesiredWheelSpinDirectionSign =
+				ResolveDesiredWheelSpinDirectionSign(CurrentForwardSpeedKmh, RuntimeWheelAngularVelocityDegPerSec);
+
+			// 현재 프레임에 hold 규칙을 반영한 최종 휠 회전 방향 부호입니다.
+			const int32 StableWheelSpinDirectionSign =
+				UpdateStableWheelSpinDirectionSign(WheelIndex, DesiredWheelSpinDirectionSign, DeltaSeconds);
+
+			// 현재 프레임에 실제 휠 각속도와 DeltaSeconds로 적분한 스핀 스텝(deg)입니다.
+			const float RuntimeWheelSpinStepDeg =
+				VisualWheelAngularVelocityMagnitudeDegPerSec *
+				DeltaSeconds *
+				static_cast<float>(StableWheelSpinDirectionSign);
+
+			// 누적 스핀 각 캐시가 유효하면 현재 프레임 스텝을 더합니다.
+			if (AccumulatedRuntimeWheelSpinDeg.IsValidIndex(WheelIndex))
+			{
+				AccumulatedRuntimeWheelSpinDeg[WheelIndex] += RuntimeWheelSpinStepDeg;
+			}
+
+			if (LastRuntimeWheelAnglesDeg.IsValidIndex(WheelIndex))
+			{
+				LastRuntimeWheelAnglesDeg[WheelIndex] = RuntimeWheelAngleDeg;
+			}
+
+			if (bHasRuntimeWheelAngleSample.IsValidIndex(WheelIndex))
+			{
+				bHasRuntimeWheelAngleSample[WheelIndex] = true;
+			}
+
+			// 현재 프레임에 메시 스핀으로 사용할 누적 각도(deg)입니다.
+			const float AccumulatedWheelSpinDeg =
+				AccumulatedRuntimeWheelSpinDeg.IsValidIndex(WheelIndex)
+				? AccumulatedRuntimeWheelSpinDeg[WheelIndex]
+				: 0.0f;
+
+			// 현재 프로젝트 mesh 축 보정까지 반영한 최종 visual spin 부호입니다.
+			const float EffectiveWheelSpinVisualSign = WheelSpinVisualSign * WheelSpinMeshAxisSign;
+
+			OutWheelInputs[WheelIndex].SpinPitchDeg = AccumulatedWheelSpinDeg * EffectiveWheelSpinVisualSign;
+			OutWheelInputs[WheelIndex].SpinPitchDeltaDeg = RuntimeWheelSpinStepDeg * EffectiveWheelSpinVisualSign;
+			OutWheelInputs[WheelIndex].bApplySpinPitchAsDelta = true;
+
+			if (WheelIndex == 0)
+			{
+				FirstWheelRuntimeAngleDeg = RuntimeWheelAngleDeg;
+				FirstWheelRuntimeSpinStepDeg = RuntimeWheelSpinStepDeg;
+				FirstWheelRuntimeAngularVelocityDegPerSec = RuntimeWheelAngularVelocityDegPerSec;
+				FirstWheelAccumulatedSpinDeg = OutWheelInputs[WheelIndex].SpinPitchDeg;
+				FirstWheelStableDirectionSign = StableWheelSpinDirectionSign;
+			}
+		}
+	}
+
 	LastWheelVisualInputs = OutWheelInputs;
 
 	// [v1.1.1] 긴 %s 체인은 UE 포맷 문자열 검증기에서 빌드 오류를 낼 수 있으므로
 // 상태 문자열을 나눠서 안전하게 조합합니다.
+	// 현재 디버그 모드 활성 여부를 문자열로 표현한 값입니다.
 	const TCHAR* DebugModeText = bDebugMode ? TEXT("True") : TEXT("False");
+
+	// 현재 Transform C++ 적용 활성 여부를 문자열로 표현한 값입니다.
 	const TCHAR* ApplyInCppText = bEnableApplyTransformsInCpp ? TEXT("True") : TEXT("False");
-	const TCHAR* SteeringOwnedText = IsSteeringYawOwnedByCpp() ? TEXT("On") : TEXT("Off");
-	const TCHAR* SuspensionOwnedText = IsSuspensionZOwnedByCpp() ? TEXT("On") : TEXT("Off");
+
+	// 현재 SpinPitch 소유 여부를 문자열로 표현한 값입니다.
 	const TCHAR* SpinOwnedText = IsSpinPitchOwnedByCpp() ? TEXT("On") : TEXT("Off");
-	const TCHAR* HelperUsedText = bUseHelperInput ? TEXT("True") : TEXT("False");
-	const TCHAR* HelperAllText = (bDebugMode && bHelperOverridesDebugInputs) ? TEXT("True") : TEXT("False");
-	const TCHAR* HelperYawText = (bDebugMode && bHelperOverridesSteeringYaw) ? TEXT("True") : TEXT("False");
-	const TCHAR* HelperZText = (bDebugMode && bHelperOverridesSuspensionZ) ? TEXT("True") : TEXT("False");
-	const TCHAR* HelperPitchText = (bDebugMode && bHelperOverridesSpinPitch) ? TEXT("True") : TEXT("False");
-	const TCHAR* CompareText = bUseHelperCompare ? TEXT("True") : TEXT("False");
 
-	LastValidationSummary = FString::Printf(
-		TEXT("Phase2InputsBuilt: Count=%d"),
-		OutWheelInputs.Num());
+	// 현재 Runtime 스핀 경로 사용 여부를 문자열로 표현한 값입니다.
+	const TCHAR* RuntimeSpinText = bUseRuntimeSpinPitch ? TEXT("True") : TEXT("False");
 
-	LastValidationSummary += FString::Printf(
-		TEXT(", Debug=%s, ApplyInCpp=%s, Own(Y/Z/P)=%s/%s/%s, Helper=%s, HAll=%s, HYaw=%s, HZ=%s, HPitch=%s, Cmp=%s"),
+	// 현재 Wheel mesh 축 보정까지 반영된 최종 visual spin 부호입니다.
+	const float EffectiveWheelSpinVisualSign = WheelSpinVisualSign * WheelSpinMeshAxisSign;
+
+	LastInputBuildSummary = FString::Printf(
+		TEXT("Phase2InputsBuilt: Count=%d, Debug=%s, ApplyInCpp=%s, SpinOwned=%s, RuntimeSpin=%s, Fwd=%.2f, VisualSign=%.1f, SpinW0(Raw=%.2f, Step=%.2f, Vel=%.2f, Accum=%.2f, Sign=%d)"),
+		OutWheelInputs.Num(),
 		DebugModeText,
 		ApplyInCppText,
-		SteeringOwnedText,
-		SuspensionOwnedText,
 		SpinOwnedText,
-		HelperUsedText,
-		HelperAllText,
-		HelperYawText,
-		HelperZText,
-		HelperPitchText,
-		CompareText);
+		RuntimeSpinText,
+		CurrentForwardSpeedKmh,
+		EffectiveWheelSpinVisualSign,
+		FirstWheelRuntimeAngleDeg,
+		FirstWheelRuntimeSpinStepDeg,
+		FirstWheelRuntimeAngularVelocityDegPerSec,
+		FirstWheelAccumulatedSpinDeg,
+		FirstWheelStableDirectionSign);
+
+	LastValidationSummary = LastInputBuildSummary;
 
 	if (bDebugMode && bVerboseLog)
 	{
-		UE_LOG(LogCFWheelSync, Log, TEXT("[WheelSync] %s"), *LastValidationSummary);
+		UE_LOG(LogCFWheelSync, Log, TEXT("[WheelSync] %s"), *LastInputBuildSummary);
 	}
 
 	return true;
@@ -640,9 +833,19 @@ bool UCFWheelSyncComp::ApplySingleWheelInputPhase2(const FCFWheelVisualInput& Wh
 
 		if (bOwnSpinPitch)
 		{
-			FRotator CurrentMeshRotation = MeshComponent->GetRelativeRotation();
-			CurrentMeshRotation.Pitch = TargetMeshRotation.Pitch;
-			MeshComponent->SetRelativeRotation(CurrentMeshRotation);
+			if (WheelInput.bApplySpinPitchAsDelta)
+			{
+				// 현재 프레임 휠 메시의 local pitch delta 회전값입니다.
+				const FRotator MeshLocalSpinDeltaRotation(WheelInput.SpinPitchDeltaDeg, 0.0f, 0.0f);
+
+				MeshComponent->AddLocalRotation(MeshLocalSpinDeltaRotation, false, nullptr, ETeleportType::TeleportPhysics);
+			}
+			else
+			{
+				FRotator CurrentMeshRotation = MeshComponent->GetRelativeRotation();
+				CurrentMeshRotation.Pitch = TargetMeshRotation.Pitch;
+				MeshComponent->SetRelativeRotation(CurrentMeshRotation);
+			}
 		}
 	}
 
@@ -728,6 +931,124 @@ bool UCFWheelSyncComp::IsSuspensionZOwnedByCpp() const
 bool UCFWheelSyncComp::IsSpinPitchOwnedByCpp() const
 {
 	return bEnableApplyTransformsInCpp && bApplySpinPitchInCpp;
+}
+
+// 현재 차량 Forward 속도(km/h)를 Wheel spin 방향 안정화용으로 계산합니다.
+float UCFWheelSyncComp::GetCurrentForwardSpeedKmhForWheelSpin() const
+{
+	// UpdatedComponent 기준 현재 선형 속도(cm/s)를 보관하는 변수입니다.
+	const FVector CurrentLinearVelocityCmPerSec =
+		(CachedVehicleMovementComponent && CachedVehicleMovementComponent->UpdatedComponent)
+		? CachedVehicleMovementComponent->UpdatedComponent->GetComponentVelocity()
+		: FVector::ZeroVector;
+
+	// UpdatedComponent 기준 현재 Forward 방향 벡터입니다.
+	const FVector CurrentForwardVector =
+		(CachedVehicleMovementComponent && CachedVehicleMovementComponent->UpdatedComponent)
+		? CachedVehicleMovementComponent->UpdatedComponent->GetForwardVector()
+		: FVector::ForwardVector;
+
+	// 현재 Forward 축 선속도(cm/s)입니다.
+	const float CurrentForwardSpeedCmPerSec = FVector::DotProduct(CurrentLinearVelocityCmPerSec, CurrentForwardVector);
+
+	// 현재 Forward 축 선속도(km/h)입니다.
+	const float CurrentForwardSpeedKmh = CurrentForwardSpeedCmPerSec * 0.036f;
+
+	return CurrentForwardSpeedKmh;
+}
+
+// 휠 각속도와 Forward 속도 기준으로 현재 프레임이 원하는 회전 방향 부호를 결정합니다.
+int32 UCFWheelSyncComp::ResolveDesiredWheelSpinDirectionSign(float InForwardSpeedKmh, float InWheelAngularVelocityDegPerSec) const
+{
+	// Forward 속도의 절대값입니다.
+	const float ForwardSpeedAbsKmh = FMath::Abs(InForwardSpeedKmh);
+
+	// 휠 각속도의 절대값입니다.
+	const float WheelAngularVelocityAbsDegPerSec = FMath::Abs(InWheelAngularVelocityDegPerSec);
+
+	// Forward 속도만으로도 진행 방향을 신뢰할 수 있는지 여부입니다.
+	const bool bHasReliableForwardDirection = (ForwardSpeedAbsKmh >= WheelSpinForwardDeadZoneKmh);
+
+	// 정지 근처에서도 휠 자체 부호를 허용할 만큼 강한 휠스핀인지 여부입니다.
+	const bool bHasStrongWheelSpinDirection = (WheelAngularVelocityAbsDegPerSec >= WheelSpinSlipAngularVelocityThresholdDegPerSec);
+
+	// Forward 속도 부호를 정수 방향 부호로 변환한 값입니다.
+	const int32 ForwardDirectionSign = (InForwardSpeedKmh > 0.0f) ? 1 : ((InForwardSpeedKmh < 0.0f) ? -1 : 0);
+
+	// 휠 각속도 부호를 정수 방향 부호로 변환한 값입니다.
+	const int32 WheelDirectionSign = (InWheelAngularVelocityDegPerSec > 0.0f) ? 1 : ((InWheelAngularVelocityDegPerSec < 0.0f) ? -1 : 0);
+
+	if (bHasReliableForwardDirection)
+	{
+		return ForwardDirectionSign;
+	}
+
+	if (bHasStrongWheelSpinDirection)
+	{
+		return WheelDirectionSign;
+	}
+
+	return 0;
+}
+
+// 휠별 방향 hold 규칙을 반영해 실제 stable sign을 갱신합니다.
+int32 UCFWheelSyncComp::UpdateStableWheelSpinDirectionSign(int32 InWheelIndex, int32 InDesiredDirectionSign, float InDeltaSeconds)
+{
+	if (!StableWheelSpinDirectionSigns.IsValidIndex(InWheelIndex) ||
+		!PendingWheelSpinDirectionSigns.IsValidIndex(InWheelIndex) ||
+		!WheelSpinDirectionHoldElapsedSeconds.IsValidIndex(InWheelIndex))
+	{
+		return InDesiredDirectionSign;
+	}
+
+	// 현재 휠의 안정화 방향 부호입니다.
+	int32& StableDirectionSign = StableWheelSpinDirectionSigns[InWheelIndex];
+
+	// 현재 휠의 방향 전환 후보 부호입니다.
+	int32& PendingDirectionSign = PendingWheelSpinDirectionSigns[InWheelIndex];
+
+	// 현재 휠의 방향 전환 후보 유지 시간(sec)입니다.
+	float& DirectionHoldElapsedSeconds = WheelSpinDirectionHoldElapsedSeconds[InWheelIndex];
+
+	if (InDesiredDirectionSign == 0)
+	{
+		PendingDirectionSign = 0;
+		DirectionHoldElapsedSeconds = 0.0f;
+		return StableDirectionSign;
+	}
+
+	if (StableDirectionSign == 0)
+	{
+		StableDirectionSign = InDesiredDirectionSign;
+		PendingDirectionSign = 0;
+		DirectionHoldElapsedSeconds = 0.0f;
+		return StableDirectionSign;
+	}
+
+	if (InDesiredDirectionSign == StableDirectionSign)
+	{
+		PendingDirectionSign = 0;
+		DirectionHoldElapsedSeconds = 0.0f;
+		return StableDirectionSign;
+	}
+
+	if (PendingDirectionSign != InDesiredDirectionSign)
+	{
+		PendingDirectionSign = InDesiredDirectionSign;
+		DirectionHoldElapsedSeconds = 0.0f;
+		return StableDirectionSign;
+	}
+
+	DirectionHoldElapsedSeconds += InDeltaSeconds;
+
+	if (DirectionHoldElapsedSeconds >= WheelSpinDirectionChangeHoldTimeSeconds)
+	{
+		StableDirectionSign = InDesiredDirectionSign;
+		PendingDirectionSign = 0;
+		DirectionHoldElapsedSeconds = 0.0f;
+	}
+
+	return StableDirectionSign;
 }
 
 void UCFWheelSyncComp::InitializeDefaultWheelNames()
@@ -826,6 +1147,31 @@ void UCFWheelSyncComp::ResetLastWheelStates()
 		LastWheelVisualStates[WheelIndex].WheelIndex = WheelIndex;
 		LastWheelVisualStates[WheelIndex].bApplied = false;
 	}
+}
+
+// 실제 휠 회전각 캐시와 누적 스핀 캐시를 기본 상태로 초기화합니다.
+void UCFWheelSyncComp::ResetRuntimeWheelSpinCaches()
+{
+	// 현재 기대 휠 개수 기준의 안전한 배열 크기입니다.
+	const int32 SafeWheelCount = FMath::Max(0, ExpectedWheelCount);
+
+	// 마지막 프레임에 읽은 실제 휠 회전각(deg) 배열입니다.
+	LastRuntimeWheelAnglesDeg.Init(0.0f, SafeWheelCount);
+
+	// 래핑을 풀어서 누적한 실제 휠 시각 스핀 각(deg) 배열입니다.
+	AccumulatedRuntimeWheelSpinDeg.Init(0.0f, SafeWheelCount);
+
+	// 실제 휠 회전각의 이전 프레임 샘플 유효 여부 배열입니다.
+	bHasRuntimeWheelAngleSample.Init(false, SafeWheelCount);
+
+	// 현재 휠별 안정화 방향 부호 배열입니다.
+	StableWheelSpinDirectionSigns.Init(0, SafeWheelCount);
+
+	// 현재 휠별 방향 전환 후보 부호 배열입니다.
+	PendingWheelSpinDirectionSigns.Init(0, SafeWheelCount);
+
+	// 현재 휠별 방향 전환 후보 유지 시간(sec) 배열입니다.
+	WheelSpinDirectionHoldElapsedSeconds.Init(0.0f, SafeWheelCount);
 }
 
 bool UCFWheelSyncComp::FailValidation(const FString& FailureMessage)

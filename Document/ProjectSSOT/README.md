@@ -1,90 +1,99 @@
 # ProjectSSOT 운영 가이드 (CarFight)
 
 ## 목적
-`Document/ProjectSSOT/`는 **CarFight 프로젝트 전용 기준 문서 묶음**을 보관한다.
+`Document/ProjectSSOT/`는 CarFight의 **상위 방향 / 현재 기준선 / 작업 순서 / 검증 기준 / 결정 로그**를 유지하는 프로젝트 전용 SSOT다.
 
-이 폴더의 문서는 단순 운영 메모가 아니라,
-**CarFight의 상위 비전과 현재 구현 기준을 함께 유지하기 위한 프로젝트 SSOT**다.
+이 폴더의 목적은 문서를 많이 만드는 것이 아니라,
+**지금 팀이 무엇을 목표로 보고 있고, 현재 어디에 서 있으며, 다음에 무엇을 해야 하는지**를 흔들리지 않게 고정하는 것이다.
 
-- 공통 SSOT 원본은 `Document/SSOT/`에 있다.
-- 이 폴더는 CarFight에만 필요한 **방향 / 현재 상태 / 운영 규칙 / 검증 기준 / 결정 로그**를 기록한다.
-- 공통 규칙은 복붙하지 않고 `Document/SSOT/`를 참조한다.
+공통 규칙 원본은 `Document/SSOT/`에 둔다.
+여기에는 CarFight에만 필요한 판단만 남긴다.
 
 ---
 
-## 먼저 볼 문서
-1. `03_VisionAlign.md`
-2. `README.md`
+## 현재 활성 문서 최소 집합
+앞으로 루트에서 바로 보는 문서는 아래 6개로 줄인다.
+
+1. `README.md`
+   - ProjectSSOT 입구 문서
+   - 문서 역할 분리와 운영 규칙
+2. `03_VisionAlign.md`
+   - 최종 방향
+   - 현재 기준선
+   - 현재 구조 갭
+   - 유지할 것 / 교체할 것
 3. `00_Handover.md`
+   - 지금 실제로 굴러가는 기준선
+   - 현재 리스크
+   - 임시 운영 편차
 4. `01_Roadmap.md`
+   - 문서 정렬 이후 실제 작업 순서
+   - 완료 조건
 5. `08_P0_Verification.md`
+   - 현재 기준선 검증
+   - DriveState 코어 체크
+   - 첫 차량 튜닝 기준
+6. `16_CPP_DecisionLog.md`
+   - 현재 구조 유지 / 교체 판단 기록
 
 ---
 
-## 현재 구현 기준
-- 현재 기준 플레이 차량: `BP_CFVehiclePawn`
-- 현재 기준 Native Pawn: `ACFVehiclePawn`
-- 현재 기준 주행 코어: `UCFVehicleDriveComp`
-- 현재 기준 휠 시각 동기화 코어: `UCFWheelSyncComp`
-- 현재 기준 데이터 축: `UCFVehicleData`
-- 현재 기준 테스트 자산: `DA_PoliceCar`
-
-이 기준은 **현재 실제 구현 기준선**이며,
-CarFight의 상위 목표를 축소하거나 한 대의 차량으로 제한한다는 뜻이 아니다.
+## 먼저 읽는 순서
+1. `03_VisionAlign.md`
+2. `00_Handover.md`
+3. `01_Roadmap.md`
+4. `08_P0_Verification.md`
+5. `16_CPP_DecisionLog.md`
 
 ---
 
-## 문서 묶음의 중심 방향
-CarFight 문서는 아래 흐름을 따라야 한다.
+## 지금 문서가 고정해야 하는 핵심 문장
+아래 4문장은 활성 문서들에서 서로 충돌하면 안 된다.
 
-1. **차량 전투와 물리 상호작용**이라는 상위 목표를 잊지 않는다.
-2. **다양한 차량을 공통 코어 위에 올릴 수 있는 구조**를 지향한다.
-3. 현재 구현은 `BP_CFVehiclePawn` / `ACFVehiclePawn` / `UCFVehicleDriveComp` / `UCFWheelSyncComp` / `UCFVehicleData` 조합을 기준으로 본다.
-4. 문서는 현재 기준선과 장기 목표를 함께 설명해야 한다.
+### 1. 최종 방향
+- CarFight의 최종 차량 구조 목표는 `CMVS / Cluster Union / Geometry Collection` 기반의 다차종 차량 전투 구조다.
 
----
+### 2. 현재 기준선
+- 현재 실제 구현 기준선은 `ACFVehiclePawn + UCFVehicleDriveComp + UCFWheelSyncComp + UCFVehicleData + DA_PoliceCar` 조합이다.
+- 현재 차량 휠 배치는 `Wheel_Anchor_*` 수동 배치 기준선을 사용하고, `AutoFit / 반자동 / 자동 배치`는 현재 운영 기준에서 제외한다.
 
-## 활성 핵심 문서
-- `03_VisionAlign.md`
-  - 상위 비전 / 현재 구현 / 다음 확장 방향
-- `00_Handover.md`
-  - 현재 상태 / 확정 기준 / 현재 리스크
-- `01_Roadmap.md`
-  - 현재 해야 할 일 / 우선순위 / 완료 조건
-- `02_Conventions.md`
-  - CarFight 프로젝트 특화 규칙 / 문서 운영 규칙
-- `08_P0_Verification.md`
-  - 현재 기준 기능 검증 / PASS-FAIL 판정
+### 3. 유지 예정 코어
+- `VehicleData`
+- `DriveState`
+- `WheelSync`
+- Thin BP 원칙
 
----
-
-## 활성 보조 문서
-- `07_TestMap_Notes.md`
-  - 테스트맵 변경/검증 메모 템플릿
-- `12_CPP_TransitionPlan.md`
-  - 파일명은 유지하지만, 현재는 **차량 코어 구조 유지와 확장 기준 문서**로 사용한다.
-- `16_CPP_DecisionLog.md`
-  - 현재 차량 코어 구조와 운영 결정을 기록한다.
-- `18_DriveState_Tuning.md`
-  - VehicleData 기반 DriveState 튜닝 가이드
-- `19_DriveState_CoreChecklist.md`
-  - 공통 코어 검증 체크리스트
-- `20_DocCleanup_Run.md`
-  - 문서 정리 실행표 / 처리 기준
+### 4. 교체 후보
+- Vehicle root 구조
+- 차량 조립 방식
+- 파괴 / 분리 표현 구조
 
 ---
 
-## 문서 작성 원칙
-- 활성 문서는 현재 기준 자산 이름만 쓴다.
-- 현재 기준선과 장기 목표를 혼동하지 않는다.
-- 특정 테스트 차량을 최종 목표처럼 쓰지 않는다.
-- 실존 경로를 우선 참조한다.
-- 완료된 과도기 문서는 `Archive/` 하위로 이동한다.
+## 문서 운영 규칙
+### 1. 최종 방향과 현재 기준선을 섞지 않는다
+- 최종 방향은 `03_VisionAlign.md`에서 고정한다.
+- 현재 실측 상태는 `00_Handover.md`에서만 확정한다.
+- 작업 순서는 `01_Roadmap.md`에서 관리한다.
+
+### 2. 임시 운영 편차와 구조 갭을 구분한다
+- 예:
+  - `GamepadOnly`는 임시 운영 편차다.
+  - `CMVS 미도입`은 구조 갭이다.
+- 이 둘을 같은 수준의 문제로 적지 않는다.
+
+### 3. 특정 테스트 차량을 최종 목표처럼 쓰지 않는다
+- `DA_PoliceCar`는 현재 기준선이다.
+- 최종 목표 차량이 아니다.
+
+### 4. 활성 문서는 적게 유지한다
+- 내용이 겹치면 새 문서를 만들지 않고 기존 활성 문서에 흡수한다.
+- 역할이 끝난 문서는 루트에 남기지 않고 `Archive/`로 이동한다.
 
 ---
 
 ## Archive 운영 원칙
-완료된 작업 문서, 과도기 문서, 체크포인트 로그는 `Archive/` 하위로 이동한다.
+루트 문서는 최소 집합만 남기고, 나머지는 `Archive/`로 내린다.
 
 ### Archive 하위 분류
 - `Archive/LegacyBP/`
@@ -95,3 +104,21 @@ CarFight 문서는 아래 흐름을 따라야 한다.
   - 일자별 체크포인트 로그
 - `Archive/Ops/`
   - 문서 정리 / 이동 실행 기록
+- `Archive/Merged/`
+  - 활성 문서에 흡수되어 루트에서 내려간 문서
+
+---
+
+## 이번 정리의 결과
+이번 정리 이후에는 아래 문서를 루트 기준에서 비활성으로 본다.
+- `02_Conventions.md`
+- `07_TestMap_Notes.md`
+- `12_CPP_TransitionPlan.md`
+- `18_DriveState_Tuning.md`
+- `19_DriveState_CoreChecklist.md`
+- `20_DocCleanup_Run.md`
+- `21_Archive_Index.md`
+- `22_DirectionGap.md`
+- `ProjectSSOT_OpMap.md`
+
+이 문서들은 삭제가 아니라 **흡수 또는 Archive 이동**으로 처리한다.

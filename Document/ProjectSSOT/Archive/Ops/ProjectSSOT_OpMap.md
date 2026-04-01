@@ -15,6 +15,8 @@
   - 현재 상태 / 확정 기준 / 리스크
 - `01_Roadmap.md`
   - 현재 할 일 / 우선순위 / 완료 조건
+- `22_DirectionGap.md`
+  - 상위 방향 문서와 현재 구현 기준선 비교
 - `02_Conventions.md`
   - 프로젝트 특화 규칙
 - `08_P0_Verification.md`
