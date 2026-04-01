@@ -55,7 +55,8 @@
 
 ### 2. 현재 기준선
 - 현재 실제 구현 기준선은 `ACFVehiclePawn + UCFVehicleDriveComp + UCFWheelSyncComp + UCFVehicleData + DA_PoliceCar` 조합이다.
-- 현재 차량 휠 배치는 `Wheel_Anchor_*` 수동 배치 기준선을 사용하고, `AutoFit / 반자동 / 자동 배치`는 현재 운영 기준에서 제외한다.
+- 현재 차량 휠 배치는 `Wheel_Anchor_*` 수동 배치 + `WheelRadius` 기준선을 사용한다.
+- `AutoFit / VehicleLayoutConfig / WheelLayout` 레거시 구조는 현재 코드 기준에서 하드 삭제됐다.
 
 ### 3. 유지 예정 코어
 - `VehicleData`

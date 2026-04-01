@@ -10,6 +10,11 @@
   - `Document/ProjectSSOT/00_Handover.md`
   - `Document/ProjectSSOT/01_Roadmap.md`
 
+> 상태 주의 (2026-04-01):
+> - 이 문서는 VehicleMovement 인벤토리 초안이다.
+> - 본문에 남은 `FCFVehicleWheelLayout` 언급은 현재 코드 기준에서 삭제된 옛 설계 축으로 본다.
+> - 현재 구현 판단은 `UCFVehicleData`의 실제 남아 있는 구조체와 활성 SSOT를 우선한다.
+
 ---
 
 ## 핵심 판단

@@ -17,6 +17,11 @@
   - `UE/Source/CarFight_Re/Public/CFWheelSyncComp.h`
   - `UE/Source/CarFight_Re/Public/CFVehicleData.h`
 
+> 상태 주의 (2026-04-01):
+> - 이 문서는 적용 구조 초안 기록이다.
+> - 본문에 남은 `VehicleLayoutConfig / FCFVehicleWheelLayout` 언급은 현재 구현 기준이 아니다.
+> - 현재 기준선에서는 레거시 AutoFit 경로를 제거했고, 수동 Anchor 배치와 WheelRadius를 사용한다.
+
 ---
 
 ## 핵심 결론

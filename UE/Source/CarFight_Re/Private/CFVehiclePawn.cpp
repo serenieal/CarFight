@@ -1,6 +1,6 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.10.6
+// Version: 2.10.7
 // Date: 2026-03-30
 // Description: CarFight 신규 차량 Pawn 기준 클래스 구현
 
@@ -452,11 +452,11 @@ void ACFVehiclePawn::ApplyVehicleLayoutConfig()
 {
 	if (!VehicleData)
 	{
-		LastVehicleRuntimeSummary = TEXT("VehicleLayoutConfig: VehicleData is null.");
+		LastVehicleRuntimeSummary = TEXT("VehicleLayout: VehicleData is null.");
 		return;
 	}
 
-	LastVehicleRuntimeSummary = TEXT("VehicleLayoutConfig: ManualAnchorLayout=Required");
+	LastVehicleRuntimeSummary = TEXT("VehicleLayout: ManualAnchorLayout=Required");
 }
 
 void ACFVehiclePawn::ApplyVehicleMovementConfig()

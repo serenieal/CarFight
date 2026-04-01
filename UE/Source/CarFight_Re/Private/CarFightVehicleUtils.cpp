@@ -1,7 +1,7 @@
 ﻿// Version: 4.2.0
 // Date: 2026-03-31
 // Description: CarFight 차량 물리/디버그 유틸리티 구현
-// Patch: v4.2.3 - Runtime/Transition 디버그 요약 축소 및 중복 제거
+// Patch: v4.2.4 - VehicleLayout 레거시 명칭 정리 및 Runtime 요약 호환 유지
 
 #include "CarFightVehicleUtils.h"
 
@@ -89,10 +89,12 @@ static void AppendCompactRuntimeSummaryLines(
 			continue;
 		}
 
-		if (RuntimeSummaryPart.StartsWith(TEXT("VehicleLayoutConfig: ")))
+		if (RuntimeSummaryPart.StartsWith(TEXT("VehicleLayout: ")) || RuntimeSummaryPart.StartsWith(TEXT("VehicleLayoutConfig: ")))
 		{
 			// 현재 레이아웃 운영 기준을 짧게 보여줄 문자열입니다.
-			const FString LayoutSummaryText = RuntimeSummaryPart.RightChop(21);
+			const FString LayoutSummaryText = RuntimeSummaryPart.StartsWith(TEXT("VehicleLayout: "))
+				? RuntimeSummaryPart.RightChop(15)
+				: RuntimeSummaryPart.RightChop(21);
 
 			if (LayoutSummaryText.Contains(TEXT("ManualAnchorLayout=Required")))
 			{

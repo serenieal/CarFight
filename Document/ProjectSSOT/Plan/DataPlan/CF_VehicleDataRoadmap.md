@@ -18,6 +18,10 @@
   - `Document/ProjectSSOT/Plan/CF_VehicleDataDraftDesign.md`
   - `Document/ProjectSSOT/Plan/CF_VehicleDataHeader.md`
 
+> 상태 주의 (2026-04-01):
+> - 이 로드맵의 일부 하위 문서는 `AutoFit / VehicleLayoutConfig / WheelLayout`을 포함한 초기 설계 흔적을 유지한다.
+> - 현재 코드 기준에서는 해당 레거시 구조가 삭제됐으므로, 문서 해석 시 루트 활성 SSOT와 실제 소스 파일을 우선한다.
+
 ---
 
 ## 핵심 결론

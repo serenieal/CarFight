@@ -2,7 +2,7 @@
 
 > 역할: CarFight 현재 기준 구현의 **PASS / FAIL 판정 / DriveState 코어 체크 / 첫 차량 튜닝 기준**을 한 문서에 모은다.  
 > 기준 상태 문서: `00_Handover.md`  
-> 마지막 정리(Asia/Seoul): 2026-03-31
+> 마지막 정리(Asia/Seoul): 2026-04-01
 
 ---
 
@@ -13,10 +13,11 @@
 
 ---
 
-## 현재 실행 상태 (2026-03-31)
+## 현재 실행 상태 (2026-04-01)
 - 문서 정렬과 자산 / 코드 기준 실측 반영은 완료됐다.
 - 이전 `ue-assetdump` 플러그인 개선으로 인한 Unreal Editor 실행 불가 제약은 해소됐다.
-- 따라서 아래 판정 항목의 **런타임 PASS / FAIL 확인을 지금부터 재개할 수 있다.**
+- `CFVehicleData`의 레거시 `AutoFit / VehicleLayoutConfig / WheelLayout` 구조는 코드 기준 하드 삭제됐다.
+- 따라서 아래 판정 항목의 **런타임 PASS / FAIL 확인과 삭제 이후 자산 로드 확인을 함께 재개할 수 있다.**
 - 이 문서는 현재 단계에서 "실행 순서와 기록 형식"까지 고정하는 기준 문서로 사용한다.
 
 ---
@@ -191,7 +192,7 @@
 - 현재 기본안은 `Wheel_Anchor_*`를 바퀴 중심점 / 조향 피벗 / 레이아웃 배치 기준으로 둔다.
 - `Wheel_Mesh_*`는 Anchor 자식 기준의 시각 표현 전용으로 둔다.
 - `PoliceCar`는 수동 Anchor 배치를 현재 기준선으로 고정한다.
-- 따라서 레거시 `AutoFit / WheelLayout` 자동 배치 경로는 현재 런타임 기준에서 제거한다.
+- 따라서 레거시 `AutoFit / WheelLayout` 자동 배치 경로는 현재 런타임 기준에서 제거했고, 현재 코드 기준에서는 데이터 구조도 하드 삭제했다.
 
 #### 2. 파일 단위 수정 대상
 - `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp`

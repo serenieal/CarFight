@@ -47,8 +47,8 @@
   - 바퀴 파묻힘은 `Anchor Z`가 아니라 `WheelRadius` 조정으로 해결했다.
   - `ACFVehiclePawn` 디테일 패널 카테고리 정리를 위해 `CarFight|VehiclePawn` 루트 분리가 반영됐다.
   - 후속 메타데이터 정리로 `VehicleDriveComp`는 `Vehicle Drive`, 컴포넌트 참조는 `컴포넌트` 루트로 분리되어 `Vehicle Pawn` 중복 표시가 해소됐다.
-  - `AutoFit` 레거시 구조는 하드 삭제 대신 `CFVehicleData` 내부에서 레거시 카테고리로 격리 정리한다.
-- 따라서 현재 다음 우선순위는 문서 작업이 아니라 고속 휠 시각 품질 검토와 레거시 `AutoFit` 정리다.
+  - `CFVehicleData` 내부 `AutoFit / VehicleLayoutConfig / WheelLayout` 레거시 구조는 하드 삭제 완료 상태로 본다.
+- 따라서 현재 다음 우선순위는 문서 작업이 아니라 고속 휠 시각 품질 검토다.
 
 ---
 
@@ -143,10 +143,10 @@
   - 바퀴는 `Wheel_FL / FR / RL / RR`
 - 레이아웃:
   - 현재 기준선은 `Wheel_Anchor_*` 수동 배치를 사용한다.
-- 레거시 `AutoFit` 필드는 더 이상 현재 기준 런타임에서 사용하지 않는다.
+- 레거시 `AutoFit` 필드는 현재 기준 런타임에서 사용하지 않으며, 현재 코드 기준에서는 하드 삭제됐다.
 - 현재 코드 정리 기준:
-  - `CFVehicleData` 안의 `VehicleLayoutConfig / WheelLayout / AutoFit` 필드는 레거시 카테고리로 격리해 유지한다.
-  - 자산 호환성을 위해 이번 단계에서는 하드 삭제하지 않는다.
+  - `CFVehicleData` 안의 `VehicleLayoutConfig / WheelLayout / AutoFit` 필드는 제거됐다.
+  - 현재 운영 기준선은 `수동 Wheel_Anchor 배치 + WheelRadius`만 사용한다.
 - `PoliceCar` 수동 기준선 좌표:
     - `FL = (195.069249, -94.740381, 12.036834)`
     - `FR = (195.069249, 94.740381, 12.036834)`

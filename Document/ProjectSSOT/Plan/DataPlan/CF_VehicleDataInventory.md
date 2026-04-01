@@ -9,6 +9,11 @@
   - `Document/ProjectSSOT/00_Handover.md`
   - `Document/ProjectSSOT/01_Roadmap.md`
 
+> 상태 주의 (2026-04-01):
+> - 이 문서는 초기 인벤토리 기록이다.
+> - 본문에 남은 `FCFVehicleWheelLayout` 항목은 현재 코드 기준에서 삭제된 역사 기록으로 본다.
+> - 실제 데이터 축은 현재 `VehicleVisualConfig / VehicleMovementConfig / WheelVisualConfig / VehicleReferenceConfig / DriveStateConfig`를 기준으로 본다.
+
 ---
 
 ## 핵심 판단

@@ -44,10 +44,10 @@
   - 바퀴 파묻힘 이슈는 `Anchor Z`가 아니라 `WheelRadius` 조정으로 해결했다.
   - `ACFVehiclePawn` 디테일 패널 카테고리 정리를 위해 `CarFight|VehiclePawn` 루트 분리가 반영됐다.
   - 후속 실측 기준으로 `Vehicle Pawn` 중복은 `DriveComp`를 `CarFight|VehicleDrive`, 컴포넌트 참조를 `CarFight|Components`로 분리해 해소했다.
-  - `AutoFit` 레거시 정리는 하드 삭제가 아니라 `CFVehicleData` 내 레거시 카테고리 격리부터 진행한다.
+  - `AutoFit` 레거시 정리는 `CFVehicleData` 기준 하드 삭제까지 반영했다.
 - 현재 WheelSync / Layout 후속 우선순위:
   1. 고속 휠 시각 품질 개선 검토
-  2. 레거시 `AutoFit` 구조 비활성 정리
+  2. 삭제 이후 자산 로드 경고 유무 재검증
 - 직접 수정 전에 아래 4가지를 먼저 문서상에서 고정한다.
   1. 확정 사실
   2. 강한 가설

@@ -4,6 +4,8 @@
 > - 이 문서는 CarFight의 **최종 방향과 기술적 북극성**을 설명한다.
 > - 여기의 구조 설명은 현재 실제 구현이 아니라 **장기 목표 구조**를 포함한다.
 > - 현재 실행 기준은 `Document/ProjectSSOT/README.md`와 루트 활성 문서를 따른다.
+> - 본문에 남아 있는 `Auto-Fit / bAutoFitToChassis / HeightOffset` 자동 배치 설명은 현재 구현 기준이 아니라 장기 아이디어 기록이다.
+> - 현재 코드 기준에서는 레거시 AutoFit 구조가 삭제됐고, 실제 운영 기준은 `수동 Wheel_Anchor 배치 + WheelRadius`다.
 
 ## 1. 서론: 프로젝트 비전 및 기술적 방향성
 

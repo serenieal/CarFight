@@ -13,6 +13,11 @@
   - `Document/ProjectSSOT/Plan/CF_VehicleDataDraftDesign.md`
   - `UE/Source/CarFight_Re/Public/CFVehicleData.h`
 
+> 상태 주의 (2026-04-01):
+> - 이 문서는 `CFVehicleData.h` 초기 확장 초안 기록이다.
+> - 본문에 남아 있는 `FCFVehicleWheelLayout / FCFVehicleLayoutConfig / VehicleLayoutConfig / AutoFit / WheelLayout` 설계안은 현재 코드 기준에서 삭제된 구조다.
+> - 실제 구현 판단은 현재 소스 파일과 루트 활성 SSOT 문서를 우선한다.
+
 ---
 
 ## 핵심 결론

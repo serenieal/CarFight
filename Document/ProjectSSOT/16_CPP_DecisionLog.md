@@ -256,10 +256,10 @@
 
 ---
 
-### CF-DL-0056 — AutoFit은 레거시 필드로만 남긴다
+### CF-DL-0056 — AutoFit은 런타임/데이터 기준에서 제거한다
 - 판정: 확정
 - 결정:
-  - `AutoFit`은 현재 기준 런타임에서 사용하지 않으며, 레거시 필드로만 남긴다.
+  - `AutoFit`은 현재 기준 런타임에서 사용하지 않으며, `CFVehicleData`에서도 제거한다.
 - 이유:
   - 현재 단계에서 AutoFit은 기준선보다 불안정했고, 수동 Anchor 기준선은 이미 실제 PASS 결과를 제공했다.
   - 프로젝트 방향상 앞으로도 자동 / 반자동 배치를 기본안으로 채택하지 않는다.
@@ -357,14 +357,14 @@
 
 ---
 
-### CF-DL-0065 — AutoFit 레거시 구조는 즉시 삭제하지 않고 카테고리 격리부터 한다
+### CF-DL-0065 — AutoFit 레거시 구조 정리는 하드 삭제로 닫는다
 - 판정: 확정
 - 결정:
-  - `CFVehicleData` 내부의 `VehicleLayoutConfig / WheelLayout / AutoFit` 필드는 지금 단계에서 하드 삭제하지 않는다.
-  - 대신 `CarFight|Legacy|AutoFit` 카테고리로 격리해 현재 운영 기준과 시각적으로 분리한다.
+  - `CFVehicleData` 내부의 `VehicleLayoutConfig / WheelLayout / AutoFit` 필드는 하드 삭제로 정리한다.
+  - 현재 운영 기준은 `Wheel_Anchor_*` 수동 배치와 `WheelRadius` 조정만 남긴다.
 - 이유:
-  - 현재 런타임은 이미 AutoFit을 사용하지 않으므로 기능상 급한 제거가 아니다.
-  - `DA_PoliceCar` 등 기존 자산 직렬화 호환성을 보존하면서, 현재 작업자가 레거시 구조를 덜 오해하게 만드는 것이 우선이다.
+  - 현재 런타임은 이미 AutoFit을 사용하지 않으므로 기능상 보존 가치가 없다.
+  - 활성 SSOT와 실제 코드 기준선을 다시 일치시키는 편이 이후 작업 혼선을 줄인다.
 
 ---
 

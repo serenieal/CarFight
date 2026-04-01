@@ -9,6 +9,11 @@
   - `Document/ProjectSSOT/Plan/CF_VehicleDataInventory.md`
   - `Document/ProjectSSOT/Plan/CF_VehicleMovementInventory.md`
 
+> 상태 주의 (2026-04-01):
+> - 이 문서는 초기 골격 설계 기록이다.
+> - 본문에 남아 있는 `FCFVehicleWheelLayout / WheelLayout / AutoFit` 언급은 현재 구현 기준이 아니다.
+> - 현재 코드 기준은 레거시 레이아웃 구조 삭제 완료이며, 실제 운영 기준은 `수동 Wheel_Anchor 배치 + WheelRadius`다.
+
 ---
 
 ## 핵심 결론
