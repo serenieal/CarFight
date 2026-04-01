@@ -213,7 +213,6 @@ private:
 	bool HasAnyWheelContactSurfaceHint() const;
 	float GetCurrentStateMinimumHoldTimeSeconds() const;
 	bool CanApplyStateTransition(ECFVehicleDriveState CandidateDriveState, float CurrentWorldTimeSeconds) const;
-	FString GetDriveStateDisplayName(ECFVehicleDriveState InDriveState) const;
 	void UpdateDriveStateTransitionSummary(const FCFVehicleDriveStateSnapshot& InDriveStateSnapshot);
 	float ConvertCmPerSecToKmh(float InSpeedCmPerSec) const;
 };

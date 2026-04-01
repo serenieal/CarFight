@@ -1,8 +1,8 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.10.7
-// Date: 2026-03-30
-// Description: CarFight 신규 차량 Pawn 기준 클래스 구현
+// Version: 2.10.9
+// Date: 2026-04-01
+// Description: CarFight 신규 차량 Pawn 기준 클래스 구현 (입력 장치 필터 보강 / 입력 바인딩/디버그 요약/Movement 조회 책임 분리)
 
 #include "CFVehiclePawn.h"
 
@@ -46,6 +46,71 @@ namespace
 		}
 
 		return nullptr;
+	}
+
+	// Triggered/Completed 패턴의 축 입력 액션 바인딩을 공통 처리합니다.
+	template<typename TriggeredHandlerType, typename CompletedHandlerType>
+	void BindTriggeredCompletedInputAction(
+		UEnhancedInputComponent* EnhancedInputComponent,
+		UInputAction* SourceInputAction,
+		ACFVehiclePawn* VehiclePawn,
+		TriggeredHandlerType TriggeredHandler,
+		CompletedHandlerType CompletedHandler)
+	{
+		if (!EnhancedInputComponent || !SourceInputAction || !VehiclePawn)
+		{
+			return;
+		}
+
+		EnhancedInputComponent->BindAction(SourceInputAction, ETriggerEvent::Triggered, VehiclePawn, TriggeredHandler);
+		EnhancedInputComponent->BindAction(SourceInputAction, ETriggerEvent::Completed, VehiclePawn, CompletedHandler);
+	}
+
+	// Started/Completed 패턴의 디지털 입력 액션 바인딩을 공통 처리합니다.
+	template<typename StartedHandlerType, typename CompletedHandlerType>
+	void BindStartedCompletedInputAction(
+		UEnhancedInputComponent* EnhancedInputComponent,
+		UInputAction* SourceInputAction,
+		ACFVehiclePawn* VehiclePawn,
+		StartedHandlerType StartedHandler,
+		CompletedHandlerType CompletedHandler)
+	{
+		if (!EnhancedInputComponent || !SourceInputAction || !VehiclePawn)
+		{
+			return;
+		}
+
+		EnhancedInputComponent->BindAction(SourceInputAction, ETriggerEvent::Started, VehiclePawn, StartedHandler);
+		EnhancedInputComponent->BindAction(SourceInputAction, ETriggerEvent::Completed, VehiclePawn, CompletedHandler);
+	}
+
+	// 기존 런타임 요약에서 WheelSync 후행 접미사를 제거한 기본 문자열을 반환합니다.
+	FString StripWheelSyncRuntimeSummarySuffix(const FString& RuntimeSummary)
+	{
+		// 기존 런타임 요약에서 WheelSyncBuild 접미사가 시작되는 위치입니다.
+		const int32 ExistingWheelSyncBuildIndex = RuntimeSummary.Find(TEXT(" | WheelSyncBuild="));
+
+		// 기존 런타임 요약에서 WheelSyncRuntime 접미사가 시작되는 위치입니다.
+		const int32 ExistingWheelSyncRuntimeIndex = RuntimeSummary.Find(TEXT(" | WheelSyncRuntime="));
+
+		// 기존 WheelSync 접미사 중 가장 먼저 나타나는 시작 위치입니다.
+		int32 ExistingWheelSyncSummaryIndex = INDEX_NONE;
+		if (ExistingWheelSyncBuildIndex != INDEX_NONE && ExistingWheelSyncRuntimeIndex != INDEX_NONE)
+		{
+			ExistingWheelSyncSummaryIndex = FMath::Min(ExistingWheelSyncBuildIndex, ExistingWheelSyncRuntimeIndex);
+		}
+		else if (ExistingWheelSyncBuildIndex != INDEX_NONE)
+		{
+			ExistingWheelSyncSummaryIndex = ExistingWheelSyncBuildIndex;
+		}
+		else if (ExistingWheelSyncRuntimeIndex != INDEX_NONE)
+		{
+			ExistingWheelSyncSummaryIndex = ExistingWheelSyncRuntimeIndex;
+		}
+
+		return (ExistingWheelSyncSummaryIndex != INDEX_NONE)
+			? RuntimeSummary.Left(ExistingWheelSyncSummaryIndex)
+			: RuntimeSummary;
 	}
 }
 
@@ -120,26 +185,30 @@ void ACFVehiclePawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 		return;
 	}
 
-	if (InputAction_Throttle)
-	{
-		EnhancedInputComponent->BindAction(InputAction_Throttle, ETriggerEvent::Triggered, this, &ACFVehiclePawn::HandleThrottleInput);
-		EnhancedInputComponent->BindAction(InputAction_Throttle, ETriggerEvent::Completed, this, &ACFVehiclePawn::HandleThrottleReleased);
-	}
-	if (InputAction_Steering)
-	{
-		EnhancedInputComponent->BindAction(InputAction_Steering, ETriggerEvent::Triggered, this, &ACFVehiclePawn::HandleSteeringInput);
-		EnhancedInputComponent->BindAction(InputAction_Steering, ETriggerEvent::Completed, this, &ACFVehiclePawn::HandleSteeringReleased);
-	}
-	if (InputAction_Brake)
-	{
-		EnhancedInputComponent->BindAction(InputAction_Brake, ETriggerEvent::Triggered, this, &ACFVehiclePawn::HandleBrakeInput);
-		EnhancedInputComponent->BindAction(InputAction_Brake, ETriggerEvent::Completed, this, &ACFVehiclePawn::HandleBrakeReleased);
-	}
-	if (InputAction_Handbrake)
-	{
-		EnhancedInputComponent->BindAction(InputAction_Handbrake, ETriggerEvent::Started, this, &ACFVehiclePawn::HandleHandbrakeStarted);
-		EnhancedInputComponent->BindAction(InputAction_Handbrake, ETriggerEvent::Completed, this, &ACFVehiclePawn::HandleHandbrakeCompleted);
-	}
+	BindTriggeredCompletedInputAction(
+		EnhancedInputComponent,
+		InputAction_Throttle,
+		this,
+		&ACFVehiclePawn::HandleThrottleInput,
+		&ACFVehiclePawn::HandleThrottleReleased);
+	BindTriggeredCompletedInputAction(
+		EnhancedInputComponent,
+		InputAction_Steering,
+		this,
+		&ACFVehiclePawn::HandleSteeringInput,
+		&ACFVehiclePawn::HandleSteeringReleased);
+	BindTriggeredCompletedInputAction(
+		EnhancedInputComponent,
+		InputAction_Brake,
+		this,
+		&ACFVehiclePawn::HandleBrakeInput,
+		&ACFVehiclePawn::HandleBrakeReleased);
+	BindStartedCompletedInputAction(
+		EnhancedInputComponent,
+		InputAction_Handbrake,
+		this,
+		&ACFVehiclePawn::HandleHandbrakeStarted,
+		&ACFVehiclePawn::HandleHandbrakeCompleted);
 }
 
 bool ACFVehiclePawn::RegisterDefaultInputMappingContext()
@@ -200,49 +269,94 @@ bool ACFVehiclePawn::UpdateVehicleWheelVisuals(float DeltaSeconds)
 	}
 	else
 	{
-		// 기존 런타임 요약에서 WheelSyncBuild 접미사가 시작되는 위치입니다.
-		const int32 ExistingWheelSyncBuildIndex = LastVehicleRuntimeSummary.Find(TEXT(" | WheelSyncBuild="));
-
-		// 기존 런타임 요약에서 WheelSyncRuntime 접미사가 시작되는 위치입니다.
-		const int32 ExistingWheelSyncRuntimeIndex = LastVehicleRuntimeSummary.Find(TEXT(" | WheelSyncRuntime="));
-
-		// 기존 WheelSync 접미사 중 가장 먼저 나타나는 시작 위치입니다.
-		int32 ExistingWheelSyncSummaryIndex = INDEX_NONE;
-		if (ExistingWheelSyncBuildIndex != INDEX_NONE && ExistingWheelSyncRuntimeIndex != INDEX_NONE)
-		{
-			ExistingWheelSyncSummaryIndex = FMath::Min(ExistingWheelSyncBuildIndex, ExistingWheelSyncRuntimeIndex);
-		}
-		else if (ExistingWheelSyncBuildIndex != INDEX_NONE)
-		{
-			ExistingWheelSyncSummaryIndex = ExistingWheelSyncBuildIndex;
-		}
-		else if (ExistingWheelSyncRuntimeIndex != INDEX_NONE)
-		{
-			ExistingWheelSyncSummaryIndex = ExistingWheelSyncRuntimeIndex;
-		}
-
-		// WheelSync 접미사를 제외한 기본 런타임 요약 문자열입니다.
-		const FString BaseRuntimeSummary = (ExistingWheelSyncSummaryIndex != INDEX_NONE)
-			? LastVehicleRuntimeSummary.Left(ExistingWheelSyncSummaryIndex)
-			: LastVehicleRuntimeSummary;
-
-		// 현재 프레임 입력 생성 단계 요약 문자열입니다.
-		const FString WheelSyncBuildSummary = WheelSyncComp->LastInputBuildSummary.IsEmpty()
-			? TEXT("NotBuilt")
-			: WheelSyncComp->LastInputBuildSummary;
-
-		// 현재 프레임 적용 단계 요약 문자열입니다.
-		const FString WheelSyncRuntimeSummary = WheelSyncComp->LastValidationSummary.IsEmpty()
-			? TEXT("NotApplied")
-			: WheelSyncComp->LastValidationSummary;
-
-		LastVehicleRuntimeSummary = FString::Printf(
-			TEXT("%s | WheelSyncBuild=%s | WheelSyncRuntime=%s"),
-			*BaseRuntimeSummary,
-			*WheelSyncBuildSummary,
-			*WheelSyncRuntimeSummary);
+		AppendWheelSyncRuntimeSummary();
 	}
 	return bUpdated;
+}
+
+UChaosWheeledVehicleMovementComponent* ACFVehiclePawn::ResolveVehicleMovementComponent(const TCHAR* CacheFailureSummary, const TCHAR* MissingComponentSummary)
+{
+	// 현재 DriveComp가 이미 보유한 VehicleMovement 컴포넌트 포인터입니다.
+	UChaosWheeledVehicleMovementComponent* ResolvedVehicleMovementComponent =
+		VehicleDriveComp ? VehicleDriveComp->GetVehicleMovementComponent() : nullptr;
+
+	if (!ResolvedVehicleMovementComponent && (!VehicleDriveComp || !VehicleDriveComp->CacheVehicleMovementComponent()))
+	{
+		LastVehicleRuntimeSummary = CacheFailureSummary;
+		return nullptr;
+	}
+
+	// 캐시 재시도 이후 확정된 VehicleMovement 컴포넌트 포인터입니다.
+	ResolvedVehicleMovementComponent = VehicleDriveComp ? VehicleDriveComp->GetVehicleMovementComponent() : nullptr;
+	if (!ResolvedVehicleMovementComponent)
+	{
+		LastVehicleRuntimeSummary = MissingComponentSummary;
+	}
+
+	return ResolvedVehicleMovementComponent;
+}
+
+FString ACFVehiclePawn::BuildVehicleDebugSummary(bool bUseMultilineFormat, bool bIncludeRuntimeSummary, bool bIncludeTransitionSummary, bool bIncludeInputState) const
+{
+	// 현재 Pawn 기준 디버그 스냅샷입니다.
+	const FCFVehicleDebugSnapshot VehicleDebugSnapshot = GetVehicleDebugSnapshot();
+
+	if (bUseMultilineFormat)
+	{
+		return UCarFightVehicleUtils::MakeVehicleDebugSnapshotMultilineDebugString(
+			VehicleDebugSnapshot,
+			bIncludeRuntimeSummary,
+			bIncludeTransitionSummary,
+			bIncludeInputState);
+	}
+
+	return UCarFightVehicleUtils::MakeVehicleDebugSnapshotDebugString(
+		VehicleDebugSnapshot,
+		bIncludeRuntimeSummary,
+		bIncludeTransitionSummary,
+		bIncludeInputState);
+}
+
+void ACFVehiclePawn::AppendWheelSyncRuntimeSummary()
+{
+	// WheelSync 접미사를 제외한 기본 런타임 요약 문자열입니다.
+	const FString BaseRuntimeSummary = StripWheelSyncRuntimeSummarySuffix(LastVehicleRuntimeSummary);
+
+	// 현재 프레임 입력 생성 단계 요약 문자열입니다.
+	const FString WheelSyncBuildSummary =
+		(WheelSyncComp && !WheelSyncComp->LastInputBuildSummary.IsEmpty())
+		? WheelSyncComp->LastInputBuildSummary
+		: TEXT("NotBuilt");
+
+	// 현재 프레임 적용 단계 요약 문자열입니다.
+	const FString WheelSyncRuntimeSummary =
+		(WheelSyncComp && !WheelSyncComp->LastValidationSummary.IsEmpty())
+		? WheelSyncComp->LastValidationSummary
+		: TEXT("NotApplied");
+
+	LastVehicleRuntimeSummary = FString::Printf(
+		TEXT("%s | WheelSyncBuild=%s | WheelSyncRuntime=%s"),
+		*BaseRuntimeSummary,
+		*WheelSyncBuildSummary,
+		*WheelSyncRuntimeSummary);
+}
+
+void ACFVehiclePawn::ApplyAxisInputFromAction(const UInputAction* SourceInputAction, const FInputActionValue& InputActionValue, void (ACFVehiclePawn::*AxisInputSetter)(float))
+{
+	// 현재 액션에서 읽은 축 입력값입니다.
+	const float InputValue = InputActionValue.Get<float>();
+	if (!ShouldAcceptActionInput(SourceInputAction, InputValue))
+	{
+		(this->*AxisInputSetter)(0.0f);
+		return;
+	}
+
+	(this->*AxisInputSetter)(InputValue);
+}
+
+void ACFVehiclePawn::ResetAxisInput(void (ACFVehiclePawn::*AxisInputSetter)(float))
+{
+	(this->*AxisInputSetter)(0.0f);
 }
 
 void ACFVehiclePawn::SetVehicleThrottleInput(float InThrottleValue)
@@ -330,26 +444,12 @@ FCFVehicleDebugSnapshot ACFVehiclePawn::GetVehicleDebugSnapshot() const
 
 FText ACFVehiclePawn::GetDebugTextSingleLine() const
 {
-	const FCFVehicleDebugSnapshot VehicleDebugSnapshot = GetVehicleDebugSnapshot();
-	const FString DebugSummary = UCarFightVehicleUtils::MakeVehicleDebugSnapshotDebugString(
-		VehicleDebugSnapshot,
-		false,
-		true,
-		true);
-
-	return FText::FromString(DebugSummary);
+	return FText::FromString(BuildVehicleDebugSummary(false, false, true, true));
 }
 
 FText ACFVehiclePawn::GetDebugTextMultiLine() const
 {
-	const FCFVehicleDebugSnapshot VehicleDebugSnapshot = GetVehicleDebugSnapshot();
-	const FString DebugSummary = UCarFightVehicleUtils::MakeVehicleDebugSnapshotMultilineDebugString(
-		VehicleDebugSnapshot,
-		true,
-		true,
-		true);
-
-	return FText::FromString(DebugSummary);
+	return FText::FromString(BuildVehicleDebugSummary(true, true, true, true));
 }
 
 FText ACFVehiclePawn::GetDebugTextByDisplayMode() const
@@ -384,21 +484,31 @@ void ACFVehiclePawn::ApplyVehicleDataConfig()
 		LastVehicleRuntimeSummary = TEXT("VehicleDataConfig: VehicleData is null.");
 		return;
 	}
+	// 차량 데이터 단계별 적용 결과 문자열 목록입니다.
+	TArray<FString> VehicleConfigSummaries;
+
 	ApplyVehicleVisualConfig();
-	const FString VehicleVisualSummary = LastVehicleRuntimeSummary;
+	VehicleConfigSummaries.Add(LastVehicleRuntimeSummary);
 	ApplyVehicleLayoutConfig();
-	const FString VehicleLayoutSummary = LastVehicleRuntimeSummary;
+	VehicleConfigSummaries.Add(LastVehicleRuntimeSummary);
 	ApplyVehicleMovementConfig();
-	const FString VehicleMovementSummary = LastVehicleRuntimeSummary;
+	VehicleConfigSummaries.Add(LastVehicleRuntimeSummary);
 	ApplyVehicleReferenceConfig();
-	const FString VehicleReferenceSummary = LastVehicleRuntimeSummary;
+	VehicleConfigSummaries.Add(LastVehicleRuntimeSummary);
 	ApplyVehicleWheelVisualConfig();
-	const FString WheelVisualSummary = LastVehicleRuntimeSummary;
+	VehicleConfigSummaries.Add(LastVehicleRuntimeSummary);
 	if (VehicleDriveComp)
 	{
 		VehicleDriveComp->ApplyDriveStateConfig(VehicleData->DriveStateConfig);
 	}
-	LastVehicleRuntimeSummary = FString::Printf(TEXT("%s | %s | %s | %s | %s | DriveStateConfig=%s"), *VehicleVisualSummary, *VehicleLayoutSummary, *VehicleMovementSummary, *VehicleReferenceSummary, *WheelVisualSummary, VehicleData->DriveStateConfig.bUseDriveStateOverrides ? TEXT("Applied") : TEXT("Default"));
+
+	// DriveState 설정 적용 여부 요약 문자열입니다.
+	const FString DriveStateConfigSummary = FString::Printf(
+		TEXT("DriveStateConfig=%s"),
+		VehicleData->DriveStateConfig.bUseDriveStateOverrides ? TEXT("Applied") : TEXT("Default"));
+	VehicleConfigSummaries.Add(DriveStateConfigSummary);
+
+	LastVehicleRuntimeSummary = FString::Join(VehicleConfigSummaries, TEXT(" | "));
 }
 
 void ACFVehiclePawn::ApplyVehicleVisualConfig()
@@ -471,16 +581,11 @@ void ACFVehiclePawn::ApplyVehicleMovementConfig()
 		LastVehicleRuntimeSummary = TEXT("VehicleMovementConfig: VehicleDriveComp is null.");
 		return;
 	}
-	UChaosWheeledVehicleMovementComponent* ChaosVehicleMovementComp = VehicleDriveComp->GetVehicleMovementComponent();
-	if (!ChaosVehicleMovementComp && !VehicleDriveComp->CacheVehicleMovementComponent())
-	{
-		LastVehicleRuntimeSummary = TEXT("VehicleMovementConfig: VehicleMovement cache failed.");
-		return;
-	}
-	ChaosVehicleMovementComp = VehicleDriveComp->GetVehicleMovementComponent();
+	UChaosWheeledVehicleMovementComponent* ChaosVehicleMovementComp = ResolveVehicleMovementComponent(
+		TEXT("VehicleMovementConfig: VehicleMovement cache failed."),
+		TEXT("VehicleMovementConfig: VehicleMovement component is null."));
 	if (!ChaosVehicleMovementComp)
 	{
-		LastVehicleRuntimeSummary = TEXT("VehicleMovementConfig: VehicleMovement component is null.");
 		return;
 	}
 
@@ -626,16 +731,11 @@ void ACFVehiclePawn::ApplyVehicleReferenceConfig()
 		LastVehicleRuntimeSummary = TEXT("VehicleReferenceConfig: VehicleDriveComp is null.");
 		return;
 	}
-	UChaosWheeledVehicleMovementComponent* ChaosVehicleMovementComp = VehicleDriveComp->GetVehicleMovementComponent();
-	if (!ChaosVehicleMovementComp && !VehicleDriveComp->CacheVehicleMovementComponent())
-	{
-		LastVehicleRuntimeSummary = TEXT("VehicleReferenceConfig: VehicleMovement cache failed.");
-		return;
-	}
-	ChaosVehicleMovementComp = VehicleDriveComp->GetVehicleMovementComponent();
+	UChaosWheeledVehicleMovementComponent* ChaosVehicleMovementComp = ResolveVehicleMovementComponent(
+		TEXT("VehicleReferenceConfig: VehicleMovement cache failed."),
+		TEXT("VehicleReferenceConfig: VehicleMovement component is null."));
 	if (!ChaosVehicleMovementComp)
 	{
-		LastVehicleRuntimeSummary = TEXT("VehicleReferenceConfig: VehicleMovement component is null.");
 		return;
 	}
 	const bool bHasFrontWheelClass = (VehicleData->VehicleReferenceConfig.FrontWheelClass != nullptr);
@@ -676,25 +776,15 @@ void ACFVehiclePawn::DisplayDriveStateOnScreenDebug() const
 		return;
 	}
 
-	const FCFVehicleDebugSnapshot VehicleDebugSnapshot = GetVehicleDebugSnapshot();
-	FString DriveDebugSummary;
+	// 현재 화면 출력에 사용할 Drive 디버그 문자열입니다.
+	const FString DriveDebugSummary = BuildVehicleDebugSummary(
+		DriveStateDebugDisplayMode == ECFVehicleDebugDisplayMode::MultiLine,
+		false,
+		false,
+		true);
 
-	if (DriveStateDebugDisplayMode == ECFVehicleDebugDisplayMode::MultiLine)
-	{
-		DriveDebugSummary = UCarFightVehicleUtils::MakeVehicleDebugSnapshotMultilineDebugString(
-			VehicleDebugSnapshot,
-			false,
-			false,
-			true);
-	}
-	else
-	{
-		DriveDebugSummary = UCarFightVehicleUtils::MakeVehicleDebugSnapshotDebugString(
-			VehicleDebugSnapshot,
-			false,
-			false,
-			true);
-	}
+	// 현재 화면 출력에 사용할 차량 디버그 스냅샷입니다.
+	const FCFVehicleDebugSnapshot VehicleDebugSnapshot = GetVehicleDebugSnapshot();
 
 	GEngine->AddOnScreenDebugMessage(
 		reinterpret_cast<uint64>(this),
@@ -724,7 +814,17 @@ bool ACFVehiclePawn::ShouldAcceptActionInput(const UInputAction* SourceInputActi
 	{
 		return true;
 	}
+
+	// 현재 허용해야 하는 입력 장치가 게임패드인지 여부입니다.
 	const bool bRequireGamepadKey = (InputDeviceMode == ECFVehicleInputDeviceMode::GamepadOnly);
+
+	// 현재 차단해야 하는 반대 입력 장치 키가 활성 상태인지 여부입니다.
+	const bool bHasBlockedDeviceInput = HasActiveMappedKeyForDevice(SourceInputAction, !bRequireGamepadKey);
+	if (bHasBlockedDeviceInput)
+	{
+		return false;
+	}
+
 	return HasActiveMappedKeyForDevice(SourceInputAction, bRequireGamepadKey);
 }
 
@@ -771,50 +871,32 @@ bool ACFVehiclePawn::IsMappedKeyCurrentlyActive(const FKey& MappingKey) const
 
 void ACFVehiclePawn::HandleThrottleInput(const FInputActionValue& InputActionValue)
 {
-	const float InputValue = InputActionValue.Get<float>();
-	if (!ShouldAcceptActionInput(InputAction_Throttle, InputValue))
-	{
-		SetVehicleThrottleInput(0.0f);
-		return;
-	}
-	SetVehicleThrottleInput(InputValue);
+	ApplyAxisInputFromAction(InputAction_Throttle, InputActionValue, &ACFVehiclePawn::SetVehicleThrottleInput);
 }
 
 void ACFVehiclePawn::HandleThrottleReleased(const FInputActionValue&)
 {
-	SetVehicleThrottleInput(0.0f);
+	ResetAxisInput(&ACFVehiclePawn::SetVehicleThrottleInput);
 }
 
 void ACFVehiclePawn::HandleSteeringInput(const FInputActionValue& InputActionValue)
 {
-	const float InputValue = InputActionValue.Get<float>();
-	if (!ShouldAcceptActionInput(InputAction_Steering, InputValue))
-	{
-		SetVehicleSteeringInput(0.0f);
-		return;
-	}
-	SetVehicleSteeringInput(InputValue);
+	ApplyAxisInputFromAction(InputAction_Steering, InputActionValue, &ACFVehiclePawn::SetVehicleSteeringInput);
 }
 
 void ACFVehiclePawn::HandleSteeringReleased(const FInputActionValue&)
 {
-	SetVehicleSteeringInput(0.0f);
+	ResetAxisInput(&ACFVehiclePawn::SetVehicleSteeringInput);
 }
 
 void ACFVehiclePawn::HandleBrakeInput(const FInputActionValue& InputActionValue)
 {
-	const float InputValue = InputActionValue.Get<float>();
-	if (!ShouldAcceptActionInput(InputAction_Brake, InputValue))
-	{
-		SetVehicleBrakeInput(0.0f);
-		return;
-	}
-	SetVehicleBrakeInput(InputValue);
+	ApplyAxisInputFromAction(InputAction_Brake, InputActionValue, &ACFVehiclePawn::SetVehicleBrakeInput);
 }
 
 void ACFVehiclePawn::HandleBrakeReleased(const FInputActionValue&)
 {
-	SetVehicleBrakeInput(0.0f);
+	ResetAxisInput(&ACFVehiclePawn::SetVehicleBrakeInput);
 }
 
 void ACFVehiclePawn::HandleHandbrakeStarted(const FInputActionValue&)

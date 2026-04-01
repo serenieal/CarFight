@@ -1,6 +1,6 @@
-// Version: 1.1.8
-// Date: 2026-03-31
-// Description: CarFight 휠 시각 동기화 컴포넌트 구현 (운영 경로 정리 + DebugMode 기반 개발용 항목 숨김 + Spin 복구 + 저속 visual spin cap + mesh axis sign fix)
+// Version: 1.1.9
+// Date: 2026-04-01
+// Description: CarFight 휠 시각 동기화 컴포넌트 구현 (컴포넌트 탐색/Helper 상태 초기화 중복 정리)
 // Scope: 단일 축 테스트/Phase1Stub 제거. helper 비교/override/상태 관측은 DebugMode에서만 활성화됩니다.
 
 #include "CFWheelSyncComp.h"
@@ -48,6 +48,38 @@ namespace
 		}
 
 		return InMovementComponent->Wheels[InWheelIndex]->GetRotationAngularVelocity();
+	}
+
+	// Owner Actor에서 이름이 정확히 일치하는 지정 타입 컴포넌트를 찾습니다.
+	template<typename ComponentType>
+	ComponentType* FindActorComponentByExactName(const AActor* OwnerActor, const FName ComponentName)
+	{
+		if (!OwnerActor || ComponentName.IsNone())
+		{
+			return nullptr;
+		}
+
+		// 현재 Actor에서 찾은 지정 타입 컴포넌트 목록입니다.
+		TArray<ComponentType*> FoundComponents;
+		OwnerActor->GetComponents<ComponentType>(FoundComponents);
+
+		for (ComponentType* FoundComponent : FoundComponents)
+		{
+			if (FoundComponent && FoundComponent->GetFName() == ComponentName)
+			{
+				return FoundComponent;
+			}
+		}
+
+		return nullptr;
+	}
+
+	// Helper 비교 상태 요약 문자열 묶음을 한 번에 초기화합니다.
+	void SetHelperCompareStatus(UCFWheelSyncComp& WheelSyncComp, const TCHAR* SummaryText, const TCHAR* FrontRearSummaryText)
+	{
+		WheelSyncComp.LastHelperCompareSummary = SummaryText;
+		WheelSyncComp.LastHelperCompareWarnWheelIndices = TEXT("None");
+		WheelSyncComp.LastHelperCompareFrontRearSummary = FrontRearSummaryText;
 	}
 }
 
@@ -142,9 +174,7 @@ void UCFWheelSyncComp::ResetWheelSyncState()
 	ResetRuntimeWheelSpinCaches();
 	ResetHelperCompareStates();
 
-	LastHelperCompareSummary = TEXT("HelperCompare:Reset");
-	LastHelperCompareWarnWheelIndices = TEXT("None");
-	LastHelperCompareFrontRearSummary = TEXT("HelperCompareFR:Reset");
+	SetHelperCompareStatus(*this, TEXT("HelperCompare:Reset"), TEXT("HelperCompareFR:Reset"));
 
 	bWheelSyncReady = false;
 	bHasLoggedHelperFallback = false;
@@ -559,9 +589,10 @@ bool UCFWheelSyncComp::BuildWheelVisualInputsPhase2(float DeltaSeconds, TArray<F
 	const bool bUseHelperCompare = bDebugMode && bEnableHelperCompareMode;
 
 	ResetHelperCompareStates();
-	LastHelperCompareSummary = bUseHelperInput ? TEXT("HelperCompare:Pending") : TEXT("HelperCompare:Disabled");
-	LastHelperCompareWarnWheelIndices = TEXT("None");
-	LastHelperCompareFrontRearSummary = bUseHelperCompare ? TEXT("HelperCompareFR:Pending") : TEXT("HelperCompareFR:Disabled");
+	SetHelperCompareStatus(
+		*this,
+		bUseHelperInput ? TEXT("HelperCompare:Pending") : TEXT("HelperCompare:Disabled"),
+		bUseHelperCompare ? TEXT("HelperCompareFR:Pending") : TEXT("HelperCompareFR:Disabled"));
 
 	if (bUseHelperInput)
 	{
@@ -1072,21 +1103,14 @@ void UCFWheelSyncComp::InitializeDefaultWheelNames()
 
 USceneComponent* UCFWheelSyncComp::FindSceneComponentByName(FName ComponentName) const
 {
+	// 현재 검색 대상 Owner Actor 포인터입니다.
 	AActor* OwnerActor = GetOwner();
-	if (!OwnerActor)
-	{
-		return nullptr;
-	}
 
-	TArray<USceneComponent*> FoundSceneComponents;
-	OwnerActor->GetComponents<USceneComponent>(FoundSceneComponents);
-
-	for (USceneComponent* SceneComponent : FoundSceneComponents)
+	// 이름으로 찾은 SceneComponent 결과 포인터입니다.
+	USceneComponent* FoundSceneComponent = FindActorComponentByExactName<USceneComponent>(OwnerActor, ComponentName);
+	if (FoundSceneComponent)
 	{
-		if (SceneComponent && SceneComponent->GetFName() == ComponentName)
-		{
-			return SceneComponent;
-		}
+		return FoundSceneComponent;
 	}
 
 	if (bDebugMode && bVerboseLog)
@@ -1099,21 +1123,14 @@ USceneComponent* UCFWheelSyncComp::FindSceneComponentByName(FName ComponentName)
 
 UStaticMeshComponent* UCFWheelSyncComp::FindStaticMeshComponentByName(FName ComponentName) const
 {
+	// 현재 검색 대상 Owner Actor 포인터입니다.
 	AActor* OwnerActor = GetOwner();
-	if (!OwnerActor)
-	{
-		return nullptr;
-	}
 
-	TArray<UStaticMeshComponent*> FoundMeshComponents;
-	OwnerActor->GetComponents<UStaticMeshComponent>(FoundMeshComponents);
-
-	for (UStaticMeshComponent* MeshComponent : FoundMeshComponents)
+	// 이름으로 찾은 StaticMeshComponent 결과 포인터입니다.
+	UStaticMeshComponent* FoundMeshComponent = FindActorComponentByExactName<UStaticMeshComponent>(OwnerActor, ComponentName);
+	if (FoundMeshComponent)
 	{
-		if (MeshComponent && MeshComponent->GetFName() == ComponentName)
-		{
-			return MeshComponent;
-		}
+		return FoundMeshComponent;
 	}
 
 	if (bDebugMode && bVerboseLog)

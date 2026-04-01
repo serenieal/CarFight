@@ -15,6 +15,7 @@
 
 class UCFVehicleData;
 class UCFWheelSyncComp;
+class UChaosWheeledVehicleMovementComponent;
 class UInputAction;
 class UInputComponent;
 class UInputMappingContext;
@@ -235,6 +236,21 @@ public:
 	ESlateVisibility GetDebugWidgetVisibility() const;
 
 protected:
+	// [v1.5.0] DriveComp 캐시를 재사용해 VehicleMovement 컴포넌트를 안전하게 가져옵니다.
+	UChaosWheeledVehicleMovementComponent* ResolveVehicleMovementComponent(const TCHAR* CacheFailureSummary, const TCHAR* MissingComponentSummary);
+
+	// [v1.5.0] 현재 설정에 맞는 차량 디버그 요약 문자열을 생성합니다.
+	FString BuildVehicleDebugSummary(bool bUseMultilineFormat, bool bIncludeRuntimeSummary, bool bIncludeTransitionSummary, bool bIncludeInputState) const;
+
+	// [v1.5.0] WheelSync 실행 결과를 기존 런타임 요약 뒤에 덧붙입니다.
+	void AppendWheelSyncRuntimeSummary();
+
+	// [v1.5.0] 축 입력 액션값을 읽어 허용 여부를 검사한 뒤 지정 setter로 전달합니다.
+	void ApplyAxisInputFromAction(const UInputAction* SourceInputAction, const FInputActionValue& InputActionValue, void (ACFVehiclePawn::*AxisInputSetter)(float));
+
+	// [v1.5.0] 지정된 축 입력 setter를 0으로 초기화합니다.
+	void ResetAxisInput(void (ACFVehiclePawn::*AxisInputSetter)(float));
+
 	void ApplyVehicleDataConfig();
 	void ApplyVehicleVisualConfig();
 	void ApplyVehicleLayoutConfig();

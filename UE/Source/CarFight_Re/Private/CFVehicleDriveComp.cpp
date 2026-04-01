@@ -1,8 +1,8 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.7.0
-// Date: 2026-03-18
-// Description: CarFight 차량 Drive 상태/입력 해석 컴포넌트 구현
+// Version: 1.7.1
+// Date: 2026-04-01
+// Description: CarFight 차량 Drive 상태/입력 해석 컴포넌트 구현 (입력 적용/속도 계산 중복 정리)
 
 #include "CFVehicleDriveComp.h"
 
@@ -11,6 +11,56 @@
 #include "GameFramework/Actor.h"
 #include "Engine/World.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
+
+namespace
+{
+	// Owner Actor 기준 현재 속도를 km/h로 계산합니다.
+	float GetOwnerSpeedKmh(const UCFVehicleDriveComp& VehicleDriveComp, const bool bProjectToForwardAxis)
+	{
+		// 현재 DriveComp의 Owner Actor 포인터입니다.
+		const AActor* OwnerActor = VehicleDriveComp.GetOwner();
+		if (!OwnerActor)
+		{
+			return 0.0f;
+		}
+
+		// 현재 Owner Actor의 선형 속도 벡터입니다.
+		const FVector VehicleVelocity = OwnerActor->GetVelocity();
+		if (!bProjectToForwardAxis)
+		{
+			return VehicleVelocity.Size() * 0.036f;
+		}
+
+		// 현재 Owner Actor의 전방 방향 벡터입니다.
+		const FVector VehicleForwardVector = OwnerActor->GetActorForwardVector();
+
+		// 현재 전방 축 기준 선속도(cm/s)입니다.
+		const float ForwardSpeedCmPerSec = FVector::DotProduct(VehicleVelocity, VehicleForwardVector);
+		return ForwardSpeedCmPerSec * 0.036f;
+	}
+
+	// VehicleMovement가 준비되면 지정 입력 적용 함수를 실행하고 DriveState를 갱신합니다.
+	template<typename ApplyMovementInputFunc>
+	void ApplyMovementInputAndRefreshState(UCFVehicleDriveComp& VehicleDriveComp, ApplyMovementInputFunc&& ApplyMovementInput)
+	{
+		// 현재 사용할 VehicleMovement 컴포넌트 포인터입니다.
+		UChaosWheeledVehicleMovementComponent* VehicleMovementComponent = VehicleDriveComp.GetVehicleMovementComponent();
+		if (!VehicleMovementComponent && !VehicleDriveComp.CacheVehicleMovementComponent())
+		{
+			VehicleDriveComp.UpdateDriveState();
+			return;
+		}
+
+		// 캐시 재시도 이후 확정된 VehicleMovement 컴포넌트 포인터입니다.
+		VehicleMovementComponent = VehicleDriveComp.GetVehicleMovementComponent();
+		if (VehicleMovementComponent)
+		{
+			ApplyMovementInput(*VehicleMovementComponent);
+		}
+
+		VehicleDriveComp.UpdateDriveState();
+	}
+}
 
 UCFVehicleDriveComp::UCFVehicleDriveComp()
 {
@@ -86,25 +136,12 @@ UChaosWheeledVehicleMovementComponent* UCFVehicleDriveComp::GetVehicleMovementCo
 
 float UCFVehicleDriveComp::GetCurrentSpeedKmh() const
 {
-	const AActor* OwnerActor = GetOwner();
-	if (!OwnerActor)
-	{
-		return 0.0f;
-	}
-	return ConvertCmPerSecToKmh(OwnerActor->GetVelocity().Size());
+	return GetOwnerSpeedKmh(*this, false);
 }
 
 float UCFVehicleDriveComp::GetForwardSpeedKmh() const
 {
-	const AActor* OwnerActor = GetOwner();
-	if (!OwnerActor)
-	{
-		return 0.0f;
-	}
-	const FVector VehicleVelocity = OwnerActor->GetVelocity();
-	const FVector VehicleForwardVector = OwnerActor->GetActorForwardVector();
-	const float ForwardSpeedCmPerSec = FVector::DotProduct(VehicleVelocity, VehicleForwardVector);
-	return ConvertCmPerSecToKmh(ForwardSpeedCmPerSec);
+	return GetOwnerSpeedKmh(*this, true);
 }
 
 FString UCFVehicleDriveComp::GetDriveStateDebugString(bool bIncludeTransitionSummary) const
@@ -188,49 +225,37 @@ FCFVehicleDriveStateSnapshot UCFVehicleDriveComp::BuildDriveStateSnapshot()
 void UCFVehicleDriveComp::ApplyThrottleInput(float InThrottleValue)
 {
 	CurrentInputState.ThrottleInput = InThrottleValue;
-	if (!CachedVehicleMovementComponent && !CacheVehicleMovementComponent())
+	ApplyMovementInputAndRefreshState(*this, [InThrottleValue](UChaosWheeledVehicleMovementComponent& VehicleMovementComponent)
 	{
-		UpdateDriveState();
-		return;
-	}
-	CachedVehicleMovementComponent->SetThrottleInput(InThrottleValue);
-	UpdateDriveState();
+		VehicleMovementComponent.SetThrottleInput(InThrottleValue);
+	});
 }
 
 void UCFVehicleDriveComp::ApplySteeringInput(float InSteeringValue)
 {
 	CurrentInputState.SteeringInput = InSteeringValue;
-	if (!CachedVehicleMovementComponent && !CacheVehicleMovementComponent())
+	ApplyMovementInputAndRefreshState(*this, [InSteeringValue](UChaosWheeledVehicleMovementComponent& VehicleMovementComponent)
 	{
-		UpdateDriveState();
-		return;
-	}
-	CachedVehicleMovementComponent->SetSteeringInput(InSteeringValue);
-	UpdateDriveState();
+		VehicleMovementComponent.SetSteeringInput(InSteeringValue);
+	});
 }
 
 void UCFVehicleDriveComp::ApplyBrakeInput(float InBrakeValue)
 {
 	CurrentInputState.BrakeInput = InBrakeValue;
-	if (!CachedVehicleMovementComponent && !CacheVehicleMovementComponent())
+	ApplyMovementInputAndRefreshState(*this, [InBrakeValue](UChaosWheeledVehicleMovementComponent& VehicleMovementComponent)
 	{
-		UpdateDriveState();
-		return;
-	}
-	CachedVehicleMovementComponent->SetBrakeInput(InBrakeValue);
-	UpdateDriveState();
+		VehicleMovementComponent.SetBrakeInput(InBrakeValue);
+	});
 }
 
 void UCFVehicleDriveComp::ApplyHandbrakeInput(bool bInHandbrakePressed)
 {
 	CurrentInputState.bHandbrakePressed = bInHandbrakePressed;
-	if (!CachedVehicleMovementComponent && !CacheVehicleMovementComponent())
+	ApplyMovementInputAndRefreshState(*this, [bInHandbrakePressed](UChaosWheeledVehicleMovementComponent& VehicleMovementComponent)
 	{
-		UpdateDriveState();
-		return;
-	}
-	CachedVehicleMovementComponent->SetHandbrakeInput(bInHandbrakePressed);
-	UpdateDriveState();
+		VehicleMovementComponent.SetHandbrakeInput(bInHandbrakePressed);
+	});
 }
 
 ECFVehicleDriveState UCFVehicleDriveComp::EvaluateDriveState(const FCFVehicleDriveStateSnapshot& InDriveStateSnapshot) const
@@ -368,21 +393,6 @@ bool UCFVehicleDriveComp::CanApplyStateTransition(ECFVehicleDriveState Candidate
 	return (HeldDurationSeconds >= GetCurrentStateMinimumHoldTimeSeconds());
 }
 
-FString UCFVehicleDriveComp::GetDriveStateDisplayName(ECFVehicleDriveState InDriveState) const
-{
-	switch (InDriveState)
-	{
-	case ECFVehicleDriveState::Idle: return TEXT("Idle");
-	case ECFVehicleDriveState::Accelerating: return TEXT("Accelerating");
-	case ECFVehicleDriveState::Coasting: return TEXT("Coasting");
-	case ECFVehicleDriveState::Braking: return TEXT("Braking");
-	case ECFVehicleDriveState::Reversing: return TEXT("Reversing");
-	case ECFVehicleDriveState::Airborne: return TEXT("Airborne");
-	case ECFVehicleDriveState::Disabled:
-	default: return TEXT("Disabled");
-	}
-}
-
 void UCFVehicleDriveComp::UpdateDriveStateTransitionSummary(const FCFVehicleDriveStateSnapshot& InDriveStateSnapshot)
 {
 	const float CurrentWorldTimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
@@ -401,9 +411,9 @@ void UCFVehicleDriveComp::UpdateDriveStateTransitionSummary(const FCFVehicleDriv
 		++DriveStateChangeCount;
 		LastDriveStateTransitionSummary = FString::Printf(
 			TEXT("DriveStateTransition: %s -> %s | Candidate=%s | Hold=%.2f | Speed=%.2f km/h | Forward=%.2f km/h | Grounded=%s | Count=%d"),
-			*GetDriveStateDisplayName(PreviousDriveState),
-			*GetDriveStateDisplayName(CurrentDriveState),
-			*GetDriveStateDisplayName(CandidateDriveState),
+			*UCarFightVehicleUtils::ConvDriveStateToDisplayString(PreviousDriveState),
+			*UCarFightVehicleUtils::ConvDriveStateToDisplayString(CurrentDriveState),
+			*UCarFightVehicleUtils::ConvDriveStateToDisplayString(CandidateDriveState),
 			GetCurrentStateMinimumHoldTimeSeconds(),
 			InDriveStateSnapshot.CurrentSpeedKmh,
 			InDriveStateSnapshot.ForwardSpeedKmh,
@@ -414,8 +424,8 @@ void UCFVehicleDriveComp::UpdateDriveStateTransitionSummary(const FCFVehicleDriv
 
 	LastDriveStateTransitionSummary = FString::Printf(
 		TEXT("DriveStateTransition: %s (unchanged) | Candidate=%s | Hold=%.2f | Speed=%.2f km/h | Forward=%.2f km/h | Grounded=%s | Count=%d"),
-		*GetDriveStateDisplayName(CurrentDriveState),
-		*GetDriveStateDisplayName(CandidateDriveState),
+		*UCarFightVehicleUtils::ConvDriveStateToDisplayString(CurrentDriveState),
+		*UCarFightVehicleUtils::ConvDriveStateToDisplayString(CandidateDriveState),
 		GetCurrentStateMinimumHoldTimeSeconds(),
 		InDriveStateSnapshot.CurrentSpeedKmh,
 		InDriveStateSnapshot.ForwardSpeedKmh,
