@@ -37,7 +37,7 @@ public:
 	 * NOTE: We deliberately do NOT CreateDefaultSubobject here in Step-1
 	 * to avoid duplicating an existing BP component named WheelSyncComp.
 	 */
-	UPROPERTY(Transient, BlueprintReadOnly, Category="CarFight|Vehicle", meta=(AllowPrivateAccess="true"))
+	UPROPERTY(Transient, BlueprintReadOnly, Category="CarFight|Vehicle", meta=(AllowPrivateAccess="true", DisplayName="휠 동기화 컴포넌트 (WheelSyncComp)", ToolTip="현재 Pawn에서 캐시한 WheelSyncComp 참조입니다. BP가 소유한 컴포넌트를 안전하게 찾아 재사용할 때 사용합니다."))
 	TObjectPtr<UCFWheelSyncComp> WheelSyncComp = nullptr;
 
 	/** BP should use this accessor instead of directly wiring variables. */

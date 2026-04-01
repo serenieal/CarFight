@@ -60,31 +60,31 @@ struct FCFVehicleDebugSnapshot
 {
 	GENERATED_BODY()
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="현재 Pawn 런타임 초기화가 완료되었는지 여부입니다."))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="런타임 준비 완료 여부 (bRuntimeReady)", ToolTip="현재 Pawn 런타임 초기화가 완료되었는지 여부입니다."))
 	bool bRuntimeReady = false;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="마지막 차량 런타임 초기화/적용 요약 문자열입니다."))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="런타임 요약 (RuntimeSummary)", ToolTip="마지막 차량 런타임 초기화/적용 요약 문자열입니다."))
 	FString RuntimeSummary = TEXT("NotInitialized");
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="현재 VehicleDriveComp가 유효한지 여부입니다."))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="Drive 컴포넌트 보유 여부 (bHasDriveComponent)", ToolTip="현재 VehicleDriveComp가 유효한지 여부입니다."))
 	bool bHasDriveComponent = false;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="현재 WheelSyncComp가 유효한지 여부입니다."))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="WheelSync 컴포넌트 보유 여부 (bHasWheelSyncComponent)", ToolTip="현재 WheelSyncComp가 유효한지 여부입니다."))
 	bool bHasWheelSyncComponent = false;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="현재 VehicleDriveComp 기준 Drive 상태입니다."))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="현재 Drive 상태 (CurrentDriveState)", ToolTip="현재 VehicleDriveComp 기준 Drive 상태입니다."))
 	ECFVehicleDriveState CurrentDriveState = ECFVehicleDriveState::Disabled;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="이전 프레임 기준 VehicleDriveComp의 Drive 상태입니다."))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="이전 Drive 상태 (PreviousDriveState)", ToolTip="이전 프레임 기준 VehicleDriveComp의 Drive 상태입니다."))
 	ECFVehicleDriveState PreviousDriveState = ECFVehicleDriveState::Disabled;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="이번 프레임에 Drive 상태가 변경되었는지 여부입니다."))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="이번 프레임 상태 변경 여부 (bDriveStateChangedThisFrame)", ToolTip="이번 프레임에 Drive 상태가 변경되었는지 여부입니다."))
 	bool bDriveStateChangedThisFrame = false;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="마지막 Drive 상태 전이 요약 문자열입니다."))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="상태 전이 요약 (DriveStateTransitionSummary)", ToolTip="마지막 Drive 상태 전이 요약 문자열입니다."))
 	FString DriveStateTransitionSummary = TEXT("DriveStateTransition: None");
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="VehicleDriveComp가 계산한 최신 Drive 상태 스냅샷입니다."))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="Drive 상태 스냅샷 (DriveStateSnapshot)", ToolTip="VehicleDriveComp가 계산한 최신 Drive 상태 스냅샷입니다."))
 	FCFVehicleDriveStateSnapshot DriveStateSnapshot;
 };
 
@@ -117,64 +117,64 @@ protected:
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
 public:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn", meta=(ToolTip="차량 루트 DataAsset 참조입니다. 현재 단계에서는 공식 타입을 UCFVehicleData로 고정하고, 세부 VehicleMovement 및 WheelVisual 해석은 후속 단계로 확장합니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn", meta=(DisplayName="차량 데이터 (VehicleData)", ToolTip="차량 루트 DataAsset 참조입니다. 현재 단계에서는 공식 타입을 UCFVehicleData로 고정하고, 세부 VehicleMovement 및 WheelVisual 해석은 후속 단계로 확장합니다."))
 	TObjectPtr<UCFVehicleData> VehicleData = nullptr;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(ToolTip="BeginPlay와 SetupPlayerInputComponent에서 등록을 시도할 기본 Input Mapping Context 입니다."))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="기본 입력 매핑 컨텍스트 (DefaultInputMappingContext)", ToolTip="BeginPlay와 SetupPlayerInputComponent에서 등록을 시도할 기본 Input Mapping Context 입니다."))
 	TObjectPtr<UInputMappingContext> DefaultInputMappingContext = nullptr;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(ToolTip="Throttle 축 입력에 사용할 Input Action 입니다."))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="스로틀 입력 액션 (InputAction_Throttle)", ToolTip="Throttle 축 입력에 사용할 Input Action 입니다."))
 	TObjectPtr<UInputAction> InputAction_Throttle = nullptr;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(ToolTip="Steering 축 입력에 사용할 Input Action 입니다."))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="조향 입력 액션 (InputAction_Steering)", ToolTip="Steering 축 입력에 사용할 Input Action 입니다."))
 	TObjectPtr<UInputAction> InputAction_Steering = nullptr;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(ToolTip="Brake 축 입력에 사용할 Input Action 입니다."))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="브레이크 입력 액션 (InputAction_Brake)", ToolTip="Brake 축 입력에 사용할 Input Action 입니다."))
 	TObjectPtr<UInputAction> InputAction_Brake = nullptr;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(ToolTip="Handbrake 토글 입력에 사용할 Input Action 입니다."))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="핸드브레이크 입력 액션 (InputAction_Handbrake)", ToolTip="Handbrake 토글 입력에 사용할 Input Action 입니다."))
 	TObjectPtr<UInputAction> InputAction_Handbrake = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Input", meta=(ToolTip="차량 입력을 어떤 장치로 받을지 고정합니다. Auto는 키보드/마우스와 게임패드를 모두 허용하고, KeyboardMouseOnly는 키보드/마우스만, GamepadOnly는 게임패드만 허용합니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="입력 장치 모드 (InputDeviceMode)", ToolTip="차량 입력을 어떤 장치로 받을지 고정합니다. Auto는 키보드/마우스와 게임패드를 모두 허용하고, KeyboardMouseOnly는 키보드/마우스만, GamepadOnly는 게임패드만 허용합니다."))
 	ECFVehicleInputDeviceMode InputDeviceMode = ECFVehicleInputDeviceMode::Auto;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Input", meta=(ClampMin="0.0", ClampMax="1.0", ToolTip="고정 입력 장치 모드에서 아날로그 키를 활성 입력으로 판정할 최소 절대값입니다. 스틱 드리프트가 있으면 값을 조금 올려서 사용합니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Input", meta=(ClampMin="0.0", ClampMax="1.0", DisplayName="입력 장치 아날로그 임계값 (InputDeviceAnalogThreshold)", ToolTip="고정 입력 장치 모드에서 아날로그 키를 활성 입력으로 판정할 최소 절대값입니다. 스틱 드리프트가 있으면 값을 조금 올려서 사용합니다."))
 	float InputDeviceAnalogThreshold = 0.1f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Input", meta=(ClampMin="0", ToolTip="기본 Input Mapping Context 등록 우선순위입니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Input", meta=(ClampMin="0", DisplayName="입력 매핑 우선순위 (InputMappingPriority)", ToolTip="기본 Input Mapping Context 등록 우선순위입니다."))
 	int32 InputMappingPriority = 0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Input", meta=(ToolTip="True이면 BeginPlay / SetupPlayerInputComponent에서 기본 Input Mapping Context 등록을 자동 시도합니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="입력 매핑 자동 등록 (bAutoRegisterInputMappingContext)", ToolTip="True이면 BeginPlay / SetupPlayerInputComponent에서 기본 Input Mapping Context 등록을 자동 시도합니다."))
 	bool bAutoRegisterInputMappingContext = true;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", ToolTip="입력 전달 전용 Drive 컴포넌트입니다."))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="Drive 컴포넌트 (VehicleDriveComp)", ToolTip="입력 전달 전용 Drive 컴포넌트입니다."))
 	TObjectPtr<UCFVehicleDriveComp> VehicleDriveComp = nullptr;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", ToolTip="휠 시각 동기화 전용 WheelSync 컴포넌트입니다."))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="WheelSync 컴포넌트 (WheelSyncComp)", ToolTip="휠 시각 동기화 전용 WheelSync 컴포넌트입니다."))
 	TObjectPtr<UCFWheelSyncComp> WheelSyncComp = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Runtime", meta=(ToolTip="True이면 BeginPlay에서 Drive / WheelSync 캐시와 준비를 자동 시도합니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Runtime", meta=(DisplayName="BeginPlay 자동 초기화 (bAutoInitializeOnBeginPlay)", ToolTip="True이면 BeginPlay에서 Drive / WheelSync 캐시와 준비를 자동 시도합니다."))
 	bool bAutoInitializeOnBeginPlay = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Runtime", meta=(ToolTip="True이면 Tick에서 WheelSync의 휠 시각 갱신을 자동 호출합니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Runtime", meta=(DisplayName="휠 시각 Tick 사용 (bEnableWheelVisualTick)", ToolTip="True이면 Tick에서 WheelSync의 휠 시각 갱신을 자동 호출합니다."))
 	bool bEnableWheelVisualTick = true;
 
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Runtime", meta=(ToolTip="Drive / WheelSync 준비가 성공했는지 여부입니다."))
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Runtime", meta=(DisplayName="차량 런타임 준비 완료 여부 (bVehicleRuntimeReady)", ToolTip="Drive / WheelSync 준비가 성공했는지 여부입니다."))
 	bool bVehicleRuntimeReady = false;
 
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Runtime", meta=(ToolTip="마지막 런타임 초기화 결과 요약 문자열입니다."))
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Runtime", meta=(DisplayName="런타임 결과 요약 (LastVehicleRuntimeSummary)", ToolTip="마지막 런타임 초기화 결과 요약 문자열입니다."))
 	FString LastVehicleRuntimeSummary = TEXT("NotInitialized");
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="True이면 PIE 중 현재 Drive 상태와 속도를 화면에 표시합니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="화면 DriveState 디버그 사용 (bEnableDriveStateOnScreenDebug)", ToolTip="True이면 PIE 중 현재 Drive 상태와 속도를 화면에 표시합니다."))
 	bool bEnableDriveStateOnScreenDebug = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="PIE 중 화면에 표시할 Drive 상태 디버그 문자열 포맷을 선택합니다. Off는 비표시, SingleLine은 한 줄 요약, MultiLine은 줄바꿈 상세 표시입니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="DriveState 디버그 표시 모드 (DriveStateDebugDisplayMode)", ToolTip="PIE 중 화면에 표시할 Drive 상태 디버그 문자열 포맷을 선택합니다. Off는 비표시, SingleLine은 한 줄 요약, MultiLine은 줄바꿈 상세 표시입니다."))
 	ECFVehicleDebugDisplayMode DriveStateDebugDisplayMode = ECFVehicleDebugDisplayMode::SingleLine;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="True이면 현재 Drive 상태와 함께 마지막 상태 전이 요약 문자열도 화면에 표시합니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="상태 전이 요약 표시 (bShowDriveStateTransitionSummary)", ToolTip="True이면 현재 Drive 상태와 함께 마지막 상태 전이 요약 문자열도 화면에 표시합니다."))
 	bool bShowDriveStateTransitionSummary = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(ClampMin="0.0", ToolTip="화면에 표시하는 Drive 상태 디버그 메시지 유지 시간(초)입니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(ClampMin="0.0", DisplayName="디버그 메시지 유지 시간 (DriveStateDebugMessageDuration)", ToolTip="화면에 표시하는 Drive 상태 디버그 메시지 유지 시간(초)입니다."))
 	float DriveStateDebugMessageDuration = 0.0f;
 
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(ToolTip="차량 입력 전달 전용 DriveComp를 반환합니다."))
