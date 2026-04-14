@@ -12,8 +12,8 @@
 
 > 상태 주의 (2026-04-01):
 > - 이 문서는 초기 설계 기록이다.
-> - 본문에 남아 있는 `VehicleLayoutConfig / FCFVehicleWheelLayout / AutoFit / WheelLayout` 언급은 현재 구현 기준이 아니다.
-> - 현재 코드 기준은 해당 구조 하드 삭제 완료이며, 실제 운영 기준은 `수동 Wheel_Anchor 배치 + WheelRadius`와 `VehicleVisualConfig / VehicleMovementConfig / WheelVisualConfig / VehicleReferenceConfig / DriveStateConfig`다.
+> - 본문 일부에는 현재 기준선에서 제거된 레거시 레이아웃 설계 흔적이 남아 있을 수 있다.
+> - 현재 운영 기준은 `수동 Wheel_Anchor 배치 + WheelRadius`와 `VehicleVisualConfig / VehicleMovementConfig / WheelVisualConfig / VehicleReferenceConfig / DriveStateConfig`다.
 
 ---
 

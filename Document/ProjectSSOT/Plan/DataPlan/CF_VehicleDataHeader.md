@@ -15,7 +15,7 @@
 
 > 상태 주의 (2026-04-01):
 > - 이 문서는 `CFVehicleData.h` 초기 확장 초안 기록이다.
-> - 본문에 남아 있는 `FCFVehicleWheelLayout / FCFVehicleLayoutConfig / VehicleLayoutConfig / AutoFit / WheelLayout` 설계안은 현재 코드 기준에서 삭제된 구조다.
+> - 본문 일부에는 현재 기준선에서 제거된 레거시 레이아웃 설계 흔적이 남아 있을 수 있다.
 > - 실제 구현 판단은 현재 소스 파일과 루트 활성 SSOT 문서를 우선한다.
 
 ---
@@ -51,11 +51,11 @@
 - `FCFVehicleWheelLayout`
 - `UCFVehicleData`
 
-### 1.2 현재 `FCFVehicleWheelLayout`가 가지는 값
-- `bUseAutoFit`
+### 1.2 현재 `FCFVehicleWheelLayout`가 다루는 값
 - `FrontAxleMargin`
 - `RearAxleMargin`
 - `HeightOffset`
+- 레이아웃 관련 보조 정보
 
 ### 1.3 현재 `UCFVehicleData`가 가지는 값
 - `ChassisMesh`
@@ -357,10 +357,6 @@ USTRUCT(BlueprintType)
 struct FCFVehicleWheelLayout
 {
 	GENERATED_BODY()
-
-	// [v1.0.0] 자동 배치 사용 여부입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ToolTip="True이면 차량 시각 휠 배치를 자동 계산하는 데이터로 사용합니다."))
-	bool bUseAutoFit = true;
 
 	// [v1.0.0] 앞바퀴 축의 전방 마진(cm)입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ToolTip="차량 전방 기준으로 앞바퀴 축을 얼마나 안쪽에 둘지 결정하는 마진(cm)입니다."))
