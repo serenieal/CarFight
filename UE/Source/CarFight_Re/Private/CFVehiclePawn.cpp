@@ -1,12 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.10.9
-// Date: 2026-04-01
-// Description: CarFight 신규 차량 Pawn 기준 클래스 구현 (입력 장치 필터 보강 / 입력 바인딩/디버그 요약/Movement 조회 책임 분리)
+// Version: 2.13.0
+// Date: 2026-04-10
+// Description: CarFight ???ル㎦??癲ル슓堉곁땟???Pawn ??れ삀?? ??????????열野?(癲ル슓堉곁땟???類λ룱?DA ????筌먲퐢六?????????ㅼ굣????됰슣維??/ ????곸죷 ??????ш낄援???怨뚮옖????/ ????곸죷 ?袁⑸즴??????釉먮폏?遺룹쐺???釉먯뒠??Movement ?釉뚰???癲??????됰슣維??/ VehicleCameraComp Look ????곸죷 ???ㅻ쿋筌???⑤베堉?)
 
 #include "CFVehiclePawn.h"
 
 #include "CFVehicleData.h"
+#include "CFVehicleCameraComp.h"
 #include "CFVehicleDriveComp.h"
 #include "CFWheelSyncComp.h"
 #include "CarFightVehicleUtils.h"
@@ -27,7 +28,130 @@
 
 namespace
 {
-	// 이름으로 StaticMeshComponent를 찾아 시각 표현 컴포넌트를 식별합니다.
+	// ??????????れ삀???筌ｋ〃泥???도 ??ш끽維뽳쭛?????곷츉??繹먮끏?????モ봼????ш끽維???怨뚮옖甕??????怨좊룴??猷?獄??怨뚮옖????筌뤾퍓???
+	struct FCFWheelClassRuntimeSnapshot
+	{
+		float MaxSteerAngle = 0.0f;
+		float MaxBrakeTorque = 0.0f;
+		float MaxHandBrakeTorque = 0.0f;
+		float WheelRadius = 0.0f;
+		float WheelWidth = 0.0f;
+		float FrictionForceMultiplier = 0.0f;
+		float CorneringStiffness = 0.0f;
+		float WheelLoadRatio = 0.0f;
+		float SpringRate = 0.0f;
+		float SpringPreload = 0.0f;
+		float SuspensionMaxRaise = 0.0f;
+		float SuspensionMaxDrop = 0.0f;
+		bool bAffectedByEngine = false;
+		ESweepShape SweepShape = ESweepShape::Raycast;
+	};
+
+	// 癲ル슣??????????????れ삀???筌ｋ〃泥???틖 ??ш끽維????筌먲퐢六????ㅺ컼??????怨좊룴??猷?筌뤿뱶?????濚왿몾??????덊렡.
+	FCFWheelClassRuntimeSnapshot CaptureWheelClassRuntimeSnapshot(const UChaosVehicleWheel& WheelClassDefaultObject)
+	{
+		FCFWheelClassRuntimeSnapshot Snapshot;
+		Snapshot.MaxSteerAngle = WheelClassDefaultObject.MaxSteerAngle;
+		Snapshot.MaxBrakeTorque = WheelClassDefaultObject.MaxBrakeTorque;
+		Snapshot.MaxHandBrakeTorque = WheelClassDefaultObject.MaxHandBrakeTorque;
+		Snapshot.WheelRadius = WheelClassDefaultObject.WheelRadius;
+		Snapshot.WheelWidth = WheelClassDefaultObject.WheelWidth;
+		Snapshot.FrictionForceMultiplier = WheelClassDefaultObject.FrictionForceMultiplier;
+		Snapshot.CorneringStiffness = WheelClassDefaultObject.CorneringStiffness;
+		Snapshot.WheelLoadRatio = WheelClassDefaultObject.WheelLoadRatio;
+		Snapshot.SpringRate = WheelClassDefaultObject.SpringRate;
+		Snapshot.SpringPreload = WheelClassDefaultObject.SpringPreload;
+		Snapshot.SuspensionMaxRaise = WheelClassDefaultObject.SuspensionMaxRaise;
+		Snapshot.SuspensionMaxDrop = WheelClassDefaultObject.SuspensionMaxDrop;
+		Snapshot.bAffectedByEngine = WheelClassDefaultObject.bAffectedByEngine;
+		Snapshot.SweepShape = WheelClassDefaultObject.SweepShape;
+		return Snapshot;
+	}
+
+	// ???怨좊룴??猷멸강?????潁뺛꺈彛???????????れ삀???筌ｋ〃泥???도 ????????ㅺ컼?얜쑚????嚥▲꺃??繹먮끏????
+	void RestoreWheelClassRuntimeSnapshot(UChaosVehicleWheel& WheelClassDefaultObject, const FCFWheelClassRuntimeSnapshot& Snapshot)
+	{
+		WheelClassDefaultObject.MaxSteerAngle = Snapshot.MaxSteerAngle;
+		WheelClassDefaultObject.MaxBrakeTorque = Snapshot.MaxBrakeTorque;
+		WheelClassDefaultObject.MaxHandBrakeTorque = Snapshot.MaxHandBrakeTorque;
+		WheelClassDefaultObject.WheelRadius = Snapshot.WheelRadius;
+		WheelClassDefaultObject.WheelWidth = Snapshot.WheelWidth;
+		WheelClassDefaultObject.FrictionForceMultiplier = Snapshot.FrictionForceMultiplier;
+		WheelClassDefaultObject.CorneringStiffness = Snapshot.CorneringStiffness;
+		WheelClassDefaultObject.WheelLoadRatio = Snapshot.WheelLoadRatio;
+		WheelClassDefaultObject.SpringRate = Snapshot.SpringRate;
+		WheelClassDefaultObject.SpringPreload = Snapshot.SpringPreload;
+		WheelClassDefaultObject.SuspensionMaxRaise = Snapshot.SuspensionMaxRaise;
+		WheelClassDefaultObject.SuspensionMaxDrop = Snapshot.SuspensionMaxDrop;
+		WheelClassDefaultObject.bAffectedByEngine = Snapshot.bAffectedByEngine;
+		WheelClassDefaultObject.SweepShape = Snapshot.SweepShape;
+	}
+
+	// 癲ル슓堉곁땟???DA????ш끽維????ш끽維???????쒓랜萸????????????れ삀???筌ｋ〃泥???군 ??ш끽維뽳쭛???낆뒩????筌뤾퍓???
+	void ApplyVehicleMovementWheelTuningToWheelClass(
+		UChaosVehicleWheel& WheelClassDefaultObject,
+		const FCFVehicleMovementConfig& VehicleMovementConfig,
+		const bool bIsFrontWheel)
+	{
+		WheelClassDefaultObject.MaxBrakeTorque =
+			bIsFrontWheel
+			? VehicleMovementConfig.FrontWheelMaxBrakeTorque
+			: VehicleMovementConfig.RearWheelMaxBrakeTorque;
+		WheelClassDefaultObject.WheelRadius =
+			bIsFrontWheel
+			? VehicleMovementConfig.FrontWheelRadius
+			: VehicleMovementConfig.RearWheelRadius;
+		WheelClassDefaultObject.WheelWidth =
+			bIsFrontWheel
+			? VehicleMovementConfig.FrontWheelWidth
+			: VehicleMovementConfig.RearWheelWidth;
+		WheelClassDefaultObject.FrictionForceMultiplier =
+			bIsFrontWheel
+			? VehicleMovementConfig.FrontWheelFrictionForceMultiplier
+			: VehicleMovementConfig.RearWheelFrictionForceMultiplier;
+		WheelClassDefaultObject.CorneringStiffness =
+			bIsFrontWheel
+			? VehicleMovementConfig.FrontWheelCorneringStiffness
+			: VehicleMovementConfig.RearWheelCorneringStiffness;
+		WheelClassDefaultObject.WheelLoadRatio =
+			bIsFrontWheel
+			? VehicleMovementConfig.FrontWheelLoadRatio
+			: VehicleMovementConfig.RearWheelLoadRatio;
+		WheelClassDefaultObject.SpringRate =
+			bIsFrontWheel
+			? VehicleMovementConfig.FrontWheelSpringRate
+			: VehicleMovementConfig.RearWheelSpringRate;
+		WheelClassDefaultObject.SpringPreload =
+			bIsFrontWheel
+			? VehicleMovementConfig.FrontWheelSpringPreload
+			: VehicleMovementConfig.RearWheelSpringPreload;
+		WheelClassDefaultObject.SuspensionMaxRaise =
+			bIsFrontWheel
+			? VehicleMovementConfig.FrontWheelSuspensionMaxRaise
+			: VehicleMovementConfig.RearWheelSuspensionMaxRaise;
+		WheelClassDefaultObject.SuspensionMaxDrop =
+			bIsFrontWheel
+			? VehicleMovementConfig.FrontWheelSuspensionMaxDrop
+			: VehicleMovementConfig.RearWheelSuspensionMaxDrop;
+		WheelClassDefaultObject.bAffectedByEngine =
+			bIsFrontWheel
+			? VehicleMovementConfig.bFrontWheelAffectedByEngine
+			: VehicleMovementConfig.bRearWheelAffectedByEngine;
+		WheelClassDefaultObject.SweepShape =
+			bIsFrontWheel
+			? VehicleMovementConfig.FrontWheelSweepShape
+			: VehicleMovementConfig.RearWheelSweepShape;
+
+		if (bIsFrontWheel)
+		{
+			WheelClassDefaultObject.MaxSteerAngle = VehicleMovementConfig.FrontWheelMaxSteerAngle;
+			return;
+		}
+
+		WheelClassDefaultObject.MaxHandBrakeTorque = VehicleMovementConfig.RearWheelMaxHandBrakeTorque;
+	}
+
+	// ???????⑥??StaticMeshComponent??癲ル슓??젆??눀???癰???????猿?????????⑤베肄????筌뤿걩???筌뤾퍓???
 	UStaticMeshComponent* FindStaticMeshComponentByName(const AActor* OwnerActor, const FName ComponentName)
 	{
 		if (!OwnerActor || ComponentName.IsNone())
@@ -48,7 +172,7 @@ namespace
 		return nullptr;
 	}
 
-	// Triggered/Completed 패턴의 축 입력 액션 바인딩을 공통 처리합니다.
+	// Triggered/Completed ????????????곸죷 ????력??袁⑸즴????獄?獄????살씁??癲ル슪?ｇ몭???筌뤾퍓???
 	template<typename TriggeredHandlerType, typename CompletedHandlerType>
 	void BindTriggeredCompletedInputAction(
 		UEnhancedInputComponent* EnhancedInputComponent,
@@ -66,7 +190,7 @@ namespace
 		EnhancedInputComponent->BindAction(SourceInputAction, ETriggerEvent::Completed, VehiclePawn, CompletedHandler);
 	}
 
-	// Started/Completed 패턴의 디지털 입력 액션 바인딩을 공통 처리합니다.
+	// Started/Completed ???????????????곸죷 ????력??袁⑸즴????獄?獄????살씁??癲ル슪?ｇ몭???筌뤾퍓???
 	template<typename StartedHandlerType, typename CompletedHandlerType>
 	void BindStartedCompletedInputAction(
 		UEnhancedInputComponent* EnhancedInputComponent,
@@ -84,28 +208,27 @@ namespace
 		EnhancedInputComponent->BindAction(SourceInputAction, ETriggerEvent::Completed, VehiclePawn, CompletedHandler);
 	}
 
-	// 기존 런타임 요약에서 WheelSync 후행 접미사를 제거한 기본 문자열을 반환합니다.
+	// ??れ삀??????????釉먯뒠??????WheelSync ??ш낄援ο쭛??????? ??癰귙끋源????れ삀??????뽮덫????⑤챶援??袁⑸즵????筌뤾퍓???
 	FString StripWheelSyncRuntimeSummarySuffix(const FString& RuntimeSummary)
 	{
-		// 기존 런타임 요약에서 WheelSyncBuild 접미사가 시작되는 위치입니다.
+		// ??れ삀??????????釉먯뒠??????WheelSyncBuild ?????? ??筌믨퀣援??嚥▲꺂痢???ш끽維?????낇돲??
 		const int32 ExistingWheelSyncBuildIndex = RuntimeSummary.Find(TEXT(" | WheelSyncBuild="));
 
-		// 기존 런타임 요약에서 WheelSyncRuntime 접미사가 시작되는 위치입니다.
+		// ??れ삀??????????釉먯뒠??????WheelSyncRuntime ?????? ??筌믨퀣援??嚥▲꺂痢???ш끽維?????낇돲??
 		const int32 ExistingWheelSyncRuntimeIndex = RuntimeSummary.Find(TEXT(" | WheelSyncRuntime="));
 
-		// 기존 WheelSync 접미사 중 가장 먼저 나타나는 시작 위치입니다.
+		// ??れ삀???WheelSync ?????濚???좊읈????沃섅굥?? ?????嚥▲꺂痢???筌믨퀣援???ш끽維?????낇돲??
 		int32 ExistingWheelSyncSummaryIndex = INDEX_NONE;
-		if (ExistingWheelSyncBuildIndex != INDEX_NONE && ExistingWheelSyncRuntimeIndex != INDEX_NONE)
-		{
-			ExistingWheelSyncSummaryIndex = FMath::Min(ExistingWheelSyncBuildIndex, ExistingWheelSyncRuntimeIndex);
-		}
-		else if (ExistingWheelSyncBuildIndex != INDEX_NONE)
+
+		if (ExistingWheelSyncBuildIndex != INDEX_NONE)
 		{
 			ExistingWheelSyncSummaryIndex = ExistingWheelSyncBuildIndex;
 		}
-		else if (ExistingWheelSyncRuntimeIndex != INDEX_NONE)
+		if (ExistingWheelSyncRuntimeIndex != INDEX_NONE)
 		{
-			ExistingWheelSyncSummaryIndex = ExistingWheelSyncRuntimeIndex;
+			ExistingWheelSyncSummaryIndex = (ExistingWheelSyncSummaryIndex != INDEX_NONE)
+				? FMath::Min(ExistingWheelSyncSummaryIndex, ExistingWheelSyncRuntimeIndex)
+				: ExistingWheelSyncRuntimeIndex;
 		}
 
 		return (ExistingWheelSyncSummaryIndex != INDEX_NONE)
@@ -119,6 +242,7 @@ ACFVehiclePawn::ACFVehiclePawn()
 	PrimaryActorTick.bCanEverTick = true;
 	VehicleDriveComp = CreateDefaultSubobject<UCFVehicleDriveComp>(TEXT("VehicleDriveComp"));
 	WheelSyncComp = CreateDefaultSubobject<UCFWheelSyncComp>(TEXT("WheelSyncComp"));
+	VehicleCameraComp = CreateDefaultSubobject<UCFVehicleCameraComp>(TEXT("VehicleCameraComp"));
 	bAutoInitializeOnBeginPlay = true;
 	bEnableWheelVisualTick = true;
 	bAutoRegisterInputMappingContext = true;
@@ -132,17 +256,45 @@ ACFVehiclePawn::ACFVehiclePawn()
 	bShowDriveStateTransitionSummary = true;
 	DriveStateDebugMessageDuration = 0.0f;
 	AutoPossessPlayer = EAutoReceiveInput::Player0;
-	DefaultInputMappingContext = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/CarFight/Input/IMC_Vehicle_Default.IMC_Vehicle_Default"));
-	InputAction_Throttle = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_Throttle.IA_Throttle"));
-	InputAction_Steering = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_Steering.IA_Steering"));
-	InputAction_Brake = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_Brake.IA_Brake"));
-	InputAction_Handbrake = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_Handbrake.IA_Handbrake"));
+
+	// [v2.14.0] 입력 자산은 BP/파생 클래스에서 지정한 값을 우선 사용하고, 비어 있을 때만 기본 fallback 자산을 로드합니다.
+	if (!DefaultInputMappingContext)
+	{
+		DefaultInputMappingContext = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/CarFight/Input/IMC_Vehicle_Default.IMC_Vehicle_Default"));
+	}
+
+	if (!InputAction_Throttle)
+	{
+		InputAction_Throttle = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_Throttle.IA_Throttle"));
+	}
+
+	if (!InputAction_Steering)
+	{
+		InputAction_Steering = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_Steering.IA_Steering"));
+	}
+
+	if (!InputAction_Brake)
+	{
+		InputAction_Brake = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_Brake.IA_Brake"));
+	}
+
+	if (!InputAction_Handbrake)
+	{
+		InputAction_Handbrake = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_Handbrake.IA_Handbrake"));
+	}
+
+	if (!InputAction_Look)
+	{
+		InputAction_Look = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_LookAround.IA_LookAround"));
+	}
 }
 
+// [v2.5.2] Construction 시점에 차체뿐 아니라 휠 메시도 기존 Wheel_Mesh_* 컴포넌트에 적용해 에디터 뷰포트 미리보기를 갱신합니다.
 void ACFVehiclePawn::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
 	ApplyVehicleVisualConfig();
+	ApplyVehicleWheelVisualConfig();
 	ApplyVehicleLayoutConfig();
 }
 
@@ -197,12 +349,18 @@ void ACFVehiclePawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 		this,
 		&ACFVehiclePawn::HandleSteeringInput,
 		&ACFVehiclePawn::HandleSteeringReleased);
-	BindTriggeredCompletedInputAction(
+		BindTriggeredCompletedInputAction(
 		EnhancedInputComponent,
 		InputAction_Brake,
 		this,
 		&ACFVehiclePawn::HandleBrakeInput,
 		&ACFVehiclePawn::HandleBrakeReleased);
+	BindTriggeredCompletedInputAction(
+		EnhancedInputComponent,
+		InputAction_Look,
+		this,
+		&ACFVehiclePawn::HandleLookInput,
+		&ACFVehiclePawn::HandleLookReleased);
 	BindStartedCompletedInputAction(
 		EnhancedInputComponent,
 		InputAction_Handbrake,
@@ -276,82 +434,84 @@ bool ACFVehiclePawn::UpdateVehicleWheelVisuals(float DeltaSeconds)
 
 UChaosWheeledVehicleMovementComponent* ACFVehiclePawn::ResolveVehicleMovementComponent(const TCHAR* CacheFailureSummary, const TCHAR* MissingComponentSummary)
 {
-	// 현재 DriveComp가 이미 보유한 VehicleMovement 컴포넌트 포인터입니다.
-	UChaosWheeledVehicleMovementComponent* ResolvedVehicleMovementComponent =
-		VehicleDriveComp ? VehicleDriveComp->GetVehicleMovementComponent() : nullptr;
-
-	if (!ResolvedVehicleMovementComponent && (!VehicleDriveComp || !VehicleDriveComp->CacheVehicleMovementComponent()))
+	if (!VehicleDriveComp)
+	{
+		LastVehicleRuntimeSummary = TEXT("VehicleRuntime: VehicleDriveComp is null.");
+		return nullptr;
+	}
+	if (!VehicleDriveComp->CacheVehicleMovementComponent())
 	{
 		LastVehicleRuntimeSummary = CacheFailureSummary;
 		return nullptr;
 	}
-
-	// 캐시 재시도 이후 확정된 VehicleMovement 컴포넌트 포인터입니다.
-	ResolvedVehicleMovementComponent = VehicleDriveComp ? VehicleDriveComp->GetVehicleMovementComponent() : nullptr;
+	UChaosWheeledVehicleMovementComponent* ResolvedVehicleMovementComponent = VehicleDriveComp->GetVehicleMovementComponent();
 	if (!ResolvedVehicleMovementComponent)
 	{
 		LastVehicleRuntimeSummary = MissingComponentSummary;
+		return nullptr;
 	}
-
 	return ResolvedVehicleMovementComponent;
 }
 
 FString ACFVehiclePawn::BuildVehicleDebugSummary(bool bUseMultilineFormat, bool bIncludeRuntimeSummary, bool bIncludeTransitionSummary, bool bIncludeInputState) const
 {
-	// 현재 Pawn 기준 디버그 스냅샷입니다.
-	const FCFVehicleDebugSnapshot VehicleDebugSnapshot = GetVehicleDebugSnapshot();
-
-	if (bUseMultilineFormat)
+	const FString LineBreak = bUseMultilineFormat ? TEXT("\n") : TEXT(" | ");
+	TArray<FString> DebugSegments;
+	DebugSegments.Reserve(8);
+	DebugSegments.Add(FString::Printf(TEXT("Ready=%s"), bVehicleRuntimeReady ? TEXT("True") : TEXT("False")));
+	if (VehicleDriveComp)
 	{
-		return UCarFightVehicleUtils::MakeVehicleDebugSnapshotMultilineDebugString(
-			VehicleDebugSnapshot,
-			bIncludeRuntimeSummary,
-			bIncludeTransitionSummary,
-			bIncludeInputState);
+		const FCFVehicleDriveStateSnapshot DriveStateSnapshot = VehicleDriveComp->GetDriveStateSnapshot();
+		DebugSegments.Add(FString::Printf(TEXT("State=%s"), *UEnum::GetValueAsString(DriveStateSnapshot.CurrentDriveState)));
+		DebugSegments.Add(FString::Printf(TEXT("Speed=%.1f km/h"), DriveStateSnapshot.CurrentSpeedKmh));
+		DebugSegments.Add(FString::Printf(TEXT("Throttle=%.2f"), DriveStateSnapshot.CurrentInputState.ThrottleInput));
+		DebugSegments.Add(FString::Printf(TEXT("Brake=%.2f"), DriveStateSnapshot.CurrentInputState.BrakeInput));
+		DebugSegments.Add(FString::Printf(TEXT("Steering=%.2f"), DriveStateSnapshot.CurrentInputState.SteeringInput));
+		DebugSegments.Add(FString::Printf(TEXT("Handbrake=%s"), DriveStateSnapshot.CurrentInputState.bHandbrakePressed ? TEXT("On") : TEXT("Off")));
+		if (bIncludeInputState)
+		{
+			DebugSegments.Add(FString::Printf(TEXT("DeviceMode=%s"), *UEnum::GetValueAsString(InputDeviceMode)));
+		}
 	}
-
-	return UCarFightVehicleUtils::MakeVehicleDebugSnapshotDebugString(
-		VehicleDebugSnapshot,
-		bIncludeRuntimeSummary,
-		bIncludeTransitionSummary,
-		bIncludeInputState);
+	else
+	{
+		DebugSegments.Add(TEXT("State=DriveCompMissing"));
+	}
+	if (bIncludeTransitionSummary)
+	{
+		if (VehicleDriveComp)
+		{
+			DebugSegments.Add(VehicleDriveComp->GetLastDriveStateTransitionSummary());
+		}
+		else
+		{
+			DebugSegments.Add(TEXT("DriveStateTransition: DriveCompMissing"));
+		}
+	}
+	if (bIncludeRuntimeSummary)
+	{
+		DebugSegments.Add(LastVehicleRuntimeSummary);
+	}
+	return FString::Join(DebugSegments, *LineBreak);
 }
 
 void ACFVehiclePawn::AppendWheelSyncRuntimeSummary()
 {
-	// WheelSync 접미사를 제외한 기본 런타임 요약 문자열입니다.
 	const FString BaseRuntimeSummary = StripWheelSyncRuntimeSummarySuffix(LastVehicleRuntimeSummary);
-
-	// 현재 프레임 입력 생성 단계 요약 문자열입니다.
-	const FString WheelSyncBuildSummary =
-		(WheelSyncComp && !WheelSyncComp->LastInputBuildSummary.IsEmpty())
-		? WheelSyncComp->LastInputBuildSummary
-		: TEXT("NotBuilt");
-
-	// 현재 프레임 적용 단계 요약 문자열입니다.
-	const FString WheelSyncRuntimeSummary =
-		(WheelSyncComp && !WheelSyncComp->LastValidationSummary.IsEmpty())
-		? WheelSyncComp->LastValidationSummary
-		: TEXT("NotApplied");
-
-	LastVehicleRuntimeSummary = FString::Printf(
-		TEXT("%s | WheelSyncBuild=%s | WheelSyncRuntime=%s"),
-		*BaseRuntimeSummary,
-		*WheelSyncBuildSummary,
-		*WheelSyncRuntimeSummary);
+	const FString WheelSyncBuildSummary = WheelSyncComp ? WheelSyncComp->LastValidationSummary : TEXT("WheelSyncBuild=MissingWheelSyncComp");
+	const FString WheelSyncRuntimeSummary = WheelSyncComp ? WheelSyncComp->LastInputBuildSummary : TEXT("WheelSyncRuntime=MissingWheelSyncComp");
+	LastVehicleRuntimeSummary = FString::Printf(TEXT("%s | WheelSyncBuild=%s | WheelSyncRuntime=%s"), *BaseRuntimeSummary, *WheelSyncBuildSummary, *WheelSyncRuntimeSummary);
 }
 
 void ACFVehiclePawn::ApplyAxisInputFromAction(const UInputAction* SourceInputAction, const FInputActionValue& InputActionValue, void (ACFVehiclePawn::*AxisInputSetter)(float))
 {
-	// 현재 액션에서 읽은 축 입력값입니다.
-	const float InputValue = InputActionValue.Get<float>();
-	if (!ShouldAcceptActionInput(SourceInputAction, InputValue))
+	const float AxisValue = InputActionValue.Get<float>();
+	if (!ShouldAcceptActionInput(SourceInputAction, AxisValue))
 	{
 		(this->*AxisInputSetter)(0.0f);
 		return;
 	}
-
-	(this->*AxisInputSetter)(InputValue);
+	(this->*AxisInputSetter)(AxisValue);
 }
 
 void ACFVehiclePawn::ResetAxisInput(void (ACFVehiclePawn::*AxisInputSetter)(float))
@@ -359,7 +519,178 @@ void ACFVehiclePawn::ResetAxisInput(void (ACFVehiclePawn::*AxisInputSetter)(floa
 	(this->*AxisInputSetter)(0.0f);
 }
 
-void ACFVehiclePawn::SetVehicleThrottleInput(float InThrottleValue)
+void ACFVehiclePawn::ApplyVehicleDataConfig()
+{
+	ApplyVehicleMovementConfig();
+	ApplyVehicleReferenceConfig();
+	ApplyVehicleWheelPhysicsConfig();
+	ApplyVehicleWheelVisualConfig();
+	if (VehicleDriveComp && VehicleData)
+	{
+		VehicleDriveComp->ApplyDriveStateConfig(VehicleData->DriveStateConfig);
+	}
+}
+
+void ACFVehiclePawn::ApplyVehicleVisualConfig()
+{
+	if (!VehicleData)
+	{
+		return;
+	}
+	UStaticMeshComponent* ChassisStaticMeshComp = FindStaticMeshComponentByName(this, TEXT("SM_Body"));
+	if (ChassisStaticMeshComp && VehicleData->VehicleVisualConfig.ChassisMesh)
+	{
+		ChassisStaticMeshComp->SetStaticMesh(VehicleData->VehicleVisualConfig.ChassisMesh);
+	}
+	// 현재 WheelSync 컴포넌트에는 휠 메쉬 자산 적용 전용 API가 없습니다.
+	// 휠 시각 메쉬 교체는 별도 구현 전까지 여기서 수행하지 않습니다.
+}
+
+void ACFVehiclePawn::ApplyVehicleLayoutConfig()
+{
+	if (!VehicleData)
+	{
+		return;
+	}
+	LastVehicleRuntimeSummary = TEXT("VehicleLayout: ManualAnchorLayout=Required");
+}
+
+void ACFVehiclePawn::ApplyVehicleMovementConfig()
+{
+	if (!VehicleData)
+	{
+		LastVehicleRuntimeSummary = TEXT("VehicleRuntime: VehicleData is null during ApplyVehicleMovementConfig.");
+		return;
+	}
+	UChaosWheeledVehicleMovementComponent* ResolvedVehicleMovementComponent = ResolveVehicleMovementComponent(TEXT("VehicleRuntime: DriveComp cache failed during ApplyVehicleMovementConfig."), TEXT("VehicleRuntime: VehicleMovementComponent is null during ApplyVehicleMovementConfig."));
+	if (!ResolvedVehicleMovementComponent)
+	{
+		return;
+	}
+	const FCFVehicleMovementConfig& VehicleMovementConfig = VehicleData->VehicleMovementConfig;
+	ResolvedVehicleMovementComponent->ChassisHeight = VehicleMovementConfig.ChassisHeight;
+	ResolvedVehicleMovementComponent->DragCoefficient = VehicleMovementConfig.DragCoefficient;
+	ResolvedVehicleMovementComponent->DownforceCoefficient = VehicleMovementConfig.DownforceCoefficient;
+	ResolvedVehicleMovementComponent->bEnableCenterOfMassOverride = VehicleMovementConfig.bEnableCenterOfMassOverride;
+	ResolvedVehicleMovementComponent->CenterOfMassOverride = VehicleMovementConfig.CenterOfMassOverride;
+	ResolvedVehicleMovementComponent->EngineSetup.MaxTorque = VehicleMovementConfig.EngineMaxTorque;
+	ResolvedVehicleMovementComponent->EngineSetup.MaxRPM = VehicleMovementConfig.EngineMaxRPM;
+	ResolvedVehicleMovementComponent->EngineSetup.EngineIdleRPM = VehicleMovementConfig.EngineIdleRPM;
+	ResolvedVehicleMovementComponent->EngineSetup.EngineBrakeEffect = VehicleMovementConfig.EngineBrakeEffect;
+	ResolvedVehicleMovementComponent->EngineSetup.EngineRevUpMOI = VehicleMovementConfig.EngineRevUpMOI;
+	ResolvedVehicleMovementComponent->EngineSetup.EngineRevDownRate = VehicleMovementConfig.EngineRevDownRate;
+	ResolvedVehicleMovementComponent->DifferentialSetup.DifferentialType = VehicleMovementConfig.DifferentialType;
+	ResolvedVehicleMovementComponent->DifferentialSetup.FrontRearSplit = VehicleMovementConfig.FrontRearSplit;
+	ResolvedVehicleMovementComponent->SteeringSetup.SteeringType = VehicleMovementConfig.SteeringType;
+	ResolvedVehicleMovementComponent->SteeringSetup.AngleRatio = VehicleMovementConfig.SteeringAngleRatio;
+	ResolvedVehicleMovementComponent->bLegacyWheelFrictionPosition = VehicleMovementConfig.bLegacyWheelFrictionPosition;
+	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: MovementProfile=%s, MaxTorque=%.1f, MaxRPM=%.1f, Differential=%s, SteeringType=%s"), *VehicleMovementConfig.MovementProfileName.ToString(), VehicleMovementConfig.EngineMaxTorque, VehicleMovementConfig.EngineMaxRPM, *UEnum::GetValueAsString(VehicleMovementConfig.DifferentialType), *UEnum::GetValueAsString(VehicleMovementConfig.SteeringType));
+}
+
+void ACFVehiclePawn::ApplyVehicleWheelPhysicsConfig()
+{
+	if (!VehicleData)
+	{
+		LastVehicleRuntimeSummary = TEXT("VehicleRuntime: VehicleData is null during ApplyVehicleWheelPhysicsConfig.");
+		return;
+	}
+	UChaosWheeledVehicleMovementComponent* ResolvedVehicleMovementComponent = ResolveVehicleMovementComponent(TEXT("VehicleRuntime: DriveComp cache failed during ApplyVehicleWheelPhysicsConfig."), TEXT("VehicleRuntime: VehicleMovementComponent is null during ApplyVehicleWheelPhysicsConfig."));
+	if (!ResolvedVehicleMovementComponent)
+	{
+		return;
+	}
+	const FCFVehicleMovementConfig& VehicleMovementConfig = VehicleData->VehicleMovementConfig;
+	const FCFVehicleReferenceConfig& VehicleReferenceConfig = VehicleData->VehicleReferenceConfig;
+	const bool bUseRuntimeWheelPhysicsOverrides = VehicleMovementConfig.bUseMovementOverrides;
+	const auto ConfigureWheelSetup = [&](FChaosWheelSetup& WheelSetup, const TSubclassOf<UChaosVehicleWheel> WheelClass, const bool bIsFrontWheel)
+	{
+		WheelSetup.WheelClass = WheelClass;
+		WheelSetup.AdditionalOffset = bIsFrontWheel ? VehicleMovementConfig.FrontWheelAdditionalOffset : VehicleMovementConfig.RearWheelAdditionalOffset;
+		if (!bUseRuntimeWheelPhysicsOverrides || !WheelClass)
+		{
+			return;
+		}
+
+		UChaosVehicleWheel* WheelClassDefaultObject = WheelClass->GetDefaultObject<UChaosVehicleWheel>();
+		if (!WheelClassDefaultObject)
+		{
+			return;
+		}
+
+		const FCFWheelClassRuntimeSnapshot WheelClassRuntimeSnapshot = CaptureWheelClassRuntimeSnapshot(*WheelClassDefaultObject);
+		ApplyVehicleMovementWheelTuningToWheelClass(*WheelClassDefaultObject, VehicleMovementConfig, bIsFrontWheel);
+		WheelSetup.WheelClass = WheelClass;
+		RestoreWheelClassRuntimeSnapshot(*WheelClassDefaultObject, WheelClassRuntimeSnapshot);
+	};
+
+	for (FChaosWheelSetup& WheelSetup : ResolvedVehicleMovementComponent->WheelSetups)
+	{
+		const FString BoneNameString = WheelSetup.BoneName.ToString();
+		const bool bIsFrontWheel = BoneNameString.Contains(TEXT("F"));
+		ConfigureWheelSetup(
+			WheelSetup,
+			bIsFrontWheel ? VehicleReferenceConfig.FrontWheelClass : VehicleReferenceConfig.RearWheelClass,
+			bIsFrontWheel);
+	}
+
+	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: WheelPhysicsOverrides=%s, FrontWheelClass=%s, RearWheelClass=%s, FrontOffset=%s, RearOffset=%s"),
+		bUseRuntimeWheelPhysicsOverrides ? TEXT("True") : TEXT("False"),
+		VehicleReferenceConfig.FrontWheelClass ? *VehicleReferenceConfig.FrontWheelClass->GetName() : TEXT("None"),
+		VehicleReferenceConfig.RearWheelClass ? *VehicleReferenceConfig.RearWheelClass->GetName() : TEXT("None"),
+		*VehicleMovementConfig.FrontWheelAdditionalOffset.ToCompactString(),
+		*VehicleMovementConfig.RearWheelAdditionalOffset.ToCompactString());
+}
+
+// [v2.5.2] VehicleData의 휠 메시 자산을 기존 Wheel_Mesh_* 컴포넌트에 적용하고 WheelSync 기본 시각 설정을 함께 갱신합니다.
+void ACFVehiclePawn::ApplyVehicleWheelVisualConfig()
+{
+	if (!WheelSyncComp || !VehicleData)
+	{
+		return;
+	}
+
+	// VehicleData 기준 WheelSync 기본 설정값을 반영합니다.
+	WheelSyncComp->ExpectedWheelCount = VehicleData->WheelVisualConfig.ExpectedWheelCount;
+	WheelSyncComp->FrontWheelCountForSteering = VehicleData->WheelVisualConfig.FrontWheelCountForSteering;
+
+	// 앞왼쪽 휠 메시 컴포넌트에 VehicleData의 FL 휠 메시를 적용합니다.
+	if (UStaticMeshComponent* WheelMeshFLComp = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_FL")))
+	{
+		WheelMeshFLComp->SetStaticMesh(VehicleData->VehicleVisualConfig.WheelMeshFL);
+	}
+
+	// 앞오른쪽 휠 메시 컴포넌트에 VehicleData의 FR 휠 메시를 적용합니다.
+	if (UStaticMeshComponent* WheelMeshFRComp = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_FR")))
+	{
+		WheelMeshFRComp->SetStaticMesh(VehicleData->VehicleVisualConfig.WheelMeshFR);
+	}
+
+	// 뒤왼쪽 휠 메시 컴포넌트에 VehicleData의 RL 휠 메시를 적용합니다.
+	if (UStaticMeshComponent* WheelMeshRLComp = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_RL")))
+	{
+		WheelMeshRLComp->SetStaticMesh(VehicleData->VehicleVisualConfig.WheelMeshRL);
+	}
+
+	// 뒤오른쪽 휠 메시 컴포넌트에 VehicleData의 RR 휠 메시를 적용합니다.
+	if (UStaticMeshComponent* WheelMeshRRComp = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_RR")))
+	{
+		WheelMeshRRComp->SetStaticMesh(VehicleData->VehicleVisualConfig.WheelMeshRR);
+	}
+
+	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: WheelVisual ExpectedWheelCount=%d, FrontWheelCount=%d"), WheelSyncComp->ExpectedWheelCount, WheelSyncComp->FrontWheelCountForSteering);
+}
+
+void ACFVehiclePawn::ApplyVehicleReferenceConfig()
+{
+	if (!VehicleData)
+	{
+		return;
+	}
+	const FCFVehicleReferenceConfig& VehicleReferenceConfig = VehicleData->VehicleReferenceConfig;
+	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: FrontWheelClass=%s, RearWheelClass=%s"), VehicleReferenceConfig.FrontWheelClass ? *VehicleReferenceConfig.FrontWheelClass->GetName() : TEXT("None"), VehicleReferenceConfig.RearWheelClass ? *VehicleReferenceConfig.RearWheelClass->GetName() : TEXT("None"));
+}
+
+void ACFVehiclePawn::SetVehicleThrottleInput(const float InThrottleValue)
 {
 	if (VehicleDriveComp)
 	{
@@ -367,7 +698,7 @@ void ACFVehiclePawn::SetVehicleThrottleInput(float InThrottleValue)
 	}
 }
 
-void ACFVehiclePawn::SetVehicleSteeringInput(float InSteeringValue)
+void ACFVehiclePawn::SetVehicleSteeringInput(const float InSteeringValue)
 {
 	if (VehicleDriveComp)
 	{
@@ -375,7 +706,7 @@ void ACFVehiclePawn::SetVehicleSteeringInput(float InSteeringValue)
 	}
 }
 
-void ACFVehiclePawn::SetVehicleBrakeInput(float InBrakeValue)
+void ACFVehiclePawn::SetVehicleBrakeInput(const float InBrakeValue)
 {
 	if (VehicleDriveComp)
 	{
@@ -383,7 +714,7 @@ void ACFVehiclePawn::SetVehicleBrakeInput(float InBrakeValue)
 	}
 }
 
-void ACFVehiclePawn::SetVehicleHandbrakeInput(bool bInHandbrakePressed)
+void ACFVehiclePawn::SetVehicleHandbrakeInput(const bool bInHandbrakePressed)
 {
 	if (VehicleDriveComp)
 	{
@@ -393,63 +724,45 @@ void ACFVehiclePawn::SetVehicleHandbrakeInput(bool bInHandbrakePressed)
 
 float ACFVehiclePawn::GetVehicleSpeed() const
 {
-	if (!VehicleDriveComp)
-	{
-		return 0.0f;
-	}
-
-	return VehicleDriveComp->GetCurrentSpeedKmh();
+	return VehicleDriveComp ? VehicleDriveComp->GetCurrentSpeedKmh() : 0.0f;
 }
 
 ECFVehicleDriveState ACFVehiclePawn::GetDriveState() const
 {
-	if (!VehicleDriveComp)
-	{
-		return ECFVehicleDriveState::Disabled;
-	}
-
-	return VehicleDriveComp->GetDriveState();
+	return VehicleDriveComp ? VehicleDriveComp->GetDriveState() : ECFVehicleDriveState::Disabled;
 }
 
 FCFVehicleDriveStateSnapshot ACFVehiclePawn::GetDriveStateSnapshot() const
 {
-	if (!VehicleDriveComp)
-	{
-		return FCFVehicleDriveStateSnapshot();
-	}
-
-	return VehicleDriveComp->GetDriveStateSnapshot();
+	return VehicleDriveComp ? VehicleDriveComp->GetDriveStateSnapshot() : FCFVehicleDriveStateSnapshot();
 }
 
 FCFVehicleDebugSnapshot ACFVehiclePawn::GetVehicleDebugSnapshot() const
 {
-	FCFVehicleDebugSnapshot VehicleDebugSnapshot;
-	VehicleDebugSnapshot.bRuntimeReady = bVehicleRuntimeReady;
-	VehicleDebugSnapshot.RuntimeSummary = LastVehicleRuntimeSummary;
-	VehicleDebugSnapshot.bHasDriveComponent = (VehicleDriveComp != nullptr);
-	VehicleDebugSnapshot.bHasWheelSyncComponent = (WheelSyncComp != nullptr);
-
-	if (!VehicleDriveComp)
+	FCFVehicleDebugSnapshot DebugSnapshot;
+	DebugSnapshot.bRuntimeReady = bVehicleRuntimeReady;
+	DebugSnapshot.RuntimeSummary = LastVehicleRuntimeSummary;
+	DebugSnapshot.bHasDriveComponent = (VehicleDriveComp != nullptr);
+	DebugSnapshot.bHasWheelSyncComponent = (WheelSyncComp != nullptr);
+	if (VehicleDriveComp)
 	{
-		return VehicleDebugSnapshot;
+		DebugSnapshot.CurrentDriveState = VehicleDriveComp->GetDriveState();
+		DebugSnapshot.PreviousDriveState = VehicleDriveComp->GetPreviousDriveState();
+		DebugSnapshot.bDriveStateChangedThisFrame = VehicleDriveComp->HasDriveStateChangedThisFrame();
+		DebugSnapshot.DriveStateTransitionSummary = VehicleDriveComp->GetLastDriveStateTransitionSummary();
+		DebugSnapshot.DriveStateSnapshot = VehicleDriveComp->GetDriveStateSnapshot();
 	}
-
-	VehicleDebugSnapshot.CurrentDriveState = VehicleDriveComp->GetDriveState();
-	VehicleDebugSnapshot.PreviousDriveState = VehicleDriveComp->GetPreviousDriveState();
-	VehicleDebugSnapshot.bDriveStateChangedThisFrame = VehicleDriveComp->HasDriveStateChangedThisFrame();
-	VehicleDebugSnapshot.DriveStateTransitionSummary = VehicleDriveComp->GetLastDriveStateTransitionSummary();
-	VehicleDebugSnapshot.DriveStateSnapshot = VehicleDriveComp->GetDriveStateSnapshot();
-	return VehicleDebugSnapshot;
+	return DebugSnapshot;
 }
 
 FText ACFVehiclePawn::GetDebugTextSingleLine() const
 {
-	return FText::FromString(BuildVehicleDebugSummary(false, false, true, true));
+	return FText::FromString(BuildVehicleDebugSummary(false, true, bShowDriveStateTransitionSummary, true));
 }
 
 FText ACFVehiclePawn::GetDebugTextMultiLine() const
 {
-	return FText::FromString(BuildVehicleDebugSummary(true, true, true, true));
+	return FText::FromString(BuildVehicleDebugSummary(true, true, bShowDriveStateTransitionSummary, true));
 }
 
 FText ACFVehiclePawn::GetDebugTextByDisplayMode() const
@@ -458,18 +771,16 @@ FText ACFVehiclePawn::GetDebugTextByDisplayMode() const
 	{
 		return FText::GetEmpty();
 	}
-
 	if (DriveStateDebugDisplayMode == ECFVehicleDebugDisplayMode::MultiLine)
 	{
 		return GetDebugTextMultiLine();
 	}
-
 	return GetDebugTextSingleLine();
 }
 
 bool ACFVehiclePawn::ShouldShowDebugWidget() const
 {
-	return bEnableDriveStateOnScreenDebug && DriveStateDebugDisplayMode != ECFVehicleDebugDisplayMode::Off;
+	return bEnableDriveStateOnScreenDebug && (DriveStateDebugDisplayMode != ECFVehicleDebugDisplayMode::Off);
 }
 
 ESlateVisibility ACFVehiclePawn::GetDebugWidgetVisibility() const
@@ -477,376 +788,55 @@ ESlateVisibility ACFVehiclePawn::GetDebugWidgetVisibility() const
 	return ShouldShowDebugWidget() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed;
 }
 
-void ACFVehiclePawn::ApplyVehicleDataConfig()
-{
-	if (!VehicleData)
-	{
-		LastVehicleRuntimeSummary = TEXT("VehicleDataConfig: VehicleData is null.");
-		return;
-	}
-	// 차량 데이터 단계별 적용 결과 문자열 목록입니다.
-	TArray<FString> VehicleConfigSummaries;
-
-	ApplyVehicleVisualConfig();
-	VehicleConfigSummaries.Add(LastVehicleRuntimeSummary);
-	ApplyVehicleLayoutConfig();
-	VehicleConfigSummaries.Add(LastVehicleRuntimeSummary);
-	ApplyVehicleMovementConfig();
-	VehicleConfigSummaries.Add(LastVehicleRuntimeSummary);
-	ApplyVehicleReferenceConfig();
-	VehicleConfigSummaries.Add(LastVehicleRuntimeSummary);
-	ApplyVehicleWheelVisualConfig();
-	VehicleConfigSummaries.Add(LastVehicleRuntimeSummary);
-	if (VehicleDriveComp)
-	{
-		VehicleDriveComp->ApplyDriveStateConfig(VehicleData->DriveStateConfig);
-	}
-
-	// DriveState 설정 적용 여부 요약 문자열입니다.
-	const FString DriveStateConfigSummary = FString::Printf(
-		TEXT("DriveStateConfig=%s"),
-		VehicleData->DriveStateConfig.bUseDriveStateOverrides ? TEXT("Applied") : TEXT("Default"));
-	VehicleConfigSummaries.Add(DriveStateConfigSummary);
-
-	LastVehicleRuntimeSummary = FString::Join(VehicleConfigSummaries, TEXT(" | "));
-}
-
-void ACFVehiclePawn::ApplyVehicleVisualConfig()
-{
-	if (!VehicleData)
-	{
-		LastVehicleRuntimeSummary = TEXT("VehicleVisualConfig: VehicleData is null.");
-		return;
-	}
-	UStaticMeshComponent* ChassisMeshComp = FindStaticMeshComponentByName(this, TEXT("SM_Chassis"));
-	UStaticMeshComponent* WheelMeshCompFL = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_FL"));
-	UStaticMeshComponent* WheelMeshCompFR = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_FR"));
-	UStaticMeshComponent* WheelMeshCompRL = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_RL"));
-	UStaticMeshComponent* WheelMeshCompRR = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_RR"));
-	if (!ChassisMeshComp)
-	{
-		LastVehicleRuntimeSummary = TEXT("VehicleVisualConfig: SM_Chassis component is missing.");
-		return;
-	}
-	UStaticMesh* ChassisMesh = VehicleData->VehicleVisualConfig.ChassisMesh.Get();
-	UStaticMesh* WheelMeshFL = VehicleData->VehicleVisualConfig.WheelMeshFL.Get();
-	UStaticMesh* WheelMeshFR = VehicleData->VehicleVisualConfig.WheelMeshFR.Get() ? VehicleData->VehicleVisualConfig.WheelMeshFR.Get() : WheelMeshFL;
-	UStaticMesh* WheelMeshRL = VehicleData->VehicleVisualConfig.WheelMeshRL.Get() ? VehicleData->VehicleVisualConfig.WheelMeshRL.Get() : WheelMeshFL;
-	UStaticMesh* WheelMeshRR = VehicleData->VehicleVisualConfig.WheelMeshRR.Get() ? VehicleData->VehicleVisualConfig.WheelMeshRR.Get() : WheelMeshFL;
-	ChassisMeshComp->SetStaticMesh(ChassisMesh);
-	ChassisMeshComp->MarkRenderStateDirty();
-	int32 AppliedWheelMeshCount = 0;
-	int32 MissingWheelMeshComponentCount = 0;
-	auto ApplyWheelMesh = [&](UStaticMeshComponent* WheelMeshComp, UStaticMesh* WheelMeshAsset)
-	{
-		if (!WheelMeshComp)
-		{
-			++MissingWheelMeshComponentCount;
-			return;
-		}
-		WheelMeshComp->SetStaticMesh(WheelMeshAsset);
-		WheelMeshComp->MarkRenderStateDirty();
-		if (WheelMeshAsset)
-		{
-			++AppliedWheelMeshCount;
-		}
-	};
-	ApplyWheelMesh(WheelMeshCompFL, WheelMeshFL);
-	ApplyWheelMesh(WheelMeshCompFR, WheelMeshFR);
-	ApplyWheelMesh(WheelMeshCompRL, WheelMeshRL);
-	ApplyWheelMesh(WheelMeshCompRR, WheelMeshRR);
-	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleVisualConfig: Chassis=%s, WheelMeshesApplied=%d, MissingWheelMeshComponents=%d"), ChassisMesh ? TEXT("Present") : TEXT("Missing"), AppliedWheelMeshCount, MissingWheelMeshComponentCount);
-}
-
-void ACFVehiclePawn::ApplyVehicleLayoutConfig()
-{
-	if (!VehicleData)
-	{
-		LastVehicleRuntimeSummary = TEXT("VehicleLayout: VehicleData is null.");
-		return;
-	}
-
-	LastVehicleRuntimeSummary = TEXT("VehicleLayout: ManualAnchorLayout=Required");
-}
-
-void ACFVehiclePawn::ApplyVehicleMovementConfig()
-{
-	if (!VehicleData)
-	{
-		LastVehicleRuntimeSummary = TEXT("VehicleMovementConfig: VehicleData is null.");
-		return;
-	}
-	if (!VehicleDriveComp)
-	{
-		LastVehicleRuntimeSummary = TEXT("VehicleMovementConfig: VehicleDriveComp is null.");
-		return;
-	}
-	UChaosWheeledVehicleMovementComponent* ChaosVehicleMovementComp = ResolveVehicleMovementComponent(
-		TEXT("VehicleMovementConfig: VehicleMovement cache failed."),
-		TEXT("VehicleMovementConfig: VehicleMovement component is null."));
-	if (!ChaosVehicleMovementComp)
-	{
-		return;
-	}
-
-	const FCFVehicleMovementConfig& VehicleMovementConfig = VehicleData->VehicleMovementConfig;
-	if (!VehicleMovementConfig.bUseMovementOverrides)
-	{
-		LastVehicleRuntimeSummary = TEXT("VehicleMovementConfig: Override disabled.");
-		return;
-	}
-
-	int32 AppliedMovementFieldCount = 0;
-	int32 AppliedWheelFieldCount = 0;
-	int32 AppliedBodyFieldCount = 0;
-	int32 AppliedEngineFieldCount = 0;
-	int32 AppliedDifferentialFieldCount = 0;
-	int32 AppliedSteeringFieldCount = 0;
-
-	UChaosVehicleWheel* FrontWheelClassDefaultObject = VehicleData->VehicleReferenceConfig.FrontWheelClass ? VehicleData->VehicleReferenceConfig.FrontWheelClass->GetDefaultObject<UChaosVehicleWheel>() : nullptr;
-	UChaosVehicleWheel* RearWheelClassDefaultObject = VehicleData->VehicleReferenceConfig.RearWheelClass ? VehicleData->VehicleReferenceConfig.RearWheelClass->GetDefaultObject<UChaosVehicleWheel>() : nullptr;
-	const int32 FrontWheelSetupCount = FMath::Max(0, VehicleData->WheelVisualConfig.FrontWheelCountForSteering);
-
-	#define APPLY_FRONT_BOOL_FLOAT(BoolField, TargetField, ValueField, NullMsg) if (VehicleMovementConfig.BoolField) { if (!FrontWheelClassDefaultObject) { LastVehicleRuntimeSummary = TEXT(NullMsg); return; } FrontWheelClassDefaultObject->TargetField = VehicleMovementConfig.ValueField; ++AppliedMovementFieldCount; ++AppliedWheelFieldCount; }
-	#define APPLY_REAR_BOOL_FLOAT(BoolField, TargetField, ValueField, NullMsg) if (VehicleMovementConfig.BoolField) { if (!RearWheelClassDefaultObject) { LastVehicleRuntimeSummary = TEXT(NullMsg); return; } RearWheelClassDefaultObject->TargetField = VehicleMovementConfig.ValueField; ++AppliedMovementFieldCount; ++AppliedWheelFieldCount; }
-	#define APPLY_FRONT_BOOL_BOOL(BoolField, TargetField, ValueField, NullMsg) if (VehicleMovementConfig.BoolField) { if (!FrontWheelClassDefaultObject) { LastVehicleRuntimeSummary = TEXT(NullMsg); return; } FrontWheelClassDefaultObject->TargetField = VehicleMovementConfig.ValueField; ++AppliedMovementFieldCount; ++AppliedWheelFieldCount; }
-	#define APPLY_REAR_BOOL_BOOL(BoolField, TargetField, ValueField, NullMsg) if (VehicleMovementConfig.BoolField) { if (!RearWheelClassDefaultObject) { LastVehicleRuntimeSummary = TEXT(NullMsg); return; } RearWheelClassDefaultObject->TargetField = VehicleMovementConfig.ValueField; ++AppliedMovementFieldCount; ++AppliedWheelFieldCount; }
-	#define APPLY_FRONT_BOOL_ENUM(BoolField, TargetField, ValueField, NullMsg) if (VehicleMovementConfig.BoolField) { if (!FrontWheelClassDefaultObject) { LastVehicleRuntimeSummary = TEXT(NullMsg); return; } FrontWheelClassDefaultObject->TargetField = VehicleMovementConfig.ValueField; ++AppliedMovementFieldCount; ++AppliedWheelFieldCount; }
-	#define APPLY_REAR_BOOL_ENUM(BoolField, TargetField, ValueField, NullMsg) if (VehicleMovementConfig.BoolField) { if (!RearWheelClassDefaultObject) { LastVehicleRuntimeSummary = TEXT(NullMsg); return; } RearWheelClassDefaultObject->TargetField = VehicleMovementConfig.ValueField; ++AppliedMovementFieldCount; ++AppliedWheelFieldCount; }
-	#define APPLY_BODY_BOOL_FLOAT(BoolField, TargetField, ValueField) if (VehicleMovementConfig.BoolField) { ChaosVehicleMovementComp->TargetField = VehicleMovementConfig.ValueField; ++AppliedMovementFieldCount; ++AppliedBodyFieldCount; }
-	#define APPLY_BODY_BOOL_BOOL(BoolField, TargetField, ValueField) if (VehicleMovementConfig.BoolField) { ChaosVehicleMovementComp->TargetField = VehicleMovementConfig.ValueField; ++AppliedMovementFieldCount; ++AppliedBodyFieldCount; }
-	#define APPLY_BODY_BOOL_VECTOR(BoolField, TargetField, ValueField) if (VehicleMovementConfig.BoolField) { ChaosVehicleMovementComp->TargetField = VehicleMovementConfig.ValueField; ++AppliedMovementFieldCount; ++AppliedBodyFieldCount; }
-	#define APPLY_ENGINE_BOOL_FLOAT(BoolField, TargetField, ValueField) if (VehicleMovementConfig.BoolField) { ChaosVehicleMovementComp->EngineSetup.TargetField = VehicleMovementConfig.ValueField; ++AppliedMovementFieldCount; ++AppliedEngineFieldCount; }
-	#define APPLY_DIFF_BOOL_FLOAT(BoolField, TargetField, ValueField) if (VehicleMovementConfig.BoolField) { ChaosVehicleMovementComp->DifferentialSetup.TargetField = VehicleMovementConfig.ValueField; ++AppliedMovementFieldCount; ++AppliedDifferentialFieldCount; }
-	#define APPLY_DIFF_BOOL_ENUM(BoolField, TargetField, ValueField) if (VehicleMovementConfig.BoolField) { ChaosVehicleMovementComp->DifferentialSetup.TargetField = VehicleMovementConfig.ValueField; ++AppliedMovementFieldCount; ++AppliedDifferentialFieldCount; }
-	#define APPLY_STEER_BOOL_FLOAT(BoolField, TargetField, ValueField) if (VehicleMovementConfig.BoolField) { ChaosVehicleMovementComp->SteeringSetup.TargetField = VehicleMovementConfig.ValueField; ++AppliedMovementFieldCount; ++AppliedSteeringFieldCount; }
-	#define APPLY_STEER_BOOL_ENUM(BoolField, TargetField, ValueField) if (VehicleMovementConfig.BoolField) { ChaosVehicleMovementComp->SteeringSetup.TargetField = VehicleMovementConfig.ValueField; ++AppliedMovementFieldCount; ++AppliedSteeringFieldCount; }
-	#define APPLY_SETUP_BOOL_BOOL(BoolField, TargetField, ValueField) if (VehicleMovementConfig.BoolField) { ChaosVehicleMovementComp->TargetField = VehicleMovementConfig.ValueField; ++AppliedMovementFieldCount; ++AppliedBodyFieldCount; }
-	#define APPLY_FRONT_SETUP_OFFSET(BoolField, ValueField) if (VehicleMovementConfig.BoolField) { for (int32 WheelSetupIndex = 0; WheelSetupIndex < ChaosVehicleMovementComp->WheelSetups.Num(); ++WheelSetupIndex) { if (WheelSetupIndex < FrontWheelSetupCount) { ChaosVehicleMovementComp->WheelSetups[WheelSetupIndex].AdditionalOffset = VehicleMovementConfig.ValueField; } } ++AppliedMovementFieldCount; ++AppliedBodyFieldCount; }
-	#define APPLY_REAR_SETUP_OFFSET(BoolField, ValueField) if (VehicleMovementConfig.BoolField) { for (int32 WheelSetupIndex = 0; WheelSetupIndex < ChaosVehicleMovementComp->WheelSetups.Num(); ++WheelSetupIndex) { if (WheelSetupIndex >= FrontWheelSetupCount) { ChaosVehicleMovementComp->WheelSetups[WheelSetupIndex].AdditionalOffset = VehicleMovementConfig.ValueField; } } ++AppliedMovementFieldCount; ++AppliedBodyFieldCount; }
-
-	APPLY_BODY_BOOL_FLOAT(bOverrideChassisHeight, ChassisHeight, ChassisHeight);
-	APPLY_BODY_BOOL_FLOAT(bOverrideDragCoefficient, DragCoefficient, DragCoefficient);
-	APPLY_BODY_BOOL_FLOAT(bOverrideDownforceCoefficient, DownforceCoefficient, DownforceCoefficient);
-	APPLY_BODY_BOOL_BOOL(bOverrideEnableCenterOfMassOverride, bEnableCenterOfMassOverride, bEnableCenterOfMassOverride);
-	APPLY_BODY_BOOL_VECTOR(bOverrideCenterOfMassOverride, CenterOfMassOverride, CenterOfMassOverride);
-	APPLY_SETUP_BOOL_BOOL(bOverrideLegacyWheelFrictionPosition, bLegacyWheelFrictionPosition, bLegacyWheelFrictionPosition);
-	APPLY_FRONT_SETUP_OFFSET(bOverrideFrontWheelAdditionalOffset, FrontWheelAdditionalOffset);
-	APPLY_REAR_SETUP_OFFSET(bOverrideRearWheelAdditionalOffset, RearWheelAdditionalOffset);
-	APPLY_ENGINE_BOOL_FLOAT(bOverrideEngineMaxTorque, MaxTorque, EngineMaxTorque);
-	APPLY_ENGINE_BOOL_FLOAT(bOverrideEngineMaxRPM, MaxRPM, EngineMaxRPM);
-	APPLY_ENGINE_BOOL_FLOAT(bOverrideEngineIdleRPM, EngineIdleRPM, EngineIdleRPM);
-	APPLY_ENGINE_BOOL_FLOAT(bOverrideEngineBrakeEffect, EngineBrakeEffect, EngineBrakeEffect);
-	APPLY_ENGINE_BOOL_FLOAT(bOverrideEngineRevUpMOI, EngineRevUpMOI, EngineRevUpMOI);
-	APPLY_ENGINE_BOOL_FLOAT(bOverrideEngineRevDownRate, EngineRevDownRate, EngineRevDownRate);
-	APPLY_DIFF_BOOL_ENUM(bOverrideDifferentialType, DifferentialType, DifferentialType);
-	APPLY_DIFF_BOOL_FLOAT(bOverrideFrontRearSplit, FrontRearSplit, FrontRearSplit);
-	APPLY_STEER_BOOL_ENUM(bOverrideSteeringType, SteeringType, SteeringType);
-	APPLY_STEER_BOOL_FLOAT(bOverrideSteeringAngleRatio, AngleRatio, SteeringAngleRatio);
-	APPLY_FRONT_BOOL_FLOAT(bOverrideFrontWheelMaxSteerAngle, MaxSteerAngle, FrontWheelMaxSteerAngle, "VehicleMovementConfig: FrontWheelClass default object is null.");
-	APPLY_FRONT_BOOL_FLOAT(bOverrideFrontWheelMaxBrakeTorque, MaxBrakeTorque, FrontWheelMaxBrakeTorque, "VehicleMovementConfig: FrontWheelClass default object is null for MaxBrakeTorque.");
-	APPLY_REAR_BOOL_FLOAT(bOverrideRearWheelMaxBrakeTorque, MaxBrakeTorque, RearWheelMaxBrakeTorque, "VehicleMovementConfig: RearWheelClass default object is null for MaxBrakeTorque.");
-	APPLY_REAR_BOOL_FLOAT(bOverrideRearWheelMaxHandBrakeTorque, MaxHandBrakeTorque, RearWheelMaxHandBrakeTorque, "VehicleMovementConfig: RearWheelClass default object is null for MaxHandBrakeTorque.");
-	APPLY_FRONT_BOOL_FLOAT(bOverrideFrontWheelRadius, WheelRadius, FrontWheelRadius, "VehicleMovementConfig: FrontWheelClass default object is null for WheelRadius.");
-	APPLY_REAR_BOOL_FLOAT(bOverrideRearWheelRadius, WheelRadius, RearWheelRadius, "VehicleMovementConfig: RearWheelClass default object is null for WheelRadius.");
-	APPLY_FRONT_BOOL_FLOAT(bOverrideFrontWheelWidth, WheelWidth, FrontWheelWidth, "VehicleMovementConfig: FrontWheelClass default object is null for WheelWidth.");
-	APPLY_REAR_BOOL_FLOAT(bOverrideRearWheelWidth, WheelWidth, RearWheelWidth, "VehicleMovementConfig: RearWheelClass default object is null for WheelWidth.");
-	APPLY_FRONT_BOOL_FLOAT(bOverrideFrontWheelFrictionForceMultiplier, FrictionForceMultiplier, FrontWheelFrictionForceMultiplier, "VehicleMovementConfig: FrontWheelClass default object is null for FrictionForceMultiplier.");
-	APPLY_REAR_BOOL_FLOAT(bOverrideRearWheelFrictionForceMultiplier, FrictionForceMultiplier, RearWheelFrictionForceMultiplier, "VehicleMovementConfig: RearWheelClass default object is null for FrictionForceMultiplier.");
-	APPLY_FRONT_BOOL_FLOAT(bOverrideFrontWheelCorneringStiffness, CorneringStiffness, FrontWheelCorneringStiffness, "VehicleMovementConfig: FrontWheelClass default object is null for CorneringStiffness.");
-	APPLY_REAR_BOOL_FLOAT(bOverrideRearWheelCorneringStiffness, CorneringStiffness, RearWheelCorneringStiffness, "VehicleMovementConfig: RearWheelClass default object is null for CorneringStiffness.");
-	APPLY_FRONT_BOOL_FLOAT(bOverrideFrontWheelLoadRatio, WheelLoadRatio, FrontWheelLoadRatio, "VehicleMovementConfig: FrontWheelClass default object is null for WheelLoadRatio.");
-	APPLY_REAR_BOOL_FLOAT(bOverrideRearWheelLoadRatio, WheelLoadRatio, RearWheelLoadRatio, "VehicleMovementConfig: RearWheelClass default object is null for WheelLoadRatio.");
-	APPLY_FRONT_BOOL_FLOAT(bOverrideFrontWheelSpringRate, SpringRate, FrontWheelSpringRate, "VehicleMovementConfig: FrontWheelClass default object is null for SpringRate.");
-	APPLY_REAR_BOOL_FLOAT(bOverrideRearWheelSpringRate, SpringRate, RearWheelSpringRate, "VehicleMovementConfig: RearWheelClass default object is null for SpringRate.");
-	APPLY_FRONT_BOOL_FLOAT(bOverrideFrontWheelSpringPreload, SpringPreload, FrontWheelSpringPreload, "VehicleMovementConfig: FrontWheelClass default object is null for SpringPreload.");
-	APPLY_REAR_BOOL_FLOAT(bOverrideRearWheelSpringPreload, SpringPreload, RearWheelSpringPreload, "VehicleMovementConfig: RearWheelClass default object is null for SpringPreload.");
-	APPLY_FRONT_BOOL_FLOAT(bOverrideFrontWheelSuspensionMaxRaise, SuspensionMaxRaise, FrontWheelSuspensionMaxRaise, "VehicleMovementConfig: FrontWheelClass default object is null for SuspensionMaxRaise.");
-	APPLY_REAR_BOOL_FLOAT(bOverrideRearWheelSuspensionMaxRaise, SuspensionMaxRaise, RearWheelSuspensionMaxRaise, "VehicleMovementConfig: RearWheelClass default object is null for SuspensionMaxRaise.");
-	APPLY_FRONT_BOOL_FLOAT(bOverrideFrontWheelSuspensionMaxDrop, SuspensionMaxDrop, FrontWheelSuspensionMaxDrop, "VehicleMovementConfig: FrontWheelClass default object is null for SuspensionMaxDrop.");
-	APPLY_REAR_BOOL_FLOAT(bOverrideRearWheelSuspensionMaxDrop, SuspensionMaxDrop, RearWheelSuspensionMaxDrop, "VehicleMovementConfig: RearWheelClass default object is null for SuspensionMaxDrop.");
-	APPLY_FRONT_BOOL_BOOL(bOverrideFrontWheelAffectedByEngine, bAffectedByEngine, bFrontWheelAffectedByEngine, "VehicleMovementConfig: FrontWheelClass default object is null for bAffectedByEngine.");
-	APPLY_REAR_BOOL_BOOL(bOverrideRearWheelAffectedByEngine, bAffectedByEngine, bRearWheelAffectedByEngine, "VehicleMovementConfig: RearWheelClass default object is null for bAffectedByEngine.");
-	APPLY_FRONT_BOOL_ENUM(bOverrideFrontWheelSweepShape, SweepShape, FrontWheelSweepShape, "VehicleMovementConfig: FrontWheelClass default object is null for SweepShape.");
-	APPLY_REAR_BOOL_ENUM(bOverrideRearWheelSweepShape, SweepShape, RearWheelSweepShape, "VehicleMovementConfig: RearWheelClass default object is null for SweepShape.");
-
-	#undef APPLY_FRONT_BOOL_FLOAT
-	#undef APPLY_REAR_BOOL_FLOAT
-	#undef APPLY_FRONT_BOOL_BOOL
-	#undef APPLY_REAR_BOOL_BOOL
-	#undef APPLY_FRONT_BOOL_ENUM
-	#undef APPLY_REAR_BOOL_ENUM
-	#undef APPLY_BODY_BOOL_FLOAT
-	#undef APPLY_BODY_BOOL_BOOL
-	#undef APPLY_BODY_BOOL_VECTOR
-	#undef APPLY_ENGINE_BOOL_FLOAT
-	#undef APPLY_DIFF_BOOL_FLOAT
-	#undef APPLY_DIFF_BOOL_ENUM
-	#undef APPLY_STEER_BOOL_FLOAT
-	#undef APPLY_STEER_BOOL_ENUM
-	#undef APPLY_SETUP_BOOL_BOOL
-	#undef APPLY_FRONT_SETUP_OFFSET
-	#undef APPLY_REAR_SETUP_OFFSET
-
-	if (AppliedMovementFieldCount > 0)
-	{
-		LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleMovementConfig: AppliedFields=%d, Wheel=%d, Body=%d, Engine=%d, Differential=%d, Steering=%d, ChassisHeight=%.2f, Drag=%.2f, Downforce=%.2f, COMEnabled=%s, LegacyWheelFriction=%s, EngineMaxTorque=%.2f, EngineMaxRPM=%.2f, DifferentialType=%d, FrontRearSplit=%.2f, SteeringType=%d, AngleRatio=%.2f, FrontOffset=(%.2f,%.2f,%.2f), RearOffset=(%.2f,%.2f,%.2f), FrontSteer=%.2f, FrontBrake=%.2f, RearBrake=%.2f, RearHandBrake=%.2f, FrontRadius=%.2f, RearRadius=%.2f, FrontWidth=%.2f, RearWidth=%.2f, FrontFriction=%.2f, RearFriction=%.2f, FrontCornering=%.2f, RearCornering=%.2f, FrontLoadRatio=%.2f, RearLoadRatio=%.2f, FrontSpringRate=%.2f, RearSpringRate=%.2f, FrontSpringPreload=%.2f, RearSpringPreload=%.2f, FrontRaise=%.2f, RearRaise=%.2f, FrontDrop=%.2f, RearDrop=%.2f, FrontEngine=%s, RearEngine=%s, FrontSweep=%d, RearSweep=%d, Profile=%s"), AppliedMovementFieldCount, AppliedWheelFieldCount, AppliedBodyFieldCount, AppliedEngineFieldCount, AppliedDifferentialFieldCount, AppliedSteeringFieldCount, VehicleMovementConfig.ChassisHeight, VehicleMovementConfig.DragCoefficient, VehicleMovementConfig.DownforceCoefficient, VehicleMovementConfig.bEnableCenterOfMassOverride ? TEXT("True") : TEXT("False"), VehicleMovementConfig.bLegacyWheelFrictionPosition ? TEXT("True") : TEXT("False"), VehicleMovementConfig.EngineMaxTorque, VehicleMovementConfig.EngineMaxRPM, static_cast<int32>(VehicleMovementConfig.DifferentialType), VehicleMovementConfig.FrontRearSplit, static_cast<int32>(VehicleMovementConfig.SteeringType), VehicleMovementConfig.SteeringAngleRatio, VehicleMovementConfig.FrontWheelAdditionalOffset.X, VehicleMovementConfig.FrontWheelAdditionalOffset.Y, VehicleMovementConfig.FrontWheelAdditionalOffset.Z, VehicleMovementConfig.RearWheelAdditionalOffset.X, VehicleMovementConfig.RearWheelAdditionalOffset.Y, VehicleMovementConfig.RearWheelAdditionalOffset.Z, VehicleMovementConfig.FrontWheelMaxSteerAngle, VehicleMovementConfig.FrontWheelMaxBrakeTorque, VehicleMovementConfig.RearWheelMaxBrakeTorque, VehicleMovementConfig.RearWheelMaxHandBrakeTorque, VehicleMovementConfig.FrontWheelRadius, VehicleMovementConfig.RearWheelRadius, VehicleMovementConfig.FrontWheelWidth, VehicleMovementConfig.RearWheelWidth, VehicleMovementConfig.FrontWheelFrictionForceMultiplier, VehicleMovementConfig.RearWheelFrictionForceMultiplier, VehicleMovementConfig.FrontWheelCorneringStiffness, VehicleMovementConfig.RearWheelCorneringStiffness, VehicleMovementConfig.FrontWheelLoadRatio, VehicleMovementConfig.RearWheelLoadRatio, VehicleMovementConfig.FrontWheelSpringRate, VehicleMovementConfig.RearWheelSpringRate, VehicleMovementConfig.FrontWheelSpringPreload, VehicleMovementConfig.RearWheelSpringPreload, VehicleMovementConfig.FrontWheelSuspensionMaxRaise, VehicleMovementConfig.RearWheelSuspensionMaxRaise, VehicleMovementConfig.FrontWheelSuspensionMaxDrop, VehicleMovementConfig.RearWheelSuspensionMaxDrop, VehicleMovementConfig.bFrontWheelAffectedByEngine ? TEXT("True") : TEXT("False"), VehicleMovementConfig.bRearWheelAffectedByEngine ? TEXT("True") : TEXT("False"), static_cast<int32>(VehicleMovementConfig.FrontWheelSweepShape), static_cast<int32>(VehicleMovementConfig.RearWheelSweepShape), VehicleMovementConfig.MovementProfileName.IsNone() ? TEXT("None") : *VehicleMovementConfig.MovementProfileName.ToString());
-		return;
-	}
-
-	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleMovementConfig: Override enabled, Profile=%s, Status=PendingDetailedFields"), VehicleMovementConfig.MovementProfileName.IsNone() ? TEXT("None") : *VehicleMovementConfig.MovementProfileName.ToString());
-}
-
-void ACFVehiclePawn::ApplyVehicleWheelVisualConfig()
-{
-	if (!VehicleData)
-	{
-		LastVehicleRuntimeSummary = TEXT("WheelVisualConfig: VehicleData is null.");
-		return;
-	}
-	if (!WheelSyncComp)
-	{
-		LastVehicleRuntimeSummary = TEXT("WheelVisualConfig: WheelSyncComp is null.");
-		return;
-	}
-	if (VehicleData->WheelVisualConfig.bUseWheelVisualOverrides)
-	{
-		WheelSyncComp->ExpectedWheelCount = VehicleData->WheelVisualConfig.ExpectedWheelCount;
-		WheelSyncComp->FrontWheelCountForSteering = VehicleData->WheelVisualConfig.FrontWheelCountForSteering;
-		LastVehicleRuntimeSummary = FString::Printf(TEXT("WheelVisualConfig: Applied ExpectedWheelCount=%d, FrontWheelCountForSteering=%d"), WheelSyncComp->ExpectedWheelCount, WheelSyncComp->FrontWheelCountForSteering);
-		return;
-	}
-	LastVehicleRuntimeSummary = TEXT("WheelVisualConfig: Override disabled.");
-}
-
-void ACFVehiclePawn::ApplyVehicleReferenceConfig()
-{
-	if (!VehicleData)
-	{
-		LastVehicleRuntimeSummary = TEXT("VehicleReferenceConfig: VehicleData is null.");
-		return;
-	}
-	if (!VehicleDriveComp)
-	{
-		LastVehicleRuntimeSummary = TEXT("VehicleReferenceConfig: VehicleDriveComp is null.");
-		return;
-	}
-	UChaosWheeledVehicleMovementComponent* ChaosVehicleMovementComp = ResolveVehicleMovementComponent(
-		TEXT("VehicleReferenceConfig: VehicleMovement cache failed."),
-		TEXT("VehicleReferenceConfig: VehicleMovement component is null."));
-	if (!ChaosVehicleMovementComp)
-	{
-		return;
-	}
-	const bool bHasFrontWheelClass = (VehicleData->VehicleReferenceConfig.FrontWheelClass != nullptr);
-	const bool bHasRearWheelClass = (VehicleData->VehicleReferenceConfig.RearWheelClass != nullptr);
-	const int32 FrontWheelCount = FMath::Max(0, VehicleData->WheelVisualConfig.FrontWheelCountForSteering);
-	const int32 WheelSetupCount = ChaosVehicleMovementComp->WheelSetups.Num();
-	if (WheelSetupCount <= 0)
-	{
-		LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleReferenceConfig: WheelSetups missing. FrontWheelClass=%s, RearWheelClass=%s"), bHasFrontWheelClass ? TEXT("Present") : TEXT("Missing"), bHasRearWheelClass ? TEXT("Present") : TEXT("Missing"));
-		return;
-	}
-	int32 AppliedFrontCount = 0;
-	int32 AppliedRearCount = 0;
-	for (int32 WheelSetupIndex = 0; WheelSetupIndex < WheelSetupCount; ++WheelSetupIndex)
-	{
-		if (WheelSetupIndex < FrontWheelCount)
-		{
-			if (bHasFrontWheelClass)
-			{
-				ChaosVehicleMovementComp->WheelSetups[WheelSetupIndex].WheelClass = VehicleData->VehicleReferenceConfig.FrontWheelClass;
-				++AppliedFrontCount;
-			}
-		}
-		else if (bHasRearWheelClass)
-		{
-			ChaosVehicleMovementComp->WheelSetups[WheelSetupIndex].WheelClass = VehicleData->VehicleReferenceConfig.RearWheelClass;
-			++AppliedRearCount;
-		}
-	}
-	ChaosVehicleMovementComp->RecreatePhysicsState();
-	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleReferenceConfig: AppliedFront=%d, AppliedRear=%d, WheelSetups=%d, IndexPolicy=FrontThenRear"), AppliedFrontCount, AppliedRearCount, WheelSetupCount);
-}
-
 void ACFVehiclePawn::DisplayDriveStateOnScreenDebug() const
 {
-	if (!bEnableDriveStateOnScreenDebug || !GEngine || DriveStateDebugDisplayMode == ECFVehicleDebugDisplayMode::Off)
+	if (!bEnableDriveStateOnScreenDebug || !GEngine)
 	{
 		return;
 	}
-
-	// 현재 화면 출력에 사용할 Drive 디버그 문자열입니다.
-	const FString DriveDebugSummary = BuildVehicleDebugSummary(
+	const FString DebugSummary = BuildVehicleDebugSummary(
 		DriveStateDebugDisplayMode == ECFVehicleDebugDisplayMode::MultiLine,
-		false,
-		false,
+		true,
+		bShowDriveStateTransitionSummary,
 		true);
-
-	// 현재 화면 출력에 사용할 차량 디버그 스냅샷입니다.
-	const FCFVehicleDebugSnapshot VehicleDebugSnapshot = GetVehicleDebugSnapshot();
-
 	GEngine->AddOnScreenDebugMessage(
 		reinterpret_cast<uint64>(this),
 		DriveStateDebugMessageDuration,
-		FColor::White,
-		DriveDebugSummary,
-		false);
-
-	if (bShowDriveStateTransitionSummary)
-	{
-		GEngine->AddOnScreenDebugMessage(
-			reinterpret_cast<uint64>(this) + 1,
-			DriveStateDebugMessageDuration,
-			FColor::White,
-			VehicleDebugSnapshot.DriveStateTransitionSummary,
-			false);
-	}
+		FColor::Cyan,
+		DebugSummary);
 }
 
-bool ACFVehiclePawn::ShouldAcceptActionInput(const UInputAction* SourceInputAction, float CurrentInputValue) const
+bool ACFVehiclePawn::ShouldAcceptActionInput(const UInputAction* SourceInputAction, const float CurrentInputValue) const
 {
 	if (InputDeviceMode == ECFVehicleInputDeviceMode::Auto)
 	{
 		return true;
 	}
-	if (!SourceInputAction || FMath::IsNearlyZero(CurrentInputValue))
-	{
-		return true;
-	}
-
-	// 현재 허용해야 하는 입력 장치가 게임패드인지 여부입니다.
 	const bool bRequireGamepadKey = (InputDeviceMode == ECFVehicleInputDeviceMode::GamepadOnly);
-
-	// 현재 차단해야 하는 반대 입력 장치 키가 활성 상태인지 여부입니다.
-	const bool bHasBlockedDeviceInput = HasActiveMappedKeyForDevice(SourceInputAction, !bRequireGamepadKey);
-	if (bHasBlockedDeviceInput)
+	if (FMath::Abs(CurrentInputValue) < InputDeviceAnalogThreshold)
 	{
 		return false;
 	}
-
 	return HasActiveMappedKeyForDevice(SourceInputAction, bRequireGamepadKey);
 }
 
-bool ACFVehiclePawn::HasActiveMappedKeyForDevice(const UInputAction* SourceInputAction, bool bRequireGamepadKey) const
+bool ACFVehiclePawn::HasActiveMappedKeyForDevice(const UInputAction* SourceInputAction, const bool bRequireGamepadKey) const
 {
-	if (!DefaultInputMappingContext || !SourceInputAction)
+	if (!SourceInputAction || !DefaultInputMappingContext)
 	{
 		return false;
 	}
-	const TArray<FEnhancedActionKeyMapping>& InputMappings = DefaultInputMappingContext->GetMappings();
-	for (const FEnhancedActionKeyMapping& InputMapping : InputMappings)
+	for (const FEnhancedActionKeyMapping& ActionKeyMapping : DefaultInputMappingContext->GetMappings())
 	{
-		if (InputMapping.Action != SourceInputAction)
+		if (ActionKeyMapping.Action != SourceInputAction)
 		{
 			continue;
 		}
-		const bool bIsGamepadKey = InputMapping.Key.IsGamepadKey();
-		if (bIsGamepadKey != bRequireGamepadKey)
+		if (ActionKeyMapping.Key.IsGamepadKey() != bRequireGamepadKey)
 		{
 			continue;
 		}
-		if (IsMappedKeyCurrentlyActive(InputMapping.Key))
+		if (IsMappedKeyCurrentlyActive(ActionKeyMapping.Key))
 		{
 			return true;
 		}
@@ -857,7 +847,7 @@ bool ACFVehiclePawn::HasActiveMappedKeyForDevice(const UInputAction* SourceInput
 bool ACFVehiclePawn::IsMappedKeyCurrentlyActive(const FKey& MappingKey) const
 {
 	APlayerController* PlayerController = Cast<APlayerController>(GetController());
-	if (!PlayerController || !MappingKey.IsValid())
+	if (!PlayerController)
 	{
 		return false;
 	}
@@ -897,6 +887,27 @@ void ACFVehiclePawn::HandleBrakeInput(const FInputActionValue& InputActionValue)
 void ACFVehiclePawn::HandleBrakeReleased(const FInputActionValue&)
 {
 	ResetAxisInput(&ACFVehiclePawn::SetVehicleBrakeInput);
+}
+
+void ACFVehiclePawn::HandleLookInput(const FInputActionValue& InputActionValue)
+{
+	if (!VehicleCameraComp)
+	{
+		return;
+	}
+
+	const FVector2D LookInputValue = InputActionValue.Get<FVector2D>();
+	VehicleCameraComp->SetLookInput(LookInputValue);
+}
+
+void ACFVehiclePawn::HandleLookReleased(const FInputActionValue&)
+{
+	if (!VehicleCameraComp)
+	{
+		return;
+	}
+
+	VehicleCameraComp->ClearLookInput();
 }
 
 void ACFVehiclePawn::HandleHandbrakeStarted(const FInputActionValue&)

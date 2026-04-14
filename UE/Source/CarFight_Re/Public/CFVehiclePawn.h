@@ -1,9 +1,9 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.3.2
-// Date: 2026-03-31
-// Description: CarFight 신규 차량 Pawn 기준 클래스
-// Scope: DriveComp / WheelSyncComp를 소유하고 새 BP의 얇은 부모로 동작합니다.
+// Version: 2.5.0
+// Date: 2026-04-10
+// Description: CarFight 신규 차량 Pawn 기준 클래스 (VehicleCameraComp / Look 입력 연동 추가)
+// Scope: DriveComp / WheelSyncComp를 소유하고 차량 DA 기준 초기 설정, 런타임 휠 튜닝, 차량 카메라 입력 전달을 함께 다룹니다.
 
 #pragma once
 
@@ -14,6 +14,7 @@
 #include "CFVehiclePawn.generated.h"
 
 class UCFVehicleData;
+class UCFVehicleCameraComp;
 class UCFWheelSyncComp;
 class UChaosWheeledVehicleMovementComponent;
 class UInputAction;
@@ -93,6 +94,7 @@ struct FCFVehicleDebugSnapshot
  * CarFight 신규 차량 Pawn 기준 클래스
  * - 입력은 DriveComp로 위임합니다.
  * - 휠 시각 갱신은 WheelSyncComp로 위임합니다.
+ * - 카메라 자유 조준 입력은 VehicleCameraComp로 위임합니다.
  * - BP는 얇은 조립/표현 레이어로 유지하는 것을 목표로 합니다.
  */
 UCLASS(BlueprintType, Blueprintable)
@@ -136,6 +138,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="핸드브레이크 입력 액션 (InputAction_Handbrake)", ToolTip="Handbrake 토글 입력에 사용할 Input Action 입니다."))
 	TObjectPtr<UInputAction> InputAction_Handbrake = nullptr;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="시점 입력 액션 (InputAction_Look)", ToolTip="차량 카메라 자유 조준 입력에 사용할 2D Look Input Action 입니다."))
+	TObjectPtr<UInputAction> InputAction_Look = nullptr;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="입력 장치 모드 (InputDeviceMode)", ToolTip="차량 입력을 어떤 장치로 받을지 고정합니다. Auto는 키보드/마우스와 게임패드를 모두 허용하고, KeyboardMouseOnly는 키보드/마우스만, GamepadOnly는 게임패드만 허용합니다."))
 	ECFVehicleInputDeviceMode InputDeviceMode = ECFVehicleInputDeviceMode::Auto;
 
@@ -153,6 +158,9 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="WheelSync 컴포넌트 (WheelSyncComp)", ToolTip="휠 시각 동기화 전용 WheelSync 컴포넌트입니다."))
 	TObjectPtr<UCFWheelSyncComp> WheelSyncComp = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="VehicleCamera 컴포넌트 (VehicleCameraComp)", ToolTip="차량 중심 피벗 기반 자유 조준과 Aim Trace를 계산하는 차량 카메라 컴포넌트입니다."))
+	TObjectPtr<UCFVehicleCameraComp> VehicleCameraComp = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Runtime", meta=(DisplayName="BeginPlay 자동 초기화 (bAutoInitializeOnBeginPlay)", ToolTip="True이면 BeginPlay에서 Drive / WheelSync 캐시와 준비를 자동 시도합니다."))
 	bool bAutoInitializeOnBeginPlay = true;
@@ -183,6 +191,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(ToolTip="차량 휠 시각 동기화 전용 WheelSyncComp를 반환합니다."))
 	UCFWheelSyncComp* GetWheelSyncComp() const { return WheelSyncComp; }
+
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(ToolTip="차량 중심 피벗 기반 자유 조준을 계산하는 VehicleCameraComp를 반환합니다."))
+	UCFVehicleCameraComp* GetVehicleCameraComp() const { return VehicleCameraComp; }
 
 	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Input", meta=(ToolTip="현재 플레이어 컨트롤러 기준으로 기본 Input Mapping Context 등록을 시도합니다."))
 	bool RegisterDefaultInputMappingContext();
@@ -255,6 +266,8 @@ protected:
 	void ApplyVehicleVisualConfig();
 	void ApplyVehicleLayoutConfig();
 	void ApplyVehicleMovementConfig();
+	// [v1.2.0] VehicleMovementConfig 중 런타임 setter가 가능한 휠 물리 값을 차량 인스턴스 기준으로 적용합니다.
+	void ApplyVehicleWheelPhysicsConfig();
 	void ApplyVehicleWheelVisualConfig();
 	void ApplyVehicleReferenceConfig();
 	void DisplayDriveStateOnScreenDebug() const;
@@ -267,6 +280,8 @@ protected:
 	void HandleSteeringReleased(const FInputActionValue& InputActionValue);
 	void HandleBrakeInput(const FInputActionValue& InputActionValue);
 	void HandleBrakeReleased(const FInputActionValue& InputActionValue);
+	void HandleLookInput(const FInputActionValue& InputActionValue);
+	void HandleLookReleased(const FInputActionValue& InputActionValue);
 	void HandleHandbrakeStarted(const FInputActionValue& InputActionValue);
 	void HandleHandbrakeCompleted(const FInputActionValue& InputActionValue);
 };
