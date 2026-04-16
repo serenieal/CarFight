@@ -1,5 +1,9 @@
 ﻿# 언리얼 엔진 5.7 기반 'CarFight' 프로젝트를 위한 모듈형 차량 시뮬레이션 및 물리 아키텍처 (V5)
 
+> 문서 버전: v1.1.0
+> 마지막 정리(Asia/Seoul): 2026-04-15
+
+
 > 사용 주의:
 > - 이 문서는 CarFight의 **최종 방향과 기술적 북극성**을 설명한다.
 > - 여기의 구조 설명은 현재 실제 구현이 아니라 **장기 목표 구조**를 포함한다.
@@ -139,4 +143,41 @@ float HeightOffset = 10.0f; // 서스펜션 높이 보정
 3.  **Live Tuning:** 버튼 하나로 즉각적인 시각적 피드백 확인.
 
 이는 1인 개발자가 기술적 제약을 극복하고 콘텐츠의 양과 질을 동시에 확보할 수 있는 최적의 방법론입니다.
+
+---
+
+## 9. 현재 카메라 구현과의 접점 (2026-04-15 추가)
+현재 프로젝트에서 진행 중인 카메라 작업은 이 문서가 설명하는 장기 구조를 직접 구현한 단계가 아니다.
+오히려 현재 기준선인 `BP_CFVehiclePawn / ACFVehiclePawn / UCFVehicleDriveComp / UCFWheelSyncComp / UCFVehicleData` 조합 위에,
+기본 카메라 시스템을 먼저 안정적으로 붙이는 작업으로 보는 것이 맞다.
+
+현재 카메라 작업의 성격은 아래처럼 정리한다.
+- 차량 중심 수평 피벗 기준의 기본 카메라 기준선 확보
+- 차량 이동과 카메라 회전 분리
+- Look 입력, Yaw / Pitch, FOV, Aim Trace의 현재 기준선 확보
+- 이후 HUD / 무기별 제한각 / 카메라 모드 확장의 기반 공사
+
+즉, 현재 카메라 작업은 이 문서가 설명하는 장기 CMVS / 자동화 / 파괴형 차량 파이프라인을 부정하는 것이 아니다.
+반대로, 현재 하이브리드 기준선에서도 전투 차량 게임플레이에 필요한 카메라 축을 먼저 고정해 두는 작업에 가깝다.
+
+현재 카메라 작업의 실제 실행 기준은 아래 문서를 함께 본다.
+- `Document/ProjectSSOT/00_Handover.md`
+- `Document/ProjectSSOT/01_Roadmap.md`
+- `Document/ProjectSSOT/16_CPP_DecisionLog.md`
+- `Document/ProjectSSOT/Plan/CameraPlan/CF_CameraPlan_260410.md`
+- `Document/ProjectSSOT/Plan/CameraPlan/CF_CameraSysSpec_260410.md`
+- `Document/ProjectSSOT/Plan/CameraPlan/CF_CamChecklist_260415.md`
+
+해석 규칙은 아래처럼 둔다.
+- 이 문서는 장기 기술 북극성 문서다.
+- 현재 카메라 구현 상태와 세부 작업 순서는 실행 문서와 CameraPlan 문서군에서 본다.
+- 따라서 본문에 남아 있는 장기 자동화 / 조립 / 파괴 구조 설명과 현재 카메라 기준선을 같은 구현 단계로 읽지 않는다.
+
+---
+
+## 변경 이력
+- v1.1.0 (2026-04-15)
+  - 문서 버전 / 마지막 정리 날짜를 갱신했다.
+  - 현재 카메라 구현이 장기 CMVS 북극성과 어떤 관계인지 설명하는 연결 섹션을 추가했다.
+
 

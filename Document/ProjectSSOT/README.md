@@ -1,5 +1,9 @@
 # ProjectSSOT 운영 가이드 (CarFight)
 
+> 문서 버전: v1.1.0
+> 마지막 정리(Asia/Seoul): 2026-04-15
+
+
 ## 목적
 `Document/ProjectSSOT/`는 CarFight의 **상위 방향 / 현재 기준선 / 작업 순서 / 검증 기준 / 결정 로그**를 유지하는 프로젝트 전용 SSOT다.
 
@@ -123,3 +127,27 @@
 - `ProjectSSOT_OpMap.md`
 
 이 문서들은 삭제가 아니라 **흡수 또는 Archive 이동**으로 처리한다.
+
+---
+
+## 보조 실행 계획 문서 (2026-04-15 추가)
+루트 활성 문서 최소 집합은 그대로 유지하되, 현재 진행 중인 카메라 작업은 아래 보조 실행 계획 문서를 함께 본다.
+
+- `Document/ProjectSSOT/Plan/CameraPlan/CF_CameraPlan_260410.md`
+  - 차량 카메라 기획 회의 정리
+- `Document/ProjectSSOT/Plan/CameraPlan/CF_CameraSysSpec_260410.md`
+  - 차량 카메라 시스템 세부 설계안
+- `Document/ProjectSSOT/Plan/CameraPlan/CF_CamChecklist_260415.md`
+  - 차량 카메라 개발 체크리스트 및 현재 구현 상태
+
+이 문서군은 루트 활성 문서를 대체하지 않는다.
+즉, 상위 방향 / 현재 기준선 / 우선순위는 계속 루트 활성 문서에서 판단하고,
+카메라 작업의 상세 기준과 구현 순서는 `Plan/CameraPlan/` 문서군에서 본다.
+
+---
+
+## 변경 이력
+- v1.1.0 (2026-04-15)
+  - 문서 버전 / 마지막 정리 날짜를 추가했다.
+  - `Plan/CameraPlan/` 문서군을 현재 보조 실행 계획 문서로 연결했다.
+

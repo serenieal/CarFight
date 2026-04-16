@@ -1,7 +1,9 @@
 # MyDocument 운영 안내
 
 > 역할: `Document/ProjectSSOT/MyDocument/` 문서의 **역할과 사용 순서**를 고정한다.  
-> 마지막 정리(Asia/Seoul): 2026-03-27
+> 문서 버전: v1.1.0  
+> 마지막 정리(Asia/Seoul): 2026-04-15
+
 
 ---
 
@@ -73,3 +75,30 @@
 ## 한 줄 규칙
 `MyDocument`는 **북극성**,  
 `ProjectSSOT` 루트는 **현재 실행 기준**으로 본다.
+
+---
+
+## 현재 카메라 작업을 볼 문서 (2026-04-15 추가)
+`MyDocument`는 여전히 북극성 문서 묶음으로 유지하지만,
+현재 카메라 기준선과 구현 순서를 확인할 때는 아래 실행 문서를 함께 본다.
+
+- `Document/ProjectSSOT/00_Handover.md`
+  - 현재 카메라 기준선과 실제 붙은 상태
+- `Document/ProjectSSOT/01_Roadmap.md`
+  - 카메라 기준선 작업이 전체 로드맵에서 어디에 붙는지
+- `Document/ProjectSSOT/16_CPP_DecisionLog.md`
+  - 카메라 코어 / 입력 / Thin BP 관련 결정
+- `Document/ProjectSSOT/Plan/CameraPlan/CF_CameraPlan_260410.md`
+- `Document/ProjectSSOT/Plan/CameraPlan/CF_CameraSysSpec_260410.md`
+- `Document/ProjectSSOT/Plan/CameraPlan/CF_CamChecklist_260415.md`
+
+즉, 카메라 작업은 북극성 문서만으로 판단하지 않고,
+북극성 문서와 실행 문서를 함께 대조해서 본다.
+
+---
+
+## 변경 이력
+- v1.1.0 (2026-04-15)
+  - 문서 버전 / 마지막 정리 날짜를 갱신했다.
+  - 현재 카메라 작업을 확인할 실행 문서 목록을 추가했다.
+

@@ -2,7 +2,9 @@
 
 > 역할: CarFight 프로젝트의 **현재 실제 기준선 / 임시 운영 편차 / 현재 리스크**를 고정한다.  
 > 공통 규칙 원본: `Document/SSOT/`  
-> 마지막 정리(Asia/Seoul): 2026-04-01
+> 문서 버전: v1.1.0  
+> 마지막 정리(Asia/Seoul): 2026-04-15
+
 
 ---
 
@@ -236,3 +238,55 @@
 3. `01_Roadmap.md`
 4. `08_P0_Verification.md`
 5. `16_CPP_DecisionLog.md`
+
+---
+
+## 현재 카메라 기준선 (2026-04-15 추가)
+아래 항목은 현재 카메라 작업의 실제 기준선을 별도 정리한 메모다.
+이 섹션은 최종 카메라 철학 전체를 설명하는 문서가 아니라, **현재 프로젝트에서 실제로 붙어 있는 카메라 기준선**만 기록한다.
+
+### 1. 현재 구현 기준
+- 현재 카메라 기준 플레이 Pawn은 `BP_CFVehiclePawn`이다.
+- 현재 카메라 Native 코어는 `UCFVehicleCameraComp`다.
+- 현재 카메라 공용 타입 / 데이터 구조는 아래 파일 기준으로 본다.
+  - `CFVehicleCameraTypes.h`
+  - `CFVehicleCameraData.h`
+  - `CFVehicleCameraComp.h / .cpp`
+- 현재 Pawn 입력 연동은 `ACFVehiclePawn`의 `InputAction_Look` 경로를 기준으로 한다.
+
+### 2. 현재 BP 기준 카메라 계층
+- 현재 기준 계층은 아래 이름을 기준으로 한다.
+  - `CameraPivotRoot`
+  - `CameraAimPivot`
+  - `CameraBoom`
+  - `FollowCamera`
+- 현재 방향은 차량 중심 수평 피벗 기준 자유 조준 카메라다.
+- 현재 카메라는 일반 레이싱 chase camera보다 차량 기반 3인칭 슈팅 카메라 성격에 가깝다.
+
+### 3. 현재 입력 기준
+- 현재 Look 입력 자산 기준은 `IA_LookAround`다.
+- 현재 `IA_LookAround`는 `Axis2D` 기준으로 사용한다.
+- 현재 `IMC_Vehicle_Default`에서는 마우스 2D 입력과 게임패드 오른쪽 썸스틱 2D축 입력이 정상 동작 기준선이다.
+- `ACFVehiclePawn` 생성자 내부 입력 자산 경로는 하드 고정값이 아니라 fallback로만 남기고, BP/파생 클래스 지정값을 우선한다.
+
+### 4. 현재 확인 완료 항목
+- 빌드 성공 확인 완료
+- 카메라 Yaw 회전 확인 완료
+- 카메라 Pitch 회전 확인 완료
+- SpringArm 기반 외부 3인칭 거리 계산 경로 반영 완료
+- FOV 반영 경로 반영 완료
+- Aim Trace 계산 경로 반영 완료
+
+### 5. 현재 범위 한계
+- 현재는 기본 카메라 움직임과 뼈대가 구현된 상태다.
+- 아직 HUD / 조준점 / 진행 방향 힌트는 미구현이다.
+- 아직 무기 시스템의 실제 Aim Profile 공급과 무기별 제한각 연동은 미구현이다.
+- 따라서 현재 카메라 기준선은 **기본 회전과 시스템 골격 확보 단계**로 본다.
+
+---
+
+## 변경 이력
+- v1.1.0 (2026-04-15)
+  - 문서 버전 / 마지막 정리 날짜를 갱신했다.
+  - 현재 카메라 기준선 섹션을 추가했다.
+
