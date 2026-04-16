@@ -339,6 +339,12 @@ void ACFVehiclePawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 
 	BindTriggeredCompletedInputAction(
 		EnhancedInputComponent,
+		InputAction_VehicleMove,
+		this,
+		&ACFVehiclePawn::HandleVehicleMoveInput,
+		&ACFVehiclePawn::HandleVehicleMoveReleased);
+	BindTriggeredCompletedInputAction(
+		EnhancedInputComponent,
 		InputAction_Throttle,
 		this,
 		&ACFVehiclePawn::HandleThrottleInput,
@@ -349,7 +355,7 @@ void ACFVehiclePawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 		this,
 		&ACFVehiclePawn::HandleSteeringInput,
 		&ACFVehiclePawn::HandleSteeringReleased);
-		BindTriggeredCompletedInputAction(
+	BindTriggeredCompletedInputAction(
 		EnhancedInputComponent,
 		InputAction_Brake,
 		this,
@@ -457,13 +463,14 @@ FString ACFVehiclePawn::BuildVehicleDebugSummary(bool bUseMultilineFormat, bool 
 {
 	const FString LineBreak = bUseMultilineFormat ? TEXT("\n") : TEXT(" | ");
 	TArray<FString> DebugSegments;
-	DebugSegments.Reserve(8);
+	DebugSegments.Reserve(16);
 	DebugSegments.Add(FString::Printf(TEXT("Ready=%s"), bVehicleRuntimeReady ? TEXT("True") : TEXT("False")));
 	if (VehicleDriveComp)
 	{
 		const FCFVehicleDriveStateSnapshot DriveStateSnapshot = VehicleDriveComp->GetDriveStateSnapshot();
 		DebugSegments.Add(FString::Printf(TEXT("State=%s"), *UEnum::GetValueAsString(DriveStateSnapshot.CurrentDriveState)));
 		DebugSegments.Add(FString::Printf(TEXT("Speed=%.1f km/h"), DriveStateSnapshot.CurrentSpeedKmh));
+		DebugSegments.Add(FString::Printf(TEXT("ForwardSpeed=%.1f km/h"), DriveStateSnapshot.ForwardSpeedKmh));
 		DebugSegments.Add(FString::Printf(TEXT("Throttle=%.2f"), DriveStateSnapshot.CurrentInputState.ThrottleInput));
 		DebugSegments.Add(FString::Printf(TEXT("Brake=%.2f"), DriveStateSnapshot.CurrentInputState.BrakeInput));
 		DebugSegments.Add(FString::Printf(TEXT("Steering=%.2f"), DriveStateSnapshot.CurrentInputState.SteeringInput));
@@ -471,6 +478,12 @@ FString ACFVehiclePawn::BuildVehicleDebugSummary(bool bUseMultilineFormat, bool 
 		if (bIncludeInputState)
 		{
 			DebugSegments.Add(FString::Printf(TEXT("DeviceMode=%s"), *UEnum::GetValueAsString(InputDeviceMode)));
+			DebugSegments.Add(FString::Printf(TEXT("MoveZone=%s"), *UEnum::GetValueAsString(LastVehicleMoveInputResult.ResolvedZone)));
+			DebugSegments.Add(FString::Printf(TEXT("MoveIntent=%s"), *UEnum::GetValueAsString(LastMoveDirectionIntent)));
+			DebugSegments.Add(FString::Printf(TEXT("MoveRaw=(%.2f, %.2f)"), LastVehicleMoveInputResult.RawMoveInput.X, LastVehicleMoveInputResult.RawMoveInput.Y));
+			DebugSegments.Add(FString::Printf(TEXT("MoveMag=%.2f"), LastVehicleMoveInputResult.Magnitude));
+			DebugSegments.Add(FString::Printf(TEXT("MoveAngle=%.1f"), LastVehicleMoveInputResult.AngleDeg));
+			DebugSegments.Add(FString::Printf(TEXT("BlackHold=%s"), LastVehicleMoveInputResult.bUsedBlackZoneHold ? TEXT("True") : TEXT("False")));
 		}
 	}
 	else
@@ -518,6 +531,139 @@ void ACFVehiclePawn::ResetAxisInput(void (ACFVehiclePawn::*AxisInputSetter)(floa
 {
 	(this->*AxisInputSetter)(0.0f);
 }
+
+float ACFVehiclePawn::ConvertMoveInputToAngleDeg(const FVector2D& MoveInputVector) const
+{
+	const float RawAngleDeg = FMath::RadiansToDegrees(FMath::Atan2(MoveInputVector.X, MoveInputVector.Y));
+	return FMath::Fmod(RawAngleDeg + 360.0f, 360.0f);
+}
+
+bool ACFVehiclePawn::IsAngleWithinRange(const float InAngleDeg, const float StartAngleDeg, const float EndAngleDeg) const
+{
+	if (StartAngleDeg <= EndAngleDeg)
+	{
+		return (InAngleDeg >= StartAngleDeg) && (InAngleDeg <= EndAngleDeg);
+	}
+
+	return (InAngleDeg >= StartAngleDeg) || (InAngleDeg <= EndAngleDeg);
+}
+
+ECFVehicleMoveDirectionIntent ACFVehiclePawn::ResolveDirectionIntentFallback() const
+{
+	const FCFVehicleDriveStateSnapshot DriveStateSnapshot = GetDriveStateSnapshot();
+	if (DriveStateSnapshot.ForwardSpeedKmh > 0.0f)
+	{
+		return ECFVehicleMoveDirectionIntent::Forward;
+	}
+	if (DriveStateSnapshot.ForwardSpeedKmh < 0.0f)
+	{
+		return ECFVehicleMoveDirectionIntent::Reverse;
+	}
+	return ECFVehicleMoveDirectionIntent::None;
+}
+
+FCFVehicleMoveInputResult ACFVehiclePawn::ResolveVehicleMoveInput(const FVector2D& MoveInputVector) const
+{
+	FCFVehicleMoveInputResult ResolvedMoveInput;
+	ResolvedMoveInput.RawMoveInput = MoveInputVector;
+	ResolvedMoveInput.Magnitude = FMath::Clamp(MoveInputVector.Length(), 0.0f, 1.0f);
+	ResolvedMoveInput.SteeringValue = FMath::Clamp(MoveInputVector.X, -1.0f, 1.0f);
+
+	if (ResolvedMoveInput.Magnitude <= KINDA_SMALL_NUMBER)
+	{
+		ResolvedMoveInput.ResolvedDirectionIntent = ResolveDirectionIntentFallback();
+		return ResolvedMoveInput;
+	}
+
+	ResolvedMoveInput.AngleDeg = ConvertMoveInputToAngleDeg(MoveInputVector);
+
+		const bool bInThrottleZone = IsAngleWithinRange(
+		ResolvedMoveInput.AngleDeg,
+		VehicleMoveInputConfig.ThrottleStartAngleDeg,
+		VehicleMoveInputConfig.ThrottleEndAngleDeg);
+	const bool bInReverseZone = IsAngleWithinRange(
+		ResolvedMoveInput.AngleDeg,
+		VehicleMoveInputConfig.ReverseStartAngleDeg,
+		VehicleMoveInputConfig.ReverseEndAngleDeg);
+
+	// [v2.6.1] 차량의 최신 Drive 상태 스냅샷을 가져옵니다.
+	const FCFVehicleDriveStateSnapshot DriveStateSnapshot = GetDriveStateSnapshot();
+
+	// [v2.6.1] 후진 전환 시 너무 엄격한 완전 정지 판정 대신,
+	// DriveState가 Idle이거나 전방 기준 속도가 아주 낮아진 상태를 후진 허용 구간으로 봅니다.
+	const float ReverseBrakeHoldSpeedThresholdKmh = 0.75f;
+
+	// [v2.6.1] 아직 전방으로 의미 있는 속도가 남아 있으면 뒤 입력을 브레이크로 유지합니다.
+	const bool bShouldHoldBrakeForForwardMotion =
+		(DriveStateSnapshot.CurrentDriveState != ECFVehicleDriveState::Idle)
+		&& (DriveStateSnapshot.ForwardSpeedKmh > ReverseBrakeHoldSpeedThresholdKmh);
+
+	// [v2.6.1] 검은 영역 유지 시 사용할 fallback 진행 방향 의도입니다.
+	const ECFVehicleMoveDirectionIntent FallbackIntent =
+		(LastMoveDirectionIntent != ECFVehicleMoveDirectionIntent::None)
+			? LastMoveDirectionIntent
+			: ResolveDirectionIntentFallback();
+
+	if (bInThrottleZone)
+	{
+		ResolvedMoveInput.ResolvedZone = ECFVehicleMoveZone::Throttle;
+		ResolvedMoveInput.ResolvedDirectionIntent = ECFVehicleMoveDirectionIntent::Forward;
+		ResolvedMoveInput.ThrottleValue = ResolvedMoveInput.Magnitude;
+		return ResolvedMoveInput;
+	}
+
+		if (bInReverseZone)
+	{
+		ResolvedMoveInput.ResolvedZone = ECFVehicleMoveZone::Reverse;
+		if (bShouldHoldBrakeForForwardMotion)
+		{
+			ResolvedMoveInput.ResolvedDirectionIntent = ECFVehicleMoveDirectionIntent::Forward;
+			ResolvedMoveInput.BrakeValue = ResolvedMoveInput.Magnitude;
+		}
+		else
+		{
+			// [v2.6.3] A안: Chaos Vehicle의 bUseAutoReverse에 후진 전환을 맡기기 위해,
+			// 후진 의도도 음수 스로틀 대신 브레이크 입력으로 전달합니다.
+			ResolvedMoveInput.ResolvedDirectionIntent = ECFVehicleMoveDirectionIntent::Reverse;
+			ResolvedMoveInput.BrakeValue = ResolvedMoveInput.Magnitude;
+		}
+		return ResolvedMoveInput;
+	}
+
+
+	ResolvedMoveInput.ResolvedZone = ECFVehicleMoveZone::Black;
+	ResolvedMoveInput.ResolvedDirectionIntent = FallbackIntent;
+	ResolvedMoveInput.bUsedBlackZoneHold = true;
+	if (FallbackIntent == ECFVehicleMoveDirectionIntent::Forward)
+	{
+		ResolvedMoveInput.ThrottleValue = ResolvedMoveInput.Magnitude;
+	}
+	else if (FallbackIntent == ECFVehicleMoveDirectionIntent::Reverse)
+	{
+		// [v2.6.3] A안: 검은 영역에서도 직전 후진 의도는 브레이크 입력 유지로 전달합니다.
+		ResolvedMoveInput.BrakeValue = ResolvedMoveInput.Magnitude;
+	}
+
+
+	return ResolvedMoveInput;
+}
+
+void ACFVehiclePawn::ApplyResolvedVehicleMoveInput(const FCFVehicleMoveInputResult& ResolvedMoveInput)
+{
+	SetVehicleSteeringInput(ResolvedMoveInput.SteeringValue);
+	SetVehicleBrakeInput(ResolvedMoveInput.BrakeValue);
+
+	// [v2.6.3] A안: 수동 기어 강제를 제거하고 Chaos Vehicle의 bUseAutoReverse가
+	// 브레이크 -> 후진 전환을 직접 처리하도록 둡니다.
+	SetVehicleThrottleInput(ResolvedMoveInput.ThrottleValue);
+
+	if (ResolvedMoveInput.ResolvedDirectionIntent != ECFVehicleMoveDirectionIntent::None)
+	{
+		LastMoveDirectionIntent = ResolvedMoveInput.ResolvedDirectionIntent;
+	}
+}
+
+
 
 void ACFVehiclePawn::ApplyVehicleDataConfig()
 {
@@ -857,6 +1003,33 @@ bool ACFVehiclePawn::IsMappedKeyCurrentlyActive(const FKey& MappingKey) const
 	}
 	const float AnalogValue = PlayerController->GetInputAnalogKeyState(MappingKey);
 	return FMath::Abs(AnalogValue) >= InputDeviceAnalogThreshold;
+}
+
+void ACFVehiclePawn::HandleVehicleMoveInput(const FInputActionValue& InputActionValue)
+{
+	const FVector2D MoveInputVector = InputActionValue.Get<FVector2D>();
+	const float MoveInputMagnitude = FMath::Clamp(MoveInputVector.Length(), 0.0f, 1.0f);
+	if (!ShouldAcceptActionInput(InputAction_VehicleMove, MoveInputMagnitude))
+	{
+		LastVehicleMoveInputResult = FCFVehicleMoveInputResult();
+		LastVehicleMoveInputResult.RawMoveInput = MoveInputVector;
+		LastVehicleMoveInputResult.Magnitude = MoveInputMagnitude;
+		SetVehicleThrottleInput(0.0f);
+		SetVehicleBrakeInput(0.0f);
+		SetVehicleSteeringInput(0.0f);
+		return;
+	}
+
+	LastVehicleMoveInputResult = ResolveVehicleMoveInput(MoveInputVector);
+	ApplyResolvedVehicleMoveInput(LastVehicleMoveInputResult);
+}
+
+void ACFVehiclePawn::HandleVehicleMoveReleased(const FInputActionValue&)
+{
+	LastVehicleMoveInputResult = FCFVehicleMoveInputResult();
+	ResetAxisInput(&ACFVehiclePawn::SetVehicleThrottleInput);
+	ResetAxisInput(&ACFVehiclePawn::SetVehicleBrakeInput);
+	ResetAxisInput(&ACFVehiclePawn::SetVehicleSteeringInput);
 }
 
 void ACFVehiclePawn::HandleThrottleInput(const FInputActionValue& InputActionValue)

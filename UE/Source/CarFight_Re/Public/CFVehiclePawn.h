@@ -1,9 +1,9 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.5.0
-// Date: 2026-04-10
-// Description: CarFight 신규 차량 Pawn 기준 클래스 (VehicleCameraComp / Look 입력 연동 추가)
-// Scope: DriveComp / WheelSyncComp를 소유하고 차량 DA 기준 초기 설정, 런타임 휠 튜닝, 차량 카메라 입력 전달을 함께 다룹니다.
+// Version: 2.6.0
+// Date: 2026-04-15
+// Description: CarFight 신규 차량 Pawn 기준 클래스 (VehicleCameraComp / Look 입력 연동 + VehicleMove 2D 입력 해석 추가)
+// Scope: DriveComp / WheelSyncComp를 소유하고 차량 DA 기준 초기 설정, 런타임 휠 튜닝, 차량 카메라 입력 전달과 차량 2D 이동 입력 해석을 함께 다룹니다.
 
 #pragma once
 
@@ -49,6 +49,93 @@ enum class ECFVehicleDebugDisplayMode : uint8
 	Off UMETA(DisplayName="Off"),
 	SingleLine UMETA(DisplayName="SingleLine"),
 	MultiLine UMETA(DisplayName="MultiLine")
+};
+
+/**
+ * 차량 2D 이동 입력에서 마지막으로 유효했던 진행 방향 의도입니다.
+ * - None: 아직 유효한 진행 방향 의도가 없습니다.
+ * - Forward: 최근 유효 입력이 전진 의도였습니다.
+ * - Reverse: 최근 유효 입력이 후진 의도였습니다.
+ */
+UENUM(BlueprintType)
+enum class ECFVehicleMoveDirectionIntent : uint8
+{
+	None UMETA(DisplayName="None"),
+	Forward UMETA(DisplayName="Forward"),
+	Reverse UMETA(DisplayName="Reverse")
+};
+
+/**
+ * 차량 2D 이동 입력이 해석된 영역입니다.
+ * - None: 아직 어떤 영역으로도 해석되지 않았습니다.
+ * - Throttle: 전진 쓰로틀 영역입니다.
+ * - Reverse: 후진/브레이크 해석 영역입니다.
+ * - Black: 방향 유지 완충용 검은 영역입니다.
+ */
+UENUM(BlueprintType)
+enum class ECFVehicleMoveZone : uint8
+{
+	None UMETA(DisplayName="None"),
+	Throttle UMETA(DisplayName="Throttle"),
+	Reverse UMETA(DisplayName="Reverse"),
+	Black UMETA(DisplayName="Black")
+};
+
+/**
+ * 차량 2D 이동 입력 해석에 사용할 각도 설정입니다.
+ */
+USTRUCT(BlueprintType)
+struct FCFVehicleMoveInputConfig
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(ClampMin="0.0", ClampMax="360.0", DisplayName="쓰로틀 시작 각도 (ThrottleStartAngleDeg)", ToolTip="위가 0도, 시계 방향 증가 기준의 쓰로틀 영역 시작 각도입니다."))
+	float ThrottleStartAngleDeg = 260.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(ClampMin="0.0", ClampMax="360.0", DisplayName="쓰로틀 종료 각도 (ThrottleEndAngleDeg)", ToolTip="위가 0도, 시계 방향 증가 기준의 쓰로틀 영역 종료 각도입니다."))
+	float ThrottleEndAngleDeg = 100.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(ClampMin="0.0", ClampMax="360.0", DisplayName="후진 시작 각도 (ReverseStartAngleDeg)", ToolTip="위가 0도, 시계 방향 증가 기준의 후진 영역 시작 각도입니다."))
+	float ReverseStartAngleDeg = 135.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(ClampMin="0.0", ClampMax="360.0", DisplayName="후진 종료 각도 (ReverseEndAngleDeg)", ToolTip="위가 0도, 시계 방향 증가 기준의 후진 영역 종료 각도입니다."))
+	float ReverseEndAngleDeg = 225.0f;
+};
+
+/**
+ * 차량 2D 이동 입력의 최신 해석 결과입니다.
+ */
+USTRUCT(BlueprintType)
+struct FCFVehicleMoveInputResult
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="원본 이동 입력 (RawMoveInput)", ToolTip="차량 이동 Input Action에서 들어온 원본 2D 입력 벡터입니다."))
+	FVector2D RawMoveInput = FVector2D::ZeroVector;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="입력 강도 (Magnitude)", ToolTip="차량 이동 입력 벡터의 반지름 기반 강도입니다."))
+	float Magnitude = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="입력 각도 (AngleDeg)", ToolTip="위가 0도, 시계 방향 증가 기준의 차량 이동 입력 각도입니다."))
+	float AngleDeg = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="해석 영역 (ResolvedZone)", ToolTip="현재 차량 이동 입력이 해석된 영역입니다."))
+	ECFVehicleMoveZone ResolvedZone = ECFVehicleMoveZone::None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="해석 방향 의도 (ResolvedDirectionIntent)", ToolTip="현재 차량 이동 입력이 해석한 진행 방향 의도입니다."))
+	ECFVehicleMoveDirectionIntent ResolvedDirectionIntent = ECFVehicleMoveDirectionIntent::None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="조향 출력값 (SteeringValue)", ToolTip="현재 프레임에 DriveComp로 전달할 조향 출력값입니다."))
+	float SteeringValue = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="스로틀 출력값 (ThrottleValue)", ToolTip="현재 프레임에 DriveComp로 전달할 스로틀 출력값입니다."))
+	float ThrottleValue = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="브레이크 출력값 (BrakeValue)", ToolTip="현재 프레임에 DriveComp로 전달할 브레이크 출력값입니다."))
+	float BrakeValue = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="검은 영역 유지 사용 여부 (bUsedBlackZoneHold)", ToolTip="현재 프레임에 검은 영역 방향 유지 정책이 적용되었는지 여부입니다."))
+	bool bUsedBlackZoneHold = false;
 };
 
 /**
@@ -126,6 +213,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="기본 입력 매핑 컨텍스트 (DefaultInputMappingContext)", ToolTip="BeginPlay와 SetupPlayerInputComponent에서 등록을 시도할 기본 Input Mapping Context 입니다."))
 	TObjectPtr<UInputMappingContext> DefaultInputMappingContext = nullptr;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="차량 이동 입력 액션 (InputAction_VehicleMove)", ToolTip="차량 전진/후진/브레이크/조향을 함께 해석할 2D 이동 Input Action 입니다."))
+	TObjectPtr<UInputAction> InputAction_VehicleMove = nullptr;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="스로틀 입력 액션 (InputAction_Throttle)", ToolTip="Throttle 축 입력에 사용할 Input Action 입니다."))
 	TObjectPtr<UInputAction> InputAction_Throttle = nullptr;
 
@@ -152,6 +242,15 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="입력 매핑 자동 등록 (bAutoRegisterInputMappingContext)", ToolTip="True이면 BeginPlay / SetupPlayerInputComponent에서 기본 Input Mapping Context 등록을 자동 시도합니다."))
 	bool bAutoRegisterInputMappingContext = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="차량 이동 입력 설정 (VehicleMoveInputConfig)", ToolTip="차량 2D 이동 입력의 각도 해석 기본 설정입니다."))
+	FCFVehicleMoveInputConfig VehicleMoveInputConfig;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="마지막 진행 방향 의도 (LastMoveDirectionIntent)", ToolTip="검은 영역 진입 시 유지할 마지막 유효 진행 방향입니다."))
+	ECFVehicleMoveDirectionIntent LastMoveDirectionIntent = ECFVehicleMoveDirectionIntent::None;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="마지막 차량 이동 입력 결과 (LastVehicleMoveInputResult)", ToolTip="현재 프레임 기준 차량 2D 이동 입력 해석 결과입니다."))
+	FCFVehicleMoveInputResult LastVehicleMoveInputResult;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="Drive 컴포넌트 (VehicleDriveComp)", ToolTip="입력 전달 전용 Drive 컴포넌트입니다."))
 	TObjectPtr<UCFVehicleDriveComp> VehicleDriveComp = nullptr;
@@ -250,7 +349,7 @@ protected:
 	// [v1.5.0] DriveComp 캐시를 재사용해 VehicleMovement 컴포넌트를 안전하게 가져옵니다.
 	UChaosWheeledVehicleMovementComponent* ResolveVehicleMovementComponent(const TCHAR* CacheFailureSummary, const TCHAR* MissingComponentSummary);
 
-	// [v1.5.0] 현재 설정에 맞는 차량 디버그 요약 문자열을 생성합니다.
+	// [v1.6.0] 현재 설정에 맞는 차량 디버그 요약 문자열을 생성합니다.
 	FString BuildVehicleDebugSummary(bool bUseMultilineFormat, bool bIncludeRuntimeSummary, bool bIncludeTransitionSummary, bool bIncludeInputState) const;
 
 	// [v1.5.0] WheelSync 실행 결과를 기존 런타임 요약 뒤에 덧붙입니다.
@@ -261,6 +360,21 @@ protected:
 
 	// [v1.5.0] 지정된 축 입력 setter를 0으로 초기화합니다.
 	void ResetAxisInput(void (ACFVehiclePawn::*AxisInputSetter)(float));
+
+	// [v1.6.0] 2D 이동 입력 벡터를 위=0도, 시계 방향 증가 각도로 변환합니다.
+	float ConvertMoveInputToAngleDeg(const FVector2D& MoveInputVector) const;
+
+	// [v1.6.0] 주어진 각도가 시작/종료 각도 포함 범위 안에 들어오는지 검사합니다.
+	bool IsAngleWithinRange(float InAngleDeg, float StartAngleDeg, float EndAngleDeg) const;
+
+	// [v1.6.0] 현재 속도 기준으로 마지막 진행 방향 의도의 fallback 값을 계산합니다.
+	ECFVehicleMoveDirectionIntent ResolveDirectionIntentFallback() const;
+
+	// [v1.6.0] 2D 이동 입력 벡터를 차량 이동 해석 결과로 변환합니다.
+	FCFVehicleMoveInputResult ResolveVehicleMoveInput(const FVector2D& MoveInputVector) const;
+
+	// [v1.6.0] 해석된 차량 이동 입력 결과를 DriveComp 입력으로 적용합니다.
+	void ApplyResolvedVehicleMoveInput(const FCFVehicleMoveInputResult& ResolvedMoveInput);
 
 	void ApplyVehicleDataConfig();
 	void ApplyVehicleVisualConfig();
@@ -274,6 +388,13 @@ protected:
 	bool ShouldAcceptActionInput(const UInputAction* SourceInputAction, float CurrentInputValue) const;
 	bool HasActiveMappedKeyForDevice(const UInputAction* SourceInputAction, bool bRequireGamepadKey) const;
 	bool IsMappedKeyCurrentlyActive(const FKey& MappingKey) const;
+
+	// [v1.6.0] 차량 이동용 2D 입력 액션값을 읽어 해석 결과를 Drive 입력으로 전달합니다.
+	void HandleVehicleMoveInput(const FInputActionValue& InputActionValue);
+
+	// [v1.6.0] 차량 이동용 2D 입력 액션이 해제됐을 때 이동 입력 상태를 초기화합니다.
+	void HandleVehicleMoveReleased(const FInputActionValue& InputActionValue);
+
 	void HandleThrottleInput(const FInputActionValue& InputActionValue);
 	void HandleThrottleReleased(const FInputActionValue& InputActionValue);
 	void HandleSteeringInput(const FInputActionValue& InputActionValue);
