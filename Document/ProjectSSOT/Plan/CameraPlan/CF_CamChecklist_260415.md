@@ -1,193 +1,78 @@
-# CarFight 차량 카메라 개발 체크리스트
+# CarFight Vehicle Camera Checklist
 
-- Version: 0.1.0
-- Date: 2026-04-15
-- Status: Working Draft
-- Scope: 차량 카메라 기획 문서와 세부 설계 문서를 기준으로, 실제로 만들어야 할 항목을 단계별 체크리스트로 정리하고 현재 구현 완료 상태를 표시한 문서
-- Base Documents:
-  - `Document/ProjectSSOT/Plan/CameraPlan/CF_CameraPlan_260410.md`
-  - `Document/ProjectSSOT/Plan/CameraPlan/CF_CameraSysSpec_260410.md`
+현재시각: 2026-04-21 14:21 (Asia/Seoul)
+
+이 문서는 차량 카메라 작업의 구현 상태와 남은 작업을 점검하기 위한 체크리스트다.
+현재 문서는 이전 패치 과정에서 손상된 내용을 복구하면서, 실제 코드 반영 상태 기준으로 다시 정리했다.
 
 ---
 
 ## 1. 문서 목적
 
-이 문서는 CarFight 차량 카메라 개발 작업을 실제 제작 순서로 나누고, 각 단계에서 무엇을 만들어야 하는지와 현재 어디까지 완료되었는지를 한눈에 확인하기 위해 작성한다.
-
-체크 상태 기준은 아래와 같다.
-
-- `[x]` 이미 구현 또는 작성 완료
-- `[-]` 일부 구현 완료, 후속 작업 필요
-- `[ ]` 아직 미구현
+- 차량 카메라 작업의 현재 구현 범위를 빠르게 파악한다.
+- 남은 작업을 우선순위 단위로 정리한다.
+- 실제 코드에 반영된 항목과 아직 기획/설계 단계인 항목을 분리한다.
 
 ---
 
-## 2. 현재 전체 진행 요약
+## 2. 현재 구현 상태 요약
 
-현재 차량 카메라 시스템은 다음 상태로 본다.
+현재까지 확인된 구현 상태는 다음과 같다.
 
-- 차량 카메라 기획 문서 작성 완료
-- 차량 카메라 세부 설계 문서 작성 완료
-- `UCFVehicleCameraComp` 기반 기본 카메라 뼈대 구현 완료
-- `ACFVehiclePawn`과 Look 입력 연동 완료
-- `BP_CFVehiclePawn` 카메라 컴포넌트 계층 구성 완료
-- 마우스 / 게임패드 기준 기본 Yaw / Pitch 회전 확인 완료
-- 기본 Arm Length / FOV / Aim Trace 계산 구조 구현 완료
-- 빌드 성공 확인 완료
-
-다만 아직 남아 있는 핵심 후속 작업은 다음과 같다.
-
-- 카메라 감각 튜닝
-- 충돌 감각 튜닝
-- HUD / 조준점 UI 구현
-- 무기 시스템 기반 Aim Profile 실제 연동
-- Reverse / Airborne / Destroyed 등 확장 모드 동작 구현
-
-즉, 현재 상태는 다음처럼 정의한다.
-
-> 기본 카메라 움직임과 시스템 뼈대는 구현 완료.
-> 이제부터는 튜닝, UI, 무기 연동, 모드 확장이 본 작업이다.
+- [x] `UCFVehicleCameraComp` 기반 카메라 뼈대 구현
+- [x] `ACFVehiclePawn`에서 Look 입력을 `VehicleCameraComp`로 전달
+- [x] 자유 조준용 Yaw / Pitch 누적 구조 구현
+- [x] Aim Profile 기반 Yaw / Pitch Clamp 구조 구현
+- [x] SpringArm + FollowCamera 연동 구현
+- [x] 기본 Arm Length / FOV / Height / Side Offset 계산 구현
+- [x] 속도 기반 Arm Length / FOV 보정 구조 구현
+- [x] 카메라 런타임 상태 구조체(`FCFVehicleCameraRuntimeState`) 구현
+- [x] Aim Trace 계산 및 차단 여부(`bAimBlocked`) 계산 구현
+- [x] 빌드 성공 확인
 
 ---
 
-## 3. 단계별 개발 체크리스트
+## 3. 구현 단계별 체크리스트
 
-## 3.1 0단계 - 기준 문서 정리
+### 3.1 1단계 - 구조 준비
 
-이 단계는 무엇을 만들 것인지 기준을 고정하는 단계다.
+- [x] `UCFVehicleCameraComp` 클래스 생성
+- [x] Tick 기반 갱신 루프 구성
+- [x] `ACFVehiclePawn` 소유자 해석 구조 구현
+- [x] `CameraPivotRoot` / `CameraAimPivot` / `CameraBoom` / `FollowCamera` 자동 참조 구조 구현
+- [x] BeginPlay 자동 초기화 구조 구현
 
-### 체크리스트
+### 3.2 2단계 - Aim / 회전 구조
 
-- [x] 차량 카메라 기획 회의 내용을 문서로 정리
-- [x] 차량 카메라를 차량 기반 3인칭 슈팅 카메라로 정의
-- [x] 차량 이동과 카메라 회전 분리 원칙 정리
-- [x] 카메라 회전 범위가 현재 활성 무기 그룹 조준 범위를 따른다는 규칙 정리
-- [x] 전방 시야 손실을 의도된 리스크로 정의
-- [x] 카메라 회전 축을 차량 수평 중심 기준으로 정리
-- [x] 세부 시스템 설계 문서 작성
-- [x] Pawn / CameraComp / DataAsset / UI / Weapon 역할 분리 문서화
+- [x] 현재 프레임 Look 입력 누적 구조 구현
+- [x] DeltaTime 스케일 적용 옵션 구현
+- [x] 누적 Aim Yaw / Pitch 상태 유지
+- [x] Aim Profile 기반 Clamp 구조 구현
+- [x] Soft Limit 접근 상태 계산 (`bAimAtYawLimit`, `bAimAtPitchLimit`)
+- [x] ResetAimToVehicleForward 구현
 
-### 현재 상태 메모
+### 3.3 3단계 - 기본 카메라 계산
 
-이 단계는 완료다. 이후 구현 기준 문서가 이미 확보되어 있다.
+- [x] Base Arm Length 계산
+- [x] Base FOV 계산
+- [x] Base Height Offset 계산
+- [x] Base Side Offset 계산
+- [x] Combat / Reverse / Airborne 모드별 오프셋 반영 구조 구현
+- [x] 속도 기반 Arm Length 보정 구조 구현
+- [x] 속도 기반 FOV 보정 구조 구현
+- [x] Aim Profile의 Arm/FOV/Height/Side 보정 반영 구조 구현
+- [x] `CurrentArmLength` / `CurrentFOV` 보간 적용
+- [x] `CameraAimPivot` 월드 위치/회전 반영
+- [x] `CameraBoom->TargetArmLength` / `SocketOffset` 반영
+- [x] `FollowCamera->FieldOfView` 반영
+- [x] `SolvedArmLength` 계산
 
----
+### 3.4 3단계 보조 - DataAsset / 설정 분리
 
-## 3.2 1단계 - 카메라 뼈대 구조 만들기
-
-이 단계는 카메라가 실제로 붙고 회전하게 만드는 가장 기본 단계다.
-
-### 3.2.1 Pawn 쪽 기본 구조
-
-- [x] `ACFVehiclePawn`에 카메라 시스템을 붙일 수 있는 구조 준비
-- [x] `VehicleCameraComp` 멤버 추가
-- [x] `InputAction_Look` 슬롯 추가
-- [x] `GetVehicleCameraComp()` Getter 추가
-- [x] Look 입력 핸들러 선언 추가
-- [x] Look 입력 핸들러 구현 추가
-
-### 3.2.2 카메라 컴포넌트 파일 생성
-
-- [x] `CFVehicleCameraTypes.h` 생성
-- [x] `CFVehicleCameraData.h` 생성
-- [x] `CFVehicleCameraComp.h` 생성
-- [x] `CFVehicleCameraComp.cpp` 생성
-- [ ] `CFWeaponAimProfile.h` 생성
-- [ ] 필요 시 `CFWeaponAimProfile.cpp` 생성
-
-### 3.2.3 블루프린트 카메라 계층 구성
-
-- [x] `BP_CFVehiclePawn`에 카메라용 컴포넌트 계층 배치
-- [x] `CameraPivotRoot` 생성
-- [x] `CameraAimPivot` 생성
-- [x] `CameraBoom` 생성
-- [x] `FollowCamera` 생성
-- [x] 부모-자식 구조 정리
-- [x] 이름 규칙을 코드와 일치시킴
-
-### 현재 상태 메모
-
-카메라 기본 뼈대는 완료된 상태다. 실제로 기본 회전이 작동하고 있다.
-
----
-
-## 3.3 2단계 - 입력 연결 완성
-
-이 단계는 플레이어 입력이 실제 카메라 회전으로 이어지게 만드는 단계다.
-
-### 3.3.1 입력 자산 구조 정리
-
-- [x] `InputAction_Look` 슬롯을 Pawn에 노출
-- [x] BP에서 Input Action 교체 가능 구조 확보
-- [x] 하드코딩 경로를 fallback 구조로 정리
-- [x] BP / 파생 클래스 지정값 우선 사용
-- [x] 비어 있을 때만 기본 자산 로드
-- [x] Look fallback 경로를 `IA_LookAround` 기준으로 수정
-
-### 3.3.2 Look 입력 매핑 연결
-
-- [x] `IA_LookAround`를 `Axis2D`로 수정
-- [x] Look 입력을 `FVector2D`로 받는 구조와 일치시킴
-- [x] `IMC_Vehicle_Default`에 Look 매핑 연결
-- [x] 마우스 2D축 입력 정상 동작 확인
-- [x] 게임패드 오른쪽 썸스틱 2D축 입력 방식 확인
-- [x] 좌우(Yaw) 회전 확인
-- [x] 상하(Pitch) 회전 확인
-
-### 현재 상태 메모
-
-입력 연결은 완료다. 현재 기본 카메라 회전은 정상 동작한다.
-
----
-
-## 3.4 3단계 - 기본 카메라 계산 로직 구현
-
-이 단계는 카메라가 단순히 붙어 있는 수준을 넘어서 실제 시스템처럼 동작하게 만드는 단계다.
-
-### 3.4.1 CameraComp 기본 계산 흐름
-
-- [x] Tick에서 카메라 갱신 구조 작성
-- [x] `UpdateAimState()` 호출 구조 작성
-- [x] `UpdateCameraTransform()` 호출 구조 작성
-- [x] `UpdateAimTrace()` 호출 구조 작성
-- [x] 카메라 모드 평가 구조 작성
-- [x] 런타임 상태 스냅샷 구조 작성
-
-### 3.4.2 Aim 회전 계산
-
-- [x] Look 입력 누적
-- [x] Aim Yaw 누적
-- [x] Aim Pitch 누적
-- [x] Clamp 적용 구조 구현
-- [x] Yaw / Pitch 한계 근접 여부 계산
-- [-] 실제 무기 프로필 기반 Clamp 연동
-- [-] 무기별 제한각 실데이터 반영
-
-### 3.4.3 카메라 위치 / FOV 계산
-
-- [x] 차량 중심 피벗 기준 회전 구조 구현
-- [x] `CameraBoom->TargetArmLength` 반영
-- [x] `FollowCamera->SetFieldOfView()` 반영
-- [x] 기본 Arm Length 보간
-- [x] 기본 FOV 보간
-- [x] 속도 기반 FOV 변화 구조 구현
-- [x] 속도 기반 Arm Length 변화 구조 구현
-- [-] 실제 플레이 감각에 맞는 값 튜닝
-- [-] 차종별 피벗 높이 / 구도 튜닝
-
-### 3.4.4 Aim Trace / 조준 상태 계산
-
-- [x] Aim Trace 계산 구조 구현
-- [x] Aim Hit Location 계산
-- [x] Aim Trace Distance 계산
-- [x] `bAimBlocked` 계산
-- [x] `bWeaponCanFireAtCurrentAim` 계산
-- [-] 실제 무기 판정 규칙과 결합
-- [-] 차량 차체 / 장애물 차단 구분 정교화
-
-### 현재 상태 메모
-
-기본 카메라 계산 로직은 구현되었다. 다만 무기 실데이터 및 실전 감각 튜닝은 아직 남아 있다.
+- [x] `UCFVehicleCameraData` 생성
+- [x] `FCFVehicleCameraTuningConfig` 정의
+- [x] 기본 튜닝값을 DataAsset/구조체 기준으로 읽는 경로 구현
+- [x] 기본 Aim Profile 제공 구조 구현
 
 ---
 
@@ -197,26 +82,49 @@
 
 ### 3.5.1 카메라 감각 튜닝
 
-- [ ] Yaw 감도 튜닝
-- [ ] Pitch 감도 튜닝
+- [x] Yaw 감도 튜닝
+- [x] Pitch 감도 튜닝
 - [ ] Pitch 최소 / 최대 제한각 튜닝
-- [ ] 기본 Arm Length 튜닝
-- [ ] 기본 FOV 튜닝
+- [x] 기본 Arm Length 튜닝
+- [x] 기본 FOV 튜닝
 - [ ] PivotRoot 높이(Z) 튜닝
 - [ ] SocketOffset 튜닝
-- [ ] 속도에 따른 FOV 증가량 튜닝
-- [ ] 속도에 따른 거리 증가량 튜닝
-- [ ] 충돌 시 카메라가 너무 당겨지지 않도록 조정
+- [x] 속도에 따른 FOV 증가량 튜닝
+- [x] 속도에 따른 거리 증가량 튜닝
+- [ ] 충돌 시 카메라가 너무 당겨지지 않도록 추가 조정
+
+적용값 메모 (2026-04-17)
+- `LookYawSpeedDegPerSec`: `120.0 -> 150.0`
+- `LookPitchSpeedDegPerSec`: `90.0 -> 75.0`
+- `BaseArmLength`: `520.0 -> 560.0`
+- `BaseHeightOffset`: `70.0 -> 80.0`
+- `BaseFOV`: `85.0 -> 87.0`
+- `MaxSpeedFOVBonus`: `8.0 -> 6.0`
+- `MaxSpeedArmLengthBonus`: `70.0 -> 45.0`
+- 적용 파일: `UE/Source/CarFight_Re/Public/CFVehicleCameraData.h`
 
 ### 3.5.2 카메라 충돌 감각 튜닝
 
 - [x] SpringArm 기반 충돌 처리 출발점 확보
+- [x] 충돌 복귀 튐 완화 1차 패치 적용
+- [x] 충돌 시 높이 / FOV 보조 1차 구조 추가
 - [ ] 좁은 공간에서 카메라가 튀는지 테스트
 - [ ] 충돌 해제 후 복귀 감각 테스트
 - [ ] 차체가 화면을 과하게 가리는지 테스트
-- [ ] 필요 시 FOV 보조 적용
-- [ ] 필요 시 높이 보조 적용
+- [ ] 필요 시 FOV 보조 추가 조정
+- [ ] 필요 시 높이 보조 추가 조정
 - [ ] 충돌 상황에서 조준 방향 감각 유지 확인
+
+적용값 메모 (2026-04-21)
+- `bUseCollisionViewAssist = true`
+- `CollisionViewAssistStartRatio = 0.82`
+- `MaxCollisionHeightAssist = 18.0`
+- `MaxCollisionFOVAssist = 3.0`
+- SpringArm 실제 해결 거리(`SolvedArmLength`)를 내부 `CurrentArmLength`에 반영하도록 수정
+- 충돌 해제 후 즉시 튀지 않고 코드 보간으로 복귀하도록 조정
+- 적용 파일:
+  - `UE/Source/CarFight_Re/Public/CFVehicleCameraData.h`
+  - `UE/Source/CarFight_Re/Private/CFVehicleCameraComp.cpp`
 
 ### 3.5.3 디버그 기능
 
@@ -226,13 +134,15 @@
 - [ ] 현재 CameraMode 표시
 - [ ] 현재 AimProfile 이름 표시
 - [ ] Accumulated / Clamped Yaw/Pitch 표시
-- [ ] Current ArmLength / FOV 표시
+- [ ] Current / Desired / Solved ArmLength 표시
+- [ ] Current / Desired FOV 표시
 - [ ] `bAimBlocked` / `bWeaponCanFireAtCurrentAim` 표시
 - [ ] 월드 디버그 라인 정리
 
 ### 현재 상태 메모
 
-이 단계는 아직 본격 착수 전이다. 다음 우선 작업으로 바로 들어가야 한다.
+기본 카메라 계산 로직은 구현되었다. 다만 무기 실데이터 연동, 실전 테스트, 디버그 HUD 연결은 아직 남아 있다.
+현재 단계에서 가장 큰 불확실성은 튜닝값 그 자체보다, 복잡한 테스트 조건에서 어떤 상태가 발생하는지 관측 수단이 부족하다는 점이다.
 
 ---
 
@@ -256,199 +166,84 @@
 - [ ] 전방 확장형 Profile 구현
 - [ ] 측면 편향형 Profile 구현
 - [ ] 전방향 터렛형 Profile 구현
-- [ ] 후방 사격 가능 여부 반영
-- [ ] 카메라 회전 범위가 무기 변경에 따라 바뀌는지 확인
-- [ ] 사격 가능 방향과 카메라 회전 가능 방향이 일치하는지 검증
+- [ ] 후방 사격 가능형 Profile 구현
 
-### 3.6.3 사격 규칙 연동
+### 3.6.3 카메라와 실제 발사 가능 범위 일치 검증
 
-- [ ] 현재 Aim 방향을 실제 무기 발사 방향으로 사용
-- [ ] 현재 Aim 방향이 무기 제한각 안인지 서버 / 로컬 기준으로 검증
-- [ ] 사격 가능 / 불가 상태를 UI에 연결
-- [ ] 차체에 막히는 경우와 단순 각도 초과를 구분
-- [ ] 발사 가능 상태와 조준점 상태 동기화
-
-### 현재 상태 메모
-
-이 단계는 아직 시작 전이다. 현재는 기본 구조만 준비된 상태다.
+- [ ] 카메라 회전 가능 범위와 실제 발사 가능 범위 일치 확인
+- [ ] 조준 가능하지만 발사 불가한 상태 처리 규칙 정리
+- [ ] HUD 경고 규칙 정리
 
 ---
 
-## 3.7 6단계 - UI / HUD 완성
+## 3.7 6단계 - 테스트 / 검증
 
-이 단계는 플레이어가 카메라 상태를 직관적으로 이해할 수 있게 만드는 단계다.
+### 3.7.1 기본 조작 테스트
 
-### 3.7.1 조준점
+- [x] Look 입력 전달 확인
+- [x] 기본 Yaw / Pitch 회전 확인
+- [x] 기본 Arm Length / FOV 변화 확인
+- [ ] Pitch 제한각 동작 확인
+- [ ] Aim Profile별 제한각 차이 확인
 
-- [ ] 기본 조준점 표시
-- [ ] 사격 가능 상태 표시
-- [ ] 한계각 근접 표시
-- [ ] 발사 불가 상태 표시
-- [ ] 가림 상태 표시
-- [ ] 차체 / 엄폐물 / 지형 차단 상태 구분
+### 3.7.2 충돌 / 공간 테스트
 
-### 3.7.2 진행 방향 힌트
+- [ ] 단일 벽 접근 테스트
+- [ ] 좁은 골목 테스트
+- [ ] 낮은 천장 테스트
+- [ ] 코너에서 비스듬히 붙는 상황 테스트
+- [ ] 기둥/장애물 스치기 테스트
+- [ ] 후진 상태 충돌 테스트
 
-- [ ] 차량 진행 방향 화살표
-- [ ] 노즈 방향 힌트
-- [ ] 카메라가 측면 / 후방을 볼 때도 주행 방향 인지 가능하게 UI 추가
+### 3.7.3 실전 플레이 테스트
 
-### 3.7.3 제한각 피드백
-
-- [ ] Yaw 제한각 근접 시 시각 피드백
-- [ ] Pitch 제한각 근접 시 시각 피드백
-- [ ] 하드 리미트 도달 시 피드백
-- [ ] 사격 불가 이유를 설명하는 UI 표현 추가
-
-### 현재 상태 메모
-
-이 단계는 아직 미구현이다.
+- [ ] 주행 중 조준 테스트
+- [ ] 고속 진입 후 회전 테스트
+- [ ] 조준하면서 벽 따라 주행 테스트
+- [ ] 충돌 중 적 추적 가능 여부 확인
+- [ ] 차체 가시성 / 조준점 가시성 확인
 
 ---
 
 ## 3.8 7단계 - 모드 확장
 
-이 단계는 기본 카메라 이후의 확장 기능 단계다.
+### 3.8.1 Camera Mode
 
-### 3.8.1 카메라 상태 구조 확장
+- [x] Normal 모드 구조
+- [x] Combat 모드 구조
+- [x] Reverse 모드 구조
+- [x] Airborne 모드 구조
+- [x] Destroyed / Spectate 열거 및 구조 준비
+- [ ] 실제 게임 상태와 Reverse 연동
+- [ ] 실제 게임 상태와 Airborne 연동
+- [ ] 실제 게임 상태와 Destroyed 연동
+- [ ] Spectate 진입 규칙 확정
 
-- [x] `Normal` 모드 구조 존재
-- [x] `Combat` 모드 enum 존재
-- [x] `Reverse` 모드 enum 존재
-- [x] `Airborne` 모드 enum 존재
-- [x] `Destroyed` 모드 enum 존재
-- [x] `Spectate` 모드 enum 존재
-- [-] 실제 게임 상태와 각 모드 연결
-- [-] BaseMode + Modifier 구조 정교화
+### 3.8.2 입력 / 보조 기능
 
-### 3.8.2 선택 기능
-
-- [ ] Camera Reset 입력
-- [ ] Rear View 입력
-- [ ] Aim Modifier 입력
-- [ ] 후진 전용 시점 로직
-- [ ] 공중 상태 반응
-- [ ] 큰 충돌 임팩트
-- [ ] 파괴 상태 카메라
-- [ ] Spectate 카메라
-
-### 현재 상태 메모
-
-enum 및 구조는 있지만 실제 동작 확장은 대부분 앞으로 작업해야 한다.
+- [ ] Camera Reset 입력 연결
+- [ ] Rear View 입력 연결
+- [ ] Aim Modifier 입력 연결
 
 ---
 
-## 3.9 8단계 - 실전 검증
+## 4. 다음 우선 작업 추천
 
-이 단계는 기능이 붙은 뒤 실제 플레이 기준으로 검증하는 단계다.
+현재 기준 다음 우선 작업은 아래 순서가 적절하다.
 
-### 체크리스트
-
-- [x] 빌드 성공 확인
-- [x] Yaw 회전 확인
-- [x] Pitch 회전 확인
-- [x] 마우스 2D축 입력 정상 동작 확인
-- [x] 게임패드 오른쪽 썸스틱 2D축 입력 방식 확인
-- [ ] 주행 중 조준 감각 테스트
-- [ ] 벽 근처 충돌 테스트
-- [ ] 속도 상승 시 FOV / 거리 변화 체감 테스트
-- [ ] 여러 카메라 각도에서 차량 가시성 테스트
-- [ ] 전방 시야 손실이 의도된 리스크로 잘 작동하는지 테스트
-- [ ] 좁은 골목 / 실내 / 터널형 지형 테스트
-- [ ] 무기 탑재 후 제한각 테스트
-
-### 현재 상태 메모
-
-입력과 기본 회전 테스트는 통과했다. 이제부터는 실전 플레이 감각 검증이 필요하다.
+1. 디버그 HUD 최소 연결
+2. 충돌 / 좁은 지형 테스트 조건 강화
+3. Pitch 제한각 / Pivot / SocketOffset 2차 튜닝
+4. 무기 시스템과 Aim Profile 실제 연동
 
 ---
 
-## 4. 현재까지 완료된 핵심 항목 요약
+## 5. 참고 구현 파일
 
-### 이미 완료된 핵심
-
-- [x] 기획 문서 작성
-- [x] 세부 설계 문서 작성
-- [x] `UCFVehicleCameraComp` 생성
-- [x] `CFVehicleCameraTypes.h` 생성
-- [x] `CFVehicleCameraData.h` 생성
-- [x] `ACFVehiclePawn`에 `VehicleCameraComp` 연동
-- [x] `InputAction_Look` 연동
-- [x] Look 입력이 CameraComp로 전달되게 구현
-- [x] Yaw / Pitch 누적과 Clamp 구현
-- [x] 중심 피벗 기준 카메라 계산 구현
-- [x] SpringArm ArmLength 반영
-- [x] FOV 반영
-- [x] Aim Trace 계산
-- [x] BP 카메라 계층 구성
-- [x] 빌드 성공
-- [x] 마우스 / 패드 기준 기본 카메라 회전 확인
-
-### 부분 완료
-
-- [-] 충돌 처리 뼈대
-- [-] 속도 기반 FOV / 거리 변화
-- [-] 카메라 모드 구조
-- [-] 런타임 디버그 상태 구조
-- [-] Aim Profile 구조체
-
-### 아직 안 된 것
-
-- [ ] 무기 시스템 실제 연동
-- [ ] 무기별 제한각 반영
-- [ ] HUD / 조준점
-- [ ] 진행 방향 힌트
-- [ ] 후진 / 공중 / 파괴 카메라 실제 동작
-- [ ] Camera Reset 같은 보조 입력
-- [ ] 차종별 데이터 튜닝
-- [ ] 실전 감각 튜닝
-
----
-
-## 5. 지금 바로 다음 우선 작업
-
-현재 우선순위는 아래 순서로 잡는 것을 권장한다.
-
-### 5.1 카메라 감각 튜닝
-
-- [ ] Yaw 감도
-- [ ] Pitch 감도
-- [ ] Pitch 제한각
-- [ ] Arm Length
-- [ ] FOV
-- [ ] Pivot 높이
-
-### 5.2 충돌 감각 튜닝
-
-- [ ] 벽 근처에서 당겨지는 감각
-- [ ] 복귀 보간
-- [ ] 차체 가림 최소화
-
-### 5.3 HUD 최소 버전
-
-- [ ] 기본 조준점
-- [ ] 사격 가능 / 불가 표시
-- [ ] 한계각 경고
-- [ ] 진행 방향 힌트
-
-### 5.4 Aim Profile 실제 연동
-
-- [ ] 무기별 제한각 연결
-- [ ] 활성 무기 그룹 기준 카메라 회전 범위 변경
-
-### 5.5 모드 확장
-
-- [ ] Reverse
-- [ ] Airborne
-- [ ] Destroyed
-
----
-
-## 6. 현재 시점 결론
-
-현재 상태는 다음과 같이 정리한다.
-
-> 차량 카메라 시스템의 기본 뼈대와 기본 움직임은 구현 완료 상태다.
-> 이후 작업의 핵심은 감각 튜닝, UI, 무기 연동, 확장 모드 구현이다.
-
-이 문서는 이후 카메라 튜닝 작업, UI 작업, 무기 시스템 연동 작업을 진행할 때 실제 작업 기준 체크리스트로 사용한다.
+- `UE/Source/CarFight_Re/Public/CFVehicleCameraData.h`
+- `UE/Source/CarFight_Re/Public/CFVehicleCameraTypes.h`
+- `UE/Source/CarFight_Re/Public/CFVehicleCameraComp.h`
+- `UE/Source/CarFight_Re/Private/CFVehicleCameraComp.cpp`
+- `UE/Source/CarFight_Re/Public/CFVehiclePawn.h`
+- `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp`
+- `/Game/CarFight/Vehicles/BP_CFVehiclePawn.BP_CFVehiclePawn`
