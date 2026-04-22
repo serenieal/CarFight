@@ -62,9 +62,24 @@
 
 즉, **후진은 브레이크 기반 전환**으로 정리했다.
 
+### 3-4. P1 입력 충돌 방지(Runtime Input Ownership)
+후속 안정화 단계에서 아래 로직을 추가했다.
+
+- `VehicleMove2D / LegacyAxis / None` 입력 소유권 enum 추가
+- `CurrentInputOwnership` 상태값 추가
+- `InputOwnershipHoldTimeSec` 유지 시간 추가
+- `LastVehicleMoveInputTimeSec / LastLegacyAxisInputTimeSec` 추적값 추가
+- `VehicleMove` 입력 소유권 획득 로직 추가
+- 기존 축 입력 게이트 추가
+- release 경로 덮어쓰기 방지 로직 추가
+- `InputOwner` 디버그 추가
+
+즉, 이제는 `IA_VehicleMove`와 기존 축 입력이 동시에 살아 있어도 **한 프레임에 하나의 입력 경로만 차량 입력을 지배**한다.
+
 ---
 
 ## 4. 제거한 방식
+
 아래 방식은 실제 테스트 후 제거했다.
 
 ### 제거 1. 음수 스로틀 기반 reverse 강제

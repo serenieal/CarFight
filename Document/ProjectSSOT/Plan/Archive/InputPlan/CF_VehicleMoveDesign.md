@@ -68,6 +68,15 @@
 4. 최종적으로 기존 `SetVehicleThrottleInput / SetVehicleBrakeInput / SetVehicleSteeringInput` 경로에 연결한다.
 5. 후진 의도일 때도 수동 기어 강제나 음수 스로틀 강제를 하지 않고, Chaos Vehicle의 `bUseAutoReverse`에 후진 전환을 맡긴다.
 
+### 2-1-a. 현재 채택된 입력 경로 분리
+현재 실제 운영안은 장치별로 입력 경로를 분리하는 것이다.
+
+- 게임패드: `IA_VehicleMove` 기반 신규 2D 해석 조작
+- 키보드: 기존 `IA_Throttle / IA_Brake / IA_Steering` 기반 기존 조작
+
+이 분리는 코드 하드코딩이 아니라 **IMC 분리**로 적용하며, 실제 동작 확인까지 끝난 상태다.
+
+
 ### 2-2. 비권장안
 아래는 현재 기준으로 비권장이다.
 

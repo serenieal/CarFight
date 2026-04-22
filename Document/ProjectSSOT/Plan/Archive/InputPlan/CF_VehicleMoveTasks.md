@@ -53,9 +53,11 @@
 
 **해야 할 일**
 - [x] 차량 이동용 2D Input Action 정의
-- [x] 키보드 전/후진/좌우를 해당 액션에 연결
 - [x] 게임패드 이동 스틱을 해당 액션에 연결
+- [x] 키보드는 기존 `IA_Throttle / IA_Brake / IA_Steering` 경로를 유지하도록 정리
+- [x] 게임패드는 `IA_VehicleMove` 경로만 사용하도록 IMC 분리
 - [x] 기존 단일 축 입력 자산과 충돌 여부 확인
+
 
 ### Phase 2. Pawn 입력 상태/설정 추가
 **목표**
@@ -106,9 +108,26 @@ PIE에서 명세와 구현이 일치하는지 검증한다.
 - [x] `bUseAutoReverse` 기반 후진 전환 검증
 - [x] 장치 모드 차단 검증
 
+### Phase 6. 입력 충돌 방지(P1)
+**목표**
+`IA_VehicleMove`와 기존 `IA_Throttle / IA_Brake / IA_Steering`가 동시에 살아 있어도 현재 프레임에서 한쪽만 차량 입력을 지배하도록 만든다.
+
+**해야 할 일**
+- [x] `VehicleMove2D / LegacyAxis / None` 입력 소유권 enum 추가
+- [x] `CurrentInputOwnership` 상태값 추가
+- [x] `InputOwnershipHoldTimeSec` 유지 시간 추가
+- [x] `LastVehicleMoveInputTimeSec / LastLegacyAxisInputTimeSec` 추적값 추가
+- [x] `VehicleMove` 입력 소유권 획득 로직 추가
+- [x] 기존 축 입력 게이트 추가
+- [x] release 경로 덮어쓰기 방지 로직 추가
+- [x] `InputOwner` 디버그 추가
+- [x] 빌드 성공 확인
+- [x] PIE 실기 테스트 확인
+
 ---
 
 ## 4. 구현 중 의사결정 기준
+
 
 ### 4-1. 구조 변경 최소화
 - 기존 구조를 유지하면서 기능을 얹는 방향을 우선한다.

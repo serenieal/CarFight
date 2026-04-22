@@ -186,10 +186,15 @@
 - 수동 기어 강제 방식은 제거
 - 음수 스로틀 기반 후진 강제는 제거
 - **Chaos Vehicle `bUseAutoReverse = true` 환경에서 실제 후진 동작 확인**
+- 게임패드 신규 조작 / 키보드 기존 조작 IMC 분리 확인
+- **P1 입력 충돌 방지(Runtime Input Ownership) 구현 완료**
+- `InputOwner` 디버그 확인 완료
+- 빌드 성공 및 PIE 실기 테스트 완료
 
 즉 현재 구현 기준으로는:
 
-**입력 해석은 CarFight 커스텀 로직, 후진 전환은 Chaos Vehicle 기본 기능**
+**입력 해석은 CarFight 커스텀 로직, 후진 전환은 Chaos Vehicle 기본 기능, 입력 충돌 방지는 Runtime Input Ownership 계층**
+
 
 이 역할 분리가 맞다.
 

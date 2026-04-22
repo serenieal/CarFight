@@ -8,6 +8,12 @@
 - 입력 각도/영역 해석은 CarFight 커스텀 로직이 담당
 - 후진 전환의 최종 결정권은 Chaos Vehicle `bUseAutoReverse`가 담당
 - 수동 기어 강제와 음수 스로틀 기반 reverse 강제는 사용하지 않음
+- 게임패드는 `IA_VehicleMove` 기반 신규 조작을 사용
+- 키보드는 기존 `IA_Throttle / IA_Brake / IA_Steering` 기반 조작을 유지
+- 이 장치별 분리는 IMC 분리로 적용하며 실제 동작 확인까지 끝남
+- P1 입력 충돌 방지(Runtime Input Ownership)를 적용해 `VehicleMove2D`와 `LegacyAxis`가 동시에 살아 있어도 한쪽만 차량 입력을 지배하도록 정리함
+
+
 
 이 폴더는 다음 6가지를 분리해 유지한다.
 

@@ -21,8 +21,11 @@
 - 차량 테스트용 Pawn 배치 완료
 - 차량 이동용 `Axis2D` 입력 액션 준비
 - IMC에 키보드/게임패드 매핑 준비
+- 게임패드용 IMC는 `IA_VehicleMove` 경로를 사용하도록 정리
+- 키보드용 IMC는 `IA_Throttle / IA_Brake / IA_Steering` 경로를 유지하도록 정리
 - Chaos Vehicle에서 `bUseAutoReverse = true` 확인
 - PIE에서 현재 차량 속도와 DriveState를 확인할 수 있는 디버그 문자열 준비
+
 
 ### 1-2. 권장 디버그 항목
 PIE 중 아래 항목을 화면이나 로그에서 바로 볼 수 있어야 한다.
