@@ -82,8 +82,23 @@ enum class ECFVehicleMoveZone : uint8
 };
 
 /**
+ * 현재 프레임 기준 차량 입력 적용의 주도권을 가진 경로입니다.
+ * - None: 아직 어떤 입력 경로도 주도권을 가지지 않습니다.
+ * - VehicleMove2D: `IA_VehicleMove` 기반 2D 신규 조작이 주도권을 가집니다.
+ * - LegacyAxis: 기존 `Throttle / Brake / Steering` 축 입력이 주도권을 가집니다.
+ */
+UENUM(BlueprintType)
+enum class ECFVehicleInputOwnership : uint8
+{
+	None UMETA(DisplayName="None"),
+	VehicleMove2D UMETA(DisplayName="VehicleMove2D"),
+	LegacyAxis UMETA(DisplayName="LegacyAxis")
+};
+
+/**
  * 차량 2D 이동 입력 해석에 사용할 각도 설정입니다.
  */
+
 USTRUCT(BlueprintType)
 struct FCFVehicleMoveInputConfig
 {
@@ -249,10 +264,23 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="마지막 진행 방향 의도 (LastMoveDirectionIntent)", ToolTip="검은 영역 진입 시 유지할 마지막 유효 진행 방향입니다."))
 	ECFVehicleMoveDirectionIntent LastMoveDirectionIntent = ECFVehicleMoveDirectionIntent::None;
 
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="마지막 차량 이동 입력 결과 (LastVehicleMoveInputResult)", ToolTip="현재 프레임 기준 차량 2D 이동 입력 해석 결과입니다."))
+		UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="마지막 차량 이동 입력 결과 (LastVehicleMoveInputResult)", ToolTip="현재 프레임 기준 차량 2D 이동 입력 해석 결과입니다."))
 	FCFVehicleMoveInputResult LastVehicleMoveInputResult;
 
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="현재 입력 소유권 (CurrentInputOwnership)", ToolTip="현재 프레임 기준 차량 입력 적용의 주도권을 가진 입력 경로입니다."))
+	ECFVehicleInputOwnership CurrentInputOwnership = ECFVehicleInputOwnership::None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(ClampMin="0.0", DisplayName="입력 소유권 유지 시간 (InputOwnershipHoldTimeSec)", ToolTip="입력 경로 주도권 전환 시 흔들림을 줄이기 위해 현재 소유권을 유지할 최소 시간(초)입니다."))
+	float InputOwnershipHoldTimeSec = 0.15f;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="마지막 VehicleMove 입력 시각 (LastVehicleMoveInputTimeSec)", ToolTip="VehicleMove 2D 입력이 마지막으로 유효하게 들어온 월드 시각(초)입니다."))
+	float LastVehicleMoveInputTimeSec = -1.0f;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="마지막 LegacyAxis 입력 시각 (LastLegacyAxisInputTimeSec)", ToolTip="기존 Throttle/Brake/Steering 축 입력이 마지막으로 유효하게 들어온 월드 시각(초)입니다."))
+	float LastLegacyAxisInputTimeSec = -1.0f;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="Drive 컴포넌트 (VehicleDriveComp)", ToolTip="입력 전달 전용 Drive 컴포넌트입니다."))
+
 	TObjectPtr<UCFVehicleDriveComp> VehicleDriveComp = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="WheelSync 컴포넌트 (WheelSyncComp)", ToolTip="휠 시각 동기화 전용 WheelSync 컴포넌트입니다."))
@@ -384,12 +412,31 @@ protected:
 	void ApplyVehicleWheelPhysicsConfig();
 	void ApplyVehicleWheelVisualConfig();
 	void ApplyVehicleReferenceConfig();
-	void DisplayDriveStateOnScreenDebug() const;
+		void DisplayDriveStateOnScreenDebug() const;
 	bool ShouldAcceptActionInput(const UInputAction* SourceInputAction, float CurrentInputValue) const;
 	bool HasActiveMappedKeyForDevice(const UInputAction* SourceInputAction, bool bRequireGamepadKey) const;
 	bool IsMappedKeyCurrentlyActive(const FKey& MappingKey) const;
 
+	// [v2.6.1] P1 입력 충돌 방지: 현재 입력값이 소유권 판단에 사용할 만큼 유효한지 검사합니다.
+	bool IsMeaningfulInputValue(float CurrentInputValue) const;
+
+	// [v2.6.1] P1 입력 충돌 방지: 2D VehicleMove 입력이 현재 입력 소유권을 획득할 수 있는지 검사합니다.
+	bool CanProcessVehicleMoveInput(float MoveInputMagnitude) const;
+
+	// [v2.6.1] P1 입력 충돌 방지: 기존 축 입력이 현재 입력 소유권을 획득할 수 있는지 검사합니다.
+	bool CanProcessLegacyAxisInput(float AxisValue) const;
+
+	// [v2.6.1] P1 입력 충돌 방지: VehicleMove 입력 기준으로 입력 소유권 상태를 갱신합니다.
+	void UpdateInputOwnershipFromVehicleMove(float MoveInputMagnitude);
+
+	// [v2.6.1] P1 입력 충돌 방지: LegacyAxis 입력 기준으로 입력 소유권 상태를 갱신합니다.
+	void UpdateInputOwnershipFromLegacyAxis(float AxisValue);
+
+	// [v2.6.1] P1 입력 충돌 방지: 현재 유효 입력이 없으면 입력 소유권을 해제합니다.
+	void ReleaseInputOwnershipIfIdle();
+
 	// [v1.6.0] 차량 이동용 2D 입력 액션값을 읽어 해석 결과를 Drive 입력으로 전달합니다.
+
 	void HandleVehicleMoveInput(const FInputActionValue& InputActionValue);
 
 	// [v1.6.0] 차량 이동용 2D 입력 액션이 해제됐을 때 이동 입력 상태를 초기화합니다.

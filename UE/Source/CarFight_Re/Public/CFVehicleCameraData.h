@@ -1,7 +1,7 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 0.1.0
-// Date: 2026-04-10
+// Version: 0.1.2
+// Date: 2026-04-21
 // Description: CarFight 차량 카메라 DataAsset 정의
 // Scope: 차량 공통 카메라 튜닝값과 기본 Aim Profile을 DataAsset으로 분리해 관리합니다.
 
@@ -30,22 +30,22 @@ struct FCFVehicleCameraTuningConfig
 	FVector PivotLocalOffset = FVector(0.0f, 0.0f, 60.0f);
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera", meta=(ClampMin="0.0", DisplayName="기본 Arm 길이 (BaseArmLength)", ToolTip="차량 카메라 기본 Arm 길이입니다."))
-	float BaseArmLength = 520.0f;
+	float BaseArmLength = 560.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera", meta=(DisplayName="기본 높이 오프셋 (BaseHeightOffset)", ToolTip="카메라 외부 시점을 구성할 기본 높이 오프셋입니다."))
-	float BaseHeightOffset = 70.0f;
+	float BaseHeightOffset = 80.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera", meta=(DisplayName="기본 좌우 오프셋 (BaseSideOffset)", ToolTip="카메라 프레이밍용 기본 좌우 오프셋입니다. 양수는 오른쪽입니다."))
 	float BaseSideOffset = 0.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera", meta=(ClampMin="1.0", DisplayName="기본 FOV (BaseFOV)", ToolTip="차량 카메라 기본 FOV입니다."))
-	float BaseFOV = 85.0f;
+	float BaseFOV = 87.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera", meta=(ClampMin="0.0", DisplayName="Yaw 입력 속도 (LookYawSpeedDegPerSec)", ToolTip="Look X 입력을 Yaw 변화량으로 변환할 초당 회전 속도(deg/s)입니다."))
-	float LookYawSpeedDegPerSec = 120.0f;
+	float LookYawSpeedDegPerSec = 150.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera", meta=(ClampMin="0.0", DisplayName="Pitch 입력 속도 (LookPitchSpeedDegPerSec)", ToolTip="Look Y 입력을 Pitch 변화량으로 변환할 초당 회전 속도(deg/s)입니다."))
-	float LookPitchSpeedDegPerSec = 90.0f;
+	float LookPitchSpeedDegPerSec = 75.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera", meta=(DisplayName="DeltaTime Look 스케일 사용 (bScaleLookInputByDeltaTime)", ToolTip="True이면 Look 입력을 DeltaTime 기준으로 스케일링합니다. Enhanced Input의 축 입력을 초당 회전량으로 해석할 때 사용합니다."))
 	bool bScaleLookInputByDeltaTime = true;
@@ -81,10 +81,10 @@ struct FCFVehicleCameraTuningConfig
 	float SpeedForMaxBonusKmh = 120.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera", meta=(DisplayName="최대 FOV 보너스 (MaxSpeedFOVBonus)", ToolTip="최대 보정 속도에 도달했을 때 추가할 최대 FOV 값입니다."))
-	float MaxSpeedFOVBonus = 8.0f;
+	float MaxSpeedFOVBonus = 6.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera", meta=(DisplayName="최대 Arm 길이 보너스 (MaxSpeedArmLengthBonus)", ToolTip="최대 보정 속도에 도달했을 때 추가할 최대 Arm 길이 값입니다."))
-	float MaxSpeedArmLengthBonus = 70.0f;
+	float MaxSpeedArmLengthBonus = 45.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera", meta=(DisplayName="Spring Arm 충돌 테스트 사용 (bEnableBoomCollisionTest)", ToolTip="True이면 Spring Arm의 기본 충돌 테스트를 사용합니다."))
 	bool bEnableBoomCollisionTest = true;
@@ -94,6 +94,18 @@ struct FCFVehicleCameraTuningConfig
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera", meta=(ClampMin="0.0", DisplayName="최소 Arm 길이 (MinArmLength)", ToolTip="충돌 또는 좁은 지형에서 허용할 최소 카메라 거리입니다."))
 	float MinArmLength = 160.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera", meta=(DisplayName="충돌 시 시야 보조 사용 (bUseCollisionViewAssist)", ToolTip="True이면 충돌로 카메라가 크게 압축될 때 높이/FOV 보조를 적용해 가시성을 보완합니다."))
+	bool bUseCollisionViewAssist = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera", meta=(ClampMin="0.1", ClampMax="1.0", DisplayName="충돌 시야 보조 시작 비율 (CollisionViewAssistStartRatio)", ToolTip="실제 카메라 거리 비율이 이 값보다 작아지면 충돌 시야 보조를 시작합니다. 1.0에 가까울수록 더 일찍 보조가 들어갑니다."))
+	float CollisionViewAssistStartRatio = 0.82f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera", meta=(ClampMin="0.0", DisplayName="최대 충돌 높이 보조 (MaxCollisionHeightAssist)", ToolTip="충돌로 카메라가 당겨졌을 때 추가할 최대 높이 보조량입니다."))
+	float MaxCollisionHeightAssist = 18.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera", meta=(ClampMin="0.0", DisplayName="최대 충돌 FOV 보조 (MaxCollisionFOVAssist)", ToolTip="충돌로 카메라가 당겨졌을 때 추가할 최대 FOV 보조량입니다."))
+	float MaxCollisionFOVAssist = 3.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera", meta=(ClampMin="0.0", DisplayName="Aim Trace 길이 (AimTraceLength)", ToolTip="조준점 계산에 사용할 기본 Aim Trace 길이입니다."))
 	float AimTraceLength = 50000.0f;

@@ -477,8 +477,10 @@ FString ACFVehiclePawn::BuildVehicleDebugSummary(bool bUseMultilineFormat, bool 
 		DebugSegments.Add(FString::Printf(TEXT("Handbrake=%s"), DriveStateSnapshot.CurrentInputState.bHandbrakePressed ? TEXT("On") : TEXT("Off")));
 		if (bIncludeInputState)
 		{
-			DebugSegments.Add(FString::Printf(TEXT("DeviceMode=%s"), *UEnum::GetValueAsString(InputDeviceMode)));
+						DebugSegments.Add(FString::Printf(TEXT("DeviceMode=%s"), *UEnum::GetValueAsString(InputDeviceMode)));
+			DebugSegments.Add(FString::Printf(TEXT("InputOwner=%s"), *UEnum::GetValueAsString(CurrentInputOwnership)));
 			DebugSegments.Add(FString::Printf(TEXT("MoveZone=%s"), *UEnum::GetValueAsString(LastVehicleMoveInputResult.ResolvedZone)));
+
 			DebugSegments.Add(FString::Printf(TEXT("MoveIntent=%s"), *UEnum::GetValueAsString(LastMoveDirectionIntent)));
 			DebugSegments.Add(FString::Printf(TEXT("MoveRaw=(%.2f, %.2f)"), LastVehicleMoveInputResult.RawMoveInput.X, LastVehicleMoveInputResult.RawMoveInput.Y));
 			DebugSegments.Add(FString::Printf(TEXT("MoveMag=%.2f"), LastVehicleMoveInputResult.Magnitude));
@@ -521,11 +523,21 @@ void ACFVehiclePawn::ApplyAxisInputFromAction(const UInputAction* SourceInputAct
 	const float AxisValue = InputActionValue.Get<float>();
 	if (!ShouldAcceptActionInput(SourceInputAction, AxisValue))
 	{
-		(this->*AxisInputSetter)(0.0f);
+		if (CurrentInputOwnership == ECFVehicleInputOwnership::LegacyAxis)
+		{
+			(this->*AxisInputSetter)(0.0f);
+			ReleaseInputOwnershipIfIdle();
+		}
 		return;
 	}
+	if (!CanProcessLegacyAxisInput(AxisValue))
+	{
+		return;
+	}
+	UpdateInputOwnershipFromLegacyAxis(AxisValue);
 	(this->*AxisInputSetter)(AxisValue);
 }
+
 
 void ACFVehiclePawn::ResetAxisInput(void (ACFVehiclePawn::*AxisInputSetter)(float))
 {
@@ -1005,31 +1017,110 @@ bool ACFVehiclePawn::IsMappedKeyCurrentlyActive(const FKey& MappingKey) const
 	return FMath::Abs(AnalogValue) >= InputDeviceAnalogThreshold;
 }
 
+bool ACFVehiclePawn::IsMeaningfulInputValue(const float CurrentInputValue) const
+{
+	return FMath::Abs(CurrentInputValue) >= InputDeviceAnalogThreshold;
+}
+
+bool ACFVehiclePawn::CanProcessVehicleMoveInput(const float MoveInputMagnitude) const
+{
+	if (!IsMeaningfulInputValue(MoveInputMagnitude))
+	{
+		return false;
+	}
+	if (CurrentInputOwnership != ECFVehicleInputOwnership::LegacyAxis)
+	{
+		return true;
+	}
+	if (!GetWorld())
+	{
+		return true;
+	}
+	return (GetWorld()->GetTimeSeconds() - LastLegacyAxisInputTimeSec) >= InputOwnershipHoldTimeSec;
+}
+
+bool ACFVehiclePawn::CanProcessLegacyAxisInput(const float AxisValue) const
+{
+	if (!IsMeaningfulInputValue(AxisValue))
+	{
+		return false;
+	}
+	if (CurrentInputOwnership != ECFVehicleInputOwnership::VehicleMove2D)
+	{
+		return true;
+	}
+	if (!GetWorld())
+	{
+		return true;
+	}
+	return (GetWorld()->GetTimeSeconds() - LastVehicleMoveInputTimeSec) >= InputOwnershipHoldTimeSec;
+}
+
+void ACFVehiclePawn::UpdateInputOwnershipFromVehicleMove(const float MoveInputMagnitude)
+{
+	if (!IsMeaningfulInputValue(MoveInputMagnitude))
+	{
+		return;
+	}
+	LastVehicleMoveInputTimeSec = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
+	CurrentInputOwnership = ECFVehicleInputOwnership::VehicleMove2D;
+}
+
+void ACFVehiclePawn::UpdateInputOwnershipFromLegacyAxis(const float AxisValue)
+{
+	if (!IsMeaningfulInputValue(AxisValue))
+	{
+		return;
+	}
+	LastLegacyAxisInputTimeSec = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
+	CurrentInputOwnership = ECFVehicleInputOwnership::LegacyAxis;
+}
+
+void ACFVehiclePawn::ReleaseInputOwnershipIfIdle()
+{
+	if (!GetWorld())
+	{
+		return;
+	}
+	const float CurrentTimeSec = GetWorld()->GetTimeSeconds();
+	const bool bVehicleMoveExpired = (LastVehicleMoveInputTimeSec < 0.0f) || ((CurrentTimeSec - LastVehicleMoveInputTimeSec) >= InputOwnershipHoldTimeSec);
+	const bool bLegacyAxisExpired = (LastLegacyAxisInputTimeSec < 0.0f) || ((CurrentTimeSec - LastLegacyAxisInputTimeSec) >= InputOwnershipHoldTimeSec);
+	if (bVehicleMoveExpired && bLegacyAxisExpired)
+	{
+		CurrentInputOwnership = ECFVehicleInputOwnership::None;
+	}
+}
+
 void ACFVehiclePawn::HandleVehicleMoveInput(const FInputActionValue& InputActionValue)
 {
 	const FVector2D MoveInputVector = InputActionValue.Get<FVector2D>();
 	const float MoveInputMagnitude = FMath::Clamp(MoveInputVector.Length(), 0.0f, 1.0f);
-	if (!ShouldAcceptActionInput(InputAction_VehicleMove, MoveInputMagnitude))
+	if (!ShouldAcceptActionInput(InputAction_VehicleMove, MoveInputMagnitude) || !CanProcessVehicleMoveInput(MoveInputMagnitude))
 	{
 		LastVehicleMoveInputResult = FCFVehicleMoveInputResult();
 		LastVehicleMoveInputResult.RawMoveInput = MoveInputVector;
 		LastVehicleMoveInputResult.Magnitude = MoveInputMagnitude;
-		SetVehicleThrottleInput(0.0f);
-		SetVehicleBrakeInput(0.0f);
-		SetVehicleSteeringInput(0.0f);
+		ReleaseInputOwnershipIfIdle();
 		return;
 	}
 
+	UpdateInputOwnershipFromVehicleMove(MoveInputMagnitude);
 	LastVehicleMoveInputResult = ResolveVehicleMoveInput(MoveInputVector);
 	ApplyResolvedVehicleMoveInput(LastVehicleMoveInputResult);
 }
 
+
 void ACFVehiclePawn::HandleVehicleMoveReleased(const FInputActionValue&)
 {
 	LastVehicleMoveInputResult = FCFVehicleMoveInputResult();
-	ResetAxisInput(&ACFVehiclePawn::SetVehicleThrottleInput);
-	ResetAxisInput(&ACFVehiclePawn::SetVehicleBrakeInput);
-	ResetAxisInput(&ACFVehiclePawn::SetVehicleSteeringInput);
+	if (CurrentInputOwnership == ECFVehicleInputOwnership::VehicleMove2D)
+	{
+		ResetAxisInput(&ACFVehiclePawn::SetVehicleThrottleInput);
+		ResetAxisInput(&ACFVehiclePawn::SetVehicleBrakeInput);
+		ResetAxisInput(&ACFVehiclePawn::SetVehicleSteeringInput);
+		CurrentInputOwnership = ECFVehicleInputOwnership::None;
+	}
+	ReleaseInputOwnershipIfIdle();
 }
 
 void ACFVehiclePawn::HandleThrottleInput(const FInputActionValue& InputActionValue)
@@ -1039,7 +1130,11 @@ void ACFVehiclePawn::HandleThrottleInput(const FInputActionValue& InputActionVal
 
 void ACFVehiclePawn::HandleThrottleReleased(const FInputActionValue&)
 {
-	ResetAxisInput(&ACFVehiclePawn::SetVehicleThrottleInput);
+	if (CurrentInputOwnership == ECFVehicleInputOwnership::LegacyAxis)
+	{
+		ResetAxisInput(&ACFVehiclePawn::SetVehicleThrottleInput);
+	}
+	ReleaseInputOwnershipIfIdle();
 }
 
 void ACFVehiclePawn::HandleSteeringInput(const FInputActionValue& InputActionValue)
@@ -1049,7 +1144,11 @@ void ACFVehiclePawn::HandleSteeringInput(const FInputActionValue& InputActionVal
 
 void ACFVehiclePawn::HandleSteeringReleased(const FInputActionValue&)
 {
-	ResetAxisInput(&ACFVehiclePawn::SetVehicleSteeringInput);
+	if (CurrentInputOwnership == ECFVehicleInputOwnership::LegacyAxis)
+	{
+		ResetAxisInput(&ACFVehiclePawn::SetVehicleSteeringInput);
+	}
+	ReleaseInputOwnershipIfIdle();
 }
 
 void ACFVehiclePawn::HandleBrakeInput(const FInputActionValue& InputActionValue)
@@ -1059,8 +1158,13 @@ void ACFVehiclePawn::HandleBrakeInput(const FInputActionValue& InputActionValue)
 
 void ACFVehiclePawn::HandleBrakeReleased(const FInputActionValue&)
 {
-	ResetAxisInput(&ACFVehiclePawn::SetVehicleBrakeInput);
+	if (CurrentInputOwnership == ECFVehicleInputOwnership::LegacyAxis)
+	{
+		ResetAxisInput(&ACFVehiclePawn::SetVehicleBrakeInput);
+	}
+	ReleaseInputOwnershipIfIdle();
 }
+
 
 void ACFVehiclePawn::HandleLookInput(const FInputActionValue& InputActionValue)
 {

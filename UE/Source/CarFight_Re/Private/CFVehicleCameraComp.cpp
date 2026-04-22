@@ -1,7 +1,7 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 0.1.0
-// Date: 2026-04-10
+// Version: 0.1.1
+// Date: 2026-04-21
 // Description: CarFight 차량 카메라 컴포넌트 구현 초안
 // Scope: 차량 중심 피벗 기반 자유 조준, 제한각 Clamp, SpringArm 연동, Aim Trace 계산 골격을 구현합니다.
 
@@ -98,6 +98,7 @@ bool UCFVehicleCameraComp::InitializeCameraRuntime()
 	CurrentFOV = LocalCameraTuningConfig.BaseFOV;
 	CameraRuntimeState.CurrentArmLength = CurrentArmLength;
 	CameraRuntimeState.CurrentFOV = CurrentFOV;
+	CameraRuntimeState.SolvedArmLength = CurrentArmLength;
 	bCameraRuntimeReady = true;
 	return true;
 }
@@ -357,7 +358,7 @@ void UCFVehicleCameraComp::UpdateAimState(float DeltaTime, const FCFVehicleCamer
 	CameraRuntimeState.bAimAtPitchLimit = DistanceToPitchMin <= AimProfile.PitchSoftLimitZoneDeg || DistanceToPitchMax <= AimProfile.PitchSoftLimitZoneDeg;
 }
 
-// [v0.1.0] 목표 카메라 위치와 FOV를 계산해 SpringArm / Camera에 반영합니다.
+// [v0.1.1] 목표 카메라 위치와 FOV를 계산해 SpringArm / Camera에 반영합니다.
 void UCFVehicleCameraComp::UpdateCameraTransform(float DeltaTime, const FCFVehicleCameraTuningConfig& CameraTuningConfig, const FCFVehicleCameraAimProfile& AimProfile)
 {
 	const float VehicleSpeedKmh = FMath::Max(0.0f, GetVehicleSpeedKmh());
@@ -398,6 +399,25 @@ void UCFVehicleCameraComp::UpdateCameraTransform(float DeltaTime, const FCFVehic
 	DesiredArmLength += AimProfile.ArmLengthOffset;
 	DesiredFOV += AimProfile.FOVOffset;
 	DesiredArmLength = FMath::Max(CameraTuningConfig.MinArmLength, DesiredArmLength);
+
+	// 이전 프레임 실제 해결 거리 기준으로 충돌 압축 비율을 계산합니다.
+	const float PreviousSolvedArmLength = CameraRuntimeState.SolvedArmLength > KINDA_SMALL_NUMBER
+		? CameraRuntimeState.SolvedArmLength
+		: CurrentArmLength;
+	const float CollisionCompressionRatio = DesiredArmLength > KINDA_SMALL_NUMBER
+		? FMath::Clamp(PreviousSolvedArmLength / DesiredArmLength, 0.0f, 1.0f)
+		: 1.0f;
+
+	// 충돌로 카메라가 크게 당겨졌다면 높이와 FOV를 조금 보조해 가시성을 유지합니다.
+	if (CameraTuningConfig.bUseCollisionViewAssist && CollisionCompressionRatio < CameraTuningConfig.CollisionViewAssistStartRatio)
+	{
+		const float CollisionAssistAlpha = 1.0f - FMath::Clamp(
+			CollisionCompressionRatio / CameraTuningConfig.CollisionViewAssistStartRatio,
+			0.0f,
+			1.0f);
+		ResolvedHeightOffset += CameraTuningConfig.MaxCollisionHeightAssist * CollisionAssistAlpha;
+		DesiredFOV += CameraTuningConfig.MaxCollisionFOVAssist * CollisionAssistAlpha;
+	}
 
 	CurrentArmLength = FMath::FInterpTo(CurrentArmLength, DesiredArmLength, DeltaTime, CameraTuningConfig.ArmLengthInterpSpeed);
 	CurrentFOV = FMath::FInterpTo(CurrentFOV, DesiredFOV, DeltaTime, CameraTuningConfig.FOVInterpSpeed);
@@ -443,6 +463,18 @@ void UCFVehicleCameraComp::UpdateCameraTransform(float DeltaTime, const FCFVehic
 	else
 	{
 		CameraRuntimeState.SolvedArmLength = CurrentArmLength;
+	}
+
+	// SpringArm 충돌로 실제 거리가 더 짧아졌다면 내부 현재 Arm 길이도 함께 낮춰
+	// 충돌 해제 후 즉시 튀지 않고 코드 보간으로 천천히 복귀하도록 맞춥니다.
+	if (CameraBoom && CameraTuningConfig.bEnableBoomCollisionTest)
+	{
+		const float CollisionSolvedArmLength = FMath::Max(CameraTuningConfig.MinArmLength, CameraRuntimeState.SolvedArmLength);
+		if (CollisionSolvedArmLength + KINDA_SMALL_NUMBER < CurrentArmLength)
+		{
+			CurrentArmLength = CollisionSolvedArmLength;
+			CameraRuntimeState.CurrentArmLength = CurrentArmLength;
+		}
 	}
 }
 
