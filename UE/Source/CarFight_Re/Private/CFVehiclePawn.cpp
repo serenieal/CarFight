@@ -252,8 +252,13 @@ ACFVehiclePawn::ACFVehiclePawn()
 	bVehicleRuntimeReady = false;
 	LastVehicleRuntimeSummary = TEXT("Constructed");
 	bEnableDriveStateOnScreenDebug = false;
+	bEnableVehicleDebugOnScreenMessage = false;
 	DriveStateDebugDisplayMode = ECFVehicleDebugDisplayMode::SingleLine;
 	bShowDriveStateTransitionSummary = true;
+	bShowVehicleDebugHud = true;
+	bShowVehicleDebugPanel = true;
+	bShowVehicleDebugText = false;
+	bShowVehicleDebugEvents = false;
 	DriveStateDebugMessageDuration = 0.0f;
 	AutoPossessPlayer = EAutoReceiveInput::Player0;
 
@@ -459,55 +464,128 @@ UChaosWheeledVehicleMovementComponent* ACFVehiclePawn::ResolveVehicleMovementCom
 	return ResolvedVehicleMovementComponent;
 }
 
-FString ACFVehiclePawn::BuildVehicleDebugSummary(bool bUseMultilineFormat, bool bIncludeRuntimeSummary, bool bIncludeTransitionSummary, bool bIncludeInputState) const
+FString ACFVehiclePawn::BuildVehicleDebugTextSingleLine(const FCFVehicleDebugSnapshot& VehicleDebugSnapshot, bool bIncludeRuntimeSummary, bool bIncludeTransitionSummary, bool bIncludeInputState) const
 {
-	const FString LineBreak = bUseMultilineFormat ? TEXT("\n") : TEXT(" | ");
+	// [v2.14.1] 기존 SingleLine 의미를 유지하기 위해 구분자는 ` | `를 그대로 사용합니다.
+	const FString SegmentSeparator = TEXT(" | ");
+
+	// [v2.14.1] 기존 출력 의미를 유지할 핵심 문자열 세그먼트 목록입니다.
 	TArray<FString> DebugSegments;
 	DebugSegments.Reserve(16);
-	DebugSegments.Add(FString::Printf(TEXT("Ready=%s"), bVehicleRuntimeReady ? TEXT("True") : TEXT("False")));
-	if (VehicleDriveComp)
-	{
-		const FCFVehicleDriveStateSnapshot DriveStateSnapshot = VehicleDriveComp->GetDriveStateSnapshot();
-		DebugSegments.Add(FString::Printf(TEXT("State=%s"), *UEnum::GetValueAsString(DriveStateSnapshot.CurrentDriveState)));
-		DebugSegments.Add(FString::Printf(TEXT("Speed=%.1f km/h"), DriveStateSnapshot.CurrentSpeedKmh));
-		DebugSegments.Add(FString::Printf(TEXT("ForwardSpeed=%.1f km/h"), DriveStateSnapshot.ForwardSpeedKmh));
-		DebugSegments.Add(FString::Printf(TEXT("Throttle=%.2f"), DriveStateSnapshot.CurrentInputState.ThrottleInput));
-		DebugSegments.Add(FString::Printf(TEXT("Brake=%.2f"), DriveStateSnapshot.CurrentInputState.BrakeInput));
-		DebugSegments.Add(FString::Printf(TEXT("Steering=%.2f"), DriveStateSnapshot.CurrentInputState.SteeringInput));
-		DebugSegments.Add(FString::Printf(TEXT("Handbrake=%s"), DriveStateSnapshot.CurrentInputState.bHandbrakePressed ? TEXT("On") : TEXT("Off")));
-		if (bIncludeInputState)
-		{
-						DebugSegments.Add(FString::Printf(TEXT("DeviceMode=%s"), *UEnum::GetValueAsString(InputDeviceMode)));
-			DebugSegments.Add(FString::Printf(TEXT("InputOwner=%s"), *UEnum::GetValueAsString(CurrentInputOwnership)));
-			DebugSegments.Add(FString::Printf(TEXT("MoveZone=%s"), *UEnum::GetValueAsString(LastVehicleMoveInputResult.ResolvedZone)));
+	DebugSegments.Add(FString::Printf(TEXT("Ready=%s"), VehicleDebugSnapshot.Runtime.bRuntimeReady ? TEXT("True") : TEXT("False")));
 
-			DebugSegments.Add(FString::Printf(TEXT("MoveIntent=%s"), *UEnum::GetValueAsString(LastMoveDirectionIntent)));
-			DebugSegments.Add(FString::Printf(TEXT("MoveRaw=(%.2f, %.2f)"), LastVehicleMoveInputResult.RawMoveInput.X, LastVehicleMoveInputResult.RawMoveInput.Y));
-			DebugSegments.Add(FString::Printf(TEXT("MoveMag=%.2f"), LastVehicleMoveInputResult.Magnitude));
-			DebugSegments.Add(FString::Printf(TEXT("MoveAngle=%.1f"), LastVehicleMoveInputResult.AngleDeg));
-			DebugSegments.Add(FString::Printf(TEXT("BlackHold=%s"), LastVehicleMoveInputResult.bUsedBlackZoneHold ? TEXT("True") : TEXT("False")));
-		}
+	if (VehicleDebugSnapshot.Runtime.bHasDriveComponent)
+	{
+		DebugSegments.Add(FString::Printf(TEXT("State=%s"), *UEnum::GetValueAsString(VehicleDebugSnapshot.Drive.CurrentDriveState)));
+		DebugSegments.Add(FString::Printf(TEXT("Speed=%.1f km/h"), VehicleDebugSnapshot.Drive.SpeedKmh));
+		DebugSegments.Add(FString::Printf(TEXT("ForwardSpeed=%.1f km/h"), VehicleDebugSnapshot.Drive.ForwardSpeedKmh));
+		DebugSegments.Add(FString::Printf(TEXT("Throttle=%.2f"), VehicleDebugSnapshot.Drive.Throttle));
+		DebugSegments.Add(FString::Printf(TEXT("Brake=%.2f"), VehicleDebugSnapshot.Drive.Brake));
+		DebugSegments.Add(FString::Printf(TEXT("Steering=%.2f"), VehicleDebugSnapshot.Drive.Steering));
+		DebugSegments.Add(FString::Printf(TEXT("Handbrake=%s"), VehicleDebugSnapshot.Drive.bHandbrake ? TEXT("On") : TEXT("Off")));
 	}
 	else
 	{
 		DebugSegments.Add(TEXT("State=DriveCompMissing"));
 	}
+
+	if (bIncludeInputState)
+	{
+		DebugSegments.Add(FString::Printf(TEXT("DeviceMode=%s"), *UEnum::GetValueAsString(VehicleDebugSnapshot.Input.DeviceMode)));
+		DebugSegments.Add(FString::Printf(TEXT("InputOwner=%s"), *UEnum::GetValueAsString(VehicleDebugSnapshot.Input.InputOwner)));
+		DebugSegments.Add(FString::Printf(TEXT("MoveZone=%s"), *UEnum::GetValueAsString(VehicleDebugSnapshot.Input.MoveZone)));
+		DebugSegments.Add(FString::Printf(TEXT("MoveIntent=%s"), *UEnum::GetValueAsString(VehicleDebugSnapshot.Input.MoveIntent)));
+		DebugSegments.Add(FString::Printf(TEXT("MoveRaw=(%.2f, %.2f)"), VehicleDebugSnapshot.Input.MoveRaw.X, VehicleDebugSnapshot.Input.MoveRaw.Y));
+		DebugSegments.Add(FString::Printf(TEXT("MoveMag=%.2f"), VehicleDebugSnapshot.Input.MoveMagnitude));
+		DebugSegments.Add(FString::Printf(TEXT("MoveAngle=%.1f"), VehicleDebugSnapshot.Input.MoveAngle));
+		DebugSegments.Add(FString::Printf(TEXT("BlackHold=%s"), VehicleDebugSnapshot.Input.bUsedBlackZoneHold ? TEXT("True") : TEXT("False")));
+	}
+
 	if (bIncludeTransitionSummary)
 	{
-		if (VehicleDriveComp)
+		if (VehicleDebugSnapshot.Runtime.bHasDriveComponent)
 		{
-			DebugSegments.Add(VehicleDriveComp->GetLastDriveStateTransitionSummary());
+			DebugSegments.Add(VehicleDebugSnapshot.Drive.DriveStateTransitionSummary);
 		}
 		else
 		{
 			DebugSegments.Add(TEXT("DriveStateTransition: DriveCompMissing"));
 		}
 	}
+
 	if (bIncludeRuntimeSummary)
 	{
-		DebugSegments.Add(LastVehicleRuntimeSummary);
+		DebugSegments.Add(VehicleDebugSnapshot.Runtime.RuntimeSummary);
 	}
-	return FString::Join(DebugSegments, *LineBreak);
+
+	return FString::Join(DebugSegments, *SegmentSeparator);
+}
+
+FString ACFVehiclePawn::BuildVehicleDebugTextMultiLine(const FCFVehicleDebugSnapshot& VehicleDebugSnapshot, bool bIncludeRuntimeSummary, bool bIncludeTransitionSummary, bool bIncludeInputState) const
+{
+	// [v2.14.1] 기존 MultiLine 의미를 유지하기 위해 구분자만 줄바꿈으로 바꿉니다.
+	const FString SegmentSeparator = TEXT("\n");
+
+	// [v2.14.1] MultiLine도 기존 핵심 항목 순서를 유지합니다.
+	TArray<FString> DebugSegments;
+	DebugSegments.Reserve(16);
+	DebugSegments.Add(FString::Printf(TEXT("Ready=%s"), VehicleDebugSnapshot.Runtime.bRuntimeReady ? TEXT("True") : TEXT("False")));
+
+	if (VehicleDebugSnapshot.Runtime.bHasDriveComponent)
+	{
+		DebugSegments.Add(FString::Printf(TEXT("State=%s"), *UEnum::GetValueAsString(VehicleDebugSnapshot.Drive.CurrentDriveState)));
+		DebugSegments.Add(FString::Printf(TEXT("Speed=%.1f km/h"), VehicleDebugSnapshot.Drive.SpeedKmh));
+		DebugSegments.Add(FString::Printf(TEXT("ForwardSpeed=%.1f km/h"), VehicleDebugSnapshot.Drive.ForwardSpeedKmh));
+		DebugSegments.Add(FString::Printf(TEXT("Throttle=%.2f"), VehicleDebugSnapshot.Drive.Throttle));
+		DebugSegments.Add(FString::Printf(TEXT("Brake=%.2f"), VehicleDebugSnapshot.Drive.Brake));
+		DebugSegments.Add(FString::Printf(TEXT("Steering=%.2f"), VehicleDebugSnapshot.Drive.Steering));
+		DebugSegments.Add(FString::Printf(TEXT("Handbrake=%s"), VehicleDebugSnapshot.Drive.bHandbrake ? TEXT("On") : TEXT("Off")));
+	}
+	else
+	{
+		DebugSegments.Add(TEXT("State=DriveCompMissing"));
+	}
+
+	if (bIncludeInputState)
+	{
+		DebugSegments.Add(FString::Printf(TEXT("DeviceMode=%s"), *UEnum::GetValueAsString(VehicleDebugSnapshot.Input.DeviceMode)));
+		DebugSegments.Add(FString::Printf(TEXT("InputOwner=%s"), *UEnum::GetValueAsString(VehicleDebugSnapshot.Input.InputOwner)));
+		DebugSegments.Add(FString::Printf(TEXT("MoveZone=%s"), *UEnum::GetValueAsString(VehicleDebugSnapshot.Input.MoveZone)));
+		DebugSegments.Add(FString::Printf(TEXT("MoveIntent=%s"), *UEnum::GetValueAsString(VehicleDebugSnapshot.Input.MoveIntent)));
+		DebugSegments.Add(FString::Printf(TEXT("MoveRaw=(%.2f, %.2f)"), VehicleDebugSnapshot.Input.MoveRaw.X, VehicleDebugSnapshot.Input.MoveRaw.Y));
+		DebugSegments.Add(FString::Printf(TEXT("MoveMag=%.2f"), VehicleDebugSnapshot.Input.MoveMagnitude));
+		DebugSegments.Add(FString::Printf(TEXT("MoveAngle=%.1f"), VehicleDebugSnapshot.Input.MoveAngle));
+		DebugSegments.Add(FString::Printf(TEXT("BlackHold=%s"), VehicleDebugSnapshot.Input.bUsedBlackZoneHold ? TEXT("True") : TEXT("False")));
+	}
+
+	if (bIncludeTransitionSummary)
+	{
+		if (VehicleDebugSnapshot.Runtime.bHasDriveComponent)
+		{
+			DebugSegments.Add(VehicleDebugSnapshot.Drive.DriveStateTransitionSummary);
+		}
+		else
+		{
+			DebugSegments.Add(TEXT("DriveStateTransition: DriveCompMissing"));
+		}
+	}
+
+	if (bIncludeRuntimeSummary)
+	{
+		DebugSegments.Add(VehicleDebugSnapshot.Runtime.RuntimeSummary);
+	}
+
+	return FString::Join(DebugSegments, *SegmentSeparator);
+}
+
+FString ACFVehiclePawn::BuildVehicleDebugSummary(bool bUseMultilineFormat, bool bIncludeRuntimeSummary, bool bIncludeTransitionSummary, bool bIncludeInputState) const
+{
+	// [v2.14.1] 텍스트 출력도 동일한 Snapshot 원본을 공유하도록 먼저 현재 스냅샷을 확보합니다.
+	const FCFVehicleDebugSnapshot VehicleDebugSnapshot = GetVehicleDebugSnapshot();
+
+	return bUseMultilineFormat
+		? BuildVehicleDebugTextMultiLine(VehicleDebugSnapshot, bIncludeRuntimeSummary, bIncludeTransitionSummary, bIncludeInputState)
+		: BuildVehicleDebugTextSingleLine(VehicleDebugSnapshot, bIncludeRuntimeSummary, bIncludeTransitionSummary, bIncludeInputState);
 }
 
 void ACFVehiclePawn::AppendWheelSyncRuntimeSummary()
@@ -897,20 +975,95 @@ FCFVehicleDriveStateSnapshot ACFVehiclePawn::GetDriveStateSnapshot() const
 
 FCFVehicleDebugSnapshot ACFVehiclePawn::GetVehicleDebugSnapshot() const
 {
+	// [v2.14.1] VehicleDebug v2 Phase 1: 기존 필드를 유지하면서 카테고리형 Snapshot을 함께 채웁니다.
 	FCFVehicleDebugSnapshot DebugSnapshot;
+
+	// [v2.14.1] 현재 Drive 컴포넌트 존재 여부를 먼저 고정합니다.
+	const bool bHasDriveComponent = (VehicleDriveComp != nullptr);
+
+	// [v2.14.1] 현재 WheelSync 컴포넌트 존재 여부를 먼저 고정합니다.
+	const bool bHasWheelSyncComponent = (WheelSyncComp != nullptr);
+
+	// [v2.14.1] Drive 카테고리 채우기에 사용할 최신 Drive 상태 스냅샷입니다.
+	FCFVehicleDriveStateSnapshot CurrentDriveStateSnapshot;
+
 	DebugSnapshot.bRuntimeReady = bVehicleRuntimeReady;
 	DebugSnapshot.RuntimeSummary = LastVehicleRuntimeSummary;
-	DebugSnapshot.bHasDriveComponent = (VehicleDriveComp != nullptr);
-	DebugSnapshot.bHasWheelSyncComponent = (WheelSyncComp != nullptr);
-	if (VehicleDriveComp)
+	DebugSnapshot.bHasDriveComponent = bHasDriveComponent;
+	DebugSnapshot.bHasWheelSyncComponent = bHasWheelSyncComponent;
+
+	DebugSnapshot.Runtime.bRuntimeReady = bVehicleRuntimeReady;
+	DebugSnapshot.Runtime.bHasDriveComponent = bHasDriveComponent;
+	DebugSnapshot.Runtime.bHasWheelSyncComponent = bHasWheelSyncComponent;
+	DebugSnapshot.Runtime.RuntimeSummary = LastVehicleRuntimeSummary;
+	DebugSnapshot.Runtime.LastInitAttemptSummary = LastVehicleRuntimeSummary;
+	DebugSnapshot.Runtime.LastValidationSummary = LastVehicleRuntimeSummary;
+
+	DebugSnapshot.Input.DeviceMode = InputDeviceMode;
+	DebugSnapshot.Input.InputOwner = CurrentInputOwnership;
+	DebugSnapshot.Input.MoveZone = LastVehicleMoveInputResult.ResolvedZone;
+	DebugSnapshot.Input.MoveIntent = LastMoveDirectionIntent;
+	DebugSnapshot.Input.MoveRaw = LastVehicleMoveInputResult.RawMoveInput;
+	DebugSnapshot.Input.MoveMagnitude = LastVehicleMoveInputResult.Magnitude;
+	DebugSnapshot.Input.MoveAngle = LastVehicleMoveInputResult.AngleDeg;
+	DebugSnapshot.Input.bUsedBlackZoneHold = LastVehicleMoveInputResult.bUsedBlackZoneHold;
+
+	DebugSnapshot.Overview.bRuntimeReady = bVehicleRuntimeReady;
+	DebugSnapshot.Overview.DeviceMode = InputDeviceMode;
+	DebugSnapshot.Overview.InputOwner = CurrentInputOwnership;
+
+	if (bHasDriveComponent)
 	{
+		CurrentDriveStateSnapshot = VehicleDriveComp->GetDriveStateSnapshot();
 		DebugSnapshot.CurrentDriveState = VehicleDriveComp->GetDriveState();
 		DebugSnapshot.PreviousDriveState = VehicleDriveComp->GetPreviousDriveState();
 		DebugSnapshot.bDriveStateChangedThisFrame = VehicleDriveComp->HasDriveStateChangedThisFrame();
 		DebugSnapshot.DriveStateTransitionSummary = VehicleDriveComp->GetLastDriveStateTransitionSummary();
-		DebugSnapshot.DriveStateSnapshot = VehicleDriveComp->GetDriveStateSnapshot();
+		DebugSnapshot.DriveStateSnapshot = CurrentDriveStateSnapshot;
+
+		DebugSnapshot.Drive.CurrentDriveState = DebugSnapshot.CurrentDriveState;
+		DebugSnapshot.Drive.PreviousDriveState = DebugSnapshot.PreviousDriveState;
+		DebugSnapshot.Drive.bDriveStateChangedThisFrame = DebugSnapshot.bDriveStateChangedThisFrame;
+		DebugSnapshot.Drive.SpeedKmh = CurrentDriveStateSnapshot.CurrentSpeedKmh;
+		DebugSnapshot.Drive.ForwardSpeedKmh = CurrentDriveStateSnapshot.ForwardSpeedKmh;
+		DebugSnapshot.Drive.Throttle = CurrentDriveStateSnapshot.CurrentInputState.ThrottleInput;
+		DebugSnapshot.Drive.Brake = CurrentDriveStateSnapshot.CurrentInputState.BrakeInput;
+		DebugSnapshot.Drive.Steering = CurrentDriveStateSnapshot.CurrentInputState.SteeringInput;
+		DebugSnapshot.Drive.bHandbrake = CurrentDriveStateSnapshot.CurrentInputState.bHandbrakePressed;
+		DebugSnapshot.Drive.DriveStateTransitionSummary = DebugSnapshot.DriveStateTransitionSummary;
+		DebugSnapshot.Drive.DriveStateSnapshot = CurrentDriveStateSnapshot;
+
+		DebugSnapshot.Overview.CurrentDriveState = DebugSnapshot.CurrentDriveState;
+		DebugSnapshot.Overview.SpeedKmh = CurrentDriveStateSnapshot.CurrentSpeedKmh;
+		DebugSnapshot.Overview.ForwardSpeedKmh = CurrentDriveStateSnapshot.ForwardSpeedKmh;
+		DebugSnapshot.Overview.LastTransitionShortText = DebugSnapshot.DriveStateTransitionSummary;
 	}
+
 	return DebugSnapshot;
+}
+
+FCFVehicleDebugOverview ACFVehiclePawn::GetVehicleDebugOverview() const
+{
+	// [v2.14.2] HUD 위젯이 필요한 카테고리만 직접 읽을 수 있도록 Overview를 반환합니다.
+	return GetVehicleDebugSnapshot().Overview;
+}
+
+FCFVehicleDebugDrive ACFVehiclePawn::GetVehicleDebugDrive() const
+{
+	// [v2.14.2] 상세 패널이 필요한 Drive 카테고리만 직접 읽을 수 있도록 반환합니다.
+	return GetVehicleDebugSnapshot().Drive;
+}
+
+FCFVehicleDebugInput ACFVehiclePawn::GetVehicleDebugInput() const
+{
+	// [v2.14.2] 상세 패널이 필요한 Input 카테고리만 직접 읽을 수 있도록 반환합니다.
+	return GetVehicleDebugSnapshot().Input;
+}
+
+FCFVehicleDebugRuntime ACFVehiclePawn::GetVehicleDebugRuntime() const
+{
+	// [v2.14.2] 상세 패널이 필요한 Runtime 카테고리만 직접 읽을 수 있도록 반환합니다.
+	return GetVehicleDebugSnapshot().Runtime;
 }
 
 FText ACFVehiclePawn::GetDebugTextSingleLine() const
@@ -936,19 +1089,45 @@ FText ACFVehiclePawn::GetDebugTextByDisplayMode() const
 	return GetDebugTextSingleLine();
 }
 
+bool ACFVehiclePawn::ShouldShowVehicleDebugUi() const
+{
+	// [v2.14.3] VehicleDebug HUD/Panel 공통 기준은 기본 화면 디버그 활성 여부만 사용합니다.
+	return bEnableDriveStateOnScreenDebug;
+}
+
 bool ACFVehiclePawn::ShouldShowDebugWidget() const
 {
-	return bEnableDriveStateOnScreenDebug && (DriveStateDebugDisplayMode != ECFVehicleDebugDisplayMode::Off);
+	// [v2.14.3] 레거시 WBP_VehicleDebug 제거 전환을 위해 기존 Text Widget 표시는 항상 비활성화합니다.
+	return false;
+}
+
+bool ACFVehiclePawn::ShouldShowVehicleDebugHud() const
+{
+	// [v2.14.3] HUD는 레거시 Text Widget과 분리된 공통 UI 표시 조건과 HUD 전용 토글을 함께 만족할 때만 표시합니다.
+	return ShouldShowVehicleDebugUi() && bShowVehicleDebugHud;
+}
+
+bool ACFVehiclePawn::ShouldShowVehicleDebugPanel() const
+{
+	// [v2.14.3] 상세 패널은 레거시 Text Widget과 분리된 공통 UI 표시 조건과 Panel 전용 토글을 함께 만족할 때만 표시합니다.
+	return ShouldShowVehicleDebugUi() && bShowVehicleDebugPanel;
+}
+
+bool ACFVehiclePawn::ShouldShowVehicleDebugText() const
+{
+	// [v2.14.3] 레거시 WBP_VehicleDebug 제거 전환을 위해 Legacy Text View 표시는 항상 비활성화합니다.
+	return false;
 }
 
 ESlateVisibility ACFVehiclePawn::GetDebugWidgetVisibility() const
 {
-	return ShouldShowDebugWidget() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed;
+	// [v2.14.3] 레거시 WBP_VehicleDebug 제거 전환을 위해 Visibility는 항상 Collapsed를 반환합니다.
+	return ESlateVisibility::Collapsed;
 }
 
 void ACFVehiclePawn::DisplayDriveStateOnScreenDebug() const
 {
-	if (!bEnableDriveStateOnScreenDebug || !GEngine)
+	if (!bEnableVehicleDebugOnScreenMessage || !GEngine)
 	{
 		return;
 	}

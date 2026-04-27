@@ -1,8 +1,8 @@
 # VehicleDebug v2 체크리스트
 
-- Version: 0.1.0
-- Date: 2026-04-22
-- Status: Draft
+- Version: 0.1.6
+- Date: 2026-04-27
+- Status: Panel 1차 마감
 - Scope: 설계/구현/검증 시 확인할 점검 목록
 
 ---
@@ -39,7 +39,7 @@
 ### 2.3 표시 정책
 
 - [ ] HUD와 Panel을 별도 표시 스위치로 관리할지 결정했다.
-- [ ] Legacy Text View를 유지할지 결정했다.
+- [ ] Legacy Text View를 제거할지, 제거 전 유예 기간이 필요한지 결정했다.
 - [ ] 카테고리별 표시/숨김 정책을 정했다.
 - [ ] 로컬 플레이어 기준 표시 정책이 유지되는지 확인했다.
 
@@ -55,13 +55,14 @@
 - [ ] `Runtime` 구조가 정의되었다.
 - [ ] 각 구조의 필드명이 UI에서 바로 읽어도 이해 가능한 수준인지 확인했다.
 
-### 3.2 기존 호환 유지
+### 3.2 레거시 제거 전환
 
 - [ ] `GetVehicleDebugSnapshot()`가 새 구조를 반영한다.
 - [ ] `GetDebugTextSingleLine()`가 깨지지 않는다.
 - [ ] `GetDebugTextMultiLine()`가 깨지지 않는다.
-- [ ] `GetDebugTextByDisplayMode()`가 깨지지 않는다.
-- [ ] `ShouldShowDebugWidget()` 동작이 기존 의도와 충돌하지 않는다.
+- [ ] `ShouldShowDebugWidget()`가 레거시 숨김 고정 정책으로 바뀌었는지 확인했다.
+- [ ] `GetDebugWidgetVisibility()`가 레거시 제거 전환 중 `Collapsed` 고정인지 확인했다.
+- [ ] HUD/Panel 표시가 레거시 Text 정책과 분리되었는지 확인했다.
 
 ### 3.3 이벤트
 
@@ -83,17 +84,23 @@
 
 ### 4.2 Panel
 
-- [ ] 카테고리 블록 구조가 있다.
-- [ ] 라벨과 값 정렬이 읽기 쉽다.
-- [ ] `Overview / Drive / Input / Runtime` 구분이 명확하다.
-- [ ] 긴 요약 문자열이 레이아웃을 깨지 않게 했다.
-- [ ] 스크롤 또는 접기/펼치기 구조가 있다.
+- [x] `VerticalBox_DynamicSectionHost` 기반 동적 Section 구조가 있다.
+- [x] `WBP_VehicleDebugSection` 공통 Section 위젯이 있다.
+- [x] `WBP_VehicleDebugFieldRow` 공통 Field Row 위젯이 있다.
+- [x] `WBP_VehicleDebugSection`에 `VerticalBox_FieldHost`가 있다.
+- [x] 기존 정적 `VerticalBox_CategoryList`가 제거되었다.
+- [x] 라벨과 값 정렬이 읽기 쉽다.
+- [x] `Overview / Drive / Input / Runtime` 구분이 명확하다.
+- [x] 긴 요약 문자열이 레이아웃을 깨지 않게 했다.
+- [x] 스크롤 또는 접기/펼치기 구조가 있다.
+- [x] 새 섹션 추가 시 루트 WBP에 개별 Button/Text/Container를 추가하지 않아도 된다.
+- [x] 하위 Section이 들여쓰기되어 상위 카테고리와 구분된다.
 
-### 4.3 Legacy Text
+### 4.3 Legacy Text 제거
 
-- [ ] 기존 텍스트 위젯이 필요 시 유지된다.
-- [ ] 텍스트 출력이 Snapshot 기반 파생 결과인지 확인했다.
-- [ ] Text View가 HUD/Panel과 충돌하지 않는지 확인했다.
+- [ ] 기존 `WBP_VehicleDebug`가 제거 대상으로 정리되었다.
+- [ ] 제거 전 기준선 문서가 별도로 남아 있다.
+- [ ] Legacy Text 제거 후에도 HUD/Panel만으로 진단이 가능한지 확인했다.
 
 ---
 
@@ -109,11 +116,11 @@
 
 ## 6. 회귀 체크리스트
 
-- [ ] 기존 텍스트 디버그가 사라지지 않았다.
+- [ ] 기존 `WBP_VehicleDebug`가 더 이상 표시되지 않는다.
 - [ ] 로컬 제어 차량에서만 표시되는 정책이 유지된다.
 - [ ] 기존 BeginPlay 생성 흐름을 바꿨다면 의도를 문서화했다.
 - [ ] MultiLine 출력에서 중요 정보가 누락되지 않았다.
-- [ ] 기존 QA/디버깅 사용 습관이 완전히 끊기지 않게 했다.
+- [ ] 제거 전 기준선 문서와 HUD 체크리스트로 QA 비교 경로를 남겼다.
 
 ---
 
@@ -140,7 +147,33 @@
 
 - [ ] Snapshot 중심 구조가 도입되었다.
 - [ ] Compact HUD가 동작한다.
-- [ ] Category Panel이 동작한다.
-- [ ] 기존 Text View가 필요 시 유지된다.
-- [ ] Overview / Drive / Input / Runtime이 분리되었다.
-- [ ] 이후 카테고리 추가가 가능한 구조가 되었다.
+- [x] Category Panel이 동작한다.
+- [x] 기존 `WBP_VehicleDebug` 제거 방향이 실제 구현과 문서에 반영되었다.
+- [x] Overview / Drive / Input / Runtime이 분리되었다.
+- [x] 이후 카테고리 추가가 가능한 구조가 되었다.
+
+---
+
+## 10. Changelog
+
+### v0.1.6 - 2026-04-27
+- Panel 1차 마감 확인 결과를 체크리스트에 반영했다.
+- 동적 Section, Field Row, 하위 Section 들여쓰기, 레거시 `VerticalBox_CategoryList` 제거 항목을 완료 처리했다.
+
+### v0.1.5 - 2026-04-27
+- Field Row 공통 위젯 도입에 맞춰 `WBP_VehicleDebugFieldRow`와 `VerticalBox_FieldHost` 확인 항목을 추가했다.
+
+### v0.1.4 - 2026-04-24
+- Panel 체크리스트를 `VerticalBox_DynamicSectionHost`와 `WBP_VehicleDebugSection` 기반 동적 구조 기준으로 갱신했다.
+- 기존 정적 `VerticalBox_CategoryList` 제거 여부와 루트 WBP 확장 금지 기준을 점검 항목에 추가했다.
+
+### v0.1.3 - 2026-04-23
+- Panel 1차 마감 기준에 맞춰 Runtime 하위 섹션 개별 접기/펼치기와 WBP 이벤트 그래프 기반 Header 입력 연결을 체크 관점에 반영했다.
+
+### v0.1.2 - 2026-04-23
+- Panel 체크리스트에 긴 문자열 대응과 접기/펼치기 구조 확인 항목을 명시했다.
+- 문서화 체크리스트에 새 위젯/새 토글/새 구조체 이름뿐 아니라 변경 이력 추적 관점이 유지되도록 보강했다.
+
+### v0.1.1 - 2026-04-23
+- 레거시 `WBP_VehicleDebug` 제거 방향을 체크리스트에 반영했다.
+- 기준선 문서와 HUD/Panel 중심 검증 흐름을 점검 항목에 반영했다.

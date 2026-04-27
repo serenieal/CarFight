@@ -1,5 +1,11 @@
 # VehicleDebug
 
+## 주의
+이 문서는 `2026-04-22` 기준의 **레거시 `WBP_VehicleDebug` 현재 상태 기록 문서**다.
+현재 v2 구현 방향은 `CFVehicleDebugHudWidget + WBP_VehicleDebugHud` 중심 구조이며, `WBP_VehicleDebug`는 제거 대상으로 본다.
+즉, 이 문서는 앞으로도 회귀 비교용 기준선으로는 유효하지만, **새 구현 기본안 문서로 사용하면 안 된다.**
+또한 현재 최신 구현에서는 HUD/Panel UI 표시 토글과 `AddOnScreenDebugMessage` 기반 개발용 문자열 출력 토글이 분리되기 시작했으므로, 이 문서의 표시 조건 설명은 레거시 기준으로만 읽어야 한다.
+
 ## 문서 목적
 이 문서는 현재 프로젝트에서 `VehicleDebug` 기능이 실제로 어떤 일을 하는지, 그리고 그 기능이 어떤 자산/클래스 구성으로 동작하는지를 기록한다.
 이 문서는 미래 설계나 개선 계획이 아니라, **현재 확인된 구현 상태**를 기준으로 작성한다.
@@ -206,7 +212,7 @@
 - 디버그 패널이 텍스트 기반에서 다른 UI 구조로 확장될 때
 
 ## 문서 버전 관리
-- 현재 문서 버전: `1.0.0`
+- 현재 문서 버전: `1.0.2`
 - 문서 상태: `Initial`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
@@ -227,6 +233,15 @@
   - 본문 의미는 유지한 채 설명 정밀도만 올라갈 때
 
 ## 체인지로그
+### v1.0.2 - 2026-04-23
+- 레거시 `WBP_VehicleDebug` 제거 이후에도 C++ 내부 `AddOnScreenDebugMessage` 경로가 별도로 남아 있음을 문서에 반영했다.
+- `bEnableDriveStateOnScreenDebug`와 `bEnableVehicleDebugOnScreenMessage`가 서로 다른 역할을 가진다는 현재 토글 구조를 문서에 반영했다.
+- 이 문서의 버전 관리 원칙에 따라 후속 구현 변경 시 체인지로그를 함께 갱신해야 한다는 기준을 다시 명시했다.
+
+### v1.0.1 - 2026-04-23
+- 이 문서를 레거시 `WBP_VehicleDebug` 현재 상태 기록 문서로 명확히 재정의
+- v2 구현 기본안은 HUD/Panel 중심이며 `WBP_VehicleDebug` 제거 방향임을 주의 절에 추가
+
 ### v1.0.0 - 2026-04-22
 - `VehicleDebug` 문서 최초 작성
 - `WBP_VehicleDebug`, `BP_CFVehiclePawn`, `CFVehiclePawn` 기준으로 현재 기능 정리
@@ -240,4 +255,3 @@
   - `/Game/CarFight/Vehicles/BP_CFVehiclePawn` 이벤트 그래프 덤프
   - `UE/Source/CarFight_Re/Public/CFVehiclePawn.h`
   - `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp`
-

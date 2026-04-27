@@ -154,6 +154,170 @@ struct FCFVehicleMoveInputResult
 };
 
 /**
+ * VehicleDebug HUD용 핵심 요약 카테고리입니다.
+ */
+USTRUCT(BlueprintType)
+struct FCFVehicleDebugOverview
+{
+	GENERATED_BODY()
+
+	// [v2.14.1] 현재 Pawn 런타임 초기화 완료 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Overview", meta=(DisplayName="런타임 준비 완료 여부 (bRuntimeReady)", ToolTip="현재 Pawn 런타임 초기화가 완료되었는지 여부입니다."))
+	bool bRuntimeReady = false;
+
+	// [v2.14.1] HUD 요약용 현재 Drive 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Overview", meta=(DisplayName="현재 Drive 상태 (CurrentDriveState)", ToolTip="HUD 요약에 사용할 현재 VehicleDriveComp 기준 Drive 상태입니다."))
+	ECFVehicleDriveState CurrentDriveState = ECFVehicleDriveState::Disabled;
+
+	// [v2.14.1] HUD 요약용 현재 전체 속도입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Overview", meta=(DisplayName="현재 속도 km/h (SpeedKmh)", ToolTip="HUD 요약에 사용할 현재 차량 전체 속도 km/h 값입니다."))
+	float SpeedKmh = 0.0f;
+
+	// [v2.14.1] HUD 요약용 현재 전후 방향 속도입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Overview", meta=(DisplayName="전후 방향 속도 km/h (ForwardSpeedKmh)", ToolTip="HUD 요약에 사용할 현재 차량 전후 방향 속도 km/h 값입니다."))
+	float ForwardSpeedKmh = 0.0f;
+
+	// [v2.14.1] HUD 요약용 현재 입력 장치 모드입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Overview", meta=(DisplayName="입력 장치 모드 (DeviceMode)", ToolTip="HUD 요약에 사용할 현재 차량 입력 장치 모드입니다."))
+	ECFVehicleInputDeviceMode DeviceMode = ECFVehicleInputDeviceMode::Auto;
+
+	// [v2.14.1] HUD 요약용 현재 입력 주도권입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Overview", meta=(DisplayName="입력 주도권 (InputOwner)", ToolTip="HUD 요약에 사용할 현재 차량 입력 주도권입니다."))
+	ECFVehicleInputOwnership InputOwner = ECFVehicleInputOwnership::None;
+
+	// [v2.14.1] HUD 요약용 마지막 상태 전이 문자열입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Overview", meta=(DisplayName="마지막 전이 요약 (LastTransitionShortText)", ToolTip="HUD 요약에 사용할 마지막 Drive 상태 전이 요약 문자열입니다."))
+	FString LastTransitionShortText = TEXT("DriveStateTransition: None");
+};
+
+/**
+ * VehicleDebug 주행 상세 카테고리입니다.
+ */
+USTRUCT(BlueprintType)
+struct FCFVehicleDebugDrive
+{
+	GENERATED_BODY()
+
+	// [v2.14.1] 현재 Drive 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Drive", meta=(DisplayName="현재 Drive 상태 (CurrentDriveState)", ToolTip="현재 VehicleDriveComp 기준 Drive 상태입니다."))
+	ECFVehicleDriveState CurrentDriveState = ECFVehicleDriveState::Disabled;
+
+	// [v2.14.1] 이전 프레임 Drive 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Drive", meta=(DisplayName="이전 Drive 상태 (PreviousDriveState)", ToolTip="이전 프레임 기준 VehicleDriveComp의 Drive 상태입니다."))
+	ECFVehicleDriveState PreviousDriveState = ECFVehicleDriveState::Disabled;
+
+	// [v2.14.1] 이번 프레임 상태 전이 발생 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Drive", meta=(DisplayName="이번 프레임 상태 변경 여부 (bDriveStateChangedThisFrame)", ToolTip="이번 프레임에 Drive 상태가 변경되었는지 여부입니다."))
+	bool bDriveStateChangedThisFrame = false;
+
+	// [v2.14.1] 현재 전체 속도입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Drive", meta=(DisplayName="현재 속도 km/h (SpeedKmh)", ToolTip="현재 차량 전체 속도 km/h 값입니다."))
+	float SpeedKmh = 0.0f;
+
+	// [v2.14.1] 현재 전후 방향 속도입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Drive", meta=(DisplayName="전후 방향 속도 km/h (ForwardSpeedKmh)", ToolTip="현재 차량 전후 방향 속도 km/h 값입니다."))
+	float ForwardSpeedKmh = 0.0f;
+
+	// [v2.14.1] 현재 스로틀 입력값입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Drive", meta=(DisplayName="스로틀 입력 (Throttle)", ToolTip="현재 VehicleDriveComp에 적용된 스로틀 입력값입니다."))
+	float Throttle = 0.0f;
+
+	// [v2.14.1] 현재 브레이크 입력값입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Drive", meta=(DisplayName="브레이크 입력 (Brake)", ToolTip="현재 VehicleDriveComp에 적용된 브레이크 입력값입니다."))
+	float Brake = 0.0f;
+
+	// [v2.14.1] 현재 조향 입력값입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Drive", meta=(DisplayName="조향 입력 (Steering)", ToolTip="현재 VehicleDriveComp에 적용된 조향 입력값입니다."))
+	float Steering = 0.0f;
+
+	// [v2.14.1] 현재 핸드브레이크 입력 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Drive", meta=(DisplayName="핸드브레이크 입력 (bHandbrake)", ToolTip="현재 VehicleDriveComp에 적용된 핸드브레이크 입력 상태입니다."))
+	bool bHandbrake = false;
+
+	// [v2.14.1] 마지막 Drive 상태 전이 요약 문자열입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Drive", meta=(DisplayName="상태 전이 요약 (DriveStateTransitionSummary)", ToolTip="마지막 Drive 상태 전이 요약 문자열입니다."))
+	FString DriveStateTransitionSummary = TEXT("DriveStateTransition: None");
+
+	// [v2.14.1] Drive 컴포넌트 최신 스냅샷입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Drive", meta=(DisplayName="Drive 상태 스냅샷 (DriveStateSnapshot)", ToolTip="VehicleDriveComp가 계산한 최신 Drive 상태 스냅샷입니다."))
+	FCFVehicleDriveStateSnapshot DriveStateSnapshot;
+};
+
+/**
+ * VehicleDebug 입력 해석 상세 카테고리입니다.
+ */
+USTRUCT(BlueprintType)
+struct FCFVehicleDebugInput
+{
+	GENERATED_BODY()
+
+	// [v2.14.1] 현재 입력 장치 모드입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Input", meta=(DisplayName="입력 장치 모드 (DeviceMode)", ToolTip="현재 차량 입력 장치 모드입니다."))
+	ECFVehicleInputDeviceMode DeviceMode = ECFVehicleInputDeviceMode::Auto;
+
+	// [v2.14.1] 현재 입력 주도권입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Input", meta=(DisplayName="입력 주도권 (InputOwner)", ToolTip="현재 차량 입력 적용의 주도권을 가진 경로입니다."))
+	ECFVehicleInputOwnership InputOwner = ECFVehicleInputOwnership::None;
+
+	// [v2.14.1] 현재 해석된 이동 입력 영역입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Input", meta=(DisplayName="해석 영역 (MoveZone)", ToolTip="현재 차량 2D 이동 입력이 해석된 영역입니다."))
+	ECFVehicleMoveZone MoveZone = ECFVehicleMoveZone::None;
+
+	// [v2.14.1] 현재 해석된 진행 방향 의도입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Input", meta=(DisplayName="진행 방향 의도 (MoveIntent)", ToolTip="현재 차량 2D 이동 입력이 해석한 진행 방향 의도입니다."))
+	ECFVehicleMoveDirectionIntent MoveIntent = ECFVehicleMoveDirectionIntent::None;
+
+	// [v2.14.1] 원본 2D 이동 입력값입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Input", meta=(DisplayName="원본 이동 입력 (MoveRaw)", ToolTip="차량 이동 Input Action에서 들어온 최신 원본 2D 입력 벡터입니다."))
+	FVector2D MoveRaw = FVector2D::ZeroVector;
+
+	// [v2.14.1] 현재 이동 입력 강도입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Input", meta=(DisplayName="입력 강도 (MoveMagnitude)", ToolTip="차량 이동 입력 벡터의 최신 강도입니다."))
+	float MoveMagnitude = 0.0f;
+
+	// [v2.14.1] 현재 이동 입력 각도입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Input", meta=(DisplayName="입력 각도 (MoveAngle)", ToolTip="위가 0도, 시계 방향 증가 기준의 차량 이동 입력 각도입니다."))
+	float MoveAngle = 0.0f;
+
+	// [v2.14.1] 검은 영역 방향 유지 정책 적용 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Input", meta=(DisplayName="검은 영역 유지 사용 여부 (bUsedBlackZoneHold)", ToolTip="현재 프레임에 검은 영역 방향 유지 정책이 적용되었는지 여부입니다."))
+	bool bUsedBlackZoneHold = false;
+};
+
+/**
+ * VehicleDebug 런타임 진단 카테고리입니다.
+ */
+USTRUCT(BlueprintType)
+struct FCFVehicleDebugRuntime
+{
+	GENERATED_BODY()
+
+	// [v2.14.1] 현재 Pawn 런타임 초기화 완료 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Runtime", meta=(DisplayName="런타임 준비 완료 여부 (bRuntimeReady)", ToolTip="현재 Pawn 런타임 초기화가 완료되었는지 여부입니다."))
+	bool bRuntimeReady = false;
+
+	// [v2.14.1] Drive 컴포넌트 보유 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Runtime", meta=(DisplayName="Drive 컴포넌트 보유 여부 (bHasDriveComponent)", ToolTip="현재 VehicleDriveComp가 유효한지 여부입니다."))
+	bool bHasDriveComponent = false;
+
+	// [v2.14.1] WheelSync 컴포넌트 보유 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Runtime", meta=(DisplayName="WheelSync 컴포넌트 보유 여부 (bHasWheelSyncComponent)", ToolTip="현재 WheelSyncComp가 유효한지 여부입니다."))
+	bool bHasWheelSyncComponent = false;
+
+	// [v2.14.1] 마지막 런타임 요약 문자열입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Runtime", meta=(DisplayName="런타임 요약 (RuntimeSummary)", ToolTip="마지막 차량 런타임 초기화/적용 요약 문자열입니다."))
+	FString RuntimeSummary = TEXT("NotInitialized");
+
+	// [v2.14.1] 마지막 초기화 시도 요약 문자열입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Runtime", meta=(DisplayName="마지막 초기화 시도 요약 (LastInitAttemptSummary)", ToolTip="최근 차량 런타임 초기화 시도 기준 요약 문자열입니다."))
+	FString LastInitAttemptSummary = TEXT("NotInitialized");
+
+	// [v2.14.1] 마지막 검증 요약 문자열입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Runtime", meta=(DisplayName="마지막 검증 요약 (LastValidationSummary)", ToolTip="최근 차량 런타임 검증 기준 요약 문자열입니다."))
+	FString LastValidationSummary = TEXT("NotInitialized");
+};
+
+/**
  * Pawn 레벨에서 바로 확인할 수 있는 차량 디버그 스냅샷입니다.
  * - 런타임 준비 상태와 요약 문자열
  * - 현재/이전 Drive 상태와 마지막 전이 요약
@@ -163,6 +327,22 @@ USTRUCT(BlueprintType)
 struct FCFVehicleDebugSnapshot
 {
 	GENERATED_BODY()
+
+	// [v2.14.1] HUD 요약용 Overview 카테고리입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="Overview 카테고리 (Overview)", ToolTip="HUD 요약에 사용할 VehicleDebug Overview 카테고리입니다."))
+	FCFVehicleDebugOverview Overview;
+
+	// [v2.14.1] 주행 상세 카테고리입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="Drive 카테고리 (Drive)", ToolTip="주행 상태와 입력 적용값을 담는 VehicleDebug Drive 카테고리입니다."))
+	FCFVehicleDebugDrive Drive;
+
+	// [v2.14.1] 입력 해석 상세 카테고리입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="Input 카테고리 (Input)", ToolTip="입력 장치, 주도권, 2D 이동 해석 결과를 담는 VehicleDebug Input 카테고리입니다."))
+	FCFVehicleDebugInput Input;
+
+	// [v2.14.1] 런타임 진단 카테고리입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="Runtime 카테고리 (Runtime)", ToolTip="런타임 준비 상태와 요약 문자열을 담는 VehicleDebug Runtime 카테고리입니다."))
+	FCFVehicleDebugRuntime Runtime;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="런타임 준비 완료 여부 (bRuntimeReady)", ToolTip="현재 Pawn 런타임 초기화가 완료되었는지 여부입니다."))
 	bool bRuntimeReady = false;
@@ -301,14 +481,31 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Runtime", meta=(DisplayName="런타임 결과 요약 (LastVehicleRuntimeSummary)", ToolTip="마지막 런타임 초기화 결과 요약 문자열입니다."))
 	FString LastVehicleRuntimeSummary = TEXT("NotInitialized");
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="화면 DriveState 디버그 사용 (bEnableDriveStateOnScreenDebug)", ToolTip="True이면 PIE 중 현재 Drive 상태와 속도를 화면에 표시합니다."))
+	// [v2.14.4] VehicleDebug HUD/Panel UI 표시를 허용하는 메인 토글입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="VehicleDebug UI 사용 (bEnableDriveStateOnScreenDebug)", ToolTip="True이면 PIE 중 VehicleDebug HUD/Panel UI 표시를 허용합니다. 개발용 온스크린 문자열 출력과는 별도입니다."))
 	bool bEnableDriveStateOnScreenDebug = false;
+
+	// [v2.14.4] 개발용 온스크린 문자열 디버그 메시지 출력을 허용하는 토글입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="온스크린 디버그 메시지 사용 (bEnableVehicleDebugOnScreenMessage)", ToolTip="True이면 PIE 중 GEngine AddOnScreenDebugMessage 기반의 개발용 문자열 디버그를 화면에 표시합니다. HUD/Panel UI 표시와는 별도입니다."))
+	bool bEnableVehicleDebugOnScreenMessage = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="DriveState 디버그 표시 모드 (DriveStateDebugDisplayMode)", ToolTip="PIE 중 화면에 표시할 Drive 상태 디버그 문자열 포맷을 선택합니다. Off는 비표시, SingleLine은 한 줄 요약, MultiLine은 줄바꿈 상세 표시입니다."))
 	ECFVehicleDebugDisplayMode DriveStateDebugDisplayMode = ECFVehicleDebugDisplayMode::SingleLine;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="상태 전이 요약 표시 (bShowDriveStateTransitionSummary)", ToolTip="True이면 현재 Drive 상태와 함께 마지막 상태 전이 요약 문자열도 화면에 표시합니다."))
 	bool bShowDriveStateTransitionSummary = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="VehicleDebug HUD 표시 여부 (bShowVehicleDebugHud)", ToolTip="True이면 VehicleDebug HUD 표시를 허용합니다. HUD 위젯에서 이 값을 읽어 표시 여부를 결정할 수 있습니다."))
+	bool bShowVehicleDebugHud = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="VehicleDebug Panel 표시 여부 (bShowVehicleDebugPanel)", ToolTip="True이면 VehicleDebug Panel 표시를 허용합니다. 상세 패널 위젯에서 이 값을 읽어 표시 여부를 결정할 수 있습니다."))
+	bool bShowVehicleDebugPanel = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="VehicleDebug Text 표시 여부 (bShowVehicleDebugText)", ToolTip="레거시 WBP_VehicleDebug 제거 전환을 위해 기본적으로 비활성 상태로 유지하는 예약용 토글입니다."))
+	bool bShowVehicleDebugText = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="VehicleDebug 이벤트 표시 여부 (bShowVehicleDebugEvents)", ToolTip="True이면 향후 Recent Events 표시를 허용합니다. 현재 단계에서는 예약용 토글입니다."))
+	bool bShowVehicleDebugEvents = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(ClampMin="0.0", DisplayName="디버그 메시지 유지 시간 (DriveStateDebugMessageDuration)", ToolTip="화면에 표시하는 Drive 상태 디버그 메시지 유지 시간(초)입니다."))
 	float DriveStateDebugMessageDuration = 0.0f;
@@ -358,6 +555,18 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="Pawn 기준 런타임 준비 상태, Drive 상태, 마지막 전이 요약을 하나로 묶은 디버그 스냅샷을 반환합니다."))
 	FCFVehicleDebugSnapshot GetVehicleDebugSnapshot() const;
 
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="HUD 표시용 VehicleDebug Overview 카테고리를 반환합니다."))
+	FCFVehicleDebugOverview GetVehicleDebugOverview() const;
+
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="상세 패널 표시용 VehicleDebug Drive 카테고리를 반환합니다."))
+	FCFVehicleDebugDrive GetVehicleDebugDrive() const;
+
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="상세 패널 표시용 VehicleDebug Input 카테고리를 반환합니다."))
+	FCFVehicleDebugInput GetVehicleDebugInput() const;
+
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="상세 패널 표시용 VehicleDebug Runtime 카테고리를 반환합니다."))
+	FCFVehicleDebugRuntime GetVehicleDebugRuntime() const;
+
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="Debug Widget의 단일 라인 Text 바인딩에 바로 사용할 수 있는 Pawn 디버그 문자열을 반환합니다."))
 	FText GetDebugTextSingleLine() const;
 
@@ -367,17 +576,36 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="현재 DriveStateDebugDisplayMode 설정을 따라 Debug Widget Text 바인딩에 바로 사용할 수 있는 Pawn 디버그 문자열을 반환합니다. Off이면 빈 텍스트를 반환합니다."))
 	FText GetDebugTextByDisplayMode() const;
 
-	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="현재 Debug Widget을 표시해야 하는지 여부를 반환합니다. OnScreenDebug가 꺼져 있거나 DisplayMode가 Off이면 False를 반환합니다."))
+	// [v2.14.3] HUD/Panel 공통 기준이 되는 VehicleDebug UI 표시 가능 여부를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="현재 VehicleDebug HUD/Panel 공통 기준이 되는 표시 가능 여부를 반환합니다. 기본 디버그 스위치가 꺼져 있으면 False를 반환합니다."))
+	bool ShouldShowVehicleDebugUi() const;
+
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="레거시 WBP_VehicleDebug 제거 전환을 위해 현재 Debug Widget을 표시하지 않도록 고정된 False를 반환합니다."))
 	bool ShouldShowDebugWidget() const;
 
-	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="현재 Debug Widget Visibility 바인딩에 바로 사용할 수 있는 값을 반환합니다. 표시 조건을 만족하면 HitTestInvisible, 아니면 Collapsed를 반환합니다."))
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="현재 VehicleDebug HUD를 표시해야 하는지 여부를 반환합니다. 로컬 차량 디버그 표시 조건과 HUD 토글을 함께 검사합니다."))
+	bool ShouldShowVehicleDebugHud() const;
+
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="현재 VehicleDebug Panel을 표시해야 하는지 여부를 반환합니다. 로컬 차량 디버그 표시 조건과 Panel 토글을 함께 검사합니다."))
+	bool ShouldShowVehicleDebugPanel() const;
+
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="레거시 WBP_VehicleDebug 제거 전환을 위해 현재 VehicleDebug Legacy Text View를 표시하지 않도록 고정된 False를 반환합니다."))
+	bool ShouldShowVehicleDebugText() const;
+
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="레거시 WBP_VehicleDebug 제거 전환을 위해 항상 Collapsed를 반환합니다."))
 	ESlateVisibility GetDebugWidgetVisibility() const;
 
 protected:
 	// [v1.5.0] DriveComp 캐시를 재사용해 VehicleMovement 컴포넌트를 안전하게 가져옵니다.
 	UChaosWheeledVehicleMovementComponent* ResolveVehicleMovementComponent(const TCHAR* CacheFailureSummary, const TCHAR* MissingComponentSummary);
 
-	// [v1.6.0] 현재 설정에 맞는 차량 디버그 요약 문자열을 생성합니다.
+	// [v2.14.1] Snapshot 기반 단일 라인 차량 디버그 문자열을 생성합니다.
+	FString BuildVehicleDebugTextSingleLine(const FCFVehicleDebugSnapshot& VehicleDebugSnapshot, bool bIncludeRuntimeSummary, bool bIncludeTransitionSummary, bool bIncludeInputState) const;
+
+	// [v2.14.1] Snapshot 기반 멀티라인 차량 디버그 문자열을 생성합니다.
+	FString BuildVehicleDebugTextMultiLine(const FCFVehicleDebugSnapshot& VehicleDebugSnapshot, bool bIncludeRuntimeSummary, bool bIncludeTransitionSummary, bool bIncludeInputState) const;
+
+	// [v2.14.1] 현재 설정에 맞는 차량 디버그 요약 문자열을 Snapshot 기반으로 생성합니다.
 	FString BuildVehicleDebugSummary(bool bUseMultilineFormat, bool bIncludeRuntimeSummary, bool bIncludeTransitionSummary, bool bIncludeInputState) const;
 
 	// [v1.5.0] WheelSync 실행 결과를 기존 런타임 요약 뒤에 덧붙입니다.

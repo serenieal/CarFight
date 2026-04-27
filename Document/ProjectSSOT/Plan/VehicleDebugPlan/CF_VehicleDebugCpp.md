@@ -1,7 +1,7 @@
 # VehicleDebug v2 C++ 반영 초안
 
-- Version: 0.1.0
-- Date: 2026-04-22
+- Version: 0.2.1
+- Date: 2026-04-23
 - Status: Draft
 - Scope: VehicleDebug v2를 실제 C++ / BP / UMG에 반영하기 위한 타입, 함수, 파일 분리 초안
 
@@ -33,7 +33,7 @@
 
 이번 C++ 반영의 1차 목표는 아래 네 가지다.
 
-1. 기존 텍스트 디버그를 깨지 않는다.
+1. 레거시 `WBP_VehicleDebug` 의존을 제거한다.
 2. 내부 원본 데이터를 Snapshot 구조로 재편한다.
 3. Compact HUD가 같은 Snapshot을 읽게 만든다.
 4. Overview / Drive / Input / Runtime 패널이 같은 Snapshot을 공유하게 만든다.
@@ -80,6 +80,16 @@
 - Snapshot 조합
 - 기존 공개 API 유지
 - BP와 위젯에서 읽을 수 있는 함수 제공
+
+### 3.4 HUD 부모 위젯 파일
+- `UE/Source/CarFight_Re/Public/UI/CFVehicleDebugHudWidget.h`
+- `UE/Source/CarFight_Re/Private/UI/CFVehicleDebugHudWidget.cpp`
+
+권장 역할:
+- `Overview` 카테고리 읽기
+- HUD 텍스트 갱신
+- HUD 가시성 갱신
+- `WBP_VehicleDebugHud` 자식이 재사용할 공통 부모 제공
 
 ---
 
@@ -240,8 +250,8 @@
 - `GetDebugTextSingleLine()`
 - `GetDebugTextMultiLine()`
 - `GetDebugTextByDisplayMode()`
-- `ShouldShowDebugWidget()`
-- `GetDebugWidgetVisibility()`
+- `ShouldShowDebugWidget()`  : 레거시 제거 전환 중에는 숨김 고정 API로 취급
+- `GetDebugWidgetVisibility()` : 레거시 제거 전환 중에는 `Collapsed` 고정 API로 취급
 
 이유:
 - 기존 BP/UMG/문서와 호환성 유지
@@ -268,7 +278,13 @@
 - `ShouldShowVehicleDebugEvents()`
 
 이유:
-- DisplayMode 하나로 모든 화면 정책을 해결하지 않기 위함
+- Legacy Text 정책을 HUD/Panel 정책과 분리하고, 최종적으로는 Legacy Text 정책 자체를 제거하기 위함
+
+추가 권장 토글:
+- `bEnableDriveStateOnScreenDebug`
+  - HUD/Panel UI 표시용 메인 토글
+- `bEnableVehicleDebugOnScreenMessage`
+  - `AddOnScreenDebugMessage` 기반 개발용 문자열 출력 토글
 
 ---
 
@@ -343,22 +359,21 @@
 
 ## 9.1 신규 위젯 권장
 
+- `CFVehicleDebugHudWidget` 부모 클래스
 - `WBP_VehicleDebugHud`
 - `WBP_VehicleDebugPanel`
-- `WBP_VehicleDebugText`
 - `WBP_VehicleDebugEvents`
 - `WBP_VehicleDebugRoot`
 
 ## 9.2 위젯 역할
 
 ### `WBP_VehicleDebugHud`
+- 부모 클래스는 `CFVehicleDebugHudWidget` 사용
 - Overview 핵심값만 표시
+- 레이아웃과 스타일만 담당
 
 ### `WBP_VehicleDebugPanel`
 - Overview / Drive / Input / Runtime 카테고리 표시
-
-### `WBP_VehicleDebugText`
-- Legacy Text 표시
 
 ### `WBP_VehicleDebugEvents`
 - 최근 이벤트 표시
@@ -381,6 +396,10 @@
 원칙:
 - BP는 계산보다 적용/표시에 집중
 - 이름만 보고 UI 반영 함수임이 드러나야 함
+
+추가 원칙:
+- HUD 갱신 로직은 가능하면 C++ 부모 위젯에 둔다.
+- 에디터 안내 시 부모 클래스 검색 이름은 `CFVehicleDebugHudWidget`처럼 접두사 제거된 표시 이름 기준으로 적는다.
 
 ---
 
@@ -418,6 +437,7 @@
 - `CFVehicleDebugText.h/.cpp`로 문자열 생성 분리
 
 ### 4단계
+- `CFVehicleDebugHudWidget` 추가
 - `WBP_VehicleDebugHud`와 `WBP_VehicleDebugPanel` 추가
 
 ### 5단계
@@ -439,7 +459,7 @@
 2. 텍스트 출력이 Snapshot 기반으로 바뀐다.
 3. HUD가 Overview를 읽는다.
 4. Panel이 Drive / Input / Runtime을 읽는다.
-5. 기존 텍스트 디버그가 깨지지 않는다.
+5. 레거시 `WBP_VehicleDebug`를 제거해도 HUD/Panel 구조가 단독으로 동작한다.
 
 ---
 
@@ -455,3 +475,25 @@
 - Pawn이 만든 구조화된 Snapshot을 여러 표시 레이어가 공유하는 구조
 
 로 가야 한다.
+
+---
+
+## 14. Changelog
+
+### v0.2.2 - 2026-04-23
+- `CFVehicleDebugPanelWidget`에 카테고리별 접기/펼치기와 백드롭 기반 상호작용 모드가 추가된 점을 반영했다.
+- Panel이 긴 요약 문자열을 Panel 전용 멀티라인 포맷으로 가공한다는 점을 구현 원칙에 반영했다.
+- UI 표시 토글과 온스크린 디버그 메시지 토글이 분리된 현재 구조를 문서에 반영했다.
+
+### v0.2.1 - 2026-04-23
+- 레거시 `WBP_VehicleDebug` 제거 방향을 반영해 목표/위젯 목록/표시 정책 문구 정리
+- `ShouldShowDebugWidget()`와 `GetDebugWidgetVisibility()`를 레거시 숨김 고정 API로 취급하는 원칙 추가
+
+### v0.2.0 - 2026-04-23
+- HUD 구현 기본안을 순수 BP HUD에서 `C++ 부모 위젯 + WBP 자식` 구조로 보강
+- `CFVehicleDebugHudWidget` 파일 위치와 책임 추가
+- 에디터 안내 시 접두사 제거된 표시 이름을 기준으로 적는 원칙 추가
+- 레거시 `WBP_VehicleDebug` 제거 방향과 숨김 고정 API 처리 원칙 추가
+
+### v0.1.0 - 2026-04-22
+- VehicleDebug v2 C++ 반영 초안 신규 작성
