@@ -1,8 +1,8 @@
 # VehicleDebug Panel 구현 가이드
 
-- Version: 0.3.0
+- Version: 0.4.1
 - Date: 2026-04-27
-- Status: Panel 1차 마감
+- Status: Panel 1차 마감 / UX-1 C++ 기반 구현
 - Scope: `CFVehicleDebugPanelWidget` C++ 부모 클래스와 `WBP_VehicleDebugPanel` 자식 위젯을 안전하게 도입하기 위한 구현 가이드
 
 ---
@@ -546,7 +546,53 @@ Panel 1차가 붙으면 다음은 아래 순서를 권장한다.
 10. 하위 섹션 들여쓰기 동작이 확인되었다.
 11. `CarFight_ReEditor Win64 Development` 빌드가 성공했다.
 
+## 15.3 UX-1 Navigation 수동 연결 체크리스트
+
+이번 C++ 작업으로 Navigation + Selected Content 기반은 준비되었다.
+다만 Codex는 `.uasset`을 직접 수정하지 않으므로 아래 작업은 언리얼 에디터에서 수동으로 진행한다.
+
+1. `WBP_VehicleDebugPanel` 루트에 `VerticalBox_Root`가 없으면 추가한다.
+2. `VerticalBox_Root` 아래에 `HorizontalBox_Main`을 만든다.
+3. `HorizontalBox_Main` 왼쪽에 `ScrollBox_Navigation`을 만들고, 그 안에 `VerticalBox_NavHost`를 배치한다.
+4. `HorizontalBox_Main` 오른쪽에 `ScrollBox_Content`를 만들고, 그 안에 `VerticalBox_SelectedSectionHost`를 배치한다.
+5. 기존 `VerticalBox_DynamicSectionHost`는 fallback 확인 전까지 제거하지 않는다.
+6. `WBP_VehicleDebugNavItem`을 새로 만든다.
+7. `WBP_VehicleDebugNavItem` 부모 클래스를 에디터 표시 기준 `CFVehicleDebugNavItemWidget`으로 설정한다.
+8. `WBP_VehicleDebugNavItem` 내부에 `Button_Root`, `Text_Display`, `Text_Badge`를 만든다.
+9. `WBP_VehicleDebugPanel`의 `NavItemWidgetClass`에 `WBP_VehicleDebugNavItem`을 지정한다.
+10. `DynamicSectionWidgetClass`가 기존 `WBP_VehicleDebugSection`을 가리키는지 확인한다.
+11. C++ 바인딩만으로 `Button_Root` 클릭이 동작하지 않으면 `WBP_VehicleDebugNavItem` 이벤트 그래프에서 `Button_Root.OnClicked -> RequestSelectThisNavItem()`을 연결한다.
+
+검증 기준:
+
+1. 새 Host를 추가하지 않은 기존 Panel은 지금처럼 전체 Section을 표시한다.
+2. `VerticalBox_SelectedSectionHost`와 `DynamicSectionWidgetClass`가 모두 유효하면 선택된 Section 하나만 표시한다.
+3. Navigation Item 클릭 시 `SelectedSectionId`가 바뀐다.
+4. Navigation Item 선택 상태가 버튼 배경색과 텍스트 색으로 구분된다.
+5. 매 Tick마다 NavItem이 계속 재생성되지 않는다.
+6. `CarFight_ReEditor Win64 Development` 빌드가 성공한다.
+
+PIE 확인 결과:
+
+1. 왼쪽 Navigation 영역에 `Overview / Drive / Input / Runtime`이 표시되었다.
+2. 오른쪽 Content 영역에는 선택된 Section 하나만 표시되었다.
+3. `Overview` 선택 상태가 버튼 배경색과 텍스트 색으로 구분되었다.
+4. `Overview`의 Field Row와 `Last Transition` 하위 Section이 정상 표시되었다.
+5. 기존 전체 Section 세로 나열 구조가 중복 표시되지 않았다.
+
 ## 16. Changelog
+
+### v0.4.1 - 2026-04-27
+- Navigation Item 선택 표시를 `> Overview` 문자열 접두사에서 버튼 배경색/텍스트 색 기반으로 변경했다.
+- `CFVehicleDebugNavItemWidget` v1.1.0 기준 선택/비선택/배지 색상을 C++ 부모 위젯에서 조정할 수 있게 했다.
+- `CarFight_ReEditor Win64 Development` 빌드 성공 결과를 기록했다.
+
+### v0.4.0 - 2026-04-27
+- Navigation + Selected Content C++ 기반 구현 결과를 반영했다.
+- `WBP_VehicleDebugNavItem` 수동 생성과 `VerticalBox_NavHost` / `VerticalBox_SelectedSectionHost` 연결 체크리스트를 추가했다.
+- C++ 버튼 바인딩 실패 시 이벤트 그래프에서 `RequestSelectThisNavItem()`을 호출하는 fallback 기준을 추가했다.
+- `CarFight_ReEditor Win64 Development` 빌드 성공 결과를 기록했다.
+- PIE에서 Navigation + Selected Section 표시가 의도대로 동작한 결과를 기록했다.
 
 ### v0.3.0 - 2026-04-27
 - Panel 1차 마감 결과를 문서에 고정했다.
