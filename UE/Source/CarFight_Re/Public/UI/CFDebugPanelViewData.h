@@ -1,9 +1,9 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-04-24
-// Description: VehicleDebug Panel의 데이터 기반 렌더링을 위한 공통 ViewData 구조입니다.
-// Scope: 정적 WBP 패널을 Section / Field 기반 구조로 전환하기 위한 C++ 데이터 모델 초안입니다.
+// Version: 1.1.0
+// Date: 2026-04-27
+// Description: VehicleDebug Panel의 데이터 기반 렌더링과 Navigation 표시를 위한 공통 ViewData 구조입니다.
+// Scope: 정적 WBP 패널을 Section / Field / Navigation 기반 구조로 전환하기 위한 C++ 데이터 모델입니다.
 
 #pragma once
 
@@ -34,6 +34,47 @@ enum class ECFVehicleDebugSectionKind : uint8
 
 	// 최근 이벤트 같은 리스트형 섹션입니다.
 	EventList
+};
+
+// VehicleDebug Panel Navigation에서 사용할 카테고리 그룹입니다.
+enum class ECFVehicleDebugNavGroup : uint8
+{
+	// 핵심 주행/입력/런타임 정보를 묶는 기본 그룹입니다.
+	Core,
+
+	// 차량 하위 시스템 정보를 묶는 그룹입니다.
+	Vehicle,
+
+	// 문제 추적과 검증 정보를 묶는 그룹입니다.
+	Diagnostics,
+
+	// 네트워크, 소유권, AI 등 고급 정보를 묶는 그룹입니다.
+	Advanced
+};
+
+// VehicleDebug Panel의 Navigation 표시용 항목 ViewData입니다.
+struct FCFVehicleDebugNavItemViewData
+{
+	// Navigation 항목과 연결될 Section 고유 ID입니다.
+	FString SectionId;
+
+	// Navigation 버튼에 표시할 이름입니다.
+	FString DisplayText;
+
+	// Navigation 항목이 속한 그룹입니다.
+	ECFVehicleDebugNavGroup NavigationGroup = ECFVehicleDebugNavGroup::Core;
+
+	// 같은 그룹 안에서 표시될 순서입니다.
+	int32 NavigationOrder = 0;
+
+	// 버튼 우측에 표시할 짧은 배지 문자열입니다.
+	FString BadgeText;
+
+	// 현재 항목을 Navigation에 표시할지 여부입니다.
+	bool bIsVisible = true;
+
+	// 현재 선택된 항목인지 여부입니다.
+	bool bIsSelected = false;
 };
 
 // VehicleDebug Panel의 가장 작은 표시 단위인 필드 ViewData입니다.
@@ -90,6 +131,18 @@ struct FCFVehicleDebugSectionViewData
 
 	// 섹션 분류입니다.
 	ECFVehicleDebugSectionKind SectionKind = ECFVehicleDebugSectionKind::Category;
+
+	// Navigation에서 사용할 그룹입니다.
+	ECFVehicleDebugNavGroup NavigationGroup = ECFVehicleDebugNavGroup::Core;
+
+	// 같은 Navigation 그룹 안에서의 표시 순서입니다.
+	int32 NavigationOrder = 0;
+
+	// 이 Section을 Navigation 목록에 표시할지 여부입니다.
+	bool bShowInNavigation = true;
+
+	// Navigation 항목 우측에 표시할 짧은 배지 문자열입니다.
+	FString BadgeText;
 
 	// 섹션 기본 펼침 상태입니다.
 	bool bDefaultExpanded = true;

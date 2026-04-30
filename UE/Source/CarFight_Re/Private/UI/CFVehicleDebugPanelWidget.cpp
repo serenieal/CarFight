@@ -1,13 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.6.0
-// Date: 2026-04-24
+// Version: 1.7.0
+// Date: 2026-04-27
 // Description: VehicleDebug Panel용 C++ 부모 위젯 클래스 구현입니다.
-// Scope: VehicleDebug Overview / Drive / Input / Runtime 카테고리를 읽어 패널 텍스트와 가시성을 갱신하고, 현재 WBP 기준 상호작용 구조를 안정적으로 지원합니다.
+// Scope: VehicleDebug Overview / Drive / Input / Runtime 카테고리를 읽어 Navigation + Selected Section 기반 표시와 기존 fallback 표시를 안정적으로 지원합니다.
 
 #include "UI/CFVehicleDebugPanelWidget.h"
 
 #include "Blueprint/WidgetTree.h"
+#include "UI/CFVehicleDebugNavItemWidget.h"
 #include "UI/CFVehicleDebugSectionWidget.h"
 #include "Input/Reply.h"
 #include "Components/TextBlock.h"
@@ -150,8 +151,18 @@ void UCFVehicleDebugPanelWidget::RefreshFromPawn()
 	// [v1.5.0] 현재 Snapshot 기준 최신 Panel ViewData를 생성해 캐시에 저장합니다.
 	CachedPanelViewData = BuildVehicleDebugPanelViewData();
 
-	// [v1.6.0] 동적 Section 레이아웃이 준비된 경우 공통 Section 위젯 경로로 갱신합니다.
-	if (IsDynamicSectionLayoutReady())
+	// [v1.7.0] 현재 선택된 SectionId를 유효한 최상위 Section 기준으로 보정합니다.
+	ResolveSelectedSectionId();
+
+	// [v1.7.0] Navigation 레이아웃이 준비된 경우 Navigation 항목 표시를 갱신합니다.
+	RefreshNavigationItems();
+
+	// [v1.7.0] 선택 Section 레이아웃이 준비된 경우 선택된 Section 하나만 갱신합니다.
+	if (IsSelectedSectionLayoutReady())
+	{
+		RefreshSelectedSectionWidget();
+	}
+	else if (ShouldUseLegacyFullSectionRendering())
 	{
 		RefreshDynamicSectionWidgets();
 	}
@@ -163,6 +174,29 @@ void UCFVehicleDebugPanelWidget::RefreshFromPawn()
 		ApplyVehicleDebugRuntime(CachedRuntime);
 		UpdateCategoryHeaderTexts();
 	}
+}
+
+void UCFVehicleDebugPanelWidget::SelectSectionById(const FString& InSectionId)
+{
+	// [v1.7.0] 빈 SectionId는 선택 요청으로 처리하지 않습니다.
+	if (InSectionId.IsEmpty())
+	{
+		return;
+	}
+
+	SelectedSectionId = InSectionId;
+	ResolveSelectedSectionId();
+	RefreshNavigationItems();
+
+	if (IsSelectedSectionLayoutReady())
+	{
+		RefreshSelectedSectionWidget();
+	}
+}
+
+FString UCFVehicleDebugPanelWidget::GetSelectedSectionId() const
+{
+	return SelectedSectionId;
 }
 
 void UCFVehicleDebugPanelWidget::ApplyVehicleDebugOverview(const FCFVehicleDebugOverview& InOverview)
@@ -669,6 +703,18 @@ void UCFVehicleDebugPanelWidget::ResolveWidgetReferences()
 		VerticalBox_DynamicSectionHost = Cast<UVerticalBox>(WidgetTree->FindWidget(TEXT("VerticalBox_DynamicSectionHost")));
 	}
 
+	// [v1.7.0] Navigation 항목 호스트 참조를 이름 기준으로 보강합니다.
+	if (!VerticalBox_NavHost)
+	{
+		VerticalBox_NavHost = Cast<UVerticalBox>(WidgetTree->FindWidget(TEXT("VerticalBox_NavHost")));
+	}
+
+	// [v1.7.0] 선택 Section 호스트 참조를 이름 기준으로 보강합니다.
+	if (!VerticalBox_SelectedSectionHost)
+	{
+		VerticalBox_SelectedSectionHost = Cast<UVerticalBox>(WidgetTree->FindWidget(TEXT("VerticalBox_SelectedSectionHost")));
+	}
+
 	// [v1.3.2] 실제 Panel 본체 루트 위젯 참조를 이름 기준으로 보강합니다.
 	if (!Border_RootPanel)
 	{
@@ -992,6 +1038,16 @@ bool UCFVehicleDebugPanelWidget::IsDynamicSectionLayoutReady() const
 	return VerticalBox_DynamicSectionHost != nullptr && DynamicSectionWidgetClass != nullptr;
 }
 
+bool UCFVehicleDebugPanelWidget::IsNavigationLayoutReady() const
+{
+	return VerticalBox_NavHost != nullptr && NavItemWidgetClass != nullptr;
+}
+
+bool UCFVehicleDebugPanelWidget::IsSelectedSectionLayoutReady() const
+{
+	return VerticalBox_SelectedSectionHost != nullptr && DynamicSectionWidgetClass != nullptr;
+}
+
 void UCFVehicleDebugPanelWidget::EnsureDynamicSectionWidgets()
 {
 	// [v1.6.0] 동적 Section 레이아웃 준비가 안 되었으면 생성을 중단합니다.
@@ -1043,6 +1099,16 @@ void UCFVehicleDebugPanelWidget::RefreshDynamicSectionWidgets()
 		return;
 	}
 
+	if (VerticalBox_DynamicSectionHost)
+	{
+		VerticalBox_DynamicSectionHost->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	}
+
+	if (VerticalBox_SelectedSectionHost)
+	{
+		VerticalBox_SelectedSectionHost->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
 	EnsureDynamicSectionWidgets();
 
 	for (int32 SectionIndex = 0; SectionIndex < DynamicSectionWidgetArray.Num(); ++SectionIndex)
@@ -1063,6 +1129,230 @@ void UCFVehicleDebugPanelWidget::RefreshDynamicSectionWidgets()
 
 		DynamicSectionWidget->SetSectionViewData(*TopLevelSectionViewData);
 	}
+}
+
+TArray<FCFVehicleDebugNavItemViewData> UCFVehicleDebugPanelWidget::BuildNavigationItemViewDataArray() const
+{
+	// [v1.7.0] 생성할 Navigation Item ViewData 배열입니다.
+	TArray<FCFVehicleDebugNavItemViewData> NavItemViewDataArray;
+
+	for (const TSharedPtr<FCFVehicleDebugSectionViewData>& TopLevelSectionViewData : CachedPanelViewData.TopLevelSectionArray)
+	{
+		if (!TopLevelSectionViewData.IsValid() || !TopLevelSectionViewData->bIsVisible || !TopLevelSectionViewData->bShowInNavigation)
+		{
+			continue;
+		}
+
+		// [v1.7.0] 현재 최상위 Section에서 만든 Navigation 항목입니다.
+		FCFVehicleDebugNavItemViewData NavItemViewData;
+		NavItemViewData.SectionId = TopLevelSectionViewData->SectionId;
+		NavItemViewData.DisplayText = TopLevelSectionViewData->TitleText;
+		NavItemViewData.NavigationGroup = TopLevelSectionViewData->NavigationGroup;
+		NavItemViewData.NavigationOrder = TopLevelSectionViewData->NavigationOrder;
+		NavItemViewData.BadgeText = TopLevelSectionViewData->BadgeText;
+		NavItemViewData.bIsVisible = true;
+		NavItemViewData.bIsSelected = TopLevelSectionViewData->SectionId == SelectedSectionId;
+		NavItemViewDataArray.Add(NavItemViewData);
+	}
+
+	NavItemViewDataArray.Sort([](const FCFVehicleDebugNavItemViewData& Left, const FCFVehicleDebugNavItemViewData& Right)
+	{
+		if (Left.NavigationGroup != Right.NavigationGroup)
+		{
+			return static_cast<uint8>(Left.NavigationGroup) < static_cast<uint8>(Right.NavigationGroup);
+		}
+
+		if (Left.NavigationOrder != Right.NavigationOrder)
+		{
+			return Left.NavigationOrder < Right.NavigationOrder;
+		}
+
+		return Left.DisplayText < Right.DisplayText;
+	});
+
+	return NavItemViewDataArray;
+}
+
+void UCFVehicleDebugPanelWidget::ResolveSelectedSectionId()
+{
+	if (CachedPanelViewData.TopLevelSectionArray.IsEmpty())
+	{
+		SelectedSectionId.Reset();
+		return;
+	}
+
+	for (const TSharedPtr<FCFVehicleDebugSectionViewData>& TopLevelSectionViewData : CachedPanelViewData.TopLevelSectionArray)
+	{
+		if (TopLevelSectionViewData.IsValid() &&
+			TopLevelSectionViewData->bIsVisible &&
+			TopLevelSectionViewData->SectionId == SelectedSectionId)
+		{
+			return;
+		}
+	}
+
+	for (const TSharedPtr<FCFVehicleDebugSectionViewData>& TopLevelSectionViewData : CachedPanelViewData.TopLevelSectionArray)
+	{
+		if (TopLevelSectionViewData.IsValid() && TopLevelSectionViewData->bIsVisible)
+		{
+			SelectedSectionId = TopLevelSectionViewData->SectionId;
+			return;
+		}
+	}
+
+	SelectedSectionId.Reset();
+}
+
+TSharedPtr<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::FindSelectedSectionViewData() const
+{
+	for (const TSharedPtr<FCFVehicleDebugSectionViewData>& TopLevelSectionViewData : CachedPanelViewData.TopLevelSectionArray)
+	{
+		if (TopLevelSectionViewData.IsValid() &&
+			TopLevelSectionViewData->bIsVisible &&
+			TopLevelSectionViewData->SectionId == SelectedSectionId)
+		{
+			return TopLevelSectionViewData;
+		}
+	}
+
+	return nullptr;
+}
+
+void UCFVehicleDebugPanelWidget::EnsureNavigationItemWidgets(const TArray<FCFVehicleDebugNavItemViewData>& InNavigationItemViewDataArray)
+{
+	// [v1.7.0] Navigation 레이아웃 준비가 안 되었으면 생성을 중단합니다.
+	if (!IsNavigationLayoutReady())
+	{
+		return;
+	}
+
+	// [v1.7.0] 기존 Navigation Item 캐시에 비어 있는 항목이 있는지 확인합니다.
+	bool bHasInvalidCachedNavItem = false;
+	for (const TObjectPtr<UCFVehicleDebugNavItemWidget>& NavigationItemWidget : NavigationItemWidgetArray)
+	{
+		if (!NavigationItemWidget)
+		{
+			bHasInvalidCachedNavItem = true;
+			break;
+		}
+	}
+
+	// [v1.7.0] 개수가 같고 캐시가 유효하면 기존 위젯을 재사용합니다.
+	if (NavigationItemWidgetArray.Num() == InNavigationItemViewDataArray.Num() && !bHasInvalidCachedNavItem)
+	{
+		return;
+	}
+
+	VerticalBox_NavHost->ClearChildren();
+	NavigationItemWidgetArray.Reset();
+
+	for (int32 NavItemIndex = 0; NavItemIndex < InNavigationItemViewDataArray.Num(); ++NavItemIndex)
+	{
+		// [v1.7.0] 새로 생성할 Navigation Item 위젯 인스턴스입니다.
+		UCFVehicleDebugNavItemWidget* NavigationItemWidget = nullptr;
+
+		if (APlayerController* OwningPlayerController = GetOwningPlayer())
+		{
+			NavigationItemWidget = CreateWidget<UCFVehicleDebugNavItemWidget>(OwningPlayerController, NavItemWidgetClass);
+		}
+		else if (WidgetTree)
+		{
+			NavigationItemWidget = CreateWidget<UCFVehicleDebugNavItemWidget>(WidgetTree, NavItemWidgetClass);
+		}
+
+		if (!NavigationItemWidget)
+		{
+			continue;
+		}
+
+		NavigationItemWidget->SetOwningPanelWidget(this);
+		NavigationItemWidgetArray.Add(NavigationItemWidget);
+		VerticalBox_NavHost->AddChildToVerticalBox(NavigationItemWidget);
+	}
+}
+
+void UCFVehicleDebugPanelWidget::RefreshNavigationItems()
+{
+	if (!IsNavigationLayoutReady())
+	{
+		return;
+	}
+
+	// [v1.7.0] 현재 Panel ViewData 기준으로 생성한 Navigation 항목 배열입니다.
+	const TArray<FCFVehicleDebugNavItemViewData> NavItemViewDataArray = BuildNavigationItemViewDataArray();
+
+	EnsureNavigationItemWidgets(NavItemViewDataArray);
+
+	for (int32 NavItemIndex = 0; NavItemIndex < NavigationItemWidgetArray.Num(); ++NavItemIndex)
+	{
+		// [v1.7.0] 현재 갱신할 Navigation Item 위젯입니다.
+		UCFVehicleDebugNavItemWidget* NavigationItemWidget = NavigationItemWidgetArray[NavItemIndex];
+
+		if (!NavigationItemWidget || !NavItemViewDataArray.IsValidIndex(NavItemIndex))
+		{
+			continue;
+		}
+
+		NavigationItemWidget->SetOwningPanelWidget(this);
+		NavigationItemWidget->SetNavItemViewData(NavItemViewDataArray[NavItemIndex]);
+	}
+}
+
+void UCFVehicleDebugPanelWidget::RefreshSelectedSectionWidget()
+{
+	// [v1.7.0] 선택 Section 레이아웃 준비가 안 되었으면 갱신을 중단합니다.
+	if (!IsSelectedSectionLayoutReady())
+	{
+		return;
+	}
+
+	if (VerticalBox_SelectedSectionHost)
+	{
+		VerticalBox_SelectedSectionHost->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	}
+
+	if (VerticalBox_DynamicSectionHost)
+	{
+		VerticalBox_DynamicSectionHost->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
+	// [v1.7.0] 현재 선택된 Section ViewData입니다.
+	const TSharedPtr<FCFVehicleDebugSectionViewData> SelectedSectionViewData = FindSelectedSectionViewData();
+
+	if (!SelectedSectionViewData.IsValid())
+	{
+		VerticalBox_SelectedSectionHost->ClearChildren();
+		SelectedSectionWidget = nullptr;
+		return;
+	}
+
+	if (!SelectedSectionWidget)
+	{
+		if (APlayerController* OwningPlayerController = GetOwningPlayer())
+		{
+			SelectedSectionWidget = CreateWidget<UCFVehicleDebugSectionWidget>(OwningPlayerController, DynamicSectionWidgetClass);
+		}
+		else if (WidgetTree)
+		{
+			SelectedSectionWidget = CreateWidget<UCFVehicleDebugSectionWidget>(WidgetTree, DynamicSectionWidgetClass);
+		}
+
+		if (SelectedSectionWidget)
+		{
+			VerticalBox_SelectedSectionHost->ClearChildren();
+			VerticalBox_SelectedSectionHost->AddChildToVerticalBox(SelectedSectionWidget);
+		}
+	}
+
+	if (SelectedSectionWidget)
+	{
+		SelectedSectionWidget->SetSectionViewData(*SelectedSectionViewData);
+	}
+}
+
+bool UCFVehicleDebugPanelWidget::ShouldUseLegacyFullSectionRendering() const
+{
+	return !IsSelectedSectionLayoutReady() && IsDynamicSectionLayoutReady();
 }
 
 // [v1.5.0] 현재 Snapshot 기준 최신 Panel ViewData를 생성합니다.
@@ -1087,6 +1377,9 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildOver
 	// [v1.5.0] 생성할 Overview 섹션 ViewData입니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> OverviewSectionViewData =
 		FCFVehicleDebugSectionViewData::MakeSection(TEXT("Overview"), TEXT("Overview"), ECFVehicleDebugSectionKind::Category, bIsOverviewExpanded);
+	OverviewSectionViewData->NavigationGroup = ECFVehicleDebugNavGroup::Core;
+	OverviewSectionViewData->NavigationOrder = 10;
+	OverviewSectionViewData->bShowInNavigation = true;
 
 	OverviewSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("overview_runtime_ready"), TEXT("Ready"), InOverview.bRuntimeReady ? TEXT("True") : TEXT("False"), true));
 	OverviewSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("overview_state"), TEXT("State"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InOverview.CurrentDriveState))));
@@ -1110,6 +1403,9 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildDriv
 	// [v1.5.0] 생성할 Drive 섹션 ViewData입니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> DriveSectionViewData =
 		FCFVehicleDebugSectionViewData::MakeSection(TEXT("Drive"), TEXT("Drive"), ECFVehicleDebugSectionKind::Category, bIsDriveExpanded);
+	DriveSectionViewData->NavigationGroup = ECFVehicleDebugNavGroup::Core;
+	DriveSectionViewData->NavigationOrder = 20;
+	DriveSectionViewData->bShowInNavigation = true;
 
 	DriveSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("drive_current_state"), TEXT("Current State"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InDrive.CurrentDriveState))));
 	DriveSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("drive_previous_state"), TEXT("Previous State"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InDrive.PreviousDriveState))));
@@ -1136,6 +1432,9 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildInpu
 	// [v1.5.0] 생성할 Input 섹션 ViewData입니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> InputSectionViewData =
 		FCFVehicleDebugSectionViewData::MakeSection(TEXT("Input"), TEXT("Input"), ECFVehicleDebugSectionKind::Category, bIsInputExpanded);
+	InputSectionViewData->NavigationGroup = ECFVehicleDebugNavGroup::Core;
+	InputSectionViewData->NavigationOrder = 30;
+	InputSectionViewData->bShowInNavigation = true;
 
 	InputSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("input_device_mode"), TEXT("Device Mode"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InInput.DeviceMode))));
 	InputSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("input_input_owner"), TEXT("Input Owner"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InInput.InputOwner))));
@@ -1155,6 +1454,9 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildRunt
 	// [v1.5.0] 생성할 Runtime 섹션 ViewData입니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> RuntimeSectionViewData =
 		FCFVehicleDebugSectionViewData::MakeSection(TEXT("Runtime"), TEXT("Runtime"), ECFVehicleDebugSectionKind::Category, bIsRuntimeExpanded);
+	RuntimeSectionViewData->NavigationGroup = ECFVehicleDebugNavGroup::Core;
+	RuntimeSectionViewData->NavigationOrder = 40;
+	RuntimeSectionViewData->bShowInNavigation = true;
 
 	RuntimeSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("runtime_ready"), TEXT("Ready"), InRuntime.bRuntimeReady ? TEXT("True") : TEXT("False"), true));
 	RuntimeSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("runtime_has_drive_comp"), TEXT("Has DriveComp"), InRuntime.bHasDriveComponent ? TEXT("True") : TEXT("False")));

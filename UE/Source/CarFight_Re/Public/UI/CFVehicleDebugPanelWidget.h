@@ -1,9 +1,9 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.6.0
-// Date: 2026-04-24
+// Version: 1.7.0
+// Date: 2026-04-27
 // Description: VehicleDebug Panel용 C++ 부모 위젯 클래스입니다.
-// Scope: VehicleDebug Overview / Drive / Input / Runtime 카테고리를 읽어 패널 텍스트와 가시성을 갱신하고, 현재 WBP 기준 상호작용 구조를 안정적으로 지원합니다.
+// Scope: VehicleDebug Overview / Drive / Input / Runtime 카테고리를 읽어 Navigation + Selected Section 기반 표시와 기존 fallback 표시를 안정적으로 지원합니다.
 
 #pragma once
 
@@ -17,6 +17,7 @@ class UTextBlock;
 class UWidget;
 class UVerticalBox;
 class APlayerController;
+class UCFVehicleDebugNavItemWidget;
 class UCFVehicleDebugSectionWidget;
 
 /**
@@ -105,6 +106,14 @@ public:
 	// [v1.5.0] 현재 Snapshot 기준 Panel ViewData를 생성해 반환합니다.
 	const FCFVehicleDebugPanelViewData& GetCachedPanelViewData() const;
 
+	// [v1.7.0] 표시할 최상위 Section을 SectionId 기준으로 선택하고 Panel을 갱신합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|VehicleDebug|Panel", meta=(DisplayName="Section 선택 (SelectSectionById)", ToolTip="Navigation 또는 Blueprint에서 호출해 현재 Panel Content 영역에 표시할 최상위 Section을 선택합니다."))
+	void SelectSectionById(const FString& InSectionId);
+
+	// [v1.7.0] 현재 선택된 SectionId를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|VehicleDebug|Panel", meta=(DisplayName="선택된 Section ID 반환 (GetSelectedSectionId)", ToolTip="현재 Panel Content 영역에 표시 중인 최상위 SectionId를 반환합니다."))
+	FString GetSelectedSectionId() const;
+
 protected:
 	// [v1.0.0] 위젯 생성 직후 현재 참조 기준으로 첫 Panel 갱신을 수행합니다.
 	virtual void NativeConstruct() override;
@@ -122,6 +131,14 @@ protected:
 	// [v1.6.0] 동적 Section 렌더링을 붙일 Vertical Box 호스트입니다.
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UVerticalBox> VerticalBox_DynamicSectionHost = nullptr;
+
+	// [v1.7.0] Navigation 항목을 붙일 Vertical Box 호스트입니다.
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UVerticalBox> VerticalBox_NavHost = nullptr;
+
+	// [v1.7.0] 선택된 최상위 Section 하나를 붙일 Vertical Box 호스트입니다.
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UVerticalBox> VerticalBox_SelectedSectionHost = nullptr;
 
 	// [v1.1.0] Overview 본문 컨테이너 위젯 참조입니다.
 	UPROPERTY(meta=(BindWidgetOptional))
@@ -259,6 +276,14 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehicleDebug|Panel", meta=(DisplayName="동적 Section 위젯 클래스 (DynamicSectionWidgetClass)", ToolTip="동적 Section 렌더링에 사용할 공통 Section 위젯 클래스입니다. 보통 WBP_VehicleDebugSection을 지정합니다."))
 	TSubclassOf<UCFVehicleDebugSectionWidget> DynamicSectionWidgetClass;
 
+	// [v1.7.0] Navigation 항목 생성에 사용할 위젯 클래스입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehicleDebug|Panel", meta=(DisplayName="Navigation Item 위젯 클래스 (NavItemWidgetClass)", ToolTip="Navigation 항목 생성 시 사용할 공통 Nav Item 위젯 클래스입니다. 보통 WBP_VehicleDebugNavItem을 지정합니다."))
+	TSubclassOf<UCFVehicleDebugNavItemWidget> NavItemWidgetClass;
+
+	// [v1.7.0] 현재 Panel Content 영역에 표시할 선택된 최상위 SectionId입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehicleDebug|Panel", meta=(DisplayName="선택된 Section ID (SelectedSectionId)", ToolTip="현재 Panel Content 영역에 표시할 최상위 SectionId입니다. 비어 있거나 유효하지 않으면 첫 번째 표시 가능한 Section으로 대체됩니다."))
+	FString SelectedSectionId = TEXT("Overview");
+
 	// [v1.2.0] True이면 Panel이 보일 때 상호작용 모드를 자동으로 활성화합니다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehicleDebug|Panel", meta=(DisplayName="표시 시 상호작용 자동 진입 (bAutoEnterInteractionModeWhenVisible)", ToolTip="True이면 Panel이 보일 때 마우스 커서를 표시하고 입력 모드를 Game and UI로 자동 전환합니다."))
 	bool bAutoEnterInteractionModeWhenVisible = true;
@@ -311,6 +336,14 @@ private:
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UCFVehicleDebugSectionWidget>> DynamicSectionWidgetArray;
 
+	// [v1.7.0] 생성해 둔 Navigation Item 위젯 캐시 배열입니다.
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UCFVehicleDebugNavItemWidget>> NavigationItemWidgetArray;
+
+	// [v1.7.0] 선택된 Section 표시용 위젯 캐시입니다.
+	UPROPERTY(Transient)
+	TObjectPtr<UCFVehicleDebugSectionWidget> SelectedSectionWidget = nullptr;
+
 	// [v1.2.3] WBP에서 이름이 맞는 위젯들을 찾아 C++ 멤버 참조를 보강합니다.
 	void ResolveWidgetReferences();
 
@@ -359,11 +392,38 @@ private:
 	// [v1.6.0] 현재 WBP가 동적 Section 렌더링 준비가 되었는지 확인합니다.
 	bool IsDynamicSectionLayoutReady() const;
 
+	// [v1.7.0] 현재 WBP가 Navigation 렌더링 준비가 되었는지 확인합니다.
+	bool IsNavigationLayoutReady() const;
+
+	// [v1.7.0] 현재 WBP가 선택 Section 렌더링 준비가 되었는지 확인합니다.
+	bool IsSelectedSectionLayoutReady() const;
+
 	// [v1.6.0] 현재 최상위 섹션 개수에 맞게 동적 Section 위젯을 준비합니다.
 	void EnsureDynamicSectionWidgets();
 
 	// [v1.6.0] 현재 CachedPanelViewData 기준으로 동적 Section 위젯을 갱신합니다.
 	void RefreshDynamicSectionWidgets();
+
+	// [v1.7.0] 현재 CachedPanelViewData에서 Navigation 항목 배열을 생성합니다.
+	TArray<FCFVehicleDebugNavItemViewData> BuildNavigationItemViewDataArray() const;
+
+	// [v1.7.0] 현재 SelectedSectionId가 유효한지 확인하고 필요하면 fallback SectionId로 보정합니다.
+	void ResolveSelectedSectionId();
+
+	// [v1.7.0] 현재 SelectedSectionId에 해당하는 Section ViewData를 찾습니다.
+	TSharedPtr<FCFVehicleDebugSectionViewData> FindSelectedSectionViewData() const;
+
+	// [v1.7.0] Navigation Item 위젯 개수를 현재 Navigation 항목 수에 맞게 준비합니다.
+	void EnsureNavigationItemWidgets(const TArray<FCFVehicleDebugNavItemViewData>& InNavigationItemViewDataArray);
+
+	// [v1.7.0] 현재 Navigation 항목 ViewData 기준으로 Navigation Item 위젯을 갱신합니다.
+	void RefreshNavigationItems();
+
+	// [v1.7.0] 선택된 Section 하나를 Content 영역에 갱신합니다.
+	void RefreshSelectedSectionWidget();
+
+	// [v1.7.0] 기존 전체 Section 렌더링 fallback을 사용할지 여부를 반환합니다.
+	bool ShouldUseLegacyFullSectionRendering() const;
 
 	// [v1.5.0] 현재 Snapshot 기준 최신 Panel ViewData를 생성합니다.
 	FCFVehicleDebugPanelViewData BuildVehicleDebugPanelViewData() const;
