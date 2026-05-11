@@ -58,7 +58,27 @@ ACFVehiclePawn
 
 ---
 
-## 3. 새 데이터 구조
+## 3. 표시 언어 정책 적용
+
+Camera Debug는 `Document/ProjectSSOT/Systems/UI/DisplayTextPolicy.md`를 따른다.
+
+적용 기준:
+
+- `SectionId`, `FieldId`, C++ 타입명, enum 값, Snapshot 필드는 영문을 유지한다.
+- 화면에 보이는 Camera 탭 제목, 섹션 제목, 필드 라벨, 상태값은 한국어로 표시한다.
+- Camera 상태값은 `정상`, `조준 막힘`, `카메라 압축`, `조준 제한`처럼 한국어로 표시한다.
+- 원본 런타임/디버그 요약 문자열은 내부 추적성을 위해 영문 키 구조를 유지할 수 있다.
+- 원본 요약 문자열이 Panel에 표시될 때는 표시 직전 단계에서 한국어로 변환한다.
+
+예시:
+
+```text
+camera_status_summary    // FieldId, 영문 유지
+상태 요약                // LabelText, 한국어 표시
+카메라 압축              // ValueText, 한국어 표시
+```
+
+## 4. 새 데이터 구조
 
 ### `FCFVehicleDebugCamera`
 
@@ -174,12 +194,27 @@ CameraSectionViewData->NavigationOrder = 30;
 CameraSectionViewData->bShowInNavigation = true;
 ```
 
-권장 Badge 우선순위:
+Navigation 탭에는 상태 문구를 표시하지 않는다.
 
-1. `bAimBlocked == true` -> `Blocked`
-2. `bCameraCompressedByCollision == true` -> `Compressed`
-3. `bAimAtYawLimit || bAimAtPitchLimit` -> `Limit`
-4. 정상 -> 빈 문자열
+이유:
+- `Blocked`, `Compressed`, `Limit` 같은 상태 문구가 탭 제목 안에 들어가면 탭 목록이 복잡해진다.
+- Navigation은 섹션 선택 역할만 맡고, 상태 진단은 선택된 섹션 내부에서 보여주는 것이 읽기 쉽다.
+
+변경된 표시 정책:
+
+1. `CameraSectionViewData->BadgeText`는 비워 둔다.
+2. `Blocked / Compressed / Limit` 상태는 Camera 섹션 내부의 `상태 요약` 필드로 표시한다.
+3. 상태 필드 값은 영어가 아니라 한국어로 표시한다.
+4. 다른 VehicleDebug 카테고리도 사용자에게 보이는 Label과 Value는 가능한 한 한국어로 표시한다.
+
+권장 상태 요약 값:
+
+| 조건 | 표시값 |
+|---|---|
+| `bAimBlocked == true` | `조준 막힘` |
+| `bCameraCompressedByCollision == true` | `카메라 압축` |
+| `bAimAtYawLimit || bAimAtPitchLimit` | `조준 제한` |
+| 위 조건 없음 | `정상` |
 
 ---
 

@@ -35,7 +35,18 @@ CameraComp RuntimeState
 
 ---
 
-## 3. `CFVehiclePawn.h` 작업
+## 3. 표시 언어 정책 적용
+
+Camera Debug 구현은 `Document/ProjectSSOT/Systems/UI/DisplayTextPolicy.md`를 따른다.
+
+구현 기준:
+
+- 내부 `SectionId`, `FieldId`, C++ 타입명, enum 값, Snapshot 필드는 영문을 유지한다.
+- 화면에 보이는 `TitleText`, `LabelText`, `ValueText`, 상태 요약 문구는 한국어로 작성한다.
+- 원본 런타임/디버그 요약 문자열은 원본 생성 지점을 무리하게 바꾸지 않고, Panel 표시 직전 변환 함수에서 한국어화한다.
+- 클래스명, 에셋명, 컴포넌트명, enum 원문 값은 추적을 위해 화면에 보여도 영문 유지가 가능하다.
+
+## 4. `CFVehiclePawn.h` 작업
 
 경로:
 
@@ -321,6 +332,26 @@ PanelViewData.AddTopLevelSection(BuildRuntimeSectionViewData(CachedRuntime));
 ---
 
 ### 6.3 `BuildCameraSectionViewData()` 구현 추가
+
+#### v0.1.1 표시 정책 보정
+
+Camera Navigation 탭에는 `Blocked`, `Compressed`, `Limit` 같은 상태 문구를 표시하지 않는다.
+
+- `CameraSectionViewData->BadgeText`는 빈 상태로 둔다.
+- 상태 정보는 Camera 섹션 내부의 `상태 요약` 필드로 추가한다.
+- 사용자에게 보이는 Label/Value는 한국어로 표시한다.
+- Camera뿐 아니라 기존 Overview / Drive / Input / Runtime의 표시 문자열도 가능한 범위에서 한국어로 정리한다.
+
+권장 상태 요약 값:
+
+```text
+조준 막힘
+카메라 압축
+조준 제한
+정상
+```
+
+
 
 구현 위치:
 

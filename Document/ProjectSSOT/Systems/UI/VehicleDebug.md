@@ -99,6 +99,36 @@
 따라서 현재 이 기능은 "화면에 차량 디버그 텍스트를 띄우는 위젯"이라기보다,
 **차량 Pawn의 현재 주행/입력/런타임 진단 상태를 한 번에 읽기 위한 텍스트 기반 디버그 패널**이라고 보는 것이 더 정확하다.
 
+## 현재 후속 문서
+
+현재 최신 `VehicleDebug Panel` 구조는 아래 문서를 기준으로 본다.
+
+- `Document/ProjectSSOT/Systems/UI/VehicleDebugPanel.md`
+
+이 문서는 레거시 `WBP_VehicleDebug` 기준선으로 유지한다.
+최신 Navigation + Selected Section 기반 패널 구조, Camera Debug 편입 상태, Camera 상태 요약 표시 정책은 `VehicleDebugPanel.md`를 따른다.
+
+## 표시 언어 정책
+
+VehicleDebug는 `Document/ProjectSSOT/Systems/UI/DisplayTextPolicy.md`를 따른다.
+
+적용 기준:
+
+- 내부 식별자, 코드, enum, Snapshot 필드, `SectionId`, `FieldId`는 영문을 유지한다.
+- 화면에 보이는 탭 제목, 섹션 제목, 필드 라벨, 상태값, 경고 문구는 한국어로 표시한다.
+- 원본 런타임 요약 문자열은 검색성과 로그 추적성을 위해 영문 키 기반 구조를 유지할 수 있다.
+- 원본 요약 문자열이 화면에 표시될 때는 Panel/ViewData/Widget 표시 직전 단계에서 한국어로 변환한다.
+- 클래스명, 컴포넌트명, 에셋명, enum 원문 값처럼 추적이 필요한 식별자는 화면에 보여도 영문 유지가 가능하다.
+
+예시:
+
+```text
+RuntimeSummary                // 내부 SectionId, 영문 유지
+런타임 요약                   // 화면 섹션 제목, 한국어 표시
+Data=Present                  // 원본 요약 문자열, 영문 유지 가능
+데이터=있음                   // 패널 표시 단계, 한국어 변환
+```
+
 ## 현재 표시 포맷 방식
 현재 `ACFVehiclePawn`에는 디버그 텍스트 포맷 모드 enum이 있다.
 

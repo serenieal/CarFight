@@ -151,7 +151,18 @@ Camera Navigation 항목을 클릭한다.
 
 ---
 
-## 5. Camera 값 검증
+## 5. 표시 언어 정책 검증
+
+Camera Debug는 `Document/ProjectSSOT/Systems/UI/DisplayTextPolicy.md`를 따른다.
+
+검증 기준:
+
+- 내부 `SectionId`, `FieldId`, C++ 타입명, enum 값, Snapshot 필드는 영문을 유지한다.
+- 화면에 보이는 탭 제목, 섹션 제목, 필드 라벨, 상태값은 한국어로 표시한다.
+- 원본 런타임/디버그 요약 문자열이 Panel에 표시될 때는 표시 직전 단계에서 한국어로 변환된다.
+- 클래스명, 컴포넌트명, 에셋명, enum 원문 값은 추적을 위해 영문으로 남아 있어도 정상으로 본다.
+
+## 6. Camera 값 검증
 
 ## 5.1 상위 Camera 필드
 
@@ -257,18 +268,29 @@ Camera Section에서 아래가 보이는지 확인한다.
 
 ---
 
-## 6. Badge 검증
+## 6. 상태 요약 검증
 
-Camera Navigation 항목의 Badge를 확인한다.
+Camera Navigation 항목에는 상태 Badge를 표시하지 않는다.
+
+검증 기준:
+
+- Camera 탭 제목 안에 `Blocked`, `Compressed`, `Limit` 문구가 보이지 않아야 한다.
+- Camera 섹션 내부에 `상태 요약` 필드가 보여야 한다.
+- 상태 요약 값은 한국어로 표시되어야 한다.
 
 권장 동작:
 
-- Aim Blocked 상태: `Blocked`
-- 충돌 압축 상태: `Compressed`
-- 제한각 상태: `Limit`
-- 정상 상태: 빈 배지
+- Aim Blocked 상태: `조준 막힘`
+- 충돌 압축 상태: `카메라 압축`
+- 제한각 상태: `조준 제한`
+- 정상 상태: `정상`
 
-우선순위는 `Blocked > Compressed > Limit`이다.
+우선순위는 `조준 막힘 > 카메라 압축 > 조준 제한 > 정상`이다.
+
+추가 검증:
+
+- 기존 Overview / Drive / Input / Runtime의 사용자 표시 Label이 가능한 범위에서 한국어로 보이는지 확인한다.
+- 내부 enum 원문이나 고유 이름은 필요하면 유지할 수 있지만, Label은 한국어를 우선한다.
 
 ---
 

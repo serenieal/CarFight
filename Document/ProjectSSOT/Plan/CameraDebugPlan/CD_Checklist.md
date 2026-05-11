@@ -63,6 +63,23 @@
 
 ## 5. Camera Section 필드
 
+### 표시 정책
+
+Camera Debug는 `Document/ProjectSSOT/Systems/UI/DisplayTextPolicy.md`를 따른다.
+
+- 내부 `SectionId`, `FieldId`, C++ 타입명, enum 값, Snapshot 필드는 영문을 유지한다.
+- 화면에 보이는 섹션 제목, 필드 라벨, 상태값은 한국어로 표시한다.
+- 원본 디버그 요약 문자열은 유지할 수 있으며, Panel 표시 직전 단계에서 한국어로 변환한다.
+
+
+- [ ] Camera Navigation 탭 안에 `Blocked`, `Compressed`, `Limit` 상태 문구를 표시하지 않는다.
+- [ ] Camera 섹션 내부에 `상태 요약` 필드를 추가한다.
+- [ ] `상태 요약` 값은 `정상`, `조준 막힘`, `카메라 압축`, `조준 제한` 중 하나로 표시한다.
+- [ ] 사용자에게 보이는 주요 Label은 한국어로 표시한다.
+- [ ] 기존 Overview / Drive / Input / Runtime의 주요 표시 Label도 가능한 범위에서 한국어로 표시한다.
+
+
+
 ### 상위 Camera 필드
 
 - [ ] Has CameraComp
