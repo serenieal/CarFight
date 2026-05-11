@@ -262,7 +262,11 @@ protected:
 
 	// [v1.0.0] 현재 Panel에 적용 중인 최신 Input 캐시입니다.
 	UPROPERTY(BlueprintReadOnly, Category="CarFight|VehicleDebug|Panel", meta=(DisplayName="Input 캐시 (CachedInput)", ToolTip="현재 Panel에 표시 중인 최신 VehicleDebug Input 캐시입니다."))
-	FCFVehicleDebugInput CachedInput;
+		FCFVehicleDebugInput CachedInput;
+
+	// [v1.8.0] Cached Camera debug category.
+	UPROPERTY(BlueprintReadOnly, Category="CarFight|VehicleDebug|Panel")
+	FCFVehicleDebugCamera CachedCamera;
 
 	// [v1.0.0] 현재 Panel에 적용 중인 최신 Runtime 캐시입니다.
 	UPROPERTY(BlueprintReadOnly, Category="CarFight|VehicleDebug|Panel", meta=(DisplayName="Runtime 캐시 (CachedRuntime)", ToolTip="현재 Panel에 표시 중인 최신 VehicleDebug Runtime 캐시입니다."))
@@ -435,7 +439,10 @@ private:
 	TSharedRef<FCFVehicleDebugSectionViewData> BuildDriveSectionViewData(const FCFVehicleDebugDrive& InDrive) const;
 
 	// [v1.5.0] Input 카테고리용 Section ViewData를 생성합니다.
-	TSharedRef<FCFVehicleDebugSectionViewData> BuildInputSectionViewData(const FCFVehicleDebugInput& InInput) const;
+		TSharedRef<FCFVehicleDebugSectionViewData> BuildInputSectionViewData(const FCFVehicleDebugInput& InInput) const;
+
+	// [v1.8.0] Camera category section ViewData.
+	TSharedRef<FCFVehicleDebugSectionViewData> BuildCameraSectionViewData(const FCFVehicleDebugCamera& InCamera) const;
 
 	// [v1.5.0] Runtime 카테고리용 Section ViewData를 생성합니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> BuildRuntimeSectionViewData(const FCFVehicleDebugRuntime& InRuntime) const;

@@ -1,14 +1,15 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.6.0
-// Date: 2026-04-15
-// Description: CarFight 신규 차량 Pawn 기준 클래스 (VehicleCameraComp / Look 입력 연동 + VehicleMove 2D 입력 해석 추가)
-// Scope: DriveComp / WheelSyncComp를 소유하고 차량 DA 기준 초기 설정, 런타임 휠 튜닝, 차량 카메라 입력 전달과 차량 2D 이동 입력 해석을 함께 다룹니다.
+// Version: 2.7.0
+// Date: 2026-05-06
+// Description: CarFight 신규 차량 Pawn 기준 클래스 (VehicleDebug Camera 카테고리 추가)
+// Scope: DriveComp / WheelSyncComp / VehicleCameraComp를 소유하고 차량 런타임, 입력, 카메라 디버그 스냅샷을 함께 다룹니다.
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "CFVehicleDriveComp.h"
+#include "CFVehicleCameraTypes.h"
 #include "Components/SlateWrapperTypes.h"
 #include "WheeledVehiclePawn.h"
 #include "CFVehiclePawn.generated.h"
@@ -318,6 +319,31 @@ struct FCFVehicleDebugRuntime
 };
 
 /**
+ * VehicleDebug 카메라 상세 카테고리입니다.
+ */
+USTRUCT(BlueprintType)
+struct FCFVehicleDebugCamera
+{
+	GENERATED_BODY()
+
+	// [v2.7.0] VehicleCameraComp 보유 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Camera", meta=(DisplayName="VehicleCameraComp 보유 여부 (bHasVehicleCameraComponent)", ToolTip="현재 Pawn이 VehicleCameraComp를 보유하고 있는지 여부입니다."))
+	bool bHasVehicleCameraComponent = false;
+
+	// [v2.7.0] VehicleCameraComp가 제공하는 원본 카메라 런타임 스냅샷입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Camera", meta=(DisplayName="카메라 런타임 상태 (CameraRuntimeState)", ToolTip="VehicleCameraComp가 계산한 현재 카메라 런타임 스냅샷입니다."))
+	FCFVehicleCameraRuntimeState CameraRuntimeState;
+
+	// [v2.7.0] 목표 Arm 길이 대비 실제 해결 Arm 길이 비율입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Camera", meta=(DisplayName="충돌 압축 비율 (CollisionCompressionRatio)", ToolTip="DesiredArmLength 대비 SolvedArmLength 비율입니다. 1에 가까울수록 압축이 적고, 0에 가까울수록 크게 눌린 상태입니다."))
+	float CollisionCompressionRatio = 1.0f;
+
+	// [v2.7.0] 카메라가 충돌 등으로 의미 있게 압축된 상태인지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Camera", meta=(DisplayName="충돌 압축 상태 (bCameraCompressedByCollision)", ToolTip="True이면 현재 카메라가 목표 Arm 길이보다 의미 있게 짧아진 상태입니다."))
+	bool bCameraCompressedByCollision = false;
+};
+
+/**
  * Pawn 레벨에서 바로 확인할 수 있는 차량 디버그 스냅샷입니다.
  * - 런타임 준비 상태와 요약 문자열
  * - 현재/이전 Drive 상태와 마지막 전이 요약
@@ -338,7 +364,11 @@ struct FCFVehicleDebugSnapshot
 
 	// [v2.14.1] 입력 해석 상세 카테고리입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="Input 카테고리 (Input)", ToolTip="입력 장치, 주도권, 2D 이동 해석 결과를 담는 VehicleDebug Input 카테고리입니다."))
-	FCFVehicleDebugInput Input;
+									FCFVehicleDebugInput Input;
+
+	// [v2.7.0] 카메라 상세 카테고리입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug")
+	FCFVehicleDebugCamera Camera;
 
 	// [v2.14.1] 런타임 진단 카테고리입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="Runtime 카테고리 (Runtime)", ToolTip="런타임 준비 상태와 요약 문자열을 담는 VehicleDebug Runtime 카테고리입니다."))
@@ -561,8 +591,11 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="상세 패널 표시용 VehicleDebug Drive 카테고리를 반환합니다."))
 	FCFVehicleDebugDrive GetVehicleDebugDrive() const;
 
-	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="상세 패널 표시용 VehicleDebug Input 카테고리를 반환합니다."))
+		UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="상세 패널 표시용 VehicleDebug Input 카테고리를 반환합니다."))
 	FCFVehicleDebugInput GetVehicleDebugInput() const;
+
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="상세 패널 표시용 VehicleDebug Camera 카테고리를 반환합니다."))
+	FCFVehicleDebugCamera GetVehicleDebugCamera() const;
 
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="상세 패널 표시용 VehicleDebug Runtime 카테고리를 반환합니다."))
 	FCFVehicleDebugRuntime GetVehicleDebugRuntime() const;

@@ -1005,8 +1005,29 @@ FCFVehicleDebugSnapshot ACFVehiclePawn::GetVehicleDebugSnapshot() const
 	DebugSnapshot.Input.MoveIntent = LastMoveDirectionIntent;
 	DebugSnapshot.Input.MoveRaw = LastVehicleMoveInputResult.RawMoveInput;
 	DebugSnapshot.Input.MoveMagnitude = LastVehicleMoveInputResult.Magnitude;
-	DebugSnapshot.Input.MoveAngle = LastVehicleMoveInputResult.AngleDeg;
+			DebugSnapshot.Input.MoveAngle = LastVehicleMoveInputResult.AngleDeg;
 	DebugSnapshot.Input.bUsedBlackZoneHold = LastVehicleMoveInputResult.bUsedBlackZoneHold;
+
+	// [v2.7.0] Camera 카테고리는 VehicleCameraComp가 제공하는 원본 런타임 스냅샷과 표시용 압축 비율을 함께 담습니다.
+	DebugSnapshot.Camera.bHasVehicleCameraComponent = (VehicleCameraComp != nullptr);
+	if (DebugSnapshot.Camera.bHasVehicleCameraComponent)
+	{
+		DebugSnapshot.Camera.CameraRuntimeState = VehicleCameraComp->GetCameraRuntimeState();
+
+		const float DesiredArmLength = DebugSnapshot.Camera.CameraRuntimeState.DesiredArmLength;
+		const float SolvedArmLength = DebugSnapshot.Camera.CameraRuntimeState.SolvedArmLength;
+
+		if (DesiredArmLength > KINDA_SMALL_NUMBER)
+		{
+			DebugSnapshot.Camera.CollisionCompressionRatio = FMath::Clamp(SolvedArmLength / DesiredArmLength, 0.0f, 1.0f);
+		}
+		else
+		{
+			DebugSnapshot.Camera.CollisionCompressionRatio = 1.0f;
+		}
+
+		DebugSnapshot.Camera.bCameraCompressedByCollision = DebugSnapshot.Camera.CollisionCompressionRatio < 0.90f;
+	}
 
 	DebugSnapshot.Overview.bRuntimeReady = bVehicleRuntimeReady;
 	DebugSnapshot.Overview.DeviceMode = InputDeviceMode;
@@ -1058,6 +1079,12 @@ FCFVehicleDebugInput ACFVehiclePawn::GetVehicleDebugInput() const
 {
 	// [v2.14.2] 상세 패널이 필요한 Input 카테고리만 직접 읽을 수 있도록 반환합니다.
 	return GetVehicleDebugSnapshot().Input;
+}
+
+FCFVehicleDebugCamera ACFVehiclePawn::GetVehicleDebugCamera() const
+{
+	// [v2.7.0] 상세 패널이 필요한 Camera 카테고리만 직접 읽을 수 있도록 반환합니다.
+	return GetVehicleDebugSnapshot().Camera;
 }
 
 FCFVehicleDebugRuntime ACFVehiclePawn::GetVehicleDebugRuntime() const

@@ -131,7 +131,8 @@ void UCFVehicleDebugPanelWidget::RefreshFromPawn()
 	const FCFVehicleDebugDrive LatestDrive = VehiclePawnRef->GetVehicleDebugDrive();
 
 	// [v1.0.0] 현재 Pawn 기준 최신 Input 카테고리를 가져옵니다.
-	const FCFVehicleDebugInput LatestInput = VehiclePawnRef->GetVehicleDebugInput();
+					const FCFVehicleDebugInput LatestInput = VehiclePawnRef->GetVehicleDebugInput();
+	const FCFVehicleDebugCamera LatestCamera = VehiclePawnRef->GetVehicleDebugCamera();
 
 	// [v1.0.0] 현재 Pawn 기준 최신 Runtime 카테고리를 가져옵니다.
 	const FCFVehicleDebugRuntime LatestRuntime = VehiclePawnRef->GetVehicleDebugRuntime();
@@ -143,7 +144,8 @@ void UCFVehicleDebugPanelWidget::RefreshFromPawn()
 	CachedDrive = LatestDrive;
 
 	// [v1.0.0] 현재 Panel 캐시에 최신 Input을 저장합니다.
-	CachedInput = LatestInput;
+					CachedInput = LatestInput;
+	CachedCamera = LatestCamera;
 
 	// [v1.0.0] 현재 Panel 캐시에 최신 Runtime을 저장합니다.
 	CachedRuntime = LatestRuntime;
@@ -536,11 +538,11 @@ FString UCFVehicleDebugPanelWidget::ConvertEnumValueToDisplayString(const TCHAR*
 FString UCFVehicleDebugPanelWidget::BuildOverviewBodyText(const FCFVehicleDebugOverview& InOverview) const
 {
 	// [v1.0.0] Runtime 준비 상태 표시 문자열입니다.
-	const FString RuntimeReadyText = InOverview.bRuntimeReady ? TEXT("True") : TEXT("False");
+	const FString RuntimeReadyText = InOverview.bRuntimeReady ? TEXT("예") : TEXT("아니오");
 
 	// [v1.0.0] Overview 본문 문자열입니다.
 	const FString OverviewBodyText = FString::Printf(
-		TEXT("Ready: %s\nState: %s\nSpeed: %.1f km/h\nForward: %.1f km/h\nInput Mode: %s\nInput Owner: %s"),
+		TEXT("준비: %s\n상태: %s\n속도: %.1f km/h\n전진 속도: %.1f km/h\n입력 모드: %s\n입력 소유자: %s"),
 		*RuntimeReadyText,
 		*ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InOverview.CurrentDriveState)),
 		InOverview.SpeedKmh,
@@ -554,7 +556,7 @@ FString UCFVehicleDebugPanelWidget::BuildOverviewBodyText(const FCFVehicleDebugO
 FString UCFVehicleDebugPanelWidget::BuildOverviewLastTransitionBodyText(const FCFVehicleDebugOverview& InOverview) const
 {
 	// [v1.4.0] Panel 표시용 Overview Last Transition 문자열입니다.
-	const FString OverviewLastTransitionPanelText = FormatLongSummaryForPanel(InOverview.LastTransitionShortText, TEXT("DriveStateTransition: "));
+	const FString OverviewLastTransitionPanelText = FormatLongSummaryForPanel(InOverview.LastTransitionShortText, TEXT("주행 상태 전이: "));
 
 	return OverviewLastTransitionPanelText;
 }
@@ -562,14 +564,14 @@ FString UCFVehicleDebugPanelWidget::BuildOverviewLastTransitionBodyText(const FC
 FString UCFVehicleDebugPanelWidget::BuildDriveBodyText(const FCFVehicleDebugDrive& InDrive) const
 {
 	// [v1.0.0] Drive 상태 변경 여부 표시 문자열입니다.
-	const FString DriveChangedText = InDrive.bDriveStateChangedThisFrame ? TEXT("True") : TEXT("False");
+	const FString DriveChangedText = InDrive.bDriveStateChangedThisFrame ? TEXT("예") : TEXT("아니오");
 
 	// [v1.0.0] Handbrake 표시 문자열입니다.
-	const FString HandbrakeText = InDrive.bHandbrake ? TEXT("On") : TEXT("Off");
+	const FString HandbrakeText = InDrive.bHandbrake ? TEXT("켜짐") : TEXT("꺼짐");
 
 	// [v1.0.0] Drive 본문 문자열입니다.
 	const FString DriveBodyText = FString::Printf(
-		TEXT("Current State: %s\nPrevious State: %s\nChanged This Frame: %s\nSpeed: %.1f km/h\nForward: %.1f km/h\nThrottle: %.2f\nBrake: %.2f\nSteering: %.2f\nHandbrake: %s"),
+		TEXT("현재 상태: %s\n이전 상태: %s\n이번 프레임 변경: %s\n속도: %.1f km/h\n전진 속도: %.1f km/h\n스로틀: %.2f\n브레이크: %.2f\n조향: %.2f\n핸드브레이크: %s"),
 		*ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InDrive.CurrentDriveState)),
 		*ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InDrive.PreviousDriveState)),
 		*DriveChangedText,
@@ -586,7 +588,7 @@ FString UCFVehicleDebugPanelWidget::BuildDriveBodyText(const FCFVehicleDebugDriv
 FString UCFVehicleDebugPanelWidget::BuildDriveTransitionBodyText(const FCFVehicleDebugDrive& InDrive) const
 {
 	// [v1.4.0] Panel 표시용 Drive Transition 문자열입니다.
-	const FString DriveTransitionPanelText = FormatLongSummaryForPanel(InDrive.DriveStateTransitionSummary, TEXT("DriveStateTransition: "));
+	const FString DriveTransitionPanelText = FormatLongSummaryForPanel(InDrive.DriveStateTransitionSummary, TEXT("주행 상태 전이: "));
 
 	return DriveTransitionPanelText;
 }
@@ -594,11 +596,11 @@ FString UCFVehicleDebugPanelWidget::BuildDriveTransitionBodyText(const FCFVehicl
 FString UCFVehicleDebugPanelWidget::BuildInputBodyText(const FCFVehicleDebugInput& InInput) const
 {
 	// [v1.0.0] 검은 영역 유지 정책 사용 여부 표시 문자열입니다.
-	const FString BlackZoneHoldText = InInput.bUsedBlackZoneHold ? TEXT("True") : TEXT("False");
+	const FString BlackZoneHoldText = InInput.bUsedBlackZoneHold ? TEXT("예") : TEXT("아니오");
 
 	// [v1.0.0] Input 본문 문자열입니다.
 	const FString InputBodyText = FString::Printf(
-		TEXT("Device Mode: %s\nInput Owner: %s\nMove Zone: %s\nMove Intent: %s\nMove Raw: (%.2f, %.2f)\nMove Magnitude: %.2f\nMove Angle: %.1f\nBlack Hold: %s"),
+		TEXT("장치 모드: %s\n입력 소유자: %s\n이동 영역: %s\n이동 의도: %s\n이동 원본값: (%.2f, %.2f)\n이동 크기: %.2f\n이동 각도: %.1f\n블랙존 유지: %s"),
 		*ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InInput.DeviceMode)),
 		*ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InInput.InputOwner)),
 		*ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InInput.MoveZone)),
@@ -615,17 +617,17 @@ FString UCFVehicleDebugPanelWidget::BuildInputBodyText(const FCFVehicleDebugInpu
 FString UCFVehicleDebugPanelWidget::BuildRuntimeBodyText(const FCFVehicleDebugRuntime& InRuntime) const
 {
 	// [v1.0.0] Runtime 준비 상태 표시 문자열입니다.
-	const FString RuntimeReadyText = InRuntime.bRuntimeReady ? TEXT("True") : TEXT("False");
+	const FString RuntimeReadyText = InRuntime.bRuntimeReady ? TEXT("예") : TEXT("아니오");
 
 	// [v1.0.0] Drive 컴포넌트 존재 여부 표시 문자열입니다.
-	const FString HasDriveComponentText = InRuntime.bHasDriveComponent ? TEXT("True") : TEXT("False");
+	const FString HasDriveComponentText = InRuntime.bHasDriveComponent ? TEXT("예") : TEXT("아니오");
 
 	// [v1.0.0] WheelSync 컴포넌트 존재 여부 표시 문자열입니다.
-	const FString HasWheelSyncComponentText = InRuntime.bHasWheelSyncComponent ? TEXT("True") : TEXT("False");
+	const FString HasWheelSyncComponentText = InRuntime.bHasWheelSyncComponent ? TEXT("예") : TEXT("아니오");
 
 	// [v1.0.0] Runtime 본문 문자열입니다.
 	const FString RuntimeBodyText = FString::Printf(
-		TEXT("Ready: %s\nHas DriveComp: %s\nHas WheelSyncComp: %s"),
+		TEXT("준비: %s\n주행 컴포넌트: %s\n휠 동기화 컴포넌트: %s"),
 		*RuntimeReadyText,
 		*HasDriveComponentText,
 		*HasWheelSyncComponentText);
@@ -636,7 +638,7 @@ FString UCFVehicleDebugPanelWidget::BuildRuntimeBodyText(const FCFVehicleDebugRu
 FString UCFVehicleDebugPanelWidget::BuildRuntimeSummaryBodyText(const FCFVehicleDebugRuntime& InRuntime) const
 {
 	// [v1.3.0] Panel 표시용 Runtime Summary 문자열입니다.
-	const FString RuntimeSummaryPanelText = FormatLongSummaryForPanel(InRuntime.RuntimeSummary, TEXT("VehicleRuntime: "));
+	const FString RuntimeSummaryPanelText = FormatLongSummaryForPanel(InRuntime.RuntimeSummary, TEXT("차량 런타임: "));
 
 	return RuntimeSummaryPanelText;
 }
@@ -644,7 +646,7 @@ FString UCFVehicleDebugPanelWidget::BuildRuntimeSummaryBodyText(const FCFVehicle
 FString UCFVehicleDebugPanelWidget::BuildRuntimeLastInitBodyText(const FCFVehicleDebugRuntime& InRuntime) const
 {
 	// [v1.3.0] Panel 표시용 Last Init 문자열입니다.
-	const FString RuntimeLastInitPanelText = FormatLongSummaryForPanel(InRuntime.LastInitAttemptSummary, TEXT("VehicleRuntime: "));
+	const FString RuntimeLastInitPanelText = FormatLongSummaryForPanel(InRuntime.LastInitAttemptSummary, TEXT("차량 런타임: "));
 
 	return RuntimeLastInitPanelText;
 }
@@ -652,7 +654,7 @@ FString UCFVehicleDebugPanelWidget::BuildRuntimeLastInitBodyText(const FCFVehicl
 FString UCFVehicleDebugPanelWidget::BuildRuntimeLastValidationBodyText(const FCFVehicleDebugRuntime& InRuntime) const
 {
 	// [v1.3.0] Panel 표시용 Last Validation 문자열입니다.
-	const FString RuntimeLastValidationPanelText = FormatLongSummaryForPanel(InRuntime.LastValidationSummary, TEXT("VehicleRuntime: "));
+	const FString RuntimeLastValidationPanelText = FormatLongSummaryForPanel(InRuntime.LastValidationSummary, TEXT("차량 런타임: "));
 
 	return RuntimeLastValidationPanelText;
 }
@@ -662,14 +664,63 @@ FString UCFVehicleDebugPanelWidget::FormatLongSummaryForPanel(const FString& InS
 	// [v1.1.0] Panel 표시용으로 정리할 원본 요약 문자열입니다.
 	FString FormattedSummaryText = InSummaryText;
 
-	// [v1.1.0] 패널에서 제거할 수 있는 공통 접두사 길이입니다.
-	const int32 KnownPrefixLength = InKnownPrefix.Len();
+	// [v1.8.1] 기존 C++ 원본 요약 접두어와 한국어 접두어를 모두 패널에서는 제거합니다.
+	const TArray<FString> KnownPrefixArray = {
+		InKnownPrefix,
+		TEXT("VehicleRuntime: "),
+		TEXT("VehicleLayout: "),
+		TEXT("DriveStateTransition: ")
+	};
 
-	// [v1.1.0] 공통 접두사가 있으면 제거해 본문만 보이게 합니다.
-	if (!InKnownPrefix.IsEmpty() && FormattedSummaryText.StartsWith(InKnownPrefix))
+	for (const FString& KnownPrefix : KnownPrefixArray)
 	{
-		FormattedSummaryText.RightChopInline(KnownPrefixLength, EAllowShrinking::No);
+		if (!KnownPrefix.IsEmpty() && FormattedSummaryText.StartsWith(KnownPrefix))
+		{
+			FormattedSummaryText.RightChopInline(KnownPrefix.Len(), EAllowShrinking::No);
+			break;
+		}
 	}
+
+	// [v1.8.1] 원본 디버그 키는 유지하되, Panel 표시용 문자열만 한국어로 변환합니다.
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("Data="), TEXT("데이터="));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("Drive="), TEXT("주행="));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("WheelSync="), TEXT("휠 동기화="));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("Ready="), TEXT("준비="));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("MovementProfile="), TEXT("이동 프로필="));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("MaxTorque="), TEXT("최대 토크="));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("MaxRPM="), TEXT("최대 RPM="));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("Differential="), TEXT("디퍼렌셜="));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("SteeringType="), TEXT("조향 타입="));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("WheelPhysicsOverrides="), TEXT("휠 물리 오버라이드="));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("FrontWheelClass="), TEXT("전륜 클래스="));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("RearWheelClass="), TEXT("후륜 클래스="));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("FrontOffset="), TEXT("전륜 오프셋="));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("RearOffset="), TEXT("후륜 오프셋="));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("WheelVisual ExpectedWheelCount="), TEXT("휠 비주얼 예상 휠 수="));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("ExpectedWheelCount="), TEXT("예상 휠 수="));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("FrontWheelCount="), TEXT("전륜 수="));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("FrontWheelCountForSteering="), TEXT("조향 전륜 수="));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("WheelSyncBuild="), TEXT("휠 동기화 빌드="));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("WheelSyncRuntime="), TEXT("휠 동기화 런타임="));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("WheelSyncValidation:"), TEXT("휠 동기화 검증:"));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("WheelSyncInput:"), TEXT("휠 동기화 입력:"));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("ManualAnchorLayout=Required"), TEXT("수동 앵커 배치 필요"));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("VehicleData is null"), TEXT("VehicleData 없음"));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("VehicleDriveComp is null"), TEXT("VehicleDriveComp 없음"));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("WheelSyncComp is null"), TEXT("WheelSyncComp 없음"));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("VehicleMovementComponent is null"), TEXT("VehicleMovementComponent 없음"));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("DriveComp cache failed"), TEXT("DriveComp 캐시 실패"));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("Wheel visual update failed"), TEXT("휠 비주얼 갱신 실패"));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("InitializeStarted"), TEXT("초기화 시작"));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("Present"), TEXT("있음"));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("MissingWheelSyncComp"), TEXT("WheelSyncComp 없음"));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("Missing"), TEXT("없음"));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("True"), TEXT("예"));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("False"), TEXT("아니오"));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("None"), TEXT("없음"));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("during ApplyVehicleMovementConfig."), TEXT("ApplyVehicleMovementConfig 중"));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("during ApplyVehicleWheelPhysicsConfig."), TEXT("ApplyVehicleWheelPhysicsConfig 중"));
+	FormattedSummaryText = FormattedSummaryText.Replace(TEXT("during UpdateVehicleWheelVisuals."), TEXT("UpdateVehicleWheelVisuals 중"));
 
 	// [v1.1.0] 파이프 구분자를 패널용 줄바꿈으로 바꿉니다.
 	FormattedSummaryText = FormattedSummaryText.Replace(TEXT(" | "), TEXT("\n  - "));
@@ -938,31 +989,31 @@ void UCFVehicleDebugPanelWidget::UpdateCategoryBodyVisibility()
 void UCFVehicleDebugPanelWidget::UpdateCategoryHeaderTexts()
 {
 	// [v1.2.4] Overview 펼침 상태를 제목 문자열에 반영합니다.
-	const FString OverviewHeaderText = FString::Printf(TEXT("%s Overview"), bIsOverviewExpanded ? TEXT("[-]") : TEXT("[+]"));
+	const FString OverviewHeaderText = FString::Printf(TEXT("%s 개요"), bIsOverviewExpanded ? TEXT("[-]") : TEXT("[+]"));
 
 	// [v1.2.4] Drive 펼침 상태를 제목 문자열에 반영합니다.
-	const FString DriveHeaderText = FString::Printf(TEXT("%s Drive"), bIsDriveExpanded ? TEXT("[-]") : TEXT("[+]"));
+	const FString DriveHeaderText = FString::Printf(TEXT("%s 주행"), bIsDriveExpanded ? TEXT("[-]") : TEXT("[+]"));
 
 	// [v1.4.0] Overview Last Transition 펼침 상태를 제목 문자열에 반영합니다.
-	const FString OverviewLastTransitionHeaderText = FString::Printf(TEXT("%s Last Transition"), bIsOverviewLastTransitionExpanded ? TEXT("[-]") : TEXT("[+]"));
+	const FString OverviewLastTransitionHeaderText = FString::Printf(TEXT("%s 최근 전이"), bIsOverviewLastTransitionExpanded ? TEXT("[-]") : TEXT("[+]"));
 
 	// [v1.4.0] Drive Transition 펼침 상태를 제목 문자열에 반영합니다.
-	const FString DriveTransitionHeaderText = FString::Printf(TEXT("%s Transition"), bIsDriveTransitionExpanded ? TEXT("[-]") : TEXT("[+]"));
+	const FString DriveTransitionHeaderText = FString::Printf(TEXT("%s 전이"), bIsDriveTransitionExpanded ? TEXT("[-]") : TEXT("[+]"));
 
 	// [v1.2.4] Input 펼침 상태를 제목 문자열에 반영합니다.
-	const FString InputHeaderText = FString::Printf(TEXT("%s Input"), bIsInputExpanded ? TEXT("[-]") : TEXT("[+]"));
+	const FString InputHeaderText = FString::Printf(TEXT("%s 입력"), bIsInputExpanded ? TEXT("[-]") : TEXT("[+]"));
 
 	// [v1.2.4] Runtime 펼침 상태를 제목 문자열에 반영합니다.
-	const FString RuntimeHeaderText = FString::Printf(TEXT("%s Runtime"), bIsRuntimeExpanded ? TEXT("[-]") : TEXT("[+]"));
+	const FString RuntimeHeaderText = FString::Printf(TEXT("%s 런타임"), bIsRuntimeExpanded ? TEXT("[-]") : TEXT("[+]"));
 
 	// [v1.3.0] Runtime Summary 펼침 상태를 제목 문자열에 반영합니다.
-	const FString RuntimeSummaryHeaderText = FString::Printf(TEXT("%s Runtime Summary"), bIsRuntimeSummaryExpanded ? TEXT("[-]") : TEXT("[+]"));
+	const FString RuntimeSummaryHeaderText = FString::Printf(TEXT("%s 런타임 요약"), bIsRuntimeSummaryExpanded ? TEXT("[-]") : TEXT("[+]"));
 
 	// [v1.3.0] Last Init 펼침 상태를 제목 문자열에 반영합니다.
-	const FString RuntimeLastInitHeaderText = FString::Printf(TEXT("%s Last Init"), bIsRuntimeLastInitExpanded ? TEXT("[-]") : TEXT("[+]"));
+	const FString RuntimeLastInitHeaderText = FString::Printf(TEXT("%s 최근 초기화"), bIsRuntimeLastInitExpanded ? TEXT("[-]") : TEXT("[+]"));
 
 	// [v1.3.0] Last Validation 펼침 상태를 제목 문자열에 반영합니다.
-	const FString RuntimeLastValidationHeaderText = FString::Printf(TEXT("%s Last Validation"), bIsRuntimeLastValidationExpanded ? TEXT("[-]") : TEXT("[+]"));
+	const FString RuntimeLastValidationHeaderText = FString::Printf(TEXT("%s 최근 검증"), bIsRuntimeLastValidationExpanded ? TEXT("[-]") : TEXT("[+]"));
 
 	// [v1.2.4] Overview 제목 텍스트를 갱신합니다.
 	if (Text_OverviewTitle)
@@ -1361,12 +1412,13 @@ FCFVehicleDebugPanelViewData UCFVehicleDebugPanelWidget::BuildVehicleDebugPanelV
 	// [v1.5.0] 생성할 Panel ViewData 결과입니다.
 	FCFVehicleDebugPanelViewData PanelViewData;
 	PanelViewData.PanelId = TEXT("VehicleDebugPanel");
-	PanelViewData.PanelTitleText = TEXT("Vehicle Debug Panel");
+	PanelViewData.PanelTitleText = TEXT("차량 디버그 패널");
 	PanelViewData.GeneratedFrameNumber = GFrameCounter;
 	PanelViewData.GeneratedTimeSeconds = FPlatformTime::Seconds();
 	PanelViewData.AddTopLevelSection(BuildOverviewSectionViewData(CachedOverview));
 	PanelViewData.AddTopLevelSection(BuildDriveSectionViewData(CachedDrive));
-	PanelViewData.AddTopLevelSection(BuildInputSectionViewData(CachedInput));
+					PanelViewData.AddTopLevelSection(BuildInputSectionViewData(CachedInput));
+	PanelViewData.AddTopLevelSection(BuildCameraSectionViewData(CachedCamera));
 	PanelViewData.AddTopLevelSection(BuildRuntimeSectionViewData(CachedRuntime));
 	return PanelViewData;
 }
@@ -1376,21 +1428,21 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildOver
 {
 	// [v1.5.0] 생성할 Overview 섹션 ViewData입니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> OverviewSectionViewData =
-		FCFVehicleDebugSectionViewData::MakeSection(TEXT("Overview"), TEXT("Overview"), ECFVehicleDebugSectionKind::Category, bIsOverviewExpanded);
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("Overview"), TEXT("개요"), ECFVehicleDebugSectionKind::Category, bIsOverviewExpanded);
 	OverviewSectionViewData->NavigationGroup = ECFVehicleDebugNavGroup::Core;
 	OverviewSectionViewData->NavigationOrder = 10;
 	OverviewSectionViewData->bShowInNavigation = true;
 
-	OverviewSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("overview_runtime_ready"), TEXT("Ready"), InOverview.bRuntimeReady ? TEXT("True") : TEXT("False"), true));
-	OverviewSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("overview_state"), TEXT("State"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InOverview.CurrentDriveState))));
-	OverviewSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("overview_speed"), TEXT("Speed"), FString::Printf(TEXT("%.1f km/h"), InOverview.SpeedKmh)));
-	OverviewSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("overview_forward_speed"), TEXT("Forward"), FString::Printf(TEXT("%.1f km/h"), InOverview.ForwardSpeedKmh)));
-	OverviewSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("overview_device_mode"), TEXT("Input Mode"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InOverview.DeviceMode))));
-	OverviewSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("overview_input_owner"), TEXT("Input Owner"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InOverview.InputOwner))));
+	OverviewSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("overview_runtime_ready"), TEXT("준비"), InOverview.bRuntimeReady ? TEXT("예") : TEXT("아니오"), true));
+	OverviewSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("overview_state"), TEXT("상태"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InOverview.CurrentDriveState))));
+	OverviewSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("overview_speed"), TEXT("속도"), FString::Printf(TEXT("%.1f km/h"), InOverview.SpeedKmh)));
+	OverviewSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("overview_forward_speed"), TEXT("전진 속도"), FString::Printf(TEXT("%.1f km/h"), InOverview.ForwardSpeedKmh)));
+	OverviewSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("overview_device_mode"), TEXT("입력 모드"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InOverview.DeviceMode))));
+	OverviewSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("overview_input_owner"), TEXT("입력 소유자"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InOverview.InputOwner))));
 
 	// [v1.5.0] Overview Last Transition 하위 섹션 ViewData입니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> OverviewLastTransitionSectionViewData =
-		FCFVehicleDebugSectionViewData::MakeSection(TEXT("OverviewLastTransition"), TEXT("Last Transition"), ECFVehicleDebugSectionKind::Subsection, bIsOverviewLastTransitionExpanded);
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("OverviewLastTransition"), TEXT("최근 전이"), ECFVehicleDebugSectionKind::Subsection, bIsOverviewLastTransitionExpanded);
 	OverviewLastTransitionSectionViewData->BodyText = BuildOverviewLastTransitionBodyText(InOverview);
 	OverviewSectionViewData->AddChildSection(OverviewLastTransitionSectionViewData);
 
@@ -1402,24 +1454,24 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildDriv
 {
 	// [v1.5.0] 생성할 Drive 섹션 ViewData입니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> DriveSectionViewData =
-		FCFVehicleDebugSectionViewData::MakeSection(TEXT("Drive"), TEXT("Drive"), ECFVehicleDebugSectionKind::Category, bIsDriveExpanded);
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("Drive"), TEXT("주행"), ECFVehicleDebugSectionKind::Category, bIsDriveExpanded);
 	DriveSectionViewData->NavigationGroup = ECFVehicleDebugNavGroup::Core;
 	DriveSectionViewData->NavigationOrder = 20;
 	DriveSectionViewData->bShowInNavigation = true;
 
-	DriveSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("drive_current_state"), TEXT("Current State"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InDrive.CurrentDriveState))));
-	DriveSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("drive_previous_state"), TEXT("Previous State"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InDrive.PreviousDriveState))));
-	DriveSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("drive_changed_this_frame"), TEXT("Changed This Frame"), InDrive.bDriveStateChangedThisFrame ? TEXT("True") : TEXT("False")));
-	DriveSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("drive_speed"), TEXT("Speed"), FString::Printf(TEXT("%.1f km/h"), InDrive.SpeedKmh)));
-	DriveSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("drive_forward_speed"), TEXT("Forward"), FString::Printf(TEXT("%.1f km/h"), InDrive.ForwardSpeedKmh)));
-	DriveSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("drive_throttle"), TEXT("Throttle"), FString::Printf(TEXT("%.2f"), InDrive.Throttle)));
-	DriveSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("drive_brake"), TEXT("Brake"), FString::Printf(TEXT("%.2f"), InDrive.Brake)));
-	DriveSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("drive_steering"), TEXT("Steering"), FString::Printf(TEXT("%.2f"), InDrive.Steering)));
-	DriveSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("drive_handbrake"), TEXT("Handbrake"), InDrive.bHandbrake ? TEXT("On") : TEXT("Off")));
+	DriveSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("drive_current_state"), TEXT("현재 상태"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InDrive.CurrentDriveState))));
+	DriveSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("drive_previous_state"), TEXT("이전 상태"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InDrive.PreviousDriveState))));
+	DriveSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("drive_changed_this_frame"), TEXT("이번 프레임 변경"), InDrive.bDriveStateChangedThisFrame ? TEXT("예") : TEXT("아니오")));
+	DriveSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("drive_speed"), TEXT("속도"), FString::Printf(TEXT("%.1f km/h"), InDrive.SpeedKmh)));
+	DriveSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("drive_forward_speed"), TEXT("전진 속도"), FString::Printf(TEXT("%.1f km/h"), InDrive.ForwardSpeedKmh)));
+	DriveSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("drive_throttle"), TEXT("스로틀"), FString::Printf(TEXT("%.2f"), InDrive.Throttle)));
+	DriveSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("drive_brake"), TEXT("브레이크"), FString::Printf(TEXT("%.2f"), InDrive.Brake)));
+	DriveSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("drive_steering"), TEXT("조향"), FString::Printf(TEXT("%.2f"), InDrive.Steering)));
+	DriveSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("drive_handbrake"), TEXT("핸드브레이크"), InDrive.bHandbrake ? TEXT("켜짐") : TEXT("꺼짐")));
 
 	// [v1.5.0] Drive Transition 하위 섹션 ViewData입니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> DriveTransitionSectionViewData =
-		FCFVehicleDebugSectionViewData::MakeSection(TEXT("DriveTransition"), TEXT("Transition"), ECFVehicleDebugSectionKind::Subsection, bIsDriveTransitionExpanded);
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("DriveTransition"), TEXT("전이"), ECFVehicleDebugSectionKind::Subsection, bIsDriveTransitionExpanded);
 	DriveTransitionSectionViewData->BodyText = BuildDriveTransitionBodyText(InDrive);
 	DriveSectionViewData->AddChildSection(DriveTransitionSectionViewData);
 
@@ -1431,21 +1483,86 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildInpu
 {
 	// [v1.5.0] 생성할 Input 섹션 ViewData입니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> InputSectionViewData =
-		FCFVehicleDebugSectionViewData::MakeSection(TEXT("Input"), TEXT("Input"), ECFVehicleDebugSectionKind::Category, bIsInputExpanded);
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("Input"), TEXT("입력"), ECFVehicleDebugSectionKind::Category, bIsInputExpanded);
 	InputSectionViewData->NavigationGroup = ECFVehicleDebugNavGroup::Core;
 	InputSectionViewData->NavigationOrder = 30;
 	InputSectionViewData->bShowInNavigation = true;
 
-	InputSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("input_device_mode"), TEXT("Device Mode"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InInput.DeviceMode))));
-	InputSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("input_input_owner"), TEXT("Input Owner"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InInput.InputOwner))));
-	InputSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("input_move_zone"), TEXT("Move Zone"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InInput.MoveZone))));
-	InputSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("input_move_intent"), TEXT("Move Intent"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InInput.MoveIntent))));
-	InputSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("input_move_raw"), TEXT("Move Raw"), FString::Printf(TEXT("(%.2f, %.2f)"), InInput.MoveRaw.X, InInput.MoveRaw.Y)));
-	InputSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("input_move_magnitude"), TEXT("Move Magnitude"), FString::Printf(TEXT("%.2f"), InInput.MoveMagnitude)));
-	InputSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("input_move_angle"), TEXT("Move Angle"), FString::Printf(TEXT("%.1f"), InInput.MoveAngle)));
-	InputSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("input_black_hold"), TEXT("Black Hold"), InInput.bUsedBlackZoneHold ? TEXT("True") : TEXT("False")));
+	InputSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("input_device_mode"), TEXT("장치 모드"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InInput.DeviceMode))));
+	InputSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("input_input_owner"), TEXT("입력 소유자"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InInput.InputOwner))));
+	InputSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("input_move_zone"), TEXT("이동 영역"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InInput.MoveZone))));
+	InputSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("input_move_intent"), TEXT("이동 의도"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InInput.MoveIntent))));
+	InputSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("input_move_raw"), TEXT("이동 원본값"), FString::Printf(TEXT("(%.2f, %.2f)"), InInput.MoveRaw.X, InInput.MoveRaw.Y)));
+	InputSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("input_move_magnitude"), TEXT("이동 크기"), FString::Printf(TEXT("%.2f"), InInput.MoveMagnitude)));
+	InputSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("input_move_angle"), TEXT("이동 각도"), FString::Printf(TEXT("%.1f"), InInput.MoveAngle)));
+	InputSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("input_black_hold"), TEXT("블랙존 유지"), InInput.bUsedBlackZoneHold ? TEXT("예") : TEXT("아니오")));
 
 	return InputSectionViewData;
+}
+
+// [v1.8.0] Camera category section ViewData.
+TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildCameraSectionViewData(const FCFVehicleDebugCamera& InCamera) const
+{
+	const FCFVehicleCameraRuntimeState& CameraState = InCamera.CameraRuntimeState;
+	const bool bIsAimLimited = CameraState.bAimAtYawLimit || CameraState.bAimAtPitchLimit;
+	const FString CameraStatusText = CameraState.bAimBlocked
+		? TEXT("조준 막힘")
+		: (InCamera.bCameraCompressedByCollision
+			? TEXT("카메라 압축")
+			: (bIsAimLimited ? TEXT("조준 제한") : TEXT("정상")));
+
+	TSharedRef<FCFVehicleDebugSectionViewData> CameraSectionViewData =
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("Camera"), TEXT("카메라"), ECFVehicleDebugSectionKind::Category, true);
+	CameraSectionViewData->NavigationGroup = ECFVehicleDebugNavGroup::Vehicle;
+	CameraSectionViewData->NavigationOrder = 30;
+	CameraSectionViewData->bShowInNavigation = true;
+
+	CameraSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_status_summary"), TEXT("상태 요약"), CameraStatusText, CameraState.bAimBlocked || InCamera.bCameraCompressedByCollision || bIsAimLimited));
+	CameraSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_has_comp"), TEXT("카메라 컴포넌트"), InCamera.bHasVehicleCameraComponent ? TEXT("있음") : TEXT("없음"), !InCamera.bHasVehicleCameraComponent));
+	CameraSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_mode"), TEXT("현재 모드"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(CameraState.CurrentCameraMode))));
+	CameraSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_profile"), TEXT("조준 프로필"), CameraState.ActiveAimProfileName.ToString()));
+	CameraSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_aim_blocked"), TEXT("조준 막힘"), CameraState.bAimBlocked ? TEXT("예") : TEXT("아니오"), CameraState.bAimBlocked));
+	CameraSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_can_fire"), TEXT("발사 가능"), CameraState.bWeaponCanFireAtCurrentAim ? TEXT("예") : TEXT("아니오"), !CameraState.bWeaponCanFireAtCurrentAim));
+	CameraSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_compression"), TEXT("압축 비율"), FString::Printf(TEXT("%.2f"), InCamera.CollisionCompressionRatio), InCamera.bCameraCompressedByCollision));
+	CameraSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_current_fov"), TEXT("현재 FOV"), FString::Printf(TEXT("%.1f"), CameraState.CurrentFOV)));
+
+	TSharedRef<FCFVehicleDebugSectionViewData> AimSectionViewData =
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("CameraAim"), TEXT("조준"), ECFVehicleDebugSectionKind::Subsection, true);
+	AimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_aim_accum_yaw"), TEXT("누적 Yaw"), FString::Printf(TEXT("%.1f"), CameraState.AccumulatedAimYaw)));
+	AimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_aim_accum_pitch"), TEXT("누적 Pitch"), FString::Printf(TEXT("%.1f"), CameraState.AccumulatedAimPitch)));
+	AimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_aim_clamped_yaw"), TEXT("제한 적용 Yaw"), FString::Printf(TEXT("%.1f"), CameraState.ClampedAimYaw)));
+	AimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_aim_clamped_pitch"), TEXT("제한 적용 Pitch"), FString::Printf(TEXT("%.1f"), CameraState.ClampedAimPitch)));
+	AimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_aim_yaw_limit"), TEXT("Yaw 제한"), CameraState.bAimAtYawLimit ? TEXT("걸림") : TEXT("아님"), CameraState.bAimAtYawLimit));
+	AimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_aim_pitch_limit"), TEXT("Pitch 제한"), CameraState.bAimAtPitchLimit ? TEXT("걸림") : TEXT("아님"), CameraState.bAimAtPitchLimit));
+	CameraSectionViewData->AddChildSection(AimSectionViewData);
+
+	TSharedRef<FCFVehicleDebugSectionViewData> ViewSectionViewData =
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("CameraView"), TEXT("시야"), ECFVehicleDebugSectionKind::Subsection, true);
+	ViewSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_view_desired_arm"), TEXT("목표 거리"), FString::Printf(TEXT("%.1f"), CameraState.DesiredArmLength)));
+	ViewSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_view_current_arm"), TEXT("현재 거리"), FString::Printf(TEXT("%.1f"), CameraState.CurrentArmLength)));
+	ViewSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_view_solved_arm"), TEXT("실제 적용 거리"), FString::Printf(TEXT("%.1f"), CameraState.SolvedArmLength), InCamera.bCameraCompressedByCollision));
+	ViewSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_view_desired_fov"), TEXT("목표 FOV"), FString::Printf(TEXT("%.1f"), CameraState.DesiredFOV)));
+	ViewSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_view_current_fov"), TEXT("현재 FOV"), FString::Printf(TEXT("%.1f"), CameraState.CurrentFOV)));
+	ViewSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_view_compression"), TEXT("압축 비율"), FString::Printf(TEXT("%.2f"), InCamera.CollisionCompressionRatio), InCamera.bCameraCompressedByCollision));
+	CameraSectionViewData->AddChildSection(ViewSectionViewData);
+
+	TSharedRef<FCFVehicleDebugSectionViewData> TraceSectionViewData =
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("CameraTrace"), TEXT("트레이스"), ECFVehicleDebugSectionKind::Subsection, true);
+	TraceSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_trace_blocked"), TEXT("조준 막힘"), CameraState.bAimBlocked ? TEXT("예") : TEXT("아니오"), CameraState.bAimBlocked));
+	TraceSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_trace_can_fire"), TEXT("발사 가능"), CameraState.bWeaponCanFireAtCurrentAim ? TEXT("예") : TEXT("아니오"), !CameraState.bWeaponCanFireAtCurrentAim));
+	TraceSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_trace_distance"), TEXT("트레이스 거리"), FString::Printf(TEXT("%.1f"), CameraState.AimTraceDistance)));
+	TraceSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_trace_hit"), TEXT("명중 위치"), FString::Printf(TEXT("(%.1f, %.1f, %.1f)"), CameraState.AimHitLocation.X, CameraState.AimHitLocation.Y, CameraState.AimHitLocation.Z)));
+	CameraSectionViewData->AddChildSection(TraceSectionViewData);
+
+	TSharedRef<FCFVehicleDebugSectionViewData> ModeSectionViewData =
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("CameraMode"), TEXT("모드"), ECFVehicleDebugSectionKind::Subsection, true);
+	ModeSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_mode_current"), TEXT("현재"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(CameraState.CurrentCameraMode))));
+	ModeSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_mode_previous"), TEXT("이전"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(CameraState.PreviousCameraMode))));
+	ModeSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_mode_changed"), TEXT("이번 프레임 변경"), CameraState.bCameraModeChangedThisFrame ? TEXT("예") : TEXT("아니오"), CameraState.bCameraModeChangedThisFrame));
+	ModeSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_mode_profile"), TEXT("조준 프로필"), CameraState.ActiveAimProfileName.ToString()));
+	CameraSectionViewData->AddChildSection(ModeSectionViewData);
+
+	return CameraSectionViewData;
 }
 
 // [v1.5.0] Runtime 카테고리용 Section ViewData를 생성합니다.
@@ -1453,30 +1570,30 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildRunt
 {
 	// [v1.5.0] 생성할 Runtime 섹션 ViewData입니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> RuntimeSectionViewData =
-		FCFVehicleDebugSectionViewData::MakeSection(TEXT("Runtime"), TEXT("Runtime"), ECFVehicleDebugSectionKind::Category, bIsRuntimeExpanded);
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("Runtime"), TEXT("런타임"), ECFVehicleDebugSectionKind::Category, bIsRuntimeExpanded);
 	RuntimeSectionViewData->NavigationGroup = ECFVehicleDebugNavGroup::Core;
 	RuntimeSectionViewData->NavigationOrder = 40;
 	RuntimeSectionViewData->bShowInNavigation = true;
 
-	RuntimeSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("runtime_ready"), TEXT("Ready"), InRuntime.bRuntimeReady ? TEXT("True") : TEXT("False"), true));
-	RuntimeSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("runtime_has_drive_comp"), TEXT("Has DriveComp"), InRuntime.bHasDriveComponent ? TEXT("True") : TEXT("False")));
-	RuntimeSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("runtime_has_wheelsync_comp"), TEXT("Has WheelSyncComp"), InRuntime.bHasWheelSyncComponent ? TEXT("True") : TEXT("False")));
+	RuntimeSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("runtime_ready"), TEXT("준비"), InRuntime.bRuntimeReady ? TEXT("예") : TEXT("아니오"), true));
+	RuntimeSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("runtime_has_drive_comp"), TEXT("주행 컴포넌트"), InRuntime.bHasDriveComponent ? TEXT("예") : TEXT("아니오")));
+	RuntimeSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("runtime_has_wheelsync_comp"), TEXT("휠 동기화 컴포넌트"), InRuntime.bHasWheelSyncComponent ? TEXT("예") : TEXT("아니오")));
 
 	// [v1.5.0] Runtime Summary 하위 섹션 ViewData입니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> RuntimeSummarySectionViewData =
-		FCFVehicleDebugSectionViewData::MakeSection(TEXT("RuntimeSummary"), TEXT("Runtime Summary"), ECFVehicleDebugSectionKind::Subsection, bIsRuntimeSummaryExpanded);
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("RuntimeSummary"), TEXT("런타임 요약"), ECFVehicleDebugSectionKind::Subsection, bIsRuntimeSummaryExpanded);
 	RuntimeSummarySectionViewData->BodyText = BuildRuntimeSummaryBodyText(InRuntime);
 	RuntimeSectionViewData->AddChildSection(RuntimeSummarySectionViewData);
 
 	// [v1.5.0] Last Init 하위 섹션 ViewData입니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> RuntimeLastInitSectionViewData =
-		FCFVehicleDebugSectionViewData::MakeSection(TEXT("RuntimeLastInit"), TEXT("Last Init"), ECFVehicleDebugSectionKind::Subsection, bIsRuntimeLastInitExpanded);
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("RuntimeLastInit"), TEXT("최근 초기화"), ECFVehicleDebugSectionKind::Subsection, bIsRuntimeLastInitExpanded);
 	RuntimeLastInitSectionViewData->BodyText = BuildRuntimeLastInitBodyText(InRuntime);
 	RuntimeSectionViewData->AddChildSection(RuntimeLastInitSectionViewData);
 
 	// [v1.5.0] Last Validation 하위 섹션 ViewData입니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> RuntimeLastValidationSectionViewData =
-		FCFVehicleDebugSectionViewData::MakeSection(TEXT("RuntimeLastValidation"), TEXT("Last Validation"), ECFVehicleDebugSectionKind::Subsection, bIsRuntimeLastValidationExpanded);
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("RuntimeLastValidation"), TEXT("최근 검증"), ECFVehicleDebugSectionKind::Subsection, bIsRuntimeLastValidationExpanded);
 	RuntimeLastValidationSectionViewData->BodyText = BuildRuntimeLastValidationBodyText(InRuntime);
 	RuntimeSectionViewData->AddChildSection(RuntimeLastValidationSectionViewData);
 
