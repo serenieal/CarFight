@@ -282,12 +282,33 @@ struct FCFVehicleDebugInput
 
 	// [v2.14.1] 검은 영역 방향 유지 정책 적용 여부입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Input", meta=(DisplayName="검은 영역 유지 사용 여부 (bUsedBlackZoneHold)", ToolTip="현재 프레임에 검은 영역 방향 유지 정책이 적용되었는지 여부입니다."))
-	bool bUsedBlackZoneHold = false;
+		bool bUsedBlackZoneHold = false;
+
+	// [v2.8.0] 게임패드 2D 이동 입력 방향에서 계산한 목표 조향값입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Input")
+	float TargetSteeringInput = 0.0f;
+
+	// [v2.8.0] 실제 DriveComp에 전달 중인 제한 속도 적용 조향값입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Input")
+	float CurrentSteeringInput = 0.0f;
+
+	// [v2.8.0] 목표 조향을 따라갈 때 사용한 마지막 조향 변화 속도입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Input")
+	float LastSteeringTurnRate = 0.0f;
+
+	// [v2.8.0] 중립 복귀 중 사용한 마지막 속도 기반 조향 복귀 속도입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Input")
+	float LastSteeringReturnRate = 0.0f;
+
+	// [v2.8.0] 현재 실제 조향값이 중립 0을 향해 복귀 중인지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Input")
+	bool bSteeringReturningToCenter = false;
 };
 
 /**
  * VehicleDebug 런타임 진단 카테고리입니다.
  */
+
 USTRUCT(BlueprintType)
 struct FCFVehicleDebugRuntime
 {
@@ -480,10 +501,57 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="현재 입력 소유권 (CurrentInputOwnership)", ToolTip="현재 프레임 기준 차량 입력 적용의 주도권을 가진 입력 경로입니다."))
 	ECFVehicleInputOwnership CurrentInputOwnership = ECFVehicleInputOwnership::None;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(ClampMin="0.0", DisplayName="입력 소유권 유지 시간 (InputOwnershipHoldTimeSec)", ToolTip="입력 경로 주도권 전환 시 흔들림을 줄이기 위해 현재 소유권을 유지할 최소 시간(초)입니다."))
+		UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(ClampMin="0.0", DisplayName="입력 소유권 유지 시간 (InputOwnershipHoldTimeSec)", ToolTip="입력 경로 주도권 전환 시 흔들림을 줄이기 위해 현재 소유권을 유지할 최소 시간(초)입니다."))
 	float InputOwnershipHoldTimeSec = 0.15f;
 
+	// [v2.8.0] 조향 방향 계산을 허용할 최소 2D 스틱 입력 크기입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(ClampMin="0.0", ClampMax="1.0", DisplayName="조향 방향 최소 입력 (SteeringDirectionMinMagnitude)", ToolTip="이 값보다 작은 2D 이동 입력은 조향 방향 계산에서 무시하고 중립 복귀 대상으로 처리합니다."))
+	float SteeringDirectionMinMagnitude = 0.10f;
+
+	// [v2.8.0] 왼쪽 최대 조향에서 오른쪽 최대 조향까지 이동하는 데 걸리는 시간입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(ClampMin="0.01", DisplayName="락 투 락 시간 (SteeringLockToLockTimeSec)", ToolTip="실제 조향값이 -1에서 +1까지 제한 속도로 이동하는 데 걸리는 시간입니다."))
+	float SteeringLockToLockTimeSec = 0.45f;
+
+	// [v2.8.0] 중립 복귀 속도 보간 시작 차량 속도(km/h)입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(ClampMin="0.0", DisplayName="조향 복귀 최소 속도 km/h (SteeringReturnMinSpeedKmh)", ToolTip="중립 복귀 속도 보간을 시작할 차량 속도입니다."))
+		float SteeringReturnMinSpeedKmh = 3.0f;
+
+
+	// [v2.8.0] 중립 복귀 속도 보간 완료 차량 속도(km/h)입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(ClampMin="0.0", DisplayName="조향 복귀 최대 속도 km/h (SteeringReturnMaxSpeedKmh)", ToolTip="이 속도 이상에서는 최대 중립 복귀 속도를 사용합니다."))
+	float SteeringReturnMaxSpeedKmh = 80.0f;
+
+	// [v2.8.0] 극저속에서 사용할 중립 복귀 속도입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(ClampMin="0.0", DisplayName="최소 조향 복귀 속도 (SteeringReturnMinRate)", ToolTip="차량이 정지 또는 극저속일 때 사용하는 중립 복귀 속도입니다."))
+		float SteeringReturnMinRate = 0.0f;
+
+
+	// [v2.8.0] 고속에서 사용할 중립 복귀 속도입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(ClampMin="0.0", DisplayName="최대 조향 복귀 속도 (SteeringReturnMaxRate)", ToolTip="차량이 SteeringReturnMaxSpeedKmh 이상일 때 사용하는 중립 복귀 속도입니다."))
+	float SteeringReturnMaxRate = 6.0f;
+
+	// [v2.8.0] 게임패드 2D 이동 입력 방향에서 계산한 목표 조향값입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="목표 조향값 (TargetSteeringInput)", ToolTip="스틱 방향에서 계산된 목표 조향값입니다."))
+	float TargetSteeringInput = 0.0f;
+
+	// [v2.8.0] 실제 DriveComp에 전달 중인 제한 속도 적용 조향값입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="현재 조향값 (CurrentSteeringInput)", ToolTip="목표 조향값을 제한 속도로 따라가며 실제 DriveComp에 전달 중인 조향값입니다."))
+	float CurrentSteeringInput = 0.0f;
+
+	// [v2.8.0] 마지막으로 계산된 조향 진입 속도입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="마지막 조향 진입 속도 (LastSteeringTurnRate)", ToolTip="목표 조향을 따라갈 때 사용한 마지막 조향 변화 속도입니다."))
+	float LastSteeringTurnRate = 0.0f;
+
+	// [v2.8.0] 마지막으로 계산된 중립 복귀 속도입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="마지막 조향 복귀 속도 (LastSteeringReturnRate)", ToolTip="중립 복귀 중 사용한 마지막 속도 기반 조향 복귀 속도입니다."))
+	float LastSteeringReturnRate = 0.0f;
+
+	// [v2.8.0] 현재 조향이 중립 복귀 중인지 여부입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="조향 중립 복귀 중 여부 (bSteeringReturningToCenter)", ToolTip="현재 실제 조향값이 중립 0을 향해 복귀 중인지 여부입니다."))
+	bool bSteeringReturningToCenter = false;
+
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="마지막 VehicleMove 입력 시각 (LastVehicleMoveInputTimeSec)", ToolTip="VehicleMove 2D 입력이 마지막으로 유효하게 들어온 월드 시각(초)입니다."))
+
 	float LastVehicleMoveInputTimeSec = -1.0f;
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="마지막 LegacyAxis 입력 시각 (LastLegacyAxisInputTimeSec)", ToolTip="기존 Throttle/Brake/Steering 축 입력이 마지막으로 유효하게 들어온 월드 시각(초)입니다."))
@@ -694,9 +762,19 @@ protected:
 	void UpdateInputOwnershipFromLegacyAxis(float AxisValue);
 
 	// [v2.6.1] P1 입력 충돌 방지: 현재 유효 입력이 없으면 입력 소유권을 해제합니다.
-	void ReleaseInputOwnershipIfIdle();
+		void ReleaseInputOwnershipIfIdle();
+
+	// [v2.8.0] VehicleMove 2D 입력 방향에서 목표 조향값을 계산합니다.
+	float CalculateVehicleMoveTargetSteering(const FVector2D& MoveInputVector, float MoveInputMagnitude) const;
+
+	// [v2.8.0] 현재 차량 속도 기준 중립 복귀 속도를 계산합니다.
+	float CalculateSteeringReturnRateKmh(float SpeedKmh) const;
+
+	// [v2.8.0] 목표 조향값을 제한 속도로 추적해 실제 조향 입력으로 적용합니다.
+	void UpdateVehicleMoveSteeringInput(float DeltaSeconds);
 
 	// [v1.6.0] 차량 이동용 2D 입력 액션값을 읽어 해석 결과를 Drive 입력으로 전달합니다.
+
 
 	void HandleVehicleMoveInput(const FInputActionValue& InputActionValue);
 

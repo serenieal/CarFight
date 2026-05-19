@@ -319,14 +319,22 @@ void ACFVehiclePawn::BeginPlay()
 void ACFVehiclePawn::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	if (!bEnableWheelVisualTick || !bVehicleRuntimeReady)
+	if (!bVehicleRuntimeReady)
 	{
 		DisplayDriveStateOnScreenDebug();
 		return;
 	}
-	UpdateVehicleWheelVisuals(DeltaSeconds);
+
+	// [v2.8.0] VehicleMove 기반 조향은 입력 이벤트가 없는 동안에도 중립 복귀가 필요하므로 Tick에서 계속 갱신합니다.
+	UpdateVehicleMoveSteeringInput(DeltaSeconds);
+
+	if (bEnableWheelVisualTick)
+	{
+		UpdateVehicleWheelVisuals(DeltaSeconds);
+	}
 	DisplayDriveStateOnScreenDebug();
 }
+
 
 void ACFVehiclePawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
@@ -657,7 +665,7 @@ FCFVehicleMoveInputResult ACFVehiclePawn::ResolveVehicleMoveInput(const FVector2
 	FCFVehicleMoveInputResult ResolvedMoveInput;
 	ResolvedMoveInput.RawMoveInput = MoveInputVector;
 	ResolvedMoveInput.Magnitude = FMath::Clamp(MoveInputVector.Length(), 0.0f, 1.0f);
-	ResolvedMoveInput.SteeringValue = FMath::Clamp(MoveInputVector.X, -1.0f, 1.0f);
+	ResolvedMoveInput.SteeringValue = CalculateVehicleMoveTargetSteering(MoveInputVector, ResolvedMoveInput.Magnitude);
 
 	if (ResolvedMoveInput.Magnitude <= KINDA_SMALL_NUMBER)
 	{
@@ -667,7 +675,7 @@ FCFVehicleMoveInputResult ACFVehiclePawn::ResolveVehicleMoveInput(const FVector2
 
 	ResolvedMoveInput.AngleDeg = ConvertMoveInputToAngleDeg(MoveInputVector);
 
-		const bool bInThrottleZone = IsAngleWithinRange(
+	const bool bInThrottleZone = IsAngleWithinRange(
 		ResolvedMoveInput.AngleDeg,
 		VehicleMoveInputConfig.ThrottleStartAngleDeg,
 		VehicleMoveInputConfig.ThrottleEndAngleDeg);
@@ -675,6 +683,7 @@ FCFVehicleMoveInputResult ACFVehiclePawn::ResolveVehicleMoveInput(const FVector2
 		ResolvedMoveInput.AngleDeg,
 		VehicleMoveInputConfig.ReverseStartAngleDeg,
 		VehicleMoveInputConfig.ReverseEndAngleDeg);
+
 
 	// [v2.6.1] 차량의 최신 Drive 상태 스냅샷을 가져옵니다.
 	const FCFVehicleDriveStateSnapshot DriveStateSnapshot = GetDriveStateSnapshot();
@@ -740,12 +749,14 @@ FCFVehicleMoveInputResult ACFVehiclePawn::ResolveVehicleMoveInput(const FVector2
 
 void ACFVehiclePawn::ApplyResolvedVehicleMoveInput(const FCFVehicleMoveInputResult& ResolvedMoveInput)
 {
-	SetVehicleSteeringInput(ResolvedMoveInput.SteeringValue);
+	// [v2.8.0] VehicleMove 조향은 목표값만 갱신하고, 실제 적용값은 Tick의 UpdateVehicleMoveSteeringInput에서 제한 속도로 추적합니다.
+	TargetSteeringInput = ResolvedMoveInput.SteeringValue;
 	SetVehicleBrakeInput(ResolvedMoveInput.BrakeValue);
 
 	// [v2.6.3] A안: 수동 기어 강제를 제거하고 Chaos Vehicle의 bUseAutoReverse가
 	// 브레이크 -> 후진 전환을 직접 처리하도록 둡니다.
 	SetVehicleThrottleInput(ResolvedMoveInput.ThrottleValue);
+
 
 	if (ResolvedMoveInput.ResolvedDirectionIntent != ECFVehicleMoveDirectionIntent::None)
 	{
@@ -999,14 +1010,20 @@ FCFVehicleDebugSnapshot ACFVehiclePawn::GetVehicleDebugSnapshot() const
 	DebugSnapshot.Runtime.LastInitAttemptSummary = LastVehicleRuntimeSummary;
 	DebugSnapshot.Runtime.LastValidationSummary = LastVehicleRuntimeSummary;
 
-	DebugSnapshot.Input.DeviceMode = InputDeviceMode;
+		DebugSnapshot.Input.DeviceMode = InputDeviceMode;
 	DebugSnapshot.Input.InputOwner = CurrentInputOwnership;
 	DebugSnapshot.Input.MoveZone = LastVehicleMoveInputResult.ResolvedZone;
 	DebugSnapshot.Input.MoveIntent = LastMoveDirectionIntent;
 	DebugSnapshot.Input.MoveRaw = LastVehicleMoveInputResult.RawMoveInput;
 	DebugSnapshot.Input.MoveMagnitude = LastVehicleMoveInputResult.Magnitude;
-			DebugSnapshot.Input.MoveAngle = LastVehicleMoveInputResult.AngleDeg;
+	DebugSnapshot.Input.MoveAngle = LastVehicleMoveInputResult.AngleDeg;
 	DebugSnapshot.Input.bUsedBlackZoneHold = LastVehicleMoveInputResult.bUsedBlackZoneHold;
+	DebugSnapshot.Input.TargetSteeringInput = TargetSteeringInput;
+	DebugSnapshot.Input.CurrentSteeringInput = CurrentSteeringInput;
+	DebugSnapshot.Input.LastSteeringTurnRate = LastSteeringTurnRate;
+	DebugSnapshot.Input.LastSteeringReturnRate = LastSteeringReturnRate;
+	DebugSnapshot.Input.bSteeringReturningToCenter = bSteeringReturningToCenter;
+
 
 	// [v2.7.0] Camera 카테고리는 VehicleCameraComp가 제공하는 원본 런타임 스냅샷과 표시용 압축 비율을 함께 담습니다.
 	DebugSnapshot.Camera.bHasVehicleCameraComponent = (VehicleCameraComp != nullptr);
@@ -1297,6 +1314,64 @@ void ACFVehiclePawn::ReleaseInputOwnershipIfIdle()
 	}
 }
 
+float ACFVehiclePawn::CalculateVehicleMoveTargetSteering(const FVector2D& MoveInputVector, const float MoveInputMagnitude) const
+{
+	if (MoveInputMagnitude < SteeringDirectionMinMagnitude)
+	{
+		return 0.0f;
+	}
+	const FVector2D SteeringDirection = MoveInputVector / MoveInputMagnitude;
+	return FMath::Clamp(SteeringDirection.X, -1.0f, 1.0f);
+}
+
+float ACFVehiclePawn::CalculateSteeringReturnRateKmh(const float SpeedKmh) const
+{
+	const float AbsoluteSpeedKmh = FMath::Abs(SpeedKmh);
+	if (AbsoluteSpeedKmh <= SteeringReturnMinSpeedKmh)
+	{
+		return 0.0f;
+	}
+
+	const float ReturnSpeedRangeKmh = FMath::Max(SteeringReturnMaxSpeedKmh - SteeringReturnMinSpeedKmh, 1.0f);
+	const float SpeedAlpha = FMath::Clamp((AbsoluteSpeedKmh - SteeringReturnMinSpeedKmh) / ReturnSpeedRangeKmh, 0.0f, 1.0f);
+	return FMath::Lerp(SteeringReturnMinRate, SteeringReturnMaxRate, SpeedAlpha);
+}
+
+
+void ACFVehiclePawn::UpdateVehicleMoveSteeringInput(const float DeltaSeconds)
+{
+	if (CurrentInputOwnership == ECFVehicleInputOwnership::LegacyAxis)
+	{
+		CurrentSteeringInput = 0.0f;
+		TargetSteeringInput = 0.0f;
+		LastSteeringTurnRate = 0.0f;
+		LastSteeringReturnRate = 0.0f;
+		bSteeringReturningToCenter = false;
+		return;
+	}
+
+	const float SafeDeltaSeconds = FMath::Max(DeltaSeconds, 0.0f);
+	const bool bHasSteeringIntent = FMath::Abs(TargetSteeringInput) > KINDA_SMALL_NUMBER;
+	if (bHasSteeringIntent)
+	{
+		LastSteeringTurnRate = 2.0f / FMath::Max(SteeringLockToLockTimeSec, 0.01f);
+		LastSteeringReturnRate = 0.0f;
+		bSteeringReturningToCenter = false;
+		CurrentSteeringInput = FMath::FInterpConstantTo(CurrentSteeringInput, TargetSteeringInput, SafeDeltaSeconds, LastSteeringTurnRate);
+	}
+	else
+	{
+		const FCFVehicleDriveStateSnapshot DriveStateSnapshot = GetDriveStateSnapshot();
+		LastSteeringTurnRate = 0.0f;
+		LastSteeringReturnRate = CalculateSteeringReturnRateKmh(DriveStateSnapshot.CurrentSpeedKmh);
+		bSteeringReturningToCenter = true;
+		CurrentSteeringInput = FMath::FInterpConstantTo(CurrentSteeringInput, 0.0f, SafeDeltaSeconds, LastSteeringReturnRate);
+	}
+
+	CurrentSteeringInput = FMath::Clamp(CurrentSteeringInput, -1.0f, 1.0f);
+	SetVehicleSteeringInput(CurrentSteeringInput);
+}
+
 void ACFVehiclePawn::HandleVehicleMoveInput(const FInputActionValue& InputActionValue)
 {
 	const FVector2D MoveInputVector = InputActionValue.Get<FVector2D>();
@@ -1306,6 +1381,8 @@ void ACFVehiclePawn::HandleVehicleMoveInput(const FInputActionValue& InputAction
 		LastVehicleMoveInputResult = FCFVehicleMoveInputResult();
 		LastVehicleMoveInputResult.RawMoveInput = MoveInputVector;
 		LastVehicleMoveInputResult.Magnitude = MoveInputMagnitude;
+		// [v2.8.0] 입력이 최소 기준 아래로 내려가면 목표 조향을 0으로 두고 Tick의 중립 복귀에 맡깁니다.
+		TargetSteeringInput = 0.0f;
 		ReleaseInputOwnershipIfIdle();
 		return;
 	}
@@ -1316,18 +1393,21 @@ void ACFVehiclePawn::HandleVehicleMoveInput(const FInputActionValue& InputAction
 }
 
 
+
 void ACFVehiclePawn::HandleVehicleMoveReleased(const FInputActionValue&)
 {
 	LastVehicleMoveInputResult = FCFVehicleMoveInputResult();
+	TargetSteeringInput = 0.0f;
 	if (CurrentInputOwnership == ECFVehicleInputOwnership::VehicleMove2D)
 	{
 		ResetAxisInput(&ACFVehiclePawn::SetVehicleThrottleInput);
 		ResetAxisInput(&ACFVehiclePawn::SetVehicleBrakeInput);
-		ResetAxisInput(&ACFVehiclePawn::SetVehicleSteeringInput);
+		// [v2.8.0] 조향은 즉시 0으로 리셋하지 않고 Tick의 속도 기반 중립 복귀에 맡깁니다.
 		CurrentInputOwnership = ECFVehicleInputOwnership::None;
 	}
 	ReleaseInputOwnershipIfIdle();
 }
+
 
 void ACFVehiclePawn::HandleThrottleInput(const FInputActionValue& InputActionValue)
 {
