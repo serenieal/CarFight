@@ -61,13 +61,14 @@ float SteeringDirectionMinMagnitude = 0.10f;
 float SteeringLockToLockTimeSec = 0.45f;
 
 /** 중립 복귀 속도 보간 시작 차량 속도(km/h)입니다. */
-float SteeringReturnMinSpeedKmh = 0.0f;
+float SteeringReturnMinSpeedKmh = 3.0f;
 
 /** 중립 복귀 속도 보간 완료 차량 속도(km/h)입니다. */
 float SteeringReturnMaxSpeedKmh = 80.0f;
 
-/** 극저속에서의 중립 복귀 속도입니다. */
-float SteeringReturnMinRate = 0.4f;
+/** 복귀 시작 속도 직후의 중립 복귀 속도입니다. 기본값 0은 정지/극저속에서 자동 복귀하지 않는다는 뜻입니다. */
+float SteeringReturnMinRate = 0.0f;
+
 
 /** 고속에서의 중립 복귀 속도입니다. */
 float SteeringReturnMaxRate = 6.0f;

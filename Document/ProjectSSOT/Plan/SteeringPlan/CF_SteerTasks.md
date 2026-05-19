@@ -27,66 +27,73 @@
 ## 3. 구현 단계
 
 ### Phase 1. 현재 Tick / Release 구조 확인
-- [ ] `ACFVehiclePawn`에서 Tick 사용 여부 확인
-- [ ] `HandleVehicleMoveReleased()`에서 조향값 즉시 0 리셋 여부 확인
-- [ ] 기존 Runtime Input Ownership과 조향 release 경로 충돌 가능성 확인
-- [ ] `UCFVehicleDriveComp::ApplySteeringInput()` 내부 보간 여부 확인
+- [x] `ACFVehiclePawn`에서 Tick 사용 여부 확인
+- [x] `HandleVehicleMoveReleased()`에서 조향값 즉시 0 리셋 여부 확인
+- [x] 기존 Runtime Input Ownership과 조향 release 경로 충돌 가능성 확인
+- [x] `UCFVehicleDriveComp::ApplySteeringInput()` 내부 보간 여부 확인
 
 ### Phase 2. 설정값 추가
-- [ ] `SteeringDirectionMinMagnitude` 추가
-- [ ] `SteeringLockToLockTimeSec` 추가
-- [ ] `SteeringReturnMinSpeedKmh` 추가
-- [ ] `SteeringReturnMaxSpeedKmh` 추가
-- [ ] `SteeringReturnMinRate` 추가
-- [ ] `SteeringReturnMaxRate` 추가
+- [x] `SteeringDirectionMinMagnitude` 추가
+- [x] `SteeringLockToLockTimeSec` 추가
+- [x] `SteeringReturnMinSpeedKmh` 추가
+- [x] `SteeringReturnMaxSpeedKmh` 추가
+- [x] `SteeringReturnMinRate` 추가
+- [x] `SteeringReturnMaxRate` 추가
 
 권장 기본값:
 
 ```text
 SteeringDirectionMinMagnitude = 0.10
 SteeringLockToLockTimeSec = 0.45
-SteeringReturnMinSpeedKmh = 0.0
+SteeringReturnMinSpeedKmh = 3.0
 SteeringReturnMaxSpeedKmh = 80.0
-SteeringReturnMinRate = 0.4
+SteeringReturnMinRate = 0.0
 SteeringReturnMaxRate = 6.0
 ```
 
+
 ### Phase 3. 런타임 상태값 추가
-- [ ] `CurrentSteeringInput` 추가
-- [ ] `TargetSteeringInput` 추가
-- [ ] `LastSteeringTurnRate` 추가
-- [ ] `LastSteeringReturnRate` 추가
-- [ ] `bLastSteeringReturningToCenter` 추가
+- [x] `CurrentSteeringInput` 추가
+- [x] `TargetSteeringInput` 추가
+- [x] `LastSteeringTurnRate` 추가
+- [x] `LastSteeringReturnRate` 추가
+- [x] `bLastSteeringReturningToCenter` 추가
 
 ### Phase 4. 목표 조향 계산 변경
-- [ ] 기존 `SteeringValue = MoveInputVector.X` 직접 비례 구조 제거
-- [ ] `MoveInputVector / Magnitude` 기반 방향 계산 추가
-- [ ] `NormalizedDirection.X`를 목표 조향값으로 사용
-- [ ] `Magnitude < SteeringDirectionMinMagnitude`이면 목표 조향 0 처리
+- [x] 기존 `SteeringValue = MoveInputVector.X` 직접 비례 구조 제거
+- [x] `MoveInputVector / Magnitude` 기반 방향 계산 추가
+- [x] `NormalizedDirection.X`를 목표 조향값으로 사용
+- [x] `Magnitude < SteeringDirectionMinMagnitude`이면 목표 조향 0 처리
 
 ### Phase 5. 실제 조향값 보간 추가
-- [ ] `UpdateCurrentSteeringInput()` 또는 동등한 helper 추가
-- [ ] 조향 의도 있음: `SteeringLockToLockTimeSec` 기반 turn rate 적용
-- [ ] 조향 의도 없음: 속도 기반 return rate 적용
-- [ ] `CurrentSteeringInput`을 `SetVehicleSteeringInput()`에 전달
+- [x] `UpdateCurrentSteeringInput()` 또는 동등한 helper 추가
+- [x] 조향 의도 있음: `SteeringLockToLockTimeSec` 기반 turn rate 적용
+- [x] 조향 의도 없음: 속도 기반 return rate 적용
+- [x] `CurrentSteeringInput`을 `SetVehicleSteeringInput()`에 전달
 
 ### Phase 6. 중립 복귀 처리 위치 확정
-- [ ] 입력 이벤트가 없는 동안에도 중립 복귀가 진행되도록 처리
-- [ ] Tick에서 처리할지 기존 입력 갱신 루프에서 처리할지 확정
-- [ ] release 시 조향 즉시 0 리셋 금지
+- [x] 입력 이벤트가 없는 동안에도 중립 복귀가 진행되도록 처리
+- [x] Tick에서 처리할지 기존 입력 갱신 루프에서 처리할지 확정
+- [x] release 시 조향 즉시 0 리셋 금지
 
 ### Phase 7. 디버그 추가
-- [ ] `SteerTarget` 출력
-- [ ] `SteerCurrent` 출력
-- [ ] `SteerTurnRate` 출력
-- [ ] `SteerReturnRate` 출력
-- [ ] `SteerReturning` 출력
+- [x] `TargetSteeringInput` 런타임 상태값 추가
+- [x] `CurrentSteeringInput` 런타임 상태값 추가
+- [x] `LastSteeringTurnRate` 런타임 상태값 추가
+- [x] `LastSteeringReturnRate` 런타임 상태값 추가
+- [x] `bSteeringReturningToCenter` 런타임 상태값 추가
+- [ ] 화면 디버그 문자열에 `SteerTarget / SteerCurrent / SteerReturnRate` 직접 출력 추가
+
+### 참고
+- 조향 기능 동작에는 영향 없음.
+- 화면 문자열 출력은 선택적 진단 항목으로 남긴다.
+
 
 ### Phase 8. 빌드 / PIE 테스트
-- [ ] `CarFight_ReEditor / Win64 / Development` 빌드
-- [ ] PIE에서 조향/가속 분리 확인
-- [ ] 스틱 중립 시 속도 기반 중립 복귀 확인
-- [ ] Runtime Input Ownership 회귀 확인
+- [x] `CarFight_ReEditor / Win64 / Development` 빌드
+- [x] PIE에서 조향/가속 분리 확인
+- [x] 스틱 중립 시 속도 기반 중립 복귀 확인
+- [x] Runtime Input Ownership 회귀 확인
 
 ---
 

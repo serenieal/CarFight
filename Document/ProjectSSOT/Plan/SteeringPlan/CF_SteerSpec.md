@@ -139,11 +139,12 @@ CurrentSteeringInput -> 0.0
 기본 튜닝값:
 
 ```text
-SteeringReturnMinSpeedKmh = 0.0
+SteeringReturnMinSpeedKmh = 3.0
 SteeringReturnMaxSpeedKmh = 80.0
-SteeringReturnMinRate = 0.4
+SteeringReturnMinRate = 0.0
 SteeringReturnMaxRate = 6.0
 ```
+
 
 계산 개념:
 
@@ -154,9 +155,11 @@ ReturnRate = Lerp(SteeringReturnMinRate, SteeringReturnMaxRate, SpeedAlpha)
 
 의미:
 
-- 정지 / 극저속: 매우 느리게 중립 복귀
-- 중속: 자연스럽게 중립 복귀
-- 고속: 빠르게 중립 복귀
+- `0 ~ 3km/h` 이하: 자동 중립 복귀 없음. 바퀴 방향을 유지한다.
+- `3km/h` 초과: 차량 속도에 비례해 중립 복귀가 시작된다.
+- 중속: 자연스럽게 중립 복귀한다.
+- `80km/h` 이상: 최대 중립 복귀 속도를 사용한다.
+
 
 ---
 

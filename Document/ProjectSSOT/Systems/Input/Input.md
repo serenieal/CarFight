@@ -93,8 +93,11 @@
 현재 역할:
 - `FVector2D` 입력을 한 번에 받는다.
 - 입력 벡터의 크기와 각도를 해석한다.
-- 이를 조향 / 쓰로틀 / 브레이크 값으로 다시 변환한다.
-- 최종 결과를 `ApplyResolvedVehicleMoveInput()`을 통해 차량 입력으로 적용한다.
+- 입력 벡터의 크기는 가속 / 브레이크 강도에 사용한다.
+- 입력 벡터의 방향은 목표 조향값에 사용한다.
+- 조향은 원본 X값에 직접 비례하지 않는다.
+- 최종 결과를 `ApplyResolvedVehicleMoveInput()`과 `UpdateVehicleMoveSteeringInput()`을 통해 차량 입력으로 적용한다.
+
 
 즉 이 경로는 **하나의 2D 입력으로 전진/후진/브레이크/조향을 동시에 해석하는 통합 조작 경로**다.
 
@@ -377,8 +380,9 @@
 - 입력 최종 전달 대상이 바뀌는 경우
 
 ## 문서 버전 관리
-- 현재 문서 버전: `1.0.0`
-- 문서 상태: `Initial`
+- 현재 문서 버전: `1.1.0`
+- 문서 상태: `Current`
+
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
   - 기능 설명 본문이 바뀌면 체인지로그도 같이 갱신한다.
@@ -398,14 +402,20 @@
   - 본문 의미는 유지한 채 설명 정밀도만 올라갈 때
 
 ## 체인지로그
+### v1.1.0 - 2026-05-11
+- VehicleMove 2D 입력의 조향 해석 변경 반영.
+- 입력 벡터 크기는 가속/브레이크 강도에, 입력 벡터 방향은 목표 조향값에 사용한다는 현재 구현 상태를 반영.
+- 조향 적용 경로에 `UpdateVehicleMoveSteeringInput()`이 포함됨을 반영.
+
 ### v1.0.0 - 2026-04-22
 - `Input` 문서 최초 작성
+
 - `IMC_Vehicle_Default`, 개별 `IA_*`, `ACFVehiclePawn` 기준으로 현재 입력 기능 정리
 - 단순 키 목록이 아니라, 현재 입력 등록/해석/장치 필터링/소유권 관리 역할 중심으로 본문 작성
 - 현재 사용 중인 입력과 현재 `CFVehiclePawn` 바인딩 범위에서 직접 사용 확인되지 않은 입력을 구분해 기록
 
 ## 마지막 확인 기준
-- 확인 일시: 2026-04-22
+- 확인 일시: 2026-05-11
 - 확인 근거:
   - `UE/Content/CarFight/Input/*`
   - `/Game/CarFight/Input/IMC_Vehicle_Default`
@@ -413,3 +423,7 @@
   - `/Game/CarFight/Input/IA_LookAround`
   - `UE/Source/CarFight_Re/Public/CFVehiclePawn.h`
   - `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp`
+  - `Document/ProjectSSOT/Systems/Vehicles/VehicleSteering.md`
+  - `CarFight_ReEditor / Win64 / Development` 빌드 성공: `build_bc511ba17bd92716`
+  - PIE 실기 동작 확인 완료
+
