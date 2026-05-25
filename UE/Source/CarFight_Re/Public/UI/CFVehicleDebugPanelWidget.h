@@ -1,9 +1,9 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.7.0
-// Date: 2026-04-27
+// Version: 1.8.0
+// Date: 2026-05-21
 // Description: VehicleDebug Panel용 C++ 부모 위젯 클래스입니다.
-// Scope: VehicleDebug Overview / Drive / Input / Runtime 카테고리를 읽어 Navigation + Selected Section 기반 표시와 기존 fallback 표시를 안정적으로 지원합니다.
+// Scope: VehicleDebug Overview / Drive / Input / Camera / Aim / Runtime 카테고리를 읽어 Navigation + Selected Section 기반 표시와 기존 fallback 표시를 안정적으로 지원합니다.
 
 #pragma once
 
@@ -268,6 +268,10 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category="CarFight|VehicleDebug|Panel")
 	FCFVehicleDebugCamera CachedCamera;
 
+	// [v1.8.0] 현재 Panel에 적용 중인 최신 Aim 캐시입니다.
+	UPROPERTY(BlueprintReadOnly, Category="CarFight|VehicleDebug|Panel", meta=(DisplayName="Aim 캐시 (CachedAim)", ToolTip="현재 Panel에 표시 중인 최신 VehicleDebug Aim 캐시입니다."))
+	FCFVehicleDebugAim CachedAim;
+
 	// [v1.0.0] 현재 Panel에 적용 중인 최신 Runtime 캐시입니다.
 	UPROPERTY(BlueprintReadOnly, Category="CarFight|VehicleDebug|Panel", meta=(DisplayName="Runtime 캐시 (CachedRuntime)", ToolTip="현재 Panel에 표시 중인 최신 VehicleDebug Runtime 캐시입니다."))
 	FCFVehicleDebugRuntime CachedRuntime;
@@ -443,6 +447,9 @@ private:
 
 	// [v1.8.0] Camera category section ViewData.
 	TSharedRef<FCFVehicleDebugSectionViewData> BuildCameraSectionViewData(const FCFVehicleDebugCamera& InCamera) const;
+
+	// [v1.8.0] Aim 카테고리용 Section ViewData를 생성합니다.
+	TSharedRef<FCFVehicleDebugSectionViewData> BuildAimSectionViewData(const FCFVehicleDebugAim& InAim) const;
 
 	// [v1.5.0] Runtime 카테고리용 Section ViewData를 생성합니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> BuildRuntimeSectionViewData(const FCFVehicleDebugRuntime& InRuntime) const;

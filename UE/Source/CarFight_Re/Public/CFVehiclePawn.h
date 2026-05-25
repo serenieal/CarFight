@@ -1,14 +1,15 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.7.0
-// Date: 2026-05-06
-// Description: CarFight 신규 차량 Pawn 기준 클래스 (VehicleDebug Camera 카테고리 추가)
-// Scope: DriveComp / WheelSyncComp / VehicleCameraComp를 소유하고 차량 런타임, 입력, 카메라 디버그 스냅샷을 함께 다룹니다.
+// Version: 2.20.0
+// Date: 2026-05-21
+// Description: CarFight 신규 차량 Pawn 기준 클래스 (Aim Reticle 위젯 선택 생성 연결 추가)
+// Scope: DriveComp / WheelSyncComp / VehicleCameraComp / VehicleAimComp를 소유하고 차량 런타임, 입력, 카메라 디버그 스냅샷을 함께 다룹니다.
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "CFVehicleDriveComp.h"
+#include "CFVehicleAimTypes.h"
 #include "CFVehicleCameraTypes.h"
 #include "Components/SlateWrapperTypes.h"
 #include "WheeledVehiclePawn.h"
@@ -16,6 +17,8 @@
 
 class UCFVehicleData;
 class UCFVehicleCameraComp;
+class UCFVehicleAimComp;
+class UCFAimReticleWidget;
 class UCFWheelSyncComp;
 class UChaosWheeledVehicleMovementComponent;
 class UInputAction;
@@ -365,6 +368,51 @@ struct FCFVehicleDebugCamera
 };
 
 /**
+ * VehicleDebug 조준 상세 카테고리입니다.
+ */
+USTRUCT(BlueprintType)
+struct FCFVehicleDebugAim
+{
+	GENERATED_BODY()
+
+	// [v2.16.0] VehicleAimComp 보유 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="VehicleAimComp 보유 여부 (bHasVehicleAimComponent)", ToolTip="현재 Pawn이 VehicleAimComp를 보유하고 있는지 여부입니다."))
+	bool bHasVehicleAimComponent = false;
+
+	// [v2.16.0] Aim 런타임 준비 완료 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="Aim 런타임 준비 완료 여부 (bAimRuntimeReady)", ToolTip="VehicleAimComp가 Owner Pawn과 VehicleCameraComp 참조를 준비했는지 여부입니다."))
+	bool bAimRuntimeReady = false;
+
+	// [v2.16.0] 로컬 클라이언트 기준 Aim 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="로컬 Aim 상태 (LocalAimState)", ToolTip="VehicleAimComp가 계산한 로컬 클라이언트 기준 Aim 상태입니다."))
+	FCFVehicleLocalAimState LocalAimState;
+
+	// [v2.16.0] 서버 검증 기준 Aim 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="서버 Aim 상태 (ServerAimState)", ToolTip="VehicleAimComp가 보유한 서버 검증 기준 Aim 상태입니다. 이번 단계에서는 기본값 표시만 수행합니다."))
+	FCFVehicleServerAimState ServerAimState;
+
+	// [v2.16.0] 복제 시각화 기준 Aim 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="복제 Aim 시각 상태 (RepAimVisualState)", ToolTip="VehicleAimComp가 보유한 복제 시각화 기준 Aim 상태입니다. 이번 단계에서는 기본값 표시만 수행합니다."))
+	FCFVehicleRepAimVisualState RepAimVisualState;
+
+	// [v2.16.0] 로컬 Reticle 표시 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="Reticle 상태 (ReticleState)", ToolTip="VehicleAimComp가 계산한 현재 로컬 Reticle 표시 상태입니다."))
+	ECFVehicleReticleState ReticleState = ECFVehicleReticleState::Hidden;
+
+	// [v2.16.0] Aim 런타임 초기화 또는 갱신 요약 문자열입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="Aim 런타임 요약 (AimRuntimeSummary)", ToolTip="VehicleAimComp의 마지막 런타임 초기화 또는 갱신 요약 문자열입니다."))
+	FString AimRuntimeSummary = TEXT("AimRuntime: Missing");
+
+	// [v2.17.0] 마지막 발사 요청 디버그 캐시입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="마지막 발사 요청 (LastFireRequest)", ToolTip="Pawn이 마지막으로 생성하거나 서버에서 받은 발사 요청 디버그 캐시입니다."))
+	FCFVehicleFireRequest LastFireRequest;
+
+	// [v2.17.0] 마지막 발사 결과 디버그 캐시입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="마지막 발사 결과 (LastFireResult)", ToolTip="서버 검증 뒤 Owner Client가 마지막으로 받은 발사 결과 디버그 캐시입니다."))
+	FCFVehicleFireResult LastFireResult;
+};
+
+/**
  * Pawn 레벨에서 바로 확인할 수 있는 차량 디버그 스냅샷입니다.
  * - 런타임 준비 상태와 요약 문자열
  * - 현재/이전 Drive 상태와 마지막 전이 요약
@@ -390,6 +438,10 @@ struct FCFVehicleDebugSnapshot
 	// [v2.7.0] 카메라 상세 카테고리입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug")
 	FCFVehicleDebugCamera Camera;
+
+	// [v2.16.0] 조준 상세 카테고리입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="Aim 카테고리 (Aim)", ToolTip="AimComp의 로컬/서버/복제 조준 상태를 담는 VehicleDebug Aim 카테고리입니다."))
+	FCFVehicleDebugAim Aim;
 
 	// [v2.14.1] 런타임 진단 카테고리입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="Runtime 카테고리 (Runtime)", ToolTip="런타임 준비 상태와 요약 문자열을 담는 VehicleDebug Runtime 카테고리입니다."))
@@ -446,6 +498,9 @@ protected:
 	// [v1.1.0] BeginPlay에서 런타임 초기화와 입력 매핑 등록을 시도합니다.
 	virtual void BeginPlay() override;
 
+	// [v2.20.0] EndPlay에서 생성된 Aim Reticle 위젯을 정리합니다.
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
 	// [v1.1.0] Tick에서 휠 시각 갱신을 수행합니다.
 	virtual void Tick(float DeltaSeconds) override;
 
@@ -476,6 +531,10 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="시점 입력 액션 (InputAction_Look)", ToolTip="차량 카메라 자유 조준 입력에 사용할 2D Look Input Action 입니다."))
 	TObjectPtr<UInputAction> InputAction_Look = nullptr;
+
+	// [v2.17.0] 발사 요청을 시작할 입력 액션입니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="발사 입력 액션 (InputAction_Fire)", ToolTip="Aim 기반 서버 발사 요청을 시작할 Input Action입니다. 비어 있으면 발사 입력 바인딩을 건너뜁니다."))
+	TObjectPtr<UInputAction> InputAction_Fire = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="입력 장치 모드 (InputDeviceMode)", ToolTip="차량 입력을 어떤 장치로 받을지 고정합니다. Auto는 키보드/마우스와 게임패드를 모두 허용하고, KeyboardMouseOnly는 키보드/마우스만, GamepadOnly는 게임패드만 허용합니다."))
 	ECFVehicleInputDeviceMode InputDeviceMode = ECFVehicleInputDeviceMode::Auto;
@@ -567,6 +626,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="VehicleCamera 컴포넌트 (VehicleCameraComp)", ToolTip="차량 중심 피벗 기반 자유 조준과 Aim Trace를 계산하는 차량 카메라 컴포넌트입니다."))
 	TObjectPtr<UCFVehicleCameraComp> VehicleCameraComp = nullptr;
 
+	// [v2.15.0] 카메라 조준과 향후 무기 발사 사이의 Aim 해석 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="VehicleAim 컴포넌트 (VehicleAimComp)", ToolTip="카메라 조준과 향후 무기 발사 사이의 Aim 해석 컴포넌트입니다."))
+	TObjectPtr<UCFVehicleAimComp> VehicleAimComp = nullptr;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Runtime", meta=(DisplayName="BeginPlay 자동 초기화 (bAutoInitializeOnBeginPlay)", ToolTip="True이면 BeginPlay에서 Drive / WheelSync 캐시와 준비를 자동 시도합니다."))
 	bool bAutoInitializeOnBeginPlay = true;
 
@@ -578,6 +641,42 @@ public:
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Runtime", meta=(DisplayName="런타임 결과 요약 (LastVehicleRuntimeSummary)", ToolTip="마지막 런타임 초기화 결과 요약 문자열입니다."))
 	FString LastVehicleRuntimeSummary = TEXT("NotInitialized");
+
+	// [v2.17.0] 다음 발사 요청에 사용할 증가형 요청 ID입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Aim", meta=(DisplayName="다음 발사 요청 ID (NextFireRequestId)", ToolTip="다음 Aim 기반 발사 요청에 사용할 증가형 요청 ID입니다."))
+	int32 NextFireRequestId = 1;
+
+	// [v2.17.0] 마지막으로 생성하거나 서버에서 받은 발사 요청입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Aim", meta=(DisplayName="마지막 발사 요청 (LastFireRequest)", ToolTip="마지막으로 생성하거나 서버에서 받은 Aim 기반 발사 요청 디버그 캐시입니다."))
+	FCFVehicleFireRequest LastFireRequest;
+
+	// [v2.17.0] 마지막으로 받은 서버 발사 검증 결과입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Aim", meta=(DisplayName="마지막 발사 결과 (LastFireResult)", ToolTip="마지막으로 받은 서버 발사 검증 결과 디버그 캐시입니다."))
+	FCFVehicleFireResult LastFireResult;
+
+	// [v2.18.0] 서버 HitScan 더미 Trace 디버그 라인 표시 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Aim", meta=(DisplayName="서버 Aim Trace 디버그 표시 (bDrawServerAimTraceDebug)", ToolTip="True이면 서버 HitScan 더미 Trace를 디버그 라인으로 표시합니다."))
+	bool bDrawServerAimTraceDebug = false;
+
+	// [v2.18.0] 서버 HitScan 더미 Trace 디버그 라인 표시 시간입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Aim", meta=(ClampMin="0.0", DisplayName="서버 Aim Trace 디버그 시간 (ServerAimTraceDebugDuration)", ToolTip="서버 HitScan 더미 Trace 디버그 라인을 표시할 시간입니다."))
+	float ServerAimTraceDebugDuration = 2.0f;
+
+	// [v2.20.0] 로컬 Pawn에서 생성할 Aim Reticle 위젯 클래스입니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(DisplayName="Aim Reticle 위젯 클래스 (AimReticleWidgetClass)", ToolTip="로컬 Pawn에서 Viewport에 추가할 Aim Reticle 위젯 클래스입니다. 비어 있으면 생성하지 않습니다."))
+	TSubclassOf<UCFAimReticleWidget> AimReticleWidgetClass = nullptr;
+
+	// [v2.20.0] 런타임에 생성된 Aim Reticle 위젯 인스턴스 캐시입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(DisplayName="Aim Reticle 위젯 인스턴스 (AimReticleWidgetInstance)", ToolTip="런타임에 생성되어 Viewport에 추가된 Aim Reticle 위젯 인스턴스입니다."))
+	TObjectPtr<UCFAimReticleWidget> AimReticleWidgetInstance = nullptr;
+
+	// [v2.20.0] Aim Reticle 위젯 표시를 허용하는 토글입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(DisplayName="Aim Reticle 표시 여부 (bShowAimReticle)", ToolTip="True이면 로컬 제어 Pawn에서 Aim Reticle 위젯 표시를 허용합니다. VehicleDebug UI 토글과는 별도입니다."))
+	bool bShowAimReticle = true;
+
+	// [v2.20.0] Aim Reticle 위젯을 Viewport에 추가할 때 사용할 ZOrder입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(ClampMin="0", DisplayName="Aim Reticle ZOrder (AimReticleZOrder)", ToolTip="Aim Reticle 위젯을 Viewport에 추가할 때 사용할 ZOrder입니다."))
+	int32 AimReticleZOrder = 10;
 
 	// [v2.14.4] VehicleDebug HUD/Panel UI 표시를 허용하는 메인 토글입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="VehicleDebug UI 사용 (bEnableDriveStateOnScreenDebug)", ToolTip="True이면 PIE 중 VehicleDebug HUD/Panel UI 표시를 허용합니다. 개발용 온스크린 문자열 출력과는 별도입니다."))
@@ -616,6 +715,26 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(ToolTip="차량 중심 피벗 기반 자유 조준을 계산하는 VehicleCameraComp를 반환합니다."))
 	UCFVehicleCameraComp* GetVehicleCameraComp() const { return VehicleCameraComp; }
+
+	// [v2.15.0] 차량 Aim 해석 컴포넌트를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(ToolTip="카메라 조준과 향후 무기 발사 사이의 Aim 해석 컴포넌트를 반환합니다."))
+	UCFVehicleAimComp* GetVehicleAimComp() const { return VehicleAimComp; }
+
+	// [v2.20.0] 현재 Pawn에서 Aim Reticle 위젯을 표시할 수 있는지 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(ToolTip="현재 Pawn에서 Aim Reticle 위젯을 표시할 수 있는지 반환합니다. 로컬 제어 Pawn에서만 True가 될 수 있습니다."))
+	bool ShouldShowAimReticle() const;
+
+	// [v2.20.0] 로컬 제어 Pawn에서 Aim Reticle 위젯을 생성하고 Viewport에 추가합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(ToolTip="로컬 제어 Pawn에서 Aim Reticle 위젯을 생성하고 Viewport에 추가합니다. 클래스가 비어 있거나 이미 생성된 경우 안전하게 종료합니다."))
+	UCFAimReticleWidget* CreateAimReticleWidget();
+
+	// [v2.20.0] 생성된 Aim Reticle 위젯을 Viewport에서 제거하고 캐시를 비웁니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(ToolTip="생성된 Aim Reticle 위젯을 Viewport에서 제거하고 캐시를 비웁니다."))
+	void DestroyAimReticleWidget();
+
+	// [v2.20.0] 생성된 Aim Reticle 위젯의 Pawn 참조와 표시 상태를 갱신합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(ToolTip="생성된 Aim Reticle 위젯의 Pawn 참조와 표시 상태를 갱신합니다. 위젯이 없으면 생성하지 않습니다."))
+	void RefreshAimReticleWidget();
 
 	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Input", meta=(ToolTip="현재 플레이어 컨트롤러 기준으로 기본 Input Mapping Context 등록을 시도합니다."))
 	bool RegisterDefaultInputMappingContext();
@@ -664,6 +783,10 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="상세 패널 표시용 VehicleDebug Camera 카테고리를 반환합니다."))
 	FCFVehicleDebugCamera GetVehicleDebugCamera() const;
+
+	// [v2.16.0] 상세 패널 표시용 VehicleDebug Aim 카테고리를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="상세 패널 표시용 VehicleDebug Aim 카테고리를 반환합니다."))
+	FCFVehicleDebugAim GetVehicleDebugAim() const;
 
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="상세 패널 표시용 VehicleDebug Runtime 카테고리를 반환합니다."))
 	FCFVehicleDebugRuntime GetVehicleDebugRuntime() const;
@@ -732,6 +855,26 @@ protected:
 
 	// [v1.6.0] 해석된 차량 이동 입력 결과를 DriveComp 입력으로 적용합니다.
 	void ApplyResolvedVehicleMoveInput(const FCFVehicleMoveInputResult& ResolvedMoveInput);
+
+	// [v2.17.0] 현재 Aim 상태를 기준으로 발사 요청 데이터를 생성합니다.
+	FCFVehicleFireRequest BuildFireRequest();
+
+	// [v2.17.0] 서버에서 발사 요청을 최소 검증하고 결과를 채웁니다.
+	bool ValidateFireRequestOnServer(const FCFVehicleFireRequest& FireRequest, FCFVehicleFireResult& OutFireResult);
+
+	// [v2.18.0] 서버 권한에서 더미 HitScan Trace를 실행하고 FireResult에 결과를 채웁니다.
+	bool RunServerDummyHitScan(const FCFVehicleFireRequest& FireRequest, FCFVehicleFireResult& InOutFireResult) const;
+
+	// [v2.17.0] 클라이언트 또는 서버 로컬 입력에서 발사 요청을 시작합니다.
+	void HandleFireStarted(const FInputActionValue& InputActionValue);
+
+	// [v2.17.0] 서버 권한으로 Aim 기반 발사 요청을 검증합니다.
+	UFUNCTION(Server, Reliable)
+	void ServerRequestFire(const FCFVehicleFireRequest& FireRequest);
+
+	// [v2.17.0] Owner Client에 서버 발사 검증 결과를 전달합니다.
+	UFUNCTION(Client, Reliable)
+	void ClientReceiveFireResult(const FCFVehicleFireResult& FireResult);
 
 	void ApplyVehicleDataConfig();
 	void ApplyVehicleVisualConfig();

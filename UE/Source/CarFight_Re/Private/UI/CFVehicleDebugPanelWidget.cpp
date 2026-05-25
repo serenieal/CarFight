@@ -1,9 +1,9 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.7.0
-// Date: 2026-04-27
+// Version: 1.8.0
+// Date: 2026-05-21
 // Description: VehicleDebug Panel용 C++ 부모 위젯 클래스 구현입니다.
-// Scope: VehicleDebug Overview / Drive / Input / Runtime 카테고리를 읽어 Navigation + Selected Section 기반 표시와 기존 fallback 표시를 안정적으로 지원합니다.
+// Scope: VehicleDebug Overview / Drive / Input / Camera / Aim / Runtime 카테고리를 읽어 Navigation + Selected Section 기반 표시와 기존 fallback 표시를 안정적으로 지원합니다.
 
 #include "UI/CFVehicleDebugPanelWidget.h"
 
@@ -134,6 +134,9 @@ void UCFVehicleDebugPanelWidget::RefreshFromPawn()
 					const FCFVehicleDebugInput LatestInput = VehiclePawnRef->GetVehicleDebugInput();
 	const FCFVehicleDebugCamera LatestCamera = VehiclePawnRef->GetVehicleDebugCamera();
 
+	// [v1.8.0] 현재 Pawn 기준 최신 Aim 카테고리를 가져옵니다.
+	const FCFVehicleDebugAim LatestAim = VehiclePawnRef->GetVehicleDebugAim();
+
 	// [v1.0.0] 현재 Pawn 기준 최신 Runtime 카테고리를 가져옵니다.
 	const FCFVehicleDebugRuntime LatestRuntime = VehiclePawnRef->GetVehicleDebugRuntime();
 
@@ -146,6 +149,9 @@ void UCFVehicleDebugPanelWidget::RefreshFromPawn()
 	// [v1.0.0] 현재 Panel 캐시에 최신 Input을 저장합니다.
 					CachedInput = LatestInput;
 	CachedCamera = LatestCamera;
+
+	// [v1.8.0] 현재 Panel 캐시에 최신 Aim을 저장합니다.
+	CachedAim = LatestAim;
 
 	// [v1.0.0] 현재 Panel 캐시에 최신 Runtime을 저장합니다.
 	CachedRuntime = LatestRuntime;
@@ -1419,6 +1425,7 @@ FCFVehicleDebugPanelViewData UCFVehicleDebugPanelWidget::BuildVehicleDebugPanelV
 	PanelViewData.AddTopLevelSection(BuildDriveSectionViewData(CachedDrive));
 					PanelViewData.AddTopLevelSection(BuildInputSectionViewData(CachedInput));
 	PanelViewData.AddTopLevelSection(BuildCameraSectionViewData(CachedCamera));
+	PanelViewData.AddTopLevelSection(BuildAimSectionViewData(CachedAim));
 	PanelViewData.AddTopLevelSection(BuildRuntimeSectionViewData(CachedRuntime));
 	return PanelViewData;
 }
@@ -1563,6 +1570,74 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildCame
 	CameraSectionViewData->AddChildSection(ModeSectionViewData);
 
 	return CameraSectionViewData;
+}
+
+// [v1.8.0] Aim 카테고리용 Section ViewData를 생성합니다.
+TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildAimSectionViewData(const FCFVehicleDebugAim& InAim) const
+{
+	// [v1.8.0] Aim Section에서 사용할 Local Aim 상태입니다.
+	const FCFVehicleLocalAimState& LocalAimState = InAim.LocalAimState;
+
+	// [v1.8.0] Aim Section에서 사용할 Server Aim 상태입니다.
+	const FCFVehicleServerAimState& ServerAimState = InAim.ServerAimState;
+
+	// [v1.8.0] Aim Section에서 사용할 복제 시각 상태입니다.
+	const FCFVehicleRepAimVisualState& RepAimVisualState = InAim.RepAimVisualState;
+
+	// [v1.8.0] Navigation 배지와 주요 필드에 표시할 Reticle 상태 문자열입니다.
+	const FString ReticleStateText = ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InAim.ReticleState));
+
+	// [v1.8.0] AimComp 상태를 한 줄로 요약한 문자열입니다.
+	const FString AimStatusText = !InAim.bHasVehicleAimComponent
+		? TEXT("AimComp 없음")
+		: (!InAim.bAimRuntimeReady
+			? TEXT("런타임 미준비")
+			: ReticleStateText);
+
+	// [v1.8.0] 생성할 Aim 섹션 ViewData입니다.
+	TSharedRef<FCFVehicleDebugSectionViewData> AimSectionViewData =
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("Aim"), TEXT("조준"), ECFVehicleDebugSectionKind::Category, true);
+	AimSectionViewData->NavigationGroup = ECFVehicleDebugNavGroup::Vehicle;
+	AimSectionViewData->NavigationOrder = 45;
+	AimSectionViewData->BadgeText = ReticleStateText;
+	AimSectionViewData->bShowInNavigation = true;
+
+	AimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_status_summary"), TEXT("상태 요약"), AimStatusText, !InAim.bHasVehicleAimComponent || !InAim.bAimRuntimeReady || InAim.ReticleState != ECFVehicleReticleState::Ready));
+	AimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_has_comp"), TEXT("Aim 컴포넌트"), InAim.bHasVehicleAimComponent ? TEXT("있음") : TEXT("없음"), !InAim.bHasVehicleAimComponent));
+	AimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_runtime_ready"), TEXT("런타임 준비"), InAim.bAimRuntimeReady ? TEXT("예") : TEXT("아니오"), !InAim.bAimRuntimeReady));
+	AimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_reticle_state"), TEXT("Reticle 상태"), ReticleStateText, InAim.ReticleState != ECFVehicleReticleState::Ready));
+	AimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_local_can_fire"), TEXT("로컬 발사 가능"), LocalAimState.bLocalCanFire ? TEXT("예") : TEXT("아니오"), !LocalAimState.bLocalCanFire));
+	AimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_within_arc"), TEXT("무기 조준각 내부"), LocalAimState.bLocalWithinWeaponArc ? TEXT("예") : TEXT("아니오"), !LocalAimState.bLocalWithinWeaponArc));
+	AimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_blocked"), TEXT("조준 막힘"), LocalAimState.bLocalAimBlocked ? TEXT("예") : TEXT("아니오"), LocalAimState.bLocalAimBlocked));
+	AimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeMultilineField(TEXT("aim_runtime_summary"), TEXT("런타임 요약"), InAim.AimRuntimeSummary));
+
+	// [v1.8.0] Local Aim 하위 섹션 ViewData입니다.
+	TSharedRef<FCFVehicleDebugSectionViewData> LocalAimSectionViewData =
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("AimLocal"), TEXT("로컬 조준"), ECFVehicleDebugSectionKind::Subsection, true);
+	LocalAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_local_target"), TEXT("목표 위치"), FString::Printf(TEXT("(%.1f, %.1f, %.1f)"), LocalAimState.LocalAimTargetLocation.X, LocalAimState.LocalAimTargetLocation.Y, LocalAimState.LocalAimTargetLocation.Z)));
+	LocalAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_local_direction"), TEXT("조준 방향"), FString::Printf(TEXT("(%.2f, %.2f, %.2f)"), LocalAimState.LocalAimDirection.X, LocalAimState.LocalAimDirection.Y, LocalAimState.LocalAimDirection.Z)));
+	AimSectionViewData->AddChildSection(LocalAimSectionViewData);
+
+	// [v1.8.0] Server Aim 하위 섹션 ViewData입니다.
+	TSharedRef<FCFVehicleDebugSectionViewData> ServerAimSectionViewData =
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("AimServer"), TEXT("서버 조준"), ECFVehicleDebugSectionKind::Subsection, true);
+	ServerAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_server_can_fire"), TEXT("서버 발사 가능"), ServerAimState.bServerCanFire ? TEXT("예") : TEXT("아니오"), !ServerAimState.bServerCanFire));
+	ServerAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_server_within_arc"), TEXT("서버 조준각 내부"), ServerAimState.bServerWithinWeaponArc ? TEXT("예") : TEXT("아니오"), !ServerAimState.bServerWithinWeaponArc));
+	ServerAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_server_reject_reason"), TEXT("마지막 서버 거부 사유"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(ServerAimState.LastServerRejectReason)), ServerAimState.LastServerRejectReason != ECFVehicleFireRejectReason::None));
+	ServerAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_server_last_accepted_id"), TEXT("마지막 승인 요청 ID"), FString::FromInt(ServerAimState.LastAcceptedFireRequestId)));
+	ServerAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_server_last_rejected_id"), TEXT("마지막 거부 요청 ID"), FString::FromInt(ServerAimState.LastRejectedFireRequestId)));
+	AimSectionViewData->AddChildSection(ServerAimSectionViewData);
+
+	// [v1.8.0] Rep Aim Visual 하위 섹션 ViewData입니다.
+	TSharedRef<FCFVehicleDebugSectionViewData> RepAimSectionViewData =
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("AimRepVisual"), TEXT("복제 시각"), ECFVehicleDebugSectionKind::Subsection, true);
+	RepAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_rep_direction"), TEXT("복제 조준 방향"), FString::Printf(TEXT("(%.2f, %.2f, %.2f)"), RepAimVisualState.RepAimDirection.X, RepAimVisualState.RepAimDirection.Y, RepAimVisualState.RepAimDirection.Z)));
+	RepAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_rep_target"), TEXT("복제 목표 위치"), FString::Printf(TEXT("(%.1f, %.1f, %.1f)"), RepAimVisualState.RepAimTargetLocation.X, RepAimVisualState.RepAimTargetLocation.Y, RepAimVisualState.RepAimTargetLocation.Z)));
+	RepAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_rep_firing_visual"), TEXT("발사 시각화"), RepAimVisualState.bIsFiringVisual ? TEXT("예") : TEXT("아니오"), RepAimVisualState.bIsFiringVisual));
+	RepAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_rep_weapon_mode"), TEXT("무기 시각 모드"), RepAimVisualState.RepWeaponVisualMode.ToString()));
+	AimSectionViewData->AddChildSection(RepAimSectionViewData);
+
+	return AimSectionViewData;
 }
 
 // [v1.5.0] Runtime 카테고리용 Section ViewData를 생성합니다.

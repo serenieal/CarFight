@@ -1,20 +1,23 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.13.0
-// Date: 2026-04-10
+// Version: 2.21.0
+// Date: 2026-05-22
 // Description: CarFight ???ル㎦??癲ル슓堉곁땟???Pawn ??れ삀?? ??????????열野?(癲ル슓堉곁땟???類λ룱?DA ????筌먲퐢六?????????ㅼ굣????됰슣維??/ ????곸죷 ??????ш낄援???怨뚮옖????/ ????곸죷 ?袁⑸즴??????釉먮폏?遺룹쐺???釉먯뒠??Movement ?釉뚰???癲??????됰슣維??/ VehicleCameraComp Look ????곸죷 ???ㅻ쿋筌???⑤베堉?)
 
 #include "CFVehiclePawn.h"
 
 #include "CFVehicleData.h"
+#include "CFVehicleAimComp.h"
 #include "CFVehicleCameraComp.h"
 #include "CFVehicleDriveComp.h"
 #include "CFWheelSyncComp.h"
 #include "CarFightVehicleUtils.h"
+#include "UI/CFAimReticleWidget.h"
 
 #include "ChaosVehicleWheel.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "DrawDebugHelpers.h"
 #include "EnhancedActionKeyMapping.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -243,6 +246,7 @@ ACFVehiclePawn::ACFVehiclePawn()
 	VehicleDriveComp = CreateDefaultSubobject<UCFVehicleDriveComp>(TEXT("VehicleDriveComp"));
 	WheelSyncComp = CreateDefaultSubobject<UCFWheelSyncComp>(TEXT("WheelSyncComp"));
 	VehicleCameraComp = CreateDefaultSubobject<UCFVehicleCameraComp>(TEXT("VehicleCameraComp"));
+	VehicleAimComp = CreateDefaultSubobject<UCFVehicleAimComp>(TEXT("VehicleAimComp"));
 	bAutoInitializeOnBeginPlay = true;
 	bEnableWheelVisualTick = true;
 	bAutoRegisterInputMappingContext = true;
@@ -260,7 +264,10 @@ ACFVehiclePawn::ACFVehiclePawn()
 	bShowVehicleDebugText = false;
 	bShowVehicleDebugEvents = false;
 	DriveStateDebugMessageDuration = 0.0f;
-	AutoPossessPlayer = EAutoReceiveInput::Player0;
+	bShowAimReticle = true;
+	AimReticleZOrder = 10;
+	// [v2.21.0] Dedicated Server 테스트에서 C++ 기본 Pawn이 로컬 Player0을 강제 점유하지 않도록 기본값을 비활성화합니다.
+	AutoPossessPlayer = EAutoReceiveInput::Disabled;
 
 	// [v2.14.0] 입력 자산은 BP/파생 클래스에서 지정한 값을 우선 사용하고, 비어 있을 때만 기본 fallback 자산을 로드합니다.
 	if (!DefaultInputMappingContext)
@@ -306,7 +313,10 @@ void ACFVehiclePawn::OnConstruction(const FTransform& Transform)
 void ACFVehiclePawn::BeginPlay()
 {
 	Super::BeginPlay();
-	if (bAutoRegisterInputMappingContext)
+
+	// [v2.21.0] 로컬 Viewport/입력 UI 처리를 실행할 수 있는 Pawn인지 여부입니다.
+	const bool bCanRunLocalPresentation = (GetNetMode() != NM_DedicatedServer) && IsLocallyControlled();
+	if (bCanRunLocalPresentation && bAutoRegisterInputMappingContext)
 	{
 		RegisterDefaultInputMappingContext();
 	}
@@ -314,6 +324,18 @@ void ACFVehiclePawn::BeginPlay()
 	{
 		InitializeVehicleRuntime();
 	}
+
+	if (bCanRunLocalPresentation)
+	{
+		CreateAimReticleWidget();
+	}
+}
+
+void ACFVehiclePawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	DestroyAimReticleWidget();
+
+	Super::EndPlay(EndPlayReason);
 }
 
 void ACFVehiclePawn::Tick(float DeltaSeconds)
@@ -326,9 +348,12 @@ void ACFVehiclePawn::Tick(float DeltaSeconds)
 	}
 
 	// [v2.8.0] VehicleMove 기반 조향은 입력 이벤트가 없는 동안에도 중립 복귀가 필요하므로 Tick에서 계속 갱신합니다.
-	UpdateVehicleMoveSteeringInput(DeltaSeconds);
+	if ((GetNetMode() != NM_DedicatedServer) && IsLocallyControlled())
+	{
+		UpdateVehicleMoveSteeringInput(DeltaSeconds);
+	}
 
-	if (bEnableWheelVisualTick)
+	if ((GetNetMode() != NM_DedicatedServer) && bEnableWheelVisualTick)
 	{
 		UpdateVehicleWheelVisuals(DeltaSeconds);
 	}
@@ -339,6 +364,12 @@ void ACFVehiclePawn::Tick(float DeltaSeconds)
 void ACFVehiclePawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+	if ((GetNetMode() == NM_DedicatedServer) || !IsLocallyControlled())
+	{
+		return;
+	}
+
 	if (bAutoRegisterInputMappingContext)
 	{
 		RegisterDefaultInputMappingContext();
@@ -386,20 +417,35 @@ void ACFVehiclePawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 		this,
 		&ACFVehiclePawn::HandleHandbrakeStarted,
 		&ACFVehiclePawn::HandleHandbrakeCompleted);
+	if (InputAction_Fire)
+	{
+		EnhancedInputComponent->BindAction(InputAction_Fire, ETriggerEvent::Started, this, &ACFVehiclePawn::HandleFireStarted);
+	}
+
+	// [v2.21.0] 소유 입력 컴포넌트가 준비된 뒤 로컬 Viewport UI 생성을 한 번 더 시도합니다.
+	CreateAimReticleWidget();
 }
 
 bool ACFVehiclePawn::RegisterDefaultInputMappingContext()
 {
+	if ((GetNetMode() == NM_DedicatedServer) || !IsLocallyControlled())
+	{
+		return false;
+	}
+
+	// [v2.21.0] Enhanced Input 매핑을 등록할 로컬 플레이어 컨트롤러입니다.
 	APlayerController* PlayerController = Cast<APlayerController>(GetController());
 	if (!PlayerController)
 	{
 		return false;
 	}
+	// [v2.21.0] Enhanced Input Subsystem을 소유한 로컬 플레이어입니다.
 	ULocalPlayer* LocalPlayer = PlayerController->GetLocalPlayer();
 	if (!LocalPlayer)
 	{
 		return false;
 	}
+	// [v2.21.0] 실제 Input Mapping Context를 추가할 Enhanced Input Subsystem입니다.
 	UEnhancedInputLocalPlayerSubsystem* EnhancedInputSubsystem = LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>();
 	if (!EnhancedInputSubsystem || !DefaultInputMappingContext)
 	{
@@ -417,9 +463,77 @@ bool ACFVehiclePawn::InitializeVehicleRuntime()
 	const FString DataConfigSummary = LastVehicleRuntimeSummary;
 	const bool bDriveReady = (VehicleDriveComp != nullptr) && VehicleDriveComp->CacheVehicleMovementComponent();
 	const bool bWheelSyncReady = PrepareWheelSync();
+
+	// [v2.15.0] AimComp가 Owner Pawn과 VehicleCameraComp를 안전하게 찾았는지 여부입니다.
+	const bool bAimReady = VehicleAimComp ? VehicleAimComp->InitializeAimRuntime() : false;
 	bVehicleRuntimeReady = bDriveReady && bWheelSyncReady;
-	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: Data=%s, Drive=%s, WheelSync=%s, Ready=%s | %s"), VehicleData ? TEXT("Present") : TEXT("Missing"), bDriveReady ? TEXT("Ready") : TEXT("Missing"), bWheelSyncReady ? TEXT("Ready") : TEXT("Missing"), bVehicleRuntimeReady ? TEXT("True") : TEXT("False"), *DataConfigSummary);
+	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: Data=%s, Drive=%s, WheelSync=%s, Aim=%s, Ready=%s | %s"), VehicleData ? TEXT("Present") : TEXT("Missing"), bDriveReady ? TEXT("Ready") : TEXT("Missing"), bWheelSyncReady ? TEXT("Ready") : TEXT("Missing"), bAimReady ? TEXT("Ready") : TEXT("Missing"), bVehicleRuntimeReady ? TEXT("True") : TEXT("False"), *DataConfigSummary);
 	return bVehicleRuntimeReady;
+}
+
+bool ACFVehiclePawn::ShouldShowAimReticle() const
+{
+	// [v2.20.0] Dedicated Server에서는 Viewport UI를 생성하지 않기 위한 네트워크 모드 조건입니다.
+	const bool bHasViewportContext = GetNetMode() != NM_DedicatedServer;
+
+	return bShowAimReticle && bHasViewportContext && IsLocallyControlled();
+}
+
+UCFAimReticleWidget* ACFVehiclePawn::CreateAimReticleWidget()
+{
+	if (AimReticleWidgetInstance)
+	{
+		RefreshAimReticleWidget();
+		return AimReticleWidgetInstance;
+	}
+
+	if (!ShouldShowAimReticle() || !AimReticleWidgetClass)
+	{
+		return nullptr;
+	}
+
+	// [v2.20.0] Aim Reticle 위젯을 소유할 로컬 플레이어 컨트롤러입니다.
+	APlayerController* OwningPlayerController = Cast<APlayerController>(GetController());
+	if (!OwningPlayerController)
+	{
+		return nullptr;
+	}
+
+	// [v2.20.0] Viewport에 추가할 Aim Reticle 위젯 인스턴스입니다.
+	UCFAimReticleWidget* CreatedAimReticleWidget = CreateWidget<UCFAimReticleWidget>(OwningPlayerController, AimReticleWidgetClass);
+	if (!CreatedAimReticleWidget)
+	{
+		return nullptr;
+	}
+
+	AimReticleWidgetInstance = CreatedAimReticleWidget;
+	AimReticleWidgetInstance->SetVehiclePawnRef(this);
+	AimReticleWidgetInstance->AddToViewport(AimReticleZOrder);
+	RefreshAimReticleWidget();
+
+	return AimReticleWidgetInstance;
+}
+
+void ACFVehiclePawn::DestroyAimReticleWidget()
+{
+	if (!AimReticleWidgetInstance)
+	{
+		return;
+	}
+
+	AimReticleWidgetInstance->RemoveFromParent();
+	AimReticleWidgetInstance = nullptr;
+}
+
+void ACFVehiclePawn::RefreshAimReticleWidget()
+{
+	if (!AimReticleWidgetInstance)
+	{
+		return;
+	}
+
+	AimReticleWidgetInstance->SetVehiclePawnRef(this);
+	AimReticleWidgetInstance->SetVisibility(ShouldShowAimReticle() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 }
 
 bool ACFVehiclePawn::PrepareWheelSync()
@@ -1046,6 +1160,20 @@ FCFVehicleDebugSnapshot ACFVehiclePawn::GetVehicleDebugSnapshot() const
 		DebugSnapshot.Camera.bCameraCompressedByCollision = DebugSnapshot.Camera.CollisionCompressionRatio < 0.90f;
 	}
 
+	// [v2.16.0] Aim 카테고리는 VehicleAimComp가 제공하는 현재 상태를 표시용으로만 읽습니다.
+	DebugSnapshot.Aim.bHasVehicleAimComponent = (VehicleAimComp != nullptr);
+	if (DebugSnapshot.Aim.bHasVehicleAimComponent)
+	{
+		DebugSnapshot.Aim.bAimRuntimeReady = VehicleAimComp->IsAimRuntimeReady();
+		DebugSnapshot.Aim.LocalAimState = VehicleAimComp->GetLocalAimState();
+		DebugSnapshot.Aim.ServerAimState = VehicleAimComp->GetServerAimState();
+		DebugSnapshot.Aim.RepAimVisualState = VehicleAimComp->GetRepAimVisualState();
+		DebugSnapshot.Aim.ReticleState = VehicleAimComp->GetReticleState();
+		DebugSnapshot.Aim.AimRuntimeSummary = VehicleAimComp->GetLastAimRuntimeSummary();
+		DebugSnapshot.Aim.LastFireRequest = LastFireRequest;
+		DebugSnapshot.Aim.LastFireResult = LastFireResult;
+	}
+
 	DebugSnapshot.Overview.bRuntimeReady = bVehicleRuntimeReady;
 	DebugSnapshot.Overview.DeviceMode = InputDeviceMode;
 	DebugSnapshot.Overview.InputOwner = CurrentInputOwnership;
@@ -1104,6 +1232,12 @@ FCFVehicleDebugCamera ACFVehiclePawn::GetVehicleDebugCamera() const
 	return GetVehicleDebugSnapshot().Camera;
 }
 
+FCFVehicleDebugAim ACFVehiclePawn::GetVehicleDebugAim() const
+{
+	// [v2.16.0] 상세 패널이 필요한 Aim 카테고리만 직접 읽을 수 있도록 반환합니다.
+	return GetVehicleDebugSnapshot().Aim;
+}
+
 FCFVehicleDebugRuntime ACFVehiclePawn::GetVehicleDebugRuntime() const
 {
 	// [v2.14.2] 상세 패널이 필요한 Runtime 카테고리만 직접 읽을 수 있도록 반환합니다.
@@ -1135,8 +1269,8 @@ FText ACFVehiclePawn::GetDebugTextByDisplayMode() const
 
 bool ACFVehiclePawn::ShouldShowVehicleDebugUi() const
 {
-	// [v2.14.3] VehicleDebug HUD/Panel 공통 기준은 기본 화면 디버그 활성 여부만 사용합니다.
-	return bEnableDriveStateOnScreenDebug;
+	// [v2.21.0] VehicleDebug HUD/Panel은 Viewport가 있는 로컬 제어 Pawn에서만 표시합니다.
+	return bEnableDriveStateOnScreenDebug && (GetNetMode() != NM_DedicatedServer) && IsLocallyControlled();
 }
 
 bool ACFVehiclePawn::ShouldShowDebugWidget() const
@@ -1171,7 +1305,7 @@ ESlateVisibility ACFVehiclePawn::GetDebugWidgetVisibility() const
 
 void ACFVehiclePawn::DisplayDriveStateOnScreenDebug() const
 {
-	if (!bEnableVehicleDebugOnScreenMessage || !GEngine)
+	if ((GetNetMode() == NM_DedicatedServer) || !IsLocallyControlled() || !bEnableVehicleDebugOnScreenMessage || !GEngine)
 	{
 		return;
 	}
@@ -1471,6 +1605,217 @@ void ACFVehiclePawn::HandleLookReleased(const FInputActionValue&)
 	}
 
 	VehicleCameraComp->ClearLookInput();
+}
+
+FCFVehicleFireRequest ACFVehiclePawn::BuildFireRequest()
+{
+	// [v2.17.0] 현재 월드 시간 또는 fallback 0초입니다.
+	const float ClientFireTimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
+
+	// [v2.17.0] 이번 발사 요청에 사용할 요청 ID입니다.
+	const int32 FireRequestId = NextFireRequestId++;
+
+	if (VehicleAimComp)
+	{
+		return VehicleAimComp->BuildFireRequest(FireRequestId, ClientFireTimeSeconds);
+	}
+
+	// [v2.17.0] AimComp가 없을 때도 크래시 없이 반환할 fallback 요청입니다.
+	FCFVehicleFireRequest FireRequest;
+	FireRequest.FireRequestId = FireRequestId;
+	FireRequest.ClientFireTimeSeconds = ClientFireTimeSeconds;
+	FireRequest.AimOrigin = GetActorLocation();
+	FireRequest.AimDirection = GetActorForwardVector();
+	FireRequest.PredictedAimTargetLocation = GetActorLocation() + GetActorForwardVector() * 1000.0f;
+	return FireRequest;
+}
+
+bool ACFVehiclePawn::ValidateFireRequestOnServer(const FCFVehicleFireRequest& FireRequest, FCFVehicleFireResult& OutFireResult)
+{
+	OutFireResult = FCFVehicleFireResult();
+	OutFireResult.FireRequestId = FireRequest.FireRequestId;
+	OutFireResult.ServerAimTargetLocation = FireRequest.PredictedAimTargetLocation;
+	OutFireResult.ServerHitLocation = FireRequest.PredictedAimTargetLocation;
+
+	if (!HasAuthority())
+	{
+		OutFireResult.RejectReason = ECFVehicleFireRejectReason::NoAuthority;
+		return false;
+	}
+
+	if (!GetController())
+	{
+		OutFireResult.RejectReason = ECFVehicleFireRejectReason::InvalidOwner;
+		return false;
+	}
+
+	if (!VehicleAimComp)
+	{
+		OutFireResult.RejectReason = ECFVehicleFireRejectReason::NoWeapon;
+		return false;
+	}
+
+	if (!VehicleAimComp->IsAimRuntimeReady())
+	{
+		OutFireResult.RejectReason = ECFVehicleFireRejectReason::VehicleDisabled;
+		return false;
+	}
+
+	// [v2.17.0] 서버 검증에 사용할 요청 조준 방향입니다.
+	const FVector AimDirection = FVector(FireRequest.AimDirection);
+	if (AimDirection.ContainsNaN() || AimDirection.IsNearlyZero())
+	{
+		OutFireResult.RejectReason = ECFVehicleFireRejectReason::InvalidAimDirection;
+		return false;
+	}
+
+	// [v2.17.0] 서버 검증에 사용할 요청 조준 시작 위치입니다.
+	const FVector AimOrigin = FVector(FireRequest.AimOrigin);
+	if (AimOrigin.ContainsNaN())
+	{
+		OutFireResult.RejectReason = ECFVehicleFireRejectReason::InvalidAimOrigin;
+		return false;
+	}
+
+	// [v2.17.0] 서버 기준 Pawn 위치와 요청 조준 시작점 사이 거리입니다.
+	const float AimOriginDistance = FVector::Dist(AimOrigin, GetActorLocation());
+
+	// [v2.17.0] 기본 Aim Profile에서 허용하는 최대 거리입니다.
+	const float MaxAimDistance = VehicleAimComp->GetDefaultAimProfile().MaxAimDistance;
+	if (AimOriginDistance > MaxAimDistance)
+	{
+		OutFireResult.RejectReason = ECFVehicleFireRejectReason::InvalidAimOrigin;
+		return false;
+	}
+
+	if (!VehicleAimComp->IsFireRequestWithinDefaultProfile(FireRequest))
+	{
+		OutFireResult.RejectReason = ECFVehicleFireRejectReason::OutOfWeaponArc;
+		return false;
+	}
+
+	if (VehicleAimComp->GetLocalAimState().bLocalAimBlocked)
+	{
+		OutFireResult.RejectReason = ECFVehicleFireRejectReason::AimBlocked;
+		return false;
+	}
+
+	OutFireResult.bAccepted = true;
+	OutFireResult.RejectReason = ECFVehicleFireRejectReason::None;
+	RunServerDummyHitScan(FireRequest, OutFireResult);
+	return true;
+}
+
+bool ACFVehiclePawn::RunServerDummyHitScan(const FCFVehicleFireRequest& FireRequest, FCFVehicleFireResult& InOutFireResult) const
+{
+	if (!HasAuthority() || !VehicleAimComp)
+	{
+		return false;
+	}
+
+	// [v2.18.0] 서버 Trace에 사용할 월드입니다.
+	UWorld* World = GetWorld();
+
+	// [v2.18.0] 서버 Trace 시작 위치입니다.
+	const FVector TraceStart = FVector(FireRequest.AimOrigin);
+
+	// [v2.18.0] 서버 Trace 방향입니다.
+	const FVector TraceDirection = FVector(FireRequest.AimDirection).GetSafeNormal();
+
+	// [v2.18.0] 서버 Trace에 사용할 최대 거리입니다.
+	const float TraceDistance = VehicleAimComp->GetDefaultAimProfile().MaxAimDistance;
+
+	// [v2.18.0] 서버 Trace 종료 위치입니다.
+	const FVector TraceEnd = TraceStart + TraceDirection * TraceDistance;
+
+	if (!World || TraceDirection.IsNearlyZero())
+	{
+		InOutFireResult.ServerAimTargetLocation = TraceEnd;
+		InOutFireResult.ServerHitLocation = TraceEnd;
+		InOutFireResult.ServerHitNormal = FVector::UpVector;
+		return false;
+	}
+
+	// [v2.18.0] 서버 Trace 적중 결과입니다.
+	FHitResult HitResult;
+
+	// [v2.18.0] 서버 Trace에서 Owner Pawn을 무시하기 위한 쿼리 설정입니다.
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(CarFightServerAimTrace), false);
+	QueryParams.AddIgnoredActor(this);
+
+	// [v2.18.0] 서버 Trace가 월드의 가시성 채널에 적중했는지 여부입니다.
+	const bool bHit = World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_Visibility, QueryParams);
+
+	if (bHit)
+	{
+		InOutFireResult.ServerAimTargetLocation = HitResult.ImpactPoint;
+		InOutFireResult.ServerHitLocation = HitResult.ImpactPoint;
+		InOutFireResult.ServerHitNormal = HitResult.ImpactNormal;
+	}
+	else
+	{
+		InOutFireResult.ServerAimTargetLocation = TraceEnd;
+		InOutFireResult.ServerHitLocation = TraceEnd;
+		InOutFireResult.ServerHitNormal = FVector::UpVector;
+	}
+
+	if (bDrawServerAimTraceDebug)
+	{
+		// [v2.18.0] 서버 Trace 디버그 라인 색상입니다.
+		const FColor TraceColor = bHit ? FColor::Green : FColor::Red;
+
+		DrawDebugLine(World, TraceStart, bHit ? HitResult.ImpactPoint : TraceEnd, TraceColor, false, ServerAimTraceDebugDuration, 0, 2.0f);
+		if (bHit)
+		{
+			DrawDebugSphere(World, HitResult.ImpactPoint, 24.0f, 12, FColor::Yellow, false, ServerAimTraceDebugDuration);
+		}
+	}
+
+	return bHit;
+}
+
+void ACFVehiclePawn::HandleFireStarted(const FInputActionValue&)
+{
+	LastFireRequest = BuildFireRequest();
+
+	if (HasAuthority())
+	{
+		ServerRequestFire_Implementation(LastFireRequest);
+		return;
+	}
+
+	ServerRequestFire(LastFireRequest);
+}
+
+void ACFVehiclePawn::ServerRequestFire_Implementation(const FCFVehicleFireRequest& FireRequest)
+{
+	LastFireRequest = FireRequest;
+
+	// [v2.17.0] 서버 검증 결과를 담을 발사 결과입니다.
+	FCFVehicleFireResult FireResult;
+
+	// [v2.17.0] 서버 검증이 발사 요청을 승인했는지 여부입니다.
+	const bool bAccepted = ValidateFireRequestOnServer(FireRequest, FireResult);
+
+	if (VehicleAimComp)
+	{
+		VehicleAimComp->BuildServerAimStateFromFireRequest(FireRequest, FireResult.RejectReason, bAccepted);
+		VehicleAimComp->ApplyServerFireResult(FireResult);
+		VehicleAimComp->UpdateRepAimVisualFromFireResult(FireRequest, FireResult);
+	}
+
+	LastFireResult = FireResult;
+	ClientReceiveFireResult(FireResult);
+}
+
+void ACFVehiclePawn::ClientReceiveFireResult_Implementation(const FCFVehicleFireResult& FireResult)
+{
+	LastFireResult = FireResult;
+
+	if (VehicleAimComp)
+	{
+		VehicleAimComp->ApplyServerFireResult(FireResult);
+	}
 }
 
 void ACFVehiclePawn::HandleHandbrakeStarted(const FInputActionValue&)
