@@ -1,0 +1,87 @@
+v: 1
+artifact_role: final_codex_input
+codex_input: true
+k: generic_plan_compile
+g: "Stabilize the already working CFServerLauncher v1.0 and improve basic usability after manual verification confirmed that server start, log display, server stop, and restart work"
+tf:
+  - Tools/CFServerLauncher/src/CFServerLauncher/MainWindow.xaml
+  - Tools/CFServerLauncher/src/CFServerLauncher/ViewModels/MainViewModel.cs
+  - Tools/CFServerLauncher/src/CFServerLauncher/MainWindow.xaml.cs
+  - Tools/CFServerLauncher/src/CFServerLauncher/Services/ArgBuilder.cs
+  - Tools/CFServerLauncher/src/CFServerLauncher/Services/ConfigStore.cs
+  - Tools/CFServerLauncher/src/CFServerLauncher/Services/PathGuard.cs
+  - Tools/CFServerLauncher/src/CFServerLauncher/Services/ServerProc.cs
+  - Tools/CFServerLauncher/src/CFServerLauncher/Utils/AppConst.cs
+  - Tools/CFServerLauncher/src/CFServerLauncher/CFServerLauncher.csproj
+  - Tools/CFServerLauncher/Config/server.sample.json
+scope:
+  in:
+    - Add a 찾아보기 button beside 서버 실행 파일
+    - Add a 찾아보기 button beside 작업 폴더
+    - Add a 찾아보기 button beside 로그 파일
+    - text BrowseExeCommand BrowseWorkDirCommand BrowseLogFileCommand
+    - Keep LogFilePath as the user-configured base log path that is saved to JSON
+    - Add a read-only UI property for the actual log file used by the current server run
+    - text ActiveLogFilePath
+    - "When starting the server, generate a unique runtime log path from the base LogFilePath"
+    - Do not overwrite the LogFilePath input with the timestamp runtime log path
+    - Show the actual runtime log path in the UI as read-only text
+    - Keep normal server stop from creating a new error message
+  out:
+    - text Unreal C++ build Cook/Stage automation RCON web dashboard game internal admin command auto restart profile system CPU/memory/TPS monitoring
+ban:
+  - do_not_expand_scope
+  - do_not_create_unrequested_files
+  - do_not_change_unlisted_public_contracts
+  - do_not_treat_review_targets_as_change_targets
+  - do_not_mark_success_with_missing_acceptance
+  - "Do not access Unreal GameMode, PlayerController, uasset, or map internals"
+  - Do not add third-party NuGet packages
+sc:
+  acc:
+    - a1
+    - a2
+    - a3
+    - a4
+    - a5
+    - a6
+  verify:
+    - v1
+acc:
+  - dotnet build .\Tools\CFServerLauncher\CFServerLauncher.sln succeeds
+  - The app launches without startup binding errors
+  - 서버 실행 파일 browse button can select an .exe path
+  - 작업 폴더 browse button can select a folder path
+  - 로그 파일 browse button can select or set a .log base path
+  - Starting the server creates a runtime log file with a timestamp suffix
+verify:
+  - "powershell cd D:\\Work\\CarFight_git dotnet build .\\Tools\\CFServerLauncher\\CFServerLauncher.sln dotnet run --project .\\Tools\\CFServerLauncher\\src\\CFServerLauncher\\CFServerLauncher.csproj"
+fail:
+  - acceptance_criteria를 충족하지 못하면 성공이 아니다
+  - must_change_targets 검토 없이 수정 파일 0개로 종료하면 재검토가 필요하다
+  - 대상 파일 변경 필요성을 확인하지 않고 이미 구현됨으로 종료하면 성공이 아니다
+  - failure_reproduction 입력이 남아 있으면 원인 확인 없이 성공 처리하면 안 된다
+  - target_files 검토 없이 수정 파일 0개로 종료하면 성공이 아니다
+ask_if_missing:
+  - "목표, 범위, 검증 조건 중 하나라도 불명확하면 구현하지 말고 missing contract를 보고한다"
+ref:
+  source: Document/ProjectSSOT/Plan/CFServerLauncher/CodexTasks/v1-stabilize-source.md
+metadata:
+  ssot_preflight:
+    checked: true
+    profile: codex_task
+    status: ok
+    blocked: false
+    warn_only: true
+    documents:
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_SSOT_Master.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Golden_Path.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Error_Guide.md
+    guidance_codes:
+      - codex_task_slots_required
+      - check_mcp_ssot_before_generation
+      - prefer_plan_build_from_folder_request
+      - use_plan_build_from_folder_request
+      - no_manual_longform_fallback
+    warning_codes:
+      - project_document_path_ignored_for_mcp_ssot_preflight

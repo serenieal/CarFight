@@ -1,0 +1,17 @@
+{
+  "version": "1.1",
+  "selectedProfileName": "로컬 테스트 서버",
+  "maxLogLines": 1000,
+  "profiles": [
+    {
+      "name": "로컬 테스트 서버",
+      "serverExePath": "D:\\Work\\CarFight_git\\Tools\\CFServerLauncher\\Server\\WindowsServer\\CarFight_ReServer.exe",
+      "workingDir": "D:\\Work\\CarFight_git\\Tools\\CFServerLauncher\\Server\\WindowsServer",
+      "mapPath": "/Game/Maps/TestMap",
+      "port": 7777,
+      "logFilePath": "D:\\Work\\CarFight_git\\Tools\\CFServerLauncher\\Logs\\server.log",
+      "extraArgs": "",
+      "autoScrollLog": true
+    }
+  ]
+}

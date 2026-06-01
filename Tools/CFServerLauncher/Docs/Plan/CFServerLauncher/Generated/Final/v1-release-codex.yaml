@@ -1,0 +1,101 @@
+v: 1
+artifact_role: final_codex_input
+codex_input: true
+k: generic_plan_compile
+g: Prepare CFServerLauncher for a practical v1.0 release candidate after manual verification confirmed that all current checks passed
+tf:
+  - Tools/CFServerLauncher/src/CFServerLauncher/CFServerLauncher.csproj
+  - Tools/CFServerLauncher/src/CFServerLauncher/MainWindow.xaml
+  - Tools/CFServerLauncher/src/CFServerLauncher/MainWindow.xaml.cs
+  - Tools/CFServerLauncher/src/CFServerLauncher/ViewModels/MainViewModel.cs
+  - Tools/CFServerLauncher
+  - Tools/CFServerLauncher/Docs
+scope:
+  in:
+    - Add a small read-only version display to the main window
+    - "text 버전: v1.0.0-rc1"
+    - text AppVersionText
+    - The version can be a constant in MainViewModel or project metadata. Keep it simple
+    - Add one of the following. Prefer the simpler option
+    - "Option A: Add a markdown release instruction file:"
+    - text Tools/CFServerLauncher/Docs/release.md
+    - "Option B: Add a simple PowerShell publish script:"
+    - text Tools/CFServerLauncher/publish.ps1
+    - "If adding a script, keep it simple and readable. It should publish the WPF app to a local output folder"
+    - text Tools/CFServerLauncher/Publish
+    - powershell dotnet publish .\src\CFServerLauncher\CFServerLauncher.csproj -c Release -r win-x64 --self-contained false -o .\Publish
+    - Do not make the app self-contained unless explicitly needed
+    - "When the user closes the launcher while the server is running, show a Korean confirmation message"
+    - text 서버가 실행 중입니다. 서버를 종료하고 런처를 닫을까요?
+    - "Yes: stop the server, then close the app"
+    - "No: cancel closing"
+    - "Keep the implementation simple. If async close handling is awkward, use a guard flag to prevent recursive close"
+    - text isClosingConfirmed
+    - "If the server is not running, close normally"
+    - "To support this, expose a read-only property or method from MainViewModel, for example:"
+    - text IsServerRunning StopServerForCloseAsync()
+    - "Do not break these existing behaviors:"
+    - LogFilePath stays as base path
+    - ActiveLogFilePath shows actual runtime log file
+    - settings save does not save timestamp log path
+    - manual stop final state is 중지됨
+    - external exit final state is 종료됨
+  out:
+    - text profile system auto restart RCON web dashboard Unreal build automation Cook/Stage automation CPU/memory/TPS monitoring server player list game internal admin command
+ban:
+  - do_not_expand_scope
+  - do_not_create_unrequested_files
+  - do_not_change_unlisted_public_contracts
+  - do_not_treat_review_targets_as_change_targets
+  - do_not_mark_success_with_missing_acceptance
+  - Do not add third-party NuGet packages
+  - Do not change Unreal server code
+  - "Do not add Unreal build, Cook, Stage, RCON, web dashboard, profile system, auto restart, or process monitoring"
+sc:
+  acc:
+    - a1
+    - a2
+    - a3
+    - a4
+    - a5
+    - a6
+  verify:
+    - v1
+acc:
+  - dotnet build .\Tools\CFServerLauncher\CFServerLauncher.sln succeeds
+  - "App window shows 버전: v1.0.0-rc1 or equivalent v1.0 rc text"
+  - "If server is not running, closing the app exits normally"
+  - "If server is running, closing the app shows a Korean confirmation dialog"
+  - Choosing No cancels app close and keeps the server running
+  - Choosing Yes stops the server and closes the launcher
+verify:
+  - "powershell cd D:\\Work\\CarFight_git dotnet build .\\Tools\\CFServerLauncher\\CFServerLauncher.sln dotnet run --project .\\Tools\\CFServerLauncher\\src\\CFServerLauncher\\CFServerLauncher.csproj"
+fail:
+  - acceptance_criteria를 충족하지 못하면 성공이 아니다
+  - must_change_targets 검토 없이 수정 파일 0개로 종료하면 재검토가 필요하다
+  - 대상 파일 변경 필요성을 확인하지 않고 이미 구현됨으로 종료하면 성공이 아니다
+  - failure_reproduction 입력이 남아 있으면 원인 확인 없이 성공 처리하면 안 된다
+  - target_files 검토 없이 수정 파일 0개로 종료하면 성공이 아니다
+ask_if_missing:
+  - "목표, 범위, 검증 조건 중 하나라도 불명확하면 구현하지 말고 missing contract를 보고한다"
+ref:
+  source: Document/ProjectSSOT/Plan/CFServerLauncher/CodexTasks/v1-release-source.md
+metadata:
+  ssot_preflight:
+    checked: true
+    profile: codex_task
+    status: ok
+    blocked: false
+    warn_only: true
+    documents:
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_SSOT_Master.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Golden_Path.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Error_Guide.md
+    guidance_codes:
+      - codex_task_slots_required
+      - check_mcp_ssot_before_generation
+      - prefer_plan_build_from_folder_request
+      - use_plan_build_from_folder_request
+      - no_manual_longform_fallback
+    warning_codes:
+      - project_document_path_ignored_for_mcp_ssot_preflight
