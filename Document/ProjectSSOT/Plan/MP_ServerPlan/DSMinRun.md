@@ -1,7 +1,8 @@
 # Dedicated Server 최소 실행선 계획
 
-- 문서 버전: 0.1.0
+- 문서 버전: 0.2.0
 - 작성일: 2026-05-22
+- 최종 갱신일: 2026-05-26
 - 대상 프로젝트: CarFight
 - 상위 문서: `MPPlan.md`
 
@@ -24,9 +25,47 @@ Dedicated Server에서 클라이언트 2개가 접속하고,
 
 ---
 
-## 2. 범위
+## 2. 현재 진행 상태
 
-### 2.1 포함
+### 2.1 완료된 환경 작업
+
+```text
+- UE 5.7 Source Build 엔진 전환 완료
+- Dedicated Server 빌드 성공
+- Dedicated Server 실행 성공
+```
+
+판정:
+
+```text
+빌드 환경 병목은 해결됨.
+이제 런타임 멀티플레이 검증 단계로 이동한다.
+```
+
+---
+
+### 2.2 아직 완료되지 않은 런타임 검증
+
+```text
+- 클라이언트 2개 서버 접속 확인
+- 각 클라이언트의 Pawn 또는 차량 소유 확인
+- 입력 분리 확인
+- 차량 이동 복제 확인
+- Dedicated Server 로그의 UI/카메라/로컬 사운드 오류 확인
+```
+
+판정:
+
+```text
+Dedicated Server 빌드/실행은 완료되었지만,
+2클라 플레이 검증은 아직 남아 있다.
+```
+
+---
+
+## 3. 범위
+
+### 3.1 포함
 
 ```text
 - Dedicated Server 실행 확인
@@ -39,7 +78,7 @@ Dedicated Server에서 클라이언트 2개가 접속하고,
 - 클라이언트 로그 확인
 ```
 
-### 2.2 제외
+### 3.2 제외
 
 ```text
 - 체력
@@ -56,46 +95,52 @@ Dedicated Server에서 클라이언트 2개가 접속하고,
 
 ---
 
-## 3. 완료 기준 요약
+## 4. 완료 기준 요약
 
-이 문서의 작업은 아래 조건을 만족하면 완료로 본다.
+이 문서의 전체 작업은 아래 조건을 만족하면 완료로 본다.
 
 ```text
 [필수 완료 기준]
-1. Dedicated Server가 실행된다.
-2. 클라이언트 2개가 서버에 접속한다.
-3. 각 클라이언트가 자기 차량을 소유한다.
-4. 클라이언트 A의 입력은 A 차량에만 적용된다.
-5. 클라이언트 B의 입력은 B 차량에만 적용된다.
-6. 클라이언트 A 화면에서 B 차량 이동이 보인다.
-7. 클라이언트 B 화면에서 A 차량 이동이 보인다.
-8. 서버 로그에 HUD/카메라/로컬 사운드 관련 오류가 없다.
+1. Dedicated Server가 실행된다. [완료]
+2. 클라이언트 2개가 서버에 접속한다. [미확인]
+3. 각 클라이언트가 자기 차량을 소유한다. [미확인]
+4. 클라이언트 A의 입력은 A 차량에만 적용된다. [미확인]
+5. 클라이언트 B의 입력은 B 차량에만 적용된다. [미확인]
+6. 클라이언트 A 화면에서 B 차량 이동이 보인다. [미확인]
+7. 클라이언트 B 화면에서 A 차량 이동이 보인다. [미확인]
+8. 서버 로그에 HUD/카메라/로컬 사운드 관련 오류가 없다. [미확인]
 ```
 
 ---
 
-## 4. 테스트 환경
+## 5. 테스트 환경
 
 테스트 환경은 실제 프로젝트 상태에 맞춰 갱신한다.
 
 ```text
 Unreal Engine 버전:
-- 확인 필요
+- UE 5.7 Source Build
 
 프로젝트 이름:
 - CarFight
 
+언리얼 프로젝트:
+- UE/CarFight_Re.uproject
+
 서버 Target:
-- 확인 필요
+- CarFight_ReServer
+- 빌드 성공 확인됨
 
 테스트 맵:
-- 확인 필요
+- /Game/Maps/TestMap.TestMap
+- Dedicated Server 실행 성공 확인됨
 
 기본 GameMode:
 - 확인 필요
 
 기본 Pawn 또는 Vehicle Pawn:
-- 확인 필요
+- BP_CFVehiclePawn 후보
+- ACFVehiclePawn 기반
 
 PlayerController:
 - 확인 필요
@@ -103,37 +148,39 @@ PlayerController:
 
 ---
 
-## 5. 실행 전 점검
+## 6. 실행 전 점검
 
-### 5.1 서버 Target 확인
+### 6.1 서버 Target 확인
 
-- [ ] `CarFightServer.Target.cs` 존재 여부 확인
-- [ ] 없으면 Dedicated Server Target 생성 계획 작성
-- [ ] 서버 빌드 가능 여부 확인
+- [x] `CarFight_ReServer.Target.cs` 존재 여부 확인
+- [x] Source Build 엔진으로 Dedicated Server 빌드 가능 여부 확인
+- [x] Dedicated Server 실행 가능 여부 확인
 
 메모:
 
 ```text
-확인 필요
+UE 5.7 Launcher Installed Build에서는 Dedicated Server Target 빌드가 막혔고,
+UE 5.7 Source Build 전환 후 Dedicated Server 빌드와 실행이 성공했다.
 ```
 
 ---
 
-### 5.2 기본 맵 확인
+### 6.2 기본 맵 확인
 
-- [ ] Dedicated Server가 실행할 테스트 맵 확인
+- [x] Dedicated Server가 실행할 테스트 맵 확인
 - [ ] 테스트 맵에 멀티플레이 테스트용 PlayerStart가 충분한지 확인
 - [ ] 맵에서 싱글 전용 Actor가 강하게 의존되어 있지 않은지 확인
 
-메모:
+현재 확인:
 
 ```text
-확인 필요
+TestMap에는 PlayerStart 1개와 BP_CFVehiclePawn 1대가 확인되어 있다.
+2클라 검증에는 부족할 가능성이 높다.
 ```
 
 ---
 
-### 5.3 GameMode 확인
+### 6.3 GameMode 확인
 
 - [ ] 현재 사용하는 GameMode 확인
 - [ ] GameMode에서 UI 생성 여부 확인
@@ -143,30 +190,36 @@ PlayerController:
 메모:
 
 ```text
-확인 필요
+다음 작업 T-005에서 확인한다.
 ```
 
 ---
 
-### 5.4 Pawn / Vehicle 확인
+### 6.4 Pawn / Vehicle 확인
 
-- [ ] 차량 Pawn 클래스 확인
-- [ ] 차량 Pawn의 `bReplicates` 설정 확인
-- [ ] 차량 이동 복제 방식 확인
-- [ ] 카메라가 소유 클라이언트 전용인지 확인
-- [ ] 입력 바인딩이 소유자에게만 적용되는지 확인
+- [x] 차량 Pawn 클래스 확인
+- [x] 차량 Pawn의 `bReplicates` 설정 확인
+- [x] 차량 Pawn의 `bReplicateMovement` 설정 확인
+- [ ] 차량 이동 복제 실제 동작 확인
+- [ ] 카메라가 소유 클라이언트 전용인지 실행 환경에서 확인
+- [ ] 입력 바인딩이 소유자에게만 적용되는지 실행 환경에서 확인
 
-메모:
+현재 확인:
 
 ```text
-확인 필요
+BP_CFVehiclePawn Class Defaults 기준:
+- bReplicates = true
+- bReplicateMovement = true
+- AutoPossessPlayer = Player0
+
+AutoPossessPlayer = Player0는 Dedicated Server 2클라 테스트에서 위험 요소다.
 ```
 
 ---
 
-## 6. 테스트 절차
+## 7. 테스트 절차
 
-### 6.1 서버 실행
+### 7.1 서버 실행
 
 목표:
 
@@ -176,20 +229,27 @@ Dedicated Server가 테스트 맵을 정상적으로 실행한다.
 
 체크리스트:
 
-- [ ] 서버 실행 명령 또는 에디터 실행 방식 확인
-- [ ] 서버 로그 시작 확인
-- [ ] 테스트 맵 로드 확인
-- [ ] 치명적 오류 없음
+- [x] 서버 실행 명령 또는 에디터 실행 방식 확인
+- [x] 서버 로그 시작 확인
+- [x] 테스트 맵 로드 확인
+- [x] 7777 포트 리슨 확인
+- [x] 스테이지 서버 실행 기준 치명적 오류 없음
 
 결과:
 
 ```text
-확인 필요
+성공.
+Source Build 전환 후 Dedicated Server 빌드와 실행이 완료되었다.
+CodexStagedServerTest.log 기준으로 /Game/Maps/TestMap 로드와 7777 포트 리슨이 확인되었다.
+
+주의:
+비스테이지 직접 실행 로그인 CodexDedicatedServerTest.log에는 BufferReader Assertion 크래시가 있다.
+따라서 현재 서버 실행 성공 근거는 스테이지 서버 로그를 기준으로 한다.
 ```
 
 ---
 
-### 6.2 클라이언트 1 접속
+### 7.2 클라이언트 1 접속
 
 목표:
 
@@ -210,12 +270,13 @@ Dedicated Server가 테스트 맵을 정상적으로 실행한다.
 결과:
 
 ```text
-확인 필요
+미확인.
+다음 런타임 검증 단계에서 확인한다.
 ```
 
 ---
 
-### 6.3 클라이언트 2 접속
+### 7.3 클라이언트 2 접속
 
 목표:
 
@@ -237,12 +298,13 @@ Dedicated Server가 테스트 맵을 정상적으로 실행한다.
 결과:
 
 ```text
-확인 필요
+미확인.
+현재 TestMap 구조상 PlayerStart와 차량 수가 부족할 가능성이 있다.
 ```
 
 ---
 
-### 6.4 입력 분리 테스트
+### 7.4 입력 분리 테스트
 
 목표:
 
@@ -260,12 +322,12 @@ Dedicated Server가 테스트 맵을 정상적으로 실행한다.
 결과:
 
 ```text
-확인 필요
+미확인.
 ```
 
 ---
 
-### 6.5 이동 복제 테스트
+### 7.5 이동 복제 테스트
 
 목표:
 
@@ -284,12 +346,12 @@ Dedicated Server가 테스트 맵을 정상적으로 실행한다.
 결과:
 
 ```text
-확인 필요
+미확인.
 ```
 
 ---
 
-### 6.6 서버 전용 환경 오류 확인
+### 7.6 서버 전용 환경 오류 확인
 
 목표:
 
@@ -308,32 +370,52 @@ Dedicated Server에서 UI, 카메라, 로컬 사운드 코드 때문에 오류�
 결과:
 
 ```text
-확인 필요
+미확인.
+Dedicated Server 실행 성공과 별도로 로그 상세 검토가 필요하다.
 ```
 
 ---
 
-## 7. 로그 기록 양식
+## 8. 현재 테스트 기록
 
-테스트 결과는 아래 형식으로 기록한다.
+### 2026-05-26 환경 검증
 
 ```text
 테스트 날짜:
+- 2026-05-26
+
 테스트 맵:
+- /Game/Maps/TestMap.TestMap
+
 서버 실행 방식:
+- UE 5.7 Source Build 기반 Dedicated Server 실행
+
 클라이언트 수:
+- 아직 2클라 검증 전
+
 성공 항목:
+- UE 5.7 Source Build 전환 완료
+- Dedicated Server 빌드 성공
+- Dedicated Server 실행 성공
+
 실패 항목:
+- 없음. 단, 2클라 런타임 검증은 아직 미수행
+
 주요 로그:
+- 사용자가 Dedicated Server 빌드/실행 성공을 확인함
+
 수정 필요 항목:
+- TestMap / GameMode / PlayerController / Pawn 소유권 확인 필요
+
 다음 액션:
+- T-005 테스트 맵과 GameMode 확인
 ```
 
 ---
 
-## 8. 실패 유형과 대응
+## 9. 실패 유형과 대응
 
-### 8.1 클라이언트가 접속하지 못함
+### 9.1 클라이언트가 접속하지 못함
 
 가능 원인:
 
@@ -355,7 +437,7 @@ Dedicated Server에서 UI, 카메라, 로컬 사운드 코드 때문에 오류�
 
 ---
 
-### 8.2 차량이 스폰되지 않음
+### 9.2 차량이 스폰되지 않음
 
 가능 원인:
 
@@ -377,7 +459,7 @@ Dedicated Server에서 UI, 카메라, 로컬 사운드 코드 때문에 오류�
 
 ---
 
-### 8.3 입력이 적용되지 않음
+### 9.3 입력이 적용되지 않음
 
 가능 원인:
 
@@ -399,7 +481,7 @@ Dedicated Server에서 UI, 카메라, 로컬 사운드 코드 때문에 오류�
 
 ---
 
-### 8.4 다른 차량이 보이지 않음
+### 9.4 다른 차량이 보이지 않음
 
 가능 원인:
 
@@ -421,7 +503,17 @@ Dedicated Server에서 UI, 카메라, 로컬 사운드 코드 때문에 오류�
 
 ---
 
-## 9. 변경 기록
+## 10. 변경 기록
+
+### 0.2.0
+
+```text
+- UE 5.7 Source Build 전환 완료 상태 반영
+- Dedicated Server 빌드 성공 상태 반영
+- Dedicated Server 실행 성공 상태 반영
+- T-004 서버 Target/빌드/실행 확인 완료 처리
+- 남은 작업을 2클라 접속, 소유권, 입력, 이동 복제 검증으로 정리
+```
 
 ### 0.1.0
 

@@ -372,18 +372,22 @@ Debug UI 생성 흐름은 OwnerOnly 조건을 타는 것으로 보인다.
 
 ---
 
-### 3순위: 실제 Dedicated Server 실행선 확인
+### 3순위: Dedicated Server 실행 완료 후 2클라 런타임 검증
 
 ```text
 현재 상태:
+- UE 5.7 Source Build 전환이 완료됐다.
+- Dedicated Server 빌드가 성공했다.
+- Dedicated Server 실행이 성공했다.
 - BP 복제 설정은 일부 확인됐다.
-- 실제 DS 실행 테스트는 아직 하지 않았다.
 
-문제:
+남은 문제:
 - 설정상 복제와 실제 Chaos Vehicle 멀티 동작은 별도로 검증해야 한다.
+- 클라이언트 2개 접속, 차량 소유권, 입력 분리, 이동 복제는 아직 미확인이다.
 
 다음 단계:
-- Dedicated Server Target 존재 여부 확인으로 넘어간다.
+- 테스트 맵과 GameMode를 확인한다.
+- 이후 클라이언트 2개 접속 검증으로 넘어간다.
 ```
 
 ---

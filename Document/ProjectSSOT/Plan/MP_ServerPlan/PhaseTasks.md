@@ -118,21 +118,28 @@ CarFight Dedicated Server 빌드와 실행 가능성을 확인한다.
 
 작업:
 
-- [ ] `CarFightServer.Target.cs` 존재 여부 확인
-- [ ] 없으면 생성 필요 항목으로 기록
-- [ ] Server Target 빌드 가능 여부 확인
-- [ ] 빌드 실패 시 오류 기록
+- [x] `CarFight_ReServer.Target.cs` 존재 여부 확인
+- [x] UE 5.7 Source Build 엔진 전환 완료
+- [x] Dedicated Server Target 빌드 성공 확인
+- [x] Dedicated Server 실행 성공 확인
 
 산출물:
 
 ```text
-DSMinRun.md 테스트 환경 항목 갱신
+DSMinRun.md 테스트 환경 항목 갱신 완료
 ```
 
 완료 기준:
 
 ```text
-Dedicated Server Target 존재 여부와 다음 액션이 명확히 기록되어 있다.
+Dedicated Server Target 빌드와 실행이 성공했으므로 T-003은 완료로 본다.
+```
+
+결과:
+
+```text
+완료.
+다음 작업은 T-004 테스트 맵과 GameMode 확인이다.
 ```
 
 ---
