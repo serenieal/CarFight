@@ -28,7 +28,7 @@
 ---
 
 ## 3. 상위 방향 규칙
-- 상위 방향은 `03_VisionAlign.md`를 우선 기준으로 둔다.
+- 상위 방향은 `00_Vision.md`를 우선 기준으로 둔다.
 - 활성 문서는 현재 구현만 적더라도, 그것이 CarFight의 상위 목표와 어떻게 연결되는지 드러내야 한다.
 - 특정 테스트 차량을 프로젝트의 최종 목표처럼 쓰지 않는다.
 - 다차종 확장 가능성을 해치는 표현을 피한다.
@@ -51,9 +51,9 @@
 - 역사 기록은 남겨도 되지만, 활성 문서 안에서 현재 기준처럼 보이게 두지 않는다.
 
 ### 활성 문서 우선순위
-- 상위 방향: `03_VisionAlign.md`
-- 현재 상태 / 확정 기준: `00_Handover.md`
-- 해야 할 일 / 우선순위: `01_Roadmap.md`
+- 상위 방향: `00_Vision.md`
+- 현재 상태 / 확정 기준: `01_ProjectState.md`
+- 해야 할 일 / 우선순위: `02_Roadmap.md`
 - 검증 판정: `08_P0_Verification.md`
 - 결정 근거: `16_CPP_DecisionLog.md`
 
@@ -75,9 +75,9 @@
 ---
 
 ## 7. 변경 시 반영 순서
-1. `03_VisionAlign.md`
-2. `01_Roadmap.md`
-3. `00_Handover.md`
+1. `00_Vision.md`
+2. `02_Roadmap.md`
+3. `01_ProjectState.md`
 4. `08_P0_Verification.md`
 5. `02_Conventions.md`
 6. 필요 시 `16_CPP_DecisionLog.md`

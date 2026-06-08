@@ -2,7 +2,7 @@
 
 > 상태: Archived  
 > 원래 경로: `Document/ProjectSSOT/11_WheelSnapshotFix.md`  
-> 현재 기준 문서: `README.md`, `00_Handover.md`, `01_Roadmap.md`, `08_P0_Verification.md`
+> 현재 기준 문서: `README.md`, `01_ProjectState.md`, `02_Roadmap.md`, `08_P0_Verification.md`
 
 ---
 
@@ -11,7 +11,7 @@
 > 상태: **Archive 후보 (핫픽스/조사 기록)**  
 > 역할: `GetRealWheelTransform` 기반 경로에서 값이 0으로 고정될 때 Snapshot API로 우회/검증했던 작업 메모.  
 > 현재 판정: 이 문서는 **당시 조사 기록**으로 보며, 현재 기본 해결책 문서로 사용하지 않는다.  
-> 최신 기준: Snapshot API 경로는 Tick 평가 시 크래시 위험 판정이 있어 현재 직접 사용 보류 상태이며, 최신 상태/판정은 `00_Handover.md`, `01_Roadmap.md`, `08_P0_Verification.md`를 우선 확인한다.
+> 최신 기준: Snapshot API 경로는 Tick 평가 시 크래시 위험 판정이 있어 현재 직접 사용 보류 상태이며, 최신 상태/판정은 `01_ProjectState.md`, `02_Roadmap.md`, `08_P0_Verification.md`를 우선 확인한다.
 
 ## Symptoms
 - Enhanced Input works, but wheel/anchor/mesh values (LocZ/Yaw/Pitch) are stuck at 0.

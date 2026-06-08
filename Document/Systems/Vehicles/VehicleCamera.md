@@ -286,17 +286,20 @@ Boom이 없을 때는 **직접 카메라 위치를 계산하는 폴백 경로**�
 ### 3. 데이터 사용 방식
 현재 구조상 `VehicleCameraData`는 선택적이다.
 
-현재 `BP_CFVehiclePawn.VehicleCameraComp` 기본값 기준:
-- `VehicleCameraData = null`
+현재 확인된 상태:
+- `UCFVehicleCameraData` C++ 타입은 존재한다.
+- `/Game/CarFight/Vehicles/Data/Camera/DA_Cam_Default` 카메라 DataAsset 자산도 존재한다.
+- 하지만 현재 `BP_CFVehiclePawn.VehicleCameraComp` 기본값 기준 `VehicleCameraData = null`이다.
 
-즉 현재 기본 프로젝트 구성에서는 **카메라 DataAsset이 연결되어 있지 않다.**
-그 대신 `Tick`/`InitializeCameraRuntime`에서 `VehicleCameraData`가 없으면
-- `FCFVehicleCameraTuningConfig()` 기본 구조체 값
-- `FCFVehicleCameraAimProfile()` 기본 구조체 값
+즉 현재 프로젝트에는 **카메라 DataAsset 자산 자체는 존재하지만, 기본 차량 BP의 VehicleCameraComp에는 아직 연결되어 있지 않다.**
 
-으로 폴백한다.
+현재 런타임 폴백 규칙:
+- `VehicleCameraData`가 있으면 `VehicleCameraData->CameraTuningConfig`를 사용한다.
+- `VehicleCameraData`가 있으면 `VehicleCameraData->DefaultAimProfile`을 기본 Aim Profile로 사용한다.
+- `VehicleCameraData`가 없으면 `FCFVehicleCameraTuningConfig()` 기본 구조체 값을 사용한다.
+- `VehicleCameraData`가 없고 AimProfile Override도 없으면 `FCFVehicleCameraAimProfile()` 기본 구조체 값을 사용한다.
 
-즉 현재 카메라 기능은 **DataAsset 없이도 코드 기본값으로 동작 가능한 폴백 구조**다.
+즉 현재 카메라 기능은 **DataAsset이 없어도 코드 기본값으로 동작 가능한 폴백 구조**이며, `DA_Cam_Default` 연결은 아직 선택 가능한 다음 정리 항목이다.
 
 ## 현재 표시 조건 / 실행 조건
 현재 `VehicleCamera`가 제대로 동작하려면 아래 조건이 중요하다.
@@ -321,7 +324,10 @@ Boom이 없을 때는 **직접 카메라 위치를 계산하는 폴백 경로**�
 ### `UCFVehicleCameraData`
 - 종류: `PrimaryDataAsset`
 - 현재 역할: 카메라 튜닝값과 기본 Aim Profile 공급
-- 현재 상태: 기본 `BP_CFVehiclePawn`에는 연결되지 않음
+- 현재 상태:
+  - C++ 타입 존재
+  - `/Game/CarFight/Vehicles/Data/Camera/DA_Cam_Default` 자산 존재
+  - 기본 `BP_CFVehiclePawn.VehicleCameraComp.VehicleCameraData`에는 아직 연결되지 않음
 
 ### `FCFVehicleCameraTuningConfig`
 - 종류: `USTRUCT`
@@ -366,6 +372,8 @@ Boom이 없을 때는 **직접 카메라 위치를 계산하는 폴백 경로**�
 현재 기본값 기준으로 확인된 주요 설정은 아래와 같다.
 
 - `VehicleCameraData = null`
+- 카메라 DataAsset 후보 자산: `/Game/CarFight/Vehicles/Data/Camera/DA_Cam_Default`
+- 현재 후보 자산은 존재하지만 기본 차량 BP 컴포넌트에는 연결되어 있지 않음
 - `CameraPivotRoot -> BP_CFVehiclePawn:CameraPivotRoot`
 - `CameraAimPivot -> BP_CFVehiclePawn:CameraAimPivot`
 - `CameraBoom -> BP_CFVehiclePawn:CameraBoom`
@@ -479,7 +487,8 @@ Camera Debug 표시 정책:
 ## 현재 문서에서 미확인인 항목
 아래는 아직 이 문서에서 확정하지 않은 내용이다.
 
-- 현재 프로젝트에 별도 `VehicleCameraData` 자산이 존재하는지 여부와 실제 연결 계획
+- `/Game/CarFight/Vehicles/Data/Camera/DA_Cam_Default`를 기본 `BP_CFVehiclePawn.VehicleCameraComp.VehicleCameraData`에 실제로 연결할지 여부
+- `DA_Cam_Default`를 연결한다면 기본 구조체 값과 어떤 차이를 둘지
 - 외부 시스템이 `CameraModeFlags`를 실제로 어디서 갱신하는지 전체 경로
 - 외부 무기 시스템이 `AimProfileOverride`를 실제 사용 중인지 여부
 - HUD/디버그에서 `CameraRuntimeState`를 직접 소비하는 경로 존재 여부
@@ -496,8 +505,8 @@ Camera Debug 표시 정책:
 - `VehicleCameraData` 실제 연결 상태 변경
 
 ## 문서 버전 관리
-- 현재 문서 버전: `1.0.0`
-- 문서 상태: `Initial`
+- 현재 문서 버전: `1.1.0`
+- 문서 상태: `Current`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
   - 기능 설명 본문이 바뀌면 체인지로그도 같이 갱신한다.
@@ -517,6 +526,12 @@ Camera Debug 표시 정책:
   - 본문 의미는 유지한 채 설명 정밀도만 올라갈 때
 
 ## 체인지로그
+### v1.1.0 - 2026-06-02
+- `VehicleCameraData` 연결 상태 갱신
+- `/Game/CarFight/Vehicles/Data/Camera/DA_Cam_Default` 자산 존재 상태 반영
+- `BP_CFVehiclePawn.VehicleCameraComp.VehicleCameraData = null` 상태를 최신 확인 기준으로 유지
+- 미확인 항목을 “자산 존재 여부”에서 “기본 차량 BP에 연결할지 여부”로 정리
+
 ### v1.0.0 - 2026-04-23
 - `VehicleCamera` 문서 최초 작성
 - `UCFVehicleCameraComp`, `UCFVehicleCameraData`, `CFVehicleCameraTypes` 기준으로 현재 기능 정리
@@ -524,11 +539,12 @@ Camera Debug 표시 정책:
 - `BP_CFVehiclePawn.VehicleCameraComp` 기본 설정과 현재 `VehicleCameraData = null` 상태 반영
 
 ## 마지막 확인 기준
-- 확인 일시: 2026-04-23
+- 확인 일시: 2026-06-02
 - 확인 근거:
   - `UE/Source/CarFight_Re/Public/CFVehicleCameraComp.h`
   - `UE/Source/CarFight_Re/Private/CFVehicleCameraComp.cpp`
   - `UE/Source/CarFight_Re/Public/CFVehicleCameraData.h`
   - `UE/Source/CarFight_Re/Public/CFVehicleCameraTypes.h`
   - `/Game/CarFight/Vehicles/BP_CFVehiclePawn`
+  - `/Game/CarFight/Vehicles/Data/Camera/DA_Cam_Default`
   - `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp`

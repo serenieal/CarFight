@@ -2,16 +2,16 @@
 
 > 상태: Archived  
 > 원래 경로: `Document/ProjectSSOT/04_WheelSync_BP.md`  
-> 현재 기준 문서: `README.md`, `00_Handover.md`, `01_Roadmap.md`, `08_P0_Verification.md`
+> 현재 기준 문서: `README.md`, `01_ProjectState.md`, `02_Roadmap.md`, `08_P0_Verification.md`
 
 ---
 
 # P0-002 Wheel Visual Sync (BP_ModularVehicle)
 
 > 상태: **Archive 후보 (과거 BP 세부 구현 가이드)**  
-> 역할: 당시 휠 시각 동기화 BP 구현을 위한 상세 절차 문서. 현재 확정사항/판정 기준은 `00_Handover.md`, `01_Roadmap.md`, `08_P0_Verification.md`를 우선 기준으로 본다.  
+> 역할: 당시 휠 시각 동기화 BP 구현을 위한 상세 절차 문서. 현재 확정사항/판정 기준은 `01_ProjectState.md`, `02_Roadmap.md`, `08_P0_Verification.md`를 우선 기준으로 본다.  
 > 현재 판정: 이 문서의 절차는 그대로 따라가기보다, 상위 기준 문서의 최신 상태와 충돌 없는지 먼저 확인한다.  
-> 주의: `GetRealWheelTransform` 실패 시 Snapshot API 경로를 **현재 기본 해결책으로 간주하지 않는다.** Snapshot 경로는 현재 Tick 평가 시 크래시 위험 판정이 있어, 최신 상태는 `00_Handover.md`와 `01_Roadmap.md`를 우선 확인한다.
+> 주의: `GetRealWheelTransform` 실패 시 Snapshot API 경로를 **현재 기본 해결책으로 간주하지 않는다.** Snapshot 경로는 현재 Tick 평가 시 크래시 위험 판정이 있어, 최신 상태는 `01_ProjectState.md`와 `02_Roadmap.md`를 우선 확인한다.
 
 ## 목표(DoD)
 - 전륜 조향: 조향 시 FL/FR 바퀴가 좌우로 자연스럽게 돌아간다.

@@ -167,7 +167,7 @@ BP `UpdateWheelVisuals` 안에서 **조향 Yaw 적용 부분만 임시로 끄고
 
 ### 원복 B (실험 계속할 때)
 - BP 우회는 유지하되, 브랜치 코멘트/메모를 남긴다
-- `00_Handover.md` 또는 `16_CPP_DecisionLog.md`에 테스트 상태 기록
+- `01_ProjectState.md` 또는 `16_CPP_DecisionLog.md`에 테스트 상태 기록
 
 ---
 

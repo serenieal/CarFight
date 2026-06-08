@@ -128,4 +128,4 @@
 ## 관련 문서
 - `Document/ProjectSSOT/12_CPP_TransitionPlan.md` (전환 원칙/판정/로드맵)
 - `Document/ProjectSSOT/13_CPP_P1_Start.md` (Phase 1 시작 체크리스트)
-- `Document/ProjectSSOT/01_Roadmap.md` (프로젝트 우선순위)
+- `Document/ProjectSSOT/02_Roadmap.md` (프로젝트 우선순위)

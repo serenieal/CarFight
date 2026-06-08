@@ -1,16 +1,146 @@
-# CarFight — 00_Handover
+# CarFight — 01_ProjectState
 
 > 역할: CarFight 프로젝트의 **현재 실제 기준선 / 임시 운영 편차 / 현재 리스크**를 고정한다.  
 > 공통 규칙 원본: `Document/SSOT/`  
-> 문서 버전: v1.1.0  
-> 마지막 정리(Asia/Seoul): 2026-04-15
+> 문서 버전: v2.0.0  
+> 마지막 정리(Asia/Seoul): 2026-06-02
 
 
 ---
 
 ## 먼저 확인할 방향
-- 최종 방향은 `03_VisionAlign.md`를 기준으로 본다.
+- 최종 방향은 `00_Vision.md`를 기준으로 본다.
 - 이 문서는 그 방향 아래에서 **지금 실제로 굴러가는 상태만** 적는다.
+
+---
+
+## 2026-06-02 현재 프로젝트 상태
+
+### 1. 프로젝트 운영 상태
+
+CarFight는 현재 **클라이언트 중심 차량 코어 검증 단계**를 지나, **서버 권한 구조와 관리툴 도입 타이밍을 함께 고려해야 하는 단계**로 이동했다.
+
+현재 개발 방식은 클라이언트 기간 / 서버 기간 / 관리툴 기간을 따로 나누는 방식이 아니다.
+기능 하나를 기준으로 아래 항목을 함께 판단하는 **기능 단위 수직 절단 방식**을 기준으로 한다.
+
+```text
+기능 후보
+→ 클라이언트 필요성 판단
+→ 서버 권한 필요성 판단
+→ 관리툴 / 임시 운영 도구 필요성 판단
+→ Plan 작성
+→ 구현
+→ Systems 승격
+→ TestChecklist 반영
+```
+
+### 2. 문서 구조 상태
+
+2026-06-02 기준 `Document/ProjectSSOT/` 루트는 아래 활성 문서 체계로 정리됐다.
+
+```text
+README.md
+00_Vision.md
+01_ProjectState.md
+02_Roadmap.md
+03_FeatureQueue.md
+04_ProjectDecisions.md
+05_TestChecklist.md
+Archive/
+```
+
+현재 문서 역할은 아래 기준으로 고정한다.
+
+| 위치 | 역할 |
+|---|---|
+| `Document/ProjectSSOT/` | 프로젝트 판단 기준 |
+| `Document/Plan/` | 앞으로 개발할 기능의 상세 계획 |
+| `Document/Systems/` | 완료된 기능의 현재 구현 기준 |
+| `Document/ProjectSSOT/Archive/` | 역사 기록 / 비활성 문서 |
+
+특히 `Document/Plan/`은 완료 기능의 현재 기준으로 보지 않는다.
+완료된 기능은 `Document/Systems/`를 기준으로 본다.
+
+### 3. 현재 구현 기준
+
+현재 차량 코어 기준선은 여전히 아래 조합이다.
+
+```text
+BP_CFVehiclePawn
+ACFVehiclePawn
+UCFVehicleDriveComp
+UCFWheelSyncComp
+UCFVehicleData
+DA_PoliceCar
+/Game/Maps/TestMap
+```
+
+현재 차량 구조는 최종 목표인 `CMVS / Cluster Union / Geometry Collection` 구조가 아니라,
+`ChaosWheeledVehicle` 기반 하이브리드 구조다.
+
+차량 코어 쪽에서는 아래 항목을 현재 유지 코어로 본다.
+
+```text
+- VehicleData
+- DriveState
+- WheelSync
+- Thin BP 원칙
+```
+
+### 4. 서버 / 네트워크 상태
+
+현재 `Document/Systems/Network/ServerSpawn.md` 기준으로 Dedicated Server 최소 Spawn/Possess 흐름은 Systems에 기록된 상태다.
+
+현재 네트워크 구현 기준은 아래 수준으로 본다.
+
+```text
+- CarFight_ReServer Target 존재
+- ACFMPGameMode 기반 서버 테스트 GameMode 존재
+- PostLogin 기반 수동 차량 Spawn/Possess 흐름 존재
+- 기본 차량 Pawn fallback 경로는 /Game/CarFight/Vehicles/BP_CFVehiclePawn
+- 현재 ServerSpawn은 Dedicated Server 전체 운영 시스템이 아니라 최소 멀티플레이 스폰 흐름이다.
+```
+
+따라서 다음 병목은 단순 접속 / 차량 Spawn이 아니라,
+**전투 입력을 서버 권한 구조로 통과시키는 것**이다.
+
+### 5. 현재 최우선 개발 후보
+
+현재 최우선 후보는 `03_FeatureQueue.md`의 아래 항목이다.
+
+```text
+1. CF-FQ-001 서버 권한 발사 요청
+2. CF-FQ-002 조준/발사 피드백 분리
+```
+
+이 두 기능은 따로 떨어진 기능이 아니라,
+CarFight의 첫 번째 서버 권한 전투 Vertical Slice로 묶어서 보는 것이 안전하다.
+
+### 6. 현재 하지 않을 것
+
+현재 단계에서 바로 하지 않을 것은 아래와 같다.
+
+```text
+- 정식 웹 관리툴부터 만들기
+- 인벤토리 / 보상 / 경제 시스템부터 만들기
+- 새 차종 양산
+- CMVS 최종 구조 전환 구현
+- 차량 모델링 파이프라인 확정
+- 대규모 서버 프레임워크 선구축
+```
+
+관리툴은 필요한 기능이 반복될 때 `콘솔 명령 / CLI / 임시 서버 명령`부터 시작하고,
+데이터 구조가 안정화된 뒤 정식 관리툴로 승격한다.
+
+### 7. 현재 리스크
+
+| 리스크 | 내용 | 대응 |
+|---|---|---|
+| 범위 확산 | 클라이언트 / 서버 / 관리툴을 동시에 크게 만들 위험 | 기능 단위 Vertical Slice로 제한 |
+| 문서 혼동 | Plan과 Systems를 현재 기준처럼 섞어 볼 위험 | 완료 기능은 Systems 우선 |
+| 서버 권한 지연 | 클라이언트 감각만 먼저 커지고 서버 판정과 충돌할 위험 | 발사 요청부터 서버 권한 구조로 검증 |
+| 관리툴 조기 개발 | 데이터 구조 불안정 상태에서 관리툴을 갈아엎을 위험 | 반복 작업 발생 후 얇게 자동화 |
+| 차량 코어 품질 후속 | WheelSync 고속 시각 품질 등 폴리싱 항목 잔존 | 기능 FAIL이 아니라 품질 후속으로 분리 |
 
 ---
 
@@ -226,18 +356,18 @@
 ---
 
 ## 검증 기준
-- 현재 기준선 PASS / FAIL 판정은 `08_P0_Verification.md`를 기준으로 본다.
-- 구조 유지 / 교체 판단은 `16_CPP_DecisionLog.md`에 남긴다.
-- 실제 작업 순서는 `01_Roadmap.md`를 기준으로 진행한다.
+- 현재 기준선 PASS / FAIL 판정은 `05_TestChecklist.md`를 기준으로 본다.
+- 구조 유지 / 교체 판단은 `VehicleCoreDecisions.md`에 남긴다.
+- 실제 작업 순서는 `02_Roadmap.md`를 기준으로 진행한다.
 
 ---
 
 ## 후속 세션에서 먼저 볼 순서
-1. `03_VisionAlign.md`
-2. `00_Handover.md`
-3. `01_Roadmap.md`
-4. `08_P0_Verification.md`
-5. `16_CPP_DecisionLog.md`
+1. `00_Vision.md`
+2. `01_ProjectState.md`
+3. `02_Roadmap.md`
+4. `05_TestChecklist.md`
+5. `VehicleCoreDecisions.md`
 
 ---
 
