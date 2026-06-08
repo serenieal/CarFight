@@ -1,8 +1,8 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 0.1.0
-// Date: 2026-04-10
-// Description: CarFight 차량 카메라 컴포넌트 초안
+// Version: 0.1.2
+// Date: 2026-06-01
+// Description: CarFight 차량 카메라 컴포넌트 초안 (Dedicated Server 카메라 런타임 스킵 추가)
 // Scope: 차량 중심 피벗 기반 자유 조준, 제한각 Clamp, SpringArm 연동, Aim Trace 계산 골격을 제공합니다.
 
 #pragma once
@@ -148,6 +148,9 @@ public:
 	FVector GetCurrentAimHitLocation() const;
 
 protected:
+	// [v0.1.2] Dedicated Server에서 카메라 런타임 작업을 스킵해야 하는지 반환합니다.
+	bool ShouldSkipCameraRuntimeOnDedicatedServer() const;
+
 	// [v0.1.0] Owner가 ACFVehiclePawn인지 확인하고 캐시합니다.
 	ACFVehiclePawn* ResolveVehiclePawnOwner();
 

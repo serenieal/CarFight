@@ -1,8 +1,8 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 0.1.1
-// Date: 2026-04-21
-// Description: CarFight 차량 카메라 컴포넌트 구현 초안
+// Version: 0.1.2
+// Date: 2026-06-01
+// Description: CarFight 차량 카메라 컴포넌트 구현 초안 (Dedicated Server 카메라 런타임 스킵 추가)
 // Scope: 차량 중심 피벗 기반 자유 조준, 제한각 Clamp, SpringArm 연동, Aim Trace 계산 골격을 구현합니다.
 
 #include "CFVehicleCameraComp.h"
@@ -53,6 +53,12 @@ void UCFVehicleCameraComp::BeginPlay()
 {
 	Super::BeginPlay();
 
+	if (ShouldSkipCameraRuntimeOnDedicatedServer())
+	{
+		SetComponentTickEnabled(false);
+		return;
+	}
+
 	if (bAutoInitializeOnBeginPlay)
 	{
 		InitializeCameraRuntime();
@@ -63,6 +69,12 @@ void UCFVehicleCameraComp::BeginPlay()
 void UCFVehicleCameraComp::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	if (ShouldSkipCameraRuntimeOnDedicatedServer())
+	{
+		SetComponentTickEnabled(false);
+		return;
+	}
 
 	if (!bCameraRuntimeReady && !InitializeCameraRuntime())
 	{
@@ -85,6 +97,12 @@ void UCFVehicleCameraComp::TickComponent(float DeltaTime, ELevelTick TickType, F
 // [v0.1.0] 카메라 참조 검색과 기본 상태 설정을 다시 시도합니다.
 bool UCFVehicleCameraComp::InitializeCameraRuntime()
 {
+	if (ShouldSkipCameraRuntimeOnDedicatedServer())
+	{
+		bCameraRuntimeReady = false;
+		return false;
+	}
+
 	ResolveVehiclePawnOwner();
 	const bool bResolvedReferences = ResolveCameraReferences();
 	if (!bResolvedReferences)
@@ -191,6 +209,14 @@ FVector UCFVehicleCameraComp::GetCurrentAimDirection() const
 FVector UCFVehicleCameraComp::GetCurrentAimHitLocation() const
 {
 	return CameraRuntimeState.AimHitLocation;
+}
+
+// [v0.1.2] Dedicated Server에서 카메라 런타임 작업을 스킵해야 하는지 반환합니다.
+bool UCFVehicleCameraComp::ShouldSkipCameraRuntimeOnDedicatedServer() const
+{
+	// [v0.1.2] 네트워크 모드를 확인할 현재 월드입니다.
+	const UWorld* CurrentWorld = GetWorld();
+	return CurrentWorld && CurrentWorld->GetNetMode() == NM_DedicatedServer;
 }
 
 // [v0.1.0] Owner가 ACFVehiclePawn인지 확인하고 캐시합니다.
