@@ -1,8 +1,8 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.21.0
-// Date: 2026-05-22
-// Description: CarFight ???ル㎦??癲ル슓堉곁땟???Pawn ??れ삀?? ??????????열野?(癲ル슓堉곁땟???類λ룱?DA ????筌먲퐢六?????????ㅼ굣????됰슣維??/ ????곸죷 ??????ш낄援???怨뚮옖????/ ????곸죷 ?袁⑸즴??????釉먮폏?遺룹쐺???釉먯뒠??Movement ?釉뚰???癲??????됰슣維??/ VehicleCameraComp Look ????곸죷 ???ㅻ쿋筌???⑤베堉?)
+// Version: 2.25.0
+// Date: 2026-06-05
+// Description: CarFight 차량 Pawn 구현 (차량 전용 NetState 복제 베이스 추가)
 
 #include "CFVehiclePawn.h"
 
@@ -16,6 +16,7 @@
 
 #include "ChaosVehicleWheel.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "DrawDebugHelpers.h"
 #include "EnhancedActionKeyMapping.h"
@@ -24,13 +25,18 @@
 #include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/GameStateBase.h"
 #include "InputAction.h"
 #include "InputActionValue.h"
 #include "InputCoreTypes.h"
 #include "InputMappingContext.h"
+#include "Net/UnrealNetwork.h"
 
 namespace
 {
+	// [v2.22.0] 차량 네트워크 물리 진단 로그 전용 카테고리입니다.
+	DEFINE_LOG_CATEGORY_STATIC(LogCFVehicleNetDebug, Log, All);
+
 	// ??????????れ삀???筌ｋ〃泥???도 ??ш끽維뽳쭛?????곷츉??繹먮끏?????モ봼????ш끽維???怨뚮옖甕??????怨좊룴??猷?獄??怨뚮옖????筌뤾퍓???
 	struct FCFWheelClassRuntimeSnapshot
 	{
@@ -266,6 +272,48 @@ ACFVehiclePawn::ACFVehiclePawn()
 	DriveStateDebugMessageDuration = 0.0f;
 	bShowAimReticle = true;
 	AimReticleZOrder = 10;
+
+	// [v2.22.0] 차량 네트워크 진단 로그와 서버 샘플 복제 기본 사용 여부입니다.
+	bEnableVehicleNetDebug = true;
+
+	// [v2.22.0] 서버 차량 상태 샘플링 기본 주기입니다.
+	VehicleNetDebugSampleIntervalSec = 0.25f;
+
+	// [v2.22.0] 클라이언트 오차 로그 기본 주기입니다.
+	VehicleNetDebugClientLogIntervalSec = 0.5f;
+
+	// [v2.22.0] 서버 샘플링 타이머 초기값입니다.
+	LastVehicleNetDebugServerSampleTimeSec = -1.0f;
+
+	// [v2.22.0] 클라이언트 로그 타이머 초기값입니다.
+	LastVehicleNetDebugClientLogTimeSec = -1.0f;
+
+	// [v2.24.0] 클라이언트 샘플 수신 로컬 시각 초기값입니다.
+	LastVehicleNetDebugSampleReceiveLocalTimeSec = -1.0f;
+
+	// [v2.25.0] 차량 전용 NetState 베이스 복제 기본 사용 여부입니다.
+	bEnableVehicleNetStateBase = true;
+
+	// [v2.25.0] 차량 NetState 서버 샘플링 기본 주기입니다.
+	VehicleNetStateSampleIntervalSec = 0.0667f;
+
+	// [v2.25.0] 클라이언트 차량 NetState 버퍼 최대 샘플 수입니다.
+	VehicleNetStateMaxBufferSamples = 12;
+
+	// [v2.25.0] 차량 NetState 베이스 로그 기본 사용 여부입니다.
+	bLogVehicleNetStateBase = false;
+
+	// [v2.25.0] 차량 NetState 베이스 로그 기본 주기입니다.
+	VehicleNetStateBaseLogIntervalSec = 1.0f;
+
+	// [v2.25.0] 서버 차량 NetState 샘플링 타이머 초기값입니다.
+	LastVehicleNetStateSampleTimeSec = -1.0f;
+
+	// [v2.25.0] 서버 차량 NetState 다음 순번 초기값입니다.
+	NextVehicleNetStateSequenceId = 1;
+
+	// [v2.25.0] 클라이언트 차량 NetState 베이스 로그 타이머 초기값입니다.
+	LastVehicleNetStateBaseLogTimeSec = -1.0f;
 	// [v2.21.0] Dedicated Server 테스트에서 C++ 기본 Pawn이 로컬 Player0을 강제 점유하지 않도록 기본값을 비활성화합니다.
 	AutoPossessPlayer = EAutoReceiveInput::Disabled;
 
@@ -341,6 +389,9 @@ void ACFVehiclePawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void ACFVehiclePawn::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	UpdateVehicleNetDebug(DeltaSeconds);
+	UpdateVehicleNetStateBase(DeltaSeconds);
+
 	if (!bVehicleRuntimeReady)
 	{
 		DisplayDriveStateOnScreenDebug();
@@ -360,6 +411,14 @@ void ACFVehiclePawn::Tick(float DeltaSeconds)
 	DisplayDriveStateOnScreenDebug();
 }
 
+// [v2.22.0] 차량 네트워크 진단 샘플 복제 대상을 등록합니다.
+void ACFVehiclePawn::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(ACFVehiclePawn, VehicleNetDebugServerSample);
+	DOREPLIFETIME(ACFVehiclePawn, ReplicatedVehicleNetState);
+}
 
 void ACFVehiclePawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
@@ -1301,6 +1360,392 @@ ESlateVisibility ACFVehiclePawn::GetDebugWidgetVisibility() const
 {
 	// [v2.14.3] 레거시 WBP_VehicleDebug 제거 전환을 위해 Visibility는 항상 Collapsed를 반환합니다.
 	return ESlateVisibility::Collapsed;
+}
+
+// [v2.24.0] 서버가 복제한 차량 네트워크 진단 샘플을 수신했을 때 수신 시각을 저장하고 오차 로그를 시도합니다.
+void ACFVehiclePawn::OnRep_VehicleNetDebugServerSample()
+{
+	// [v2.24.0] 이번 서버 샘플을 받은 클라이언트 로컬 월드 시각입니다.
+	const UWorld* CurrentWorld = GetWorld();
+	LastVehicleNetDebugSampleReceiveLocalTimeSec = CurrentWorld ? CurrentWorld->GetTimeSeconds() : -1.0f;
+
+	LogVehicleNetDebugClientError();
+}
+
+// [v2.25.0] 서버가 복제한 차량 NetState를 클라이언트 수신 버퍼에 저장합니다.
+void ACFVehiclePawn::OnRep_VehicleNetState()
+{
+	if (!ReplicatedVehicleNetState.bValid)
+	{
+		return;
+	}
+
+	// [v2.25.0] 이번 NetState를 받은 클라이언트 로컬 월드 시각입니다.
+	const UWorld* CurrentWorld = GetWorld();
+	const float ReceivedLocalTimeSeconds = CurrentWorld ? CurrentWorld->GetTimeSeconds() : 0.0f;
+
+	AddVehicleNetStateBufferItem(ReplicatedVehicleNetState, ReceivedLocalTimeSeconds);
+}
+
+// [v2.22.0] 서버와 클라이언트의 차량 네트워크 진단 흐름을 Tick에서 갱신합니다.
+void ACFVehiclePawn::UpdateVehicleNetDebug(float)
+{
+	if (!bEnableVehicleNetDebug)
+	{
+		return;
+	}
+
+	if (HasAuthority())
+	{
+		UpdateVehicleNetDebugServerSample(0.0f);
+		return;
+	}
+
+	LogVehicleNetDebugClientError();
+}
+
+// [v2.25.0] 차량 전용 NetState 베이스 복제 흐름을 Tick에서 갱신합니다.
+void ACFVehiclePawn::UpdateVehicleNetStateBase(float)
+{
+	if (!bEnableVehicleNetStateBase || !HasAuthority())
+	{
+		return;
+	}
+
+	UpdateVehicleNetStateBaseServerSample(0.0f);
+}
+
+// [v2.25.0] 서버 권위 차량 상태를 NetState로 주기적으로 갱신합니다.
+void ACFVehiclePawn::UpdateVehicleNetStateBaseServerSample(float)
+{
+	// [v2.25.0] NetState 샘플 시각 판정에 사용할 월드입니다.
+	const UWorld* CurrentWorld = GetWorld();
+	if (!CurrentWorld)
+	{
+		return;
+	}
+
+	// [v2.25.0] 현재 서버 월드 시각입니다.
+	const float CurrentWorldTimeSec = CurrentWorld->GetTimeSeconds();
+
+	// [v2.25.0] 안전하게 보정한 NetState 서버 샘플 주기입니다.
+	const float SafeSampleIntervalSec = FMath::Max(VehicleNetStateSampleIntervalSec, 0.01f);
+	if (LastVehicleNetStateSampleTimeSec >= 0.0f && (CurrentWorldTimeSec - LastVehicleNetStateSampleTimeSec) < SafeSampleIntervalSec)
+	{
+		return;
+	}
+
+	LastVehicleNetStateSampleTimeSec = CurrentWorldTimeSec;
+
+	// [v2.25.0] 이번 NetState에 부여할 서버 순번입니다.
+	const int32 NewServerSequenceId = NextVehicleNetStateSequenceId++;
+	ReplicatedVehicleNetState = CaptureVehicleNetState(NewServerSequenceId);
+}
+
+// [v2.25.0] 현재 차량 상태를 차량 전용 NetState 구조로 캡처합니다.
+FCFVehicleNetState ACFVehiclePawn::CaptureVehicleNetState(const int32 NewServerSequenceId) const
+{
+	// [v2.25.0] 서버 시간 유효 여부입니다.
+	bool bResolvedServerTimeValid = false;
+
+	// [v2.25.0] 서버 권위 선형 속도입니다.
+	const FVector ServerLinearVelocity = GetVelocity();
+
+	// [v2.25.0] 캡처 결과로 반환할 차량 전용 NetState입니다.
+	FCFVehicleNetState NewNetState;
+	NewNetState.bValid = true;
+	NewNetState.ServerSequenceId = NewServerSequenceId;
+	NewNetState.ServerTimeSeconds = ResolveVehicleNetDebugServerTimeSeconds(bResolvedServerTimeValid);
+	NewNetState.ServerLocation = FVector_NetQuantize10(GetActorLocation());
+	NewNetState.ServerRotation = GetActorRotation();
+	NewNetState.ServerLinearVelocity = FVector_NetQuantize10(ServerLinearVelocity);
+	NewNetState.ServerAngularVelocityDeg = FVector_NetQuantize10(GetVehicleNetDebugAngularVelocityDeg());
+	NewNetState.ServerForwardSpeedCmPerSec = FVector::DotProduct(ServerLinearVelocity, GetActorForwardVector());
+	return NewNetState;
+}
+
+// [v2.25.0] 수신한 차량 NetState를 클라이언트 로컬 버퍼에 추가합니다.
+void ACFVehiclePawn::AddVehicleNetStateBufferItem(const FCFVehicleNetState& ReceivedState, const float ReceivedLocalTimeSeconds)
+{
+	if (!ReceivedState.bValid)
+	{
+		return;
+	}
+
+	if (VehicleNetStateBuffer.Num() > 0 && VehicleNetStateBuffer.Last().State.ServerSequenceId >= ReceivedState.ServerSequenceId)
+	{
+		return;
+	}
+
+	// [v2.25.0] 클라이언트 버퍼에 추가할 새 NetState 항목입니다.
+	FCFVehicleNetStateBufferItem NewBufferItem;
+	NewBufferItem.State = ReceivedState;
+	NewBufferItem.ReceivedLocalTimeSeconds = ReceivedLocalTimeSeconds;
+	VehicleNetStateBuffer.Add(NewBufferItem);
+
+	// [v2.25.0] 안전하게 보정한 클라이언트 NetState 버퍼 최대 샘플 수입니다.
+	const int32 SafeMaxBufferSamples = FMath::Max(VehicleNetStateMaxBufferSamples, 1);
+	while (VehicleNetStateBuffer.Num() > SafeMaxBufferSamples)
+	{
+		VehicleNetStateBuffer.RemoveAt(0, 1, EAllowShrinking::No);
+	}
+
+	LogVehicleNetStateBaseBuffer(NewBufferItem);
+}
+
+// [v2.25.0] 차량 NetState 버퍼 로그를 필요할 때 출력합니다.
+void ACFVehiclePawn::LogVehicleNetStateBaseBuffer(const FCFVehicleNetStateBufferItem& AddedBufferItem)
+{
+	if (!bLogVehicleNetStateBase)
+	{
+		return;
+	}
+
+	// [v2.25.0] 로그 주기 판정에 사용할 현재 월드입니다.
+	const UWorld* CurrentWorld = GetWorld();
+	if (!CurrentWorld)
+	{
+		return;
+	}
+
+	// [v2.25.0] 현재 클라이언트 로컬 월드 시각입니다.
+	const float CurrentWorldTimeSec = CurrentWorld->GetTimeSeconds();
+
+	// [v2.25.0] 안전하게 보정한 NetState 베이스 로그 주기입니다.
+	const float SafeLogIntervalSec = FMath::Max(VehicleNetStateBaseLogIntervalSec, 0.0f);
+	if (LastVehicleNetStateBaseLogTimeSec >= 0.0f && SafeLogIntervalSec > 0.0f && (CurrentWorldTimeSec - LastVehicleNetStateBaseLogTimeSec) < SafeLogIntervalSec)
+	{
+		return;
+	}
+
+	LastVehicleNetStateBaseLogTimeSec = CurrentWorldTimeSec;
+
+	UE_LOG(
+		LogCFVehicleNetDebug,
+		Log,
+		TEXT("VehicleNetStateBase: Pawn=%s Role=%s IsLocal=%s Seq=%d BufferCount=%d ServerTimeSeconds=%.3f ReceivedLocalTimeSeconds=%.3f RepMove=%s bReplicates=%s"),
+		*GetNameSafe(this),
+		*UEnum::GetValueAsString(GetLocalRole()),
+		IsLocallyControlled() ? TEXT("true") : TEXT("false"),
+		AddedBufferItem.State.ServerSequenceId,
+		VehicleNetStateBuffer.Num(),
+		AddedBufferItem.State.ServerTimeSeconds,
+		AddedBufferItem.ReceivedLocalTimeSeconds,
+		IsReplicatingMovement() ? TEXT("true") : TEXT("false"),
+		GetIsReplicated() ? TEXT("true") : TEXT("false"));
+}
+
+// [v2.22.0] 서버 권위 차량 상태 샘플을 주기적으로 갱신합니다.
+void ACFVehiclePawn::UpdateVehicleNetDebugServerSample(float)
+{
+	// [v2.22.0] 서버 샘플 시각 판정에 사용할 월드입니다.
+	const UWorld* CurrentWorld = GetWorld();
+	if (!CurrentWorld)
+	{
+		return;
+	}
+
+	// [v2.22.0] 현재 서버 월드 시각입니다.
+	const float CurrentWorldTimeSec = CurrentWorld->GetTimeSeconds();
+
+	// [v2.22.0] 안전하게 보정한 서버 샘플 주기입니다.
+	const float SafeSampleIntervalSec = FMath::Max(VehicleNetDebugSampleIntervalSec, 0.05f);
+	if (LastVehicleNetDebugServerSampleTimeSec >= 0.0f && (CurrentWorldTimeSec - LastVehicleNetDebugServerSampleTimeSec) < SafeSampleIntervalSec)
+	{
+		return;
+	}
+
+	LastVehicleNetDebugServerSampleTimeSec = CurrentWorldTimeSec;
+
+	// [v2.22.0] 새 서버 샘플에 부여할 증가형 순번입니다.
+	const int32 NewSampleSequenceId = VehicleNetDebugServerSample.SampleSequenceId + 1;
+	VehicleNetDebugServerSample = CaptureVehicleNetDebugSample(NewSampleSequenceId);
+}
+
+// [v2.22.0] 현재 차량 상태를 네트워크 진단 샘플 구조로 캡처합니다.
+FCFVehicleNetDebugSample ACFVehiclePawn::CaptureVehicleNetDebugSample(const int32 NewSampleSequenceId) const
+{
+	// [v2.22.0] 캡처 결과로 반환할 서버 차량 상태 샘플입니다.
+	FCFVehicleNetDebugSample NewDebugSample;
+
+	// [v2.23.0] GameState 기준 서버 시간이 유효한지 여부입니다.
+	bool bResolvedServerTimeValid = false;
+
+	NewDebugSample.bValid = true;
+	NewDebugSample.SampleSequenceId = NewSampleSequenceId;
+	NewDebugSample.ServerWorldTimeSeconds = ResolveVehicleNetDebugServerTimeSeconds(bResolvedServerTimeValid);
+	NewDebugSample.bServerTimeValid = bResolvedServerTimeValid;
+	NewDebugSample.ServerLocation = GetActorLocation();
+	NewDebugSample.ServerRotation = GetActorRotation();
+	NewDebugSample.ServerLinearVelocity = GetVelocity();
+	NewDebugSample.ServerAngularVelocityDeg = GetVehicleNetDebugAngularVelocityDeg();
+	return NewDebugSample;
+}
+
+// [v2.22.0] 클라이언트에서 서버 샘플 대비 로컬 차량 상태 오차를 로그로 출력합니다.
+void ACFVehiclePawn::LogVehicleNetDebugClientError()
+{
+	if (!bEnableVehicleNetDebug || HasAuthority() || !VehicleNetDebugServerSample.bValid)
+	{
+		return;
+	}
+
+	// [v2.22.0] 클라이언트 로그 주기 판정에 사용할 월드입니다.
+	const UWorld* CurrentWorld = GetWorld();
+	if (!CurrentWorld)
+	{
+		return;
+	}
+
+	// [v2.22.0] 현재 클라이언트 월드 시각입니다.
+	const float CurrentWorldTimeSec = CurrentWorld->GetTimeSeconds();
+
+	// [v2.22.0] 안전하게 보정한 클라이언트 로그 최소 주기입니다.
+	const float SafeClientLogIntervalSec = FMath::Max(VehicleNetDebugClientLogIntervalSec, 0.05f);
+	if (LastVehicleNetDebugClientLogTimeSec >= 0.0f && (CurrentWorldTimeSec - LastVehicleNetDebugClientLogTimeSec) < SafeClientLogIntervalSec)
+	{
+		return;
+	}
+
+	LastVehicleNetDebugClientLogTimeSec = CurrentWorldTimeSec;
+
+	// [v2.22.0] 클라이언트 현재 위치입니다.
+	const FVector LocalLocation = GetActorLocation();
+
+	// [v2.22.0] 클라이언트 현재 회전입니다.
+	const FRotator LocalRotation = GetActorRotation();
+
+	// [v2.22.0] 클라이언트 현재 선형 속도입니다.
+	const FVector LocalLinearVelocity = GetVelocity();
+
+	// [v2.23.0] 클라이언트 현재 각속도(deg/s)입니다.
+	const FVector LocalAngularVelocityDeg = GetVehicleNetDebugAngularVelocityDeg();
+
+	// [v2.22.0] 서버 샘플 대비 위치 오차(cm)입니다.
+	const float LocationErrorCm = FVector::Dist(LocalLocation, VehicleNetDebugServerSample.ServerLocation);
+
+	// [v2.22.0] 서버 샘플 대비 정규화된 회전 차이입니다.
+	const FRotator RotationDelta = (LocalRotation - VehicleNetDebugServerSample.ServerRotation).GetNormalized();
+
+	// [v2.22.0] 서버 샘플 대비 가장 큰 축 회전 오차(deg)입니다.
+	const float RotationErrorDeg = FMath::Max3(FMath::Abs(RotationDelta.Pitch), FMath::Abs(RotationDelta.Yaw), FMath::Abs(RotationDelta.Roll));
+
+	// [v2.22.0] 서버 샘플 대비 선형 속도 벡터 오차(cm/s)입니다.
+	const float LinearVelocityErrorCmPerSec = FVector::Dist(LocalLinearVelocity, VehicleNetDebugServerSample.ServerLinearVelocity);
+
+	// [v2.22.0] 서버 샘플 대비 속력 오차(km/h)입니다.
+	const float SpeedErrorKmh = FMath::Abs(LocalLinearVelocity.Size() - VehicleNetDebugServerSample.ServerLinearVelocity.Size()) * 0.036f;
+
+	// [v2.23.0] 서버 샘플 대비 각속도 벡터 오차(deg/s)입니다.
+	const float AngularVelocityErrorDegPerSec = FVector::Dist(LocalAngularVelocityDeg, VehicleNetDebugServerSample.ServerAngularVelocityDeg);
+
+	// [v2.23.0] 현재 클라이언트에서 읽은 GameState 기준 서버 시간의 유효 여부입니다.
+	bool bCurrentServerTimeValid = false;
+
+	// [v2.23.0] 현재 클라이언트에서 읽은 GameState 기준 서버 시간입니다.
+	const float CurrentServerTimeSeconds = ResolveVehicleNetDebugServerTimeSeconds(bCurrentServerTimeValid);
+
+	// [v2.24.0] 서버 샘플 시각과 현재 서버 시각 사이의 차이입니다.
+	const float ServerTimeDeltaSec = (VehicleNetDebugServerSample.bServerTimeValid && bCurrentServerTimeValid)
+		? CurrentServerTimeSeconds - VehicleNetDebugServerSample.ServerWorldTimeSeconds
+		: -1.0f;
+
+	// [v2.24.0] 서버 샘플을 클라이언트가 수신한 뒤 로컬 기준으로 흐른 시간입니다.
+	const float ReceivedAgeSec = LastVehicleNetDebugSampleReceiveLocalTimeSec >= 0.0f
+		? CurrentWorldTimeSec - LastVehicleNetDebugSampleReceiveLocalTimeSec
+		: -1.0f;
+
+	// [v2.24.0] 호환성을 위해 유지하는 기존 SampleAge 값입니다.
+	const float SampleAgeSec = ServerTimeDeltaSec;
+
+	// [v2.23.0] 현재 Pawn의 소유 컨트롤러입니다.
+	const AController* OwnerController = GetController();
+
+	UE_LOG(
+		LogCFVehicleNetDebug,
+		Log,
+		TEXT("VehicleNetDebug: Pawn=%s NetMode=%s Role=%s RemoteRole=%s HasAuthority=%s IsLocal=%s bReplicates=%s RepMove=%s OwnerController=%s RuntimeReady=%s Seq=%d ServerTimeValid=%s CurrentServerTimeValid=%s SampleAge=%.3fs ServerTimeDelta=%.3fs ReceivedAge=%.3fs LocErr=%.2fcm RotErr=%.2fdeg VelErr=%.2fcm/s SpeedErr=%.2fkm/h AngVelErr=%.2fdeg/s ServerLoc=%s LocalLoc=%s ServerVel=%s LocalVel=%s ServerAngVel=%s LocalAngVel=%s"),
+		*GetNameSafe(this),
+		*GetVehicleNetDebugNetModeName(),
+		*UEnum::GetValueAsString(GetLocalRole()),
+		*UEnum::GetValueAsString(GetRemoteRole()),
+		HasAuthority() ? TEXT("true") : TEXT("false"),
+		IsLocallyControlled() ? TEXT("true") : TEXT("false"),
+		GetIsReplicated() ? TEXT("true") : TEXT("false"),
+		IsReplicatingMovement() ? TEXT("true") : TEXT("false"),
+		*GetNameSafe(OwnerController),
+		bVehicleRuntimeReady ? TEXT("true") : TEXT("false"),
+		VehicleNetDebugServerSample.SampleSequenceId,
+		VehicleNetDebugServerSample.bServerTimeValid ? TEXT("true") : TEXT("false"),
+		bCurrentServerTimeValid ? TEXT("true") : TEXT("false"),
+		SampleAgeSec,
+		ServerTimeDeltaSec,
+		ReceivedAgeSec,
+		LocationErrorCm,
+		RotationErrorDeg,
+		LinearVelocityErrorCmPerSec,
+		SpeedErrorKmh,
+		AngularVelocityErrorDegPerSec,
+		*VehicleNetDebugServerSample.ServerLocation.ToCompactString(),
+		*LocalLocation.ToCompactString(),
+		*VehicleNetDebugServerSample.ServerLinearVelocity.ToCompactString(),
+		*LocalLinearVelocity.ToCompactString(),
+		*VehicleNetDebugServerSample.ServerAngularVelocityDeg.ToCompactString(),
+		*LocalAngularVelocityDeg.ToCompactString());
+}
+
+// [v2.23.0] GameState 기준 서버 시간을 읽고 유효 여부를 함께 반환합니다.
+float ACFVehiclePawn::ResolveVehicleNetDebugServerTimeSeconds(bool& bOutServerTimeValid) const
+{
+	bOutServerTimeValid = false;
+
+	// [v2.23.0] 서버 시간 기준을 제공할 현재 월드입니다.
+	const UWorld* CurrentWorld = GetWorld();
+	if (!CurrentWorld)
+	{
+		return 0.0f;
+	}
+
+	// [v2.23.0] 서버/클라이언트 공통 시간 기준으로 사용할 GameState입니다.
+	const AGameStateBase* CurrentGameState = CurrentWorld->GetGameState();
+	if (!CurrentGameState)
+	{
+		return CurrentWorld->GetTimeSeconds();
+	}
+
+	bOutServerTimeValid = true;
+	return CurrentGameState->GetServerWorldTimeSeconds();
+}
+
+// [v2.23.0] 차량 루트 물리 컴포넌트의 현재 각속도(deg/s)를 반환합니다.
+FVector ACFVehiclePawn::GetVehicleNetDebugAngularVelocityDeg() const
+{
+	// [v2.23.0] 각속도를 읽을 차량 루트 물리 컴포넌트입니다.
+	const UPrimitiveComponent* RootPrimitiveComponent = Cast<UPrimitiveComponent>(GetRootComponent());
+	if (!RootPrimitiveComponent)
+	{
+		return FVector::ZeroVector;
+	}
+
+	return RootPrimitiveComponent->GetPhysicsAngularVelocityInDegrees();
+}
+
+// [v2.23.0] 현재 NetMode를 로그용 문자열로 반환합니다.
+FString ACFVehiclePawn::GetVehicleNetDebugNetModeName() const
+{
+	switch (GetNetMode())
+	{
+	case NM_Standalone:
+		return TEXT("Standalone");
+	case NM_DedicatedServer:
+		return TEXT("DedicatedServer");
+	case NM_ListenServer:
+		return TEXT("ListenServer");
+	case NM_Client:
+		return TEXT("Client");
+	default:
+		return TEXT("Unknown");
+	}
 }
 
 void ACFVehiclePawn::DisplayDriveStateOnScreenDebug() const
