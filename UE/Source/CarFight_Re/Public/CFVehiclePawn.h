@@ -1,8 +1,8 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.25.0
-// Date: 2026-06-05
-// Description: CarFight 신규 차량 Pawn 기준 클래스 (차량 전용 NetState 복제 베이스 추가)
+// Version: 2.42.0
+// Date: 2026-06-15
+// Description: CarFight 신규 차량 Pawn 기준 클래스 (회전축/공중 상태 네트워크 진단 로그 확장)
 // Scope: DriveComp / WheelSyncComp / VehicleCameraComp / VehicleAimComp를 소유하고 차량 런타임, 입력, 카메라 디버그 스냅샷을 함께 다룹니다.
 
 #pragma once
@@ -12,6 +12,7 @@
 #include "CFVehicleAimTypes.h"
 #include "CFVehicleCameraTypes.h"
 #include "Components/SlateWrapperTypes.h"
+#include "Engine/EngineTypes.h"
 #include "WheeledVehiclePawn.h"
 #include "CFVehiclePawn.generated.h"
 
@@ -94,62 +95,18 @@ struct FCFVehicleNetDebugSample
 	// [v2.23.0] 서버 권위 차량 각속도입니다.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetDebug", meta=(DisplayName="서버 각속도 deg/s (ServerAngularVelocityDeg)", ToolTip="서버 권위 기준 차량 각속도(deg/s)입니다. Pitch/Roll 흔들림과 회전 보정 문제 진단에 사용합니다."))
 	FVector ServerAngularVelocityDeg = FVector::ZeroVector;
-};
 
-/**
- * 서버 권위 차량 상태를 차량 전용 복제 파이프라인으로 전달하기 위한 NetState입니다.
- */
-USTRUCT(BlueprintType)
-struct FCFVehicleNetState
-{
-	GENERATED_BODY()
+	// [v2.42.0] 서버 권위 기준 접지 중인 바퀴 수입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetDebug", meta=(DisplayName="서버 접지 바퀴 수 (ServerGroundedWheelCount)", ToolTip="서버 권위 기준 현재 지면에 닿아 있는 바퀴 수입니다. -1이면 접지 정보를 읽지 못한 상태입니다."))
+	int32 ServerGroundedWheelCount = -1;
 
-	// [v2.25.0] 이 NetState가 서버에서 채운 유효한 상태인지 여부입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetState", meta=(DisplayName="NetState 유효 여부 (bValid)", ToolTip="True이면 서버가 채운 차량 전용 NetState 샘플입니다."))
-	bool bValid = false;
+	// [v2.42.0] 서버 권위 기준 전체 바퀴 수입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetDebug", meta=(DisplayName="서버 전체 바퀴 수 (ServerWheelCount)", ToolTip="서버 권위 기준 Chaos Vehicle Movement가 보고한 전체 바퀴 수입니다."))
+	int32 ServerWheelCount = 0;
 
-	// [v2.25.0] 서버에서 NetState를 갱신할 때마다 증가하는 순번입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetState", meta=(DisplayName="서버 순번 (ServerSequenceId)", ToolTip="서버가 차량 전용 NetState를 갱신할 때마다 증가하는 순번입니다. 클라이언트 버퍼에서 오래된 샘플을 거르는 데 사용합니다."))
-	int32 ServerSequenceId = 0;
-
-	// [v2.25.0] GameState 기준 서버 샘플 시각입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetState", meta=(DisplayName="서버 시각 (ServerTimeSeconds)", ToolTip="GameState 서버 시간 기준으로 NetState가 샘플링된 시각입니다."))
-	float ServerTimeSeconds = 0.0f;
-
-	// [v2.25.0] 서버 권위 차량 위치입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetState", meta=(DisplayName="서버 위치 (ServerLocation)", ToolTip="서버 권위 기준 차량 월드 위치입니다. 네트워크 친화적인 양자화 벡터로 복제됩니다."))
-	FVector_NetQuantize10 ServerLocation = FVector::ZeroVector;
-
-	// [v2.25.0] 서버 권위 차량 회전입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetState", meta=(DisplayName="서버 회전 (ServerRotation)", ToolTip="서버 권위 기준 차량 월드 회전입니다."))
-	FRotator ServerRotation = FRotator::ZeroRotator;
-
-	// [v2.25.0] 서버 권위 차량 선형 속도입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetState", meta=(DisplayName="서버 선형 속도 (ServerLinearVelocity)", ToolTip="서버 권위 기준 차량 선형 속도(cm/s)입니다. 네트워크 친화적인 양자화 벡터로 복제됩니다."))
-	FVector_NetQuantize10 ServerLinearVelocity = FVector::ZeroVector;
-
-	// [v2.25.0] 서버 권위 차량 각속도입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetState", meta=(DisplayName="서버 각속도 deg/s (ServerAngularVelocityDeg)", ToolTip="서버 권위 기준 차량 각속도(deg/s)입니다."))
-	FVector_NetQuantize10 ServerAngularVelocityDeg = FVector::ZeroVector;
-
-	// [v2.25.0] 서버 권위 기준 차량 전방 속도입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetState", meta=(DisplayName="서버 전방 속도 cm/s (ServerForwardSpeedCmPerSec)", ToolTip="서버 권위 기준 차량 전방 방향 선형 속도(cm/s)입니다."))
-	float ServerForwardSpeedCmPerSec = 0.0f;
-};
-
-/**
- * 클라이언트가 수신한 차량 NetState와 로컬 수신 시각을 함께 저장하는 버퍼 항목입니다.
- */
-USTRUCT()
-struct FCFVehicleNetStateBufferItem
-{
-	GENERATED_BODY()
-
-	// [v2.25.0] 클라이언트가 수신한 서버 NetState입니다.
-	FCFVehicleNetState State;
-
-	// [v2.25.0] 클라이언트 로컬 월드 기준 수신 시각입니다.
-	float ReceivedLocalTimeSeconds = 0.0f;
+	// [v2.42.0] 서버 권위 기준 차량이 공중 상태인지 여부입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetDebug", meta=(DisplayName="서버 공중 상태 (bServerAirborne)", ToolTip="서버 권위 기준 전체 바퀴 중 접지한 바퀴가 하나도 없으면 True입니다."))
+	bool bServerAirborne = false;
 };
 
 /**
@@ -823,30 +780,6 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, ReplicatedUsing=OnRep_VehicleNetDebugServerSample, Category="CarFight|VehiclePawn|NetDebug", meta=(DisplayName="서버 네트워크 진단 샘플 (VehicleNetDebugServerSample)", ToolTip="서버가 주기적으로 복제하는 차량 권위 위치, 회전, 속도 샘플입니다."))
 	FCFVehicleNetDebugSample VehicleNetDebugServerSample;
 
-	// [v2.25.0] 차량 전용 NetState 베이스 복제를 사용할지 여부입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|NetState", meta=(DisplayName="차량 NetState 베이스 사용 (bEnableVehicleNetStateBase)", ToolTip="True이면 서버가 차량 전용 NetState를 주기적으로 복제하고 클라이언트가 수신 버퍼에 저장합니다. 이번 단계에서는 이동 보정이나 보간에 사용하지 않습니다."))
-	bool bEnableVehicleNetStateBase = true;
-
-	// [v2.25.0] 서버가 차량 NetState를 샘플링하는 주기입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|NetState", meta=(ClampMin="0.01", DisplayName="NetState 샘플 주기 (VehicleNetStateSampleIntervalSec)", ToolTip="서버가 차량 전용 NetState를 갱신하는 주기(초)입니다. 기본값 0.0667은 약 15Hz입니다."))
-	float VehicleNetStateSampleIntervalSec = 0.0667f;
-
-	// [v2.25.0] 클라이언트가 보관할 최대 NetState 버퍼 샘플 수입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|NetState", meta=(ClampMin="1", DisplayName="NetState 최대 버퍼 수 (VehicleNetStateMaxBufferSamples)", ToolTip="클라이언트가 수신한 차량 NetState 샘플을 최대 몇 개까지 보관할지 정합니다."))
-	int32 VehicleNetStateMaxBufferSamples = 12;
-
-	// [v2.25.0] NetState 베이스 수신/버퍼 로그를 출력할지 여부입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|NetState", meta=(DisplayName="NetState 베이스 로그 사용 (bLogVehicleNetStateBase)", ToolTip="True이면 클라이언트가 NetState를 수신해 버퍼에 저장할 때 VehicleNetStateBase 로그를 출력합니다."))
-	bool bLogVehicleNetStateBase = false;
-
-	// [v2.25.0] NetState 베이스 로그를 출력하는 최소 주기입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|NetState", meta=(ClampMin="0.0", DisplayName="NetState 베이스 로그 주기 (VehicleNetStateBaseLogIntervalSec)", ToolTip="VehicleNetStateBase 로그를 출력하는 최소 주기(초)입니다. 0이면 수신 샘플마다 출력할 수 있습니다."))
-	float VehicleNetStateBaseLogIntervalSec = 1.0f;
-
-	// [v2.25.0] 서버에서 복제하는 최신 차량 전용 NetState입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, ReplicatedUsing=OnRep_VehicleNetState, Category="CarFight|VehiclePawn|NetState", meta=(DisplayName="복제 차량 NetState (ReplicatedVehicleNetState)", ToolTip="서버가 주기적으로 복제하는 최신 차량 전용 NetState입니다. 클라이언트는 이를 수신 버퍼에 저장만 합니다."))
-	FCFVehicleNetState ReplicatedVehicleNetState;
-
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(ToolTip="차량 입력 전달 전용 DriveComp를 반환합니다."))
 	UCFVehicleDriveComp* GetVehicleDriveComp() const { return VehicleDriveComp; }
 
@@ -960,31 +893,15 @@ public:
 	ESlateVisibility GetDebugWidgetVisibility() const;
 
 protected:
+	// [v2.41.0] 차량 Pawn의 표준 복제 갱신 빈도와 우선순위 하한을 적용합니다.
+	void ApplyVehicleReplicationBaseline();
+
 	// [v2.22.0] 서버가 복제한 차량 네트워크 진단 샘플을 수신했을 때 오차 로그를 시도합니다.
 	UFUNCTION()
 	void OnRep_VehicleNetDebugServerSample();
 
-	// [v2.25.0] 서버가 복제한 차량 NetState를 클라이언트 수신 버퍼에 저장합니다.
-	UFUNCTION()
-	void OnRep_VehicleNetState();
-
 	// [v2.22.0] 서버와 클라이언트의 차량 네트워크 진단 흐름을 Tick에서 갱신합니다.
 	void UpdateVehicleNetDebug(float DeltaSeconds);
-
-	// [v2.25.0] 차량 전용 NetState 베이스 복제 흐름을 Tick에서 갱신합니다.
-	void UpdateVehicleNetStateBase(float DeltaSeconds);
-
-	// [v2.25.0] 서버 권위 차량 상태를 NetState로 주기적으로 갱신합니다.
-	void UpdateVehicleNetStateBaseServerSample(float DeltaSeconds);
-
-	// [v2.25.0] 현재 차량 상태를 차량 전용 NetState 구조로 캡처합니다.
-	FCFVehicleNetState CaptureVehicleNetState(int32 NewServerSequenceId) const;
-
-	// [v2.25.0] 수신한 차량 NetState를 클라이언트 로컬 버퍼에 추가합니다.
-	void AddVehicleNetStateBufferItem(const FCFVehicleNetState& ReceivedState, float ReceivedLocalTimeSeconds);
-
-	// [v2.25.0] 차량 NetState 버퍼 로그를 필요할 때 출력합니다.
-	void LogVehicleNetStateBaseBuffer(const FCFVehicleNetStateBufferItem& AddedBufferItem);
 
 	// [v2.22.0] 서버 권위 차량 상태 샘플을 주기적으로 갱신합니다.
 	void UpdateVehicleNetDebugServerSample(float DeltaSeconds);
@@ -1000,6 +917,9 @@ protected:
 
 	// [v2.23.0] 차량 루트 물리 컴포넌트의 현재 각속도(deg/s)를 반환합니다.
 	FVector GetVehicleNetDebugAngularVelocityDeg() const;
+
+	// [v2.42.0] Chaos Vehicle Movement의 현재 접지 바퀴 수와 전체 바퀴 수를 반환합니다.
+	int32 GetVehicleNetDebugGroundedWheelCount(int32& OutWheelCount) const;
 
 	// [v2.23.0] 현재 NetMode를 로그용 문자열로 반환합니다.
 	FString GetVehicleNetDebugNetModeName() const;
@@ -1129,15 +1049,4 @@ private:
 	// [v2.24.0] 클라이언트가 마지막 VehicleNetDebug 서버 샘플을 수신한 로컬 월드 시각입니다.
 	float LastVehicleNetDebugSampleReceiveLocalTimeSec = -1.0f;
 
-	// [v2.25.0] 서버에서 마지막으로 차량 NetState를 갱신한 월드 시각입니다.
-	float LastVehicleNetStateSampleTimeSec = -1.0f;
-
-	// [v2.25.0] 서버에서 다음 차량 NetState에 부여할 순번입니다.
-	int32 NextVehicleNetStateSequenceId = 1;
-
-	// [v2.25.0] 클라이언트가 수신한 차량 NetState 샘플 버퍼입니다.
-	TArray<FCFVehicleNetStateBufferItem> VehicleNetStateBuffer;
-
-	// [v2.25.0] 클라이언트에서 마지막으로 VehicleNetStateBase 로그를 출력한 로컬 월드 시각입니다.
-	float LastVehicleNetStateBaseLogTimeSec = -1.0f;
 };
