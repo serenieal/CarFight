@@ -173,10 +173,10 @@ VehicleCameraComp
 
 ## 9. 관련 문서
 
-- `Document/ProjectSSOT/Systems/UI/VehicleDebug.md`
-- `Document/ProjectSSOT/Plan/CameraDebugPlan/CD_DebugDesign.md`
-- `Document/ProjectSSOT/Plan/CameraDebugPlan/CD_Checklist.md`
-- `Document/ProjectSSOT/Plan/CameraDebugPlan/CD_VerifyGuide.md`
+- `Document/Systems/UI/VehicleDebug.md`
+- `Document/Plan/CameraDebugPlan/CD_DebugDesign.md`
+- `Document/Plan/CameraDebugPlan/CD_Checklist.md`
+- `Document/Plan/CameraDebugPlan/CD_VerifyGuide.md`
 
 ---
 
@@ -184,3 +184,9 @@ VehicleCameraComp
 
 ### v1.0.0 - 2026-05-07
 - 내부 식별자는 영문 유지, 화면 표시 텍스트는 한국어 표시라는 프로젝트 공통 UI 텍스트 정책을 최초 작성했다.
+---
+
+## 변경 이력
+### 2026-06-19 - 링크 경로 정정
+- 이전 ProjectSSOT Plan/Systems 참조를 현재 Document/Plan 및 Document/Systems 경로로 정정했다.
+- 구버전 ProjectSSOT 파일명 참조를 현재 `00_Vision` ~ `05_TestChecklist` 기준 또는 Archive 경로로 정정했다.

@@ -1,9 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.3.0
-// Date: 2026-05-21
-// Description: CarFight 차량 Aim 시스템의 복제 Aim 시각 상태 추가
-// Scope: Owner Pawn과 VehicleCameraComp 참조를 안전하게 캐시하고 Tick에서 Local Aim 상태를 갱신하며 서버 검증/복제 시각 상태를 저장합니다.
+// Version: 1.5.0
+// Date: 2026-06-19
+// Description: CarFight 싱글플레이 차량 Aim 시스템 기준 클래스
+// Changelog:
+// - v1.5.0: 싱글플레이 기준선에서 Aim 시각 상태의 UE 복제 등록과 OnRep 경로를 제거.
+// - v1.4.0: 싱글플레이 전환에 맞춰 AimComp 기본 컴포넌트 복제를 비활성화.
+// Migration:
+// - 멀티플레이 Aim 시각 상태 복제가 다시 필요하면 별도 멀티플레이 브랜치에서 복제 경로를 복구한다.
+// Scope: Owner Pawn과 VehicleCameraComp 참조를 안전하게 캐시하고 Tick에서 Local Aim 상태를 갱신하며 서버 검증/로컬 시각 상태를 저장합니다.
 
 #pragma once
 
@@ -35,9 +40,6 @@ public:
 	// [v1.1.0] Tick에서 Local Aim 상태를 갱신합니다.
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-	// [v1.3.0] 복제 대상 Aim 시각 상태를 등록합니다.
-	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-
 public:
 	// [v1.0.0] Owner Pawn과 CameraComp 참조를 갱신하고 Aim 런타임 준비 상태를 계산합니다.
 	UFUNCTION(BlueprintCallable, Category="CarFight|Aim", meta=(ToolTip="Owner 차량 Pawn과 VehicleCameraComp 참조를 갱신하고 Aim 런타임 준비 상태를 계산합니다."))
@@ -59,8 +61,8 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|Aim", meta=(ToolTip="현재 서버 검증 기준 Aim 상태를 반환합니다."))
 	FCFVehicleServerAimState GetServerAimState() const;
 
-	// [v1.0.0] 현재 복제 시각화용 Aim 상태를 반환합니다.
-	UFUNCTION(BlueprintPure, Category="CarFight|Aim", meta=(ToolTip="현재 다른 클라이언트 표시용 Aim 시각 상태를 반환합니다."))
+	// [v1.5.0] 현재 로컬 디버그/발사 결과 표시용 Aim 시각 상태를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Aim", meta=(ToolTip="현재 로컬 디버그와 발사 결과 표시에 사용할 Aim 시각 상태를 반환합니다."))
 	FCFVehicleRepAimVisualState GetRepAimVisualState() const;
 
 	// [v1.0.0] 기본 Aim Profile을 반환합니다.
@@ -83,8 +85,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category="CarFight|Weapon", meta=(ToolTip="서버 발사 처리 결과를 ServerAimState에 반영합니다."))
 	void ApplyServerFireResult(const FCFVehicleFireResult& FireResult);
 
-	// [v1.3.0] 서버 발사 결과를 다른 클라이언트 표시용 복제 Aim 시각 상태에 반영합니다.
-	UFUNCTION(BlueprintCallable, Category="CarFight|Weapon", meta=(ToolTip="서버 발사 결과를 다른 클라이언트 표시용 복제 Aim 시각 상태에 반영합니다. 전투 판정용으로 사용하지 않습니다."))
+	// [v1.5.0] 서버 발사 결과를 로컬 디버그/발사 결과 표시용 Aim 시각 상태에 반영합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|Weapon", meta=(ToolTip="서버 발사 결과를 로컬 디버그와 발사 결과 표시용 Aim 시각 상태에 반영합니다. 전투 판정용으로 사용하지 않습니다."))
 	void UpdateRepAimVisualFromFireResult(const FCFVehicleFireRequest& FireRequest, const FCFVehicleFireResult& FireResult);
 
 	// [v1.2.0] 서버 발사 요청과 검증 결과를 기준으로 ServerAimState를 갱신합니다.
@@ -114,10 +116,6 @@ protected:
 	// [v1.0.0] Owner 차량 Pawn에서 VehicleCameraComp를 해석합니다.
 	UCFVehicleCameraComp* ResolveVehicleCameraComp() const;
 
-	// [v1.3.0] 복제 Aim 시각 상태가 클라이언트에 도착했을 때 표시 캐시만 갱신합니다.
-	UFUNCTION()
-	void OnRep_RepAimVisualState();
-
 private:
 	// [v1.0.0] 이 AimComp를 소유한 차량 Pawn 캐시입니다.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Aim", meta=(AllowPrivateAccess="true", DisplayName="Owner 차량 Pawn (OwnerVehiclePawn)", ToolTip="이 AimComp를 소유한 차량 Pawn 캐시입니다."))
@@ -139,8 +137,8 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(AllowPrivateAccess="true", DisplayName="서버 Aim 상태 (ServerAimState)", ToolTip="서버 검증에 사용할 Aim 상태입니다. 이번 단계에서는 검증 로직 없이 기본값을 유지합니다."))
 	FCFVehicleServerAimState ServerAimState;
 
-	// [v1.3.0] 다른 클라이언트에게 보여줄 Aim 시각 상태입니다.
-	UPROPERTY(ReplicatedUsing=OnRep_RepAimVisualState, VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(AllowPrivateAccess="true", DisplayName="복제 Aim 시각 상태 (RepAimVisualState)", ToolTip="다른 클라이언트에게 보여줄 Aim 시각 상태입니다. 전투 판정용 데이터가 아닙니다."))
+	// [v1.5.0] 로컬 디버그와 발사 결과 표시에 사용할 Aim 시각 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(AllowPrivateAccess="true", DisplayName="Aim 시각 상태 (RepAimVisualState)", ToolTip="싱글플레이에서 로컬 디버그와 발사 결과 표시에 사용할 Aim 시각 상태입니다. 전투 판정용 데이터가 아닙니다."))
 	FCFVehicleRepAimVisualState RepAimVisualState;
 
 	// [v1.0.0] Owner Pawn과 CameraComp 참조가 모두 준비되었는지 여부입니다.

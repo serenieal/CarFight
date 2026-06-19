@@ -1,7 +1,7 @@
 # SystemIndex
 
-- Version: 1.0.0
-- Date: 2026-06-02
+- Version: 1.1.0
+- Date: 2026-06-19
 - Status: Active
 - Scope: `Document/Systems/` 하위 문서 위치 안내 색인
 
@@ -51,9 +51,11 @@
 
 ## 6. Network 폴더
 
+현재 싱글 플레이 1대 차량 고도화 기준에서 Network 폴더 문서는 활성 구현 지시가 아니라 보류된 서버/멀티 기록으로 본다.
+
 | 경로 | 문서 내용 |
 | --- | --- |
-| `Document/Systems/Network/ServerSpawn.md` | Dedicated Server 테스트 환경에서 플레이어 로그인 후 서버가 기본 차량 Pawn을 스폰하고 PlayerController가 Possess하도록 만드는 최소 멀티플레이 진입 기능을 설명하는 문서다. |
+| `Document/Systems/Network/ServerSpawn.md` | 현재는 Deferred 기록이다. Dedicated Server 테스트 환경에서 플레이어 로그인 후 서버가 기본 차량 Pawn을 스폰하고 PlayerController가 Possess하도록 만드는 최소 멀티플레이 진입 기능을 설명한다. |
 
 ---
 
@@ -90,7 +92,7 @@
 | --- | --- |
 | 프로젝트 시작 맵, 렌더링, 입력 백엔드 설정 | `Config/ProjectRuntimeConfig.md` |
 | 입력 액션, 매핑 컨텍스트, 키보드/게임패드 입력 처리 | `Input/Input.md` |
-| 서버 접속 후 차량 Pawn 생성과 Possess | `Network/ServerSpawn.md` |
+| 보류된 서버 접속 후 차량 Pawn 생성과 Possess 기록 | `Network/ServerSpawn.md` |
 | UI 텍스트를 한국어로 표시하는 기준 | `UI/DisplayTextPolicy.md` |
 | 차량 디버그 위젯의 기본 문자열 표시 | `UI/VehicleDebug.md` |
 | 차량 디버그 패널의 탭/섹션 구조 | `UI/VehicleDebugPanel.md` |
@@ -120,6 +122,11 @@
 ---
 
 ## 11. Changelog
+
+### v1.1.0 - 2026-06-19
+
+- 싱글 플레이 1대 차량 고도화 전환 기준에 맞춰 Network 폴더를 Deferred 기록으로 표시했다.
+- 기능별 찾기 표에서 서버 Spawn/Possess 항목이 현재 활성 작업처럼 보이지 않게 정리했다.
 
 ### v1.0.0 - 2026-06-02
 

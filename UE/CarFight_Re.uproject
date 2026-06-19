@@ -1,6 +1,6 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "{68E072E4-4907-C1C6-E545-AFADE41DA523}",
+	"EngineAssociation": "{D7510FB5-401C-951E-957C-C8BDD7CBA871}",
 	"Category": "",
 	"Description": "",
 	"Modules": [
@@ -33,6 +33,10 @@
 		{
 			"Name": "ChaosVehiclesPlugin",
 			"Enabled": true
+		},
+		{
+			"Name": "CFNetSmooth",
+			"Enabled": false
 		}
 	]
 }

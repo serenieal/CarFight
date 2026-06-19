@@ -446,8 +446,8 @@ Camera Debug 표시 정책:
 - 화면에 보이는 섹션 제목, 필드 라벨, 상태값은 한국어로 표시한다.
 - `Blocked`, `Compressed`, `Limit` 같은 상태 문구는 Camera 탭 제목에 붙이지 않는다.
 - 상태는 Camera Section 내부의 `상태 요약` 필드로 표시한다.
-- 표시 언어 정책은 `Document/ProjectSSOT/Systems/UI/DisplayTextPolicy.md`를 따른다.
-- 최신 패널 구조는 `Document/ProjectSSOT/Systems/UI/VehicleDebugPanel.md`를 기준으로 본다.
+- 표시 언어 정책은 `Document/Systems/UI/DisplayTextPolicy.md`를 따른다.
+- 최신 패널 구조는 `Document/Systems/UI/VehicleDebugPanel.md`를 기준으로 본다.
 
 현재 Camera 상태 요약 우선순위는 아래와 같다.
 
@@ -548,3 +548,9 @@ Camera Debug 표시 정책:
   - `/Game/CarFight/Vehicles/BP_CFVehiclePawn`
   - `/Game/CarFight/Vehicles/Data/Camera/DA_Cam_Default`
   - `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp`
+---
+
+## 변경 이력
+### 2026-06-19 - 링크 경로 정정
+- 이전 ProjectSSOT Plan/Systems 참조를 현재 Document/Plan 및 Document/Systems 경로로 정정했다.
+- 구버전 ProjectSSOT 파일명 참조를 현재 `00_Vision` ~ `05_TestChecklist` 기준 또는 Archive 경로로 정정했다.

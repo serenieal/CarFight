@@ -10,3 +10,6 @@
 [submodule "SSOT"]
 	path = Document/SSOT
 	url = https://github.com/serenieal/SSOT.git
+[submodule "UE/Plugins/CFNetSmooth"]
+	path = UE/Plugins/CFNetSmooth
+	url = https://github.com/serenieal/NetSmoothSync.git

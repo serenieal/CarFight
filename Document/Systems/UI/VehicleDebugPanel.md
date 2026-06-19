@@ -11,7 +11,7 @@
 
 이 문서는 현재 CarFight 프로젝트에서 사용하는 최신 `VehicleDebug Panel` 구조를 기록한다.
 
-기존 `Document/ProjectSSOT/Systems/UI/VehicleDebug.md`는 레거시 `WBP_VehicleDebug` 기준선 문서로 유지한다.
+기존 `Document/Systems/UI/VehicleDebug.md`는 레거시 `WBP_VehicleDebug` 기준선 문서로 유지한다.
 현재 패널 구조, Navigation 방식, Selected Section 표시 방식, Camera Debug 편입 상태는 이 문서를 기준으로 본다.
 
 ---
@@ -218,7 +218,7 @@ Camera Section 내부 필드: 상태 요약
 
 ## 10. 표시 언어 정책
 
-VehicleDebug Panel은 `Document/ProjectSSOT/Systems/UI/DisplayTextPolicy.md`를 따른다.
+VehicleDebug Panel은 `Document/Systems/UI/DisplayTextPolicy.md`를 따른다.
 
 기준:
 
@@ -300,11 +300,11 @@ ValueText = 카메라 압축
 
 ## 15. 관련 문서
 
-- `Document/ProjectSSOT/Systems/UI/DisplayTextPolicy.md`
-- `Document/ProjectSSOT/Systems/UI/VehicleDebug.md`
-- `Document/ProjectSSOT/Systems/Vehicles/VehicleCamera.md`
-- `Document/ProjectSSOT/Plan/CameraDebugPlan/CD_DebugDesign.md`
-- `Document/ProjectSSOT/Plan/CameraDebugPlan/CD_VerifyGuide.md`
+- `Document/Systems/UI/DisplayTextPolicy.md`
+- `Document/Systems/UI/VehicleDebug.md`
+- `Document/Systems/Vehicles/VehicleCamera.md`
+- `Document/Plan/CameraDebugPlan/CD_DebugDesign.md`
+- `Document/Plan/CameraDebugPlan/CD_VerifyGuide.md`
 
 ---
 
@@ -316,3 +316,9 @@ ValueText = 카메라 압축
 - Camera Debug TopLevel Section 편입 상태 기록
 - Camera 상태 요약 표시 정책 기록
 - DisplayTextPolicy 적용 기준 기록
+---
+
+## 변경 이력
+### 2026-06-19 - 링크 경로 정정
+- 이전 ProjectSSOT Plan/Systems 참조를 현재 Document/Plan 및 Document/Systems 경로로 정정했다.
+- 구버전 ProjectSSOT 파일명 참조를 현재 `00_Vision` ~ `05_TestChecklist` 기준 또는 Archive 경로로 정정했다.

@@ -1,7 +1,7 @@
 # CarFight 큰 그림
 
-> 역할: **문서 운영용이 아니라, 프로젝트를 한눈에 이해하기 위한 사용자용 개요 문서**  
-> 문서 버전: v1.1.0  
+> 역할: **문서 운영용이 아니라, 프로젝트를 한눈에 이해하기 위한 사용자용 개요 문서**
+> 문서 버전: v1.1.0
 > 마지막 정리(Asia/Seoul): 2026-04-15
 
 
@@ -315,17 +315,17 @@ DriveState 공통 코어와 Wheel Sync 현재 기준을 안정화하는 것이�
 
 ## 이 문서를 읽은 뒤 어디를 보면 되나
 ### 현재 상태를 보고 싶을 때
-- `00_Handover.md`
+- `01_ProjectState.md`
 
 ### 지금 해야 할 일을 보고 싶을 때
-- `01_Roadmap.md`
+- `02_Roadmap.md`
 
 ### 현재 기준이 통과했는지 보고 싶을 때
-- `08_P0_Verification.md`
+- `Archive/Checkpoints/P0_Verification_20260401.md`
 - `19_DriveState_CoreChecklist.md`
 
 ### 왜 이런 구조를 택했는지 보고 싶을 때
-- `16_CPP_DecisionLog.md`
+- `VehicleCoreDecisions.md`
 
 ### DriveState를 실제로 어떻게 만질지 보고 싶을 때
 - `18_DriveState_Tuning.md`
@@ -372,12 +372,12 @@ DriveState 공통 코어와 Wheel Sync 현재 기준을 안정화하는 것이�
 - 아직 HUD / 무기별 Aim Profile 실제 연동 / 확장 모드는 후속 과제
 
 현재 카메라 작업의 실제 실행 기준과 세부 설계는 아래 문서를 함께 본다.
-- `Document/ProjectSSOT/00_Handover.md`
-- `Document/ProjectSSOT/01_Roadmap.md`
-- `Document/ProjectSSOT/16_CPP_DecisionLog.md`
-- `Document/ProjectSSOT/Plan/CameraPlan/CF_CameraPlan_260410.md`
-- `Document/ProjectSSOT/Plan/CameraPlan/CF_CameraSysSpec_260410.md`
-- `Document/ProjectSSOT/Plan/CameraPlan/CF_CamChecklist_260415.md`
+- `Document/ProjectSSOT/01_ProjectState.md`
+- `Document/ProjectSSOT/02_Roadmap.md`
+- `Document/Systems/Vehicles/VehicleCoreDecisions.md`
+- `Document/Plan/CameraPlan/CF_CameraPlan_260410.md`
+- `Document/Plan/CameraPlan/CF_CameraSysSpec_260410.md`
+- `Document/Plan/CameraPlan/CF_CamChecklist_260415.md`
 
 이 문서 기준으로 보면, 현재 카메라 작업은 “지금 왜 필요한가”에 대한 답으로 정리할 수 있다.
 
@@ -390,4 +390,9 @@ DriveState 공통 코어와 Wheel Sync 현재 기준을 안정화하는 것이�
 - v1.1.0 (2026-04-15)
   - 문서 버전 / 마지막 정리 날짜를 갱신했다.
   - 현재 카메라 작업이 큰 그림에서 어떤 위치를 가지는지 설명하는 연결 섹션을 추가했다.
+---
 
+## 변경 이력
+### 2026-06-19 - 링크 경로 정정
+- 이전 ProjectSSOT Plan/Systems 참조를 현재 Document/Plan 및 Document/Systems 경로로 정정했다.
+- 구버전 ProjectSSOT 파일명 참조를 현재 `00_Vision` ~ `05_TestChecklist` 기준 또는 Archive 경로로 정정했다.

@@ -103,14 +103,14 @@
 
 현재 최신 `VehicleDebug Panel` 구조는 아래 문서를 기준으로 본다.
 
-- `Document/ProjectSSOT/Systems/UI/VehicleDebugPanel.md`
+- `Document/Systems/UI/VehicleDebugPanel.md`
 
 이 문서는 레거시 `WBP_VehicleDebug` 기준선으로 유지한다.
 최신 Navigation + Selected Section 기반 패널 구조, Camera Debug 편입 상태, Camera 상태 요약 표시 정책은 `VehicleDebugPanel.md`를 따른다.
 
 ## 표시 언어 정책
 
-VehicleDebug는 `Document/ProjectSSOT/Systems/UI/DisplayTextPolicy.md`를 따른다.
+VehicleDebug는 `Document/Systems/UI/DisplayTextPolicy.md`를 따른다.
 
 적용 기준:
 
@@ -285,3 +285,9 @@ Data=Present                  // 원본 요약 문자열, 영문 유지 가능
   - `/Game/CarFight/Vehicles/BP_CFVehiclePawn` 이벤트 그래프 덤프
   - `UE/Source/CarFight_Re/Public/CFVehiclePawn.h`
   - `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp`
+---
+
+## 변경 이력
+### 2026-06-19 - 링크 경로 정정
+- 이전 ProjectSSOT Plan/Systems 참조를 현재 Document/Plan 및 Document/Systems 경로로 정정했다.
+- 구버전 ProjectSSOT 파일명 참조를 현재 `00_Vision` ~ `05_TestChecklist` 기준 또는 Archive 경로로 정정했다.

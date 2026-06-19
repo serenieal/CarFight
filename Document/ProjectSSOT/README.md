@@ -1,8 +1,8 @@
 # ProjectSSOT 운영 가이드 (CarFight)
 
-> 문서 버전: v2.0.0  
-> 마지막 정리(Asia/Seoul): 2026-06-02  
-> 문서 상태: Active  
+> 문서 버전: v2.1.2
+> 마지막 정리(Asia/Seoul): 2026-06-19
+> 문서 상태: Active
 > 역할: `Document/ProjectSSOT/`의 읽기 순서, 문서 역할, 생명주기를 고정한다.
 
 ---
@@ -48,6 +48,33 @@ Plan = 진행 중 계획
 Systems = 완료된 현재 구현
 Archive = 역사 기록
 ```
+
+---
+
+## 2-1. 2026-06-18 현재 전환 기준
+
+현재 활성 개발 기준은 **멀티플레이 / Dedicated Server 계획에서 싱글 플레이 1대 차량 고도화로 전환**한다.
+
+이번 전환의 목적은 아래와 같다.
+
+```text
+1. 서버, 멀티플레이, 2클라 검증, 서버 런처, 세션/로비 계획을 현재 일정에서 제외한다.
+2. 현재 구현된 차량 1대를 클라이언트 사이드에서 더 완성도 있게 만든다.
+3. 개발 일정을 약 2~3개월 단축한다.
+4. 서버/멀티 문서는 삭제하지 않고 역사 기록 또는 Deferred 기준으로 남긴다.
+```
+
+현재 읽기 기준:
+- 활성 판단은 `Document/ProjectSSOT/`를 우선한다.
+- 완료된 실제 구현은 `Document/Systems/`를 우선한다.
+- `Document/Plan/Archive/MP_ServerPlan`, `Document/Plan/Archive/ServerUpgradePlan`, `Document/Plan/Archive/VehicleNetSyncPlan`, `Document/Plan/Archive/CFNetSmoothPlan`은 **현재 착수 계획이 아니라 보류된 서버/네트워크 계획**으로 본다.
+- Plan 활성/보관 기준은 `Document/Plan/README.md`와 `Document/Plan/Archive/README.md`를 함께 확인한다.
+
+현재 세션의 전환 범위:
+- 목표는 프로젝트 진행 선로를 멀티플레이에서 싱글플레이로 바꾸는 것이다.
+- 코드, Target, 플러그인, 배치 파일을 긁어내거나 삭제하는 작업은 이번 전환 범위가 아니다.
+- 서버/멀티 관련 구현물은 현상 유지하되, 현재 착수 기준에서는 참고/보류 대상으로만 읽는다.
+- 다음 개발 착수 판단은 싱글 1대 차량 기준으로만 한다.
 
 ---
 
@@ -123,7 +150,8 @@ ACFVehiclePawn + UCFVehicleDriveComp + UCFWheelSyncComp + UCFVehicleData + DA_Po
 - DriveState
 - WheelSync
 - Thin BP 원칙
-- 서버 Spawn/Possess 최소 흐름
+- VehicleCamera
+- Local Aim / Reticle 표시
 ```
 
 ### 5.4 교체 / 확장 후보
@@ -132,9 +160,9 @@ ACFVehiclePawn + UCFVehicleDriveComp + UCFWheelSyncComp + UCFVehicleData + DA_Po
 - Vehicle root 구조
 - 차량 조립 방식
 - 파괴 / 분리 표현 구조
-- 서버 권한 전투 처리
-- 로드아웃 / 인벤토리 / 보상 저장 구조
-- 관리툴 / 운영 도구
+- 서버 권한 전투 처리: 현재 일정 제외 / 장기 보류
+- 로드아웃 / 인벤토리 / 보상 저장 구조: 현재 일정 제외
+- 관리툴 / 운영 도구: 현재 일정 제외
 ```
 
 ---
@@ -275,6 +303,29 @@ AI가 현재 구현을 확인할 때 Plan을 기준으로 단정하면 안 된�
 ---
 
 ## 11. 변경 이력
+
+### v2.1.2 - 2026-06-19
+
+```text
+- 현재 세션의 목표를 코드 삭제가 아니라 멀티플레이 진행 선로에서 싱글플레이 진행 선로로 바꾸는 문서 전환으로 명시
+- 서버/멀티 관련 코드, Target, 플러그인, 배치 파일은 현상 유지하고 현재 착수 기준에서만 제외하도록 기준 추가
+```
+
+### v2.1.1 - 2026-06-19
+
+```text
+- Plan 루트/Archive 안내 문서 신설에 맞춰 서버/네트워크 보류 문서 경로를 Archive 기준으로 정정
+- 현재 착수 기준 확인 시 Document/Plan/README.md와 Document/Plan/Archive/README.md를 함께 보도록 안내 추가
+```
+
+### v2.1.0 - 2026-06-18
+
+```text
+- 활성 개발 기준을 싱글 플레이 1대 차량 고도화로 전환
+- 서버/멀티/2클라/서버 런처/세션 계획을 현재 일정 제외 항목으로 명시
+- 유지 예정 코어에서 서버 Spawn/Possess를 제거하고 VehicleCamera / Local Aim / Reticle을 추가
+- 서버 관련 Plan 문서군을 현재 착수 계획이 아닌 보류된 역사/계획 자료로 해석하도록 기준 추가
+```
 
 ### v2.0.0 - 2026-06-02
 

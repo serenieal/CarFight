@@ -1,20 +1,24 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.3.1
-// Date: 2026-05-22
-// Description: CarFight 차량 Aim 시스템의 복제 Aim 시각 상태 구현
-// Scope: Owner Pawn과 VehicleCameraComp 참조 초기화, Tick 기반 Local Aim 상태 갱신, 서버 검증/복제 시각 상태 저장을 제공합니다.
+// Version: 1.5.0
+// Date: 2026-06-19
+// Description: CarFight 싱글플레이 차량 Aim 시스템 구현
+// Changelog:
+// - v1.5.0: 싱글플레이 기준선에서 Aim 시각 상태의 UE 복제 등록과 OnRep 경로를 제거.
+// - v1.4.0: 싱글플레이 전환에 맞춰 AimComp 기본 컴포넌트 복제를 비활성화.
+// Migration:
+// - 멀티플레이 Aim 시각 상태 복제가 다시 필요하면 별도 멀티플레이 브랜치에서 복제 경로를 복구한다.
+// Scope: Owner Pawn과 VehicleCameraComp 참조 초기화, Tick 기반 Local Aim 상태 갱신, 서버 검증/로컬 시각 상태 저장을 제공합니다.
 
 #include "CFVehicleAimComp.h"
 
 #include "CFVehicleCameraComp.h"
 #include "CFVehiclePawn.h"
-#include "Net/UnrealNetwork.h"
 
 UCFVehicleAimComp::UCFVehicleAimComp()
 {
 	PrimaryComponentTick.bCanEverTick = true;
-	SetIsReplicatedByDefault(true);
+	SetIsReplicatedByDefault(false);
 	bAimRuntimeReady = false;
 	LastAimRuntimeSummary = TEXT("Constructed");
 }
@@ -38,14 +42,6 @@ void UCFVehicleAimComp::TickComponent(const float DeltaTime, const ELevelTick Ti
 	}
 
 	RefreshLocalAimState(DeltaTime);
-}
-
-// [v1.3.0] 복제 대상 Aim 시각 상태를 네트워크 복제 목록에 등록합니다.
-void UCFVehicleAimComp::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
-{
-	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-
-	DOREPLIFETIME(UCFVehicleAimComp, RepAimVisualState);
 }
 
 bool UCFVehicleAimComp::InitializeAimRuntime()
@@ -154,7 +150,7 @@ void UCFVehicleAimComp::ApplyServerFireResult(const FCFVehicleFireResult& FireRe
 	}
 }
 
-// [v1.3.0] 서버 발사 결과를 다른 클라이언트 표시용 복제 Aim 시각 상태에 반영합니다.
+// [v1.5.0] 서버 발사 결과를 로컬 디버그/발사 결과 표시용 Aim 시각 상태에 반영합니다.
 void UCFVehicleAimComp::UpdateRepAimVisualFromFireResult(const FCFVehicleFireRequest& FireRequest, const FCFVehicleFireResult& FireResult)
 {
 	// [v1.3.0] 이 컴포넌트를 소유한 Actor입니다.
@@ -164,7 +160,7 @@ void UCFVehicleAimComp::UpdateRepAimVisualFromFireResult(const FCFVehicleFireReq
 		return;
 	}
 
-	// [v1.3.0] 복제 표시용으로 정규화할 요청 조준 방향입니다.
+	// [v1.5.0] 표시용으로 정규화할 요청 조준 방향입니다.
 	FVector ResolvedAimDirection = FVector(FireRequest.AimDirection);
 	if (ResolvedAimDirection.IsNearlyZero())
 	{
@@ -174,7 +170,7 @@ void UCFVehicleAimComp::UpdateRepAimVisualFromFireResult(const FCFVehicleFireReq
 	}
 	ResolvedAimDirection = ResolvedAimDirection.GetSafeNormal();
 
-	// [v1.3.0] 복제 표시용으로 사용할 서버 확정 목표 위치입니다.
+	// [v1.5.0] 표시용으로 사용할 서버 확정 목표 위치입니다.
 	FVector ResolvedTargetLocation = FVector(FireResult.ServerAimTargetLocation);
 	if (ResolvedTargetLocation.IsNearlyZero())
 	{
@@ -226,15 +222,6 @@ bool UCFVehicleAimComp::IsFireRequestWithinDefaultProfile(const FCFVehicleFireRe
 	// [v1.2.0] 요청 조준 방향을 차량 로컬 각도로 변환할 수 있었는지 여부입니다.
 	const bool bHasAimAngles = CalculateAimAnglesRelativeToVehicle(AimDirection.GetSafeNormal(), AimYawDeg, AimPitchDeg);
 	return bHasAimAngles && IsAimWithinDefaultProfile(AimYawDeg, AimPitchDeg);
-}
-
-// [v1.3.0] 복제 Aim 시각 상태 수신 시 디버그 요약만 갱신합니다.
-void UCFVehicleAimComp::OnRep_RepAimVisualState()
-{
-	LastAimRuntimeSummary = FString::Printf(
-		TEXT("AimRuntime: RepAimVisual Updated Firing=%s, Weapon=%s"),
-		RepAimVisualState.bIsFiringVisual ? TEXT("True") : TEXT("False"),
-		*RepAimVisualState.RepWeaponVisualMode.ToString());
 }
 
 void UCFVehicleAimComp::RefreshLocalAimState(const float DeltaSeconds)

@@ -1,8 +1,8 @@
 # CarFight — 05_TestChecklist
 
-> 문서 버전: v1.0.0  
-> 작성일(Asia/Seoul): 2026-06-02  
-> 문서 상태: Active  
+> 문서 버전: v1.1.0
+> 작성일(Asia/Seoul): 2026-06-18
+> 문서 상태: Active
 > 역할: CarFight의 **완료된 Systems 기준 최소 회귀 테스트**를 관리한다.
 
 ---
@@ -57,7 +57,21 @@
 2. 미래 계획은 테스트 PASS 기준으로 쓰지 않는다.
 3. 실패 시 원인을 코어 문제 / 수치 문제 / 에디터 설정 문제 / 테스트 환경 문제로 분리한다.
 4. 테스트 결과가 기능 책임을 바꾸면 해당 Systems 문서도 갱신한다.
-5. 반복 테스트가 3회 이상 수동 절차를 요구하면 02_FeatureQueue.md의 관리툴 후보 큐에 등록한다.
+5. 2026-06-18 싱글 전환 기준에서는 서버/멀티/2클라 테스트를 기본 회귀 조건으로 쓰지 않는다.
+6. 서버/멀티 항목은 현재 사이클에서 N/A로 두고, 서버 작업 재개 결정이 있을 때만 다시 활성화한다.
+```
+
+---
+
+## 4-1. 2026-06-18 싱글 전환 테스트 기준
+
+현재 사이클의 최소 검증 목표는 아래다.
+
+```text
+1. 서버 실행 없이 에디터와 PIE 1인 플레이만으로 기준 차량을 검증한다.
+2. 기준 차량 1대가 바로 조작 가능해야 한다.
+3. 주행감, 카메라, 로컬 Aim, Reticle, WheelSync 시각 품질을 우선 확인한다.
+4. Dedicated Server, 2클라, 이동 복제, 서버 권한 발사 검증은 현재 기준 N/A다.
 ```
 
 ---
@@ -74,11 +88,11 @@
 | `CF-TC-004` | Input | 기본 입력 등록 | Enhanced Input Mapping Context 등록 성공 | `Document/Systems/Input/Input.md` | `TODO` |
 | `CF-TC-005` | UI | 차량 디버그 표시 | 디버그 HUD/Panel이 필요한 조건에서 표시 | `Document/Systems/UI/VehicleDebug.md`, `Document/Systems/UI/VehicleDebugPanel.md` | `TODO` |
 | `CF-TC-006` | UI | 조준 Reticle | 조준 Reticle 표시/갱신이 정상 | `Document/Systems/UI/AimReticle.md` | `TODO` |
-| `CF-TC-007` | Network | Dedicated Server 실행 | 서버 타깃 실행 및 맵 로드 성공 | `Document/Systems/Network/ServerSpawn.md` | `TODO` |
-| `CF-TC-008` | Network | 1클라 Spawn/Possess | 클라이언트 1명이 자기 차량을 점유 | `Document/Systems/Network/ServerSpawn.md` | `TODO` |
-| `CF-TC-009` | Network | 2클라 Spawn/Possess | 클라이언트 2명이 각자 다른 차량을 점유 | `Document/Systems/Network/ServerSpawn.md` | `TODO` |
-| `CF-TC-010` | Network | 입력 분리 | 각 클라이언트 입력이 자기 차량에만 적용 | `Document/Systems/Network/ServerSpawn.md`, `Document/Systems/Input/Input.md` | `TODO` |
-| `CF-TC-011` | Network | 이동 복제 | 상대 차량 위치/회전이 양쪽 클라에서 보임 | `Document/Systems/Network/ServerSpawn.md` | `TODO` |
+| `CF-TC-007` | Network | Dedicated Server 실행 | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/Systems/Network/ServerSpawn.md` | `N/A` |
+| `CF-TC-008` | Network | 1클라 Spawn/Possess | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/Systems/Network/ServerSpawn.md` | `N/A` |
+| `CF-TC-009` | Network | 2클라 Spawn/Possess | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/Systems/Network/ServerSpawn.md` | `N/A` |
+| `CF-TC-010` | Network | 입력 분리 | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/Systems/Network/ServerSpawn.md`, `Document/Systems/Input/Input.md` | `N/A` |
+| `CF-TC-011` | Network | 이동 복제 | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/Systems/Network/ServerSpawn.md` | `N/A` |
 | `CF-TC-012` | Config | 런타임 설정 | 현재 Config 기준 경로/모드가 깨지지 않음 | `Document/Systems/Config/ProjectRuntimeConfig.md` | `TODO` |
 
 ---
@@ -142,15 +156,15 @@
 ```text
 - 로컬 플레이어 차량 기준 카메라가 정상 생성/활성화된다.
 - Look 입력이 카메라에 반영된다.
-- Dedicated Server에서 카메라 전용 Tick/LocalPlayer 접근 오류가 없다.
-- 비소유 Pawn에서 로컬 카메라/입력 처리가 실행되지 않는다.
+- 싱글 PIE에서 카메라가 차량 기준으로 추적/회전한다.
+- 서버/비소유 Pawn 검증은 현재 사이클에서 N/A다.
 ```
 
 ### PASS 기준
 
 ```text
 - 로컬 클라이언트 카메라가 정상 동작한다.
-- Dedicated Server 로그에 카메라/LocalPlayer 관련 치명 오류가 없다.
+- PIE 1인 플레이에서 카메라 이동, 회전, 충돌 감각이 확인 가능하다.
 ```
 
 ---
@@ -164,14 +178,14 @@
 ```text
 - 현재 AimComp가 의도한 기준으로 조준 방향/타겟 정보를 계산한다.
 - UI Reticle과 연결되는 데이터가 유효하다.
-- 서버 권한 발사 구조 도입 전까지는 Aim과 Fire 책임을 혼동하지 않는다.
+- 서버 권한 발사 구조는 현재 보류하고, 로컬 Aim / Reticle 피드백을 우선한다.
 ```
 
 ### PASS 기준
 
 ```text
 - 조준 데이터가 UI 또는 후속 Fire 요청에서 읽을 수 있는 형태로 유지된다.
-- Aim 기능이 서버 판정 책임까지 임의로 떠안지 않는다.
+- 서버 없이 로컬 조준 상태와 Reticle 상태를 확인할 수 있다.
 ```
 
 ---
@@ -210,14 +224,14 @@
 ```text
 - Reticle 위젯이 필요한 조건에서 생성된다.
 - 조준 상태 변화가 Reticle에 반영된다.
-- 서버 또는 비소유 Pawn에서 로컬 UI 생성이 실행되지 않는다.
+- 싱글 PIE에서 로컬 차량 기준 Reticle 표시/갱신을 확인한다.
 ```
 
 ### PASS 기준
 
 ```text
 - 로컬 클라이언트 화면에서 Reticle이 정상 표시된다.
-- Dedicated Server 로그에 UI 생성 오류가 없다.
+- Aim 상태 변화가 Reticle 표시 상태로 읽힌다.
 ```
 
 ---
@@ -233,20 +247,23 @@
 ```text
 - 디버그 UI 생성 조건이 명확하다.
 - 표시 텍스트가 현재 Systems 기준 필드와 맞는다.
-- Dedicated Server에서 Debug UI 생성이 차단된다.
 - 너무 긴 Runtime 문자열이 가독성을 해치지 않는지 확인한다.
+- 서버 전용 UI 차단 검증은 현재 사이클에서 N/A다.
 ```
 
 ### PASS 기준
 
 ```text
 - 디버그 UI가 테스트 중 필요한 정보를 제공한다.
-- 서버에서 로컬 UI 관련 오류가 없다.
+- 싱글 PIE에서 주행/카메라/Aim/WheelSync 정보를 읽을 수 있다.
 ```
 
 ---
 
 ## 9. Network 테스트
+
+현재 싱글 전환 기준에서 Network 테스트는 기본 회귀 테스트가 아니다.
+아래 항목은 서버/멀티 작업을 재개할 때 다시 활성화한다.
 
 ## 9.1 ServerSpawn
 
@@ -331,7 +348,8 @@
 ### 확인 항목
 
 ```text
-- DefaultEngine.ini의 주요 GameMode/ServerGameMode 연결이 의도와 맞는다.
+- DefaultEngine.ini의 주요 GameMode/ServerGameMode 연결이 현재 싱글 전환 기준과 맞는다.
+- 기본 실행 경로에서 `CFMPGameMode`가 의도치 않게 사용되지 않는지 확인한다.
 - 입력/맵/런타임 설정 경로가 현재 Systems 문서와 충돌하지 않는다.
 - 오래된 ProjectSSOT/Plan 경로가 남아 있으면 실제 구조에 맞게 수정 후보로 기록한다.
 ```
@@ -413,6 +431,15 @@
 ---
 
 ## 15. 체인지로그
+
+### v1.1.0 - 2026-06-18
+
+```text
+- 싱글 전환 테스트 기준을 추가
+- Dedicated Server / 1클라 / 2클라 / 입력 분리 / 이동 복제 항목을 현재 사이클 N/A로 변경
+- VehicleCamera / VehicleAim / AimReticle / VehicleDebug 검증 기준을 싱글 PIE 중심으로 재정렬
+- Config 테스트에 CFMPGameMode 기본 실행 경로 제거 확인을 추가
+```
 
 ### v1.0.0 - 2026-06-02
 

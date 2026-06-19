@@ -1,8 +1,8 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 0.1.0
-// Date: 2026-04-10
-// Description: CarFight 차량 카메라 공용 타입 정의
+// Version: 0.1.2
+// Date: 2026-06-15
+// Description: CarFight 차량 카메라 공용 타입 정의 (카메라 Yaw 완충 런타임 표시 추가)
 // Scope: 카메라 모드, Aim Profile, 모드 플래그, 런타임 스냅샷을 공통으로 정의합니다.
 
 #pragma once
@@ -126,6 +126,25 @@ struct FCFVehicleCameraRuntimeState
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime", meta=(DisplayName="이번 프레임 모드 변경 여부 (bCameraModeChangedThisFrame)", ToolTip="이번 프레임에 카메라 모드가 변경되었는지 여부입니다."))
 	bool bCameraModeChangedThisFrame = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime", meta=(DisplayName="Pitch/Roll 카메라 분리 적용 여부 (bCameraPitchRollIsolationApplied)", ToolTip="현재 프레임 카메라 계산에서 차량 Root의 Pitch/Roll 영향을 분리했는지 여부입니다."))
+	bool bCameraPitchRollIsolationApplied = false;
+
+	// [v0.1.2] 이번 프레임 카메라 기준 Yaw 완충 적용 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime", meta=(DisplayName="카메라 Yaw 완충 적용 여부 (bCameraYawDampingApplied)", ToolTip="현재 프레임 카메라 계산에서 차량 기준 Yaw 완충이 적용되었는지 여부입니다."))
+	bool bCameraYawDampingApplied = false;
+
+	// [v0.1.2] 차량 Actor 또는 Pivot에서 읽은 목표 카메라 기준 Yaw입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime", meta=(DisplayName="목표 카메라 기준 Yaw (TargetCameraBaseYaw)", ToolTip="차량 Actor 또는 Pivot에서 읽은 목표 카메라 기준 Yaw(deg)입니다."))
+	float TargetCameraBaseYaw = 0.0f;
+
+	// [v0.1.2] Yaw 완충 후 카메라 회전에 실제 사용한 기준 Yaw입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime", meta=(DisplayName="완충 카메라 기준 Yaw (SmoothedCameraBaseYaw)", ToolTip="Yaw 완충 후 카메라 회전에 실제 사용한 기준 Yaw(deg)입니다."))
+	float SmoothedCameraBaseYaw = 0.0f;
+
+	// [v0.1.2] 목표 차량 Yaw와 완충 카메라 Yaw 사이의 현재 차이입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime", meta=(DisplayName="카메라 Yaw 지연각 (CameraYawDampingLagDeg)", ToolTip="목표 차량 Yaw와 완충 카메라 Yaw 사이의 현재 차이(deg)입니다."))
+	float CameraYawDampingLagDeg = 0.0f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime", meta=(DisplayName="활성 Aim Profile 이름 (ActiveAimProfileName)", ToolTip="현재 해석된 Aim Profile 이름입니다."))
 	FName ActiveAimProfileName = NAME_None;

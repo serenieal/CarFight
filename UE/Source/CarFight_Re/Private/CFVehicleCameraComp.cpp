@@ -1,8 +1,8 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 0.1.2
-// Date: 2026-06-01
-// Description: CarFight 차량 카메라 컴포넌트 구현 초안 (Dedicated Server 카메라 런타임 스킵 추가)
+// Version: 0.1.4
+// Date: 2026-06-15
+// Description: CarFight 차량 카메라 컴포넌트 구현 초안 (카메라 Yaw 완충 옵션 추가)
 // Scope: 차량 중심 피벗 기반 자유 조준, 제한각 Clamp, SpringArm 연동, Aim Trace 계산 골격을 구현합니다.
 
 #include "CFVehicleCameraComp.h"
@@ -117,6 +117,16 @@ bool UCFVehicleCameraComp::InitializeCameraRuntime()
 	CameraRuntimeState.CurrentArmLength = CurrentArmLength;
 	CameraRuntimeState.CurrentFOV = CurrentFOV;
 	CameraRuntimeState.SolvedArmLength = CurrentArmLength;
+
+	// [v0.1.4] 초기 카메라 Yaw 완충 기준으로 사용할 차량 기본 Aim 회전입니다.
+	const FRotator InitialBaseVehicleAimRotation = GetBaseVehicleAimRotation();
+	SmoothedCameraBaseYawDeg = InitialBaseVehicleAimRotation.Yaw;
+	bHasSmoothedCameraBaseYaw = true;
+	CameraRuntimeState.bCameraYawDampingApplied = false;
+	CameraRuntimeState.TargetCameraBaseYaw = InitialBaseVehicleAimRotation.Yaw;
+	CameraRuntimeState.SmoothedCameraBaseYaw = InitialBaseVehicleAimRotation.Yaw;
+	CameraRuntimeState.CameraYawDampingLagDeg = 0.0f;
+
 	bCameraRuntimeReady = true;
 	return true;
 }
@@ -342,7 +352,69 @@ FRotator UCFVehicleCameraComp::GetBaseVehicleAimRotation() const
 	return FRotator(0.0f, OwnerActorRotation.Yaw, 0.0f);
 }
 
-// [v0.1.0] 카메라 피벗의 월드 위치를 계산합니다.
+// [v0.1.4] 카메라 표시용 기본 Aim Rotation에 Yaw 완충을 적용합니다.
+FRotator UCFVehicleCameraComp::ResolveCameraYawDampedBaseRotation(float DeltaTime, const FRotator& TargetBaseVehicleAimRotation)
+{
+	// [v0.1.4] 카메라가 최종적으로 따라가야 하는 차량 기준 Yaw입니다.
+	const float TargetCameraBaseYawDeg = TargetBaseVehicleAimRotation.Yaw;
+
+	CameraRuntimeState.TargetCameraBaseYaw = TargetCameraBaseYawDeg;
+	CameraRuntimeState.SmoothedCameraBaseYaw = TargetCameraBaseYawDeg;
+	CameraRuntimeState.CameraYawDampingLagDeg = 0.0f;
+	CameraRuntimeState.bCameraYawDampingApplied = false;
+
+	if (!bEnableCameraYawDamping || CameraYawDampingInterpSpeed <= KINDA_SMALL_NUMBER || DeltaTime <= KINDA_SMALL_NUMBER)
+	{
+		SmoothedCameraBaseYawDeg = TargetCameraBaseYawDeg;
+		bHasSmoothedCameraBaseYaw = false;
+		return TargetBaseVehicleAimRotation;
+	}
+
+	if (!bHasSmoothedCameraBaseYaw)
+	{
+		SmoothedCameraBaseYawDeg = TargetCameraBaseYawDeg;
+		bHasSmoothedCameraBaseYaw = true;
+	}
+
+	// [v0.1.4] 보간 전 현재 카메라 표시용 기본 회전입니다.
+	const FRotator CurrentSmoothedBaseRotation(0.0f, SmoothedCameraBaseYawDeg, 0.0f);
+
+	// [v0.1.4] 보간 목표로 사용할 차량 기준 기본 회전입니다.
+	const FRotator TargetBaseRotation(0.0f, TargetCameraBaseYawDeg, 0.0f);
+
+	// [v0.1.4] 이번 프레임 보간된 카메라 표시용 기본 회전입니다.
+	const FRotator InterpedBaseRotation = FMath::RInterpTo(
+		CurrentSmoothedBaseRotation,
+		TargetBaseRotation,
+		DeltaTime,
+		CameraYawDampingInterpSpeed);
+
+	SmoothedCameraBaseYawDeg = InterpedBaseRotation.Yaw;
+
+	// [v0.1.4] 허용 가능한 최대 카메라 Yaw 지연각입니다.
+	const float SafeMaxYawLagDeg = FMath::Max(0.0f, CameraYawDampingMaxLagDeg);
+
+	// [v0.1.4] 차량 기준 Yaw 대비 현재 카메라 표시용 Yaw 지연각입니다.
+	float CurrentYawLagDeg = FMath::FindDeltaAngleDegrees(TargetCameraBaseYawDeg, SmoothedCameraBaseYawDeg);
+	if (SafeMaxYawLagDeg <= KINDA_SMALL_NUMBER)
+	{
+		SmoothedCameraBaseYawDeg = TargetCameraBaseYawDeg;
+		CurrentYawLagDeg = 0.0f;
+	}
+	else if (FMath::Abs(CurrentYawLagDeg) > SafeMaxYawLagDeg)
+	{
+		CurrentYawLagDeg = FMath::Clamp(CurrentYawLagDeg, -SafeMaxYawLagDeg, SafeMaxYawLagDeg);
+		SmoothedCameraBaseYawDeg = FRotator::NormalizeAxis(TargetCameraBaseYawDeg + CurrentYawLagDeg);
+	}
+
+	CameraRuntimeState.SmoothedCameraBaseYaw = SmoothedCameraBaseYawDeg;
+	CameraRuntimeState.CameraYawDampingLagDeg = CurrentYawLagDeg;
+	CameraRuntimeState.bCameraYawDampingApplied = true;
+
+	return FRotator(TargetBaseVehicleAimRotation.Pitch, SmoothedCameraBaseYawDeg, 0.0f);
+}
+
+// [v0.1.3] 카메라 피벗의 월드 위치를 계산합니다.
 FVector UCFVehicleCameraComp::GetPivotWorldLocation(const FCFVehicleCameraTuningConfig& CameraTuningConfig) const
 {
 	const AActor* OwnerActor = GetOwner();
@@ -351,8 +423,35 @@ FVector UCFVehicleCameraComp::GetPivotWorldLocation(const FCFVehicleCameraTuning
 		return FVector::ZeroVector;
 	}
 
+	// 차량 Root 기준 위치를 얻기 위한 Owner Root Component입니다.
+	const USceneComponent* OwnerRootComponent = OwnerActor->GetRootComponent();
+
+	// 차량 Root가 없을 때 사용할 Actor 기준 위치입니다.
+	const FVector OwnerBaseLocation = OwnerRootComponent ? OwnerRootComponent->GetComponentLocation() : OwnerActor->GetActorLocation();
+
+	// 차량 Pitch/Roll을 제거한 카메라 기준 Yaw 회전입니다.
 	const FRotator BaseVehicleAimRotation = GetBaseVehicleAimRotation();
-	const FVector PivotBaseLocation = CameraPivotRoot ? CameraPivotRoot->GetComponentLocation() : OwnerActor->GetActorLocation();
+
+	// 카메라 피벗 계산의 기준 월드 위치입니다.
+	FVector PivotBaseLocation = OwnerBaseLocation;
+
+	if (CameraPivotRoot)
+	{
+		if (bIsolateCameraFromVehiclePitchRoll)
+		{
+			// Root 기준 카메라 Pivot의 로컬 위치입니다.
+			const FVector PivotOwnerLocalLocation = OwnerRootComponent
+				? OwnerRootComponent->GetComponentTransform().InverseTransformPosition(CameraPivotRoot->GetComponentLocation())
+				: CameraPivotRoot->GetRelativeLocation();
+
+			PivotBaseLocation = OwnerBaseLocation + BaseVehicleAimRotation.RotateVector(PivotOwnerLocalLocation);
+		}
+		else
+		{
+			PivotBaseLocation = CameraPivotRoot->GetComponentLocation();
+		}
+	}
+
 	return PivotBaseLocation + BaseVehicleAimRotation.RotateVector(CameraTuningConfig.PivotLocalOffset);
 }
 
@@ -452,22 +551,39 @@ void UCFVehicleCameraComp::UpdateCameraTransform(float DeltaTime, const FCFVehic
 	CameraRuntimeState.CurrentArmLength = CurrentArmLength;
 	CameraRuntimeState.DesiredFOV = DesiredFOV;
 	CameraRuntimeState.CurrentFOV = CurrentFOV;
+	CameraRuntimeState.bCameraPitchRollIsolationApplied = bIsolateCameraFromVehiclePitchRoll;
 
 	const FVector PivotWorldLocation = GetPivotWorldLocation(CameraTuningConfig);
 	const FRotator BaseVehicleAimRotation = GetBaseVehicleAimRotation();
+
+	// [v0.1.4] 화면 표시용으로 Yaw 완충이 적용된 카메라 기준 Aim 회전입니다.
+	const FRotator CameraBaseAimRotation = ResolveCameraYawDampedBaseRotation(DeltaTime, BaseVehicleAimRotation);
 	const FRotator WorldAimRotation(
-		BaseVehicleAimRotation.Pitch + CameraRuntimeState.ClampedAimPitch,
-		BaseVehicleAimRotation.Yaw + CameraRuntimeState.ClampedAimYaw,
+		CameraBaseAimRotation.Pitch + CameraRuntimeState.ClampedAimPitch,
+		CameraBaseAimRotation.Yaw + CameraRuntimeState.ClampedAimYaw,
 		0.0f);
 
 	if (CameraAimPivot)
 	{
+		if (bIsolateCameraFromVehiclePitchRoll)
+		{
+			CameraAimPivot->SetUsingAbsoluteRotation(true);
+		}
+
 		CameraAimPivot->SetWorldLocationAndRotation(PivotWorldLocation, WorldAimRotation);
 	}
 
 	if (CameraBoom)
 	{
 		CameraBoom->bUsePawnControlRotation = false;
+		if (bIsolateCameraFromVehiclePitchRoll)
+		{
+			CameraBoom->SetUsingAbsoluteRotation(true);
+			CameraBoom->bInheritPitch = false;
+			CameraBoom->bInheritYaw = false;
+			CameraBoom->bInheritRoll = false;
+		}
+
 		CameraBoom->bDoCollisionTest = CameraTuningConfig.bEnableBoomCollisionTest;
 		CameraBoom->ProbeChannel = ECC_Camera;
 		CameraBoom->ProbeSize = CameraTuningConfig.CollisionProbeSize;
