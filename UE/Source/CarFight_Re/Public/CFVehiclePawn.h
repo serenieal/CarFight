@@ -1,8 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.42.0
-// Date: 2026-06-15
-// Description: CarFight 신규 차량 Pawn 기준 클래스 (회전축/공중 상태 네트워크 진단 로그 확장)
+// Version: 2.62.0
+// Date: 2026-06-19
+// Description: CarFight 싱글플레이 차량 Pawn 기준 클래스 (멀티 동기화 진단 잔여 코드 제거)
+// Changelog:
+// - v2.62.0: 싱글플레이 기준선에서 차량 네트워크 진단 샘플/RepMove 수신 로그/복제 등록 경로를 제거하고 Aim 디버그 표시 문구를 정리.
+// - v2.61.0: 싱글플레이 전환에 맞춰 C++ 기준선에서 Actor 복제와 Replicate Movement 강제 활성화를 중단.
+// - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
+// - v2.59.0: CFNetSmooth 적용 전 기준선 정리를 위해 차량 NetDebug/OwnerVisual/OwnerBodyVisual 실험 플래그 기본값을 False로 통일.
+// Migration:
+// - BP_CFVehiclePawn의 Actor Replicates/Replicate Movement도 False로 저장해 C++ 기본값과 맞춘다.
+// - 멀티플레이 진단이 다시 필요하면 별도 멀티플레이 브랜치/문서에서 복구한다.
 // Scope: DriveComp / WheelSyncComp / VehicleCameraComp / VehicleAimComp를 소유하고 차량 런타임, 입력, 카메라 디버그 스냅샷을 함께 다룹니다.
 
 #pragma once
@@ -25,6 +33,7 @@ class UChaosWheeledVehicleMovementComponent;
 class UInputAction;
 class UInputComponent;
 class UInputMappingContext;
+class USceneComponent;
 struct FInputActionValue;
 struct FKey;
 
@@ -54,59 +63,6 @@ enum class ECFVehicleDebugDisplayMode : uint8
 	Off UMETA(DisplayName="Off"),
 	SingleLine UMETA(DisplayName="SingleLine"),
 	MultiLine UMETA(DisplayName="MultiLine")
-};
-
-/**
- * 서버 권위 차량 상태를 클라이언트에서 비교하기 위한 네트워크 진단 샘플입니다.
- */
-USTRUCT(BlueprintType)
-struct FCFVehicleNetDebugSample
-{
-	GENERATED_BODY()
-
-	// [v2.22.0] 이 샘플이 유효한 서버 측 측정값인지 여부입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetDebug", meta=(DisplayName="샘플 유효 여부 (bValid)", ToolTip="True이면 서버에서 채운 차량 네트워크 진단 샘플입니다."))
-	bool bValid = false;
-
-	// [v2.22.0] 서버에서 샘플을 갱신할 때마다 증가하는 순번입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetDebug", meta=(DisplayName="샘플 순번 (SampleSequenceId)", ToolTip="서버가 차량 네트워크 진단 샘플을 갱신할 때마다 증가하는 순번입니다."))
-	int32 SampleSequenceId = 0;
-
-	// [v2.22.0] 서버 월드 기준 샘플링 시각입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetDebug", meta=(DisplayName="서버 샘플 시각 (ServerWorldTimeSeconds)", ToolTip="서버 월드 기준으로 차량 상태를 샘플링한 시간(초)입니다."))
-	float ServerWorldTimeSeconds = 0.0f;
-
-	// [v2.23.0] 서버 샘플 시각이 GameState 서버 시간 기준으로 계산되었는지 여부입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetDebug", meta=(DisplayName="서버 시간 유효 여부 (bServerTimeValid)", ToolTip="True이면 ServerWorldTimeSeconds가 GameState의 서버 시간 기준으로 기록되어 클라이언트 SampleAge 계산에 사용할 수 있습니다."))
-	bool bServerTimeValid = false;
-
-	// [v2.22.0] 서버 권위 차량 위치입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetDebug", meta=(DisplayName="서버 위치 (ServerLocation)", ToolTip="서버 권위 기준 차량 월드 위치입니다."))
-	FVector ServerLocation = FVector::ZeroVector;
-
-	// [v2.22.0] 서버 권위 차량 회전입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetDebug", meta=(DisplayName="서버 회전 (ServerRotation)", ToolTip="서버 권위 기준 차량 월드 회전입니다."))
-	FRotator ServerRotation = FRotator::ZeroRotator;
-
-	// [v2.22.0] 서버 권위 차량 선형 속도입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetDebug", meta=(DisplayName="서버 선형 속도 (ServerLinearVelocity)", ToolTip="서버 권위 기준 차량 선형 속도(cm/s)입니다."))
-	FVector ServerLinearVelocity = FVector::ZeroVector;
-
-	// [v2.23.0] 서버 권위 차량 각속도입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetDebug", meta=(DisplayName="서버 각속도 deg/s (ServerAngularVelocityDeg)", ToolTip="서버 권위 기준 차량 각속도(deg/s)입니다. Pitch/Roll 흔들림과 회전 보정 문제 진단에 사용합니다."))
-	FVector ServerAngularVelocityDeg = FVector::ZeroVector;
-
-	// [v2.42.0] 서버 권위 기준 접지 중인 바퀴 수입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetDebug", meta=(DisplayName="서버 접지 바퀴 수 (ServerGroundedWheelCount)", ToolTip="서버 권위 기준 현재 지면에 닿아 있는 바퀴 수입니다. -1이면 접지 정보를 읽지 못한 상태입니다."))
-	int32 ServerGroundedWheelCount = -1;
-
-	// [v2.42.0] 서버 권위 기준 전체 바퀴 수입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetDebug", meta=(DisplayName="서버 전체 바퀴 수 (ServerWheelCount)", ToolTip="서버 권위 기준 Chaos Vehicle Movement가 보고한 전체 바퀴 수입니다."))
-	int32 ServerWheelCount = 0;
-
-	// [v2.42.0] 서버 권위 기준 차량이 공중 상태인지 여부입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|NetDebug", meta=(DisplayName="서버 공중 상태 (bServerAirborne)", ToolTip="서버 권위 기준 전체 바퀴 중 접지한 바퀴가 하나도 없으면 True입니다."))
-	bool bServerAirborne = false;
 };
 
 /**
@@ -445,8 +401,8 @@ struct FCFVehicleDebugAim
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="서버 Aim 상태 (ServerAimState)", ToolTip="VehicleAimComp가 보유한 서버 검증 기준 Aim 상태입니다. 이번 단계에서는 기본값 표시만 수행합니다."))
 	FCFVehicleServerAimState ServerAimState;
 
-	// [v2.16.0] 복제 시각화 기준 Aim 상태입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="복제 Aim 시각 상태 (RepAimVisualState)", ToolTip="VehicleAimComp가 보유한 복제 시각화 기준 Aim 상태입니다. 이번 단계에서는 기본값 표시만 수행합니다."))
+	// [v2.62.0] 로컬 디버그와 발사 결과 표시용 Aim 시각 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="Aim 시각 상태 (RepAimVisualState)", ToolTip="VehicleAimComp가 보유한 로컬 디버그와 발사 결과 표시용 Aim 시각 상태입니다."))
 	FCFVehicleRepAimVisualState RepAimVisualState;
 
 	// [v2.16.0] 로컬 Reticle 표시 상태입니다.
@@ -494,7 +450,7 @@ struct FCFVehicleDebugSnapshot
 	FCFVehicleDebugCamera Camera;
 
 	// [v2.16.0] 조준 상세 카테고리입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="Aim 카테고리 (Aim)", ToolTip="AimComp의 로컬/서버/복제 조준 상태를 담는 VehicleDebug Aim 카테고리입니다."))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="Aim 카테고리 (Aim)", ToolTip="AimComp의 로컬/서버/표시용 조준 상태를 담는 VehicleDebug Aim 카테고리입니다."))
 	FCFVehicleDebugAim Aim;
 
 	// [v2.14.1] 런타임 진단 카테고리입니다.
@@ -557,9 +513,6 @@ protected:
 
 	// [v1.1.0] Tick에서 휠 시각 갱신을 수행합니다.
 	virtual void Tick(float DeltaSeconds) override;
-
-	// [v2.22.0] 차량 네트워크 진단 샘플 복제 대상을 등록합니다.
-	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	// [v1.1.0] PlayerInputComponent에 Enhanced Input Action을 바인딩합니다.
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
@@ -628,6 +581,26 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(ClampMin="0.01", DisplayName="락 투 락 시간 (SteeringLockToLockTimeSec)", ToolTip="실제 조향값이 -1에서 +1까지 제한 속도로 이동하는 데 걸리는 시간입니다."))
 	float SteeringLockToLockTimeSec = 0.45f;
 
+	// [v2.44.0] 기존 축 조향 입력도 제한 속도 보간을 사용할지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="레거시 조향 smoothing 사용 (bSmoothLegacySteeringInput)", ToolTip="키보드/축 조향 입력을 즉시 DriveComp에 넣지 않고 CurrentSteeringInput 보간 경로로 전달합니다. 좌우 조향 끊김을 분리 확인할 때 사용합니다."))
+	bool bSmoothLegacySteeringInput = true;
+
+	// [v2.55.0] 차량 속도가 올라갈수록 Chaos Vehicle에 전달하는 실제 조향 입력을 줄일지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="속도 기반 조향 제한 사용 (bEnableSpeedSteeringLimit)", ToolTip="True이면 고속 좌우 조향 시 차량 Yaw 변화가 과격해지는 현상을 줄이기 위해 실제 조향 입력을 속도에 따라 낮춥니다."))
+	bool bEnableSpeedSteeringLimit = false;
+
+	// [v2.55.0] 속도 기반 조향 제한이 시작되는 차량 속도(km/h)입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(ClampMin="0.0", DisplayName="조향 제한 시작 속도 km/h (SpeedSteeringLimitStartSpeedKmh)", ToolTip="이 속도부터 Chaos Vehicle에 전달하는 실제 조향 입력을 서서히 줄이기 시작합니다."))
+	float SpeedSteeringLimitStartSpeedKmh = 10.0f;
+
+	// [v2.55.0] 속도 기반 조향 제한이 최대치에 도달하는 차량 속도(km/h)입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(ClampMin="0.0", DisplayName="조향 제한 최대 속도 km/h (SpeedSteeringLimitFullSpeedKmh)", ToolTip="이 속도 이상에서는 SpeedSteeringLimitMinScale 값을 적용해 실제 조향 입력을 제한합니다."))
+	float SpeedSteeringLimitFullSpeedKmh = 28.0f;
+
+	// [v2.55.0] 고속 구간에서 허용할 최소 실제 조향 입력 배율입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(ClampMin="0.05", ClampMax="1.0", DisplayName="고속 최소 조향 배율 (SpeedSteeringLimitMinScale)", ToolTip="조향 제한 최대 속도 이상에서 원본 조향 입력에 곱할 최소 배율입니다. 0.45이면 풀 조향 입력 1.0이 실제 0.45로 전달됩니다."))
+	float SpeedSteeringLimitMinScale = 0.45f;
+
 	// [v2.8.0] 중립 복귀 속도 보간 시작 차량 속도(km/h)입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|MoveInput", meta=(ClampMin="0.0", DisplayName="조향 복귀 최소 속도 km/h (SteeringReturnMinSpeedKmh)", ToolTip="중립 복귀 속도 보간을 시작할 차량 속도입니다."))
 		float SteeringReturnMinSpeedKmh = 3.0f;
@@ -649,6 +622,10 @@ public:
 	// [v2.8.0] 게임패드 2D 이동 입력 방향에서 계산한 목표 조향값입니다.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="목표 조향값 (TargetSteeringInput)", ToolTip="스틱 방향에서 계산된 목표 조향값입니다."))
 	float TargetSteeringInput = 0.0f;
+
+	// [v2.44.0] 기존 축 조향 이벤트에서 받은 목표 조향값입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="레거시 목표 조향값 (LegacyTargetSteeringInput)", ToolTip="키보드/축 조향 입력에서 받은 목표 조향값입니다. bSmoothLegacySteeringInput이 켜져 있을 때 CurrentSteeringInput이 이 값을 제한 속도로 따라갑니다."))
+	float LegacyTargetSteeringInput = 0.0f;
 
 	// [v2.8.0] 실제 DriveComp에 전달 중인 제한 속도 적용 조향값입니다.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|MoveInput", meta=(DisplayName="현재 조향값 (CurrentSteeringInput)", ToolTip="목표 조향값을 제한 속도로 따라가며 실제 DriveComp에 전달 중인 조향값입니다."))
@@ -686,6 +663,10 @@ public:
 	// [v2.15.0] 카메라 조준과 향후 무기 발사 사이의 Aim 해석 컴포넌트입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="VehicleAim 컴포넌트 (VehicleAimComp)", ToolTip="카메라 조준과 향후 무기 발사 사이의 Aim 해석 컴포넌트입니다."))
 	TObjectPtr<UCFVehicleAimComp> VehicleAimComp = nullptr;
+
+	// [v2.48.0] 로컬 Owner 표시 안정화에 사용할 차체/휠 표시 전용 루트 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="Owner 표시 루트 (OwnerVisualRootComp)", ToolTip="로컬 조작 차량에서 차체와 휠 표시를 물리 루트 흔들림과 분리하기 위한 표시 전용 루트입니다."))
+	TObjectPtr<USceneComponent> OwnerVisualRootComp = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Runtime", meta=(DisplayName="BeginPlay 자동 초기화 (bAutoInitializeOnBeginPlay)", ToolTip="True이면 BeginPlay에서 Drive / WheelSync 캐시와 준비를 자동 시도합니다."))
 	bool bAutoInitializeOnBeginPlay = true;
@@ -764,21 +745,49 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(ClampMin="0.0", DisplayName="디버그 메시지 유지 시간 (DriveStateDebugMessageDuration)", ToolTip="화면에 표시하는 Drive 상태 디버그 메시지 유지 시간(초)입니다."))
 	float DriveStateDebugMessageDuration = 0.0f;
 
-	// [v2.22.0] 차량 네트워크 물리 진단 로그와 서버 샘플 복제를 사용할지 여부입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|NetDebug", meta=(DisplayName="차량 네트워크 진단 사용 (bEnableVehicleNetDebug)", ToolTip="True이면 서버가 차량 권위 상태를 주기적으로 샘플링해 복제하고, 클라이언트가 로컬 차량 상태와의 위치/회전/속도 오차를 로그로 출력합니다."))
-	bool bEnableVehicleNetDebug = true;
+	// [v2.48.2] 로컬 조작 차량의 표시 루트 회전 안정화를 사용할지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|OwnerVisual", meta=(DisplayName="Owner 표시 안정화 사용 (bEnableOwnerVisualStabilization)", ToolTip="True이면 로컬 조작 차량에서 물리 루트는 그대로 두고 차체/휠 표시 루트만 부드럽게 따라가게 합니다. 서버 싱크와 물리에는 영향을 주지 않습니다."))
+	bool bEnableOwnerVisualStabilization = false;
 
-	// [v2.22.0] 서버가 차량 권위 상태를 샘플링하는 주기입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|NetDebug", meta=(ClampMin="0.05", DisplayName="서버 샘플 주기 (VehicleNetDebugSampleIntervalSec)", ToolTip="서버가 차량 위치, 회전, 속도를 네트워크 진단 샘플로 갱신하는 주기(초)입니다."))
-	float VehicleNetDebugSampleIntervalSec = 0.25f;
+	// [v2.48.0] Owner 표시 루트가 Actor 회전을 따라가는 보간 속도입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|OwnerVisual", meta=(ClampMin="0.1", DisplayName="Owner 표시 안정화 속도 (OwnerVisualStabilizationInterpSpeed)", ToolTip="값이 클수록 차체/휠 표시가 물리 Actor 회전을 빠르게 따라갑니다. 너무 낮으면 차량 표시가 조작보다 늦게 보일 수 있습니다."))
+	float OwnerVisualStabilizationInterpSpeed = 4.0f;
 
-	// [v2.22.0] 클라이언트가 서버 샘플 대비 오차 로그를 출력하는 최소 주기입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|NetDebug", meta=(ClampMin="0.05", DisplayName="클라이언트 로그 주기 (VehicleNetDebugClientLogIntervalSec)", ToolTip="클라이언트가 복제된 서버 샘플과 자기 로컬 차량 상태의 오차를 로그로 출력하는 최소 주기(초)입니다."))
-	float VehicleNetDebugClientLogIntervalSec = 0.5f;
+	// [v2.48.0] Actor 회전과 Owner 표시 루트 회전 사이에 허용할 최대 지연각입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|OwnerVisual", meta=(ClampMin="0.0", DisplayName="Owner 표시 최대 지연각 (OwnerVisualStabilizationMaxLagDeg)", ToolTip="차체/휠 표시 루트가 Actor 회전에서 너무 멀리 떨어지지 않도록 축별 지연각을 제한합니다."))
+	float OwnerVisualStabilizationMaxLagDeg = 30.0f;
 
-	// [v2.22.0] 서버에서 복제한 최신 차량 권위 상태 샘플입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, ReplicatedUsing=OnRep_VehicleNetDebugServerSample, Category="CarFight|VehiclePawn|NetDebug", meta=(DisplayName="서버 네트워크 진단 샘플 (VehicleNetDebugServerSample)", ToolTip="서버가 주기적으로 복제하는 차량 권위 위치, 회전, 속도 샘플입니다."))
-	FCFVehicleNetDebugSample VehicleNetDebugServerSample;
+	// [v2.48.0] Owner 표시 안정화가 Yaw 축에도 적용되는지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|OwnerVisual", meta=(DisplayName="Owner 표시 Yaw 안정화 (bOwnerVisualStabilizeYaw)", ToolTip="True이면 좌우 조향 중 보이는 차체/휠 Yaw 흔들림도 표시 루트에서 완충합니다."))
+	bool bOwnerVisualStabilizeYaw = false;
+
+	// [v2.48.0] Owner 표시 안정화가 Pitch/Roll 축에 적용되는지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|OwnerVisual", meta=(DisplayName="Owner 표시 Pitch/Roll 안정화 (bOwnerVisualStabilizePitchRoll)", ToolTip="True이면 과속방지턱, 착지, 차체 기울어짐 중 보이는 Pitch/Roll 흔들림을 표시 루트에서 완충합니다."))
+	bool bOwnerVisualStabilizePitchRoll = false;
+
+	// [v2.48.0] Owner 표시 안정화 중 물리 루트 SkeletalMesh 렌더링을 숨길지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|OwnerVisual", meta=(DisplayName="Owner 물리 메쉬 숨김 (bHideOwnerPhysicsMeshWhenStabilized)", ToolTip="True이면 로컬 조작 차량에서 흔들리는 물리 루트 VehicleMesh 렌더링을 숨기고 안정화된 SM_Body/휠 표시를 사용합니다. 물리 시뮬레이션은 유지됩니다."))
+	bool bHideOwnerPhysicsMeshWhenStabilized = false;
+
+	// [v2.53.0] 로컬 조작 차량의 SM_Body만 별도로 부드럽게 표시할지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|OwnerBodyVisual", meta=(DisplayName="Owner 차체 표시 안정화 사용 (bEnableOwnerBodyVisualStabilization)", ToolTip="True이면 로컬 조작 차량에서 SM_Body 표시 회전만 부드럽게 따라가게 합니다. 물리, 충돌, 서버 싱크에는 영향을 주지 않습니다."))
+	bool bEnableOwnerBodyVisualStabilization = false;
+
+	// [v2.53.1] SM_Body 표시 회전이 Actor 회전을 따라가는 보간 속도입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|OwnerBodyVisual", meta=(ClampMin="0.1", DisplayName="Owner 차체 표시 안정화 속도 (OwnerBodyVisualInterpSpeed)", ToolTip="값이 클수록 로컬 차체 표시가 물리 Actor 회전을 빠르게 따라갑니다. 너무 낮으면 차체만 늦게 움직여 보일 수 있습니다."))
+	float OwnerBodyVisualInterpSpeed = 15.0f;
+
+	// [v2.53.1] SM_Body 표시 회전이 Actor 회전에서 벗어날 수 있는 최대 지연각입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|OwnerBodyVisual", meta=(ClampMin="0.0", DisplayName="Owner 차체 표시 최대 지연각 (OwnerBodyVisualMaxLagDeg)", ToolTip="차체 표시가 물리 Actor 회전에서 너무 멀리 떨어지지 않도록 축별 지연각을 제한합니다."))
+	float OwnerBodyVisualMaxLagDeg = 5.0f;
+
+	// [v2.53.2] SM_Body 표시 안정화를 Yaw 축에도 적용할지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|OwnerBodyVisual", meta=(DisplayName="Owner 차체 Yaw 안정화 (bOwnerBodyVisualStabilizeYaw)", ToolTip="True이면 좌우 조향 중 보이는 차체 Yaw 흔들림을 SM_Body 표시 회전에서 완충합니다."))
+	bool bOwnerBodyVisualStabilizeYaw = false;
+
+	// [v2.53.0] SM_Body 표시 안정화를 Pitch/Roll 축에 적용할지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|OwnerBodyVisual", meta=(DisplayName="Owner 차체 Pitch/Roll 안정화 (bOwnerBodyVisualStabilizePitchRoll)", ToolTip="True이면 방지턱, 착지, 차체 기울어짐 중 보이는 Pitch/Roll 흔들림을 SM_Body 표시 회전에서 완충합니다."))
+	bool bOwnerBodyVisualStabilizePitchRoll = false;
 
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(ToolTip="차량 입력 전달 전용 DriveComp를 반환합니다."))
 	UCFVehicleDriveComp* GetVehicleDriveComp() const { return VehicleDriveComp; }
@@ -893,36 +902,32 @@ public:
 	ESlateVisibility GetDebugWidgetVisibility() const;
 
 protected:
-	// [v2.41.0] 차량 Pawn의 표준 복제 갱신 빈도와 우선순위 하한을 적용합니다.
-	void ApplyVehicleReplicationBaseline();
+	// [v2.61.0] 차량 Pawn의 싱글플레이 기본 복제 상태를 적용합니다.
+	void ApplyVehicleSinglePlayerBaseline();
 
-	// [v2.22.0] 서버가 복제한 차량 네트워크 진단 샘플을 수신했을 때 오차 로그를 시도합니다.
-	UFUNCTION()
-	void OnRep_VehicleNetDebugServerSample();
+	// [v2.48.0] 로컬 Owner 표시 안정화용 차체/휠 표시 계층을 준비합니다.
+	bool PrepareOwnerVisualStabilization();
 
-	// [v2.22.0] 서버와 클라이언트의 차량 네트워크 진단 흐름을 Tick에서 갱신합니다.
-	void UpdateVehicleNetDebug(float DeltaSeconds);
+	// [v2.48.0] 지정한 표시 컴포넌트를 Owner 표시 루트 아래로 안전하게 이동합니다.
+	bool AttachOwnerVisualComponent(USceneComponent* VisualComponent);
 
-	// [v2.22.0] 서버 권위 차량 상태 샘플을 주기적으로 갱신합니다.
-	void UpdateVehicleNetDebugServerSample(float DeltaSeconds);
+	// [v2.48.0] 로컬 Owner 표시 루트 회전을 현재 Actor 회전에 부드럽게 맞춥니다.
+	void UpdateOwnerVisualStabilization(float DeltaSeconds);
 
-	// [v2.22.0] 현재 차량 상태를 네트워크 진단 샘플 구조로 캡처합니다.
-	FCFVehicleNetDebugSample CaptureVehicleNetDebugSample(int32 NewSampleSequenceId) const;
+	// [v2.48.0] Owner 표시 안정화 상태를 기본 회전으로 되돌립니다.
+	void ResetOwnerVisualStabilization();
 
-	// [v2.22.0] 클라이언트에서 서버 샘플 대비 로컬 차량 상태 오차를 로그로 출력합니다.
-	void LogVehicleNetDebugClientError();
+	// [v2.48.0] Actor 회전과 표시 회전 사이의 지연각을 설정 한도 안으로 제한합니다.
+	FRotator ClampOwnerVisualStabilizedRotation(const FRotator& CurrentActorRotation, const FRotator& DesiredVisualRotation) const;
 
-	// [v2.23.0] GameState 기준 서버 시간을 읽고 유효 여부를 함께 반환합니다.
-	float ResolveVehicleNetDebugServerTimeSeconds(bool& bOutServerTimeValid) const;
+	// [v2.53.0] 로컬 조작 차량의 SM_Body 표시 회전을 부드럽게 안정화합니다.
+	void UpdateOwnerBodyVisualStabilization(float DeltaSeconds);
 
-	// [v2.23.0] 차량 루트 물리 컴포넌트의 현재 각속도(deg/s)를 반환합니다.
-	FVector GetVehicleNetDebugAngularVelocityDeg() const;
+	// [v2.53.0] 로컬 조작 차량의 SM_Body 표시 안정화 상태를 기본 상태로 되돌립니다.
+	void ResetOwnerBodyVisualStabilization();
 
-	// [v2.42.0] Chaos Vehicle Movement의 현재 접지 바퀴 수와 전체 바퀴 수를 반환합니다.
-	int32 GetVehicleNetDebugGroundedWheelCount(int32& OutWheelCount) const;
-
-	// [v2.23.0] 현재 NetMode를 로그용 문자열로 반환합니다.
-	FString GetVehicleNetDebugNetModeName() const;
+	// [v2.53.0] Actor 회전과 SM_Body 표시 회전 사이의 지연각을 설정 한도 안으로 제한합니다.
+	FRotator ClampOwnerBodyVisualRotation(const FRotator& CurrentActorRotation, const FRotator& DesiredVisualRotation) const;
 
 	// [v1.5.0] DriveComp 캐시를 재사용해 VehicleMovement 컴포넌트를 안전하게 가져옵니다.
 	UChaosWheeledVehicleMovementComponent* ResolveVehicleMovementComponent(const TCHAR* CacheFailureSummary, const TCHAR* MissingComponentSummary);
@@ -1017,7 +1022,10 @@ protected:
 	// [v2.8.0] 현재 차량 속도 기준 중립 복귀 속도를 계산합니다.
 	float CalculateSteeringReturnRateKmh(float SpeedKmh) const;
 
-	// [v2.8.0] 목표 조향값을 제한 속도로 추적해 실제 조향 입력으로 적용합니다.
+	// [v2.55.0] 현재 차량 속도 기준으로 실제 Chaos Vehicle에 전달할 조향 입력을 계산합니다.
+	float CalculateSpeedLimitedSteeringInput(float RawSteeringInput) const;
+
+	// [v2.44.0] 현재 입력 경로의 목표 조향값을 제한 속도로 추적해 실제 조향 입력으로 적용합니다.
 	void UpdateVehicleMoveSteeringInput(float DeltaSeconds);
 
 	// [v1.6.0] 차량 이동용 2D 입력 액션값을 읽어 해석 결과를 Drive 입력으로 전달합니다.
@@ -1040,13 +1048,34 @@ protected:
 	void HandleHandbrakeCompleted(const FInputActionValue& InputActionValue);
 
 private:
-	// [v2.22.0] 서버에서 마지막으로 네트워크 진단 샘플을 갱신한 월드 시각입니다.
-	float LastVehicleNetDebugServerSampleTimeSec = -1.0f;
+	// [v2.48.0] Owner 표시 안정화 계층 준비가 완료됐는지 여부입니다.
+	bool bOwnerVisualStabilizationReady = false;
 
-	// [v2.22.0] 클라이언트에서 마지막으로 네트워크 진단 오차 로그를 출력한 월드 시각입니다.
-	float LastVehicleNetDebugClientLogTimeSec = -1.0f;
+	// [v2.48.0] Owner 표시 안정화용 이전 프레임 표시 회전값입니다.
+	FRotator SmoothedOwnerVisualRotation = FRotator::ZeroRotator;
 
-	// [v2.24.0] 클라이언트가 마지막 VehicleNetDebug 서버 샘플을 수신한 로컬 월드 시각입니다.
-	float LastVehicleNetDebugSampleReceiveLocalTimeSec = -1.0f;
+	// [v2.48.0] Owner 표시 안정화 회전 기준값이 유효한지 여부입니다.
+	bool bHasSmoothedOwnerVisualRotation = false;
+
+	// [v2.48.0] Owner 표시 루트 아래로 이동한 표시 컴포넌트 목록입니다.
+	TArray<TObjectPtr<USceneComponent>> OwnerVisualStabilizedComponents;
+
+	// [v2.48.0] Owner 표시 안정화 때문에 물리 루트 VehicleMesh 렌더링을 숨겼는지 여부입니다.
+	bool bOwnerVisualPhysicsMeshHidden = false;
+
+	// [v2.53.0] Owner 차체 표시 안정화가 현재 적용 가능한 상태인지 여부입니다.
+	bool bOwnerBodyVisualStabilizationReady = false;
+
+	// [v2.53.0] Owner 차체 표시 안정화용 이전 프레임 표시 회전값입니다.
+	FRotator SmoothedOwnerBodyVisualRotation = FRotator::ZeroRotator;
+
+	// [v2.53.0] Owner 차체 표시 안정화 회전 기준값이 유효한지 여부입니다.
+	bool bHasSmoothedOwnerBodyVisualRotation = false;
+
+	// [v2.53.0] Owner 차체 표시 안정화 전 SM_Body의 기본 상대 회전입니다.
+	FRotator OriginalOwnerBodyVisualRelativeRotation = FRotator::ZeroRotator;
+
+	// [v2.53.0] Owner 차체 표시 안정화 전 SM_Body 상대 회전을 저장했는지 여부입니다.
+	bool bHasOriginalOwnerBodyVisualRelativeRotation = false;
 
 };

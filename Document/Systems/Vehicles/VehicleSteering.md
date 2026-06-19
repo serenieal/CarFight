@@ -272,7 +272,13 @@
 - 확인 근거:
   - `UE/Source/CarFight_Re/Public/CFVehiclePawn.h`
   - `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp`
-  - `Document/ProjectSSOT/Plan/SteeringPlan/CF_SteerSpec.md`
-  - `Document/ProjectSSOT/Plan/SteeringPlan/CF_SteerTest.md`
+  - `Document/Plan/Archive/SteeringPlan/CF_SteerSpec.md`
+  - `Document/Plan/Archive/SteeringPlan/CF_SteerTest.md`
   - `CarFight_ReEditor / Win64 / Development` 빌드 성공: `build_bc511ba17bd92716`
   - PIE 실기 동작 확인 완료
+---
+
+## 변경 이력
+### 2026-06-19 - 링크 경로 정정
+- 이전 ProjectSSOT Plan/Systems 참조를 현재 Document/Plan 및 Document/Systems 경로로 정정했다.
+- 구버전 ProjectSSOT 파일명 참조를 현재 `00_Vision` ~ `05_TestChecklist` 기준 또는 Archive 경로로 정정했다.

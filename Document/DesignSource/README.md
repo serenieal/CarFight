@@ -1,14 +1,14 @@
-# MyDocument 운영 안내
+# DesignSource 운영 안내
 
-> 역할: `Document/ProjectSSOT/MyDocument/` 문서의 **역할과 사용 순서**를 고정한다.  
-> 문서 버전: v1.1.0  
-> 마지막 정리(Asia/Seoul): 2026-04-15
+> 역할: `Document/DesignSource/` 문서의 **역할과 사용 순서**를 고정한다.
+> 문서 버전: v1.2.0
+> 마지막 정리(Asia/Seoul): 2026-06-19
 
 
 ---
 
 ## 이 폴더의 역할
-`MyDocument`는 CarFight의 **북극성 문서 묶음**이다.
+`DesignSource`는 CarFight의 **북극성 문서 묶음**이다.
 
 즉 이 폴더는 아래 내용을 위해 본다.
 - 프로젝트가 최종적으로 어떤 게임과 차량 구조를 목표로 하는가
@@ -36,61 +36,65 @@
 ## 현재 실행 기준 문서
 현재 실제 작업은 아래 `ProjectSSOT` 루트 문서를 기준으로 진행한다.
 
-1. `Document/ProjectSSOT/03_VisionAlign.md`
+1. `Document/ProjectSSOT/00_Vision.md`
    - 최종 방향
    - 현재 기준선
    - 현재 구조 갭
-2. `Document/ProjectSSOT/00_Handover.md`
+2. `Document/ProjectSSOT/01_ProjectState.md`
    - 현재 실제 기준선
    - 임시 운영 편차
-3. `Document/ProjectSSOT/01_Roadmap.md`
+3. `Document/ProjectSSOT/02_Roadmap.md`
    - 현재 해야 할 일
    - 작업 순서
-4. `Document/ProjectSSOT/08_P0_Verification.md`
-   - 현재 기준선 검증
-   - DriveState 코어 체크
-   - 첫 차량 튜닝 기준
-5. `Document/ProjectSSOT/16_CPP_DecisionLog.md`
+4. `Document/ProjectSSOT/03_FeatureQueue.md`
+   - 착수 후보
+   - 현재 우선순위
+5. `Document/ProjectSSOT/04_ProjectDecisions.md`
    - 유지 구조
    - 교체 구조
    - 운영 판단
+6. `Document/ProjectSSOT/05_TestChecklist.md`
+   - 현재 기준선 검증
+   - 회귀 체크 기준
 
 ---
 
 ## 읽는 순서
 ### 프로젝트 방향을 먼저 볼 때
-1. `MyDocument/CarFight개발기획서.md`
-2. `MyDocument/22_Project_BigPicture.md`
-3. `Document/ProjectSSOT/03_VisionAlign.md`
+1. `Document/DesignSource/CarFight개발기획서.md`
+2. `Document/DesignSource/22_Project_BigPicture.md`
+3. `Document/ProjectSSOT/00_Vision.md`
 
 ### 실제 작업에 들어갈 때
-1. `Document/ProjectSSOT/03_VisionAlign.md`
-2. `Document/ProjectSSOT/00_Handover.md`
-3. `Document/ProjectSSOT/01_Roadmap.md`
-4. `Document/ProjectSSOT/08_P0_Verification.md`
-5. `Document/ProjectSSOT/16_CPP_DecisionLog.md`
+1. `Document/ProjectSSOT/README.md`
+2. `Document/ProjectSSOT/00_Vision.md`
+3. `Document/ProjectSSOT/01_ProjectState.md`
+4. `Document/ProjectSSOT/02_Roadmap.md`
+5. `Document/ProjectSSOT/03_FeatureQueue.md`
+6. `Document/ProjectSSOT/04_ProjectDecisions.md`
+7. `Document/ProjectSSOT/05_TestChecklist.md`
 
 ---
 
 ## 한 줄 규칙
-`MyDocument`는 **북극성**,  
+`DesignSource`는 **북극성**,
 `ProjectSSOT` 루트는 **현재 실행 기준**으로 본다.
 
 ---
 
 ## 현재 카메라 작업을 볼 문서 (2026-04-15 추가)
-`MyDocument`는 여전히 북극성 문서 묶음으로 유지하지만,
+`DesignSource`는 여전히 북극성 문서 묶음으로 유지하지만,
 현재 카메라 기준선과 구현 순서를 확인할 때는 아래 실행 문서를 함께 본다.
 
-- `Document/ProjectSSOT/00_Handover.md`
+- `Document/ProjectSSOT/01_ProjectState.md`
   - 현재 카메라 기준선과 실제 붙은 상태
-- `Document/ProjectSSOT/01_Roadmap.md`
+- `Document/ProjectSSOT/02_Roadmap.md`
   - 카메라 기준선 작업이 전체 로드맵에서 어디에 붙는지
-- `Document/ProjectSSOT/16_CPP_DecisionLog.md`
+- `Document/ProjectSSOT/04_ProjectDecisions.md`
   - 카메라 코어 / 입력 / Thin BP 관련 결정
-- `Document/ProjectSSOT/Plan/CameraPlan/CF_CameraPlan_260410.md`
-- `Document/ProjectSSOT/Plan/CameraPlan/CF_CameraSysSpec_260410.md`
-- `Document/ProjectSSOT/Plan/CameraPlan/CF_CamChecklist_260415.md`
+- `Document/Plan/CameraPlan/CF_CameraPlan_260410.md`
+- `Document/Plan/CameraPlan/CF_CameraSysSpec_260410.md`
+- `Document/Plan/CameraPlan/CF_CamChecklist_260415.md`
 
 즉, 카메라 작업은 북극성 문서만으로 판단하지 않고,
 북극성 문서와 실행 문서를 함께 대조해서 본다.
@@ -98,7 +102,11 @@
 ---
 
 ## 변경 이력
+- v1.2.0 (2026-06-19)
+  - 실제 폴더명 `Document/DesignSource/` 기준으로 제목과 역할 설명을 정정했다.
+  - 구버전 ProjectSSOT 파일명 참조를 현재 `00_Vision` ~ `05_TestChecklist` 기준으로 갱신했다.
+  - 카메라 계획 문서 경로를 현재 `Document/Plan/CameraPlan/` 기준으로 정정했다.
+
 - v1.1.0 (2026-04-15)
   - 문서 버전 / 마지막 정리 날짜를 갱신했다.
   - 현재 카메라 작업을 확인할 실행 문서 목록을 추가했다.
-

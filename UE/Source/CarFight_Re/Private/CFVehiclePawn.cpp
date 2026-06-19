@@ -1,8 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.42.0
-// Date: 2026-06-15
-// Description: CarFight 차량 Pawn 구현 (회전축/공중 상태 네트워크 진단 로그 확장)
+// Version: 2.62.0
+// Date: 2026-06-19
+// Description: CarFight 싱글플레이 차량 Pawn 구현 (멀티 동기화 진단 잔여 코드 제거)
+// Changelog:
+// - v2.62.0: 싱글플레이 기준선에서 차량 네트워크 진단 샘플/RepMove 수신 로그/복제 등록 경로를 제거.
+// - v2.61.0: 싱글플레이 전환에 맞춰 C++ 기준선에서 Actor 복제와 Replicate Movement 강제 활성화를 중단.
+// - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
+// - v2.59.0: CFNetSmooth Visual/Shell 적용 전 기준선을 깨끗하게 만들기 위해 차량 진단 로그와 Owner 표시 안정화 기본값을 False로 통일.
+// Migration:
+// - BP_CFVehiclePawn의 Actor Replicates/Replicate Movement도 False로 저장해 C++ 기본값과 맞춘다.
+// - 멀티플레이 진단이 다시 필요하면 별도 멀티플레이 브랜치/문서에서 복구한다.
 
 #include "CFVehiclePawn.h"
 
@@ -17,6 +25,8 @@
 #include "ChaosVehicleWheel.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
 #include "Components/PrimitiveComponent.h"
+#include "Components/SceneComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "DrawDebugHelpers.h"
 #include "EnhancedActionKeyMapping.h"
@@ -25,18 +35,13 @@
 #include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
 #include "GameFramework/PlayerController.h"
-#include "GameFramework/GameStateBase.h"
 #include "InputAction.h"
 #include "InputActionValue.h"
 #include "InputCoreTypes.h"
 #include "InputMappingContext.h"
-#include "Net/UnrealNetwork.h"
 
 namespace
 {
-	// [v2.22.0] 차량 네트워크 물리 진단 로그 전용 카테고리입니다.
-	DEFINE_LOG_CATEGORY_STATIC(LogCFVehicleNetDebug, Log, All);
-
 	// ??????????れ삀???筌ｋ〃泥???도 ??ш끽維뽳쭛?????곷츉??繹먮끏?????モ봼????ш끽維???怨뚮옖甕??????怨좊룴??猷?獄??怨뚮옖????筌뤾퍓???
 	struct FCFWheelClassRuntimeSnapshot
 	{
@@ -181,6 +186,50 @@ namespace
 		return nullptr;
 	}
 
+	// [v2.48.0] 이름이 일치하는 SceneComponent를 Owner에서 찾습니다.
+	USceneComponent* FindSceneComponentByName(const AActor* OwnerActor, const FName ComponentName)
+	{
+		if (!OwnerActor || ComponentName.IsNone())
+		{
+			return nullptr;
+		}
+
+		// [v2.48.0] Owner에 등록된 SceneComponent 후보 목록입니다.
+		TArray<USceneComponent*> SceneComponents;
+		OwnerActor->GetComponents<USceneComponent>(SceneComponents);
+		for (USceneComponent* SceneComponent : SceneComponents)
+		{
+			if (SceneComponent && SceneComponent->GetFName() == ComponentName)
+			{
+				return SceneComponent;
+			}
+		}
+
+		return nullptr;
+	}
+
+	// [v2.47.0] 이름이 일치하는 SkeletalMeshComponent를 Owner에서 찾습니다.
+	USkeletalMeshComponent* FindSkeletalMeshComponentByName(const AActor* OwnerActor, const FName ComponentName)
+	{
+		if (!OwnerActor || ComponentName.IsNone())
+		{
+			return nullptr;
+		}
+
+		// [v2.47.0] Owner에 등록된 SkeletalMeshComponent 후보 목록입니다.
+		TArray<USkeletalMeshComponent*> SkeletalMeshComponents;
+		OwnerActor->GetComponents<USkeletalMeshComponent>(SkeletalMeshComponents);
+		for (USkeletalMeshComponent* SkeletalMeshComponent : SkeletalMeshComponents)
+		{
+			if (SkeletalMeshComponent && SkeletalMeshComponent->GetFName() == ComponentName)
+			{
+				return SkeletalMeshComponent;
+			}
+		}
+
+		return nullptr;
+	}
+
 	// Triggered/Completed ????????????곸죷 ????력??袁⑸즴????獄?獄????살씁??癲ル슪?ｇ몭???筌뤾퍓???
 	template<typename TriggeredHandlerType, typename CompletedHandlerType>
 	void BindTriggeredCompletedInputAction(
@@ -244,6 +293,7 @@ namespace
 			? RuntimeSummary.Left(ExistingWheelSyncSummaryIndex)
 			: RuntimeSummary;
 	}
+
 }
 
 ACFVehiclePawn::ACFVehiclePawn()
@@ -253,9 +303,14 @@ ACFVehiclePawn::ACFVehiclePawn()
 	WheelSyncComp = CreateDefaultSubobject<UCFWheelSyncComp>(TEXT("WheelSyncComp"));
 	VehicleCameraComp = CreateDefaultSubobject<UCFVehicleCameraComp>(TEXT("VehicleCameraComp"));
 	VehicleAimComp = CreateDefaultSubobject<UCFVehicleAimComp>(TEXT("VehicleAimComp"));
+	OwnerVisualRootComp = CreateDefaultSubobject<USceneComponent>(TEXT("OwnerVisualRoot"));
+	if (OwnerVisualRootComp)
+	{
+		OwnerVisualRootComp->SetupAttachment(GetMesh());
+	}
 
-	// [v2.41.0] C++ 기본 객체 기준으로 차량 네트워크 복제 하한을 먼저 적용합니다.
-	ApplyVehicleReplicationBaseline();
+	// [v2.61.0] C++ 기본 객체 기준으로 싱글플레이 차량 기본값을 먼저 적용합니다.
+	ApplyVehicleSinglePlayerBaseline();
 
 	bAutoInitializeOnBeginPlay = true;
 	bEnableWheelVisualTick = true;
@@ -263,6 +318,13 @@ ACFVehiclePawn::ACFVehiclePawn()
 	InputDeviceMode = ECFVehicleInputDeviceMode::Auto;
 	InputDeviceAnalogThreshold = 0.1f;
 	InputMappingPriority = 0;
+
+	// [v2.44.0] 키보드/축 조향도 보간 경로를 타도록 기본 활성화합니다.
+	bSmoothLegacySteeringInput = true;
+
+	// [v2.44.0] LegacyAxis 목표 조향 초기값입니다.
+	LegacyTargetSteeringInput = 0.0f;
+
 	bVehicleRuntimeReady = false;
 	LastVehicleRuntimeSummary = TEXT("Constructed");
 	bEnableDriveStateOnScreenDebug = false;
@@ -277,23 +339,65 @@ ACFVehiclePawn::ACFVehiclePawn()
 	bShowAimReticle = true;
 	AimReticleZOrder = 10;
 
-	// [v2.22.0] 차량 네트워크 진단 로그와 서버 샘플 복제 기본 사용 여부입니다.
-	bEnableVehicleNetDebug = true;
+	// [v2.48.2] Owner 표시 루트 안정화 기본 사용 여부입니다.
+	bEnableOwnerVisualStabilization = false;
 
-	// [v2.22.0] 서버 차량 상태 샘플링 기본 주기입니다.
-	VehicleNetDebugSampleIntervalSec = 0.25f;
+	// [v2.48.1] Owner 표시 루트 안정화 기본 보간 속도입니다.
+	OwnerVisualStabilizationInterpSpeed = 4.0f;
 
-	// [v2.22.0] 클라이언트 오차 로그 기본 주기입니다.
-	VehicleNetDebugClientLogIntervalSec = 0.5f;
+	// [v2.48.1] Owner 표시 루트 안정화 기본 최대 지연각입니다.
+	OwnerVisualStabilizationMaxLagDeg = 30.0f;
 
-	// [v2.22.0] 서버 샘플링 타이머 초기값입니다.
-	LastVehicleNetDebugServerSampleTimeSec = -1.0f;
+	// [v2.48.1] Owner 표시 루트 Yaw 안정화 기본 사용 여부입니다.
+	bOwnerVisualStabilizeYaw = false;
 
-	// [v2.22.0] 클라이언트 로그 타이머 초기값입니다.
-	LastVehicleNetDebugClientLogTimeSec = -1.0f;
+	// [v2.48.0] Owner 표시 루트 Pitch/Roll 안정화 기본 사용 여부입니다.
+	bOwnerVisualStabilizePitchRoll = false;
 
-	// [v2.24.0] 클라이언트 샘플 수신 로컬 시각 초기값입니다.
-	LastVehicleNetDebugSampleReceiveLocalTimeSec = -1.0f;
+	// [v2.48.0] Owner 표시 안정화 중 물리 루트 렌더링 숨김 기본 사용 여부입니다.
+	bHideOwnerPhysicsMeshWhenStabilized = false;
+
+	// [v2.53.0] Owner 차체 표시 안정화 기본 사용 여부입니다.
+	bEnableOwnerBodyVisualStabilization = false;
+
+	// [v2.53.1] Owner 차체 표시 안정화 기본 보간 속도입니다.
+	OwnerBodyVisualInterpSpeed = 15.0f;
+
+	// [v2.53.1] Owner 차체 표시 안정화 기본 최대 지연각입니다.
+	OwnerBodyVisualMaxLagDeg = 5.0f;
+
+	// [v2.53.2] Owner 차체 표시 Yaw 안정화 기본 사용 여부입니다.
+	bOwnerBodyVisualStabilizeYaw = false;
+
+	// [v2.53.0] Owner 차체 표시 Pitch/Roll 안정화 기본 사용 여부입니다.
+	bOwnerBodyVisualStabilizePitchRoll = false;
+
+	// [v2.48.0] Owner 표시 안정화 준비 상태 초기값입니다.
+	bOwnerVisualStabilizationReady = false;
+
+	// [v2.48.0] Owner 표시 안정화 표시 회전 초기값입니다.
+	SmoothedOwnerVisualRotation = FRotator::ZeroRotator;
+
+	// [v2.48.0] Owner 표시 안정화 회전 기준값 유효 여부 초기값입니다.
+	bHasSmoothedOwnerVisualRotation = false;
+
+	// [v2.48.0] Owner 표시 안정화로 물리 루트 렌더링을 숨겼는지 여부 초기값입니다.
+	bOwnerVisualPhysicsMeshHidden = false;
+
+	// [v2.53.0] Owner 차체 표시 안정화 준비 상태 초기값입니다.
+	bOwnerBodyVisualStabilizationReady = false;
+
+	// [v2.53.0] Owner 차체 표시 안정화 표시 회전 초기값입니다.
+	SmoothedOwnerBodyVisualRotation = FRotator::ZeroRotator;
+
+	// [v2.53.0] Owner 차체 표시 안정화 회전 기준값 유효 여부 초기값입니다.
+	bHasSmoothedOwnerBodyVisualRotation = false;
+
+	// [v2.53.0] Owner 차체 표시 안정화 전 SM_Body 기본 상대 회전 초기값입니다.
+	OriginalOwnerBodyVisualRelativeRotation = FRotator::ZeroRotator;
+
+	// [v2.53.0] Owner 차체 표시 안정화 전 SM_Body 상대 회전 저장 여부 초기값입니다.
+	bHasOriginalOwnerBodyVisualRelativeRotation = false;
 
 	// [v2.21.0] Dedicated Server 테스트에서 C++ 기본 Pawn이 로컬 Player0을 강제 점유하지 않도록 기본값을 비활성화합니다.
 	AutoPossessPlayer = EAutoReceiveInput::Disabled;
@@ -343,8 +447,8 @@ void ACFVehiclePawn::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// [v2.41.0] BP 저장 기본값이 낮게 남아 있어도 런타임 차량 복제 하한을 보장합니다.
-	ApplyVehicleReplicationBaseline();
+	// [v2.61.0] BP 저장값이 이전 네트워크 테스트 기준으로 남아 있어도 런타임 싱글플레이 기준선을 보장합니다.
+	ApplyVehicleSinglePlayerBaseline();
 
 	// [v2.21.0] 로컬 Viewport/입력 UI 처리를 실행할 수 있는 Pawn인지 여부입니다.
 	const bool bCanRunLocalPresentation = (GetNetMode() != NM_DedicatedServer) && IsLocallyControlled();
@@ -372,9 +476,7 @@ void ACFVehiclePawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void ACFVehiclePawn::Tick(float DeltaSeconds)
 {
-	// [v2.40.0] 실패한 차량 네트워크 실험 경로는 소스에서 제거하고 VehicleNetDebug 기준선만 유지합니다.
 	Super::Tick(DeltaSeconds);
-	UpdateVehicleNetDebug(DeltaSeconds);
 
 	if (!bVehicleRuntimeReady)
 	{
@@ -395,43 +497,19 @@ void ACFVehiclePawn::Tick(float DeltaSeconds)
 	{
 		UpdateVehicleWheelVisuals(DeltaSeconds);
 	}
+	UpdateOwnerVisualStabilization(DeltaSeconds);
+	UpdateOwnerBodyVisualStabilization(DeltaSeconds);
 	DisplayDriveStateOnScreenDebug();
 }
 
-// [v2.22.0] 차량 네트워크 진단 샘플 복제 대상을 등록합니다.
-void ACFVehiclePawn::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+// [v2.61.0] 차량 Pawn의 싱글플레이 기본 복제 상태를 적용합니다.
+void ACFVehiclePawn::ApplyVehicleSinglePlayerBaseline()
 {
-	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	// [v2.61.0] 싱글플레이 차량 Actor는 네트워크 복제 대상이 아닙니다.
+	bReplicates = false;
 
-	DOREPLIFETIME(ACFVehiclePawn, VehicleNetDebugServerSample);
-}
-
-// [v2.41.0] 차량 Pawn의 표준 복제 갱신 빈도와 우선순위 하한을 적용합니다.
-void ACFVehiclePawn::ApplyVehicleReplicationBaseline()
-{
-	// [v2.41.0] 차량 Pawn이 네트워크 복제 대상임을 C++ 기준선에서도 명시합니다.
-	bReplicates = true;
-
-	// [v2.41.0] 현재 차량 Pawn 복제 갱신 빈도입니다.
-	const float CurrentNetUpdateFrequency = GetNetUpdateFrequency();
-
-	// [v2.41.0] 고속 차량 위치 샘플이 장시간 밀리지 않도록 복제 갱신 빈도의 하한을 둡니다.
-	SetNetUpdateFrequency(FMath::Max(CurrentNetUpdateFrequency, 60.0f));
-
-	// [v2.41.0] 현재 차량 Pawn 최소 복제 갱신 빈도입니다.
-	const float CurrentMinNetUpdateFrequency = GetMinNetUpdateFrequency();
-
-	// [v2.41.0] 적응형 네트워크 갱신이 켜져 있어도 차량 복제 갱신이 너무 낮게 떨어지지 않도록 하한을 둡니다.
-	SetMinNetUpdateFrequency(FMath::Max(CurrentMinNetUpdateFrequency, 30.0f));
-
-	// [v2.41.0] 같은 맵 안의 차량 Actor 복제 우선순위를 기본 Actor보다 높게 유지합니다.
-	NetPriority = FMath::Max(NetPriority, 3.0f);
-
-	// [v2.41.0] 현재 차량 Pawn 네트워크 컬링 거리 제곱값입니다.
-	const float CurrentNetCullDistanceSquared = GetNetCullDistanceSquared();
-
-	// [v2.41.0] 테스트 맵/아레나 주행 중 거리 때문에 차량 복제가 빠지는 상황을 줄입니다.
-	SetNetCullDistanceSquared(FMath::Max(CurrentNetCullDistanceSquared, FMath::Square(200000.0f)));
+	// [v2.61.0] 싱글플레이 차량 이동은 로컬 물리와 입력만 사용하므로 Actor Movement Replication을 끕니다.
+	SetReplicateMovement(false);
 }
 
 void ACFVehiclePawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -534,13 +612,16 @@ bool ACFVehiclePawn::InitializeVehicleRuntime()
 	LastVehicleRuntimeSummary = TEXT("VehicleRuntime: InitializeStarted");
 	ApplyVehicleDataConfig();
 	const FString DataConfigSummary = LastVehicleRuntimeSummary;
+
+	// [v2.48.0] 로컬 Owner 표시 안정화 계층 준비 결과입니다.
+	const bool bOwnerVisualReady = PrepareOwnerVisualStabilization();
 	const bool bDriveReady = (VehicleDriveComp != nullptr) && VehicleDriveComp->CacheVehicleMovementComponent();
 	const bool bWheelSyncReady = PrepareWheelSync();
 
 	// [v2.15.0] AimComp가 Owner Pawn과 VehicleCameraComp를 안전하게 찾았는지 여부입니다.
 	const bool bAimReady = VehicleAimComp ? VehicleAimComp->InitializeAimRuntime() : false;
 	bVehicleRuntimeReady = bDriveReady && bWheelSyncReady;
-	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: Data=%s, Drive=%s, WheelSync=%s, Aim=%s, Ready=%s | %s"), VehicleData ? TEXT("Present") : TEXT("Missing"), bDriveReady ? TEXT("Ready") : TEXT("Missing"), bWheelSyncReady ? TEXT("Ready") : TEXT("Missing"), bAimReady ? TEXT("Ready") : TEXT("Missing"), bVehicleRuntimeReady ? TEXT("True") : TEXT("False"), *DataConfigSummary);
+	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: Data=%s, Drive=%s, WheelSync=%s, Aim=%s, OwnerVisual=%s, Ready=%s | %s"), VehicleData ? TEXT("Present") : TEXT("Missing"), bDriveReady ? TEXT("Ready") : TEXT("Missing"), bWheelSyncReady ? TEXT("Ready") : TEXT("Missing"), bAimReady ? TEXT("Ready") : TEXT("Missing"), bOwnerVisualReady ? TEXT("Ready") : TEXT("Skipped"), bVehicleRuntimeReady ? TEXT("True") : TEXT("False"), *DataConfigSummary);
 	return bVehicleRuntimeReady;
 }
 
@@ -796,7 +877,7 @@ void ACFVehiclePawn::ApplyAxisInputFromAction(const UInputAction* SourceInputAct
 	const float AxisValue = InputActionValue.Get<float>();
 	if (!ShouldAcceptActionInput(SourceInputAction, AxisValue))
 	{
-		if (CurrentInputOwnership == ECFVehicleInputOwnership::LegacyAxis)
+		if (CurrentInputOwnership != ECFVehicleInputOwnership::VehicleMove2D)
 		{
 			(this->*AxisInputSetter)(0.0f);
 			ReleaseInputOwnershipIfIdle();
@@ -1028,43 +1109,69 @@ void ACFVehiclePawn::ApplyVehicleWheelPhysicsConfig()
 		LastVehicleRuntimeSummary = TEXT("VehicleRuntime: VehicleData is null during ApplyVehicleWheelPhysicsConfig.");
 		return;
 	}
+
+	// [v2.56.1] 실제 Chaos Vehicle Movement 컴포넌트입니다.
 	UChaosWheeledVehicleMovementComponent* ResolvedVehicleMovementComponent = ResolveVehicleMovementComponent(TEXT("VehicleRuntime: DriveComp cache failed during ApplyVehicleWheelPhysicsConfig."), TEXT("VehicleRuntime: VehicleMovementComponent is null during ApplyVehicleWheelPhysicsConfig."));
 	if (!ResolvedVehicleMovementComponent)
 	{
 		return;
 	}
+
+	// [v2.56.1] VehicleData에서 읽은 차량 물리 설정입니다.
 	const FCFVehicleMovementConfig& VehicleMovementConfig = VehicleData->VehicleMovementConfig;
+
+	// [v2.56.1] VehicleData에서 읽은 차량 참조 설정입니다.
 	const FCFVehicleReferenceConfig& VehicleReferenceConfig = VehicleData->VehicleReferenceConfig;
+
+	// [v2.56.1] 런타임 휠 물리 덮어쓰기를 사용할지 여부입니다.
 	const bool bUseRuntimeWheelPhysicsOverrides = VehicleMovementConfig.bUseMovementOverrides;
+
+	// [v2.56.1] 휠 setup에 클래스/오프셋을 적용합니다.
 	const auto ConfigureWheelSetup = [&](FChaosWheelSetup& WheelSetup, const TSubclassOf<UChaosVehicleWheel> WheelClass, const bool bIsFrontWheel)
 	{
 		WheelSetup.WheelClass = WheelClass;
 		WheelSetup.AdditionalOffset = bIsFrontWheel ? VehicleMovementConfig.FrontWheelAdditionalOffset : VehicleMovementConfig.RearWheelAdditionalOffset;
-		if (!bUseRuntimeWheelPhysicsOverrides || !WheelClass)
+		if (!WheelClass)
 		{
 			return;
 		}
 
+		// [v2.56.1] 휠 클래스의 기본 오브젝트입니다.
 		UChaosVehicleWheel* WheelClassDefaultObject = WheelClass->GetDefaultObject<UChaosVehicleWheel>();
 		if (!WheelClassDefaultObject)
 		{
 			return;
 		}
 
+		if (!bUseRuntimeWheelPhysicsOverrides)
+		{
+			return;
+		}
+
+		// [v2.56.1] 클래스 기본값 임시 변경 전 복구용 스냅샷입니다.
 		const FCFWheelClassRuntimeSnapshot WheelClassRuntimeSnapshot = CaptureWheelClassRuntimeSnapshot(*WheelClassDefaultObject);
 		ApplyVehicleMovementWheelTuningToWheelClass(*WheelClassDefaultObject, VehicleMovementConfig, bIsFrontWheel);
 		WheelSetup.WheelClass = WheelClass;
 		RestoreWheelClassRuntimeSnapshot(*WheelClassDefaultObject, WheelClassRuntimeSnapshot);
 	};
 
-	for (FChaosWheelSetup& WheelSetup : ResolvedVehicleMovementComponent->WheelSetups)
+	for (int32 WheelIndex = 0; WheelIndex < ResolvedVehicleMovementComponent->WheelSetups.Num(); ++WheelIndex)
 	{
+		// [v2.56.1] 현재 순회 중인 Chaos 휠 setup입니다.
+		FChaosWheelSetup& WheelSetup = ResolvedVehicleMovementComponent->WheelSetups[WheelIndex];
+
+		// [v2.56.1] 휠 본 이름 문자열입니다.
 		const FString BoneNameString = WheelSetup.BoneName.ToString();
+
+		// [v2.56.1] 현재 휠을 앞바퀴로 볼지 여부입니다.
 		const bool bIsFrontWheel = BoneNameString.Contains(TEXT("F"));
-		ConfigureWheelSetup(
-			WheelSetup,
-			bIsFrontWheel ? VehicleReferenceConfig.FrontWheelClass : VehicleReferenceConfig.RearWheelClass,
-			bIsFrontWheel);
+
+		// [v2.56.1] 현재 휠에 적용할 휠 클래스입니다.
+		const TSubclassOf<UChaosVehicleWheel> WheelClass = bIsFrontWheel
+			? VehicleReferenceConfig.FrontWheelClass
+			: VehicleReferenceConfig.RearWheelClass;
+
+		ConfigureWheelSetup(WheelSetup, WheelClass, bIsFrontWheel);
 	}
 
 	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: WheelPhysicsOverrides=%s, FrontWheelClass=%s, RearWheelClass=%s, FrontOffset=%s, RearOffset=%s"),
@@ -1136,7 +1243,10 @@ void ACFVehiclePawn::SetVehicleSteeringInput(const float InSteeringValue)
 {
 	if (VehicleDriveComp)
 	{
-		VehicleDriveComp->ApplySteeringInput(InSteeringValue);
+		// [v2.55.0] 현재 속도 기준 조향 제한을 적용한 실제 Chaos Vehicle 입력값입니다.
+		const float SpeedLimitedSteeringValue = CalculateSpeedLimitedSteeringInput(InSteeringValue);
+
+		VehicleDriveComp->ApplySteeringInput(SpeedLimitedSteeringValue);
 	}
 }
 
@@ -1376,377 +1486,362 @@ ESlateVisibility ACFVehiclePawn::GetDebugWidgetVisibility() const
 	return ESlateVisibility::Collapsed;
 }
 
-// [v2.24.0] 서버가 복제한 차량 네트워크 진단 샘플을 수신했을 때 수신 시각을 저장하고 오차 로그를 시도합니다.
-void ACFVehiclePawn::OnRep_VehicleNetDebugServerSample()
+// [v2.48.0] 로컬 Owner 표시 안정화용 차체/휠 표시 계층을 준비합니다.
+bool ACFVehiclePawn::PrepareOwnerVisualStabilization()
 {
-	// [v2.24.0] 이번 서버 샘플을 받은 클라이언트 로컬 월드 시각입니다.
-	const UWorld* CurrentWorld = GetWorld();
-	LastVehicleNetDebugSampleReceiveLocalTimeSec = CurrentWorld ? CurrentWorld->GetTimeSeconds() : -1.0f;
+	bOwnerVisualStabilizationReady = false;
+	OwnerVisualStabilizedComponents.Reset();
 
-	LogVehicleNetDebugClientError();
-}
-
-// [v2.22.0] 서버와 클라이언트의 차량 네트워크 진단 흐름을 Tick에서 갱신합니다.
-void ACFVehiclePawn::UpdateVehicleNetDebug(float)
-{
-	if (!bEnableVehicleNetDebug)
+	if (!bEnableOwnerVisualStabilization)
 	{
-		return;
+		ResetOwnerVisualStabilization();
+		return false;
 	}
 
-	if (HasAuthority())
+	if ((GetNetMode() == NM_DedicatedServer) || !IsLocallyControlled())
 	{
-		UpdateVehicleNetDebugServerSample(0.0f);
-		return;
+		ResetOwnerVisualStabilization();
+		return false;
 	}
 
-	LogVehicleNetDebugClientError();
-}
-
-// [v2.22.0] 서버 권위 차량 상태 샘플을 주기적으로 갱신합니다.
-void ACFVehiclePawn::UpdateVehicleNetDebugServerSample(float)
-{
-	// [v2.22.0] 서버 샘플 시각 판정에 사용할 월드입니다.
-	const UWorld* CurrentWorld = GetWorld();
-	if (!CurrentWorld)
+	if (!OwnerVisualRootComp)
 	{
-		return;
+		return false;
 	}
 
-	// [v2.22.0] 현재 서버 월드 시각입니다.
-	const float CurrentWorldTimeSec = CurrentWorld->GetTimeSeconds();
-
-	// [v2.22.0] 안전하게 보정한 서버 샘플 주기입니다.
-	const float SafeSampleIntervalSec = FMath::Max(VehicleNetDebugSampleIntervalSec, 0.05f);
-	if (LastVehicleNetDebugServerSampleTimeSec >= 0.0f && (CurrentWorldTimeSec - LastVehicleNetDebugServerSampleTimeSec) < SafeSampleIntervalSec)
+	// [v2.48.0] Owner 표시 루트의 부모가 될 차량 물리 루트 SkeletalMeshComponent입니다.
+	USkeletalMeshComponent* VehicleMeshComponent = FindSkeletalMeshComponentByName(this, TEXT("VehicleMesh"));
+	if (!VehicleMeshComponent)
 	{
-		return;
+		VehicleMeshComponent = GetMesh();
 	}
 
-	LastVehicleNetDebugServerSampleTimeSec = CurrentWorldTimeSec;
-
-	// [v2.22.0] 새 서버 샘플에 부여할 증가형 순번입니다.
-	const int32 NewSampleSequenceId = VehicleNetDebugServerSample.SampleSequenceId + 1;
-	VehicleNetDebugServerSample = CaptureVehicleNetDebugSample(NewSampleSequenceId);
-
-	// [v2.41.0] 현재 차량 Pawn 복제 갱신 빈도입니다.
-	const float CurrentNetUpdateFrequency = GetNetUpdateFrequency();
-
-	// [v2.41.0] 현재 차량 Pawn 최소 복제 갱신 빈도입니다.
-	const float CurrentMinNetUpdateFrequency = GetMinNetUpdateFrequency();
-
-	// [v2.41.0] 현재 차량 Pawn 네트워크 컬링 거리 제곱값입니다.
-	const float CurrentNetCullDistanceSquared = GetNetCullDistanceSquared();
-
-	// [v2.41.0] 현재 NetCullDistanceSquared를 사람이 읽기 쉬운 거리(cm)로 변환한 값입니다.
-	const float NetCullDistanceCm = FMath::Sqrt(FMath::Max(CurrentNetCullDistanceSquared, 0.0f));
-
-	UE_LOG(
-		LogCFVehicleNetDebug,
-		Log,
-		TEXT("VehicleNetDebugServer: Pawn=%s NetMode=%s Role=%s RemoteRole=%s bReplicates=%s RepMove=%s NetUpdate=%.1f MinNetUpdate=%.1f NetPriority=%.1f NetCullDist=%.0fcm Seq=%d ServerTimeValid=%s ServerTime=%.3f ServerGrounded=%d/%d ServerAirborne=%s ServerLoc=%s ServerRotP=%.2f ServerRotY=%.2f ServerRotR=%.2f ServerVel=%s ServerAngVel=%s"),
-		*GetNameSafe(this),
-		*GetVehicleNetDebugNetModeName(),
-		*UEnum::GetValueAsString(GetLocalRole()),
-		*UEnum::GetValueAsString(GetRemoteRole()),
-		GetIsReplicated() ? TEXT("true") : TEXT("false"),
-		IsReplicatingMovement() ? TEXT("true") : TEXT("false"),
-		CurrentNetUpdateFrequency,
-		CurrentMinNetUpdateFrequency,
-		NetPriority,
-		NetCullDistanceCm,
-		VehicleNetDebugServerSample.SampleSequenceId,
-		VehicleNetDebugServerSample.bServerTimeValid ? TEXT("true") : TEXT("false"),
-		VehicleNetDebugServerSample.ServerWorldTimeSeconds,
-		VehicleNetDebugServerSample.ServerGroundedWheelCount,
-		VehicleNetDebugServerSample.ServerWheelCount,
-		VehicleNetDebugServerSample.bServerAirborne ? TEXT("true") : TEXT("false"),
-		*VehicleNetDebugServerSample.ServerLocation.ToCompactString(),
-		VehicleNetDebugServerSample.ServerRotation.Pitch,
-		VehicleNetDebugServerSample.ServerRotation.Yaw,
-		VehicleNetDebugServerSample.ServerRotation.Roll,
-		*VehicleNetDebugServerSample.ServerLinearVelocity.ToCompactString(),
-		*VehicleNetDebugServerSample.ServerAngularVelocityDeg.ToCompactString());
-}
-
-// [v2.22.0] 현재 차량 상태를 네트워크 진단 샘플 구조로 캡처합니다.
-FCFVehicleNetDebugSample ACFVehiclePawn::CaptureVehicleNetDebugSample(const int32 NewSampleSequenceId) const
-{
-	// [v2.22.0] 캡처 결과로 반환할 서버 차량 상태 샘플입니다.
-	FCFVehicleNetDebugSample NewDebugSample;
-
-	// [v2.23.0] GameState 기준 서버 시간이 유효한지 여부입니다.
-	bool bResolvedServerTimeValid = false;
-
-	NewDebugSample.bValid = true;
-	NewDebugSample.SampleSequenceId = NewSampleSequenceId;
-	NewDebugSample.ServerWorldTimeSeconds = ResolveVehicleNetDebugServerTimeSeconds(bResolvedServerTimeValid);
-	NewDebugSample.bServerTimeValid = bResolvedServerTimeValid;
-	NewDebugSample.ServerLocation = GetActorLocation();
-	NewDebugSample.ServerRotation = GetActorRotation();
-	NewDebugSample.ServerLinearVelocity = GetVelocity();
-	NewDebugSample.ServerAngularVelocityDeg = GetVehicleNetDebugAngularVelocityDeg();
-
-	// [v2.42.0] 서버 권위 기준 전체 바퀴 수입니다.
-	int32 ServerWheelCount = 0;
-
-	// [v2.42.0] 서버 권위 기준 접지 중인 바퀴 수입니다.
-	const int32 ServerGroundedWheelCount = GetVehicleNetDebugGroundedWheelCount(ServerWheelCount);
-
-	NewDebugSample.ServerGroundedWheelCount = ServerGroundedWheelCount;
-	NewDebugSample.ServerWheelCount = ServerWheelCount;
-	NewDebugSample.bServerAirborne = (ServerWheelCount > 0) && (ServerGroundedWheelCount == 0);
-	return NewDebugSample;
-}
-
-// [v2.22.0] 클라이언트에서 서버 샘플 대비 로컬 차량 상태 오차를 로그로 출력합니다.
-void ACFVehiclePawn::LogVehicleNetDebugClientError()
-{
-	if (!bEnableVehicleNetDebug || HasAuthority() || !VehicleNetDebugServerSample.bValid)
+	if (!VehicleMeshComponent)
 	{
-		return;
+		return false;
 	}
 
-	// [v2.22.0] 클라이언트 로그 주기 판정에 사용할 월드입니다.
-	const UWorld* CurrentWorld = GetWorld();
-	if (!CurrentWorld)
+	if (OwnerVisualRootComp->GetAttachParent() != VehicleMeshComponent)
 	{
-		return;
+		OwnerVisualRootComp->AttachToComponent(VehicleMeshComponent, FAttachmentTransformRules::KeepRelativeTransform);
 	}
 
-	// [v2.22.0] 현재 클라이언트 월드 시각입니다.
-	const float CurrentWorldTimeSec = CurrentWorld->GetTimeSeconds();
+	OwnerVisualRootComp->SetRelativeLocation(FVector::ZeroVector);
+	OwnerVisualRootComp->SetRelativeRotation(FRotator::ZeroRotator);
+	OwnerVisualRootComp->SetRelativeScale3D(FVector::OneVector);
 
-	// [v2.22.0] 안전하게 보정한 클라이언트 로그 최소 주기입니다.
-	const float SafeClientLogIntervalSec = FMath::Max(VehicleNetDebugClientLogIntervalSec, 0.05f);
-	if (LastVehicleNetDebugClientLogTimeSec >= 0.0f && (CurrentWorldTimeSec - LastVehicleNetDebugClientLogTimeSec) < SafeClientLogIntervalSec)
+	// [v2.48.0] Owner 표시 루트 아래로 묶을 차체/휠 표시 컴포넌트 이름 목록입니다.
+	const TArray<FName> OwnerVisualComponentNames =
 	{
-		return;
-	}
+		TEXT("SM_Body"),
+		TEXT("Wheel_Anchor_FL"),
+		TEXT("Wheel_Anchor_FR"),
+		TEXT("Wheel_Anchor_RL"),
+		TEXT("Wheel_Anchor_RR"),
+		TEXT("Wheel_Mesh_FL"),
+		TEXT("Wheel_Mesh_FR"),
+		TEXT("Wheel_Mesh_RL"),
+		TEXT("Wheel_Mesh_RR")
+	};
 
-	LastVehicleNetDebugClientLogTimeSec = CurrentWorldTimeSec;
-
-	// [v2.22.0] 클라이언트 현재 위치입니다.
-	const FVector LocalLocation = GetActorLocation();
-
-	// [v2.22.0] 클라이언트 현재 회전입니다.
-	const FRotator LocalRotation = GetActorRotation();
-
-	// [v2.22.0] 클라이언트 현재 선형 속도입니다.
-	const FVector LocalLinearVelocity = GetVelocity();
-
-	// [v2.23.0] 클라이언트 현재 각속도(deg/s)입니다.
-	const FVector LocalAngularVelocityDeg = GetVehicleNetDebugAngularVelocityDeg();
-
-	// [v2.22.0] 서버 샘플 대비 위치 오차(cm)입니다.
-	const float LocationErrorCm = FVector::Dist(LocalLocation, VehicleNetDebugServerSample.ServerLocation);
-
-	// [v2.22.0] 서버 샘플 대비 정규화된 회전 차이입니다.
-	const FRotator RotationDelta = (LocalRotation - VehicleNetDebugServerSample.ServerRotation).GetNormalized();
-
-	// [v2.42.0] 서버 샘플 대비 Pitch 회전 오차(deg)입니다.
-	const float RotationDeltaPitchDeg = RotationDelta.Pitch;
-
-	// [v2.42.0] 서버 샘플 대비 Yaw 회전 오차(deg)입니다.
-	const float RotationDeltaYawDeg = RotationDelta.Yaw;
-
-	// [v2.42.0] 서버 샘플 대비 Roll 회전 오차(deg)입니다.
-	const float RotationDeltaRollDeg = RotationDelta.Roll;
-
-	// [v2.22.0] 서버 샘플 대비 가장 큰 축 회전 오차(deg)입니다.
-	const float RotationErrorDeg = FMath::Max3(FMath::Abs(RotationDelta.Pitch), FMath::Abs(RotationDelta.Yaw), FMath::Abs(RotationDelta.Roll));
-
-	// [v2.22.0] 서버 샘플 대비 선형 속도 벡터 오차(cm/s)입니다.
-	const float LinearVelocityErrorCmPerSec = FVector::Dist(LocalLinearVelocity, VehicleNetDebugServerSample.ServerLinearVelocity);
-
-	// [v2.22.0] 서버 샘플 대비 속력 오차(km/h)입니다.
-	const float SpeedErrorKmh = FMath::Abs(LocalLinearVelocity.Size() - VehicleNetDebugServerSample.ServerLinearVelocity.Size()) * 0.036f;
-
-	// [v2.23.0] 서버 샘플 대비 각속도 벡터 오차(deg/s)입니다.
-	const float AngularVelocityErrorDegPerSec = FVector::Dist(LocalAngularVelocityDeg, VehicleNetDebugServerSample.ServerAngularVelocityDeg);
-
-	// [v2.42.0] 서버 샘플 대비 각속도 벡터 차이(deg/s)입니다.
-	const FVector AngularVelocityDeltaDegPerSec = LocalAngularVelocityDeg - VehicleNetDebugServerSample.ServerAngularVelocityDeg;
-
-	// [v2.23.0] 현재 클라이언트에서 읽은 GameState 기준 서버 시간의 유효 여부입니다.
-	bool bCurrentServerTimeValid = false;
-
-	// [v2.23.0] 현재 클라이언트에서 읽은 GameState 기준 서버 시간입니다.
-	const float CurrentServerTimeSeconds = ResolveVehicleNetDebugServerTimeSeconds(bCurrentServerTimeValid);
-
-	// [v2.24.0] 서버 샘플 시각과 현재 서버 시각 사이의 차이입니다.
-	const float ServerTimeDeltaSec = (VehicleNetDebugServerSample.bServerTimeValid && bCurrentServerTimeValid)
-		? CurrentServerTimeSeconds - VehicleNetDebugServerSample.ServerWorldTimeSeconds
-		: -1.0f;
-
-	// [v2.24.0] 서버 샘플을 클라이언트가 수신한 뒤 로컬 기준으로 흐른 시간입니다.
-	const float ReceivedAgeSec = LastVehicleNetDebugSampleReceiveLocalTimeSec >= 0.0f
-		? CurrentWorldTimeSec - LastVehicleNetDebugSampleReceiveLocalTimeSec
-		: -1.0f;
-
-	// [v2.24.0] 호환성을 위해 유지하는 기존 SampleAge 값입니다.
-	const float SampleAgeSec = ServerTimeDeltaSec;
-
-	// [v2.23.0] 현재 Pawn의 소유 컨트롤러입니다.
-	const AController* OwnerController = GetController();
-
-	// [v2.41.0] 현재 차량 Pawn 복제 갱신 빈도입니다.
-	const float CurrentNetUpdateFrequency = GetNetUpdateFrequency();
-
-	// [v2.41.0] 현재 차량 Pawn 최소 복제 갱신 빈도입니다.
-	const float CurrentMinNetUpdateFrequency = GetMinNetUpdateFrequency();
-
-	// [v2.41.0] 현재 차량 Pawn 네트워크 컬링 거리 제곱값입니다.
-	const float CurrentNetCullDistanceSquared = GetNetCullDistanceSquared();
-
-	// [v2.41.0] 현재 NetCullDistanceSquared를 사람이 읽기 쉬운 거리(cm)로 변환한 값입니다.
-	const float NetCullDistanceCm = FMath::Sqrt(FMath::Max(CurrentNetCullDistanceSquared, 0.0f));
-
-	// [v2.42.0] 클라이언트 로컬 기준 전체 바퀴 수입니다.
-	int32 LocalWheelCount = 0;
-
-	// [v2.42.0] 클라이언트 로컬 기준 접지 중인 바퀴 수입니다.
-	const int32 LocalGroundedWheelCount = GetVehicleNetDebugGroundedWheelCount(LocalWheelCount);
-
-	// [v2.42.0] 클라이언트 로컬 기준 차량 공중 상태입니다.
-	const bool bLocalAirborne = (LocalWheelCount > 0) && (LocalGroundedWheelCount == 0);
-
-	UE_LOG(
-		LogCFVehicleNetDebug,
-		Log,
-		TEXT("VehicleNetDebug: Pawn=%s NetMode=%s Role=%s RemoteRole=%s HasAuthority=%s IsLocal=%s bReplicates=%s RepMove=%s NetUpdate=%.1f MinNetUpdate=%.1f NetPriority=%.1f NetCullDist=%.0fcm OwnerController=%s RuntimeReady=%s Seq=%d ServerTimeValid=%s CurrentServerTimeValid=%s SampleAge=%.3fs ServerTimeDelta=%.3fs ReceivedAge=%.3fs LocErr=%.2fcm RotErr=%.2fdeg RotDeltaP=%.2fdeg RotDeltaY=%.2fdeg RotDeltaR=%.2fdeg VelErr=%.2fcm/s SpeedErr=%.2fkm/h AngVelErr=%.2fdeg/s ServerGrounded=%d/%d ServerAirborne=%s LocalGrounded=%d/%d LocalAirborne=%s ServerLoc=%s LocalLoc=%s ServerRotP=%.2f ServerRotY=%.2f ServerRotR=%.2f LocalRotP=%.2f LocalRotY=%.2f LocalRotR=%.2f ServerVel=%s LocalVel=%s ServerAngVel=%s LocalAngVel=%s AngVelDelta=%s"),
-		*GetNameSafe(this),
-		*GetVehicleNetDebugNetModeName(),
-		*UEnum::GetValueAsString(GetLocalRole()),
-		*UEnum::GetValueAsString(GetRemoteRole()),
-		HasAuthority() ? TEXT("true") : TEXT("false"),
-		IsLocallyControlled() ? TEXT("true") : TEXT("false"),
-		GetIsReplicated() ? TEXT("true") : TEXT("false"),
-		IsReplicatingMovement() ? TEXT("true") : TEXT("false"),
-		CurrentNetUpdateFrequency,
-		CurrentMinNetUpdateFrequency,
-		NetPriority,
-		NetCullDistanceCm,
-		*GetNameSafe(OwnerController),
-		bVehicleRuntimeReady ? TEXT("true") : TEXT("false"),
-		VehicleNetDebugServerSample.SampleSequenceId,
-		VehicleNetDebugServerSample.bServerTimeValid ? TEXT("true") : TEXT("false"),
-		bCurrentServerTimeValid ? TEXT("true") : TEXT("false"),
-		SampleAgeSec,
-		ServerTimeDeltaSec,
-		ReceivedAgeSec,
-		LocationErrorCm,
-		RotationErrorDeg,
-		RotationDeltaPitchDeg,
-		RotationDeltaYawDeg,
-		RotationDeltaRollDeg,
-		LinearVelocityErrorCmPerSec,
-		SpeedErrorKmh,
-		AngularVelocityErrorDegPerSec,
-		VehicleNetDebugServerSample.ServerGroundedWheelCount,
-		VehicleNetDebugServerSample.ServerWheelCount,
-		VehicleNetDebugServerSample.bServerAirborne ? TEXT("true") : TEXT("false"),
-		LocalGroundedWheelCount,
-		LocalWheelCount,
-		bLocalAirborne ? TEXT("true") : TEXT("false"),
-		*VehicleNetDebugServerSample.ServerLocation.ToCompactString(),
-		*LocalLocation.ToCompactString(),
-		VehicleNetDebugServerSample.ServerRotation.Pitch,
-		VehicleNetDebugServerSample.ServerRotation.Yaw,
-		VehicleNetDebugServerSample.ServerRotation.Roll,
-		LocalRotation.Pitch,
-		LocalRotation.Yaw,
-		LocalRotation.Roll,
-		*VehicleNetDebugServerSample.ServerLinearVelocity.ToCompactString(),
-		*LocalLinearVelocity.ToCompactString(),
-		*VehicleNetDebugServerSample.ServerAngularVelocityDeg.ToCompactString(),
-		*LocalAngularVelocityDeg.ToCompactString(),
-		*AngularVelocityDeltaDegPerSec.ToCompactString());
-}
-
-// [v2.23.0] GameState 기준 서버 시간을 읽고 유효 여부를 함께 반환합니다.
-float ACFVehiclePawn::ResolveVehicleNetDebugServerTimeSeconds(bool& bOutServerTimeValid) const
-{
-	bOutServerTimeValid = false;
-
-	// [v2.23.0] 서버 시간 기준을 제공할 현재 월드입니다.
-	const UWorld* CurrentWorld = GetWorld();
-	if (!CurrentWorld)
+	// [v2.48.0] Owner 표시 루트 아래로 이동한 컴포넌트 개수입니다.
+	int32 AttachedVisualComponentCount = 0;
+	for (const FName& OwnerVisualComponentName : OwnerVisualComponentNames)
 	{
-		return 0.0f;
-	}
-
-	// [v2.23.0] 서버/클라이언트 공통 시간 기준으로 사용할 GameState입니다.
-	const AGameStateBase* CurrentGameState = CurrentWorld->GetGameState();
-	if (!CurrentGameState)
-	{
-		return CurrentWorld->GetTimeSeconds();
-	}
-
-	bOutServerTimeValid = true;
-	return CurrentGameState->GetServerWorldTimeSeconds();
-}
-
-// [v2.23.0] 차량 루트 물리 컴포넌트의 현재 각속도(deg/s)를 반환합니다.
-FVector ACFVehiclePawn::GetVehicleNetDebugAngularVelocityDeg() const
-{
-	// [v2.23.0] 각속도를 읽을 차량 루트 물리 컴포넌트입니다.
-	const UPrimitiveComponent* RootPrimitiveComponent = Cast<UPrimitiveComponent>(GetRootComponent());
-	if (!RootPrimitiveComponent)
-	{
-		return FVector::ZeroVector;
-	}
-
-	return RootPrimitiveComponent->GetPhysicsAngularVelocityInDegrees();
-}
-
-// [v2.42.0] Chaos Vehicle Movement의 현재 접지 바퀴 수와 전체 바퀴 수를 반환합니다.
-int32 ACFVehiclePawn::GetVehicleNetDebugGroundedWheelCount(int32& OutWheelCount) const
-{
-	OutWheelCount = 0;
-
-	// [v2.42.0] 접지 상태를 읽을 Chaos Vehicle Movement 컴포넌트입니다.
-	const UChaosWheeledVehicleMovementComponent* WheeledVehicleMovementComponent = FindComponentByClass<UChaosWheeledVehicleMovementComponent>();
-	if (!WheeledVehicleMovementComponent)
-	{
-		return -1;
-	}
-
-	OutWheelCount = WheeledVehicleMovementComponent->GetNumWheels();
-	if (OutWheelCount <= 0)
-	{
-		return -1;
-	}
-
-	// [v2.42.0] 현재 지면에 닿아 있는 바퀴 수입니다.
-	int32 GroundedWheelCount = 0;
-	for (int32 WheelIndex = 0; WheelIndex < OutWheelCount; ++WheelIndex)
-	{
-		if (WheeledVehicleMovementComponent->GetWheelState(WheelIndex).bInContact)
+		// [v2.48.0] 이름으로 찾은 표시 대상 SceneComponent입니다.
+		USceneComponent* VisualComponent = FindSceneComponentByName(this, OwnerVisualComponentName);
+		if (AttachOwnerVisualComponent(VisualComponent))
 		{
-			++GroundedWheelCount;
+			++AttachedVisualComponentCount;
 		}
 	}
 
-	return GroundedWheelCount;
+	if (VehicleMeshComponent && bHideOwnerPhysicsMeshWhenStabilized)
+	{
+		VehicleMeshComponent->SetVisibility(false, false);
+		VehicleMeshComponent->SetHiddenInGame(true, false);
+		bOwnerVisualPhysicsMeshHidden = true;
+	}
+	else if (VehicleMeshComponent && bOwnerVisualPhysicsMeshHidden)
+	{
+		VehicleMeshComponent->SetVisibility(true, false);
+		VehicleMeshComponent->SetHiddenInGame(false, false);
+		bOwnerVisualPhysicsMeshHidden = false;
+	}
+
+	SmoothedOwnerVisualRotation = GetActorRotation();
+	bHasSmoothedOwnerVisualRotation = true;
+	bOwnerVisualStabilizationReady = AttachedVisualComponentCount > 0;
+
+	return bOwnerVisualStabilizationReady;
 }
 
-// [v2.23.0] 현재 NetMode를 로그용 문자열로 반환합니다.
-FString ACFVehiclePawn::GetVehicleNetDebugNetModeName() const
+// [v2.48.0] 지정한 표시 컴포넌트를 Owner 표시 루트 아래로 안전하게 이동합니다.
+bool ACFVehiclePawn::AttachOwnerVisualComponent(USceneComponent* VisualComponent)
 {
-	switch (GetNetMode())
+	if (!VisualComponent || !OwnerVisualRootComp)
 	{
-	case NM_Standalone:
-		return TEXT("Standalone");
-	case NM_DedicatedServer:
-		return TEXT("DedicatedServer");
-	case NM_ListenServer:
-		return TEXT("ListenServer");
-	case NM_Client:
-		return TEXT("Client");
-	default:
-		return TEXT("Unknown");
+		return false;
 	}
+
+	if ((VisualComponent == OwnerVisualRootComp) || (VisualComponent == GetRootComponent()) || (VisualComponent == GetMesh()))
+	{
+		return false;
+	}
+
+	if (!VisualComponent->IsRegistered())
+	{
+		return false;
+	}
+
+	if (!VisualComponent->IsAttachedTo(OwnerVisualRootComp))
+	{
+		VisualComponent->AttachToComponent(OwnerVisualRootComp, FAttachmentTransformRules::KeepWorldTransform);
+	}
+
+	OwnerVisualStabilizedComponents.AddUnique(VisualComponent);
+	return true;
+}
+
+// [v2.48.0] 로컬 Owner 표시 루트 회전을 현재 Actor 회전에 부드럽게 맞춥니다.
+void ACFVehiclePawn::UpdateOwnerVisualStabilization(const float DeltaSeconds)
+{
+	if (!bEnableOwnerVisualStabilization)
+	{
+		ResetOwnerVisualStabilization();
+		return;
+	}
+
+	if ((GetNetMode() == NM_DedicatedServer) || !IsLocallyControlled())
+	{
+		ResetOwnerVisualStabilization();
+		return;
+	}
+
+	if (!OwnerVisualRootComp)
+	{
+		return;
+	}
+
+	if (!bOwnerVisualStabilizationReady)
+	{
+		// [v2.48.0] 이번 Tick에서 Owner 표시 안정화 계층 준비에 성공했는지 여부입니다.
+		const bool bPreparedOwnerVisualThisFrame = PrepareOwnerVisualStabilization();
+		if (bPreparedOwnerVisualThisFrame && WheelSyncComp && bVehicleRuntimeReady)
+		{
+			PrepareWheelSync();
+		}
+	}
+
+	if (!bOwnerVisualStabilizationReady)
+	{
+		return;
+	}
+
+	// [v2.48.0] 현재 물리 Actor 회전입니다.
+	const FRotator CurrentActorRotation = GetActorRotation();
+
+	if (!bHasSmoothedOwnerVisualRotation)
+	{
+		SmoothedOwnerVisualRotation = CurrentActorRotation;
+		bHasSmoothedOwnerVisualRotation = true;
+	}
+
+	// [v2.48.0] 음수 Tick 간격을 방지한 표시 안정화 DeltaSeconds입니다.
+	const float SafeDeltaSeconds = FMath::Max(DeltaSeconds, 0.0f);
+
+	// [v2.48.0] 표시 루트 회전 보간에 사용할 안전한 보간 속도입니다.
+	const float SafeInterpSpeed = FMath::Max(OwnerVisualStabilizationInterpSpeed, 0.1f);
+
+	// [v2.48.0] 현재 보간 속도로 Actor 회전을 따라간 후보 표시 회전입니다.
+	const FRotator InterpolatedVisualRotation = FMath::RInterpTo(SmoothedOwnerVisualRotation, CurrentActorRotation, SafeDeltaSeconds, SafeInterpSpeed);
+
+	// [v2.48.0] 축별 사용 여부를 반영한 표시 회전 후보입니다.
+	FRotator DesiredVisualRotation = CurrentActorRotation;
+	if (bOwnerVisualStabilizePitchRoll)
+	{
+		DesiredVisualRotation.Pitch = InterpolatedVisualRotation.Pitch;
+		DesiredVisualRotation.Roll = InterpolatedVisualRotation.Roll;
+	}
+	if (bOwnerVisualStabilizeYaw)
+	{
+		DesiredVisualRotation.Yaw = InterpolatedVisualRotation.Yaw;
+	}
+
+	SmoothedOwnerVisualRotation = ClampOwnerVisualStabilizedRotation(CurrentActorRotation, DesiredVisualRotation);
+	OwnerVisualRootComp->SetWorldRotation(SmoothedOwnerVisualRotation, false, nullptr, ETeleportType::TeleportPhysics);
+}
+
+// [v2.48.0] Owner 표시 안정화 상태를 기본 회전으로 되돌립니다.
+void ACFVehiclePawn::ResetOwnerVisualStabilization()
+{
+	if (OwnerVisualRootComp)
+	{
+		OwnerVisualRootComp->SetRelativeRotation(FRotator::ZeroRotator);
+	}
+
+	SmoothedOwnerVisualRotation = GetActorRotation();
+	bHasSmoothedOwnerVisualRotation = false;
+	bOwnerVisualStabilizationReady = false;
+	OwnerVisualStabilizedComponents.Reset();
+
+	// [v2.48.0] 물리 루트 렌더링 복구 대상 SkeletalMeshComponent입니다.
+	USkeletalMeshComponent* VehicleMeshComponent = FindSkeletalMeshComponentByName(this, TEXT("VehicleMesh"));
+	if (!VehicleMeshComponent)
+	{
+		VehicleMeshComponent = GetMesh();
+	}
+
+	if (VehicleMeshComponent && bOwnerVisualPhysicsMeshHidden)
+	{
+		VehicleMeshComponent->SetVisibility(true, false);
+		VehicleMeshComponent->SetHiddenInGame(false, false);
+		bOwnerVisualPhysicsMeshHidden = false;
+	}
+}
+
+// [v2.48.0] Actor 회전과 표시 회전 사이의 지연각을 설정 한도 안으로 제한합니다.
+FRotator ACFVehiclePawn::ClampOwnerVisualStabilizedRotation(const FRotator& CurrentActorRotation, const FRotator& DesiredVisualRotation) const
+{
+	// [v2.48.0] 표시 루트가 Actor 회전에서 벗어날 수 있는 최대 축별 각도입니다.
+	const float SafeMaxLagDeg = FMath::Max(OwnerVisualStabilizationMaxLagDeg, 0.0f);
+
+	// [v2.48.0] Actor Pitch에서 표시 Pitch까지의 지연각입니다.
+	const float PitchLagDeg = FMath::FindDeltaAngleDegrees(CurrentActorRotation.Pitch, DesiredVisualRotation.Pitch);
+
+	// [v2.48.0] Actor Yaw에서 표시 Yaw까지의 지연각입니다.
+	const float YawLagDeg = FMath::FindDeltaAngleDegrees(CurrentActorRotation.Yaw, DesiredVisualRotation.Yaw);
+
+	// [v2.48.0] Actor Roll에서 표시 Roll까지의 지연각입니다.
+	const float RollLagDeg = FMath::FindDeltaAngleDegrees(CurrentActorRotation.Roll, DesiredVisualRotation.Roll);
+
+	// [v2.48.0] 최대 지연각으로 제한한 표시 Pitch입니다.
+	const float ClampedPitchDeg = CurrentActorRotation.Pitch + FMath::Clamp(PitchLagDeg, -SafeMaxLagDeg, SafeMaxLagDeg);
+
+	// [v2.48.0] 최대 지연각으로 제한한 표시 Yaw입니다.
+	const float ClampedYawDeg = CurrentActorRotation.Yaw + FMath::Clamp(YawLagDeg, -SafeMaxLagDeg, SafeMaxLagDeg);
+
+	// [v2.48.0] 최대 지연각으로 제한한 표시 Roll입니다.
+	const float ClampedRollDeg = CurrentActorRotation.Roll + FMath::Clamp(RollLagDeg, -SafeMaxLagDeg, SafeMaxLagDeg);
+
+	// [v2.48.0] 정규화 전 최종 표시 회전입니다.
+	FRotator ClampedVisualRotation(ClampedPitchDeg, ClampedYawDeg, ClampedRollDeg);
+	ClampedVisualRotation.Normalize();
+
+	return ClampedVisualRotation;
+}
+
+// [v2.53.0] 로컬 조작 차량의 SM_Body 표시 회전을 부드럽게 안정화합니다.
+void ACFVehiclePawn::UpdateOwnerBodyVisualStabilization(const float DeltaSeconds)
+{
+	if (!bEnableOwnerBodyVisualStabilization || bEnableOwnerVisualStabilization)
+	{
+		ResetOwnerBodyVisualStabilization();
+		return;
+	}
+
+	if ((GetNetMode() == NM_DedicatedServer) || !IsLocallyControlled())
+	{
+		ResetOwnerBodyVisualStabilization();
+		return;
+	}
+
+	// [v2.53.0] 안정화 대상 차체 표시 컴포넌트입니다.
+	UStaticMeshComponent* BodyMeshComponent = FindStaticMeshComponentByName(this, TEXT("SM_Body"));
+	if (!BodyMeshComponent || !BodyMeshComponent->IsRegistered() || BodyMeshComponent->IsSimulatingPhysics())
+	{
+		bOwnerBodyVisualStabilizationReady = false;
+		return;
+	}
+
+	if (!bHasOriginalOwnerBodyVisualRelativeRotation)
+	{
+		// [v2.53.0] 안정화 전 차체 표시 기본 상대 회전입니다.
+		const FRotator CurrentBodyRelativeRotation = BodyMeshComponent->GetRelativeRotation();
+
+		OriginalOwnerBodyVisualRelativeRotation = CurrentBodyRelativeRotation;
+		bHasOriginalOwnerBodyVisualRelativeRotation = true;
+	}
+
+	// [v2.53.0] 현재 물리 Actor 회전입니다.
+	const FRotator CurrentActorRotation = GetActorRotation();
+
+	if (!bHasSmoothedOwnerBodyVisualRotation)
+	{
+		SmoothedOwnerBodyVisualRotation = CurrentActorRotation;
+		bHasSmoothedOwnerBodyVisualRotation = true;
+	}
+
+	// [v2.53.0] 음수 Tick 간격을 방지한 차체 표시 안정화 DeltaSeconds입니다.
+	const float SafeDeltaSeconds = FMath::Max(DeltaSeconds, 0.0f);
+
+	// [v2.53.0] 차체 표시 회전 보간에 사용할 안전한 보간 속도입니다.
+	const float SafeInterpSpeed = FMath::Max(OwnerBodyVisualInterpSpeed, 0.1f);
+
+	// [v2.53.0] 현재 보간 속도로 Actor 회전을 따라간 후보 차체 표시 회전입니다.
+	const FRotator InterpolatedBodyRotation = FMath::RInterpTo(SmoothedOwnerBodyVisualRotation, CurrentActorRotation, SafeDeltaSeconds, SafeInterpSpeed);
+
+	// [v2.53.0] 축별 사용 여부를 반영한 차체 표시 회전 후보입니다.
+	FRotator DesiredBodyRotation = CurrentActorRotation;
+	if (bOwnerBodyVisualStabilizePitchRoll)
+	{
+		DesiredBodyRotation.Pitch = InterpolatedBodyRotation.Pitch;
+		DesiredBodyRotation.Roll = InterpolatedBodyRotation.Roll;
+	}
+	if (bOwnerBodyVisualStabilizeYaw)
+	{
+		DesiredBodyRotation.Yaw = InterpolatedBodyRotation.Yaw;
+	}
+
+	SmoothedOwnerBodyVisualRotation = ClampOwnerBodyVisualRotation(CurrentActorRotation, DesiredBodyRotation);
+	BodyMeshComponent->SetWorldRotation(SmoothedOwnerBodyVisualRotation, false, nullptr, ETeleportType::TeleportPhysics);
+	bOwnerBodyVisualStabilizationReady = true;
+}
+
+// [v2.53.0] 로컬 조작 차량의 SM_Body 표시 안정화 상태를 기본 상태로 되돌립니다.
+void ACFVehiclePawn::ResetOwnerBodyVisualStabilization()
+{
+	// [v2.53.0] 리셋 대상 차체 표시 컴포넌트입니다.
+	UStaticMeshComponent* BodyMeshComponent = FindStaticMeshComponentByName(this, TEXT("SM_Body"));
+	if (BodyMeshComponent && BodyMeshComponent->IsRegistered() && bHasOriginalOwnerBodyVisualRelativeRotation)
+	{
+		BodyMeshComponent->SetRelativeRotation(OriginalOwnerBodyVisualRelativeRotation);
+	}
+
+	SmoothedOwnerBodyVisualRotation = GetActorRotation();
+	bHasSmoothedOwnerBodyVisualRotation = false;
+	bOwnerBodyVisualStabilizationReady = false;
+}
+
+// [v2.53.0] Actor 회전과 SM_Body 표시 회전 사이의 지연각을 설정 한도 안으로 제한합니다.
+FRotator ACFVehiclePawn::ClampOwnerBodyVisualRotation(const FRotator& CurrentActorRotation, const FRotator& DesiredVisualRotation) const
+{
+	// [v2.53.0] 차체 표시가 Actor 회전에서 벗어날 수 있는 최대 축별 각도입니다.
+	const float SafeMaxLagDeg = FMath::Max(OwnerBodyVisualMaxLagDeg, 0.0f);
+
+	// [v2.53.0] Actor Pitch에서 차체 표시 Pitch까지의 지연각입니다.
+	const float PitchLagDeg = FMath::FindDeltaAngleDegrees(CurrentActorRotation.Pitch, DesiredVisualRotation.Pitch);
+
+	// [v2.53.0] Actor Yaw에서 차체 표시 Yaw까지의 지연각입니다.
+	const float YawLagDeg = FMath::FindDeltaAngleDegrees(CurrentActorRotation.Yaw, DesiredVisualRotation.Yaw);
+
+	// [v2.53.0] Actor Roll에서 차체 표시 Roll까지의 지연각입니다.
+	const float RollLagDeg = FMath::FindDeltaAngleDegrees(CurrentActorRotation.Roll, DesiredVisualRotation.Roll);
+
+	// [v2.53.0] 최대 지연각으로 제한한 차체 표시 Pitch입니다.
+	const float ClampedPitchDeg = CurrentActorRotation.Pitch + FMath::Clamp(PitchLagDeg, -SafeMaxLagDeg, SafeMaxLagDeg);
+
+	// [v2.53.0] 최대 지연각으로 제한한 차체 표시 Yaw입니다.
+	const float ClampedYawDeg = CurrentActorRotation.Yaw + FMath::Clamp(YawLagDeg, -SafeMaxLagDeg, SafeMaxLagDeg);
+
+	// [v2.53.0] 최대 지연각으로 제한한 차체 표시 Roll입니다.
+	const float ClampedRollDeg = CurrentActorRotation.Roll + FMath::Clamp(RollLagDeg, -SafeMaxLagDeg, SafeMaxLagDeg);
+
+	// [v2.53.0] 정규화 전 최종 차체 표시 회전입니다.
+	FRotator ClampedBodyRotation(ClampedPitchDeg, ClampedYawDeg, ClampedRollDeg);
+	ClampedBodyRotation.Normalize();
+
+	return ClampedBodyRotation;
 }
 
 void ACFVehiclePawn::DisplayDriveStateOnScreenDebug() const
@@ -1917,27 +2012,76 @@ float ACFVehiclePawn::CalculateSteeringReturnRateKmh(const float SpeedKmh) const
 	return FMath::Lerp(SteeringReturnMinRate, SteeringReturnMaxRate, SpeedAlpha);
 }
 
+// [v2.55.0] 속도에 따라 실제 Chaos Vehicle로 전달할 조향 입력을 제한합니다.
+float ACFVehiclePawn::CalculateSpeedLimitedSteeringInput(const float RawSteeringInput) const
+{
+	// [v2.55.0] 입력 경로에서 들어온 원본 조향값을 Chaos 입력 허용 범위로 고정한 값입니다.
+	const float ClampedRawSteeringInput = FMath::Clamp(RawSteeringInput, -1.0f, 1.0f);
 
+	if (!bEnableSpeedSteeringLimit || FMath::Abs(ClampedRawSteeringInput) <= KINDA_SMALL_NUMBER)
+	{
+		return ClampedRawSteeringInput;
+	}
+
+	// [v2.55.0] 현재 차량 속도를 얻기 위한 Drive 상태 스냅샷입니다.
+	const FCFVehicleDriveStateSnapshot DriveStateSnapshot = GetDriveStateSnapshot();
+
+	// [v2.55.0] 전진과 후진 모두 같은 제한을 적용하기 위한 절대 속도(km/h)입니다.
+	const float AbsoluteSpeedKmh = FMath::Abs(DriveStateSnapshot.CurrentSpeedKmh);
+
+	// [v2.55.0] 제한 시작 속도를 음수가 되지 않도록 보정한 값입니다.
+	const float LimitStartSpeedKmh = FMath::Max(SpeedSteeringLimitStartSpeedKmh, 0.0f);
+
+	// [v2.55.0] 제한 최대 속도가 시작 속도보다 낮게 설정되지 않도록 보정한 값입니다.
+	const float LimitFullSpeedKmh = FMath::Max(SpeedSteeringLimitFullSpeedKmh, LimitStartSpeedKmh + 1.0f);
+
+	if (AbsoluteSpeedKmh <= LimitStartSpeedKmh)
+	{
+		return ClampedRawSteeringInput;
+	}
+
+	// [v2.55.0] 현재 속도가 제한 시작과 최대 제한 사이에서 어느 정도 진행됐는지 나타내는 비율입니다.
+	const float SpeedLimitAlpha = FMath::Clamp((AbsoluteSpeedKmh - LimitStartSpeedKmh) / (LimitFullSpeedKmh - LimitStartSpeedKmh), 0.0f, 1.0f);
+
+	// [v2.55.0] 고속 구간에서 허용할 최소 조향 배율입니다.
+	const float MinimumSteeringScale = FMath::Clamp(SpeedSteeringLimitMinScale, 0.05f, 1.0f);
+
+	// [v2.55.0] 현재 속도 기준으로 원본 조향 입력에 곱할 최종 배율입니다.
+	const float SteeringScale = FMath::Lerp(1.0f, MinimumSteeringScale, SpeedLimitAlpha);
+
+	return FMath::Clamp(ClampedRawSteeringInput * SteeringScale, -1.0f, 1.0f);
+}
+
+// [v2.44.0] 현재 입력 경로의 목표 조향값을 제한 속도로 추적해 DriveComp에 적용합니다.
 void ACFVehiclePawn::UpdateVehicleMoveSteeringInput(const float DeltaSeconds)
 {
-	if (CurrentInputOwnership == ECFVehicleInputOwnership::LegacyAxis)
+	// [v2.44.0] 현재 LegacyAxis 조향을 보간 경로로 처리해야 하는지 여부입니다.
+	const bool bUseSmoothedLegacySteering = bSmoothLegacySteeringInput && CurrentInputOwnership == ECFVehicleInputOwnership::LegacyAxis;
+	if (CurrentInputOwnership == ECFVehicleInputOwnership::LegacyAxis && !bUseSmoothedLegacySteering)
 	{
 		CurrentSteeringInput = 0.0f;
 		TargetSteeringInput = 0.0f;
+		LegacyTargetSteeringInput = 0.0f;
 		LastSteeringTurnRate = 0.0f;
 		LastSteeringReturnRate = 0.0f;
 		bSteeringReturningToCenter = false;
 		return;
 	}
 
+	// [v2.44.0] 음수 Tick 간격이 들어오지 않도록 보정한 DeltaSeconds입니다.
 	const float SafeDeltaSeconds = FMath::Max(DeltaSeconds, 0.0f);
-	const bool bHasSteeringIntent = FMath::Abs(TargetSteeringInput) > KINDA_SMALL_NUMBER;
+
+	// [v2.44.0] 현재 입력 경로에서 실제 조향 보간이 따라갈 목표값입니다.
+	const float ActiveTargetSteeringInput = bUseSmoothedLegacySteering ? LegacyTargetSteeringInput : TargetSteeringInput;
+
+	// [v2.44.0] 중립이 아닌 조향 목표가 있는지 여부입니다.
+	const bool bHasSteeringIntent = FMath::Abs(ActiveTargetSteeringInput) > KINDA_SMALL_NUMBER;
 	if (bHasSteeringIntent)
 	{
 		LastSteeringTurnRate = 2.0f / FMath::Max(SteeringLockToLockTimeSec, 0.01f);
 		LastSteeringReturnRate = 0.0f;
 		bSteeringReturningToCenter = false;
-		CurrentSteeringInput = FMath::FInterpConstantTo(CurrentSteeringInput, TargetSteeringInput, SafeDeltaSeconds, LastSteeringTurnRate);
+		CurrentSteeringInput = FMath::FInterpConstantTo(CurrentSteeringInput, ActiveTargetSteeringInput, SafeDeltaSeconds, LastSteeringTurnRate);
 	}
 	else
 	{
@@ -1952,6 +2096,7 @@ void ACFVehiclePawn::UpdateVehicleMoveSteeringInput(const float DeltaSeconds)
 	SetVehicleSteeringInput(CurrentSteeringInput);
 }
 
+// [v1.6.0] 차량 이동용 2D 입력 액션값을 읽어 해석 결과를 Drive 입력으로 전달합니다.
 void ACFVehiclePawn::HandleVehicleMoveInput(const FInputActionValue& InputActionValue)
 {
 	const FVector2D MoveInputVector = InputActionValue.Get<FVector2D>();
@@ -1968,6 +2113,7 @@ void ACFVehiclePawn::HandleVehicleMoveInput(const FInputActionValue& InputAction
 	}
 
 	UpdateInputOwnershipFromVehicleMove(MoveInputMagnitude);
+	LegacyTargetSteeringInput = 0.0f;
 	LastVehicleMoveInputResult = ResolveVehicleMoveInput(MoveInputVector);
 	ApplyResolvedVehicleMoveInput(LastVehicleMoveInputResult);
 }
@@ -1996,23 +2142,66 @@ void ACFVehiclePawn::HandleThrottleInput(const FInputActionValue& InputActionVal
 
 void ACFVehiclePawn::HandleThrottleReleased(const FInputActionValue&)
 {
-	if (CurrentInputOwnership == ECFVehicleInputOwnership::LegacyAxis)
+	// [v2.44.1] VehicleMove2D가 소유 중이 아닐 때는 소유권이 None이어도 남은 LegacyAxis 스로틀을 반드시 정리합니다.
+	const bool bShouldResetLegacyThrottleOnRelease = CurrentInputOwnership != ECFVehicleInputOwnership::VehicleMove2D;
+	if (bShouldResetLegacyThrottleOnRelease)
 	{
 		ResetAxisInput(&ACFVehiclePawn::SetVehicleThrottleInput);
 	}
 	ReleaseInputOwnershipIfIdle();
 }
 
+// [v2.44.0] LegacyAxis 조향 입력을 직접 적용 또는 smoothing 목표값으로 갱신합니다.
 void ACFVehiclePawn::HandleSteeringInput(const FInputActionValue& InputActionValue)
 {
-	ApplyAxisInputFromAction(InputAction_Steering, InputActionValue, &ACFVehiclePawn::SetVehicleSteeringInput);
+	// [v2.44.0] 현재 입력 액션에서 읽은 원본 LegacyAxis 조향값입니다.
+	const float SteeringAxisValue = InputActionValue.Get<float>();
+	if (!ShouldAcceptActionInput(InputAction_Steering, SteeringAxisValue))
+	{
+		if (CurrentInputOwnership != ECFVehicleInputOwnership::VehicleMove2D)
+		{
+			if (bSmoothLegacySteeringInput)
+			{
+				LegacyTargetSteeringInput = 0.0f;
+			}
+			else
+			{
+				ResetAxisInput(&ACFVehiclePawn::SetVehicleSteeringInput);
+			}
+			ReleaseInputOwnershipIfIdle();
+		}
+		return;
+	}
+	if (!CanProcessLegacyAxisInput(SteeringAxisValue))
+	{
+		return;
+	}
+	UpdateInputOwnershipFromLegacyAxis(SteeringAxisValue);
+	if (bSmoothLegacySteeringInput)
+	{
+		LegacyTargetSteeringInput = FMath::Clamp(SteeringAxisValue, -1.0f, 1.0f);
+		return;
+	}
+
+	LegacyTargetSteeringInput = 0.0f;
+	SetVehicleSteeringInput(SteeringAxisValue);
 }
 
+// [v2.44.0] LegacyAxis 조향 해제 시 직접 조향 또는 smoothing 목표값을 중립으로 되돌립니다.
 void ACFVehiclePawn::HandleSteeringReleased(const FInputActionValue&)
 {
-	if (CurrentInputOwnership == ECFVehicleInputOwnership::LegacyAxis)
+	// [v2.44.1] VehicleMove2D가 소유 중이 아닐 때는 소유권이 None이어도 남은 LegacyAxis 조향을 반드시 정리합니다.
+	const bool bShouldResetLegacySteeringOnRelease = CurrentInputOwnership != ECFVehicleInputOwnership::VehicleMove2D;
+	if (bShouldResetLegacySteeringOnRelease)
 	{
-		ResetAxisInput(&ACFVehiclePawn::SetVehicleSteeringInput);
+		if (bSmoothLegacySteeringInput)
+		{
+			LegacyTargetSteeringInput = 0.0f;
+		}
+		else
+		{
+			ResetAxisInput(&ACFVehiclePawn::SetVehicleSteeringInput);
+		}
 	}
 	ReleaseInputOwnershipIfIdle();
 }
@@ -2024,7 +2213,9 @@ void ACFVehiclePawn::HandleBrakeInput(const FInputActionValue& InputActionValue)
 
 void ACFVehiclePawn::HandleBrakeReleased(const FInputActionValue&)
 {
-	if (CurrentInputOwnership == ECFVehicleInputOwnership::LegacyAxis)
+	// [v2.44.1] VehicleMove2D가 소유 중이 아닐 때는 소유권이 None이어도 남은 LegacyAxis 브레이크/후진 입력을 반드시 정리합니다.
+	const bool bShouldResetLegacyBrakeOnRelease = CurrentInputOwnership != ECFVehicleInputOwnership::VehicleMove2D;
+	if (bShouldResetLegacyBrakeOnRelease)
 	{
 		ResetAxisInput(&ACFVehiclePawn::SetVehicleBrakeInput);
 	}

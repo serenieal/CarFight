@@ -1,5 +1,10 @@
 # ServerSpawn
 
+> 현재 전환 기준: Decommissioned / Historical Record
+> 기준일(Asia/Seoul): 2026-06-19
+> 해석: 이 문서는 삭제 대상이 아니라 과거 Dedicated Server / Multiplayer Spawn 구현 기록이다. 현재 활성 개발 기준은 싱글 플레이 1대 차량 고도화이며, 이 문서의 서버 실행/2클라 검증 내용은 서버 작업 재개 결정 전까지 구현 지시로 사용하지 않는다.
+> 정리 상태: 2026-06-19 싱글플레이 전환 정리에서 `CarFight_ReServer.Target.cs`, `ACFMPGameMode`, `Tools/CFServerLauncher`는 제거 완료됐다.
+
 ## 문서 목적
 이 문서는 현재 프로젝트에서 `Dedicated Server / Multiplayer Spawn` 기능이 실제로 어떤 일을 하는지, 그리고 그 기능이 어떤 클래스/설정 구성으로 동작하는지를 기록한다.
 이 문서는 미래 설계나 개선 계획이 아니라, **현재 확인된 구현 상태**를 기준으로 작성한다.
@@ -356,8 +361,8 @@ Dedicated Server 실행
 - Dedicated Server 실행 방식 또는 운영 문서가 추가될 때
 
 ## 문서 버전 관리
-- 현재 문서 버전: `1.0.0`
-- 문서 상태: `Initial`
+- 현재 문서 버전: `1.1.0`
+- 문서 상태: `Deferred`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
   - 기능 설명 본문이 바뀌면 체인지로그도 같이 갱신한다.
@@ -377,6 +382,10 @@ Dedicated Server 실행
   - 본문 의미는 유지한 채 설명 정밀도만 올라갈 때
 
 ## 체인지로그
+### v1.1.0 - 2026-06-19
+- 싱글 플레이 1대 차량 고도화 전환 기준에 맞춰 문서 상태를 `Deferred`로 변경했다.
+- 기존 서버 Spawn/Possess 설명은 구현 기록으로 보존하고, 현재 활성 구현 지시가 아님을 상단에 명시했다.
+
 ### v1.0.0 - 2026-06-02
 - `Dedicated Server / Multiplayer Spawn` 문서 최초 작성
 - `CarFight_ReServer.Target.cs`와 `ACFMPGameMode` 기준 현재 서버 스폰 흐름 정리

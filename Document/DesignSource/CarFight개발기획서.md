@@ -1,4 +1,4 @@
-﻿# 언리얼 엔진 5.7 기반 'CarFight' 프로젝트를 위한 모듈형 차량 시뮬레이션 및 물리 아키텍처 (V5)
+# 언리얼 엔진 5.7 기반 'CarFight' 프로젝트를 위한 모듈형 차량 시뮬레이션 및 물리 아키텍처 (V5)
 
 > 문서 버전: v1.1.0
 > 마지막 정리(Asia/Seoul): 2026-04-15
@@ -161,12 +161,12 @@ float HeightOffset = 10.0f; // 서스펜션 높이 보정
 반대로, 현재 하이브리드 기준선에서도 전투 차량 게임플레이에 필요한 카메라 축을 먼저 고정해 두는 작업에 가깝다.
 
 현재 카메라 작업의 실제 실행 기준은 아래 문서를 함께 본다.
-- `Document/ProjectSSOT/00_Handover.md`
-- `Document/ProjectSSOT/01_Roadmap.md`
-- `Document/ProjectSSOT/16_CPP_DecisionLog.md`
-- `Document/ProjectSSOT/Plan/CameraPlan/CF_CameraPlan_260410.md`
-- `Document/ProjectSSOT/Plan/CameraPlan/CF_CameraSysSpec_260410.md`
-- `Document/ProjectSSOT/Plan/CameraPlan/CF_CamChecklist_260415.md`
+- `Document/ProjectSSOT/01_ProjectState.md`
+- `Document/ProjectSSOT/02_Roadmap.md`
+- `Document/Systems/Vehicles/VehicleCoreDecisions.md`
+- `Document/Plan/CameraPlan/CF_CameraPlan_260410.md`
+- `Document/Plan/CameraPlan/CF_CameraSysSpec_260410.md`
+- `Document/Plan/CameraPlan/CF_CamChecklist_260415.md`
 
 해석 규칙은 아래처럼 둔다.
 - 이 문서는 장기 기술 북극성 문서다.
@@ -179,5 +179,9 @@ float HeightOffset = 10.0f; // 서스펜션 높이 보정
 - v1.1.0 (2026-04-15)
   - 문서 버전 / 마지막 정리 날짜를 갱신했다.
   - 현재 카메라 구현이 장기 CMVS 북극성과 어떤 관계인지 설명하는 연결 섹션을 추가했다.
+---
 
-
+## 변경 이력
+### 2026-06-19 - 링크 경로 정정
+- 이전 ProjectSSOT Plan/Systems 참조를 현재 Document/Plan 및 Document/Systems 경로로 정정했다.
+- 구버전 ProjectSSOT 파일명 참조를 현재 `00_Vision` ~ `05_TestChecklist` 기준 또는 Archive 경로로 정정했다.

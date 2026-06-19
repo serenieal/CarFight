@@ -1,8 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.8.0
-// Date: 2026-05-21
+// Version: 1.8.1
+// Date: 2026-06-19
 // Description: VehicleDebug Panel용 C++ 부모 위젯 클래스 구현입니다.
+// Changelog:
+// - v1.8.1: 싱글플레이 기준에 맞춰 Aim 디버그 패널의 복제 시각 표시 문구를 Aim 시각 표시로 변경.
+// Migration:
+// - 기존 FieldId와 SectionId는 유지되므로 위젯 바인딩 변경은 필요 없다.
 // Scope: VehicleDebug Overview / Drive / Input / Camera / Aim / Runtime 카테고리를 읽어 Navigation + Selected Section 기반 표시와 기존 fallback 표시를 안정적으로 지원합니다.
 
 #include "UI/CFVehicleDebugPanelWidget.h"
@@ -1581,7 +1585,7 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildAimS
 	// [v1.8.0] Aim Section에서 사용할 Server Aim 상태입니다.
 	const FCFVehicleServerAimState& ServerAimState = InAim.ServerAimState;
 
-	// [v1.8.0] Aim Section에서 사용할 복제 시각 상태입니다.
+	// [v1.8.1] Aim Section에서 사용할 표시용 Aim 시각 상태입니다.
 	const FCFVehicleRepAimVisualState& RepAimVisualState = InAim.RepAimVisualState;
 
 	// [v1.8.0] Navigation 배지와 주요 필드에 표시할 Reticle 상태 문자열입니다.
@@ -1628,11 +1632,11 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildAimS
 	ServerAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_server_last_rejected_id"), TEXT("마지막 거부 요청 ID"), FString::FromInt(ServerAimState.LastRejectedFireRequestId)));
 	AimSectionViewData->AddChildSection(ServerAimSectionViewData);
 
-	// [v1.8.0] Rep Aim Visual 하위 섹션 ViewData입니다.
+	// [v1.8.1] Aim Visual 하위 섹션 ViewData입니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> RepAimSectionViewData =
-		FCFVehicleDebugSectionViewData::MakeSection(TEXT("AimRepVisual"), TEXT("복제 시각"), ECFVehicleDebugSectionKind::Subsection, true);
-	RepAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_rep_direction"), TEXT("복제 조준 방향"), FString::Printf(TEXT("(%.2f, %.2f, %.2f)"), RepAimVisualState.RepAimDirection.X, RepAimVisualState.RepAimDirection.Y, RepAimVisualState.RepAimDirection.Z)));
-	RepAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_rep_target"), TEXT("복제 목표 위치"), FString::Printf(TEXT("(%.1f, %.1f, %.1f)"), RepAimVisualState.RepAimTargetLocation.X, RepAimVisualState.RepAimTargetLocation.Y, RepAimVisualState.RepAimTargetLocation.Z)));
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("AimRepVisual"), TEXT("Aim 시각"), ECFVehicleDebugSectionKind::Subsection, true);
+	RepAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_rep_direction"), TEXT("표시 조준 방향"), FString::Printf(TEXT("(%.2f, %.2f, %.2f)"), RepAimVisualState.RepAimDirection.X, RepAimVisualState.RepAimDirection.Y, RepAimVisualState.RepAimDirection.Z)));
+	RepAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_rep_target"), TEXT("표시 목표 위치"), FString::Printf(TEXT("(%.1f, %.1f, %.1f)"), RepAimVisualState.RepAimTargetLocation.X, RepAimVisualState.RepAimTargetLocation.Y, RepAimVisualState.RepAimTargetLocation.Z)));
 	RepAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_rep_firing_visual"), TEXT("발사 시각화"), RepAimVisualState.bIsFiringVisual ? TEXT("예") : TEXT("아니오"), RepAimVisualState.bIsFiringVisual));
 	RepAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_rep_weapon_mode"), TEXT("무기 시각 모드"), RepAimVisualState.RepWeaponVisualMode.ToString()));
 	AimSectionViewData->AddChildSection(RepAimSectionViewData);

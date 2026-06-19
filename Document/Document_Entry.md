@@ -1,7 +1,7 @@
 # Document Entry (CarFight)
 
-- 문서 버전: v2.0
-- 작성일: 2026-04-21
+- 문서 버전: v2.1
+- 작성일: 2026-06-19
 - 문서 상태: Current
 
 ## 목적
@@ -66,9 +66,12 @@
 ### 3.1 CarFight 현재 상태를 빠르게 파악하고 싶을 때
 
 1. `Document/ProjectSSOT/README.md`
-2. `Document/ProjectSSOT/00_Handover.md`
-3. `Document/ProjectSSOT/01_Roadmap.md`
-4. `Document/ProjectSSOT/08_P0_Verification.md`
+2. `Document/ProjectSSOT/00_Vision.md`
+3. `Document/ProjectSSOT/01_ProjectState.md`
+4. `Document/ProjectSSOT/02_Roadmap.md`
+5. `Document/ProjectSSOT/03_FeatureQueue.md`
+6. `Document/ProjectSSOT/04_ProjectDecisions.md`
+7. `Document/ProjectSSOT/05_TestChecklist.md`
 
 ### 3.2 CarFight 문서 정리 / Archive 작업을 하고 싶을 때
 
@@ -79,7 +82,8 @@
 
 1. `Document/SSOT/UE_SSOT/UE_AI_User_Workflow_SSOT_v0_1.md`
 2. 필요한 UE 기술 SSOT
-3. 프로젝트 전용 계획서 (`Document/ProjectSSOT/...`)
+3. 프로젝트 전용 실행 기준 (`Document/ProjectSSOT/...`)
+4. 필요 시 프로젝트 전용 계획서 (`Document/Plan/...`)
 
 ### 3.4 공통 규칙 원본을 찾고 싶을 때
 
@@ -110,8 +114,11 @@
 ```text
 Document/
   Document_Entry.md          # 이 문서 (총괄 진입점)
+  DesignSource/              # 장기 방향 / 원본 기획 참고 문서
+  Plan/                      # 현재 또는 보류된 프로젝트 계획 문서
   ProjectSSOT/               # CarFight 프로젝트 전용 SSOT
   SSOT/                      # 공용 통합 SSOT
+  Systems/                   # 구현 완료 또는 현재 상태 기준 시스템 문서
 ```
 
 ---
@@ -128,15 +135,23 @@ Document/
 ## 7) Quick Links
 
 - `Document/ProjectSSOT/README.md`
-- `Document/ProjectSSOT/00_Handover.md`
-- `Document/ProjectSSOT/01_Roadmap.md`
-- `Document/ProjectSSOT/08_P0_Verification.md`
+- `Document/ProjectSSOT/00_Vision.md`
+- `Document/ProjectSSOT/01_ProjectState.md`
+- `Document/ProjectSSOT/02_Roadmap.md`
+- `Document/ProjectSSOT/03_FeatureQueue.md`
+- `Document/ProjectSSOT/04_ProjectDecisions.md`
+- `Document/ProjectSSOT/05_TestChecklist.md`
 - `Document/SSOT/README.md`
 - `Document/SSOT/UE_SSOT/UE_AI_User_Workflow_SSOT_v0_1.md`
 
 ---
 
 ## 8) Changelog
+
+- v2.1
+- ProjectSSOT 빠른 시작 경로를 현재 파일명 기준으로 갱신
+- `Document/Plan`, `Document/Systems`, `Document/DesignSource` 역할을 현재 구조에 맞게 추가
+- UE 작업 시 `ProjectSSOT`를 실행 기준으로 보고 `Plan`은 필요 시 참고하는 흐름으로 정리
 
 - v2.0
 - `Document/` 허브에서 MCP 전용 엔트리 구조 제거
