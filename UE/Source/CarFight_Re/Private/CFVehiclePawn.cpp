@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.67.0
-// Date: 2026-06-19
+// Version: 2.68.0
+// Date: 2026-06-23
 // Description: CarFight 싱글플레이 차량 Pawn 구현
 // Changelog:
+// - v2.68.0: VehicleData의 VehicleLayoutConfig를 Wheel_Anchor_*에 적용하고 WheelSync 준비 전 레이아웃 재적용 순서를 추가.
 // - v2.67.0: 로컬 HitScan Trace 디버그 변수명을 LocalAimTraceDebug 기준으로 교체.
 // - v2.66.0: AimComp의 FireValidationState / AimVisualState 리네이밍에 맞춰 Debug Snapshot과 Fire Result 연결을 갱신.
 // - v2.65.0: 참조가 없는 ACFVehiclePawn Fire 레거시 wrapper와 RPC 구현을 제거해 싱글플레이 Fire 실행 경로를 단일화.
@@ -13,6 +14,8 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth Visual/Shell 적용 전 기준선을 깨끗하게 만들기 위해 차량 진단 로그와 Owner 표시 안정화 기본값을 False로 통일.
 // Migration:
+// - VehicleLayoutConfig 적용 차량은 DA에서 bUseLayoutOverrides를 켜고 네 WheelAnchor 값을 입력한다.
+// - 기존 BP 수동 Wheel_Anchor 배치는 bUseLayoutOverrides=false fallback으로 유지한다.
 // - 신규 Fire 흐름은 로컬 함수 경로를 기준으로 호출한다.
 // - bDrawServerAimTraceDebug / ServerAimTraceDebugDuration 호출은 bDrawLocalAimTraceDebug / LocalAimTraceDebugDuration으로 교체한다.
 // - Debug Snapshot의 ServerAimState / RepAimVisualState 접근은 FireValidationState / AimVisualState로 교체한다.
@@ -614,22 +617,35 @@ bool ACFVehiclePawn::RegisterDefaultInputMappingContext()
 	return true;
 }
 
+// [v2.68.0] VehicleData와 표시 계층을 준비한 뒤 WheelSync가 최종 앵커 기준을 캡처할 수 있게 런타임을 초기화합니다.
 bool ACFVehiclePawn::InitializeVehicleRuntime()
 {
 	bVehicleRuntimeReady = false;
 	LastVehicleRuntimeSummary = TEXT("VehicleRuntime: InitializeStarted");
 	ApplyVehicleDataConfig();
+
+	// [v2.68.0] VehicleData 기반 공통 설정 적용 직후의 요약 문자열입니다.
 	const FString DataConfigSummary = LastVehicleRuntimeSummary;
 
 	// [v2.48.0] 로컬 Owner 표시 안정화 계층 준비 결과입니다.
 	const bool bOwnerVisualReady = PrepareOwnerVisualStabilization();
+
+	// [v2.68.0] Owner 표시 루트 재부착 이후 최종 부모 기준으로 레이아웃을 다시 적용합니다.
+	ApplyVehicleLayoutConfig();
+
+	// [v2.68.0] WheelSync 캡처 직전에 확정된 레이아웃 적용 요약 문자열입니다.
+	const FString LayoutConfigSummary = LastVehicleRuntimeSummary;
+
+	// [v2.68.0] 차량 입력/물리 Drive 컴포넌트 캐시 준비 결과입니다.
 	const bool bDriveReady = (VehicleDriveComp != nullptr) && VehicleDriveComp->CacheVehicleMovementComponent();
+
+	// [v2.68.0] DataAsset 레이아웃 적용 이후 WheelSync 준비가 성공했는지 여부입니다.
 	const bool bWheelSyncReady = PrepareWheelSync();
 
 	// [v2.15.0] AimComp가 Owner Pawn과 VehicleCameraComp를 안전하게 찾았는지 여부입니다.
 	const bool bAimReady = VehicleAimComp ? VehicleAimComp->InitializeAimRuntime() : false;
 	bVehicleRuntimeReady = bDriveReady && bWheelSyncReady;
-	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: Data=%s, Drive=%s, WheelSync=%s, Aim=%s, OwnerVisual=%s, Ready=%s | %s"), VehicleData ? TEXT("Present") : TEXT("Missing"), bDriveReady ? TEXT("Ready") : TEXT("Missing"), bWheelSyncReady ? TEXT("Ready") : TEXT("Missing"), bAimReady ? TEXT("Ready") : TEXT("Missing"), bOwnerVisualReady ? TEXT("Ready") : TEXT("Skipped"), bVehicleRuntimeReady ? TEXT("True") : TEXT("False"), *DataConfigSummary);
+	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: Data=%s, Drive=%s, WheelSync=%s, Aim=%s, OwnerVisual=%s, Ready=%s | %s | %s"), VehicleData ? TEXT("Present") : TEXT("Missing"), bDriveReady ? TEXT("Ready") : TEXT("Missing"), bWheelSyncReady ? TEXT("Ready") : TEXT("Missing"), bAimReady ? TEXT("Ready") : TEXT("Missing"), bOwnerVisualReady ? TEXT("Ready") : TEXT("Skipped"), bVehicleRuntimeReady ? TEXT("True") : TEXT("False"), *DataConfigSummary, *LayoutConfigSummary);
 	return bVehicleRuntimeReady;
 }
 
@@ -1069,13 +1085,61 @@ void ACFVehiclePawn::ApplyVehicleVisualConfig()
 	// 휠 시각 메쉬 교체는 별도 구현 전까지 여기서 수행하지 않습니다.
 }
 
+// [v2.68.0] VehicleData의 바퀴 앵커 레이아웃 오버라이드를 BP Wheel_Anchor_* 컴포넌트에 적용합니다.
 void ACFVehiclePawn::ApplyVehicleLayoutConfig()
 {
 	if (!VehicleData)
 	{
+		LastVehicleRuntimeSummary = TEXT("VehicleLayout: VehicleData=Missing, ManualAnchorLayout=Fallback");
 		return;
 	}
-	LastVehicleRuntimeSummary = TEXT("VehicleLayout: ManualAnchorLayout=Required");
+
+	// [v2.68.0] VehicleData에서 읽은 차량 레이아웃 설정입니다.
+	const FCFVehicleLayoutConfig& VehicleLayoutConfig = VehicleData->VehicleLayoutConfig;
+	if (!VehicleLayoutConfig.bUseLayoutOverrides)
+	{
+		LastVehicleRuntimeSummary = TEXT("VehicleLayout: ManualAnchorLayout=Fallback");
+		return;
+	}
+
+	// [v2.68.0] 레이아웃을 적용하지 못한 Wheel_Anchor_* 컴포넌트 이름 목록입니다.
+	FString MissingWheelAnchorNames;
+
+	// [v2.68.0] DataAsset 레이아웃이 적용된 바퀴 앵커 개수입니다.
+	int32 AppliedWheelAnchorCount = 0;
+
+	// [v2.68.0] 단일 WheelAnchor 포즈를 같은 이름의 SceneComponent에 적용하는 로컬 함수입니다.
+	const auto ApplyWheelAnchorPose = [this, &MissingWheelAnchorNames, &AppliedWheelAnchorCount](const FName WheelAnchorName, const FCFWheelAnchorPose& WheelAnchorPose)
+	{
+		// [v2.68.0] 이름으로 찾은 바퀴 앵커 SceneComponent입니다.
+		USceneComponent* WheelAnchorComponent = FindSceneComponentByName(this, WheelAnchorName);
+		if (!WheelAnchorComponent)
+		{
+			if (!MissingWheelAnchorNames.IsEmpty())
+			{
+				MissingWheelAnchorNames += TEXT(", ");
+			}
+			MissingWheelAnchorNames += WheelAnchorName.ToString();
+			return;
+		}
+
+		WheelAnchorComponent->SetRelativeLocation(WheelAnchorPose.RelativeLocation);
+		WheelAnchorComponent->SetRelativeRotation(WheelAnchorPose.RelativeRotation);
+		++AppliedWheelAnchorCount;
+	};
+
+	ApplyWheelAnchorPose(TEXT("Wheel_Anchor_FL"), VehicleLayoutConfig.WheelAnchorFL);
+	ApplyWheelAnchorPose(TEXT("Wheel_Anchor_FR"), VehicleLayoutConfig.WheelAnchorFR);
+	ApplyWheelAnchorPose(TEXT("Wheel_Anchor_RL"), VehicleLayoutConfig.WheelAnchorRL);
+	ApplyWheelAnchorPose(TEXT("Wheel_Anchor_RR"), VehicleLayoutConfig.WheelAnchorRR);
+
+	if (!MissingWheelAnchorNames.IsEmpty())
+	{
+		LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleLayout: LayoutOverride=Partial, Applied=%d, Missing=%s"), AppliedWheelAnchorCount, *MissingWheelAnchorNames);
+		return;
+	}
+
+	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleLayout: LayoutOverride=Applied, Applied=%d"), AppliedWheelAnchorCount);
 }
 
 void ACFVehiclePawn::ApplyVehicleMovementConfig()

@@ -1,9 +1,15 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.13.0
-// Date: 2026-04-01
-// Description: CarFight 차량 루트 DataAsset VehicleMovement 기본값 재정렬 및 레거시 실험값 자동 마이그레이션 추가
-// Scope: 차량 시각 자산, Wheel Class 참조, VehicleMovement/WheelVisual 소비 구조에서 DA 기본값과 레거시 자산 보정을 함께 다룹니다.
+// Version: 1.14.0
+// Date: 2026-06-23
+// Description: CarFight 차량 루트 DataAsset 바퀴 앵커 레이아웃 오버라이드 설정 추가
+// Scope: 차량 시각 자산, Wheel Class 참조, VehicleMovement/WheelVisual/Layout 소비 구조에서 DA 기본값과 레거시 자산 보정을 함께 다룹니다.
+// Changelog:
+// - v1.14.0: VehicleLayoutConfig와 WheelAnchor 포즈 구조를 추가해 차량별 시각 휠 기준 위치를 DataAsset에서 관리.
+// - v1.13.0: VehicleMovement 기본값 재정렬 및 레거시 실험값 자동 마이그레이션 추가.
+// Migration:
+// - 기존 자산은 bUseLayoutOverrides=false 기본값으로 BP 수동 Wheel_Anchor 배치를 유지한다.
+// - DA_PoliceCar 등 마이그레이션 대상만 bUseLayoutOverrides=true와 네 앵커 좌표를 입력한다.
 
 #pragma once
 
@@ -36,6 +42,46 @@ struct FCFVehicleVisualConfig
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="뒤오른쪽 휠 메쉬 (WheelMeshRR)", ToolTip="뒤오른쪽 바퀴 시각 표현에 사용할 Static Mesh 입니다. 비어 있으면 FL 재사용을 권장합니다."))
 	TObjectPtr<UStaticMesh> WheelMeshRR = nullptr;
+};
+
+USTRUCT(BlueprintType)
+struct FCFWheelAnchorPose
+{
+	GENERATED_BODY()
+
+	// [v1.14.0] Wheel_Anchor_* 컴포넌트에 적용할 부모 기준 상대 위치입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Layout", meta=(DisplayName="상대 위치 (RelativeLocation)", ToolTip="Wheel_Anchor_* 컴포넌트에 적용할 부모 기준 상대 위치입니다."))
+	FVector RelativeLocation = FVector::ZeroVector;
+
+	// [v1.14.0] Wheel_Anchor_* 컴포넌트에 적용할 부모 기준 상대 회전입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Layout", meta=(DisplayName="상대 회전 (RelativeRotation)", ToolTip="Wheel_Anchor_* 컴포넌트에 적용할 부모 기준 상대 회전입니다."))
+	FRotator RelativeRotation = FRotator::ZeroRotator;
+};
+
+USTRUCT(BlueprintType)
+struct FCFVehicleLayoutConfig
+{
+	GENERATED_BODY()
+
+	// [v1.14.0] True이면 VehicleData의 바퀴 앵커 기준 위치/회전을 BP 컴포넌트에 적용합니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Layout", meta=(DisplayName="레이아웃 덮어쓰기 사용 (bUseLayoutOverrides)", ToolTip="True이면 VehicleData의 바퀴 앵커 기준 위치와 회전을 BP의 Wheel_Anchor_* 컴포넌트에 적용합니다. False이면 기존 BP 수동 배치를 유지합니다."))
+	bool bUseLayoutOverrides = false;
+
+	// [v1.14.0] 앞왼쪽 바퀴 앵커에 적용할 기준 위치/회전입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Layout", meta=(EditCondition="bUseLayoutOverrides", EditConditionHides, DisplayName="앞왼쪽 바퀴 앵커 (WheelAnchorFL)", ToolTip="Wheel_Anchor_FL 컴포넌트에 적용할 기준 위치와 회전입니다."))
+	FCFWheelAnchorPose WheelAnchorFL;
+
+	// [v1.14.0] 앞오른쪽 바퀴 앵커에 적용할 기준 위치/회전입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Layout", meta=(EditCondition="bUseLayoutOverrides", EditConditionHides, DisplayName="앞오른쪽 바퀴 앵커 (WheelAnchorFR)", ToolTip="Wheel_Anchor_FR 컴포넌트에 적용할 기준 위치와 회전입니다."))
+	FCFWheelAnchorPose WheelAnchorFR;
+
+	// [v1.14.0] 뒤왼쪽 바퀴 앵커에 적용할 기준 위치/회전입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Layout", meta=(EditCondition="bUseLayoutOverrides", EditConditionHides, DisplayName="뒤왼쪽 바퀴 앵커 (WheelAnchorRL)", ToolTip="Wheel_Anchor_RL 컴포넌트에 적용할 기준 위치와 회전입니다."))
+	FCFWheelAnchorPose WheelAnchorRL;
+
+	// [v1.14.0] 뒤오른쪽 바퀴 앵커에 적용할 기준 위치/회전입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Layout", meta=(EditCondition="bUseLayoutOverrides", EditConditionHides, DisplayName="뒤오른쪽 바퀴 앵커 (WheelAnchorRR)", ToolTip="Wheel_Anchor_RR 컴포넌트에 적용할 기준 위치와 회전입니다."))
+	FCFWheelAnchorPose WheelAnchorRR;
 };
 
 USTRUCT(BlueprintType)
@@ -220,6 +266,10 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="차량 시각 설정 (VehicleVisualConfig)", ToolTip="차체와 휠 시각 자산 참조를 묶은 설정입니다."))
 	FCFVehicleVisualConfig VehicleVisualConfig;
+
+	// [v1.14.0] 차량별 Wheel_Anchor_* 기준 위치/회전을 묶은 레이아웃 설정입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="차량 레이아웃 설정 (VehicleLayoutConfig)", ToolTip="차량별 Wheel_Anchor_FL/FR/RL/RR 기준 위치와 회전을 묶은 설정입니다. bUseLayoutOverrides가 꺼져 있으면 기존 BP 수동 배치를 유지합니다."))
+	FCFVehicleLayoutConfig VehicleLayoutConfig;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="차량 이동 설정 (VehicleMovementConfig)", ToolTip="VehicleMovement 계열 데이터를 나중에 확장하기 위한 최소 슬롯입니다."))
 	FCFVehicleMovementConfig VehicleMovementConfig;
