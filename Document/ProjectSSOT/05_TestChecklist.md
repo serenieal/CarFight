@@ -1,6 +1,6 @@
 # CarFight — 05_TestChecklist
 
-> 문서 버전: v1.1.0
+> 문서 버전: v1.2.0
 > 작성일(Asia/Seoul): 2026-06-18
 > 문서 상태: Active
 > 역할: CarFight의 **완료된 Systems 기준 최소 회귀 테스트**를 관리한다.
@@ -59,6 +59,7 @@
 4. 테스트 결과가 기능 책임을 바꾸면 해당 Systems 문서도 갱신한다.
 5. 2026-06-18 싱글 전환 기준에서는 서버/멀티/2클라 테스트를 기본 회귀 조건으로 쓰지 않는다.
 6. 서버/멀티 항목은 현재 사이클에서 N/A로 두고, 서버 작업 재개 결정이 있을 때만 다시 활성화한다.
+7. 2026-06-19 전투 루프 기준에서는 조준/발사/피격/피해/피드백을 서버 없이 싱글 PIE에서 먼저 검증한다.
 ```
 
 ---
@@ -72,6 +73,20 @@
 2. 기준 차량 1대가 바로 조작 가능해야 한다.
 3. 주행감, 카메라, 로컬 Aim, Reticle, WheelSync 시각 품질을 우선 확인한다.
 4. Dedicated Server, 2클라, 이동 복제, 서버 권한 발사 검증은 현재 기준 N/A다.
+```
+
+---
+
+## 4-2. 2026-06-19 전투 루프 검증 기준
+
+현재 사이클의 전투 루프 검증 목표는 아래다.
+
+```text
+1. 기준 차량 1대가 주행 중 조준과 발사를 수행한다.
+2. 발사 성공/불가/쿨다운 상태가 이펙트, 사운드, 조준 UI로 읽힌다.
+3. 발사 결과가 피격 판정과 피해 처리로 이어진다.
+4. 주행, 조준, 발사, 피격, 피해 흐름을 반복해도 상태가 꼬이지 않는다.
+5. 조작감, 전투 템포, 피드백 문제를 기능 차단과 품질 후속으로 분리한다.
 ```
 
 ---
@@ -94,6 +109,12 @@
 | `CF-TC-010` | Network | 입력 분리 | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/Systems/Network/ServerSpawn.md`, `Document/Systems/Input/Input.md` | `N/A` |
 | `CF-TC-011` | Network | 이동 복제 | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/Systems/Network/ServerSpawn.md` | `N/A` |
 | `CF-TC-012` | Config | 런타임 설정 | 현재 Config 기준 경로/모드가 깨지지 않음 | `Document/Systems/Config/ProjectRuntimeConfig.md` | `TODO` |
+| `CF-TC-013` | Combat | 차량 무기 조준/발사 | 조준 방향으로 발사 요청이 생성되고 성공/불가 상태가 구분됨 | `Document/Systems/Combat/WeaponFire.md`, `Document/Systems/Vehicles/VehicleAim.md` | `TODO` |
+| `CF-TC-014` | Feedback | 발사 이펙트/사운드/UI | 발사 성공/불가/쿨다운 상태가 화면/소리/UI로 읽힘 | `Document/Systems/Combat/FireFeedback.md`, `Document/Systems/UI/AimReticle.md` | `TODO` |
+| `CF-TC-015` | Combat | 피격 판정 | 발사 결과가 빗나감/피격으로 구분되어 기록됨 | `Document/Systems/Combat/HitDamage.md` | `TODO` |
+| `CF-TC-016` | Combat | 피해 처리 | 피격 결과가 피해량과 생존 상태에 반영됨 | `Document/Systems/Combat/HitDamage.md` | `TODO` |
+| `CF-TC-017` | Loop | 주행/전투 반복 | 주행, 조준, 발사, 피격, 피해 루프를 반복해도 상태가 꼬이지 않음 | `Document/Systems/Combat/CoreLoop.md` | `TODO` |
+| `CF-TC-018` | Feel | 전투 템포/피드백 | 조작감, 발사 리듬, 피격 반응 문제가 기능 차단과 품질 후속으로 분리됨 | `Document/Systems/Combat/CombatFeel.md` | `TODO` |
 
 ---
 
@@ -260,12 +281,109 @@
 
 ---
 
-## 9. Network 테스트
+## 9. Combat / Feedback / Loop 테스트
+
+현재 전투 루프 테스트는 아직 완료된 Systems 기준이 아니라, 다음 구현 후 회귀 테스트로 승격할 후보다.
+구현 전에는 `TODO` 상태를 유지한다.
+
+## 9.1 WeaponFire
+
+- 관련 문서:
+  - `Document/Systems/Combat/WeaponFire.md` 예정
+  - `Document/Systems/Vehicles/VehicleAim.md`
+
+### 확인 항목
+
+```text
+- Fire 입력이 로컬 기준에서 발사 요청으로 연결된다.
+- 발사 원점과 발사 방향을 확인할 수 있다.
+- 발사 성공 / 발사 불가 / 쿨다운 상태가 구분된다.
+- 서버 권한 발사와 복제 검증은 현재 사이클에서 N/A다.
+```
+
+### PASS 기준
+
+```text
+- 싱글 PIE에서 기준 차량이 조준 방향으로 발사 요청을 만든다.
+- 실패 시 원인을 입력 / 조준 / 쿨다운 / 데이터 문제로 분리할 수 있다.
+```
+
+---
+
+## 9.2 FireFeedback
+
+- 관련 문서:
+  - `Document/Systems/Combat/FireFeedback.md` 예정
+  - `Document/Systems/UI/AimReticle.md`
+
+### 확인 항목
+
+```text
+- 발사 성공 시 최소 이펙트와 사운드가 발생한다.
+- 발사 불가 또는 쿨다운 상태가 조준 UI로 구분된다.
+- 피드백 호출과 실제 판정 흐름이 분리되어 있다.
+- UI 표시 문구는 한국어 표시 정책을 따른다.
+```
+
+### PASS 기준
+
+```text
+- 플레이어가 발사 성공, 발사 불가, 대기 상태를 즉시 이해할 수 있다.
+- 이펙트/사운드가 없어도 판정 흐름을 추적할 수 있다.
+```
+
+---
+
+## 9.3 HitDamage
+
+- 관련 문서: `Document/Systems/Combat/HitDamage.md` 예정
+
+### 확인 항목
+
+```text
+- 발사 결과가 빗나감 / 피격으로 구분된다.
+- 피격 결과가 피해량으로 변환된다.
+- 피해량이 현재 체력 또는 생존 상태에 반영된다.
+- 피해 처리 실패 시 Aim / Fire / Hit / Damage 중 어느 단계 문제인지 분리된다.
+```
+
+### PASS 기준
+
+```text
+- 로컬 테스트에서 피격과 피해 누적을 반복 확인할 수 있다.
+- 피해 결과가 UI 또는 디버그에서 확인 가능하다.
+```
+
+---
+
+## 9.4 CoreLoop
+
+- 관련 문서: `Document/Systems/Combat/CoreLoop.md` 예정
+
+### 확인 항목
+
+```text
+- 주행 중 조준/발사 입력이 끊기지 않는다.
+- 조준/발사/피격/피해 루프를 5회 이상 반복한다.
+- 반복 중 UI, 디버그, 피해 상태가 꼬이지 않는다.
+- 남은 문제를 기능 차단 / 품질 후속 / 장기 확장으로 분리한다.
+```
+
+### PASS 기준
+
+```text
+- 기준 차량 1대로 주행, 조준, 발사, 피격, 피해 흐름을 반복할 수 있다.
+- 다음 개발 단계로 넘어갈 수 있는지 PASS / FAIL 판정이 가능하다.
+```
+
+---
+
+## 10. Network 테스트
 
 현재 싱글 전환 기준에서 Network 테스트는 기본 회귀 테스트가 아니다.
 아래 항목은 서버/멀티 작업을 재개할 때 다시 활성화한다.
 
-## 9.1 ServerSpawn
+## 10.1 ServerSpawn
 
 - 관련 문서: `Document/Systems/Network/ServerSpawn.md`
 
@@ -291,7 +409,7 @@
 
 ---
 
-## 9.2 2클라 소유권 / 입력 분리
+## 10.2 2클라 소유권 / 입력 분리
 
 - 관련 문서:
   - `Document/Systems/Network/ServerSpawn.md`
@@ -317,7 +435,7 @@
 
 ---
 
-## 9.3 이동 복제
+## 10.3 이동 복제
 
 - 관련 문서: `Document/Systems/Network/ServerSpawn.md`
 
@@ -341,7 +459,7 @@
 
 ---
 
-## 10. Config 테스트
+## 11. Config 테스트
 
 - 관련 문서: `Document/Systems/Config/ProjectRuntimeConfig.md`
 
@@ -363,7 +481,7 @@
 
 ---
 
-## 11. 테스트 기록 양식
+## 12. 테스트 기록 양식
 
 각 테스트 후 아래 형식으로 기록한다.
 
@@ -384,7 +502,7 @@
 
 ---
 
-## 12. 실패 분류 기준
+## 13. 실패 분류 기준
 
 실패 시 아래 중 하나로 분류한다.
 
@@ -401,7 +519,7 @@
 
 ---
 
-## 13. 문서 갱신 조건
+## 14. 문서 갱신 조건
 
 아래 상황이 발생하면 이 문서를 갱신한다.
 
@@ -415,9 +533,9 @@
 
 ---
 
-## 14. 문서 버전 관리
+## 15. 문서 버전 관리
 
-- 현재 문서 버전: `v1.0.0`
+- 현재 문서 버전: `v1.2.0`
 - 문서 상태: `Active`
 
 ### 버전 증가 기준
@@ -430,7 +548,16 @@
 
 ---
 
-## 15. 체인지로그
+## 16. 체인지로그
+
+### v1.2.0 - 2026-06-19
+
+```text
+- 2026-06-19 전투 루프 검증 기준 추가
+- CF-TC-013 ~ CF-TC-018 전투/피드백/루프 테스트 후보 추가
+- WeaponFire, FireFeedback, HitDamage, CoreLoop 테스트 섹션 추가
+- Network 이후 섹션 번호를 전투 루프 테스트 추가에 맞춰 조정
+```
 
 ### v1.1.0 - 2026-06-18
 

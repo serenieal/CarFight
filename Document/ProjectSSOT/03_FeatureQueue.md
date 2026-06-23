@@ -1,6 +1,6 @@
 # CarFight — 03_FeatureQueue
 
-> 문서 버전: v1.1.0
+> 문서 버전: v1.2.0
 > 작성일(Asia/Seoul): 2026-06-18
 > 문서 상태: Active
 > 역할: CarFight의 **기능 후보 / 착수 판단 / 클라이언트·서버·관리툴 필요성**을 한 곳에서 관리한다.
@@ -81,14 +81,20 @@ CarFight 문서 흐름은 아래 기준으로 본다.
 
 | ID | 기능 | 목적 | 우선순위 | 상태 | 클라 | 서버 | 관리툴 | 완료 후 Systems 위치 |
 |---|---|---|---|---|---|---|---|---|
-| `CF-FQ-011` | 싱글 실행 기준선 전환 | 서버 GameMode 전제 없이 PIE 1인 플레이에서 기준 차량 1대를 바로 조작 가능하게 만들기 | `P0` | `Ready` | 필요 | 불필요 | 불필요 | `Document/Systems/Config/ProjectRuntimeConfig.md`, `Document/Systems/Vehicles/VehicleRuntime.md` 갱신 |
-| `CF-FQ-012` | 1대 차량 주행감 고도화 | `DA_PoliceCar` 기준 전진/후진/조향/브레이크/핸드브레이크 감각을 데모 가능한 수준으로 조정 | `P0` | `Ready` | 필요 | 불필요 | 불필요 | `Document/Systems/Vehicles/VehicleDrive.md`, `Document/Systems/Vehicles/VehicleSteering.md` 갱신 |
-| `CF-FQ-013` | 카메라/로컬 조준 고도화 | 서버 판정 없이 차량 카메라, Local Aim, Reticle 피드백을 싱글 기준으로 정리 | `P0` | `Ready` | 필요 | 불필요 | 불필요 | `Document/Systems/Vehicles/VehicleCamera.md`, `Document/Systems/Vehicles/VehicleAim.md`, `Document/Systems/UI/AimReticle.md` 갱신 |
+| `CF-FQ-011` | 싱글 실행 기준선 전환 | 서버 GameMode 전제 없이 PIE 1인 플레이에서 기준 차량 1대를 바로 조작 가능하게 만들기 | `P0` | `Done` | 필요 | 불필요 | 불필요 | `Document/Systems/Config/ProjectRuntimeConfig.md`, `Document/Systems/Vehicles/VehicleRuntime.md` 갱신 |
+| `CF-FQ-012` | 1대 차량 주행감 고도화 | `DA_PoliceCar` 기준 전진/후진/조향/브레이크/핸드브레이크 감각을 전투 루프 안에서 조정 | `P1` | `Candidate` | 필요 | 불필요 | 불필요 | `Document/Systems/Vehicles/VehicleDrive.md`, `Document/Systems/Vehicles/VehicleSteering.md` 갱신 |
+| `CF-FQ-013` | 카메라/로컬 조준 고도화 | 서버 판정 없이 차량 카메라, Local Aim, Reticle 피드백을 싱글 기준으로 정리 | `P0` | `Done` | 필요 | 불필요 | 불필요 | `Document/Systems/Vehicles/VehicleCamera.md`, `Document/Systems/Vehicles/VehicleAim.md`, `Document/Systems/UI/AimReticle.md` 갱신 |
 | `CF-FQ-014` | WheelSync 시각 품질 폴리싱 | 고속 휠 스핀/조향/서스펜션 시각 품질을 기능 FAIL과 품질 후속으로 분리하고 개선 | `P1` | `Candidate` | 필요 | 불필요 | 불필요 | `Document/Systems/Vehicles/WheelSync.md` 갱신 |
 | `CF-FQ-015` | 차량 데이터 튜닝 패스 | 기준 차량 1대의 Movement/Wheel/DriveState 값을 추적 가능한 데이터 기준으로 정리 | `P1` | `Candidate` | 필요 | 불필요 | 불필요 | `Document/Systems/Vehicles/VehicleData.md` 갱신 |
+| `CF-FQ-016` | 차량 무기 조준 및 발사 | 기준 차량 1대에서 로컬 조준 상태를 실제 발사 경로로 연결 | `P0` | `Ready` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/WeaponFire.md`, `Document/Systems/Vehicles/VehicleAim.md` 갱신 |
+| `CF-FQ-017` | 발사 피드백 구현 | 발사 이펙트, 사운드, 조준 UI로 발사 성공/불가/쿨다운 상태를 읽히게 만들기 | `P0` | `Candidate` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/FireFeedback.md`, `Document/Systems/UI/AimReticle.md` 갱신 |
+| `CF-FQ-018` | 피격 판정 및 피해 처리 | 발사 결과를 피격 판정과 피해 누적으로 연결해 전투 결과가 남게 만들기 | `P0` | `Candidate` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/HitDamage.md` |
+| `CF-FQ-019` | 주행/전투 반복 테스트 | 주행 중 조준/발사/피격/피해가 반복되는지 PIE 기준으로 검증 | `P1` | `Candidate` | 필요 | 불필요 | 불필요 | `Document/ProjectSSOT/05_TestChecklist.md`, `Document/Systems/Combat/CoreLoop.md` 갱신 |
+| `CF-FQ-020` | 조작감/전투 템포/피드백 개선 | 조작감, 발사 리듬, 피격 반응, UI/사운드 피드백을 핵심 루프 기준으로 조정 | `P1` | `Candidate` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/CombatFeel.md` |
+| `CF-FQ-021` | 핵심 게임 루프 검증 | 싱글 차량 전투 루프가 다음 개발 단계로 넘어갈 수 있는지 PASS/FAIL 판정 | `P1` | `Candidate` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/CoreLoop.md`, `Document/ProjectSSOT/05_TestChecklist.md` 갱신 |
 | `CF-FQ-001` | 서버 권한 발사 요청 | 2클라 환경에서 발사 요청을 서버 권한 구조로 통과시키기 | `Icebox` | `Deferred` | 필요 | 필요 | 불필요 | `Document/Systems/Network/ServerFire.md` 또는 `Document/Systems/Combat/Fire.md` |
 | `CF-FQ-002` | 조준/발사 피드백 분리 | 서버 판정과 로컬 조준/이펙트/Reticle 피드백 책임 분리 | `Icebox` | `Deferred` | 필요 | 필요 | 불필요 | 현재는 `CF-FQ-013`의 로컬 피드백으로 대체 |
-| `CF-FQ-003` | 체력/대미지 최소 구조 | 차량 전투의 피해 판정과 생존 상태 기반 만들기 | `P2` | `Deferred` | 필요 | 불필요 | 낮음 | `Document/Systems/Combat/Damage.md` |
+| `CF-FQ-003` | 체력/대미지 최소 구조 | 장기 전투 확장을 위한 체력/생존 상태 기반. 현재 최소 피해 처리는 `CF-FQ-018`에서 먼저 다룸 | `P2` | `Deferred` | 필요 | 불필요 | 낮음 | `Document/Systems/Combat/Damage.md` |
 | `CF-FQ-004` | 리스폰 최소 구조 | 2클라 전투 테스트 반복 가능 상태 만들기 | `Icebox` | `Deferred` | 필요 | 필요 | 낮음 | `Document/Systems/Network/Respawn.md` |
 | `CF-FQ-005` | 전투 결과 기록 | 매치 종료/승패/기본 결과 기록 기반 만들기 | `Icebox` | `Deferred` | 필요 | 필요 | 중간 | `Document/Systems/Combat/MatchResult.md` |
 | `CF-FQ-006` | 테스트 계정/상태 초기화 도구 | 반복 테스트 준비 비용 줄이기 | `Icebox` | `Deferred` | 불필요 | 필요 | 필요 | `Document/Systems/Admin/TestReset.md` |
@@ -101,18 +107,22 @@ CarFight 문서 흐름은 아래 기준으로 본다.
 
 ## 6. 현재 최우선 착수 후보
 
-현재 기준 최우선 후보는 아래 세 개다.
+현재 기준 최우선 후보는 아래 순서다.
 
 ```text
-1. CF-FQ-011 싱글 실행 기준선 전환
-2. CF-FQ-012 1대 차량 주행감 고도화
-3. CF-FQ-013 카메라/로컬 조준 고도화
+1. CF-FQ-016 차량 무기 조준 및 발사
+2. CF-FQ-017 발사 피드백 구현
+3. CF-FQ-018 피격 판정 및 피해 처리
+4. CF-FQ-019 주행/전투 반복 테스트
+5. CF-FQ-020 조작감/전투 템포/피드백 개선
+6. CF-FQ-021 핵심 게임 루프 검증
 ```
 
 이유:
-- 현재 피드백 기준으로 서버/멀티 범위를 삭제 또는 보류하고 개발 일정을 2~3개월 단축해야 한다.
-- 지금 가장 빠르게 체감 품질을 올릴 수 있는 영역은 기준 차량 1대의 조작감, 카메라, 로컬 조준 피드백이다.
-- 서버 권한 발사 요청과 2클라 검증은 현재 싱글 전환 목표와 충돌하므로 `Deferred`로 내린다.
+- 싱글 실행 기준선과 로컬 Aim / Fire / Reticle 골격은 확인된 기반으로 본다.
+- 이제 체감 품질을 올리려면 발사 입력이 실제 전투 결과로 이어져야 한다.
+- 서버 권한 발사 요청과 2클라 검증은 현재 싱글 전투 루프 검증 목표와 충돌하므로 `Deferred`로 유지한다.
+- 무기 종류, 탄종, 장갑, AI, 피팅 전체 확장보다 최소 전투 루프를 먼저 닫는다.
 
 ---
 
@@ -185,7 +195,7 @@ Document/Plan/<기능명>/DecisionLog.md
 
 ## 10. 문서 버전 관리
 
-- 현재 문서 버전: `v1.0.0`
+- 현재 문서 버전: `v1.2.0`
 - 문서 상태: `Active`
 
 ### 버전 증가 기준
@@ -199,6 +209,15 @@ Document/Plan/<기능명>/DecisionLog.md
 ---
 
 ## 11. 체인지로그
+
+### v1.2.0 - 2026-06-19
+
+```text
+- CF-FQ-016 ~ CF-FQ-021 싱글 로컬 전투 루프 개발 후보를 추가
+- 현재 최우선 착수 후보를 차량 무기 조준/발사, 발사 피드백, 피격/피해, 반복 테스트, 템포 개선, 핵심 루프 검증 순서로 재정렬
+- CF-FQ-011 싱글 실행 기준선 전환과 CF-FQ-013 카메라/로컬 조준 고도화를 완료 기반으로 표시
+- 체력/대미지 장기 확장 항목은 유지하되, 최소 피해 처리는 CF-FQ-018에서 먼저 다루도록 분리
+```
 
 ### v1.1.0 - 2026-06-18
 
