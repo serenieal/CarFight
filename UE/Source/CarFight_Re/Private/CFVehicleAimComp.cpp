@@ -1,14 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.5.0
+// Version: 1.8.0
 // Date: 2026-06-19
 // Description: CarFight 싱글플레이 차량 Aim 시스템 구현
 // Changelog:
+// - v1.8.0: 발사 검증/시각 상태 저장과 갱신 경로를 FireValidationState / AimVisualState 명칭으로 교체.
+// - v1.6.0: 로컬 Fire Command 전환에 맞춰 발사 요청/결과 처리 설명과 Aim 시각 상태 갱신 조건을 정리.
 // - v1.5.0: 싱글플레이 기준선에서 Aim 시각 상태의 UE 복제 등록과 OnRep 경로를 제거.
 // - v1.4.0: 싱글플레이 전환에 맞춰 AimComp 기본 컴포넌트 복제를 비활성화.
 // Migration:
+// - GetServerAimState / ApplyServerFireResult 계열 호출은 FireValidationState 명칭 함수로 교체한다.
+// - GetRepAimVisualState / UpdateRepAimVisualFromFireResult 호출은 AimVisualState 명칭 함수로 교체한다.
 // - 멀티플레이 Aim 시각 상태 복제가 다시 필요하면 별도 멀티플레이 브랜치에서 복제 경로를 복구한다.
-// Scope: Owner Pawn과 VehicleCameraComp 참조 초기화, Tick 기반 Local Aim 상태 갱신, 서버 검증/로컬 시각 상태 저장을 제공합니다.
+// Scope: Owner Pawn과 VehicleCameraComp 참조 초기화, Tick 기반 Local Aim 상태 갱신, 로컬 발사 검증/시각 상태 저장을 제공합니다.
 
 #include "CFVehicleAimComp.h"
 
@@ -90,14 +94,14 @@ ECFVehicleReticleState UCFVehicleAimComp::GetReticleState() const
 	return LocalAimState.LocalReticleState;
 }
 
-FCFVehicleServerAimState UCFVehicleAimComp::GetServerAimState() const
+FCFVehicleFireValidationState UCFVehicleAimComp::GetFireValidationState() const
 {
-	return ServerAimState;
+	return FireValidationState;
 }
 
-FCFVehicleRepAimVisualState UCFVehicleAimComp::GetRepAimVisualState() const
+FCFVehicleAimVisualState UCFVehicleAimComp::GetAimVisualState() const
 {
-	return RepAimVisualState;
+	return AimVisualState;
 }
 
 FCFVehicleAimProfile UCFVehicleAimComp::GetDefaultAimProfile() const
@@ -115,9 +119,10 @@ FString UCFVehicleAimComp::GetLastAimRuntimeSummary() const
 	return LastAimRuntimeSummary;
 }
 
+// [v1.6.0] 현재 Local Aim 상태를 기준으로 로컬 발사 명령 데이터를 생성합니다.
 FCFVehicleFireRequest UCFVehicleAimComp::BuildFireRequest(const int32 FireRequestId, const float ClientFireTimeSeconds) const
 {
-	// [v1.2.0] 서버로 전달할 발사 요청 결과입니다.
+	// [v1.6.0] 로컬 검증에 전달할 발사 명령 결과입니다.
 	FCFVehicleFireRequest FireRequest;
 	FireRequest.FireRequestId = FireRequestId;
 	FireRequest.ClientFireTimeSeconds = ClientFireTimeSeconds;
@@ -133,29 +138,30 @@ FCFVehicleFireRequest UCFVehicleAimComp::BuildFireRequest(const int32 FireReques
 	return FireRequest;
 }
 
-void UCFVehicleAimComp::ApplyServerFireResult(const FCFVehicleFireResult& FireResult)
+// [v1.8.0] 로컬 발사 처리 결과를 검증 상태에 반영합니다.
+void UCFVehicleAimComp::ApplyFireValidationResult(const FCFVehicleFireResult& FireResult)
 {
-	ServerAimState.ServerAimTargetLocation = FireResult.ServerAimTargetLocation;
-	ServerAimState.bServerWithinWeaponArc = FireResult.bAccepted || FireResult.RejectReason != ECFVehicleFireRejectReason::OutOfWeaponArc;
-	ServerAimState.bServerCanFire = FireResult.bAccepted;
-	ServerAimState.LastServerRejectReason = FireResult.RejectReason;
+	FireValidationState.ValidationAimTargetLocation = FireResult.ValidationAimTargetLocation;
+	FireValidationState.bValidationWithinWeaponArc = FireResult.bAccepted || FireResult.RejectReason != ECFVehicleFireRejectReason::OutOfWeaponArc;
+	FireValidationState.bValidationCanFire = FireResult.bAccepted;
+	FireValidationState.LastValidationRejectReason = FireResult.RejectReason;
 
 	if (FireResult.bAccepted)
 	{
-		ServerAimState.LastAcceptedFireRequestId = FireResult.FireRequestId;
+		FireValidationState.LastAcceptedFireRequestId = FireResult.FireRequestId;
 	}
 	else
 	{
-		ServerAimState.LastRejectedFireRequestId = FireResult.FireRequestId;
+		FireValidationState.LastRejectedFireRequestId = FireResult.FireRequestId;
 	}
 }
 
-// [v1.5.0] 서버 발사 결과를 로컬 디버그/발사 결과 표시용 Aim 시각 상태에 반영합니다.
-void UCFVehicleAimComp::UpdateRepAimVisualFromFireResult(const FCFVehicleFireRequest& FireRequest, const FCFVehicleFireResult& FireResult)
+// [v1.8.0] 로컬 발사 결과를 로컬 디버그/발사 결과 표시용 Aim 시각 상태에 반영합니다.
+void UCFVehicleAimComp::UpdateAimVisualFromFireResult(const FCFVehicleFireRequest& FireRequest, const FCFVehicleFireResult& FireResult)
 {
-	// [v1.3.0] 이 컴포넌트를 소유한 Actor입니다.
+	// [v1.6.0] 이 컴포넌트를 소유한 Actor입니다.
 	const AActor* OwnerActor = GetOwner();
-	if (!OwnerActor || !OwnerActor->HasAuthority())
+	if (!OwnerActor)
 	{
 		return;
 	}
@@ -164,43 +170,44 @@ void UCFVehicleAimComp::UpdateRepAimVisualFromFireResult(const FCFVehicleFireReq
 	FVector ResolvedAimDirection = FVector(FireRequest.AimDirection);
 	if (ResolvedAimDirection.IsNearlyZero())
 	{
-		// [v1.3.0] 요청 방향이 비정상일 때 사용할 서버 로컬 Aim 방향 fallback입니다.
+		// [v1.6.0] 요청 방향이 비정상일 때 사용할 로컬 Aim 방향 fallback입니다.
 		const FVector LocalAimDirection = FVector(LocalAimState.LocalAimDirection);
 		ResolvedAimDirection = LocalAimDirection.IsNearlyZero() ? FVector::ForwardVector : LocalAimDirection;
 	}
 	ResolvedAimDirection = ResolvedAimDirection.GetSafeNormal();
 
-	// [v1.5.0] 표시용으로 사용할 서버 확정 목표 위치입니다.
-	FVector ResolvedTargetLocation = FVector(FireResult.ServerAimTargetLocation);
+	// [v1.6.0] 표시용으로 사용할 로컬 확정 목표 위치입니다.
+	FVector ResolvedTargetLocation = FVector(FireResult.ValidationAimTargetLocation);
 	if (ResolvedTargetLocation.IsNearlyZero())
 	{
-		ResolvedTargetLocation = FVector(FireResult.ServerHitLocation);
+		ResolvedTargetLocation = FVector(FireResult.LocalHitLocation);
 	}
 	if (ResolvedTargetLocation.IsNearlyZero())
 	{
 		ResolvedTargetLocation = FVector(FireRequest.PredictedAimTargetLocation);
 	}
 
-	RepAimVisualState.RepAimDirection = ResolvedAimDirection;
-	RepAimVisualState.RepAimTargetLocation = ResolvedTargetLocation;
-	RepAimVisualState.bIsFiringVisual = FireResult.bAccepted;
-	RepAimVisualState.RepWeaponVisualMode = FireRequest.WeaponGroupId;
+	AimVisualState.VisualAimDirection = ResolvedAimDirection;
+	AimVisualState.VisualAimTargetLocation = ResolvedTargetLocation;
+	AimVisualState.bIsFiringVisual = FireResult.bAccepted;
+	AimVisualState.WeaponVisualMode = FireRequest.WeaponGroupId;
 }
 
-void UCFVehicleAimComp::BuildServerAimStateFromFireRequest(const FCFVehicleFireRequest& FireRequest, const ECFVehicleFireRejectReason RejectReason, const bool bAccepted)
+// [v1.8.0] 로컬 발사 명령과 검증 결과를 기준으로 검증 상태를 갱신합니다.
+void UCFVehicleAimComp::BuildFireValidationStateFromFireCommand(const FCFVehicleFireRequest& FireCommand, const ECFVehicleFireRejectReason RejectReason, const bool bAccepted)
 {
-	ServerAimState.ServerAimTargetLocation = FireRequest.PredictedAimTargetLocation;
-	ServerAimState.bServerWithinWeaponArc = IsFireRequestWithinDefaultProfile(FireRequest);
-	ServerAimState.bServerCanFire = bAccepted;
-	ServerAimState.LastServerRejectReason = RejectReason;
+	FireValidationState.ValidationAimTargetLocation = FireCommand.PredictedAimTargetLocation;
+	FireValidationState.bValidationWithinWeaponArc = IsFireRequestWithinDefaultProfile(FireCommand);
+	FireValidationState.bValidationCanFire = bAccepted;
+	FireValidationState.LastValidationRejectReason = RejectReason;
 
 	if (bAccepted)
 	{
-		ServerAimState.LastAcceptedFireRequestId = FireRequest.FireRequestId;
+		FireValidationState.LastAcceptedFireRequestId = FireCommand.FireRequestId;
 	}
 	else
 	{
-		ServerAimState.LastRejectedFireRequestId = FireRequest.FireRequestId;
+		FireValidationState.LastRejectedFireRequestId = FireCommand.FireRequestId;
 	}
 }
 

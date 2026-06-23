@@ -1,14 +1,27 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-05-21
-// Description: CarFight 차량 Aim 시스템의 1차 공용 타입 정의
-// Scope: Reticle 상태, 발사 거부 사유, Aim Profile, Local/Server/Replicated Aim 상태, Fire Request/Result 구조를 제공합니다.
+// Version: 1.4.0
+// Date: 2026-06-19
+// Description: CarFight 싱글플레이 차량 Aim 시스템의 공용 타입 정의
+// Changelog:
+// - v1.4.0: 싱글플레이 기준에 맞춰 NetSerialization 의존성과 FVector_NetQuantize 계열 타입을 제거하고 일반 FVector로 통일.
+// - v1.3.0: Reticle/FireReject enum 값에서 서버 중심 이름을 싱글플레이 로컬 발사 처리 이름으로 교체.
+// - v1.2.0: 발사 검증/시각 상태 타입과 필드명을 싱글플레이 용어로 리네이밍.
+// - v1.1.0: 싱글플레이 전환에 맞춰 표시명과 툴팁을 로컬 Fire Command / Fire Result 의미로 정리.
+// Migration:
+// - ECFVehicleReticleState::WaitingServer는 FirePending으로 교체한다.
+// - ECFVehicleReticleState::ServerRejected는 FireRejected로 교체한다.
+// - ECFVehicleFireRejectReason::NoAuthority는 InvalidLocalState로 교체한다.
+// - ECFVehicleFireRejectReason::ServerTraceMiss는 TraceMiss로 교체한다.
+// - FVector_NetQuantize / FVector_NetQuantizeNormal 필드는 FVector로 교체한다.
+// - FCFVehicleServerAimState는 FCFVehicleFireValidationState로 교체한다.
+// - FCFVehicleRepAimVisualState는 FCFVehicleAimVisualState로 교체한다.
+// - Server/Rep 접두 필드는 Validation/Visual/Local 접두 필드로 교체한다.
+// Scope: Reticle 상태, 발사 거부 사유, Aim Profile, Local Aim 상태, 로컬 발사 검증/시각 상태, Fire Command/Result 구조를 제공합니다.
 
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Engine/NetSerialization.h"
 #include "CFVehicleAimTypes.generated.h"
 
 /**
@@ -24,18 +37,18 @@ enum class ECFVehicleReticleState : uint8
 	NoWeapon UMETA(DisplayName="NoWeapon"),
 	Cooldown UMETA(DisplayName="Cooldown"),
 	Reloading UMETA(DisplayName="Reloading"),
-	WaitingServer UMETA(DisplayName="WaitingServer"),
-	ServerRejected UMETA(DisplayName="ServerRejected")
+	FirePending UMETA(DisplayName="FirePending"),
+	FireRejected UMETA(DisplayName="FireRejected")
 };
 
 /**
- * 서버가 차량 발사 요청을 거부할 때 사용할 대표 사유입니다.
+ * 로컬 발사 명령을 거부할 때 사용할 대표 사유입니다.
  */
 UENUM(BlueprintType)
 enum class ECFVehicleFireRejectReason : uint8
 {
 	None UMETA(DisplayName="None"),
-	NoAuthority UMETA(DisplayName="NoAuthority"),
+	InvalidLocalState UMETA(DisplayName="InvalidLocalState"),
 	InvalidOwner UMETA(DisplayName="InvalidOwner"),
 	VehicleDisabled UMETA(DisplayName="VehicleDisabled"),
 	NoWeapon UMETA(DisplayName="NoWeapon"),
@@ -45,7 +58,7 @@ enum class ECFVehicleFireRejectReason : uint8
 	AimBlocked UMETA(DisplayName="AimBlocked"),
 	InvalidAimOrigin UMETA(DisplayName="InvalidAimOrigin"),
 	InvalidAimDirection UMETA(DisplayName="InvalidAimDirection"),
-	ServerTraceMiss UMETA(DisplayName="ServerTraceMiss")
+	TraceMiss UMETA(DisplayName="TraceMiss")
 };
 
 /**
@@ -82,27 +95,27 @@ struct FCFVehicleAimProfile
 };
 
 /**
- * 소유 클라이언트가 즉시 표시할 로컬 조준 상태입니다.
+ * 로컬 플레이어가 즉시 표시할 조준 상태입니다.
  */
 USTRUCT(BlueprintType)
 struct FCFVehicleLocalAimState
 {
 	GENERATED_BODY()
 
-	// [v1.0.0] 로컬 기준 현재 조준 목표 월드 위치입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="로컬 조준 목표 위치 (LocalAimTargetLocation)", ToolTip="로컬 클라이언트 기준 현재 조준 목표 월드 위치입니다."))
-	FVector_NetQuantize LocalAimTargetLocation = FVector::ZeroVector;
+	// [v1.4.0] 로컬 기준 현재 조준 목표 월드 위치입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="로컬 조준 목표 위치 (LocalAimTargetLocation)", ToolTip="로컬 플레이어 기준 현재 조준 목표 월드 위치입니다."))
+	FVector LocalAimTargetLocation = FVector::ZeroVector;
 
-	// [v1.0.0] 로컬 기준 현재 조준 방향입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="로컬 조준 방향 (LocalAimDirection)", ToolTip="로컬 클라이언트 기준 현재 조준 방향입니다."))
-	FVector_NetQuantizeNormal LocalAimDirection = FVector::ForwardVector;
+	// [v1.4.0] 로컬 기준 현재 조준 방향입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="로컬 조준 방향 (LocalAimDirection)", ToolTip="로컬 플레이어 기준 현재 조준 방향입니다."))
+	FVector LocalAimDirection = FVector::ForwardVector;
 
-	// [v1.0.0] 로컬 기준 현재 Reticle 표시 상태입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="로컬 Reticle 상태 (LocalReticleState)", ToolTip="로컬 클라이언트 기준 현재 조준점 표시 상태입니다."))
+	// [v1.1.0] 로컬 기준 현재 Reticle 표시 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="로컬 Reticle 상태 (LocalReticleState)", ToolTip="로컬 플레이어 기준 현재 조준점 표시 상태입니다."))
 	ECFVehicleReticleState LocalReticleState = ECFVehicleReticleState::Hidden;
 
 	// [v1.0.0] 로컬 예측 기준 발사 가능 여부입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="로컬 발사 가능 예측 (bLocalCanFire)", ToolTip="로컬 예측 기준 현재 발사 가능 여부입니다. 서버 최종 판정은 아닙니다."))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="로컬 발사 가능 예측 (bLocalCanFire)", ToolTip="로컬 예측 기준 현재 발사 가능 여부입니다. 실제 발사 적용 전 검증과 분리해서 봅니다."))
 	bool bLocalCanFire = false;
 
 	// [v1.0.0] 로컬 기준 무기 조준각 안에 있는지 여부입니다.
@@ -115,90 +128,90 @@ struct FCFVehicleLocalAimState
 };
 
 /**
- * 서버가 발사 요청 검증에 사용할 조준 상태입니다.
+ * 로컬 발사 검증에 사용할 조준 상태입니다.
  */
 USTRUCT(BlueprintType)
-struct FCFVehicleServerAimState
+struct FCFVehicleFireValidationState
 {
 	GENERATED_BODY()
 
-	// [v1.0.0] 서버 기준 현재 조준 목표 월드 위치입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="서버 조준 목표 위치 (ServerAimTargetLocation)", ToolTip="서버 검증 기준 현재 조준 목표 월드 위치입니다."))
-	FVector_NetQuantize ServerAimTargetLocation = FVector::ZeroVector;
+	// [v1.4.0] 로컬 검증 기준 현재 조준 목표 월드 위치입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="검증 조준 목표 위치 (ValidationAimTargetLocation)", ToolTip="로컬 발사 검증 기준 현재 조준 목표 월드 위치입니다."))
+	FVector ValidationAimTargetLocation = FVector::ZeroVector;
 
-	// [v1.0.0] 서버 기준 무기 조준각 안에 있는지 여부입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="서버 무기 조준각 내부 여부 (bServerWithinWeaponArc)", ToolTip="서버 검증 기준 현재 조준이 무기 조준각 안에 들어오는지 여부입니다."))
-	bool bServerWithinWeaponArc = false;
+	// [v1.2.0] 로컬 검증 기준 무기 조준각 안에 있는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="검증 무기 조준각 내부 여부 (bValidationWithinWeaponArc)", ToolTip="로컬 발사 검증 기준 현재 조준이 무기 조준각 안에 들어오는지 여부입니다."))
+	bool bValidationWithinWeaponArc = false;
 
-	// [v1.0.0] 서버 최종 판정 기준 발사 가능 여부입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="서버 발사 가능 여부 (bServerCanFire)", ToolTip="서버 최종 판정 기준 현재 발사 가능 여부입니다."))
-	bool bServerCanFire = false;
+	// [v1.2.0] 로컬 검증 기준 발사 가능 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="검증 발사 가능 여부 (bValidationCanFire)", ToolTip="로컬 발사 검증 기준 현재 발사 가능 여부입니다."))
+	bool bValidationCanFire = false;
 
-	// [v1.0.0] 서버가 마지막으로 기록한 발사 거부 사유입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="마지막 서버 거부 사유 (LastServerRejectReason)", ToolTip="서버가 마지막으로 기록한 발사 요청 거부 사유입니다."))
-	ECFVehicleFireRejectReason LastServerRejectReason = ECFVehicleFireRejectReason::None;
+	// [v1.2.0] 마지막으로 기록한 로컬 발사 거부 사유입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="마지막 발사 거부 사유 (LastValidationRejectReason)", ToolTip="로컬 발사 검증이 마지막으로 기록한 발사 명령 거부 사유입니다."))
+	ECFVehicleFireRejectReason LastValidationRejectReason = ECFVehicleFireRejectReason::None;
 
-	// [v1.0.0] 서버가 마지막으로 승인한 발사 요청 ID입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="마지막 승인 발사 요청 ID (LastAcceptedFireRequestId)", ToolTip="서버가 마지막으로 승인한 발사 요청 ID입니다."))
+	// [v1.1.0] 마지막으로 승인한 발사 명령 ID입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="마지막 승인 발사 명령 ID (LastAcceptedFireRequestId)", ToolTip="로컬 발사 검증이 마지막으로 승인한 발사 명령 ID입니다."))
 	int32 LastAcceptedFireRequestId = 0;
 
-	// [v1.0.0] 서버가 마지막으로 거부한 발사 요청 ID입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="마지막 거부 발사 요청 ID (LastRejectedFireRequestId)", ToolTip="서버가 마지막으로 거부한 발사 요청 ID입니다."))
+	// [v1.1.0] 마지막으로 거부한 발사 명령 ID입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="마지막 거부 발사 명령 ID (LastRejectedFireRequestId)", ToolTip="로컬 발사 검증이 마지막으로 거부한 발사 명령 ID입니다."))
 	int32 LastRejectedFireRequestId = 0;
 };
 
 /**
- * 다른 클라이언트에게 보여줄 최소 조준 시각 상태입니다.
+ * 로컬 디버그와 발사 피드백에 사용할 최소 조준 시각 상태입니다.
  */
 USTRUCT(BlueprintType)
-struct FCFVehicleRepAimVisualState
+struct FCFVehicleAimVisualState
 {
 	GENERATED_BODY()
 
-	// [v1.0.0] 복제 시각화용 조준 방향입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="복제 조준 방향 (RepAimDirection)", ToolTip="다른 클라이언트에게 보여줄 조준 방향입니다. 전투 판정용 데이터가 아닙니다."))
-	FVector_NetQuantizeNormal RepAimDirection = FVector::ForwardVector;
+	// [v1.4.0] 표시 시각화용 조준 방향입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="표시 조준 방향 (VisualAimDirection)", ToolTip="로컬 디버그와 발사 피드백에 표시할 조준 방향입니다."))
+	FVector VisualAimDirection = FVector::ForwardVector;
 
-	// [v1.0.0] 복제 시각화용 조준 목표 위치입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="복제 조준 목표 위치 (RepAimTargetLocation)", ToolTip="다른 클라이언트에게 보여줄 조준 목표 월드 위치입니다. 전투 판정용 데이터가 아닙니다."))
-	FVector_NetQuantize RepAimTargetLocation = FVector::ZeroVector;
+	// [v1.4.0] 표시 시각화용 조준 목표 위치입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="표시 조준 목표 위치 (VisualAimTargetLocation)", ToolTip="로컬 디버그와 발사 피드백에 표시할 조준 목표 월드 위치입니다."))
+	FVector VisualAimTargetLocation = FVector::ZeroVector;
 
-	// [v1.0.0] 발사 이펙트 시각화 재생 여부입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="발사 시각화 여부 (bIsFiringVisual)", ToolTip="다른 클라이언트에게 발사 이펙트 시각화를 보여줄지 여부입니다."))
+	// [v1.1.0] 발사 이펙트 시각화 재생 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="발사 시각화 여부 (bIsFiringVisual)", ToolTip="로컬 발사 피드백에서 발사 이펙트 시각화를 표시할지 여부입니다."))
 	bool bIsFiringVisual = false;
 
-	// [v1.0.0] 무기 시각화 모드를 구분하는 이름입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="무기 시각화 모드 (RepWeaponVisualMode)", ToolTip="다른 클라이언트에게 보여줄 무기 시각화 모드 이름입니다."))
-	FName RepWeaponVisualMode = NAME_None;
+	// [v1.2.0] 무기 시각화 모드를 구분하는 이름입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="무기 시각화 모드 (WeaponVisualMode)", ToolTip="로컬 발사 피드백에 사용할 무기 시각화 모드 이름입니다."))
+	FName WeaponVisualMode = NAME_None;
 };
 
 /**
- * 클라이언트가 서버에 보내는 발사 요청 입력 데이터입니다.
+ * 로컬 발사 검증에 넘기는 발사 명령 입력 데이터입니다.
  */
 USTRUCT(BlueprintType)
 struct FCFVehicleFireRequest
 {
 	GENERATED_BODY()
 
-	// [v1.0.0] 클라이언트가 생성한 발사 요청 ID입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="발사 요청 ID (FireRequestId)", ToolTip="클라이언트가 생성한 발사 요청 ID입니다."))
+	// [v1.1.0] 로컬 발사 명령 ID입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="발사 명령 ID (FireRequestId)", ToolTip="로컬 플레이어가 생성한 발사 명령 ID입니다. 필드명은 기존 BP 호환을 위해 유지합니다."))
 	int32 FireRequestId = 0;
 
-	// [v1.0.0] 클라이언트가 발사를 요청한 로컬 시간입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="클라이언트 발사 시간 (ClientFireTimeSeconds)", ToolTip="클라이언트가 발사를 요청한 로컬 월드 시간(초)입니다."))
+	// [v1.1.0] 로컬 플레이어가 발사를 입력한 시간입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="로컬 발사 시간 (ClientFireTimeSeconds)", ToolTip="로컬 플레이어가 발사를 입력한 월드 시간(초)입니다. 필드명은 기존 BP 호환을 위해 유지합니다."))
 	float ClientFireTimeSeconds = 0.0f;
 
-	// [v1.0.0] 클라이언트가 보낸 조준 시작 위치입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="조준 시작 위치 (AimOrigin)", ToolTip="클라이언트가 서버 검증용으로 보낸 조준 시작 월드 위치입니다."))
-	FVector_NetQuantize AimOrigin = FVector::ZeroVector;
+	// [v1.4.0] 로컬 발사 검증용 조준 시작 위치입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="조준 시작 위치 (AimOrigin)", ToolTip="로컬 발사 검증용 조준 시작 월드 위치입니다."))
+	FVector AimOrigin = FVector::ZeroVector;
 
-	// [v1.0.0] 클라이언트가 보낸 조준 방향입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="조준 방향 (AimDirection)", ToolTip="클라이언트가 서버 검증용으로 보낸 조준 방향입니다."))
-	FVector_NetQuantizeNormal AimDirection = FVector::ForwardVector;
+	// [v1.4.0] 로컬 발사 검증용 조준 방향입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="조준 방향 (AimDirection)", ToolTip="로컬 발사 검증용 조준 방향입니다."))
+	FVector AimDirection = FVector::ForwardVector;
 
-	// [v1.0.0] 클라이언트가 예측한 조준 목표 월드 위치입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="예측 조준 목표 위치 (PredictedAimTargetLocation)", ToolTip="클라이언트가 예측한 조준 목표 월드 위치입니다. 서버 최종 결과는 아닙니다."))
-	FVector_NetQuantize PredictedAimTargetLocation = FVector::ZeroVector;
+	// [v1.4.0] 로컬 발사 명령이 참조하는 조준 목표 월드 위치입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="조준 목표 위치 (PredictedAimTargetLocation)", ToolTip="로컬 발사 명령이 참조하는 조준 목표 월드 위치입니다. 필드명은 기존 BP 호환을 위해 유지합니다."))
+	FVector PredictedAimTargetLocation = FVector::ZeroVector;
 
 	// [v1.0.0] 발사를 요청한 무기 그룹 ID입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="무기 그룹 ID (WeaponGroupId)", ToolTip="발사를 요청한 무기 그룹 ID입니다."))
@@ -206,34 +219,34 @@ struct FCFVehicleFireRequest
 };
 
 /**
- * 서버가 발사 요청 처리 후 소유 클라이언트에 돌려줄 결과 데이터입니다.
+ * 로컬 발사 명령 처리 후 적용할 결과 데이터입니다.
  */
 USTRUCT(BlueprintType)
 struct FCFVehicleFireResult
 {
 	GENERATED_BODY()
 
-	// [v1.0.0] 처리된 발사 요청 ID입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="발사 요청 ID (FireRequestId)", ToolTip="서버가 처리한 발사 요청 ID입니다."))
+	// [v1.1.0] 처리된 발사 명령 ID입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="발사 명령 ID (FireRequestId)", ToolTip="로컬 검증에서 처리한 발사 명령 ID입니다. 필드명은 기존 BP 호환을 위해 유지합니다."))
 	int32 FireRequestId = 0;
 
-	// [v1.0.0] 서버가 발사 요청을 승인했는지 여부입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="발사 승인 여부 (bAccepted)", ToolTip="서버가 발사 요청을 승인했는지 여부입니다."))
+	// [v1.1.0] 로컬 검증이 발사 명령을 승인했는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="발사 승인 여부 (bAccepted)", ToolTip="로컬 검증이 발사 명령을 승인했는지 여부입니다."))
 	bool bAccepted = false;
 
-	// [v1.0.0] 서버가 발사 요청을 거부한 경우의 사유입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="거부 사유 (RejectReason)", ToolTip="서버가 발사 요청을 거부한 경우의 사유입니다. 승인된 경우 None입니다."))
+	// [v1.1.0] 로컬 검증이 발사 명령을 거부한 경우의 사유입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="거부 사유 (RejectReason)", ToolTip="로컬 검증이 발사 명령을 거부한 경우의 사유입니다. 승인된 경우 None입니다."))
 	ECFVehicleFireRejectReason RejectReason = ECFVehicleFireRejectReason::None;
 
-	// [v1.0.0] 서버 기준 조준 목표 월드 위치입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="서버 조준 목표 위치 (ServerAimTargetLocation)", ToolTip="서버 기준으로 확정한 조준 목표 월드 위치입니다."))
-	FVector_NetQuantize ServerAimTargetLocation = FVector::ZeroVector;
+	// [v1.4.0] 로컬 검증 기준 조준 목표 월드 위치입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="검증 조준 목표 위치 (ValidationAimTargetLocation)", ToolTip="로컬 검증 기준으로 확정한 조준 목표 월드 위치입니다."))
+	FVector ValidationAimTargetLocation = FVector::ZeroVector;
 
-	// [v1.0.0] 서버 Trace 기준 적중 위치입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="서버 적중 위치 (ServerHitLocation)", ToolTip="서버 Trace 기준 적중 위치입니다. 이번 1차 골격에서는 실제 Trace를 수행하지 않습니다."))
-	FVector_NetQuantize ServerHitLocation = FVector::ZeroVector;
+	// [v1.4.0] 로컬 Trace 기준 적중 위치입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="로컬 적중 위치 (LocalHitLocation)", ToolTip="로컬 Trace 기준 적중 위치입니다."))
+	FVector LocalHitLocation = FVector::ZeroVector;
 
-	// [v1.0.0] 서버 Trace 기준 적중 노멀입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="서버 적중 노멀 (ServerHitNormal)", ToolTip="서버 Trace 기준 적중 노멀입니다. 이번 1차 골격에서는 실제 Trace를 수행하지 않습니다."))
-	FVector_NetQuantizeNormal ServerHitNormal = FVector::UpVector;
+	// [v1.4.0] 로컬 Trace 기준 적중 노멀입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="로컬 적중 노멀 (LocalHitNormal)", ToolTip="로컬 Trace 기준 적중 노멀입니다."))
+	FVector LocalHitNormal = FVector::UpVector;
 };

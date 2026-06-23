@@ -1,17 +1,27 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.62.0
+// Version: 2.67.0
 // Date: 2026-06-19
-// Description: CarFight 싱글플레이 차량 Pawn 기준 클래스 (멀티 동기화 진단 잔여 코드 제거)
+// Description: CarFight 싱글플레이 차량 Pawn 기준 클래스
 // Changelog:
+// - v2.67.0: Aim Trace 디버그 변수명을 bDrawLocalAimTraceDebug / LocalAimTraceDebugDuration으로 교체.
+// - v2.66.0: Aim Debug Snapshot의 ServerAimState / RepAimVisualState 명칭을 FireValidationState / AimVisualState로 교체.
+// - v2.65.0: 참조가 없는 ACFVehiclePawn Fire 레거시 wrapper와 RPC 선언을 제거해 싱글플레이 Fire 경로를 단일화.
+// - v2.64.0: Aim Debug 표시명과 입력/결과 툴팁을 싱글플레이 로컬 Fire Command 기준으로 정리.
+// - v2.63.0: Aim Fire 입력이 싱글플레이 로컬 Fire Command 경로를 먼저 사용하도록 로컬 함수와 레거시 RPC wrapper를 분리.
 // - v2.62.0: 싱글플레이 기준선에서 차량 네트워크 진단 샘플/RepMove 수신 로그/복제 등록 경로를 제거하고 Aim 디버그 표시 문구를 정리.
 // - v2.61.0: 싱글플레이 전환에 맞춰 C++ 기준선에서 Actor 복제와 Replicate Movement 강제 활성화를 중단.
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth 적용 전 기준선 정리를 위해 차량 NetDebug/OwnerVisual/OwnerBodyVisual 실험 플래그 기본값을 False로 통일.
 // Migration:
+// - 신규 Fire 흐름은 BuildFireCommand / ValidateFireCommand / RunLocalDummyHitScan / ApplyFireResult를 기준으로 사용한다.
+// - bDrawServerAimTraceDebug는 bDrawLocalAimTraceDebug로, ServerAimTraceDebugDuration은 LocalAimTraceDebugDuration으로 교체한다.
+// - BP 저장값 보존을 위해 DefaultEngine.ini CoreRedirects의 PropertyRedirects를 유지한다.
+// - FCFVehicleDebugAim의 ServerAimState는 FireValidationState로, RepAimVisualState는 AimVisualState로 교체한다.
+// - ACFVehiclePawn의 BuildFireRequest / ValidateFireRequestOnServer / RunServerDummyHitScan / ServerRequestFire / ClientReceiveFireResult 호출은 제거하고 로컬 Fire 함수로 교체한다.
 // - BP_CFVehiclePawn의 Actor Replicates/Replicate Movement도 False로 저장해 C++ 기본값과 맞춘다.
 // - 멀티플레이 진단이 다시 필요하면 별도 멀티플레이 브랜치/문서에서 복구한다.
-// Scope: DriveComp / WheelSyncComp / VehicleCameraComp / VehicleAimComp를 소유하고 차량 런타임, 입력, 카메라 디버그 스냅샷을 함께 다룹니다.
+// Scope: DriveComp / WheelSyncComp / VehicleCameraComp / VehicleAimComp를 소유하고 차량 런타임, 입력, 카메라 디버그 스냅샷, 로컬 Fire Command를 함께 다룹니다.
 
 #pragma once
 
@@ -393,17 +403,17 @@ struct FCFVehicleDebugAim
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="Aim 런타임 준비 완료 여부 (bAimRuntimeReady)", ToolTip="VehicleAimComp가 Owner Pawn과 VehicleCameraComp 참조를 준비했는지 여부입니다."))
 	bool bAimRuntimeReady = false;
 
-	// [v2.16.0] 로컬 클라이언트 기준 Aim 상태입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="로컬 Aim 상태 (LocalAimState)", ToolTip="VehicleAimComp가 계산한 로컬 클라이언트 기준 Aim 상태입니다."))
+	// [v2.64.0] 로컬 플레이어 기준 Aim 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="로컬 Aim 상태 (LocalAimState)", ToolTip="VehicleAimComp가 계산한 로컬 플레이어 기준 Aim 상태입니다."))
 	FCFVehicleLocalAimState LocalAimState;
 
-	// [v2.16.0] 서버 검증 기준 Aim 상태입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="서버 Aim 상태 (ServerAimState)", ToolTip="VehicleAimComp가 보유한 서버 검증 기준 Aim 상태입니다. 이번 단계에서는 기본값 표시만 수행합니다."))
-	FCFVehicleServerAimState ServerAimState;
+	// [v2.66.0] 로컬 발사 검증 기준 Aim 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="발사 검증 상태 (FireValidationState)", ToolTip="VehicleAimComp가 보유한 로컬 발사 검증 기준 Aim 상태입니다."))
+	FCFVehicleFireValidationState FireValidationState;
 
-	// [v2.62.0] 로컬 디버그와 발사 결과 표시용 Aim 시각 상태입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="Aim 시각 상태 (RepAimVisualState)", ToolTip="VehicleAimComp가 보유한 로컬 디버그와 발사 결과 표시용 Aim 시각 상태입니다."))
-	FCFVehicleRepAimVisualState RepAimVisualState;
+	// [v2.66.0] 로컬 디버그와 발사 결과 표시용 Aim 시각 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="Aim 시각 상태 (AimVisualState)", ToolTip="VehicleAimComp가 보유한 로컬 디버그와 발사 결과 표시용 Aim 시각 상태입니다."))
+	FCFVehicleAimVisualState AimVisualState;
 
 	// [v2.16.0] 로컬 Reticle 표시 상태입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="Reticle 상태 (ReticleState)", ToolTip="VehicleAimComp가 계산한 현재 로컬 Reticle 표시 상태입니다."))
@@ -413,12 +423,12 @@ struct FCFVehicleDebugAim
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="Aim 런타임 요약 (AimRuntimeSummary)", ToolTip="VehicleAimComp의 마지막 런타임 초기화 또는 갱신 요약 문자열입니다."))
 	FString AimRuntimeSummary = TEXT("AimRuntime: Missing");
 
-	// [v2.17.0] 마지막 발사 요청 디버그 캐시입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="마지막 발사 요청 (LastFireRequest)", ToolTip="Pawn이 마지막으로 생성하거나 서버에서 받은 발사 요청 디버그 캐시입니다."))
+	// [v2.64.0] 마지막 발사 명령 디버그 캐시입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="마지막 발사 명령 (LastFireRequest)", ToolTip="Pawn이 마지막으로 생성하거나 레거시 wrapper에서 받은 로컬 발사 명령 디버그 캐시입니다."))
 	FCFVehicleFireRequest LastFireRequest;
 
-	// [v2.17.0] 마지막 발사 결과 디버그 캐시입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="마지막 발사 결과 (LastFireResult)", ToolTip="서버 검증 뒤 Owner Client가 마지막으로 받은 발사 결과 디버그 캐시입니다."))
+	// [v2.64.0] 마지막 발사 결과 디버그 캐시입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Aim", meta=(DisplayName="마지막 발사 결과 (LastFireResult)", ToolTip="로컬 발사 검증 뒤 Pawn이 마지막으로 적용한 발사 결과 디버그 캐시입니다."))
 	FCFVehicleFireResult LastFireResult;
 };
 
@@ -450,7 +460,7 @@ struct FCFVehicleDebugSnapshot
 	FCFVehicleDebugCamera Camera;
 
 	// [v2.16.0] 조준 상세 카테고리입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="Aim 카테고리 (Aim)", ToolTip="AimComp의 로컬/서버/표시용 조준 상태를 담는 VehicleDebug Aim 카테고리입니다."))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="Aim 카테고리 (Aim)", ToolTip="AimComp의 로컬/검증/표시용 조준 상태를 담는 VehicleDebug Aim 카테고리입니다."))
 	FCFVehicleDebugAim Aim;
 
 	// [v2.14.1] 런타임 진단 카테고리입니다.
@@ -542,8 +552,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="시점 입력 액션 (InputAction_Look)", ToolTip="차량 카메라 자유 조준 입력에 사용할 2D Look Input Action 입니다."))
 	TObjectPtr<UInputAction> InputAction_Look = nullptr;
 
-	// [v2.17.0] 발사 요청을 시작할 입력 액션입니다.
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="발사 입력 액션 (InputAction_Fire)", ToolTip="Aim 기반 서버 발사 요청을 시작할 Input Action입니다. 비어 있으면 발사 입력 바인딩을 건너뜁니다."))
+	// [v2.64.0] 로컬 발사 명령을 시작할 입력 액션입니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="발사 입력 액션 (InputAction_Fire)", ToolTip="Aim 기반 로컬 발사 명령을 시작할 Input Action입니다. 비어 있으면 발사 입력 바인딩을 건너뜁니다."))
 	TObjectPtr<UInputAction> InputAction_Fire = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="입력 장치 모드 (InputDeviceMode)", ToolTip="차량 입력을 어떤 장치로 받을지 고정합니다. Auto는 키보드/마우스와 게임패드를 모두 허용하고, KeyboardMouseOnly는 키보드/마우스만, GamepadOnly는 게임패드만 허용합니다."))
@@ -684,21 +694,21 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Aim", meta=(DisplayName="다음 발사 요청 ID (NextFireRequestId)", ToolTip="다음 Aim 기반 발사 요청에 사용할 증가형 요청 ID입니다."))
 	int32 NextFireRequestId = 1;
 
-	// [v2.17.0] 마지막으로 생성하거나 서버에서 받은 발사 요청입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Aim", meta=(DisplayName="마지막 발사 요청 (LastFireRequest)", ToolTip="마지막으로 생성하거나 서버에서 받은 Aim 기반 발사 요청 디버그 캐시입니다."))
+	// [v2.63.0] 마지막으로 생성하거나 레거시 wrapper에서 받은 발사 명령입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Aim", meta=(DisplayName="마지막 발사 명령 (LastFireRequest)", ToolTip="마지막으로 생성하거나 레거시 wrapper에서 받은 Aim 기반 로컬 발사 명령 디버그 캐시입니다. 변수명은 기존 BP 호환을 위해 유지합니다."))
 	FCFVehicleFireRequest LastFireRequest;
 
-	// [v2.17.0] 마지막으로 받은 서버 발사 검증 결과입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Aim", meta=(DisplayName="마지막 발사 결과 (LastFireResult)", ToolTip="마지막으로 받은 서버 발사 검증 결과 디버그 캐시입니다."))
+	// [v2.63.0] 마지막 로컬 발사 검증 결과입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Aim", meta=(DisplayName="마지막 발사 결과 (LastFireResult)", ToolTip="마지막 로컬 발사 검증 결과 디버그 캐시입니다."))
 	FCFVehicleFireResult LastFireResult;
 
-	// [v2.18.0] 서버 HitScan 더미 Trace 디버그 라인 표시 여부입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Aim", meta=(DisplayName="서버 Aim Trace 디버그 표시 (bDrawServerAimTraceDebug)", ToolTip="True이면 서버 HitScan 더미 Trace를 디버그 라인으로 표시합니다."))
-	bool bDrawServerAimTraceDebug = false;
+	// [v2.67.0] 로컬 HitScan 더미 Trace 디버그 라인 표시 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Aim", meta=(DisplayName="로컬 Aim Trace 디버그 표시 (bDrawLocalAimTraceDebug)", ToolTip="True이면 로컬 HitScan 더미 Trace를 디버그 라인으로 표시합니다."))
+	bool bDrawLocalAimTraceDebug = false;
 
-	// [v2.18.0] 서버 HitScan 더미 Trace 디버그 라인 표시 시간입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Aim", meta=(ClampMin="0.0", DisplayName="서버 Aim Trace 디버그 시간 (ServerAimTraceDebugDuration)", ToolTip="서버 HitScan 더미 Trace 디버그 라인을 표시할 시간입니다."))
-	float ServerAimTraceDebugDuration = 2.0f;
+	// [v2.67.0] 로컬 HitScan 더미 Trace 디버그 라인 표시 시간입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Aim", meta=(ClampMin="0.0", DisplayName="로컬 Aim Trace 디버그 시간 (LocalAimTraceDebugDuration)", ToolTip="로컬 HitScan 더미 Trace 디버그 라인을 표시할 시간입니다."))
+	float LocalAimTraceDebugDuration = 2.0f;
 
 	// [v2.20.0] 로컬 Pawn에서 생성할 Aim Reticle 위젯 클래스입니다.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(DisplayName="Aim Reticle 위젯 클래스 (AimReticleWidgetClass)", ToolTip="로컬 Pawn에서 Viewport에 추가할 Aim Reticle 위젯 클래스입니다. 비어 있으면 생성하지 않습니다."))
@@ -746,7 +756,7 @@ public:
 	float DriveStateDebugMessageDuration = 0.0f;
 
 	// [v2.48.2] 로컬 조작 차량의 표시 루트 회전 안정화를 사용할지 여부입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|OwnerVisual", meta=(DisplayName="Owner 표시 안정화 사용 (bEnableOwnerVisualStabilization)", ToolTip="True이면 로컬 조작 차량에서 물리 루트는 그대로 두고 차체/휠 표시 루트만 부드럽게 따라가게 합니다. 서버 싱크와 물리에는 영향을 주지 않습니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|OwnerVisual", meta=(DisplayName="Owner 표시 안정화 사용 (bEnableOwnerVisualStabilization)", ToolTip="True이면 로컬 조작 차량에서 물리 루트는 그대로 두고 차체/휠 표시 루트만 부드럽게 따라가게 합니다. 물리 판정에는 영향을 주지 않습니다."))
 	bool bEnableOwnerVisualStabilization = false;
 
 	// [v2.48.0] Owner 표시 루트가 Actor 회전을 따라가는 보간 속도입니다.
@@ -770,7 +780,7 @@ public:
 	bool bHideOwnerPhysicsMeshWhenStabilized = false;
 
 	// [v2.53.0] 로컬 조작 차량의 SM_Body만 별도로 부드럽게 표시할지 여부입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|OwnerBodyVisual", meta=(DisplayName="Owner 차체 표시 안정화 사용 (bEnableOwnerBodyVisualStabilization)", ToolTip="True이면 로컬 조작 차량에서 SM_Body 표시 회전만 부드럽게 따라가게 합니다. 물리, 충돌, 서버 싱크에는 영향을 주지 않습니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|OwnerBodyVisual", meta=(DisplayName="Owner 차체 표시 안정화 사용 (bEnableOwnerBodyVisualStabilization)", ToolTip="True이면 로컬 조작 차량에서 SM_Body 표시 회전만 부드럽게 따라가게 합니다. 물리와 충돌에는 영향을 주지 않습니다."))
 	bool bEnableOwnerBodyVisualStabilization = false;
 
 	// [v2.53.1] SM_Body 표시 회전이 Actor 회전을 따라가는 보간 속도입니다.
@@ -965,25 +975,20 @@ protected:
 	// [v1.6.0] 해석된 차량 이동 입력 결과를 DriveComp 입력으로 적용합니다.
 	void ApplyResolvedVehicleMoveInput(const FCFVehicleMoveInputResult& ResolvedMoveInput);
 
-	// [v2.17.0] 현재 Aim 상태를 기준으로 발사 요청 데이터를 생성합니다.
-	FCFVehicleFireRequest BuildFireRequest();
+	// [v2.63.0] 현재 Aim 상태를 기준으로 로컬 발사 명령 데이터를 생성합니다.
+	FCFVehicleFireRequest BuildFireCommand();
 
-	// [v2.17.0] 서버에서 발사 요청을 최소 검증하고 결과를 채웁니다.
-	bool ValidateFireRequestOnServer(const FCFVehicleFireRequest& FireRequest, FCFVehicleFireResult& OutFireResult);
+	// [v2.63.0] 싱글플레이 로컬 발사 명령을 최소 검증하고 결과를 채웁니다.
+	bool ValidateFireCommand(const FCFVehicleFireRequest& FireCommand, FCFVehicleFireResult& OutFireResult);
 
-	// [v2.18.0] 서버 권한에서 더미 HitScan Trace를 실행하고 FireResult에 결과를 채웁니다.
-	bool RunServerDummyHitScan(const FCFVehicleFireRequest& FireRequest, FCFVehicleFireResult& InOutFireResult) const;
+	// [v2.63.0] 싱글플레이 로컬 더미 HitScan Trace를 실행하고 FireResult에 결과를 채웁니다.
+	bool RunLocalDummyHitScan(const FCFVehicleFireRequest& FireCommand, FCFVehicleFireResult& InOutFireResult) const;
 
 	// [v2.17.0] 클라이언트 또는 서버 로컬 입력에서 발사 요청을 시작합니다.
 	void HandleFireStarted(const FInputActionValue& InputActionValue);
 
-	// [v2.17.0] 서버 권한으로 Aim 기반 발사 요청을 검증합니다.
-	UFUNCTION(Server, Reliable)
-	void ServerRequestFire(const FCFVehicleFireRequest& FireRequest);
-
-	// [v2.17.0] Owner Client에 서버 발사 검증 결과를 전달합니다.
-	UFUNCTION(Client, Reliable)
-	void ClientReceiveFireResult(const FCFVehicleFireResult& FireResult);
+	// [v2.63.0] 로컬 발사 결과를 Pawn과 AimComp 상태에 반영합니다.
+	void ApplyFireResult(const FCFVehicleFireRequest& FireCommand, const FCFVehicleFireResult& FireResult);
 
 	void ApplyVehicleDataConfig();
 	void ApplyVehicleVisualConfig();

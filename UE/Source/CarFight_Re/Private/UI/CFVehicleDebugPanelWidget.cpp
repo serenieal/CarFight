@@ -1,12 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.8.1
+// Version: 1.8.3
 // Date: 2026-06-19
 // Description: VehicleDebug Panel용 C++ 부모 위젯 클래스 구현입니다.
 // Changelog:
+// - v1.8.3: Aim Debug ViewData의 발사 검증/시각 상태 참조명을 FireValidationState / AimVisualState로 교체.
+// - v1.8.2: Aim 검증 하위 섹션 표시명을 서버 조준에서 로컬 발사 검증 기준으로 변경.
 // - v1.8.1: 싱글플레이 기준에 맞춰 Aim 디버그 패널의 복제 시각 표시 문구를 Aim 시각 표시로 변경.
 // Migration:
-// - 기존 FieldId와 SectionId는 유지되므로 위젯 바인딩 변경은 필요 없다.
+// - Aim 검증/시각 상태 FieldId는 aim_validation / aim_visual 접두어를 기준으로 사용한다.
 // Scope: VehicleDebug Overview / Drive / Input / Camera / Aim / Runtime 카테고리를 읽어 Navigation + Selected Section 기반 표시와 기존 fallback 표시를 안정적으로 지원합니다.
 
 #include "UI/CFVehicleDebugPanelWidget.h"
@@ -1582,11 +1584,11 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildAimS
 	// [v1.8.0] Aim Section에서 사용할 Local Aim 상태입니다.
 	const FCFVehicleLocalAimState& LocalAimState = InAim.LocalAimState;
 
-	// [v1.8.0] Aim Section에서 사용할 Server Aim 상태입니다.
-	const FCFVehicleServerAimState& ServerAimState = InAim.ServerAimState;
+	// [v1.8.3] Aim Section에서 사용할 발사 검증 상태입니다.
+	const FCFVehicleFireValidationState& FireValidationState = InAim.FireValidationState;
 
-	// [v1.8.1] Aim Section에서 사용할 표시용 Aim 시각 상태입니다.
-	const FCFVehicleRepAimVisualState& RepAimVisualState = InAim.RepAimVisualState;
+	// [v1.8.3] Aim Section에서 사용할 표시용 Aim 시각 상태입니다.
+	const FCFVehicleAimVisualState& AimVisualState = InAim.AimVisualState;
 
 	// [v1.8.0] Navigation 배지와 주요 필드에 표시할 Reticle 상태 문자열입니다.
 	const FString ReticleStateText = ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InAim.ReticleState));
@@ -1622,24 +1624,24 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildAimS
 	LocalAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_local_direction"), TEXT("조준 방향"), FString::Printf(TEXT("(%.2f, %.2f, %.2f)"), LocalAimState.LocalAimDirection.X, LocalAimState.LocalAimDirection.Y, LocalAimState.LocalAimDirection.Z)));
 	AimSectionViewData->AddChildSection(LocalAimSectionViewData);
 
-	// [v1.8.0] Server Aim 하위 섹션 ViewData입니다.
-	TSharedRef<FCFVehicleDebugSectionViewData> ServerAimSectionViewData =
-		FCFVehicleDebugSectionViewData::MakeSection(TEXT("AimServer"), TEXT("서버 조준"), ECFVehicleDebugSectionKind::Subsection, true);
-	ServerAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_server_can_fire"), TEXT("서버 발사 가능"), ServerAimState.bServerCanFire ? TEXT("예") : TEXT("아니오"), !ServerAimState.bServerCanFire));
-	ServerAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_server_within_arc"), TEXT("서버 조준각 내부"), ServerAimState.bServerWithinWeaponArc ? TEXT("예") : TEXT("아니오"), !ServerAimState.bServerWithinWeaponArc));
-	ServerAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_server_reject_reason"), TEXT("마지막 서버 거부 사유"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(ServerAimState.LastServerRejectReason)), ServerAimState.LastServerRejectReason != ECFVehicleFireRejectReason::None));
-	ServerAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_server_last_accepted_id"), TEXT("마지막 승인 요청 ID"), FString::FromInt(ServerAimState.LastAcceptedFireRequestId)));
-	ServerAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_server_last_rejected_id"), TEXT("마지막 거부 요청 ID"), FString::FromInt(ServerAimState.LastRejectedFireRequestId)));
-	AimSectionViewData->AddChildSection(ServerAimSectionViewData);
+	// [v1.8.2] 발사 검증 하위 섹션 ViewData입니다.
+	TSharedRef<FCFVehicleDebugSectionViewData> FireValidationSectionViewData =
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("AimFireValidation"), TEXT("발사 검증"), ECFVehicleDebugSectionKind::Subsection, true);
+	FireValidationSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_validation_can_fire"), TEXT("검증 발사 가능"), FireValidationState.bValidationCanFire ? TEXT("예") : TEXT("아니오"), !FireValidationState.bValidationCanFire));
+	FireValidationSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_validation_within_arc"), TEXT("검증 조준각 내부"), FireValidationState.bValidationWithinWeaponArc ? TEXT("예") : TEXT("아니오"), !FireValidationState.bValidationWithinWeaponArc));
+	FireValidationSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_validation_reject_reason"), TEXT("마지막 발사 거부 사유"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(FireValidationState.LastValidationRejectReason)), FireValidationState.LastValidationRejectReason != ECFVehicleFireRejectReason::None));
+	FireValidationSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_validation_last_accepted_id"), TEXT("마지막 승인 명령 ID"), FString::FromInt(FireValidationState.LastAcceptedFireRequestId)));
+	FireValidationSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_validation_last_rejected_id"), TEXT("마지막 거부 명령 ID"), FString::FromInt(FireValidationState.LastRejectedFireRequestId)));
+	AimSectionViewData->AddChildSection(FireValidationSectionViewData);
 
-	// [v1.8.1] Aim Visual 하위 섹션 ViewData입니다.
-	TSharedRef<FCFVehicleDebugSectionViewData> RepAimSectionViewData =
-		FCFVehicleDebugSectionViewData::MakeSection(TEXT("AimRepVisual"), TEXT("Aim 시각"), ECFVehicleDebugSectionKind::Subsection, true);
-	RepAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_rep_direction"), TEXT("표시 조준 방향"), FString::Printf(TEXT("(%.2f, %.2f, %.2f)"), RepAimVisualState.RepAimDirection.X, RepAimVisualState.RepAimDirection.Y, RepAimVisualState.RepAimDirection.Z)));
-	RepAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_rep_target"), TEXT("표시 목표 위치"), FString::Printf(TEXT("(%.1f, %.1f, %.1f)"), RepAimVisualState.RepAimTargetLocation.X, RepAimVisualState.RepAimTargetLocation.Y, RepAimVisualState.RepAimTargetLocation.Z)));
-	RepAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_rep_firing_visual"), TEXT("발사 시각화"), RepAimVisualState.bIsFiringVisual ? TEXT("예") : TEXT("아니오"), RepAimVisualState.bIsFiringVisual));
-	RepAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_rep_weapon_mode"), TEXT("무기 시각 모드"), RepAimVisualState.RepWeaponVisualMode.ToString()));
-	AimSectionViewData->AddChildSection(RepAimSectionViewData);
+	// [v1.8.3] Aim Visual 하위 섹션 ViewData입니다.
+	TSharedRef<FCFVehicleDebugSectionViewData> AimVisualSectionViewData =
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("AimVisual"), TEXT("Aim 시각"), ECFVehicleDebugSectionKind::Subsection, true);
+	AimVisualSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_visual_direction"), TEXT("표시 조준 방향"), FString::Printf(TEXT("(%.2f, %.2f, %.2f)"), AimVisualState.VisualAimDirection.X, AimVisualState.VisualAimDirection.Y, AimVisualState.VisualAimDirection.Z)));
+	AimVisualSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_visual_target"), TEXT("표시 목표 위치"), FString::Printf(TEXT("(%.1f, %.1f, %.1f)"), AimVisualState.VisualAimTargetLocation.X, AimVisualState.VisualAimTargetLocation.Y, AimVisualState.VisualAimTargetLocation.Z)));
+	AimVisualSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_visual_firing"), TEXT("발사 시각화"), AimVisualState.bIsFiringVisual ? TEXT("예") : TEXT("아니오"), AimVisualState.bIsFiringVisual));
+	AimVisualSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_visual_weapon_mode"), TEXT("무기 시각 모드"), AimVisualState.WeaponVisualMode.ToString()));
+	AimSectionViewData->AddChildSection(AimVisualSectionViewData);
 
 	return AimSectionViewData;
 }

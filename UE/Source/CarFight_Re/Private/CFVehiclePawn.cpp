@@ -1,14 +1,22 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.62.0
+// Version: 2.67.0
 // Date: 2026-06-19
-// Description: CarFight 싱글플레이 차량 Pawn 구현 (멀티 동기화 진단 잔여 코드 제거)
+// Description: CarFight 싱글플레이 차량 Pawn 구현
 // Changelog:
+// - v2.67.0: 로컬 HitScan Trace 디버그 변수명을 LocalAimTraceDebug 기준으로 교체.
+// - v2.66.0: AimComp의 FireValidationState / AimVisualState 리네이밍에 맞춰 Debug Snapshot과 Fire Result 연결을 갱신.
+// - v2.65.0: 참조가 없는 ACFVehiclePawn Fire 레거시 wrapper와 RPC 구현을 제거해 싱글플레이 Fire 실행 경로를 단일화.
+// - v2.63.0: Aim Fire 입력을 BuildFireCommand / ValidateFireCommand / RunLocalDummyHitScan / ApplyFireResult 로컬 경로로 전환하고 기존 RPC 이름 함수는 wrapper로 유지.
 // - v2.62.0: 싱글플레이 기준선에서 차량 네트워크 진단 샘플/RepMove 수신 로그/복제 등록 경로를 제거.
 // - v2.61.0: 싱글플레이 전환에 맞춰 C++ 기준선에서 Actor 복제와 Replicate Movement 강제 활성화를 중단.
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth Visual/Shell 적용 전 기준선을 깨끗하게 만들기 위해 차량 진단 로그와 Owner 표시 안정화 기본값을 False로 통일.
 // Migration:
+// - 신규 Fire 흐름은 로컬 함수 경로를 기준으로 호출한다.
+// - bDrawServerAimTraceDebug / ServerAimTraceDebugDuration 호출은 bDrawLocalAimTraceDebug / LocalAimTraceDebugDuration으로 교체한다.
+// - Debug Snapshot의 ServerAimState / RepAimVisualState 접근은 FireValidationState / AimVisualState로 교체한다.
+// - ACFVehiclePawn의 BuildFireRequest / ValidateFireRequestOnServer / RunServerDummyHitScan / ServerRequestFire / ClientReceiveFireResult 호출은 제거하고 로컬 Fire 함수로 교체한다.
 // - BP_CFVehiclePawn의 Actor Replicates/Replicate Movement도 False로 저장해 C++ 기본값과 맞춘다.
 // - 멀티플레이 진단이 다시 필요하면 별도 멀티플레이 브랜치/문서에서 복구한다.
 
@@ -1349,8 +1357,8 @@ FCFVehicleDebugSnapshot ACFVehiclePawn::GetVehicleDebugSnapshot() const
 	{
 		DebugSnapshot.Aim.bAimRuntimeReady = VehicleAimComp->IsAimRuntimeReady();
 		DebugSnapshot.Aim.LocalAimState = VehicleAimComp->GetLocalAimState();
-		DebugSnapshot.Aim.ServerAimState = VehicleAimComp->GetServerAimState();
-		DebugSnapshot.Aim.RepAimVisualState = VehicleAimComp->GetRepAimVisualState();
+		DebugSnapshot.Aim.FireValidationState = VehicleAimComp->GetFireValidationState();
+		DebugSnapshot.Aim.AimVisualState = VehicleAimComp->GetAimVisualState();
 		DebugSnapshot.Aim.ReticleState = VehicleAimComp->GetReticleState();
 		DebugSnapshot.Aim.AimRuntimeSummary = VehicleAimComp->GetLastAimRuntimeSummary();
 		DebugSnapshot.Aim.LastFireRequest = LastFireRequest;
@@ -2244,12 +2252,13 @@ void ACFVehiclePawn::HandleLookReleased(const FInputActionValue&)
 	VehicleCameraComp->ClearLookInput();
 }
 
-FCFVehicleFireRequest ACFVehiclePawn::BuildFireRequest()
+// [v2.63.0] 현재 Aim 상태를 기준으로 로컬 발사 명령 데이터를 생성합니다.
+FCFVehicleFireRequest ACFVehiclePawn::BuildFireCommand()
 {
-	// [v2.17.0] 현재 월드 시간 또는 fallback 0초입니다.
+	// [v2.63.0] 현재 월드 시간 또는 fallback 0초입니다.
 	const float ClientFireTimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
 
-	// [v2.17.0] 이번 발사 요청에 사용할 요청 ID입니다.
+	// [v2.63.0] 이번 로컬 발사 명령에 사용할 요청 ID입니다.
 	const int32 FireRequestId = NextFireRequestId++;
 
 	if (VehicleAimComp)
@@ -2257,7 +2266,7 @@ FCFVehicleFireRequest ACFVehiclePawn::BuildFireRequest()
 		return VehicleAimComp->BuildFireRequest(FireRequestId, ClientFireTimeSeconds);
 	}
 
-	// [v2.17.0] AimComp가 없을 때도 크래시 없이 반환할 fallback 요청입니다.
+	// [v2.63.0] AimComp가 없을 때도 크래시 없이 반환할 fallback 발사 명령입니다.
 	FCFVehicleFireRequest FireRequest;
 	FireRequest.FireRequestId = FireRequestId;
 	FireRequest.ClientFireTimeSeconds = ClientFireTimeSeconds;
@@ -2267,18 +2276,13 @@ FCFVehicleFireRequest ACFVehiclePawn::BuildFireRequest()
 	return FireRequest;
 }
 
-bool ACFVehiclePawn::ValidateFireRequestOnServer(const FCFVehicleFireRequest& FireRequest, FCFVehicleFireResult& OutFireResult)
+// [v2.63.0] 싱글플레이 로컬 발사 명령을 최소 검증하고 결과를 채웁니다.
+bool ACFVehiclePawn::ValidateFireCommand(const FCFVehicleFireRequest& FireCommand, FCFVehicleFireResult& OutFireResult)
 {
 	OutFireResult = FCFVehicleFireResult();
-	OutFireResult.FireRequestId = FireRequest.FireRequestId;
-	OutFireResult.ServerAimTargetLocation = FireRequest.PredictedAimTargetLocation;
-	OutFireResult.ServerHitLocation = FireRequest.PredictedAimTargetLocation;
-
-	if (!HasAuthority())
-	{
-		OutFireResult.RejectReason = ECFVehicleFireRejectReason::NoAuthority;
-		return false;
-	}
+	OutFireResult.FireRequestId = FireCommand.FireRequestId;
+	OutFireResult.ValidationAimTargetLocation = FireCommand.PredictedAimTargetLocation;
+	OutFireResult.LocalHitLocation = FireCommand.PredictedAimTargetLocation;
 
 	if (!GetController())
 	{
@@ -2298,26 +2302,26 @@ bool ACFVehiclePawn::ValidateFireRequestOnServer(const FCFVehicleFireRequest& Fi
 		return false;
 	}
 
-	// [v2.17.0] 서버 검증에 사용할 요청 조준 방향입니다.
-	const FVector AimDirection = FVector(FireRequest.AimDirection);
+	// [v2.63.0] 로컬 검증에 사용할 발사 명령 조준 방향입니다.
+	const FVector AimDirection = FVector(FireCommand.AimDirection);
 	if (AimDirection.ContainsNaN() || AimDirection.IsNearlyZero())
 	{
 		OutFireResult.RejectReason = ECFVehicleFireRejectReason::InvalidAimDirection;
 		return false;
 	}
 
-	// [v2.17.0] 서버 검증에 사용할 요청 조준 시작 위치입니다.
-	const FVector AimOrigin = FVector(FireRequest.AimOrigin);
+	// [v2.63.0] 로컬 검증에 사용할 발사 명령 조준 시작 위치입니다.
+	const FVector AimOrigin = FVector(FireCommand.AimOrigin);
 	if (AimOrigin.ContainsNaN())
 	{
 		OutFireResult.RejectReason = ECFVehicleFireRejectReason::InvalidAimOrigin;
 		return false;
 	}
 
-	// [v2.17.0] 서버 기준 Pawn 위치와 요청 조준 시작점 사이 거리입니다.
+	// [v2.63.0] Pawn 위치와 발사 명령 조준 시작점 사이 거리입니다.
 	const float AimOriginDistance = FVector::Dist(AimOrigin, GetActorLocation());
 
-	// [v2.17.0] 기본 Aim Profile에서 허용하는 최대 거리입니다.
+	// [v2.63.0] 기본 Aim Profile에서 허용하는 최대 거리입니다.
 	const float MaxAimDistance = VehicleAimComp->GetDefaultAimProfile().MaxAimDistance;
 	if (AimOriginDistance > MaxAimDistance)
 	{
@@ -2325,7 +2329,7 @@ bool ACFVehiclePawn::ValidateFireRequestOnServer(const FCFVehicleFireRequest& Fi
 		return false;
 	}
 
-	if (!VehicleAimComp->IsFireRequestWithinDefaultProfile(FireRequest))
+	if (!VehicleAimComp->IsFireRequestWithinDefaultProfile(FireCommand))
 	{
 		OutFireResult.RejectReason = ECFVehicleFireRejectReason::OutOfWeaponArc;
 		return false;
@@ -2339,119 +2343,102 @@ bool ACFVehiclePawn::ValidateFireRequestOnServer(const FCFVehicleFireRequest& Fi
 
 	OutFireResult.bAccepted = true;
 	OutFireResult.RejectReason = ECFVehicleFireRejectReason::None;
-	RunServerDummyHitScan(FireRequest, OutFireResult);
+	RunLocalDummyHitScan(FireCommand, OutFireResult);
 	return true;
 }
 
-bool ACFVehiclePawn::RunServerDummyHitScan(const FCFVehicleFireRequest& FireRequest, FCFVehicleFireResult& InOutFireResult) const
+// [v2.63.0] 싱글플레이 로컬 더미 HitScan Trace를 실행하고 FireResult에 결과를 채웁니다.
+bool ACFVehiclePawn::RunLocalDummyHitScan(const FCFVehicleFireRequest& FireCommand, FCFVehicleFireResult& InOutFireResult) const
 {
-	if (!HasAuthority() || !VehicleAimComp)
+	if (!VehicleAimComp)
 	{
 		return false;
 	}
 
-	// [v2.18.0] 서버 Trace에 사용할 월드입니다.
+	// [v2.63.0] 로컬 Trace에 사용할 월드입니다.
 	UWorld* World = GetWorld();
 
-	// [v2.18.0] 서버 Trace 시작 위치입니다.
-	const FVector TraceStart = FVector(FireRequest.AimOrigin);
+	// [v2.63.0] 로컬 Trace 시작 위치입니다.
+	const FVector TraceStart = FVector(FireCommand.AimOrigin);
 
-	// [v2.18.0] 서버 Trace 방향입니다.
-	const FVector TraceDirection = FVector(FireRequest.AimDirection).GetSafeNormal();
+	// [v2.63.0] 로컬 Trace 방향입니다.
+	const FVector TraceDirection = FVector(FireCommand.AimDirection).GetSafeNormal();
 
-	// [v2.18.0] 서버 Trace에 사용할 최대 거리입니다.
+	// [v2.63.0] 로컬 Trace에 사용할 최대 거리입니다.
 	const float TraceDistance = VehicleAimComp->GetDefaultAimProfile().MaxAimDistance;
 
-	// [v2.18.0] 서버 Trace 종료 위치입니다.
+	// [v2.63.0] 로컬 Trace 종료 위치입니다.
 	const FVector TraceEnd = TraceStart + TraceDirection * TraceDistance;
 
 	if (!World || TraceDirection.IsNearlyZero())
 	{
-		InOutFireResult.ServerAimTargetLocation = TraceEnd;
-		InOutFireResult.ServerHitLocation = TraceEnd;
-		InOutFireResult.ServerHitNormal = FVector::UpVector;
+		InOutFireResult.ValidationAimTargetLocation = TraceEnd;
+		InOutFireResult.LocalHitLocation = TraceEnd;
+		InOutFireResult.LocalHitNormal = FVector::UpVector;
 		return false;
 	}
 
-	// [v2.18.0] 서버 Trace 적중 결과입니다.
+	// [v2.63.0] 로컬 Trace 적중 결과입니다.
 	FHitResult HitResult;
 
-	// [v2.18.0] 서버 Trace에서 Owner Pawn을 무시하기 위한 쿼리 설정입니다.
-	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(CarFightServerAimTrace), false);
+	// [v2.63.0] 로컬 Trace에서 Owner Pawn을 무시하기 위한 쿼리 설정입니다.
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(CarFightLocalAimTrace), false);
 	QueryParams.AddIgnoredActor(this);
 
-	// [v2.18.0] 서버 Trace가 월드의 가시성 채널에 적중했는지 여부입니다.
+	// [v2.63.0] 로컬 Trace가 월드의 가시성 채널에 적중했는지 여부입니다.
 	const bool bHit = World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_Visibility, QueryParams);
 
 	if (bHit)
 	{
-		InOutFireResult.ServerAimTargetLocation = HitResult.ImpactPoint;
-		InOutFireResult.ServerHitLocation = HitResult.ImpactPoint;
-		InOutFireResult.ServerHitNormal = HitResult.ImpactNormal;
+		InOutFireResult.ValidationAimTargetLocation = HitResult.ImpactPoint;
+		InOutFireResult.LocalHitLocation = HitResult.ImpactPoint;
+		InOutFireResult.LocalHitNormal = HitResult.ImpactNormal;
 	}
 	else
 	{
-		InOutFireResult.ServerAimTargetLocation = TraceEnd;
-		InOutFireResult.ServerHitLocation = TraceEnd;
-		InOutFireResult.ServerHitNormal = FVector::UpVector;
+		InOutFireResult.ValidationAimTargetLocation = TraceEnd;
+		InOutFireResult.LocalHitLocation = TraceEnd;
+		InOutFireResult.LocalHitNormal = FVector::UpVector;
 	}
 
-	if (bDrawServerAimTraceDebug)
+	if (bDrawLocalAimTraceDebug)
 	{
-		// [v2.18.0] 서버 Trace 디버그 라인 색상입니다.
+		// [v2.63.0] 로컬 Trace 디버그 라인 색상입니다.
 		const FColor TraceColor = bHit ? FColor::Green : FColor::Red;
 
-		DrawDebugLine(World, TraceStart, bHit ? HitResult.ImpactPoint : TraceEnd, TraceColor, false, ServerAimTraceDebugDuration, 0, 2.0f);
+		DrawDebugLine(World, TraceStart, bHit ? HitResult.ImpactPoint : TraceEnd, TraceColor, false, LocalAimTraceDebugDuration, 0, 2.0f);
 		if (bHit)
 		{
-			DrawDebugSphere(World, HitResult.ImpactPoint, 24.0f, 12, FColor::Yellow, false, ServerAimTraceDebugDuration);
+			DrawDebugSphere(World, HitResult.ImpactPoint, 24.0f, 12, FColor::Yellow, false, LocalAimTraceDebugDuration);
 		}
 	}
 
 	return bHit;
 }
 
+// [v2.63.0] Fire 입력을 싱글플레이 로컬 발사 경로로 처리합니다.
 void ACFVehiclePawn::HandleFireStarted(const FInputActionValue&)
 {
-	LastFireRequest = BuildFireRequest();
+	LastFireRequest = BuildFireCommand();
 
-	if (HasAuthority())
-	{
-		ServerRequestFire_Implementation(LastFireRequest);
-		return;
-	}
-
-	ServerRequestFire(LastFireRequest);
-}
-
-void ACFVehiclePawn::ServerRequestFire_Implementation(const FCFVehicleFireRequest& FireRequest)
-{
-	LastFireRequest = FireRequest;
-
-	// [v2.17.0] 서버 검증 결과를 담을 발사 결과입니다.
+	// [v2.63.0] 로컬 발사 검증 결과를 담을 임시 결과입니다.
 	FCFVehicleFireResult FireResult;
 
-	// [v2.17.0] 서버 검증이 발사 요청을 승인했는지 여부입니다.
-	const bool bAccepted = ValidateFireRequestOnServer(FireRequest, FireResult);
-
-	if (VehicleAimComp)
-	{
-		VehicleAimComp->BuildServerAimStateFromFireRequest(FireRequest, FireResult.RejectReason, bAccepted);
-		VehicleAimComp->ApplyServerFireResult(FireResult);
-		VehicleAimComp->UpdateRepAimVisualFromFireResult(FireRequest, FireResult);
-	}
-
-	LastFireResult = FireResult;
-	ClientReceiveFireResult(FireResult);
+	ValidateFireCommand(LastFireRequest, FireResult);
+	ApplyFireResult(LastFireRequest, FireResult);
 }
 
-void ACFVehiclePawn::ClientReceiveFireResult_Implementation(const FCFVehicleFireResult& FireResult)
+// [v2.63.0] 로컬 발사 결과를 Pawn과 AimComp 상태에 반영합니다.
+void ACFVehiclePawn::ApplyFireResult(const FCFVehicleFireRequest& FireCommand, const FCFVehicleFireResult& FireResult)
 {
+	LastFireRequest = FireCommand;
 	LastFireResult = FireResult;
 
 	if (VehicleAimComp)
 	{
-		VehicleAimComp->ApplyServerFireResult(FireResult);
+		VehicleAimComp->BuildFireValidationStateFromFireCommand(FireCommand, FireResult.RejectReason, FireResult.bAccepted);
+		VehicleAimComp->ApplyFireValidationResult(FireResult);
+		VehicleAimComp->UpdateAimVisualFromFireResult(FireCommand, FireResult);
 	}
 }
 

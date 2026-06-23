@@ -1,14 +1,20 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.5.0
+// Version: 1.8.0
 // Date: 2026-06-19
 // Description: CarFight 싱글플레이 차량 Aim 시스템 기준 클래스
 // Changelog:
+// - v1.8.0: ServerAimState / RepAimVisualState 계열 API를 FireValidationState / AimVisualState 명칭으로 교체.
+// - v1.7.0: BP에 보이는 Aim 상태 getter 설명을 싱글플레이 로컬 플레이어/검증 상태 기준으로 정리.
+// - v1.6.0: 로컬 Fire Command 전환에 맞춰 발사 요청/결과 함수 설명을 싱글플레이 의미로 정리.
 // - v1.5.0: 싱글플레이 기준선에서 Aim 시각 상태의 UE 복제 등록과 OnRep 경로를 제거.
 // - v1.4.0: 싱글플레이 전환에 맞춰 AimComp 기본 컴포넌트 복제를 비활성화.
 // Migration:
+// - GetServerAimState는 GetFireValidationState로 교체한다.
+// - GetRepAimVisualState는 GetAimVisualState로 교체한다.
+// - ApplyServerFireResult / BuildServerAimStateFromFireRequest / UpdateRepAimVisualFromFireResult는 FireValidation/AimVisual 명칭 함수로 교체한다.
 // - 멀티플레이 Aim 시각 상태 복제가 다시 필요하면 별도 멀티플레이 브랜치에서 복제 경로를 복구한다.
-// Scope: Owner Pawn과 VehicleCameraComp 참조를 안전하게 캐시하고 Tick에서 Local Aim 상태를 갱신하며 서버 검증/로컬 시각 상태를 저장합니다.
+// Scope: Owner Pawn과 VehicleCameraComp 참조를 안전하게 캐시하고 Tick에서 Local Aim 상태를 갱신하며 로컬 발사 검증/시각 상태를 저장합니다.
 
 #pragma once
 
@@ -49,21 +55,21 @@ public:
 	UFUNCTION(BlueprintCallable, Category="CarFight|Aim", meta=(ToolTip="Aim 런타임에 필요한 Owner 차량 Pawn과 VehicleCameraComp 참조를 다시 찾습니다."))
 	bool RefreshAimRuntimeReferences();
 
-	// [v1.0.0] 현재 로컬 Aim 상태를 반환합니다.
-	UFUNCTION(BlueprintPure, Category="CarFight|Aim", meta=(ToolTip="현재 로컬 클라이언트 기준 Aim 상태를 반환합니다."))
+	// [v1.7.0] 현재 로컬 Aim 상태를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Aim", meta=(ToolTip="현재 로컬 플레이어 기준 Aim 상태를 반환합니다."))
 	FCFVehicleLocalAimState GetLocalAimState() const;
 
-	// [v1.1.0] 현재 로컬 Reticle 상태를 반환합니다.
-	UFUNCTION(BlueprintPure, Category="CarFight|Aim", meta=(ToolTip="현재 로컬 클라이언트 기준 Reticle 표시 상태를 반환합니다."))
+	// [v1.7.0] 현재 로컬 Reticle 상태를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Aim", meta=(ToolTip="현재 로컬 플레이어 기준 Reticle 표시 상태를 반환합니다."))
 	ECFVehicleReticleState GetReticleState() const;
 
-	// [v1.0.0] 현재 서버 Aim 상태를 반환합니다.
-	UFUNCTION(BlueprintPure, Category="CarFight|Aim", meta=(ToolTip="현재 서버 검증 기준 Aim 상태를 반환합니다."))
-	FCFVehicleServerAimState GetServerAimState() const;
+	// [v1.8.0] 현재 발사 검증 상태를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Aim", meta=(ToolTip="현재 로컬 발사 검증 상태를 반환합니다."))
+	FCFVehicleFireValidationState GetFireValidationState() const;
 
-	// [v1.5.0] 현재 로컬 디버그/발사 결과 표시용 Aim 시각 상태를 반환합니다.
+	// [v1.8.0] 현재 로컬 디버그/발사 결과 표시용 Aim 시각 상태를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|Aim", meta=(ToolTip="현재 로컬 디버그와 발사 결과 표시에 사용할 Aim 시각 상태를 반환합니다."))
-	FCFVehicleRepAimVisualState GetRepAimVisualState() const;
+	FCFVehicleAimVisualState GetAimVisualState() const;
 
 	// [v1.0.0] 기본 Aim Profile을 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|Aim", meta=(ToolTip="현재 AimComp가 보유한 기본 Aim Profile을 반환합니다."))
@@ -77,21 +83,21 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|Aim", meta=(ToolTip="마지막 Aim 런타임 초기화 또는 참조 갱신 결과 요약 문자열을 반환합니다."))
 	FString GetLastAimRuntimeSummary() const;
 
-	// [v1.2.0] 현재 Local Aim 상태를 기준으로 서버 발사 요청 데이터를 생성합니다.
-	UFUNCTION(BlueprintCallable, Category="CarFight|Weapon", meta=(ToolTip="현재 Local Aim 상태를 기준으로 서버 발사 요청 데이터를 생성합니다."))
+	// [v1.6.0] 현재 Local Aim 상태를 기준으로 로컬 발사 명령 데이터를 생성합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|Weapon", meta=(ToolTip="현재 Local Aim 상태를 기준으로 로컬 발사 명령 데이터를 생성합니다. 함수명은 기존 BP 호환을 위해 유지합니다."))
 	FCFVehicleFireRequest BuildFireRequest(int32 FireRequestId, float ClientFireTimeSeconds) const;
 
-	// [v1.2.0] 서버 발사 처리 결과를 ServerAimState에 반영합니다.
-	UFUNCTION(BlueprintCallable, Category="CarFight|Weapon", meta=(ToolTip="서버 발사 처리 결과를 ServerAimState에 반영합니다."))
-	void ApplyServerFireResult(const FCFVehicleFireResult& FireResult);
+	// [v1.8.0] 로컬 발사 처리 결과를 검증 상태에 반영합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|Weapon", meta=(ToolTip="로컬 발사 처리 결과를 검증 상태에 반영합니다."))
+	void ApplyFireValidationResult(const FCFVehicleFireResult& FireResult);
 
-	// [v1.5.0] 서버 발사 결과를 로컬 디버그/발사 결과 표시용 Aim 시각 상태에 반영합니다.
-	UFUNCTION(BlueprintCallable, Category="CarFight|Weapon", meta=(ToolTip="서버 발사 결과를 로컬 디버그와 발사 결과 표시용 Aim 시각 상태에 반영합니다. 전투 판정용으로 사용하지 않습니다."))
-	void UpdateRepAimVisualFromFireResult(const FCFVehicleFireRequest& FireRequest, const FCFVehicleFireResult& FireResult);
+	// [v1.8.0] 로컬 발사 결과를 로컬 디버그/발사 결과 표시용 Aim 시각 상태에 반영합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|Weapon", meta=(ToolTip="로컬 발사 결과를 로컬 디버그와 발사 결과 표시용 Aim 시각 상태에 반영합니다."))
+	void UpdateAimVisualFromFireResult(const FCFVehicleFireRequest& FireRequest, const FCFVehicleFireResult& FireResult);
 
-	// [v1.2.0] 서버 발사 요청과 검증 결과를 기준으로 ServerAimState를 갱신합니다.
-	UFUNCTION(BlueprintCallable, Category="CarFight|Weapon", meta=(ToolTip="서버 발사 요청과 검증 결과를 기준으로 ServerAimState를 갱신합니다."))
-	void BuildServerAimStateFromFireRequest(const FCFVehicleFireRequest& FireRequest, ECFVehicleFireRejectReason RejectReason, bool bAccepted);
+	// [v1.8.0] 로컬 발사 명령과 검증 결과를 기준으로 검증 상태를 갱신합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|Weapon", meta=(ToolTip="로컬 발사 명령과 검증 결과를 기준으로 검증 상태를 갱신합니다."))
+	void BuildFireValidationStateFromFireCommand(const FCFVehicleFireRequest& FireCommand, ECFVehicleFireRejectReason RejectReason, bool bAccepted);
 
 	// [v1.2.0] 발사 요청의 AimDirection이 DefaultAimProfile 조준각 안에 있는지 검사합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|Weapon", meta=(ToolTip="발사 요청의 AimDirection이 DefaultAimProfile 조준각 안에 있는지 검사합니다."))
@@ -129,17 +135,17 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(AllowPrivateAccess="true", DisplayName="기본 Aim Profile (DefaultAimProfile)", ToolTip="Aim 시스템의 기본 조준 가능 범위 프로필입니다. 후속 단계에서 무기/데이터 에셋과 연결할 수 있습니다."))
 	FCFVehicleAimProfile DefaultAimProfile;
 
-	// [v1.0.0] 로컬 클라이언트가 즉시 표시할 Aim 상태입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(AllowPrivateAccess="true", DisplayName="로컬 Aim 상태 (LocalAimState)", ToolTip="로컬 클라이언트가 즉시 표시할 Aim 상태입니다. 이번 단계에서는 계산 로직 없이 기본값을 유지합니다."))
+	// [v1.7.0] 로컬 플레이어가 즉시 표시할 Aim 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(AllowPrivateAccess="true", DisplayName="로컬 Aim 상태 (LocalAimState)", ToolTip="로컬 플레이어가 즉시 표시할 Aim 상태입니다."))
 	FCFVehicleLocalAimState LocalAimState;
 
-	// [v1.0.0] 서버 검증에 사용할 Aim 상태입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(AllowPrivateAccess="true", DisplayName="서버 Aim 상태 (ServerAimState)", ToolTip="서버 검증에 사용할 Aim 상태입니다. 이번 단계에서는 검증 로직 없이 기본값을 유지합니다."))
-	FCFVehicleServerAimState ServerAimState;
+	// [v1.8.0] 로컬 발사 검증에 사용할 Aim 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(AllowPrivateAccess="true", DisplayName="발사 검증 상태 (FireValidationState)", ToolTip="로컬 발사 검증에 사용할 Aim 상태입니다."))
+	FCFVehicleFireValidationState FireValidationState;
 
-	// [v1.5.0] 로컬 디버그와 발사 결과 표시에 사용할 Aim 시각 상태입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(AllowPrivateAccess="true", DisplayName="Aim 시각 상태 (RepAimVisualState)", ToolTip="싱글플레이에서 로컬 디버그와 발사 결과 표시에 사용할 Aim 시각 상태입니다. 전투 판정용 데이터가 아닙니다."))
-	FCFVehicleRepAimVisualState RepAimVisualState;
+	// [v1.8.0] 로컬 디버그와 발사 결과 표시에 사용할 Aim 시각 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(AllowPrivateAccess="true", DisplayName="Aim 시각 상태 (AimVisualState)", ToolTip="싱글플레이에서 로컬 디버그와 발사 결과 표시에 사용할 Aim 시각 상태입니다. 전투 판정용 데이터가 아닙니다."))
+	FCFVehicleAimVisualState AimVisualState;
 
 	// [v1.0.0] Owner Pawn과 CameraComp 참조가 모두 준비되었는지 여부입니다.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Aim", meta=(AllowPrivateAccess="true", DisplayName="Aim 런타임 준비 완료 여부 (bAimRuntimeReady)", ToolTip="Owner 차량 Pawn과 VehicleCameraComp 참조가 모두 준비되었는지 여부입니다."))

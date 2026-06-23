@@ -1,8 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-05-21
+// Version: 1.2.0
+// Date: 2026-06-19
 // Description: Aim Reticle UI용 C++ 부모 위젯 클래스 구현입니다.
+// Changelog:
+// - v1.2.0: Reticle enum 값 이름을 FirePending / FireRejected 싱글플레이 명칭으로 교체.
+// - v1.1.0: 싱글플레이 전환에 맞춰 서버 대기/거부 표시 문구를 로컬 발사 처리/거부 문구로 변경.
+// Migration:
+// - ECFVehicleReticleState::WaitingServer는 FirePending으로, ServerRejected는 FireRejected로 교체한다.
 // Scope: VehicleAimComp의 Reticle 상태를 읽어 선택적 TextBlock과 위젯 가시성을 갱신합니다.
 
 #include "UI/CFAimReticleWidget.h"
@@ -86,10 +91,10 @@ FText UCFAimReticleWidget::GetReticleStateDisplayText() const
 		return FText::FromString(TEXT("조준: 재사용 대기"));
 	case ECFVehicleReticleState::Reloading:
 		return FText::FromString(TEXT("조준: 재장전"));
-	case ECFVehicleReticleState::WaitingServer:
-		return FText::FromString(TEXT("조준: 서버 대기"));
-	case ECFVehicleReticleState::ServerRejected:
-		return FText::FromString(TEXT("조준: 서버 거부"));
+	case ECFVehicleReticleState::FirePending:
+		return FText::FromString(TEXT("조준: 발사 처리 중"));
+	case ECFVehicleReticleState::FireRejected:
+		return FText::FromString(TEXT("조준: 발사 거부"));
 	case ECFVehicleReticleState::Hidden:
 	default:
 		return FText::FromString(TEXT("조준: 숨김"));
@@ -162,10 +167,10 @@ FText UCFAimReticleWidget::GetReticleHintDisplayText() const
 		return FText::FromString(TEXT("무기 대기 중"));
 	case ECFVehicleReticleState::Reloading:
 		return FText::FromString(TEXT("재장전 중"));
-	case ECFVehicleReticleState::WaitingServer:
-		return FText::FromString(TEXT("서버 응답 대기"));
-	case ECFVehicleReticleState::ServerRejected:
-		return FText::FromString(TEXT("서버에서 발사 거부"));
+	case ECFVehicleReticleState::FirePending:
+		return FText::FromString(TEXT("발사 처리 대기"));
+	case ECFVehicleReticleState::FireRejected:
+		return FText::FromString(TEXT("발사 조건 미충족"));
 	case ECFVehicleReticleState::Hidden:
 	default:
 		return FText::FromString(TEXT("Reticle 숨김"));
