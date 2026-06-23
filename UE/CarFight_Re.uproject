@@ -35,6 +35,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "AssetDump",
+			"Enabled": true
+		},
+		{
 			"Name": "CFNetSmooth",
 			"Enabled": false
 		}
