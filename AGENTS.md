@@ -61,12 +61,14 @@ Windows PowerShell에서 한글/비ASCII가 포함된 파일을 읽을 때는 �
 - 문서 정리, 명세 정제, 설계서 압축, 중복 제거, 구조 개선 요청에는 `doc_curation` skill을 우선 사용한다.
 - AGENTS.md는 짧게 유지하고 전체 워크플로는 넣지 않는다.
 
-# CarFight 엔진 경로 규칙
+# CarFight 빌드/실행 강제 규칙
 
 - 기준 엔진은 `D:\UnrealEngine_Source`이다.
-- 빌드/실행/테스트에서 `D:\UE_5.7`를 사용하지 않는다.
-- 에디터 빌드는 `Tools\BuildEditor.bat`, 에디터 실행은 `Tools\RunEditor.bat`를 우선 사용한다.
-- 직접 명령을 작성해야 하면 반드시 `D:\UnrealEngine_Source\Engine\Build\BatchFiles\Build.bat`와 `D:\UnrealEngine_Source\Engine\Binaries\Win64\UnrealEditor.exe`를 사용한다.
+- 에디터 빌드는 반드시 `D:\Work\CarFight_git\Tools\BuildEditor.bat`를 실행한다.
+- 에디터 실행은 반드시 `D:\Work\CarFight_git\Tools\RunEditor.bat`를 실행한다.
+- 빌드/실행/테스트에서 `D:\UE_5.7` 또는 `D:\UE_5.7_Source`를 사용하지 않는다.
+- 오래된 문서의 `D:\UE_5.7` 예시는 폐기된 기록으로 보고 새 명령에 사용하지 않는다.
+- 직접 명령을 작성해야 하면 먼저 `Tools\CarFightEnv.bat`를 확인하고, 반드시 `D:\UnrealEngine_Source\Engine\Build\BatchFiles\Build.bat`와 `D:\UnrealEngine_Source\Engine\Binaries\Win64\UnrealEditor.exe`를 사용한다.
 
 # 이성수준 규칙
 
