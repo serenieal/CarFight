@@ -11,6 +11,16 @@
 			"AdditionalDependencies": [
 				"Engine"
 			]
+		},
+		{
+			"Name": "CarFight_ReEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [
+				"Engine",
+				"UnrealEd",
+				"CarFight_Re"
+			]
 		}
 	],
 	"Plugins": [
@@ -39,8 +49,20 @@
 			"Enabled": true
 		},
 		{
+			"Name": "MeshPaintPrepTool",
+			"Enabled": true
+		},
+		{
 			"Name": "CFNetSmooth",
 			"Enabled": false
+		},
+		{
+			"Name": "MCPClientToolset",
+			"Enabled": true
+		},
+		{
+			"Name": "AllToolsets",
+			"Enabled": true
 		}
 	]
 }

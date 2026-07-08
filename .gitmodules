@@ -13,3 +13,6 @@
 [submodule "UE/Plugins/CFNetSmooth"]
 	path = UE/Plugins/CFNetSmooth
 	url = https://github.com/serenieal/NetSmoothSync.git
+[submodule "UE/Plugins/MeshPaintPrepTool"]
+	path = UE/Plugins/MeshPaintPrepTool
+	url = https://github.com/serenieal/MeshPaintPrepTool
