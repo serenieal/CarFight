@@ -141,13 +141,17 @@
 - `Wheel_Mesh_FR`에 FR 휠 메쉬 적용
 - `Wheel_Mesh_RL`에 RL 휠 메쉬 적용
 - `Wheel_Mesh_RR`에 RR 휠 메쉬 적용
+- `WheelVisualConfig.bAutoScaleWheelMeshToRadius`가 켜져 있으면 각 휠 StaticMesh 바운드 반지름을 측정해 `FrontWheelRadius` / `RearWheelRadius` 기준 Uniform Scale 적용
+- `WheelVisualConfig.bAutoCenterWheelMeshBoundsToOrigin`이 켜져 있으면 스케일된 StaticMesh 바운드 중심을 `Wheel_Mesh_*` 원점에 맞춰 시각 휠 중심을 물리 휠 중심과 정렬
 
 즉 현재 `VehicleRuntime`은 **휠이 몇 개인지, 앞바퀴가 몇 개인지, 실제 시각 휠 메쉬가 무엇인지까지 런타임에 반영하는 기능**도 포함한다.
+자동 스케일은 `WheelSyncComp->TryPrepareWheelSync()`가 기준 회전/위치를 캡처하기 전에 적용된다.
 
 현재 이 단계가 끝나면 `LastVehicleRuntimeSummary`에는 대략 아래 의미가 기록된다.
 
 - ExpectedWheelCount
 - FrontWheelCountForSteering
+- AutoScale On/Off와 휠별 Scale / Center / CenterFix / InvalidRadius / MeshMissing 요약
 
 #### 2-5. Drive 상태 설정 적용
 `ApplyVehicleDataConfig()` 마지막에는,
@@ -378,8 +382,8 @@
 - `LastVehicleRuntimeSummary` 요약 포맷 변경
 
 ## 문서 버전 관리
-- 현재 문서 버전: `1.0.0`
-- 문서 상태: `Initial`
+- 현재 문서 버전: `1.1.0`
+- 문서 상태: `WheelMesh Auto Scale Added`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
   - 기능 설명 본문이 바뀌면 체인지로그도 같이 갱신한다.
@@ -399,6 +403,12 @@
   - 본문 의미는 유지한 채 설명 정밀도만 올라갈 때
 
 ## 체인지로그
+### v1.1.0 - 2026-07-08
+- `ApplyVehicleWheelVisualConfig()`가 WheelRadius 기준 휠 메시 자동 스케일도 처리할 수 있음을 추가했다.
+- 자동 스케일 적용 시점이 WheelSync 준비 캡처 이전임을 명시했다.
+- 자동 스케일 후 메시 바운드 중심 보정이 가능함을 추가했다.
+- `LastVehicleRuntimeSummary`에 AutoScale / CenterFix 결과 요약이 포함됨을 반영했다.
+
 ### v1.0.0 - 2026-04-22
 - `VehicleRuntime` 문서 최초 작성
 - `ACFVehiclePawn` 기준 런타임 준비 기능 정리
@@ -406,7 +416,7 @@
 - 현재 실패 요약 문자열과 현재 운영 스위치까지 포함해 문서화
 
 ## 마지막 확인 기준
-- 확인 일시: 2026-04-22
+- 확인 일시: 2026-07-08
 - 확인 근거:
   - `UE/Source/CarFight_Re/Public/CFVehiclePawn.h`
   - `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp`

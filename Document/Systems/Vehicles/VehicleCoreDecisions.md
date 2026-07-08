@@ -2,8 +2,8 @@
 
 > 역할: CarFight 현재 기준 차량 코어의 **유지 결정 / 교체 결정 / 임시 운영 판단**을 기록한다.
 > 상위 방향 문서: `00_Vision.md`
-> 문서 버전: v1.1.0
-> 마지막 정리(Asia/Seoul): 2026-04-15
+> 문서 버전: v1.1.1
+> 마지막 정리(Asia/Seoul): 2026-07-08
 
 
 ---
@@ -440,7 +440,24 @@
 
 ---
 
+### CF-DL-0072 — WheelRadius 기준 휠 메시 크기 보정은 VehicleData 옵션으로 둔다
+- 판정: 확정
+- 결정:
+  - 휠 StaticMesh 표시 크기를 `FrontWheelRadius` / `RearWheelRadius`에 맞추는 기능은 `WheelSync` Tick 보정이 아니라 `VehicleData.WheelVisualConfig`의 명시 옵션으로 둔다.
+  - 기본값은 비활성화하고, DA에서 `bAutoScaleWheelMeshToRadius`를 켠 차량에만 `Wheel_Mesh_*` Uniform Scale을 적용한다.
+  - 측정 축이 다른 에셋을 위해 `AutoMaxXZ`, `AxisX`, `AxisY`, `AxisZ` 측정 모드를 제공한다.
+  - 메시 피벗이 실제 휠 중심이 아닐 수 있으므로, 자동 스케일 사용 시 StaticMesh 바운드 중심을 `Wheel_Mesh_*` 원점에 맞추는 중심 보정을 기본으로 둔다.
+- 이유:
+  - 기존 BP 수동 스케일과 기존 차량 외형을 말 없이 바꾸면 회귀 위험이 크다.
+  - 휠 반지름 불일치는 공통 WheelSync 회전/서스펜션 로직보다 VehicleData 해석 단계에서 정렬하는 편이 안전하다.
+  - 자동 스케일을 WheelSync 기준 캡처 전에 적용하면 이후 스핀/조향/서스펜션 Tick과 책임이 섞이지 않는다.
+  - `WheelRadius`가 물리와 시각에 모두 반영되어도 StaticMesh 바운드 중심이 원점에서 어긋나면 바퀴가 반지름 변경량만큼 계속 파묻혀 보일 수 있다.
+
+---
+
 ## 변경 이력
+- v1.1.1 (2026-07-08)
+  - WheelRadius 기준 휠 메시 자동 스케일과 메시 바운드 중심 보정 정책을 CF-DL-0072로 추가했다.
 - v1.1.0 (2026-04-15)
   - 문서 버전 / 마지막 정리 날짜를 갱신했다.
   - 차량 카메라 코어, Thin BP 카메라 계층, 입력 자산 우선순위, Axis2D 입력 기준, 카메라 기준선 단계 판단을 결정 로그에 추가했다.

@@ -1,5 +1,24 @@
 # VehicleData
 
+## 최신 상태 주의
+2026-06-25 현재 이 문서에는 2026-04-22 기준 구형 설명이 남아 있다.
+
+최신 `VehiclePlatformPlan` / `TurretPlan` 기준은 아래처럼 본다.
+
+- `DA_PoliceCar`는 현재 P0 터렛 / 하드포인트 계획의 대표 입력이 아니라 레거시 감사 기준이다.
+- P0 기본 실행 기준은 `DA_TestSedan`, 대조 테스트 후보는 `DA_TestSUV`로 정리되어 있다.
+- `UCFVehicleData`, `HardpointSlots`, 선택 캡처, `CFVDAValidator` 하드포인트 검사는 코드에 반영되어 있다.
+- 이번 문서 세션에서는 `.uasset` 내부 기본값을 MCP 또는 AssetDump로 새로 확인하지 않았다.
+- 코드 / 에셋 작업으로 넘어가기 전에는 `BP_CFVehiclePawn`, `DA_TestSedan`, `DA_TestSUV`를 새 AssetDump 또는 MCP로 다시 확인한다.
+
+이 문서의 본문은 VehicleData 기능 설명 참고용으로 유지하되, 최신 P0 차량 / 터렛 기준을 판단할 때는 아래 문서를 우선한다.
+
+```text
+Document/Plan/VehiclePlatformPlan/CF_CodeStartGate.md
+Document/Plan/VehiclePlatformPlan/CF_AssetDumpResult.md
+Document/Plan/TurretPlan/CF_TurretPlan_v0_1.md
+```
+
 ## 문서 목적
 이 문서는 현재 프로젝트에서 `VehicleData` 기능이 실제로 어떤 일을 하는지, 그리고 그 기능이 어떤 자산/클래스/설정 구성으로 동작하는지를 기록한다.
 이 문서는 미래 설계나 개선 계획이 아니라, **현재 확인된 구현 상태**를 기준으로 작성한다.
@@ -119,12 +138,22 @@
 - `bUseWheelVisualOverrides`
 - `ExpectedWheelCount`
 - `FrontWheelCountForSteering`
+- `bAutoScaleWheelMeshToRadius`
+- `WheelMeshRadiusMeasureMode`
+- `bAutoCenterWheelMeshBoundsToOrigin`
+- `WheelMeshScaleClampMin`
+- `WheelMeshScaleClampMax`
 
 현재 의미:
 - 이 차량이 바퀴를 몇 개로 보는지
 - 그중 몇 개를 조향 바퀴로 보는지
+- `bAutoScaleWheelMeshToRadius`가 켜져 있으면 `WheelMeshFL/FR/RL/RR`의 StaticMesh 로컬 바운드 반지름을 측정해 `FrontWheelRadius` / `RearWheelRadius`에 맞는 표시 스케일을 적용한다.
+- 기본 측정 모드는 `AutoMaxXZ`이며, 차축이 다른 메시에서는 `AxisX`, `AxisY`, `AxisZ` 중 하나로 명시 조정한다.
+- `bAutoCenterWheelMeshBoundsToOrigin`이 켜져 있으면 스케일 적용 후 StaticMesh 바운드 중심을 `Wheel_Mesh_*` 컴포넌트 원점에 맞춰 메시 피벗 오프셋을 보정한다.
+- 자동 스케일 결과는 `WheelMeshScaleClampMin` / `WheelMeshScaleClampMax` 범위로 제한한다.
 
 현재 `ApplyVehicleWheelVisualConfig()`는 이 값을 `WheelSyncComp`에 반영한다.
+추가로 자동 스케일 옵션이 켜진 경우 같은 함수에서 `Wheel_Mesh_*` 컴포넌트의 `RelativeScale3D`를 Uniform Scale로 갱신한다.
 
 즉 현재 `VehicleData`는 **휠 시각 시스템이 차량을 어떤 형태로 해석해야 하는지 알려주는 WheelSync 입력 데이터**도 함께 가진다.
 
@@ -382,10 +411,11 @@
 - `ApplyVehicleDataConfig()` 소비 방식 변경
 - `DA_PoliceCar` 주요 값 변경
 - `PostLoad()` 보정 정책 변경
+- `WheelVisualConfig` 자동 스케일 정책 변경
 
 ## 문서 버전 관리
-- 현재 문서 버전: `1.0.0`
-- 문서 상태: `Initial`
+- 현재 문서 버전: `1.1.0`
+- 문서 상태: `WheelMesh Auto Scale Added / Needs Asset Refresh`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
   - 기능 설명 본문이 바뀌면 체인지로그도 같이 갱신한다.
@@ -405,6 +435,17 @@
   - 본문 의미는 유지한 채 설명 정밀도만 올라갈 때
 
 ## 체인지로그
+### v1.1.0 - 2026-07-08
+- `WheelVisualConfig`에 WheelRadius 기준 휠 메시 자동 스케일 옵션이 추가된 현재 구현을 반영했다.
+- 자동 스케일은 기본 비활성화이며, DA에서 명시적으로 켠 차량에만 적용한다고 명시했다.
+- 반지름 측정 모드, 메시 바운드 중심 보정, 스케일 Clamp 기준을 문서화했다.
+
+### v1.0.1 - 2026-06-25
+- 문서 상단에 최신 상태 주의 문구를 추가했다.
+- `DA_PoliceCar` 설명이 최신 P0 터렛 / 하드포인트 기준이 아니라 레거시 감사 기준임을 명시했다.
+- 최신 판단 기준 문서로 `CF_CodeStartGate.md`, `CF_AssetDumpResult.md`, `CF_TurretPlan_v0_1.md`를 연결했다.
+- 본문 전체 재작성은 하지 않고, 코드 / 에셋 작업 전 AssetDump 또는 MCP 재확인이 필요하다고 표시했다.
+
 ### v1.0.0 - 2026-04-22
 - `VehicleData` 문서 최초 작성
 - `UCFVehicleData` 구조와 `DA_PoliceCar` 실값 기준으로 현재 기능 정리
@@ -412,7 +453,8 @@
 - 현재 기본 차량 데이터 세트가 `DA_PoliceCar`임을 문서화
 
 ## 마지막 확인 기준
-- 확인 일시: 2026-04-22
+- 확인 일시: 2026-07-08
+- 주의: 코드 구조는 2026-07-08 기준으로 확인했지만, 대표 차량 자산 실값은 별도 AssetDump 또는 MCP로 다시 확인해야 한다.
 - 확인 근거:
   - `UE/Source/CarFight_Re/Public/CFVehicleData.h`
   - `UE/Source/CarFight_Re/Public/CFVehiclePawn.h`
