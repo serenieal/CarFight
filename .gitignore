@@ -32,3 +32,8 @@ GoPyMCP/
 Document/_tmp_test.txt
 Document/pfix01.txt
 /RuntimeLogs
+Tools/PluginBackups/
+Tools/Tripo3d_UE_Bridge-latest/
+UE/*.slnx
+UE/Plugins/Tripo3DUEBridge-UE5.8-Win64/
+skills/skills/carfight-mcp-assetdump/
