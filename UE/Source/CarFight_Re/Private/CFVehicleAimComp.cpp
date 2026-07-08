@@ -1,14 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.8.0
-// Date: 2026-06-19
+// Version: 1.9.0
+// Date: 2026-07-02
 // Description: CarFight 싱글플레이 차량 Aim 시스템 구현
 // Changelog:
+// - v1.9.0: 터렛 안정화 전 발사 정책에 맞춰 조준각 초과를 표시 상태로만 남기고 로컬 발사 예측 차단에서 제외.
 // - v1.8.0: 발사 검증/시각 상태 저장과 갱신 경로를 FireValidationState / AimVisualState 명칭으로 교체.
 // - v1.6.0: 로컬 Fire Command 전환에 맞춰 발사 요청/결과 처리 설명과 Aim 시각 상태 갱신 조건을 정리.
 // - v1.5.0: 싱글플레이 기준선에서 Aim 시각 상태의 UE 복제 등록과 OnRep 경로를 제거.
 // - v1.4.0: 싱글플레이 전환에 맞춰 AimComp 기본 컴포넌트 복제를 비활성화.
 // Migration:
+// - OutOfWeaponArc는 호환용 상태로 유지하지만, 기본 로컬 발사 검증에서는 조준각 초과를 단독 거부 사유로 쓰지 않는다.
 // - GetServerAimState / ApplyServerFireResult 계열 호출은 FireValidationState 명칭 함수로 교체한다.
 // - GetRepAimVisualState / UpdateRepAimVisualFromFireResult 호출은 AimVisualState 명칭 함수로 교체한다.
 // - 멀티플레이 Aim 시각 상태 복제가 다시 필요하면 별도 멀티플레이 브랜치에서 복제 경로를 복구한다.
@@ -142,7 +144,10 @@ FCFVehicleFireRequest UCFVehicleAimComp::BuildFireRequest(const int32 FireReques
 void UCFVehicleAimComp::ApplyFireValidationResult(const FCFVehicleFireResult& FireResult)
 {
 	FireValidationState.ValidationAimTargetLocation = FireResult.ValidationAimTargetLocation;
-	FireValidationState.bValidationWithinWeaponArc = FireResult.bAccepted || FireResult.RejectReason != ECFVehicleFireRejectReason::OutOfWeaponArc;
+	if (FireResult.RejectReason == ECFVehicleFireRejectReason::OutOfWeaponArc)
+	{
+		FireValidationState.bValidationWithinWeaponArc = false;
+	}
 	FireValidationState.bValidationCanFire = FireResult.bAccepted;
 	FireValidationState.LastValidationRejectReason = FireResult.RejectReason;
 
@@ -298,8 +303,11 @@ void UCFVehicleAimComp::RefreshLocalAimState(const float DeltaSeconds)
 	// [v1.1.0] Camera Runtime State에서 전달된 현재 조준 가림 여부입니다.
 	const bool bAimBlocked = CameraRuntimeState.bAimBlocked;
 
-	// [v1.1.0] 로컬 예측 기준 발사 가능 여부입니다.
-	const bool bCanFire = bWithinWeaponArc && !bAimBlocked;
+	// [v1.9.0] 로컬 예측 기준 조준 방향이 유효한지 여부입니다.
+	const bool bHasResolvedAimDirection = !ResolvedAimDirection.IsNearlyZero();
+
+	// [v1.9.0] 로컬 예측 기준 발사 가능 여부입니다.
+	const bool bCanFire = bHasResolvedAimDirection && !bAimBlocked;
 
 	LocalAimState.LocalAimTargetLocation = AimTargetLocation;
 	LocalAimState.LocalAimDirection = ResolvedAimDirection;
@@ -355,13 +363,13 @@ ECFVehicleReticleState UCFVehicleAimComp::BuildLocalReticleState(const bool bWit
 	{
 		return ECFVehicleReticleState::Blocked;
 	}
-	if (!bWithinWeaponArc)
-	{
-		return ECFVehicleReticleState::OutOfArc;
-	}
 	if (bCanFire)
 	{
 		return ECFVehicleReticleState::Ready;
+	}
+	if (!bWithinWeaponArc)
+	{
+		return ECFVehicleReticleState::OutOfArc;
 	}
 	return ECFVehicleReticleState::Hidden;
 }

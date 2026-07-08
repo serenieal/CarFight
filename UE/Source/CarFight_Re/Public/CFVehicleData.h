@@ -1,15 +1,33 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.14.0
-// Date: 2026-06-23
-// Description: CarFight 차량 루트 DataAsset 바퀴 앵커 레이아웃 오버라이드 설정 추가
+// Version: 1.21.0
+// Date: 2026-07-08
+// Description: CarFight 차량 루트 DataAsset 전투 장착 프로파일 및 휠 메시 자동 스케일 설정 추가
 // Scope: 차량 시각 자산, Wheel Class 참조, VehicleMovement/WheelVisual/Layout 소비 구조에서 DA 기본값과 레거시 자산 보정을 함께 다룹니다.
 // Changelog:
+// - v1.21.0: 자동 스케일된 휠 메시의 바운드 중심을 Wheel_Mesh 원점에 맞추는 중심 보정 옵션을 추가.
+// - v1.20.0: WheelRadius 기준으로 휠 StaticMesh 표시 크기를 자동 보정하는 WheelVisual 옵션과 측정 모드를 추가.
+// - v1.19.0: 전투 FireOrigin P0 검증을 위해 HardpointSlots를 참조하는 MountProfiles 배열을 추가.
+// - v1.18.1: DA_PoliceCar 폐기 결정에 맞춰 현재 P0 DataAsset 기준 마이그레이션 문구로 갱신.
+// - v1.18.0: 하드포인트 위치 슬롯 데이터와 차체 소켓 기반 선택 캡처 입력을 추가.
+// - v1.17.0: 주행감 Quick Tune의 가속 체감 보장을 위한 ThrottleInputScale 값을 추가.
+// - v1.16.0: 레벨 배치 액터 없이 VehicleData에서 차체 메시 소켓을 직접 캡처하는 에디터 버튼 추가.
+// - v1.15.0: 차체 메시 소켓에서 휠 앵커 레이아웃을 캡처할 수 있도록 BodyWheelSocketFL/FR/RL/RR 이름 설정을 추가.
 // - v1.14.0: VehicleLayoutConfig와 WheelAnchor 포즈 구조를 추가해 차량별 시각 휠 기준 위치를 DataAsset에서 관리.
 // - v1.13.0: VehicleMovement 기본값 재정렬 및 레거시 실험값 자동 마이그레이션 추가.
 // Migration:
+// - 기존 VehicleData는 bAutoScaleWheelMeshToRadius=false 기본값으로 이전 외형 스케일을 유지한다.
+// - 자동 휠 메시 스케일을 쓸 차량만 DA의 WheelVisualConfig에서 옵션을 명시적으로 켠다.
+// - 자동 스케일 사용 차량은 기본적으로 메시 바운드 중심도 Wheel_Mesh 원점에 맞춘다. 기존 수동 위치를 유지해야 하면 bAutoCenterWheelMeshBoundsToOrigin=false로 끈다.
+// - MountProfiles는 기존 HardpointSlots를 대체하지 않고 LocationSlotRef로 참조한다.
+// - Top_01 하드포인트가 있는 기존 자산은 PostLoad에서 RoofTurret_MediumOrLarge 기본 프로파일을 1회 보강한다.
+// - 기존 차량 DataAsset의 HardpointSlots는 빈 배열로 시작하며, 빈 배열은 오류가 아니다.
+// - 하드포인트 SocketName은 선택 캡처 입력이며, 비어 있으면 기존 LocalTransform을 유지한다.
+// - 기존 VehicleMovementConfig는 ThrottleInputScale=1.0 기본값으로 기존 스로틀 입력 체감을 유지한다.
+// - 스폰 차량은 DA_*를 열고 "차체 소켓에서 차량 레이아웃 캡처" 버튼을 눌러 레이아웃 값을 생성한다.
+// - 새 소켓 이름 필드는 기본 Wheel_Anchor_FL/FR/RL/RR을 사용하므로 기존 자산 동작을 바꾸지 않는다.
 // - 기존 자산은 bUseLayoutOverrides=false 기본값으로 BP 수동 Wheel_Anchor 배치를 유지한다.
-// - DA_PoliceCar 등 마이그레이션 대상만 bUseLayoutOverrides=true와 네 앵커 좌표를 입력한다.
+// - DA_TestSedan, DA_TestSUV 같은 현재 P0 DataAsset만 bUseLayoutOverrides=true와 네 앵커 좌표를 입력한다.
 
 #pragma once
 
@@ -18,10 +36,20 @@
 #include "ChaosWheeledVehicleMovementComponent.h"
 #include "Engine/DataAsset.h"
 #include "CFVehicleDriveStateConfig.h"
+#include "CFVehicleWeaponTypes.h"
 #include "CFVehicleData.generated.h"
 
 class UChaosVehicleWheel;
 class UStaticMesh;
+
+UENUM(BlueprintType)
+enum class ECFWheelMeshRadiusMeasureMode : uint8
+{
+	AutoMaxXZ UMETA(DisplayName="자동 XZ 최대값 (AutoMaxXZ)", ToolTip="차축이 Y축인 일반 휠 메시 기준으로 X/Z 바운드 중 큰 값을 반지름으로 사용합니다."),
+	AxisX UMETA(DisplayName="X축 반지름 (AxisX)", ToolTip="StaticMesh 로컬 바운드의 X축 Extent를 휠 반지름으로 사용합니다."),
+	AxisY UMETA(DisplayName="Y축 반지름 (AxisY)", ToolTip="StaticMesh 로컬 바운드의 Y축 Extent를 휠 반지름으로 사용합니다."),
+	AxisZ UMETA(DisplayName="Z축 반지름 (AxisZ)", ToolTip="StaticMesh 로컬 바운드의 Z축 Extent를 휠 반지름으로 사용합니다.")
+};
 
 USTRUCT(BlueprintType)
 struct FCFVehicleVisualConfig
@@ -59,6 +87,32 @@ struct FCFWheelAnchorPose
 };
 
 USTRUCT(BlueprintType)
+struct FCFVehicleHardpointSlot
+{
+	GENERATED_BODY()
+
+	// [v1.18.0] 전투 규칙에서 참조할 실제 하드포인트 위치 슬롯 ID입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Hardpoint", meta=(DisplayName="위치 슬롯 ID (LocationSlotId)", ToolTip="전투 규칙에서 참조할 실제 하드포인트 위치 슬롯 ID입니다. 예: Front_01, Top_01"))
+	FName LocationSlotId = NAME_None;
+
+	// [v1.18.0] Front, Top 같은 하드포인트 위치 분류입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Hardpoint", meta=(DisplayName="위치 분류 (LocationCategory)", ToolTip="하드포인트 위치를 분류하기 위한 값입니다. 예: Front, Back, LeftSide, RightSide, Top"))
+	FName LocationCategory = NAME_None;
+
+	// [v1.18.0] 차체 StaticMesh 소켓에서 이 슬롯 위치를 캡처할 때 사용할 선택 입력 이름입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Hardpoint|Socket", meta=(DisplayName="캡처 소켓 이름 (SocketName)", ToolTip="이 슬롯의 위치를 차체 StaticMesh 소켓에서 캡처할 때 사용할 이름입니다. 비어 있으면 캡처하지 않고 LocalTransform 값을 유지합니다. 예: HP_Front_01, HP_Top_01"))
+	FName SocketName = NAME_None;
+
+	// [v1.18.0] 차량 / 차체 기준 하드포인트 로컬 위치입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Hardpoint", meta=(DisplayName="로컬 위치 (LocalLocation)", ToolTip="차량 또는 차체 기준으로 저장된 하드포인트 위치입니다. 런타임 Fire / Aim은 이 값을 원본으로 사용합니다."))
+	FVector LocalLocation = FVector::ZeroVector;
+
+	// [v1.18.0] 차량 / 차체 기준 하드포인트 로컬 회전입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Hardpoint", meta=(DisplayName="로컬 회전 (LocalRotation)", ToolTip="차량 또는 차체 기준으로 저장된 하드포인트 방향입니다. 런타임 Fire / Aim은 이 값을 원본으로 사용합니다."))
+	FRotator LocalRotation = FRotator::ZeroRotator;
+};
+
+USTRUCT(BlueprintType)
 struct FCFVehicleLayoutConfig
 {
 	GENERATED_BODY()
@@ -66,6 +120,22 @@ struct FCFVehicleLayoutConfig
 	// [v1.14.0] True이면 VehicleData의 바퀴 앵커 기준 위치/회전을 BP 컴포넌트에 적용합니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Layout", meta=(DisplayName="레이아웃 덮어쓰기 사용 (bUseLayoutOverrides)", ToolTip="True이면 VehicleData의 바퀴 앵커 기준 위치와 회전을 BP의 Wheel_Anchor_* 컴포넌트에 적용합니다. False이면 기존 BP 수동 배치를 유지합니다."))
 	bool bUseLayoutOverrides = false;
+
+	// [v1.15.0] 차체 메시에서 앞왼쪽 바퀴 중심을 읽을 소켓 이름입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Layout|Socket", meta=(DisplayName="앞왼쪽 차체 소켓 (BodyWheelSocketFL)", ToolTip="차체 Static Mesh에서 앞왼쪽 바퀴 중심 위치를 읽을 소켓 이름입니다. 비어 있으면 Wheel_Anchor_FL을 사용합니다."))
+	FName BodyWheelSocketFL = TEXT("Wheel_Anchor_FL");
+
+	// [v1.15.0] 차체 메시에서 앞오른쪽 바퀴 중심을 읽을 소켓 이름입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Layout|Socket", meta=(DisplayName="앞오른쪽 차체 소켓 (BodyWheelSocketFR)", ToolTip="차체 Static Mesh에서 앞오른쪽 바퀴 중심 위치를 읽을 소켓 이름입니다. 비어 있으면 Wheel_Anchor_FR을 사용합니다."))
+	FName BodyWheelSocketFR = TEXT("Wheel_Anchor_FR");
+
+	// [v1.15.0] 차체 메시에서 뒤왼쪽 바퀴 중심을 읽을 소켓 이름입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Layout|Socket", meta=(DisplayName="뒤왼쪽 차체 소켓 (BodyWheelSocketRL)", ToolTip="차체 Static Mesh에서 뒤왼쪽 바퀴 중심 위치를 읽을 소켓 이름입니다. 비어 있으면 Wheel_Anchor_RL을 사용합니다."))
+	FName BodyWheelSocketRL = TEXT("Wheel_Anchor_RL");
+
+	// [v1.15.0] 차체 메시에서 뒤오른쪽 바퀴 중심을 읽을 소켓 이름입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Layout|Socket", meta=(DisplayName="뒤오른쪽 차체 소켓 (BodyWheelSocketRR)", ToolTip="차체 Static Mesh에서 뒤오른쪽 바퀴 중심 위치를 읽을 소켓 이름입니다. 비어 있으면 Wheel_Anchor_RR을 사용합니다."))
+	FName BodyWheelSocketRR = TEXT("Wheel_Anchor_RR");
 
 	// [v1.14.0] 앞왼쪽 바퀴 앵커에 적용할 기준 위치/회전입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Layout", meta=(EditCondition="bUseLayoutOverrides", EditConditionHides, DisplayName="앞왼쪽 바퀴 앵커 (WheelAnchorFL)", ToolTip="Wheel_Anchor_FL 컴포넌트에 적용할 기준 위치와 회전입니다."))
@@ -94,6 +164,10 @@ struct FCFVehicleMovementConfig
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="이동 프로필 이름 (MovementProfileName)", ToolTip="현재 단계에서는 실제 수치 대신 식별용 이름 또는 메모성 구분자로 사용합니다."))
 	FName MovementProfileName = NAME_None;
+
+	// [v1.17.0] 차량별 가속 체감 조절을 위해 실제 스로틀 입력에 곱할 배율입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ClampMin="0.0", ClampMax="1.0", DisplayName="스로틀 입력 배율 (ThrottleInputScale)", ToolTip="차량 Pawn이 DriveComp에 전달하는 스로틀 입력에 곱할 배율입니다. 가속감 Quick Tune의 체감 차이를 보장하기 위한 값입니다."))
+	float ThrottleInputScale = 1.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ClampMin="0.0", DisplayName="전륜 최대 조향각 (FrontWheelMaxSteerAngle)", ToolTip="전륜 Wheel Class 기본값에 적용할 최대 조향각(deg)입니다."))
 	float FrontWheelMaxSteerAngle = 35.0f;
@@ -241,6 +315,26 @@ struct FCFVehicleWheelVisualConfig
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ClampMin="0", DisplayName="조향 전륜 개수 (FrontWheelCountForSteering)", ToolTip="차량 휠 시각 동기화에서 조향 대상으로 보는 전륜 개수입니다."))
 	int32 FrontWheelCountForSteering = 2;
+
+	// [v1.20.0] True이면 WheelMesh의 원본 바운드 반지름을 VehicleMovementConfig의 WheelRadius에 맞춰 표시 스케일을 자동 보정합니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="WheelRadius 기준 휠 메시 자동 스케일 (bAutoScaleWheelMeshToRadius)", ToolTip="True이면 VehicleVisualConfig의 WheelMesh 바운드 반지름을 측정해서 FrontWheelRadius / RearWheelRadius에 맞게 Wheel_Mesh_* 표시 스케일을 자동 적용합니다. 기존 수동 스케일 보존을 위해 기본값은 False입니다."))
+	bool bAutoScaleWheelMeshToRadius = false;
+
+	// [v1.20.0] 휠 StaticMesh 바운드에서 어떤 축을 반지름으로 볼지 정합니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(EditCondition="bAutoScaleWheelMeshToRadius", EditConditionHides, DisplayName="휠 메시 반지름 측정 모드 (WheelMeshRadiusMeasureMode)", ToolTip="휠 StaticMesh의 로컬 바운드에서 반지름으로 사용할 축입니다. 일반적인 차축 Y 기준 휠은 자동 XZ 최대값을 사용합니다."))
+	ECFWheelMeshRadiusMeasureMode WheelMeshRadiusMeasureMode = ECFWheelMeshRadiusMeasureMode::AutoMaxXZ;
+
+	// [v1.21.0] True이면 자동 스케일 후 휠 메시 바운드 중심을 Wheel_Mesh 컴포넌트 원점에 맞춥니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(EditCondition="bAutoScaleWheelMeshToRadius", EditConditionHides, DisplayName="휠 메시 바운드 중심 자동 보정 (bAutoCenterWheelMeshBoundsToOrigin)", ToolTip="True이면 자동 스케일 후 StaticMesh 바운드 중심이 Wheel_Mesh_* 컴포넌트 원점과 일치하도록 RelativeLocation을 보정합니다. 메시 피벗이 휠 중심이 아닐 때 시각 휠과 물리 휠 중심을 맞추는 옵션입니다."))
+	bool bAutoCenterWheelMeshBoundsToOrigin = true;
+
+	// [v1.20.0] 자동 계산된 휠 메시 표시 스케일의 최소 허용값입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(EditCondition="bAutoScaleWheelMeshToRadius", EditConditionHides, ClampMin="0.01", DisplayName="휠 메시 자동 스케일 최소값 (WheelMeshScaleClampMin)", ToolTip="자동 계산된 휠 메시 표시 스케일이 이 값보다 작아지지 않게 제한합니다. 너무 작은 메시 측정 오류를 막기 위한 안전값입니다."))
+	float WheelMeshScaleClampMin = 0.25f;
+
+	// [v1.20.0] 자동 계산된 휠 메시 표시 스케일의 최대 허용값입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(EditCondition="bAutoScaleWheelMeshToRadius", EditConditionHides, ClampMin="0.01", DisplayName="휠 메시 자동 스케일 최대값 (WheelMeshScaleClampMax)", ToolTip="자동 계산된 휠 메시 표시 스케일이 이 값보다 커지지 않게 제한합니다. 비정상 바운드나 잘못된 WheelRadius 입력을 빠르게 발견하기 위한 안전값입니다."))
+	float WheelMeshScaleClampMax = 4.0f;
 };
 
 USTRUCT(BlueprintType)
@@ -264,12 +358,26 @@ public:
 	// 레거시 VehicleMovement 실험값 세트를 현재 프로젝트 기준값으로 보정합니다.
 	virtual void PostLoad() override;
 
+#if WITH_EDITOR
+	// VehicleVisualConfig.ChassisMesh 소켓에서 휠 앵커와 선택 하드포인트 위치 값을 직접 캡처합니다.
+	UFUNCTION(CallInEditor, BlueprintCallable, Category="CarFight|Vehicle Data|Editor", meta=(DisplayName="차체 소켓에서 차량 레이아웃 캡처 (Capture Vehicle Layout From Chassis Sockets)", ToolTip="VehicleVisualConfig.ChassisMesh의 Wheel_Anchor_FL/FR/RL/RR 소켓과 HardpointSlots에 선언된 SocketName을 읽어 차량 레이아웃 값을 기록합니다. 하드포인트 SocketName이 비어 있거나 소켓이 없어도 휠 캡처 성공 자체를 실패로 보지 않습니다."))
+	void CaptureLayoutFromChassisSockets();
+#endif
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="차량 시각 설정 (VehicleVisualConfig)", ToolTip="차체와 휠 시각 자산 참조를 묶은 설정입니다."))
 	FCFVehicleVisualConfig VehicleVisualConfig;
 
 	// [v1.14.0] 차량별 Wheel_Anchor_* 기준 위치/회전을 묶은 레이아웃 설정입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="차량 레이아웃 설정 (VehicleLayoutConfig)", ToolTip="차량별 Wheel_Anchor_FL/FR/RL/RR 기준 위치와 회전을 묶은 설정입니다. bUseLayoutOverrides가 꺼져 있으면 기존 BP 수동 배치를 유지합니다."))
 	FCFVehicleLayoutConfig VehicleLayoutConfig;
+
+	// [v1.18.0] 차량별 하드포인트 위치 슬롯 목록입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="하드포인트 위치 슬롯 (HardpointSlots)", ToolTip="이 차량이 제공하는 하드포인트 위치 슬롯 목록입니다. 빈 배열은 아직 하드포인트 위치를 선언하지 않은 상태이며 오류가 아닙니다."))
+	TArray<FCFVehicleHardpointSlot> HardpointSlots;
+
+	// [v1.19.0] 차량별 전투 장착 프로파일 목록입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="전투 장착 프로파일 (MountProfiles)", ToolTip="이 차량의 하드포인트 위치 슬롯에 어떤 전투 장착 규칙을 연결할지 정의합니다. P0에서는 Top_01 + Turret 프로파일부터 사용합니다."))
+	TArray<FCFVehicleMountProfile> MountProfiles;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="차량 이동 설정 (VehicleMovementConfig)", ToolTip="VehicleMovement 계열 데이터를 나중에 확장하기 위한 최소 슬롯입니다."))
 	FCFVehicleMovementConfig VehicleMovementConfig;

@@ -1,14 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.4.0
-// Date: 2026-06-19
+// Version: 1.5.0
+// Date: 2026-07-02
 // Description: CarFight 싱글플레이 차량 Aim 시스템의 공용 타입 정의
 // Changelog:
+// - v1.5.0: 터렛 안정화 전 발사 정책에 맞춰 조준각 내부 여부를 발사 차단 조건이 아닌 표시/디버그 상태로 정리.
 // - v1.4.0: 싱글플레이 기준에 맞춰 NetSerialization 의존성과 FVector_NetQuantize 계열 타입을 제거하고 일반 FVector로 통일.
 // - v1.3.0: Reticle/FireReject enum 값에서 서버 중심 이름을 싱글플레이 로컬 발사 처리 이름으로 교체.
 // - v1.2.0: 발사 검증/시각 상태 타입과 필드명을 싱글플레이 용어로 리네이밍.
 // - v1.1.0: 싱글플레이 전환에 맞춰 표시명과 툴팁을 로컬 Fire Command / Fire Result 의미로 정리.
 // Migration:
+// - OutOfWeaponArc는 호환을 위해 유지하지만, P0 터렛 발사 정책에서는 기본 발사 거부 사유로 사용하지 않는다.
 // - ECFVehicleReticleState::WaitingServer는 FirePending으로 교체한다.
 // - ECFVehicleReticleState::ServerRejected는 FireRejected로 교체한다.
 // - ECFVehicleFireRejectReason::NoAuthority는 InvalidLocalState로 교체한다.
@@ -114,12 +116,12 @@ struct FCFVehicleLocalAimState
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="로컬 Reticle 상태 (LocalReticleState)", ToolTip="로컬 플레이어 기준 현재 조준점 표시 상태입니다."))
 	ECFVehicleReticleState LocalReticleState = ECFVehicleReticleState::Hidden;
 
-	// [v1.0.0] 로컬 예측 기준 발사 가능 여부입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="로컬 발사 가능 예측 (bLocalCanFire)", ToolTip="로컬 예측 기준 현재 발사 가능 여부입니다. 실제 발사 적용 전 검증과 분리해서 봅니다."))
+	// [v1.5.0] 로컬 예측 기준 발사 가능 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="로컬 발사 가능 예측 (bLocalCanFire)", ToolTip="로컬 예측 기준 현재 발사 가능 여부입니다. 조준각 초과는 단독 발사 차단 조건이 아닙니다."))
 	bool bLocalCanFire = false;
 
-	// [v1.0.0] 로컬 기준 무기 조준각 안에 있는지 여부입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="로컬 무기 조준각 내부 여부 (bLocalWithinWeaponArc)", ToolTip="로컬 기준 현재 조준이 무기 조준각 안에 들어오는지 여부입니다."))
+	// [v1.5.0] 로컬 기준 무기 조준각 안에 있는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="로컬 무기 조준각 내부 여부 (bLocalWithinWeaponArc)", ToolTip="로컬 기준 현재 조준이 무기 조준각 안에 들어오는지 여부입니다. 표시/디버그용 상태이며 단독 발사 차단 조건이 아닙니다."))
 	bool bLocalWithinWeaponArc = false;
 
 	// [v1.0.0] 로컬 기준 조준이 장애물 등에 막힌 상태인지 여부입니다.
@@ -139,8 +141,8 @@ struct FCFVehicleFireValidationState
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="검증 조준 목표 위치 (ValidationAimTargetLocation)", ToolTip="로컬 발사 검증 기준 현재 조준 목표 월드 위치입니다."))
 	FVector ValidationAimTargetLocation = FVector::ZeroVector;
 
-	// [v1.2.0] 로컬 검증 기준 무기 조준각 안에 있는지 여부입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="검증 무기 조준각 내부 여부 (bValidationWithinWeaponArc)", ToolTip="로컬 발사 검증 기준 현재 조준이 무기 조준각 안에 들어오는지 여부입니다."))
+	// [v1.5.0] 로컬 검증 기준 무기 조준각 안에 있는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(DisplayName="검증 무기 조준각 내부 여부 (bValidationWithinWeaponArc)", ToolTip="로컬 발사 검증 기준 현재 조준이 무기 조준각 안에 들어오는지 여부입니다. 표시/디버그용 상태이며 단독 발사 차단 조건이 아닙니다."))
 	bool bValidationWithinWeaponArc = false;
 
 	// [v1.2.0] 로컬 검증 기준 발사 가능 여부입니다.

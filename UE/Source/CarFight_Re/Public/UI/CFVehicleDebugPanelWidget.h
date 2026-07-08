@@ -1,9 +1,43 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.8.0
-// Date: 2026-05-21
+// Version: 1.25.0
+// Date: 2026-07-03
 // Description: VehicleDebug Panel용 C++ 부모 위젯 클래스입니다.
-// Scope: VehicleDebug Overview / Drive / Input / Camera / Aim / Runtime 카테고리를 읽어 Navigation + Selected Section 기반 표시와 기존 fallback 표시를 안정적으로 지원합니다.
+// Changelog:
+// - v1.25.0: Weapon 섹션에 EquipmentPresetData 지정 여부 / ID / 호환성 / 요약 표시를 추가.
+// - v1.24.0: Weapon 섹션에 마지막 Damage HitContext Debug 표시를 추가.
+// - v1.23.0: DamageData 표시 설명을 ProjectileData 단일 소유 정책에 맞게 정리.
+// - v1.22.0: Weapon 섹션에 DamageData 지정 여부 / 피해 ID / 해석 경로 / 요약 표시를 추가.
+// - v1.21.0: Weapon 섹션에 터렛 조준 현재/목표 Yaw/Pitch와 안정화 상태 표시를 추가.
+// - v1.20.0: Weapon 섹션의 터렛 시각 하위 섹션에 Base 메쉬 표시를 추가.
+// - v1.19.0: Weapon 섹션의 터렛 시각 하위 섹션에 TurretMountData 지정 / ID / 요약 표시를 추가.
+// - v1.18.0: Weapon 섹션에 터렛 시각 장착 하위 섹션을 추가.
+// - v1.17.0: Weapon 섹션의 Projectile Pool 하위 섹션에 마지막 반환 요약 표시를 추가.
+// - v1.16.0: Weapon 섹션의 발사 쿨다운 초 표시를 분당 발사속도 표시로 전환.
+// - v1.15.0: Weapon 섹션에 Projectile Pool 전체 / 활성 / 비활성 수 표시를 추가.
+// - v1.14.0: Projectile 준비 표시를 실제 Pool Acquire 경로 기준으로 갱신.
+// - v1.13.0: Weapon 섹션의 ProjectileData 표시를 Projectile Actor 스폰 준비 상태와 Dummy HitScan 유지 기준으로 확장.
+// - v1.12.0: Weapon 섹션에 활성 ProjectileData 지정 여부, ID, 요약 표시를 추가.
+// - v1.11.0: Weapon 섹션에 활성 WeaponData 기반 MaxRange / Cooldown 런타임 표시를 추가.
+// - v1.10.0: Weapon 섹션에 활성 WeaponData ID, 호환성, 요약 표시를 추가.
+// - v1.9.0: VehicleDebug Weapon 카테고리를 Navigation 섹션으로 추가해 WeaponComp 런타임과 FireOrigin 상태를 표시.
+// Migration:
+// - EquipmentPresetData 표시는 Debug 전용이며 FireOrigin / Projectile / Damage 판정을 변경하지 않는다.
+// - Base 메쉬 표시는 Debug 전용이며 FireOrigin / Projectile / Damage 판정을 변경하지 않는다.
+// - TurretMountData 표시는 Debug 전용이며 FireOrigin / Projectile / Damage 판정을 변경하지 않는다.
+// - 터렛 시각 장착 상태는 Debug 표시 전용이며 FireOrigin / Projectile / Damage 판정을 변경하지 않는다.
+// - 터렛 조준 상태 표시는 Debug 전용이며 FireOrigin / Projectile / Damage 판정을 변경하지 않는다.
+// - DamageData 표시는 Debug 전용이며 실제 HP / 모듈 피해 적용은 수행하지 않는다.
+// - DamageData 미지정은 ProjectileData.DamageProfileId fallback 또는 ProjectileData 미연결 상태로 표시하며 발사 가능 여부를 판정하지 않는다.
+// - Damage HitContext 표시는 마지막 HitScan / Projectile 결과 확인 전용이며 실제 HP / 모듈 피해 적용은 수행하지 않는다.
+// - ProjectileData 미지정 또는 ProjectileActorClass 미지정은 Dummy HitScan fallback 상태로 표시하고 경고 상태로 승격하지 않는다.
+// - ProjectileActorClass 지정과 FireMode=Projectile 조건이 맞으면 Projectile Pool 확보 경로 준비 상태로 표시한다.
+// - Projectile Pool 카운트는 Pool 재사용 여부를 확인하기 위한 표시 전용 값이며 발사 가능 여부를 판정하지 않는다.
+// - Projectile Pool 마지막 반환 요약은 충돌 / 수명 / 반환 검증 표시 전용 값이며 Damage를 적용하지 않는다.
+// - 기존 WeaponData 표시 구조는 유지하고 발사 제한 원본값은 분당 발사속도로 표시한다.
+// - 기존 Weapon 섹션 ID와 필드는 유지하고 WeaponData 하위 섹션만 추가한다.
+// - 기존 WBP 바인딩 위젯은 유지하고, 동적 Section 레이아웃에서 Weapon 섹션을 추가로 표시한다.
+// Scope: VehicleDebug Overview / Drive / Input / Camera / Aim / Weapon / Runtime 카테고리를 읽어 Navigation + Selected Section 기반 표시와 기존 fallback 표시를 안정적으로 지원합니다.
 
 #pragma once
 
@@ -272,6 +306,10 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category="CarFight|VehicleDebug|Panel", meta=(DisplayName="Aim 캐시 (CachedAim)", ToolTip="현재 Panel에 표시 중인 최신 VehicleDebug Aim 캐시입니다."))
 	FCFVehicleDebugAim CachedAim;
 
+	// [v1.9.0] 현재 Panel에 적용 중인 최신 Weapon 캐시입니다.
+	UPROPERTY(BlueprintReadOnly, Category="CarFight|VehicleDebug|Panel", meta=(DisplayName="Weapon 캐시 (CachedWeapon)", ToolTip="현재 Panel에 표시 중인 최신 VehicleDebug Weapon 캐시입니다."))
+	FCFVehicleDebugWeapon CachedWeapon;
+
 	// [v1.0.0] 현재 Panel에 적용 중인 최신 Runtime 캐시입니다.
 	UPROPERTY(BlueprintReadOnly, Category="CarFight|VehicleDebug|Panel", meta=(DisplayName="Runtime 캐시 (CachedRuntime)", ToolTip="현재 Panel에 표시 중인 최신 VehicleDebug Runtime 캐시입니다."))
 	FCFVehicleDebugRuntime CachedRuntime;
@@ -450,6 +488,9 @@ private:
 
 	// [v1.8.0] Aim 카테고리용 Section ViewData를 생성합니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> BuildAimSectionViewData(const FCFVehicleDebugAim& InAim) const;
+
+	// [v1.9.0] Weapon 카테고리용 Section ViewData를 생성합니다.
+	TSharedRef<FCFVehicleDebugSectionViewData> BuildWeaponSectionViewData(const FCFVehicleDebugWeapon& InWeapon) const;
 
 	// [v1.5.0] Runtime 카테고리용 Section ViewData를 생성합니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> BuildRuntimeSectionViewData(const FCFVehicleDebugRuntime& InRuntime) const;

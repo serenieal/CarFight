@@ -1,9 +1,39 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.67.0
-// Date: 2026-06-19
+// Version: 2.101.0
+// Date: 2026-07-03
 // Description: CarFight 싱글플레이 차량 Pawn 기준 클래스
 // Changelog:
+// - v2.101.0: VehicleDebug EquipmentPresetData 기준 설명을 legacy 직접 fallback 제거 정책에 맞게 갱신.
+// - v2.100.0: VehicleDebug Weapon 카테고리에 활성 EquipmentPresetData 상태를 추가하고 터렛 시각 장착도 EquipmentPresetData 우선 해석으로 전환.
+// - v2.99.0: ActiveTurretMountData Debug 툴팁을 MountProfile inline fallback 제거 정책에 맞게 정리.
+// - v2.98.0: MountProfile inline 터렛 시각 fallback을 런타임에서 제거하고 TurretMountData 전용 경로로 전환.
+// - v2.97.0: Dummy HitScan과 Projectile Actor 충돌 결과를 같은 Damage HitContext Debug로 기록.
+// - v2.96.0: VehicleDebug DamageData 표시 설명을 ProjectileData 단일 소유 정책에 맞게 정리.
+// - v2.95.0: VehicleDebug Weapon 카테고리에 활성 DamageData 참조, ID, 요약, 해석 경로를 추가.
+// - v2.94.0: 터렛 안정화 전 발사 정책에 맞춰 조준각 초과를 기본 발사 거부 조건에서 제외.
+// - v2.93.0: Turret Pitch 메쉬의 Muzzle 소켓이 유효하면 최종 FireOrigin을 총구 기준으로 보정.
+// - v2.92.0: 터렛 하드포인트 / Yaw / Pitch 필수 소켓 누락을 VehicleDebug 요약에서 MissingRequiredSocket으로 구분.
+// - v2.91.0: 하드포인트 / Yaw / Pitch 소켓 부착을 SnapToTarget 기준으로 명확히 하고 소켓-루트 위치 차이 Debug를 추가.
+// - v2.90.0: 터렛 장착 루트가 HardpointSlot.SocketName을 실제 차체 소켓으로 우선 사용하도록 수정.
+// - v2.89.0: WeaponComp가 계산한 터렛 Yaw / Pitch 추적 각도를 시각 피벗 컴포넌트에 적용하고 Debug Snapshot에 표시.
+// - v2.88.0: 터렛 시각 장착을 BaseMesh + YawPivot + PitchPivot 3단 소켓 계층으로 확장.
+// - v2.87.0: 터렛 시각 장착이 TurretMountData를 우선 사용하도록 Debug Snapshot 필드를 추가.
+// - v2.86.1: 터렛 시각 장착 빌드 안정화를 위해 하드포인트 슬롯 타입 전방 선언을 추가.
+// - v2.86.0: 하드포인트 기반 P0 터렛 시각 장착 컴포넌트와 VehicleDebug 터렛 시각 요약을 추가.
+// - v2.85.0: VehicleDebug Weapon 카테고리에 Projectile Pool 마지막 반환 요약을 추가.
+// - v2.84.0: VehicleDebug Weapon 카테고리에 활성 무기 분당 발사속도를 추가하고 기존 쿨다운 초는 환산 발사 간격으로 유지.
+// - v2.83.0: VehicleDebug Weapon 카테고리에 Projectile Pool 보유 여부와 전체 / 활성 / 비활성 수를 추가.
+// - v2.82.0: ProjectilePoolComp를 추가하고 Projectile Actor 스폰 경로를 Pool Acquire 기반으로 전환.
+// - v2.81.0: Projectile FireMode에서 공통 Projectile Actor 스폰 경로를 추가하고 Dummy HitScan fallback을 유지.
+// - v2.80.0: VehicleDebug Weapon 카테고리에 Projectile Actor 스폰 준비 상태와 실행 요약을 추가.
+// - v2.79.0: VehicleDebug Weapon 카테고리에 활성 ProjectileData 참조, ID, 요약을 추가.
+// - v2.78.0: 활성 WeaponData의 MaxRange / CooldownSeconds를 Fire 검증과 VehicleDebug Weapon 카테고리에 연결.
+// - v2.77.0: VehicleDebug Weapon 카테고리에 활성 WeaponData 참조, ID, 호환성, 요약을 추가.
+// - v2.76.0: VehicleDebug Snapshot에 Weapon 카테고리를 추가해 WeaponComp 런타임과 FireOrigin 상태를 패널에서 읽을 수 있게 함.
+// - v2.75.0: VehicleWeaponComp를 추가해 VehicleData MountProfiles 기반 FireOrigin을 로컬 Fire Command에 반영.
+// - v2.74.0: 차체 메시 소켓에서 휠 앵커와 선택 하드포인트 위치를 함께 캡처하는 차량 레이아웃 버튼으로 확장.
+// - v2.69.0: 차체 메시 소켓에서 VehicleData 휠 레이아웃을 캡처하는 에디터 전용 버튼을 추가.
 // - v2.67.0: Aim Trace 디버그 변수명을 bDrawLocalAimTraceDebug / LocalAimTraceDebugDuration으로 교체.
 // - v2.66.0: Aim Debug Snapshot의 ServerAimState / RepAimVisualState 명칭을 FireValidationState / AimVisualState로 교체.
 // - v2.65.0: 참조가 없는 ACFVehiclePawn Fire 레거시 wrapper와 RPC 선언을 제거해 싱글플레이 Fire 경로를 단일화.
@@ -14,6 +44,32 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth 적용 전 기준선 정리를 위해 차량 NetDebug/OwnerVisual/OwnerBodyVisual 실험 플래그 기본값을 False로 통일.
 // Migration:
+// - MountProfile.DefaultEquipmentPresetData가 있으면 터렛 시각 장착과 Weapon Debug는 EquipmentPresetData를 단일 소스로 사용한다.
+// - EquipmentPresetData가 없거나 내부 TurretMountData / WeaponData 참조가 비어 있으면 해당 Debug는 Missing 상태로 표시하고 MountProfile 직접 fallback은 사용하지 않는다.
+// - OutOfWeaponArc는 호환용 enum 값으로 남지만, P0 터렛 발사 정책에서는 조준각 초과만으로 발사를 막지 않는다.
+// - 소켓 이름이 지정되어 있는데 실제 메쉬에 없으면 기존 fallback은 유지하지만, VehicleDebug Panel 터렛 시각 요약에 MissingRequiredSocket 상태가 표시된다.
+// - TurretMountData의 TurretBaseMesh가 비어 있으면 기존처럼 하드포인트 루트 기준 Yaw / Pitch 장착을 유지한다.
+// - YawPivotSocketName 또는 PitchPivotSocketName이 없으면 해당 Pivot은 부모 컴포넌트 원점 기준으로 fallback된다.
+// - EquipmentPresetData 내부 TurretMountData가 있으면 터렛 시각 메쉬 / 피벗 소켓 원본으로 사용하고, 비어 있으면 MountProfile inline 터렛 시각 fallback은 더 이상 사용하지 않는다.
+// - 터렛 시각 메쉬가 비어 있으면 표시만 생략하고 기존 FireOrigin / Projectile / Cooldown 검증은 유지한다.
+// - 터렛 회전 상태는 WeaponComp가 소유하고, Pawn은 계산된 Yaw / Pitch 값을 TurretYawPivot / TurretPitchPivot 시각 컴포넌트에 적용만 한다.
+// - HardpointSlot.SocketName이 차체 소켓에 있으면 터렛 장착 루트는 소켓에 직접 붙고, 없으면 기존 LocalTransform fallback을 사용한다.
+// - VehicleDebug Panel의 터렛 시각 요약에서 하드포인트 소켓 위치와 터렛 루트 위치 차이를 확인할 수 있다.
+// - MuzzleSocketName이 Pitch 메쉬에 존재하면 최종 FireOrigin 위치와 방향은 해당 소켓을 우선 사용한다.
+// - Muzzle 소켓이 없거나 Pitch 메쉬가 없으면 기존 하드포인트 FireOrigin fallback을 유지한다.
+// - DamageData는 ProjectileData.DefaultDamageData만 직접 참조하며, HitScan / Laser도 가상 ProjectileData로 연결한다.
+// - DamageData가 비어 있어도 실제 피해 적용은 아직 수행하지 않으며 기존 발사 / Projectile / Dummy HitScan fallback 흐름을 유지한다.
+// - Damage HitContext는 Debug 표시 전용이며 실제 HP 차감 / 모듈 손상을 수행하지 않는다.
+// - ProjectileData가 없어도 기존 Dummy HitScan / FireOrigin / 발사 간격 검증은 유지한다.
+// - Projectile Actor 스폰은 WeaponData.FireMode가 Projectile이고 ProjectileData / ProjectileActorClass가 모두 유효할 때만 실행한다.
+// - Projectile Pool 확보 조건이 맞지 않거나 Pool 확보 실패 시 기존 Dummy HitScan fallback을 유지한다.
+// - WeaponData가 없으면 기존 Aim Profile MaxAimDistance와 즉시 발사 흐름을 유지한다.
+// - 기존 Weapon Debug 필드는 유지하고 WeaponData 관련 필드만 뒤에 추가한다.
+// - 기존 VehicleDebug Overview / Drive / Input / Camera / Aim / Runtime 카테고리는 유지하고 Weapon 카테고리만 추가한다.
+// - 기존 Aim 기반 발사 흐름은 유지하고, MountProfile 해석에 성공한 경우에만 AimOrigin/AimDirection/WeaponGroupId를 덮어쓴다.
+// - MountProfiles가 비어 있거나 Top_01 하드포인트가 없으면 기존 AimComp 발사 원점으로 안전하게 fallback한다.
+// - Mesh_TestSUV 같은 차체 메시 소켓 기반 차량은 에디터에서 Capture Vehicle Layout From Body Sockets를 실행해 DA 값을 생성한다.
+// - 하드포인트 SocketName이 비어 있거나 누락되어도 휠 레이아웃 캡처 성공 자체는 유지된다.
 // - 신규 Fire 흐름은 BuildFireCommand / ValidateFireCommand / RunLocalDummyHitScan / ApplyFireResult를 기준으로 사용한다.
 // - bDrawServerAimTraceDebug는 bDrawLocalAimTraceDebug로, ServerAimTraceDebugDuration은 LocalAimTraceDebugDuration으로 교체한다.
 // - BP 저장값 보존을 위해 DefaultEngine.ini CoreRedirects의 PropertyRedirects를 유지한다.
@@ -21,7 +77,7 @@
 // - ACFVehiclePawn의 BuildFireRequest / ValidateFireRequestOnServer / RunServerDummyHitScan / ServerRequestFire / ClientReceiveFireResult 호출은 제거하고 로컬 Fire 함수로 교체한다.
 // - BP_CFVehiclePawn의 Actor Replicates/Replicate Movement도 False로 저장해 C++ 기본값과 맞춘다.
 // - 멀티플레이 진단이 다시 필요하면 별도 멀티플레이 브랜치/문서에서 복구한다.
-// Scope: DriveComp / WheelSyncComp / VehicleCameraComp / VehicleAimComp를 소유하고 차량 런타임, 입력, 카메라 디버그 스냅샷, 로컬 Fire Command를 함께 다룹니다.
+// Scope: DriveComp / WheelSyncComp / VehicleCameraComp / VehicleAimComp / VehicleWeaponComp / ProjectilePoolComp를 소유하고 차량 런타임, 입력, 카메라 디버그 스냅샷, 로컬 Fire Command를 함께 다룹니다.
 
 #pragma once
 
@@ -29,6 +85,8 @@
 #include "CFVehicleDriveComp.h"
 #include "CFVehicleAimTypes.h"
 #include "CFVehicleCameraTypes.h"
+#include "CFDamageTypes.h"
+#include "CFVehicleWeaponTypes.h"
 #include "Components/SlateWrapperTypes.h"
 #include "Engine/EngineTypes.h"
 #include "WheeledVehiclePawn.h"
@@ -37,13 +95,23 @@
 class UCFVehicleData;
 class UCFVehicleCameraComp;
 class UCFVehicleAimComp;
+class UCFVehicleWeaponComp;
+class UCFProjectilePoolComp;
+class UCFEquipmentPresetData;
+class UCFProjectileData;
+class UCFDamageData;
+class UCFTurretMountData;
+class UCFWeaponData;
 class UCFAimReticleWidget;
 class UCFWheelSyncComp;
+class ACFProjectileActor;
 class UChaosWheeledVehicleMovementComponent;
 class UInputAction;
 class UInputComponent;
 class UInputMappingContext;
 class USceneComponent;
+class UStaticMeshComponent;
+struct FCFVehicleHardpointSlot;
 struct FInputActionValue;
 struct FKey;
 
@@ -433,6 +501,203 @@ struct FCFVehicleDebugAim
 };
 
 /**
+ * VehicleDebug 무기 상세 카테고리입니다.
+ */
+USTRUCT(BlueprintType)
+struct FCFVehicleDebugWeapon
+{
+	GENERATED_BODY()
+
+	// [v2.76.0] VehicleWeaponComp 보유 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="VehicleWeaponComp 보유 여부 (bHasVehicleWeaponComponent)", ToolTip="현재 Pawn이 VehicleWeaponComp를 보유하고 있는지 여부입니다."))
+	bool bHasVehicleWeaponComponent = false;
+
+	// [v2.76.0] Weapon 런타임 준비 완료 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="Weapon 런타임 준비 완료 여부 (bWeaponRuntimeReady)", ToolTip="VehicleWeaponComp가 활성 장착 프로파일과 하드포인트 슬롯을 찾았는지 여부입니다."))
+	bool bWeaponRuntimeReady = false;
+
+	// [v2.76.0] WeaponComp가 우선 사용할 장착 프로파일 ID입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 장착 프로파일 ID (ActiveMountProfileId)", ToolTip="VehicleWeaponComp가 현재 우선 사용하는 장착 프로파일 ID입니다."))
+	FName ActiveMountProfileId = NAME_None;
+
+	// [v2.76.0] 마지막으로 계산된 실제 발사 원점입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="마지막 발사 원점 (LastFireOrigin)", ToolTip="VehicleWeaponComp가 마지막으로 계산한 실제 발사 위치와 방향입니다."))
+	FCFVehicleFireOrigin LastFireOrigin;
+
+	// [v2.76.0] WeaponComp의 마지막 런타임 초기화 또는 FireOrigin 계산 요약 문자열입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="Weapon 런타임 요약 (LastWeaponRuntimeSummary)", ToolTip="VehicleWeaponComp의 마지막 런타임 초기화 또는 FireOrigin 계산 결과 요약 문자열입니다."))
+	FString LastWeaponRuntimeSummary = TEXT("WeaponRuntime: Missing");
+
+	// [v2.101.0] 현재 활성 장착 프로파일에서 해석한 EquipmentPresetData입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 EquipmentPresetData (ActiveEquipmentPresetData)", ToolTip="현재 활성 장착 프로파일에서 해석한 장비 프리셋 DataAsset입니다. 비어 있으면 장비 데이터는 Missing 상태입니다."))
+	TObjectPtr<UCFEquipmentPresetData> ActiveEquipmentPresetData = nullptr;
+
+	// [v2.100.0] 현재 활성 EquipmentPresetData가 지정되어 있는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 EquipmentPresetData 지정 여부 (bActiveEquipmentPresetDataAssigned)", ToolTip="현재 활성 장착 프로파일에 장비 프리셋 DataAsset이 지정되어 있는지 여부입니다."))
+	bool bActiveEquipmentPresetDataAssigned = false;
+
+	// [v2.100.0] 현재 활성 EquipmentPresetData가 장착 프로파일과 호환되는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 EquipmentPresetData 호환 여부 (bActiveEquipmentPresetDataCompatible)", ToolTip="현재 활성 EquipmentPresetData가 장착 타입과 크기 제한을 통과했는지 여부입니다."))
+	bool bActiveEquipmentPresetDataCompatible = false;
+
+	// [v2.100.0] 현재 활성 EquipmentPresetData의 식별자입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 장비 프리셋 ID (ActiveEquipmentPresetId)", ToolTip="현재 활성 EquipmentPresetData의 EquipmentId입니다. EquipmentPresetData가 비어 있으면 None입니다."))
+	FName ActiveEquipmentPresetId = NAME_None;
+
+	// [v2.100.0] 현재 활성 EquipmentPresetData 핵심 값 요약입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 EquipmentPresetData 요약 (ActiveEquipmentPresetSummary)", ToolTip="현재 활성 EquipmentPresetData의 장비 조합 요약 문자열입니다."))
+	FString ActiveEquipmentPresetSummary = TEXT("EquipmentPresetData: MissingOptional");
+
+	// [v2.101.0] 현재 활성 EquipmentPresetData에서 해석한 TurretMountData이며, 비어 있으면 Missing 상태로 표시합니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 TurretMountData (ActiveTurretMountData)", ToolTip="현재 활성 EquipmentPresetData에서 해석한 터렛 마운트 DataAsset입니다. 비어 있으면 터렛 시각 / 조준 추적은 Missing으로 표시되고 MountProfile 직접 fallback은 사용하지 않습니다."))
+	TObjectPtr<UCFTurretMountData> ActiveTurretMountData = nullptr;
+
+	// [v2.101.0] 현재 활성 TurretMountData가 EquipmentPresetData에서 해석되었는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 TurretMountData 지정 여부 (bActiveTurretMountDataAssigned)", ToolTip="현재 활성 장착 프로파일에서 터렛 마운트 DataAsset이 EquipmentPresetData로 해석되었는지 여부입니다."))
+	bool bActiveTurretMountDataAssigned = false;
+
+	// [v2.87.0] 현재 활성 TurretMountData의 식별자입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 터렛 마운트 ID (ActiveTurretMountId)", ToolTip="현재 활성 TurretMountData의 TurretMountId입니다. TurretMountData가 비어 있으면 None입니다."))
+	FName ActiveTurretMountId = NAME_None;
+
+	// [v2.87.0] 현재 활성 TurretMountData 핵심 값 요약입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 터렛 마운트 요약 (ActiveTurretMountSummary)", ToolTip="현재 활성 TurretMountData의 시각 메쉬, 피벗 소켓, 회전 한계, 회전 속도 요약입니다."))
+	FString ActiveTurretMountSummary = TEXT("TurretMountData: NotInitialized");
+
+	// [v2.86.0] 현재 활성 장착 프로파일의 터렛 시각 메쉬가 차량에 붙었는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="터렛 시각 장착 여부 (bTurretVisualAttached)", ToolTip="현재 활성 장착 프로파일의 터렛 시각 메쉬가 하드포인트 기준으로 차량에 붙었는지 여부입니다."))
+	bool bTurretVisualAttached = false;
+
+	// [v2.88.0] 현재 터렛 시각 장착 상태 요약입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="터렛 시각 요약 (TurretVisualSummary)", ToolTip="터렛 Base/Yaw/Pitch 메쉬 연결, 하드포인트, 피벗 소켓 적용 상태를 요약한 문자열입니다."))
+	FString TurretVisualSummary = TEXT("TurretVisual: NotInitialized");
+
+	// [v2.89.0] 현재 터렛 조준 추적 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="터렛 조준 상태 (TurretState)", ToolTip="WeaponComp가 계산한 터렛 목표 Yaw/Pitch와 현재 추적 Yaw/Pitch 상태입니다."))
+	FCFVehicleTurretState TurretState;
+
+	// [v2.89.0] 현재 터렛 조준 추적 계산 요약입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="터렛 런타임 요약 (TurretRuntimeSummary)", ToolTip="WeaponComp가 마지막으로 계산한 터렛 조준 추적 상태 요약입니다."))
+	FString TurretRuntimeSummary = TEXT("TurretRuntime: NotInitialized");
+
+	// [v2.88.0] 현재 터렛 Base 메쉬 이름입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="터렛 Base 메쉬 이름 (TurretBaseMeshName)", ToolTip="현재 하드포인트에 고정된 터렛 받침/Base 메쉬 이름입니다. 비어 있으면 None입니다."))
+	FName TurretBaseMeshName = NAME_None;
+
+	// [v2.88.0] 현재 터렛 Yaw 메쉬 이름입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="터렛 Yaw 메쉬 이름 (TurretYawMeshName)", ToolTip="현재 YawPivot 아래에 붙은 터렛 회전부/Yaw 메쉬 이름입니다. 비어 있으면 None입니다."))
+	FName TurretYawMeshName = NAME_None;
+
+	// [v2.88.0] 현재 터렛 Pitch 메쉬 이름입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="터렛 Pitch 메쉬 이름 (TurretPitchMeshName)", ToolTip="현재 PitchPivot 아래에 붙은 터렛 상부/포신/Pitch 메쉬 이름입니다. 비어 있으면 None입니다."))
+	FName TurretPitchMeshName = NAME_None;
+
+	// [v2.77.0] 현재 활성 장착 프로파일에 연결된 WeaponData입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 WeaponData (ActiveWeaponData)", ToolTip="현재 활성 장착 프로파일에 연결된 WeaponData입니다."))
+	TObjectPtr<UCFWeaponData> ActiveWeaponData = nullptr;
+
+	// [v2.77.0] 현재 활성 WeaponData의 식별자입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 무기 ID (ActiveWeaponId)", ToolTip="현재 활성 WeaponData의 WeaponId입니다. WeaponData가 비어 있으면 None입니다."))
+	FName ActiveWeaponId = NAME_None;
+
+	// [v2.77.0] 현재 활성 WeaponData가 장착 프로파일과 호환되는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 WeaponData 호환 여부 (bActiveWeaponDataCompatible)", ToolTip="현재 활성 WeaponData가 장착 타입과 크기 제한을 통과했는지 여부입니다."))
+	bool bActiveWeaponDataCompatible = false;
+
+	// [v2.77.0] 현재 활성 WeaponData 핵심 값 요약입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 WeaponData 요약 (ActiveWeaponSummary)", ToolTip="현재 활성 WeaponData의 핵심 전투 데이터 요약 문자열입니다."))
+	FString ActiveWeaponSummary = TEXT("WeaponData: MissingOptional");
+
+	// [v2.79.0] 현재 활성 WeaponData에 연결된 ProjectileData입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 ProjectileData (ActiveProjectileData)", ToolTip="현재 활성 WeaponData에 연결된 ProjectileData입니다. 비어 있으면 Dummy HitScan fallback을 유지합니다."))
+	TObjectPtr<UCFProjectileData> ActiveProjectileData = nullptr;
+
+	// [v2.79.0] 현재 활성 ProjectileData의 식별자입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 발사체 ID (ActiveProjectileId)", ToolTip="현재 활성 ProjectileData의 ProjectileId입니다. ProjectileData가 비어 있으면 None입니다."))
+	FName ActiveProjectileId = NAME_None;
+
+	// [v2.79.0] 현재 활성 ProjectileData 핵심 값 요약입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 ProjectileData 요약 (ActiveProjectileSummary)", ToolTip="현재 활성 ProjectileData의 핵심 발사체 데이터 요약 문자열입니다."))
+	FString ActiveProjectileSummary = TEXT("ProjectileData: MissingOptional");
+
+	// [v2.80.0] 현재 활성 ProjectileData가 Projectile Actor 전환 후보인지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 Projectile 스폰 준비 여부 (bActiveProjectileSpawnReady)", ToolTip="활성 ProjectileData와 ProjectileActorClass가 모두 유효해 Projectile Actor Pool 확보 경로를 사용할 수 있는지 여부입니다."))
+	bool bActiveProjectileSpawnReady = false;
+
+	// [v2.80.0] 현재 활성 Projectile 실행 경로 요약입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 Projectile 실행 요약 (ActiveProjectileExecutionSummary)", ToolTip="Dummy HitScan 유지 또는 Projectile 전환 준비 상태를 설명하는 요약 문자열입니다."))
+	FString ActiveProjectileExecutionSummary = TEXT("ProjectileExecution: DummyHitScanFallback");
+
+	// [v2.96.0] 현재 활성 ProjectileData에서 해석한 DamageData입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 DamageData (ActiveDamageData)", ToolTip="현재 활성 ProjectileData에서 해석한 DamageData입니다. 비어 있으면 ProjectileData.DamageProfileId fallback 또는 미지정 상태만 표시합니다."))
+	TObjectPtr<UCFDamageData> ActiveDamageData = nullptr;
+
+	// [v2.96.0] 현재 활성 DamageData의 DamageId 또는 ProjectileData fallback DamageProfileId입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 피해 ID (ActiveDamageId)", ToolTip="현재 활성 DamageData의 DamageId 또는 fallback DamageProfileId입니다."))
+	FName ActiveDamageId = NAME_None;
+
+	// [v2.96.0] 현재 활성 DamageData 핵심 값 요약입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 DamageData 요약 (ActiveDamageSummary)", ToolTip="현재 활성 DamageData 또는 fallback DamageProfileId의 요약 문자열입니다."))
+	FString ActiveDamageSummary = TEXT("DamageData: MissingOptional");
+
+	// [v2.95.0] 현재 활성 DamageData가 어떤 경로로 해석되었는지 설명하는 요약입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 DamageData 해석 요약 (ActiveDamageResolutionSummary)", ToolTip="ProjectileData.DefaultDamageData 또는 ProjectileData.DamageProfileId fallback 중 어떤 경로가 사용됐는지 설명합니다."))
+	FString ActiveDamageResolutionSummary = TEXT("DamageResolution: MissingOptional");
+
+	// [v2.97.0] 마지막 Damage HitContext 기록이 존재하는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="마지막 HitContext 존재 여부 (bHasLastDamageHitContext)", ToolTip="Dummy HitScan 또는 Projectile Actor 충돌로 마지막 Damage HitContext Debug가 기록됐는지 여부입니다."))
+	bool bHasLastDamageHitContext = false;
+
+	// [v2.97.0] 마지막 Dummy HitScan 또는 Projectile Actor 충돌 Damage HitContext입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="마지막 Damage HitContext (LastDamageHitContext)", ToolTip="마지막 Dummy HitScan 결과 또는 Projectile Actor 충돌 결과를 같은 형식으로 기록한 Debug 컨텍스트입니다. 실제 HP 차감에는 사용하지 않습니다."))
+	FCFDamageHitContext LastDamageHitContext;
+
+	// [v2.97.0] 마지막 Damage HitContext 표시 요약입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="마지막 Damage HitContext 요약 (LastDamageHitContextSummary)", ToolTip="VehicleDebug Panel에 표시할 마지막 Damage HitContext 요약 문자열입니다."))
+	FString LastDamageHitContextSummary = TEXT("DamageHitContext: None");
+
+	// [v2.83.0] 현재 Pawn이 ProjectilePoolComp를 보유하고 있는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="ProjectilePoolComp 보유 여부 (bHasProjectilePoolComponent)", ToolTip="현재 Pawn이 발사체 재사용 Pool 컴포넌트를 보유하고 있는지 여부입니다."))
+	bool bHasProjectilePoolComponent = false;
+
+	// [v2.83.0] Pool이 추적 중인 전체 Projectile Actor 수입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="전체 Pool 발사체 수 (TotalPooledProjectileCount)", ToolTip="현재 Projectile Pool이 추적 중인 전체 발사체 Actor 수입니다. 활성 / 비활성 Actor를 모두 포함합니다."))
+	int32 TotalPooledProjectileCount = 0;
+
+	// [v2.83.0] Pool이 추적 중이고 현재 이동 중인 활성 Projectile Actor 수입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 Pool 발사체 수 (ActivePooledProjectileCount)", ToolTip="현재 Projectile Pool이 추적 중이고 발사되어 이동 중인 발사체 Actor 수입니다."))
+	int32 ActivePooledProjectileCount = 0;
+
+	// [v2.83.0] Pool에서 재사용 대기 중인 비활성 Projectile Actor 수입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="비활성 Pool 발사체 수 (InactivePooledProjectileCount)", ToolTip="현재 Projectile Pool에서 다음 발사에 재사용할 수 있는 비활성 발사체 Actor 수입니다."))
+	int32 InactivePooledProjectileCount = 0;
+
+	// [v2.85.0] Projectile Pool에 마지막으로 반환된 발사체 이벤트 요약입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="마지막 Projectile Pool 반환 요약 (LastProjectileReleaseSummary)", ToolTip="마지막으로 Pool에 반환된 발사체의 ID, 비활성화 사유, 충돌 대상, 비행 시간을 요약한 문자열입니다."))
+	FString LastProjectileReleaseSummary = TEXT("ProjectileRelease: None");
+
+	// [v2.78.0] 현재 활성 무기에서 실제 Trace에 사용할 최대 사거리입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 무기 최대 사거리 (ActiveWeaponMaxRange)", ToolTip="현재 활성 WeaponData가 유효하면 WeaponData.MaxRange, 아니면 Aim Profile MaxAimDistance입니다."))
+	float ActiveWeaponMaxRange = 0.0f;
+
+	// [v2.84.0] 현재 활성 무기의 분당 발사속도입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 무기 분당 발사속도 (ActiveWeaponFireRatePerMinute)", ToolTip="현재 활성 WeaponData가 유효하면 WeaponData.FireRatePerMinute, 아니면 0입니다. 60이면 1초마다 1발입니다."))
+	float ActiveWeaponFireRatePerMinute = 0.0f;
+
+	// [v2.84.0] 현재 활성 무기의 분당 발사속도에서 환산한 발사 간격입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="활성 무기 발사 간격 초 (ActiveWeaponCooldownSeconds)", ToolTip="현재 활성 WeaponData의 FireRatePerMinute를 초 단위 발사 간격으로 환산한 값입니다. 기존 디버그/검증 호환용입니다."))
+	float ActiveWeaponCooldownSeconds = 0.0f;
+
+	// [v2.78.0] 현재 시간 기준 남은 무기 쿨다운 시간입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="남은 무기 쿨다운 초 (ActiveWeaponRemainingCooldownSeconds)", ToolTip="현재 월드 시간 기준 활성 무기의 남은 쿨다운 시간입니다."))
+	float ActiveWeaponRemainingCooldownSeconds = 0.0f;
+
+	// [v2.78.0] 마지막으로 승인된 발사 시간입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="마지막 승인 발사 시간 (LastAcceptedWeaponFireTimeSeconds)", ToolTip="VehicleWeaponComp가 마지막으로 기록한 승인 발사 시간입니다. 아직 없으면 음수입니다."))
+	float LastAcceptedWeaponFireTimeSeconds = -1.0f;
+};
+
+/**
  * Pawn 레벨에서 바로 확인할 수 있는 차량 디버그 스냅샷입니다.
  * - 런타임 준비 상태와 요약 문자열
  * - 현재/이전 Drive 상태와 마지막 전이 요약
@@ -462,6 +727,10 @@ struct FCFVehicleDebugSnapshot
 	// [v2.16.0] 조준 상세 카테고리입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="Aim 카테고리 (Aim)", ToolTip="AimComp의 로컬/검증/표시용 조준 상태를 담는 VehicleDebug Aim 카테고리입니다."))
 	FCFVehicleDebugAim Aim;
+
+	// [v2.77.0] 무기 상세 카테고리입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="Weapon 카테고리 (Weapon)", ToolTip="WeaponComp의 런타임 준비 상태, WeaponData 상태, FireOrigin 결과를 담는 VehicleDebug Weapon 카테고리입니다."))
+	FCFVehicleDebugWeapon Weapon;
 
 	// [v2.14.1] 런타임 진단 카테고리입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="Runtime 카테고리 (Runtime)", ToolTip="런타임 준비 상태와 요약 문자열을 담는 VehicleDebug Runtime 카테고리입니다."))
@@ -674,6 +943,38 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="VehicleAim 컴포넌트 (VehicleAimComp)", ToolTip="카메라 조준과 향후 무기 발사 사이의 Aim 해석 컴포넌트입니다."))
 	TObjectPtr<UCFVehicleAimComp> VehicleAimComp = nullptr;
 
+	// [v2.75.0] 차량 장착 프로파일과 실제 발사 원점을 해석하는 Weapon 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="VehicleWeapon 컴포넌트 (VehicleWeaponComp)", ToolTip="차량 하드포인트와 장착 프로파일을 읽어 실제 발사 원점을 계산하는 컴포넌트입니다."))
+	TObjectPtr<UCFVehicleWeaponComp> VehicleWeaponComp = nullptr;
+
+	// [v2.82.0] 반복 발사되는 Projectile Actor를 재사용하는 Pool 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="ProjectilePool 컴포넌트 (ProjectilePoolComp)", ToolTip="반복 발사되는 Projectile Actor를 재사용해 Spawn / Destroy 부담을 줄이는 Pool 컴포넌트입니다."))
+	TObjectPtr<UCFProjectilePoolComp> ProjectilePoolComp = nullptr;
+
+	// [v2.86.0] P0 터렛 시각 장착 위치를 잡는 루트 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components|Turret", meta=(AllowPrivateAccess="true", DisplayName="터렛 장착 루트 (TurretMountRootComp)", ToolTip="현재 활성 하드포인트 위치에 배치되는 터렛 시각 장착 루트입니다."))
+	TObjectPtr<USceneComponent> TurretMountRootComp = nullptr;
+
+	// [v2.88.0] 하드포인트에 고정되는 터렛 받침 메쉬 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components|Turret", meta=(AllowPrivateAccess="true", DisplayName="터렛 Base 메쉬 컴포넌트 (TurretBaseMeshComp)", ToolTip="하드포인트에 고정되는 터렛 받침/Base 메쉬 컴포넌트입니다."))
+	TObjectPtr<UStaticMeshComponent> TurretBaseMeshComp = nullptr;
+
+	// [v2.88.0] 좌우 Yaw 회전을 적용할 가상 피벗 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components|Turret", meta=(AllowPrivateAccess="true", DisplayName="터렛 Yaw 피벗 컴포넌트 (TurretYawPivotComp)", ToolTip="Base 메쉬의 YawPivot 소켓 또는 하드포인트 루트에 붙어 좌우 회전을 담당할 가상 피벗 컴포넌트입니다."))
+	TObjectPtr<USceneComponent> TurretYawPivotComp = nullptr;
+
+	// [v2.88.0] YawPivot 아래에서 좌우 Yaw 회전 기준으로 사용할 터렛 상부 메쉬 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components|Turret", meta=(AllowPrivateAccess="true", DisplayName="터렛 Yaw 메쉬 컴포넌트 (TurretYawMeshComp)", ToolTip="YawPivot 아래에 붙어 좌우 회전할 터렛 회전부 메쉬 컴포넌트입니다."))
+	TObjectPtr<UStaticMeshComponent> TurretYawMeshComp = nullptr;
+
+	// [v2.88.0] 상하 Pitch 회전을 적용할 가상 피벗 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components|Turret", meta=(AllowPrivateAccess="true", DisplayName="터렛 Pitch 피벗 컴포넌트 (TurretPitchPivotComp)", ToolTip="Yaw 메쉬의 PitchPivot 소켓 또는 Yaw 피벗에 붙어 상하 회전을 담당할 가상 피벗 컴포넌트입니다."))
+	TObjectPtr<USceneComponent> TurretPitchPivotComp = nullptr;
+
+	// [v2.88.0] PitchPivot 아래에서 상하 Pitch 회전 후보로 사용할 터렛 상부 또는 포신 메쉬 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components|Turret", meta=(AllowPrivateAccess="true", DisplayName="터렛 Pitch 메쉬 컴포넌트 (TurretPitchMeshComp)", ToolTip="PitchPivot 아래에 붙어 Yaw를 따라 좌우 회전하고 Pitch로 상하 회전할 터렛 상부/포신 메쉬 컴포넌트입니다."))
+	TObjectPtr<UStaticMeshComponent> TurretPitchMeshComp = nullptr;
+
 	// [v2.48.0] 로컬 Owner 표시 안정화에 사용할 차체/휠 표시 전용 루트 컴포넌트입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="Owner 표시 루트 (OwnerVisualRootComp)", ToolTip="로컬 조작 차량에서 차체와 휠 표시를 물리 루트 흔들림과 분리하기 위한 표시 전용 루트입니다."))
 	TObjectPtr<USceneComponent> OwnerVisualRootComp = nullptr;
@@ -701,6 +1002,18 @@ public:
 	// [v2.63.0] 마지막 로컬 발사 검증 결과입니다.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Aim", meta=(DisplayName="마지막 발사 결과 (LastFireResult)", ToolTip="마지막 로컬 발사 검증 결과 디버그 캐시입니다."))
 	FCFVehicleFireResult LastFireResult;
+
+	// [v2.97.0] 마지막 Damage HitContext 기록이 존재하는지 여부입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Damage", meta=(DisplayName="마지막 Damage HitContext 존재 여부 (bHasLastDamageHitContext)", ToolTip="Dummy HitScan 또는 Projectile Actor 충돌로 마지막 Damage HitContext Debug가 기록됐는지 여부입니다."))
+	bool bHasLastDamageHitContext = false;
+
+	// [v2.97.0] 마지막 Dummy HitScan 또는 Projectile Actor 충돌 Damage HitContext입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Damage", meta=(DisplayName="마지막 Damage HitContext (LastDamageHitContext)", ToolTip="마지막 Dummy HitScan 결과 또는 Projectile Actor 충돌 결과를 같은 형식으로 기록한 Debug 컨텍스트입니다. 실제 HP 차감에는 사용하지 않습니다."))
+	FCFDamageHitContext LastDamageHitContext;
+
+	// [v2.97.0] 마지막 Damage HitContext 표시 요약입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Damage", meta=(DisplayName="마지막 Damage HitContext 요약 (LastDamageHitContextSummary)", ToolTip="VehicleDebug Panel에 표시할 마지막 Damage HitContext 요약 문자열입니다."))
+	FString LastDamageHitContextSummary = TEXT("DamageHitContext: None");
 
 	// [v2.67.0] 로컬 HitScan 더미 Trace 디버그 라인 표시 여부입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Aim", meta=(DisplayName="로컬 Aim Trace 디버그 표시 (bDrawLocalAimTraceDebug)", ToolTip="True이면 로컬 HitScan 더미 Trace를 디버그 라인으로 표시합니다."))
@@ -812,6 +1125,21 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(ToolTip="카메라 조준과 향후 무기 발사 사이의 Aim 해석 컴포넌트를 반환합니다."))
 	UCFVehicleAimComp* GetVehicleAimComp() const { return VehicleAimComp; }
 
+	// [v2.75.0] 차량 Weapon 해석 컴포넌트를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(ToolTip="차량 하드포인트와 장착 프로파일을 읽어 실제 발사 원점을 계산하는 Weapon 컴포넌트를 반환합니다."))
+	UCFVehicleWeaponComp* GetVehicleWeaponComp() const { return VehicleWeaponComp; }
+
+	// [v2.82.0] 차량 Projectile Pool 컴포넌트를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(ToolTip="반복 발사되는 Projectile Actor를 재사용하는 Pool 컴포넌트를 반환합니다."))
+	UCFProjectilePoolComp* GetProjectilePoolComp() const { return ProjectilePoolComp; }
+
+	// [v2.97.0] Projectile Pool에서 반환된 Hit 발사체를 Damage HitContext Debug로 기록합니다.
+	void RecordProjectileDamageHitContextFromPool(const ACFProjectileActor* InProjectileActor);
+
+	// [v2.86.0] 현재 터렛 시각 장착 요약 문자열을 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Turret", meta=(ToolTip="현재 활성 장착 프로파일의 터렛 시각 메쉬 장착 상태 요약을 반환합니다."))
+	FString GetLastTurretVisualSummary() const { return LastTurretVisualSummary; }
+
 	// [v2.20.0] 현재 Pawn에서 Aim Reticle 위젯을 표시할 수 있는지 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(ToolTip="현재 Pawn에서 Aim Reticle 위젯을 표시할 수 있는지 반환합니다. 로컬 제어 Pawn에서만 True가 될 수 있습니다."))
 	bool ShouldShowAimReticle() const;
@@ -833,6 +1161,16 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn", meta=(ToolTip="Drive / WheelSync 캐시와 준비를 다시 시도합니다."))
 	bool InitializeVehicleRuntime();
+
+#if WITH_EDITOR
+	// [v2.74.0] SM_Body 차체 메시 소켓에서 휠 앵커와 선택 하드포인트 위치를 캡처해 VehicleData에 기록합니다.
+	UFUNCTION(CallInEditor, BlueprintCallable, Category="CarFight|VehiclePawn|Editor", meta=(DisplayName="메시 소켓에서 차량 레이아웃 캡처 (Capture Vehicle Layout From Body Sockets)", ToolTip="SM_Body에 적용된 차체 메시의 휠 소켓과 VehicleData.HardpointSlots의 SocketName을 읽어 차량 레이아웃 값을 기록합니다. 휠 소켓이나 앵커가 하나라도 없으면 DataAsset을 수정하지 않지만, 하드포인트 SocketName이 비어 있거나 누락된 경우는 경고만 표시합니다."))
+	void CaptureWheelLayoutFromBodySockets();
+
+	// [v2.69.0] VehicleData에 저장된 휠 앵커 레이아웃을 에디터 프리뷰 Pawn에 다시 적용합니다.
+	UFUNCTION(CallInEditor, BlueprintCallable, Category="CarFight|VehiclePawn|Editor", meta=(DisplayName="데이터에서 휠 레이아웃 적용 (Apply Vehicle Layout From Data)", ToolTip="현재 VehicleData.VehicleLayoutConfig 값을 BP의 Wheel_Anchor_* 컴포넌트에 다시 적용합니다. 캡처 후 결과 확인용입니다."))
+	void ApplyVehicleLayoutFromDataInEditor();
+#endif
 
 	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn", meta=(ToolTip="WheelSync의 캐시와 준비를 다시 시도합니다."))
 	bool PrepareWheelSync();
@@ -879,6 +1217,10 @@ public:
 	// [v2.16.0] 상세 패널 표시용 VehicleDebug Aim 카테고리를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="상세 패널 표시용 VehicleDebug Aim 카테고리를 반환합니다."))
 	FCFVehicleDebugAim GetVehicleDebugAim() const;
+
+	// [v2.76.0] 상세 패널 표시용 VehicleDebug Weapon 카테고리를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="상세 패널 표시용 VehicleDebug Weapon 카테고리를 반환합니다."))
+	FCFVehicleDebugWeapon GetVehicleDebugWeapon() const;
 
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="상세 패널 표시용 VehicleDebug Runtime 카테고리를 반환합니다."))
 	FCFVehicleDebugRuntime GetVehicleDebugRuntime() const;
@@ -981,8 +1323,26 @@ protected:
 	// [v2.63.0] 싱글플레이 로컬 발사 명령을 최소 검증하고 결과를 채웁니다.
 	bool ValidateFireCommand(const FCFVehicleFireRequest& FireCommand, FCFVehicleFireResult& OutFireResult);
 
-	// [v2.63.0] 싱글플레이 로컬 더미 HitScan Trace를 실행하고 FireResult에 결과를 채웁니다.
-	bool RunLocalDummyHitScan(const FCFVehicleFireRequest& FireCommand, FCFVehicleFireResult& InOutFireResult) const;
+	// [v2.97.0] 싱글플레이 로컬 더미 HitScan Trace를 실행하고 FireResult와 Damage HitContext Debug에 결과를 채웁니다.
+	bool RunLocalDummyHitScan(const FCFVehicleFireRequest& FireCommand, FCFVehicleFireResult& InOutFireResult);
+
+	// [v2.97.0] Dummy HitScan 결과를 Damage HitContext Debug로 기록합니다.
+	void RecordDummyHitScanDamageHitContext(const FCFVehicleFireRequest& FireCommand, const FCFVehicleFireResult& FireResult, const FHitResult* HitResult, bool bBlockingHit);
+
+	// [v2.97.0] 마지막 Damage HitContext Debug와 표시 요약을 저장합니다.
+	void StoreLastDamageHitContext(const FCFDamageHitContext& InDamageHitContext);
+
+	// [v2.97.0] VehicleDebug Panel에 표시할 Damage HitContext 요약 문자열을 생성합니다.
+	FString BuildDamageHitContextSummary(const FCFDamageHitContext& InDamageHitContext) const;
+
+	// [v2.93.0] Turret Pitch 메쉬의 Muzzle 소켓으로 최종 FireOrigin을 보정합니다.
+	bool TryBuildMuzzleFireOrigin(FCFVehicleFireOrigin& InOutFireOrigin, FString& OutFireOriginSummary) const;
+
+	// [v2.81.0] 현재 활성 무기가 Projectile Actor 스폰 경로를 사용할 수 있는지 반환합니다.
+	bool ShouldUseProjectileActorFire() const;
+
+	// [v2.82.0] 현재 활성 ProjectileData를 사용해 FireOrigin에서 Projectile Actor를 Pool로 확보합니다.
+	bool TrySpawnProjectileActorFromFireCommand(const FCFVehicleFireRequest& FireCommand);
 
 	// [v2.17.0] 클라이언트 또는 서버 로컬 입력에서 발사 요청을 시작합니다.
 	void HandleFireStarted(const FInputActionValue& InputActionValue);
@@ -992,6 +1352,12 @@ protected:
 
 	void ApplyVehicleDataConfig();
 	void ApplyVehicleVisualConfig();
+	// [v2.86.0] VehicleData MountProfile의 터렛 시각 메쉬를 하드포인트 위치에 붙입니다.
+	void ApplyVehicleTurretVisualConfig();
+	// [v2.89.0] 현재 Aim 상태에서 터렛이 바라볼 월드 방향을 계산합니다.
+	FVector ResolveTurretAimWorldDirection() const;
+	// [v2.89.0] WeaponComp가 계산한 터렛 Yaw / Pitch 각도를 시각 피벗 컴포넌트에 적용합니다.
+	void UpdateVehicleTurretAimVisuals(float DeltaSeconds);
 	void ApplyVehicleLayoutConfig();
 	void ApplyVehicleMovementConfig();
 	// [v1.2.0] VehicleMovementConfig 중 런타임 setter가 가능한 휠 물리 값을 차량 인스턴스 기준으로 적용합니다.
@@ -1053,6 +1419,43 @@ protected:
 	void HandleHandbrakeCompleted(const FInputActionValue& InputActionValue);
 
 private:
+	// [v2.87.0] 마지막 터렛 시각 장착에 사용한 TurretMountData입니다.
+	UPROPERTY(Transient)
+	TObjectPtr<UCFTurretMountData> LastTurretMountData = nullptr;
+
+	// [v2.101.0] 마지막 터렛 시각 장착에서 EquipmentPresetData 기반 TurretMountData가 해석되어 있었는지 여부입니다.
+	bool bLastTurretMountDataAssigned = false;
+
+	// [v2.87.0] 마지막 터렛 시각 장착에 사용한 TurretMountData ID입니다.
+	FName LastTurretMountId = NAME_None;
+
+	// [v2.87.0] 마지막 터렛 시각 장착에 사용한 TurretMountData 요약입니다.
+	FString LastTurretMountSummary = TEXT("TurretMountData: NotInitialized");
+
+	// [v2.86.0] 현재 활성 장착 프로파일 기준 터렛 시각 메쉬가 붙었는지 여부입니다.
+	bool bLastTurretVisualAttached = false;
+
+	// [v2.86.0] 현재 활성 장착 프로파일 기준 터렛 시각 장착 요약입니다.
+	FString LastTurretVisualSummary = TEXT("TurretVisual: NotInitialized");
+
+	// [v2.88.0] 마지막으로 적용한 터렛 Base 메쉬 이름입니다.
+	FName LastTurretBaseMeshName = NAME_None;
+
+	// [v2.88.0] 마지막으로 적용한 터렛 Yaw 메쉬 이름입니다.
+	FName LastTurretYawMeshName = NAME_None;
+
+	// [v2.88.0] 마지막으로 적용한 터렛 Pitch 메쉬 이름입니다.
+	FName LastTurretPitchMeshName = NAME_None;
+
+	// [v2.86.0] 터렛 시각 장착에 사용할 활성 MountProfile을 찾습니다.
+	const FCFVehicleMountProfile* FindActiveTurretMountProfile() const;
+
+	// [v2.86.0] 터렛 시각 장착에 사용할 하드포인트 슬롯을 찾습니다.
+	const FCFVehicleHardpointSlot* FindTurretHardpointSlot(FName LocationSlotId) const;
+
+	// [v2.86.0] 터렛 시각 컴포넌트를 기본 숨김 상태로 되돌립니다.
+	void ResetTurretVisualComponents();
+
 	// [v2.48.0] Owner 표시 안정화 계층 준비가 완료됐는지 여부입니다.
 	bool bOwnerVisualStabilizationReady = false;
 

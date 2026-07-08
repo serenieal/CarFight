@@ -193,7 +193,7 @@ public:
 	float WheelSpinVisualSign;
 
 	// Wheel mesh의 로컬 Pitch 축 방향 보정용 부호입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="WheelSync", meta=(DisplayName="휠 메쉬 Pitch 축 부호 (WheelSpinMeshAxisSign)", ToolTip="Wheel mesh의 로컬 Pitch 축 방향 보정용 부호입니다. 현재 프로젝트 PoliceCar 기준 기본값은 -1입니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="WheelSync", meta=(DisplayName="휠 메쉬 Pitch 축 부호 (WheelSpinMeshAxisSign)", ToolTip="Wheel mesh의 로컬 Pitch 축 방향 보정용 부호입니다. 현재 테스트 차량 기준 기본값은 -1입니다."))
 	float WheelSpinMeshAxisSign;
 
 	// 매우 작은 휠 각속도를 0으로 보는 dead zone 임계값(deg/s)입니다.

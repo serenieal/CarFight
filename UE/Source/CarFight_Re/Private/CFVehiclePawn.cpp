@@ -1,9 +1,45 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.68.0
-// Date: 2026-06-23
+// Version: 2.103.0
+// Date: 2026-07-08
 // Description: CarFight 싱글플레이 차량 Pawn 구현
 // Changelog:
+// - v2.103.0: 자동 스케일된 휠 메시의 바운드 중심을 Wheel_Mesh 원점에 맞춰 시각 휠과 물리 휠 중심 불일치를 보정.
+// - v2.102.0: VehicleData WheelVisualConfig 옵션이 켜진 경우 WheelRadius 기준으로 Wheel_Mesh_* 표시 스케일을 자동 보정.
+// - v2.100.0: 터렛 시각 장착에서 MountProfile legacy 직접 TurretMountData fallback을 제거하고 EquipmentPresetData 전용 경로로 전환.
+// - v2.99.0: VehicleDebug Snapshot에 활성 EquipmentPresetData 상태를 채우고 터렛 시각 장착을 EquipmentPresetData 우선 해석으로 전환.
+// - v2.98.0: MountProfile inline 터렛 시각 fallback을 런타임에서 제거하고 TurretMountData 전용 경로로 전환.
+// - v2.97.0: Dummy HitScan과 Projectile Actor 충돌 결과를 같은 Damage HitContext Debug로 기록.
+// - v2.96.0: VehicleDebug DamageData 표시 설명을 ProjectileData 단일 소유 정책에 맞게 정리.
+// - v2.95.0: VehicleDebug Snapshot의 Weapon 카테고리에 활성 DamageData 참조, ID, 요약, 해석 경로를 채움.
+// - v2.94.0: 터렛 안정화 전 발사 정책에 맞춰 조준각 초과를 기본 발사 거부 조건에서 제외.
+// - v2.93.0: Turret Pitch 메쉬의 Muzzle 소켓이 유효하면 최종 FireOrigin을 총구 기준으로 보정.
+// - v2.92.0: 터렛 하드포인트 / Yaw / Pitch 필수 소켓 누락을 VehicleDebug 요약에서 MissingRequiredSocket으로 구분.
+// - v2.91.0: 하드포인트 / Yaw / Pitch 소켓 부착을 SnapToTarget 기준으로 명확히 하고 소켓-루트 위치 차이 Debug를 추가.
+// - v2.90.0: 터렛 장착 루트가 HardpointSlot.SocketName을 실제 차체 소켓으로 우선 사용하도록 수정.
+// - v2.89.0: WeaponComp가 계산한 터렛 Yaw / Pitch 추적 각도를 시각 피벗 컴포넌트에 적용하고 Debug Snapshot에 표시.
+// - v2.88.0: 터렛 시각 장착을 BaseMesh + YawPivot + PitchPivot 3단 소켓 계층으로 확장.
+// - v2.87.0: 터렛 시각 장착이 DefaultTurretMountData를 우선 사용하고 MountProfile inline 필드를 fallback으로 사용하도록 전환.
+// - v2.86.1: 터렛 Pitch 메쉬 기본 부모 선택식의 TObjectPtr 모호성을 제거해 빌드를 안정화.
+// - v2.86.0: MountProfile 터렛 시각 메쉬를 하드포인트 위치에 붙이고 VehicleDebug Snapshot에 터렛 시각 요약을 채움.
+// - v2.85.0: VehicleDebug Snapshot의 Weapon 카테고리에 Projectile Pool 마지막 반환 요약을 채움.
+// - v2.84.0: VehicleDebug Snapshot의 Weapon 카테고리에 활성 무기 분당 발사속도와 환산 발사 간격을 채움.
+// - v2.83.0: VehicleDebug Snapshot의 Weapon 카테고리에 Projectile Pool 보유 여부와 전체 / 활성 / 비활성 수를 채움.
+// - v2.82.0: ProjectilePoolComp를 생성하고 Projectile Actor 스폰 경로를 Pool Acquire 기반으로 전환.
+// - v2.81.0: Projectile FireMode에서 공통 Projectile Actor 스폰 경로를 추가하고 Dummy HitScan fallback을 유지.
+// - v2.80.0: VehicleDebug Snapshot의 Weapon 카테고리에 Projectile Actor 스폰 준비 상태와 실행 요약을 채움.
+// - v2.79.0: VehicleDebug Snapshot의 Weapon 카테고리에 활성 ProjectileData ID/요약을 채움.
+// - v2.78.0: 활성 WeaponData의 MaxRange를 Dummy HitScan Trace 거리에 적용하고 CooldownSeconds를 로컬 Fire 검증에 연결.
+// - v2.77.0: VehicleDebug Snapshot의 Weapon 카테고리에 활성 WeaponData ID/호환성/요약을 채움.
+// - v2.76.0: VehicleDebug Snapshot에 Weapon 카테고리를 채워 패널에서 WeaponComp와 FireOrigin 상태를 확인할 수 있게 함.
+// - v2.75.0: VehicleWeaponComp를 생성하고 VehicleData MountProfiles 기반 FireOrigin을 로컬 Fire Command에 반영.
+// - v2.74.0: SM_Body 소켓에서 휠 앵커와 선택 하드포인트 위치를 함께 캡처하는 차량 레이아웃 흐름으로 확장.
+// - v2.73.0: VehicleMovementConfig.ThrottleInputScale을 실제 스로틀 입력에 적용해 가속감 Quick Tune 체감 차이를 보장.
+// - v2.72.1: 전진 구동을 끊을 수 있는 휠 재생성, 구동 휠, 서스펜션 런타임 변경을 안전하게 제외.
+// - v2.72.0: VehicleMovementConfig 값을 이미 생성된 Chaos Vehicle 런타임 시뮬레이션에도 즉시 적용하도록 보강.
+// - v2.71.0: 에디터 Details 버튼 실행 결과가 PIE 외부에서도 보이도록 Slate 알림을 추가.
+// - v2.70.0: 소켓 캡처/레이아웃 적용 에디터 버튼 실행 후 Wheel_Anchor 갱신과 WheelSync 재준비 피드백을 보강.
+// - v2.69.0: 차체 메시 소켓에서 VehicleData.VehicleLayoutConfig를 캡처하는 에디터 전용 흐름 추가.
 // - v2.68.0: VehicleData의 VehicleLayoutConfig를 Wheel_Anchor_*에 적용하고 WheelSync 준비 전 레이아웃 재적용 순서를 추가.
 // - v2.67.0: 로컬 HitScan Trace 디버그 변수명을 LocalAimTraceDebug 기준으로 교체.
 // - v2.66.0: AimComp의 FireValidationState / AimVisualState 리네이밍에 맞춰 Debug Snapshot과 Fire Result 연결을 갱신.
@@ -14,6 +50,38 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth Visual/Shell 적용 전 기준선을 깨끗하게 만들기 위해 차량 진단 로그와 Owner 표시 안정화 기본값을 False로 통일.
 // Migration:
+// - 자동 휠 메시 스케일을 켠 차량은 기본적으로 메시 바운드 중심 보정도 함께 적용된다. 기존 수동 Wheel_Mesh 상대 위치를 유지해야 하면 bAutoCenterWheelMeshBoundsToOrigin=false로 끈다.
+// - 기존 차량은 WheelVisualConfig.bAutoScaleWheelMeshToRadius=false 기본값으로 기존 Wheel_Mesh_* 수동 스케일을 유지한다.
+// - 자동 휠 메시 스케일은 StaticMesh 로컬 바운드 반지름을 기준으로 하므로 축이 다른 메시에서는 WheelMeshRadiusMeasureMode를 조정한다.
+// - MountProfile.DefaultEquipmentPresetData가 있으면 터렛 시각 장착과 Weapon Debug는 EquipmentPresetData를 단일 소스로 사용한다.
+// - EquipmentPresetData가 없거나 내부 TurretMountData / WeaponData 참조가 비어 있으면 해당 Debug는 Missing 상태로 표시하고 MountProfile 직접 fallback은 사용하지 않는다.
+// - OutOfWeaponArc는 호환용 enum 값으로 남지만, P0 터렛 발사 정책에서는 조준각 초과만으로 발사를 막지 않는다.
+// - 소켓 이름이 지정되어 있는데 실제 메쉬에 없으면 기존 fallback은 유지하지만, VehicleDebug Panel 터렛 시각 요약에 MissingRequiredSocket 상태가 표시된다.
+// - TurretBaseMesh가 비어 있으면 기존처럼 하드포인트 루트에 YawPivot을 두고 Yaw / Pitch 메쉬를 장착한다.
+// - YawPivotSocketName 또는 PitchPivotSocketName이 없으면 해당 Pivot은 부모 원점 기준으로 fallback된다.
+// - EquipmentPresetData 내부 TurretMountData가 있으면 TurretMountData의 메쉬 / 소켓 / Transform을 사용한다.
+// - EquipmentPresetData 내부 TurretMountData가 비어 있으면 MountProfile inline 터렛 시각 fallback은 더 이상 사용하지 않고 시각 장착을 생략한다.
+// - 터렛 시각 메쉬가 비어 있으면 표시만 생략하고 기존 FireOrigin / Projectile / Cooldown 검증은 유지한다.
+// - 터렛 회전 상태는 WeaponComp가 소유하고, Pawn은 계산된 Yaw / Pitch 값을 TurretYawPivot / TurretPitchPivot 시각 컴포넌트에 적용만 한다.
+// - HardpointSlot.SocketName이 차체 소켓에 있으면 터렛 장착 루트는 소켓에 직접 붙고, 없으면 기존 LocalTransform fallback을 사용한다.
+// - VehicleDebug Panel의 터렛 시각 요약에서 하드포인트 소켓 위치와 터렛 루트 위치 차이를 확인할 수 있다.
+// - MuzzleSocketName이 Pitch 메쉬에 존재하면 최종 FireOrigin 위치와 방향은 해당 소켓을 우선 사용한다.
+// - Muzzle 소켓이 없거나 Pitch 메쉬가 없으면 기존 하드포인트 FireOrigin fallback을 유지한다.
+// - DamageData가 비어 있거나 ProjectileData.DamageProfileId fallback만 있어도 실제 피해 적용은 하지 않고 기존 Fire / Projectile / Dummy HitScan 흐름을 유지한다.
+// - Damage HitContext 기록은 Debug 표시 전용이며 실제 HP 차감 / 모듈 손상을 수행하지 않는다.
+// - Projectile Actor 확보는 WeaponData.FireMode가 Projectile이고 ProjectileData / ProjectileActorClass가 모두 유효할 때만 실행한다.
+// - Projectile Pool 확보 조건이 맞지 않거나 Pool 확보 실패 시 기존 Dummy HitScan fallback을 유지한다.
+// - WeaponData가 없으면 기존 Aim Profile MaxAimDistance와 즉시 발사 흐름을 유지한다.
+// - 기존 FireCommand / FireOrigin 흐름은 유지하고 WeaponData는 우선 디버그와 데이터 연결 확인에만 사용한다.
+// - 기존 VehicleDebug 카테고리와 Fire 함수 시그니처는 유지하고 Weapon 카테고리만 추가한다.
+// - 기존 Aim 기반 발사 검증과 더미 HitScan은 유지하며, WeaponComp가 FireOrigin 계산에 성공한 경우에만 발사 원점과 무기 그룹을 덮어쓴다.
+// - MountProfiles가 비어 있거나 Top_01 하드포인트가 없으면 WeaponComp는 Ready가 아니어도 전체 VehicleRuntime Ready를 막지 않는다.
+// - 메시 소켓 캡처 버튼은 VehicleData.HardpointSlots에 선언된 SocketName만 선택적으로 갱신한다.
+// - 하드포인트 SocketName이 비어 있거나 누락되어도 휠 레이아웃 캡처 성공 자체는 유지된다.
+// - 가속감 Quick Tune은 EngineMaxTorque와 함께 ThrottleInputScale을 저장하므로 0%와 100% 테스트는 스로틀 입력 크기부터 달라진다.
+// - DA 주행감 프리셋을 적용한 뒤 PIE를 다시 시작하거나 Initialize Vehicle Runtime을 호출하면 엔진 토크와 안전한 휠 런타임 setter까지 갱신된다.
+// - Mesh_TestSUV처럼 Wheel_Anchor_FL/FR/RL/RR 소켓을 가진 차체 메시에서는 에디터 캡처 버튼으로 DA 레이아웃 값을 생성한다.
+// - 소켓 캡처 버튼은 선택된 Pawn 인스턴스의 VehicleData를 갱신하므로, 테스트할 때 DA_TestSUV가 할당된 액터를 선택한다.
 // - VehicleLayoutConfig 적용 차량은 DA에서 bUseLayoutOverrides를 켜고 네 WheelAnchor 값을 입력한다.
 // - 기존 BP 수동 Wheel_Anchor 배치는 bUseLayoutOverrides=false fallback으로 유지한다.
 // - 신규 Fire 흐름은 로컬 함수 경로를 기준으로 호출한다.
@@ -25,10 +93,18 @@
 
 #include "CFVehiclePawn.h"
 
+#include "CFEquipmentPresetData.h"
+#include "CFProjectileData.h"
+#include "CFProjectileActor.h"
+#include "CFProjectilePoolComp.h"
+#include "CFDamageData.h"
+#include "CFTurretMountData.h"
 #include "CFVehicleData.h"
 #include "CFVehicleAimComp.h"
 #include "CFVehicleCameraComp.h"
 #include "CFVehicleDriveComp.h"
+#include "CFWeaponData.h"
+#include "CFVehicleWeaponComp.h"
 #include "CFWheelSyncComp.h"
 #include "CarFightVehicleUtils.h"
 #include "UI/CFAimReticleWidget.h"
@@ -45,11 +121,14 @@
 #include "EnhancedInputSubsystems.h"
 #include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/StaticMesh.h"
 #include "GameFramework/PlayerController.h"
 #include "InputAction.h"
 #include "InputActionValue.h"
 #include "InputCoreTypes.h"
 #include "InputMappingContext.h"
+#include "Framework/Notifications/NotificationManager.h"
+#include "Widgets/Notifications/SNotificationList.h"
 
 namespace
 {
@@ -176,6 +255,41 @@ namespace
 		WheelClassDefaultObject.MaxHandBrakeTorque = VehicleMovementConfig.RearWheelMaxHandBrakeTorque;
 	}
 
+	// [v2.72.0] DA 휠 물리값을 이미 생성된 Chaos Vehicle 런타임 시뮬레이션에 즉시 반영합니다.
+	void ApplyVehicleMovementWheelTuningToRuntime(
+		UChaosWheeledVehicleMovementComponent& VehicleMovementComponent,
+		const FCFVehicleMovementConfig& VehicleMovementConfig,
+		const int32 WheelIndex,
+		const bool bIsFrontWheel)
+	{
+		// [v2.72.0] 현재 휠에 적용할 최대 브레이크 토크입니다.
+		const float WheelMaxBrakeTorque = bIsFrontWheel
+			? VehicleMovementConfig.FrontWheelMaxBrakeTorque
+			: VehicleMovementConfig.RearWheelMaxBrakeTorque;
+
+		// [v2.72.0] 현재 휠에 적용할 반지름입니다.
+		const float WheelRadius = bIsFrontWheel
+			? VehicleMovementConfig.FrontWheelRadius
+			: VehicleMovementConfig.RearWheelRadius;
+
+		// [v2.72.0] 현재 휠에 적용할 마찰력 배수입니다.
+		const float WheelFrictionMultiplier = bIsFrontWheel
+			? VehicleMovementConfig.FrontWheelFrictionForceMultiplier
+			: VehicleMovementConfig.RearWheelFrictionForceMultiplier;
+
+		VehicleMovementComponent.SetWheelMaxBrakeTorque(WheelIndex, WheelMaxBrakeTorque);
+		VehicleMovementComponent.SetWheelRadius(WheelIndex, WheelRadius);
+		VehicleMovementComponent.SetWheelFrictionMultiplier(WheelIndex, WheelFrictionMultiplier);
+
+		if (bIsFrontWheel)
+		{
+			VehicleMovementComponent.SetWheelMaxSteerAngle(WheelIndex, VehicleMovementConfig.FrontWheelMaxSteerAngle);
+			return;
+		}
+
+		VehicleMovementComponent.SetWheelHandbrakeTorque(WheelIndex, VehicleMovementConfig.RearWheelMaxHandBrakeTorque);
+	}
+
 	// ???????⑥??StaticMeshComponent??癲ル슓??젆??눀???癰???????猿?????????⑤베肄????筌뤿걩???筌뤾퍓???
 	UStaticMeshComponent* FindStaticMeshComponentByName(const AActor* OwnerActor, const FName ComponentName)
 	{
@@ -195,6 +309,143 @@ namespace
 		}
 
 		return nullptr;
+	}
+
+	// [v2.102.0] 휠 메시 자동 스케일 요약 문자열에 항목을 이어 붙입니다.
+	void AppendWheelMeshAutoScaleSummary(FString& InOutScaleSummary, const FString& ItemSummary)
+	{
+		if (!InOutScaleSummary.IsEmpty())
+		{
+			InOutScaleSummary += TEXT("; ");
+		}
+
+		InOutScaleSummary += ItemSummary;
+	}
+
+	// [v2.102.0] StaticMesh 로컬 바운드에서 설정된 측정 모드 기준 휠 반지름(cm)을 계산합니다.
+	float MeasureWheelMeshRadiusCm(const UStaticMesh* WheelMesh, const ECFWheelMeshRadiusMeasureMode MeasureMode)
+	{
+		if (!WheelMesh)
+		{
+			return 0.0f;
+		}
+
+		// [v2.102.0] StaticMesh 에셋 로컬 공간의 원본 바운딩 박스입니다.
+		const FBox WheelMeshBoundingBox = WheelMesh->GetBoundingBox();
+		if (!WheelMeshBoundingBox.IsValid)
+		{
+			return 0.0f;
+		}
+
+		// [v2.102.0] 바운딩 박스 중심에서 각 축 끝까지의 거리입니다.
+		const FVector WheelMeshBoxExtent = WheelMeshBoundingBox.GetExtent();
+
+		switch (MeasureMode)
+		{
+		case ECFWheelMeshRadiusMeasureMode::AxisX:
+			return WheelMeshBoxExtent.X;
+		case ECFWheelMeshRadiusMeasureMode::AxisY:
+			return WheelMeshBoxExtent.Y;
+		case ECFWheelMeshRadiusMeasureMode::AxisZ:
+			return WheelMeshBoxExtent.Z;
+		case ECFWheelMeshRadiusMeasureMode::AutoMaxXZ:
+		default:
+			return FMath::Max(WheelMeshBoxExtent.X, WheelMeshBoxExtent.Z);
+		}
+	}
+
+	// [v2.102.0] 목표 WheelRadius와 측정 반지름을 비교해 안전 범위로 제한된 표시 스케일을 계산합니다.
+	bool CalculateWheelMeshScaleToRadius(
+		const float TargetWheelRadiusCm,
+		const float MeasuredWheelRadiusCm,
+		const FCFVehicleWheelVisualConfig& WheelVisualConfig,
+		float& OutWheelMeshScale)
+	{
+		if (TargetWheelRadiusCm <= 0.0f || MeasuredWheelRadiusCm <= KINDA_SMALL_NUMBER)
+		{
+			OutWheelMeshScale = 1.0f;
+			return false;
+		}
+
+		// [v2.102.0] DA에서 입력한 최소 스케일을 안전 하한으로 보정한 값입니다.
+		const float ConfigScaleClampMin = FMath::Max(0.01f, WheelVisualConfig.WheelMeshScaleClampMin);
+
+		// [v2.102.0] DA에서 입력한 최대 스케일을 안전 하한으로 보정한 값입니다.
+		const float ConfigScaleClampMax = FMath::Max(0.01f, WheelVisualConfig.WheelMeshScaleClampMax);
+
+		// [v2.102.0] 최소/최대 입력이 뒤집혀도 실제 Clamp에 사용할 낮은 값입니다.
+		const float SafeScaleClampMin = FMath::Min(ConfigScaleClampMin, ConfigScaleClampMax);
+
+		// [v2.102.0] 최소/최대 입력이 뒤집혀도 실제 Clamp에 사용할 높은 값입니다.
+		const float SafeScaleClampMax = FMath::Max(ConfigScaleClampMin, ConfigScaleClampMax);
+
+		// [v2.102.0] 목표 반지름을 메시 원본 반지름으로 나눈 원본 스케일 배율입니다.
+		const float RawWheelMeshScale = TargetWheelRadiusCm / MeasuredWheelRadiusCm;
+
+		OutWheelMeshScale = FMath::Clamp(RawWheelMeshScale, SafeScaleClampMin, SafeScaleClampMax);
+		return true;
+	}
+
+	// [v2.102.0] Wheel_Mesh_* 컴포넌트에 메시를 넣고 옵션이 켜진 경우 WheelRadius 기준 표시 스케일을 적용합니다.
+	void ApplyWheelMeshVisualConfigToComponent(
+		UStaticMeshComponent* WheelMeshComponent,
+		UStaticMesh* WheelMesh,
+		const float TargetWheelRadiusCm,
+		const FCFVehicleWheelVisualConfig& WheelVisualConfig,
+		FString& InOutScaleSummary)
+	{
+		if (!WheelMeshComponent)
+		{
+			return;
+		}
+
+		WheelMeshComponent->SetStaticMesh(WheelMesh);
+
+		if (!WheelVisualConfig.bAutoScaleWheelMeshToRadius)
+		{
+			return;
+		}
+
+		// [v2.102.0] 현재 처리 중인 Wheel_Mesh_* 컴포넌트의 표시 이름입니다.
+		const FString WheelMeshComponentName = WheelMeshComponent->GetName();
+
+		if (!WheelMesh)
+		{
+			AppendWheelMeshAutoScaleSummary(InOutScaleSummary, FString::Printf(TEXT("%s=MeshMissing"), *WheelMeshComponentName));
+			return;
+		}
+
+		// [v2.103.0] StaticMesh 원본 바운드의 중심 보정에도 사용할 로컬 바운딩 박스입니다.
+		const FBox WheelMeshBoundingBox = WheelMesh->GetBoundingBox();
+
+		// [v2.102.0] StaticMesh 원본 바운드에서 계산한 휠 반지름(cm)입니다.
+		const float MeasuredWheelRadiusCm = MeasureWheelMeshRadiusCm(WheelMesh, WheelVisualConfig.WheelMeshRadiusMeasureMode);
+
+		// [v2.102.0] WheelRadius 대비 적용할 최종 Uniform Scale 값입니다.
+		float FinalWheelMeshScale = 1.0f;
+		if (!CalculateWheelMeshScaleToRadius(TargetWheelRadiusCm, MeasuredWheelRadiusCm, WheelVisualConfig, FinalWheelMeshScale))
+		{
+			AppendWheelMeshAutoScaleSummary(InOutScaleSummary, FString::Printf(TEXT("%s=InvalidRadius(Target=%.2f,Measured=%.2f)"), *WheelMeshComponentName, TargetWheelRadiusCm, MeasuredWheelRadiusCm));
+			return;
+		}
+
+		WheelMeshComponent->SetRelativeScale3D(FVector(FinalWheelMeshScale));
+
+		// [v2.103.0] 자동 중심 보정 후 Wheel_Mesh 원점에 맞춰질 StaticMesh 바운드 중심입니다.
+		FVector WheelMeshBoundsCenter = FVector::ZeroVector;
+		if (WheelMeshBoundingBox.IsValid)
+		{
+			WheelMeshBoundsCenter = WheelMeshBoundingBox.GetCenter();
+		}
+
+		if (WheelVisualConfig.bAutoCenterWheelMeshBoundsToOrigin)
+		{
+			// [v2.103.0] 컴포넌트 회전과 스케일을 반영해 바운드 중심을 부모 공간에서 원점으로 되돌리는 위치 보정값입니다.
+			const FVector WheelMeshCenterCorrection = WheelMeshComponent->GetRelativeRotation().RotateVector(-WheelMeshBoundsCenter * FinalWheelMeshScale);
+			WheelMeshComponent->SetRelativeLocation(WheelMeshCenterCorrection);
+		}
+
+		AppendWheelMeshAutoScaleSummary(InOutScaleSummary, FString::Printf(TEXT("%s=Scale %.3f(Target=%.2f,Measured=%.2f,Center=%s,CenterFix=%s)"), *WheelMeshComponentName, FinalWheelMeshScale, TargetWheelRadiusCm, MeasuredWheelRadiusCm, *WheelMeshBoundsCenter.ToCompactString(), WheelVisualConfig.bAutoCenterWheelMeshBoundsToOrigin ? TEXT("On") : TEXT("Off")));
 	}
 
 	// [v2.48.0] 이름이 일치하는 SceneComponent를 Owner에서 찾습니다.
@@ -218,6 +469,172 @@ namespace
 
 		return nullptr;
 	}
+
+#if WITH_EDITOR
+	// 하드포인트 선택 캡처 결과 카운트와 경고 요약입니다.
+	struct FCFHardpointCaptureStats
+	{
+		// 소켓을 찾아 LocalTransform을 갱신한 하드포인트 슬롯 수입니다.
+		int32 CapturedCount = 0;
+
+		// SocketName이 비어 있어 캡처를 건너뛴 하드포인트 슬롯 수입니다.
+		int32 SkippedCount = 0;
+
+		// SocketName은 있지만 SM_Body 메시에서 찾지 못한 하드포인트 슬롯 수입니다.
+		int32 MissingCount = 0;
+
+		// LocationSlotId가 비어 있어 식별이 불완전한 하드포인트 슬롯 수입니다.
+		int32 InvalidCount = 0;
+
+		// 하드포인트 선택 캡처 중 발생한 경고 요약입니다.
+		FString WarningSummary;
+	};
+
+	// [v2.71.0] 에디터 버튼 실행 결과를 Output Log, 화면 메시지, Slate 알림으로 함께 확인할 수 있게 합니다.
+	void ShowVehicleLayoutEditorMessage(const FString& MessageText, const FColor& ScreenColor)
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(INDEX_NONE, 5.0f, ScreenColor, MessageText);
+		}
+
+		// [v2.71.0] Details 패널 버튼 실행 결과를 PIE 외부에서도 볼 수 있게 띄우는 에디터 알림 정보입니다.
+		FNotificationInfo NotificationInfo(FText::FromString(MessageText));
+		NotificationInfo.ExpireDuration = 5.0f;
+		NotificationInfo.bFireAndForget = true;
+
+		// [v2.71.0] 화면 오른쪽 하단에 표시되는 Slate 알림 항목입니다.
+		TSharedPtr<SNotificationItem> NotificationItem = FSlateNotificationManager::Get().AddNotification(NotificationInfo);
+		if (NotificationItem.IsValid())
+		{
+			NotificationItem->SetCompletionState(ScreenColor == FColor::Red ? SNotificationItem::CS_Fail : SNotificationItem::CS_Success);
+		}
+	}
+
+	// [v2.69.0] DataAsset 소켓 이름이 비어 있을 때 사용할 프로젝트 표준 이름을 반환합니다.
+	FName ResolveWheelLayoutSocketName(const FName ConfiguredSocketName, const FName DefaultSocketName)
+	{
+		return ConfiguredSocketName.IsNone() ? DefaultSocketName : ConfiguredSocketName;
+	}
+
+	// [v2.69.0] 캡처 실패 요약에 항목을 쉼표로 이어 붙입니다.
+	void AppendWheelLayoutCaptureFailure(FString& InOutFailureSummary, const FString& FailureText)
+	{
+		if (!InOutFailureSummary.IsEmpty())
+		{
+			InOutFailureSummary += TEXT(", ");
+		}
+		InOutFailureSummary += FailureText;
+	}
+
+	// [v2.74.0] 하드포인트 캡처 경고 요약에 항목을 쉼표로 이어 붙입니다.
+	void AppendHardpointCaptureWarning(FCFHardpointCaptureStats& InOutStats, const FString& WarningText)
+	{
+		if (!InOutStats.WarningSummary.IsEmpty())
+		{
+			InOutStats.WarningSummary += TEXT(", ");
+		}
+		InOutStats.WarningSummary += WarningText;
+	}
+
+	// [v2.69.0] 차체 메시 소켓 Transform을 Wheel_Anchor_* 부모 기준 상대 포즈로 변환합니다.
+	bool BuildWheelAnchorPoseFromBodySocket(
+		const AActor* OwnerActor,
+		const UStaticMeshComponent* BodyMeshComponent,
+		const FName BodySocketName,
+		const FName WheelAnchorName,
+		FCFWheelAnchorPose& OutWheelAnchorPose,
+		FString& InOutFailureSummary)
+	{
+		if (!OwnerActor)
+		{
+			AppendWheelLayoutCaptureFailure(InOutFailureSummary, TEXT("OwnerActor=Missing"));
+			return false;
+		}
+
+		if (!BodyMeshComponent || !BodyMeshComponent->GetStaticMesh())
+		{
+			AppendWheelLayoutCaptureFailure(InOutFailureSummary, TEXT("SM_Body.StaticMesh=Missing"));
+			return false;
+		}
+
+		if (BodySocketName.IsNone() || !BodyMeshComponent->DoesSocketExist(BodySocketName))
+		{
+			AppendWheelLayoutCaptureFailure(InOutFailureSummary, FString::Printf(TEXT("SocketMissing=%s"), *BodySocketName.ToString()));
+			return false;
+		}
+
+		// [v2.69.0] 소켓 위치를 적용받을 Wheel_Anchor_* 컴포넌트입니다.
+		const USceneComponent* WheelAnchorComponent = FindSceneComponentByName(OwnerActor, WheelAnchorName);
+		if (!WheelAnchorComponent)
+		{
+			AppendWheelLayoutCaptureFailure(InOutFailureSummary, FString::Printf(TEXT("AnchorMissing=%s"), *WheelAnchorName.ToString()));
+			return false;
+		}
+
+		// [v2.69.0] 차체 메시 소켓의 월드 Transform입니다.
+		const FTransform SocketWorldTransform = BodyMeshComponent->GetSocketTransform(BodySocketName, RTS_World);
+
+		// [v2.69.0] Wheel_Anchor_*가 상대 Transform을 저장할 기준 부모 Transform입니다.
+		const USceneComponent* WheelAnchorParentComponent = WheelAnchorComponent->GetAttachParent();
+
+		// [v2.69.0] 부모가 없을 때는 Actor Transform을 상대 기준으로 사용합니다.
+		const FTransform AnchorParentWorldTransform = WheelAnchorParentComponent ? WheelAnchorParentComponent->GetComponentTransform() : OwnerActor->GetActorTransform();
+
+		// [v2.69.0] 최종적으로 DataAsset에 저장할 Wheel_Anchor_* 상대 Transform입니다.
+		const FTransform CapturedRelativeTransform = SocketWorldTransform.GetRelativeTransform(AnchorParentWorldTransform);
+
+		OutWheelAnchorPose.RelativeLocation = CapturedRelativeTransform.GetLocation();
+		OutWheelAnchorPose.RelativeRotation = CapturedRelativeTransform.Rotator();
+		return true;
+	}
+
+	// [v2.74.0] SM_Body 소켓 Transform을 차체 기준 하드포인트 슬롯 LocalTransform에 선택적으로 캡처합니다.
+	void CaptureHardpointSlotFromBodySocket(
+		const UStaticMeshComponent* BodyMeshComponent,
+		FCFVehicleHardpointSlot& InOutHardpointSlot,
+		FCFHardpointCaptureStats& InOutStats)
+	{
+		if (InOutHardpointSlot.LocationSlotId.IsNone())
+		{
+			++InOutStats.InvalidCount;
+			AppendHardpointCaptureWarning(InOutStats, TEXT("HardpointInvalidSlotId=None"));
+		}
+
+		if (InOutHardpointSlot.SocketName.IsNone())
+		{
+			++InOutStats.SkippedCount;
+			return;
+		}
+
+		if (!BodyMeshComponent || !BodyMeshComponent->GetStaticMesh())
+		{
+			++InOutStats.MissingCount;
+			AppendHardpointCaptureWarning(InOutStats, FString::Printf(TEXT("HardpointBodyMissing=%s"), *InOutHardpointSlot.SocketName.ToString()));
+			return;
+		}
+
+		if (!BodyMeshComponent->DoesSocketExist(InOutHardpointSlot.SocketName))
+		{
+			++InOutStats.MissingCount;
+			AppendHardpointCaptureWarning(InOutStats, FString::Printf(TEXT("HardpointSocketMissing=%s:%s"), *InOutHardpointSlot.LocationSlotId.ToString(), *InOutHardpointSlot.SocketName.ToString()));
+			return;
+		}
+
+		// [v2.74.0] SM_Body 컴포넌트 기준으로 환산된 하드포인트 소켓 Transform입니다.
+		const FTransform SocketComponentTransform = BodyMeshComponent->GetSocketTransform(InOutHardpointSlot.SocketName, RTS_Component);
+
+		InOutHardpointSlot.LocalLocation = SocketComponentTransform.GetLocation();
+		InOutHardpointSlot.LocalRotation = SocketComponentTransform.Rotator();
+		++InOutStats.CapturedCount;
+	}
+
+	// [v2.74.0] 하드포인트 선택 캡처 결과에 경고가 포함되어 있는지 반환합니다.
+	bool HasHardpointCaptureWarning(const FCFHardpointCaptureStats& CaptureStats)
+	{
+		return CaptureStats.MissingCount > 0 || CaptureStats.InvalidCount > 0;
+	}
+#endif
 
 	// [v2.47.0] 이름이 일치하는 SkeletalMeshComponent를 Owner에서 찾습니다.
 	USkeletalMeshComponent* FindSkeletalMeshComponentByName(const AActor* OwnerActor, const FName ComponentName)
@@ -314,10 +731,58 @@ ACFVehiclePawn::ACFVehiclePawn()
 	WheelSyncComp = CreateDefaultSubobject<UCFWheelSyncComp>(TEXT("WheelSyncComp"));
 	VehicleCameraComp = CreateDefaultSubobject<UCFVehicleCameraComp>(TEXT("VehicleCameraComp"));
 	VehicleAimComp = CreateDefaultSubobject<UCFVehicleAimComp>(TEXT("VehicleAimComp"));
+	VehicleWeaponComp = CreateDefaultSubobject<UCFVehicleWeaponComp>(TEXT("VehicleWeaponComp"));
+	ProjectilePoolComp = CreateDefaultSubobject<UCFProjectilePoolComp>(TEXT("ProjectilePoolComp"));
 	OwnerVisualRootComp = CreateDefaultSubobject<USceneComponent>(TEXT("OwnerVisualRoot"));
 	if (OwnerVisualRootComp)
 	{
 		OwnerVisualRootComp->SetupAttachment(GetMesh());
+	}
+	TurretMountRootComp = CreateDefaultSubobject<USceneComponent>(TEXT("Turret_MountRoot"));
+	if (TurretMountRootComp)
+	{
+		TurretMountRootComp->SetupAttachment(OwnerVisualRootComp ? OwnerVisualRootComp : GetMesh());
+	}
+
+	TurretBaseMeshComp = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Turret_BaseMesh"));
+	if (TurretBaseMeshComp)
+	{
+		TurretBaseMeshComp->SetupAttachment(TurretMountRootComp);
+		TurretBaseMeshComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		TurretBaseMeshComp->SetGenerateOverlapEvents(false);
+		TurretBaseMeshComp->SetCanEverAffectNavigation(false);
+	}
+
+	TurretYawPivotComp = CreateDefaultSubobject<USceneComponent>(TEXT("Turret_YawPivot"));
+	if (TurretYawPivotComp)
+	{
+		TurretYawPivotComp->SetupAttachment(TurretBaseMeshComp ? static_cast<USceneComponent*>(TurretBaseMeshComp.Get()) : TurretMountRootComp.Get());
+	}
+
+	TurretYawMeshComp = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Turret_YawMesh"));
+	if (TurretYawMeshComp)
+	{
+		TurretYawMeshComp->SetupAttachment(TurretYawPivotComp ? TurretYawPivotComp.Get() : TurretMountRootComp.Get());
+		TurretYawMeshComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		TurretYawMeshComp->SetGenerateOverlapEvents(false);
+		TurretYawMeshComp->SetCanEverAffectNavigation(false);
+	}
+
+	TurretPitchPivotComp = CreateDefaultSubobject<USceneComponent>(TEXT("Turret_PitchPivot"));
+	if (TurretPitchPivotComp)
+	{
+		TurretPitchPivotComp->SetupAttachment(TurretYawMeshComp ? static_cast<USceneComponent*>(TurretYawMeshComp.Get()) : TurretYawPivotComp.Get());
+	}
+
+	TurretPitchMeshComp = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Turret_PitchMesh"));
+	if (TurretPitchMeshComp)
+	{
+		// [v2.86.1] Pitch 메쉬 기본 부모로 사용할 터렛 시각 컴포넌트입니다.
+		USceneComponent* PitchParentComponent = TurretPitchPivotComp ? TurretPitchPivotComp.Get() : TurretMountRootComp.Get();
+		TurretPitchMeshComp->SetupAttachment(PitchParentComponent);
+		TurretPitchMeshComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		TurretPitchMeshComp->SetGenerateOverlapEvents(false);
+		TurretPitchMeshComp->SetCanEverAffectNavigation(false);
 	}
 
 	// [v2.61.0] C++ 기본 객체 기준으로 싱글플레이 차량 기본값을 먼저 적용합니다.
@@ -452,6 +917,7 @@ void ACFVehiclePawn::OnConstruction(const FTransform& Transform)
 	ApplyVehicleVisualConfig();
 	ApplyVehicleWheelVisualConfig();
 	ApplyVehicleLayoutConfig();
+	ApplyVehicleTurretVisualConfig();
 }
 
 void ACFVehiclePawn::BeginPlay()
@@ -510,6 +976,7 @@ void ACFVehiclePawn::Tick(float DeltaSeconds)
 	}
 	UpdateOwnerVisualStabilization(DeltaSeconds);
 	UpdateOwnerBodyVisualStabilization(DeltaSeconds);
+	UpdateVehicleTurretAimVisuals(DeltaSeconds);
 	DisplayDriveStateOnScreenDebug();
 }
 
@@ -633,8 +1100,14 @@ bool ACFVehiclePawn::InitializeVehicleRuntime()
 	// [v2.68.0] Owner 표시 루트 재부착 이후 최종 부모 기준으로 레이아웃을 다시 적용합니다.
 	ApplyVehicleLayoutConfig();
 
+	// [v2.86.0] Owner 표시 루트 재부착 이후 최종 부모 기준으로 터렛 시각 장착을 다시 적용합니다.
+	ApplyVehicleTurretVisualConfig();
+
 	// [v2.68.0] WheelSync 캡처 직전에 확정된 레이아웃 적용 요약 문자열입니다.
 	const FString LayoutConfigSummary = LastVehicleRuntimeSummary;
+
+	// [v2.86.0] VehicleRuntime 요약에 함께 남길 최신 터렛 시각 장착 요약입니다.
+	const FString TurretVisualConfigSummary = LastTurretVisualSummary;
 
 	// [v2.68.0] 차량 입력/물리 Drive 컴포넌트 캐시 준비 결과입니다.
 	const bool bDriveReady = (VehicleDriveComp != nullptr) && VehicleDriveComp->CacheVehicleMovementComponent();
@@ -644,10 +1117,174 @@ bool ACFVehiclePawn::InitializeVehicleRuntime()
 
 	// [v2.15.0] AimComp가 Owner Pawn과 VehicleCameraComp를 안전하게 찾았는지 여부입니다.
 	const bool bAimReady = VehicleAimComp ? VehicleAimComp->InitializeAimRuntime() : false;
+
+	// [v2.75.0] WeaponComp가 VehicleData MountProfile과 하드포인트 슬롯을 해석했는지 여부입니다.
+	const bool bWeaponReady = VehicleWeaponComp ? VehicleWeaponComp->InitializeWeaponRuntime(this, VehicleData) : false;
 	bVehicleRuntimeReady = bDriveReady && bWheelSyncReady;
-	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: Data=%s, Drive=%s, WheelSync=%s, Aim=%s, OwnerVisual=%s, Ready=%s | %s | %s"), VehicleData ? TEXT("Present") : TEXT("Missing"), bDriveReady ? TEXT("Ready") : TEXT("Missing"), bWheelSyncReady ? TEXT("Ready") : TEXT("Missing"), bAimReady ? TEXT("Ready") : TEXT("Missing"), bOwnerVisualReady ? TEXT("Ready") : TEXT("Skipped"), bVehicleRuntimeReady ? TEXT("True") : TEXT("False"), *DataConfigSummary, *LayoutConfigSummary);
+	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: Data=%s, Drive=%s, WheelSync=%s, Aim=%s, Weapon=%s, OwnerVisual=%s, Ready=%s | %s | %s | %s"), VehicleData ? TEXT("Present") : TEXT("Missing"), bDriveReady ? TEXT("Ready") : TEXT("Missing"), bWheelSyncReady ? TEXT("Ready") : TEXT("Missing"), bAimReady ? TEXT("Ready") : TEXT("Missing"), bWeaponReady ? TEXT("Ready") : TEXT("Missing"), bOwnerVisualReady ? TEXT("Ready") : TEXT("Skipped"), bVehicleRuntimeReady ? TEXT("True") : TEXT("False"), *DataConfigSummary, *LayoutConfigSummary, *TurretVisualConfigSummary);
 	return bVehicleRuntimeReady;
 }
+
+#if WITH_EDITOR
+// [v2.74.0] SM_Body 차체 메시 소켓에서 휠 앵커와 선택 하드포인트 위치를 캡처해 VehicleData에 기록합니다.
+void ACFVehiclePawn::CaptureWheelLayoutFromBodySockets()
+{
+	if (!VehicleData)
+	{
+		LastVehicleRuntimeSummary = TEXT("VehicleLayoutSocketCapture: VehicleData=Missing");
+		UE_LOG(LogTemp, Warning, TEXT("%s"), *LastVehicleRuntimeSummary);
+		ShowVehicleLayoutEditorMessage(LastVehicleRuntimeSummary, FColor::Red);
+		return;
+	}
+
+	ApplyVehicleVisualConfig();
+
+	// [v2.69.0] 차체 메시가 적용되는 표준 StaticMeshComponent입니다.
+	UStaticMeshComponent* BodyMeshComponent = FindStaticMeshComponentByName(this, TEXT("SM_Body"));
+	if (!BodyMeshComponent || !BodyMeshComponent->GetStaticMesh())
+	{
+		LastVehicleRuntimeSummary = TEXT("VehicleLayoutSocketCapture: SM_Body.StaticMesh=Missing");
+		UE_LOG(LogTemp, Warning, TEXT("%s"), *LastVehicleRuntimeSummary);
+		ShowVehicleLayoutEditorMessage(LastVehicleRuntimeSummary, FColor::Red);
+		return;
+	}
+
+	// [v2.69.0] 현재 DataAsset에 저장된 레이아웃 설정입니다.
+	const FCFVehicleLayoutConfig& ExistingLayoutConfig = VehicleData->VehicleLayoutConfig;
+
+	// [v2.69.0] 앞왼쪽 바퀴 중심을 읽을 차체 소켓 이름입니다.
+	const FName BodySocketFL = ResolveWheelLayoutSocketName(ExistingLayoutConfig.BodyWheelSocketFL, FName(TEXT("Wheel_Anchor_FL")));
+
+	// [v2.69.0] 앞오른쪽 바퀴 중심을 읽을 차체 소켓 이름입니다.
+	const FName BodySocketFR = ResolveWheelLayoutSocketName(ExistingLayoutConfig.BodyWheelSocketFR, FName(TEXT("Wheel_Anchor_FR")));
+
+	// [v2.69.0] 뒤왼쪽 바퀴 중심을 읽을 차체 소켓 이름입니다.
+	const FName BodySocketRL = ResolveWheelLayoutSocketName(ExistingLayoutConfig.BodyWheelSocketRL, FName(TEXT("Wheel_Anchor_RL")));
+
+	// [v2.69.0] 뒤오른쪽 바퀴 중심을 읽을 차체 소켓 이름입니다.
+	const FName BodySocketRR = ResolveWheelLayoutSocketName(ExistingLayoutConfig.BodyWheelSocketRR, FName(TEXT("Wheel_Anchor_RR")));
+
+	// [v2.69.0] 앞왼쪽 바퀴 앵커에 저장할 캡처 포즈입니다.
+	FCFWheelAnchorPose CapturedWheelAnchorFL;
+
+	// [v2.69.0] 앞오른쪽 바퀴 앵커에 저장할 캡처 포즈입니다.
+	FCFWheelAnchorPose CapturedWheelAnchorFR;
+
+	// [v2.69.0] 뒤왼쪽 바퀴 앵커에 저장할 캡처 포즈입니다.
+	FCFWheelAnchorPose CapturedWheelAnchorRL;
+
+	// [v2.69.0] 뒤오른쪽 바퀴 앵커에 저장할 캡처 포즈입니다.
+	FCFWheelAnchorPose CapturedWheelAnchorRR;
+
+	// [v2.69.0] 캡처 실패 원인을 모두 모아 표시할 요약 문자열입니다.
+	FString FailureSummary;
+
+	// [v2.69.0] 앞왼쪽 소켓 캡처 성공 여부입니다.
+	const bool bCapturedFL = BuildWheelAnchorPoseFromBodySocket(this, BodyMeshComponent, BodySocketFL, FName(TEXT("Wheel_Anchor_FL")), CapturedWheelAnchorFL, FailureSummary);
+
+	// [v2.69.0] 앞오른쪽 소켓 캡처 성공 여부입니다.
+	const bool bCapturedFR = BuildWheelAnchorPoseFromBodySocket(this, BodyMeshComponent, BodySocketFR, FName(TEXT("Wheel_Anchor_FR")), CapturedWheelAnchorFR, FailureSummary);
+
+	// [v2.69.0] 뒤왼쪽 소켓 캡처 성공 여부입니다.
+	const bool bCapturedRL = BuildWheelAnchorPoseFromBodySocket(this, BodyMeshComponent, BodySocketRL, FName(TEXT("Wheel_Anchor_RL")), CapturedWheelAnchorRL, FailureSummary);
+
+	// [v2.69.0] 뒤오른쪽 소켓 캡처 성공 여부입니다.
+	const bool bCapturedRR = BuildWheelAnchorPoseFromBodySocket(this, BodyMeshComponent, BodySocketRR, FName(TEXT("Wheel_Anchor_RR")), CapturedWheelAnchorRR, FailureSummary);
+
+	if (!bCapturedFL || !bCapturedFR || !bCapturedRL || !bCapturedRR)
+	{
+		LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleLayoutSocketCapture: Failed, %s"), *FailureSummary);
+		UE_LOG(LogTemp, Warning, TEXT("%s"), *LastVehicleRuntimeSummary);
+		ShowVehicleLayoutEditorMessage(LastVehicleRuntimeSummary, FColor::Red);
+		return;
+	}
+
+	Modify();
+	VehicleData->Modify();
+
+	// [v2.69.0] 실제로 수정할 VehicleData 레이아웃 설정입니다.
+	FCFVehicleLayoutConfig& MutableLayoutConfig = VehicleData->VehicleLayoutConfig;
+	MutableLayoutConfig.bUseLayoutOverrides = true;
+	MutableLayoutConfig.BodyWheelSocketFL = BodySocketFL;
+	MutableLayoutConfig.BodyWheelSocketFR = BodySocketFR;
+	MutableLayoutConfig.BodyWheelSocketRL = BodySocketRL;
+	MutableLayoutConfig.BodyWheelSocketRR = BodySocketRR;
+	MutableLayoutConfig.WheelAnchorFL = CapturedWheelAnchorFL;
+	MutableLayoutConfig.WheelAnchorFR = CapturedWheelAnchorFR;
+	MutableLayoutConfig.WheelAnchorRL = CapturedWheelAnchorRL;
+	MutableLayoutConfig.WheelAnchorRR = CapturedWheelAnchorRR;
+
+	// [v2.74.0] 하드포인트 선택 캡처 결과 카운트입니다.
+	FCFHardpointCaptureStats HardpointCaptureStats;
+
+	// [v2.74.0] 현재 선택 캡처를 시도할 하드포인트 슬롯입니다.
+	for (FCFVehicleHardpointSlot& HardpointSlot : VehicleData->HardpointSlots)
+	{
+		CaptureHardpointSlotFromBodySocket(BodyMeshComponent, HardpointSlot, HardpointCaptureStats);
+	}
+
+	VehicleData->MarkPackageDirty();
+	ApplyVehicleLayoutConfig();
+
+	// [v2.70.0] 캡처 직후 WheelSync의 기준 위치 캐시도 새 앵커 레이아웃으로 다시 준비합니다.
+	const bool bWheelSyncReadyAfterCapture = WheelSyncComp ? WheelSyncComp->TryPrepareWheelSync() : false;
+
+	// [v2.74.0] 하드포인트 선택 캡처 중 경고가 있었는지 여부입니다.
+	const bool bHasHardpointWarning = HasHardpointCaptureWarning(HardpointCaptureStats);
+
+	// [v2.74.0] 캡처 결과 상태 이름입니다.
+	const TCHAR* CaptureStateText = bHasHardpointWarning ? TEXT("AppliedWithWarning") : TEXT("Applied");
+
+	// [v2.74.0] 하드포인트 경고 요약 표시 문자열입니다.
+	const FString HardpointWarningSuffix = HardpointCaptureStats.WarningSummary.IsEmpty() ? FString() : FString::Printf(TEXT(", Warnings=%s"), *HardpointCaptureStats.WarningSummary);
+
+	LastVehicleRuntimeSummary = FString::Printf(
+		TEXT("VehicleLayoutSocketCapture: %s, SourceMesh=%s, Wheels=4/4, Sockets=%s/%s/%s/%s, WheelSync=%s, Hardpoints=Captured=%d, Skipped=%d, Missing=%d, Invalid=%d%s"),
+		CaptureStateText,
+		*BodyMeshComponent->GetStaticMesh()->GetName(),
+		*BodySocketFL.ToString(),
+		*BodySocketFR.ToString(),
+		*BodySocketRL.ToString(),
+		*BodySocketRR.ToString(),
+		bWheelSyncReadyAfterCapture ? TEXT("Ready") : TEXT("SkippedOrFailed"),
+		HardpointCaptureStats.CapturedCount,
+		HardpointCaptureStats.SkippedCount,
+		HardpointCaptureStats.MissingCount,
+		HardpointCaptureStats.InvalidCount,
+		*HardpointWarningSuffix);
+	UE_LOG(LogTemp, Display, TEXT("%s"), *LastVehicleRuntimeSummary);
+	ShowVehicleLayoutEditorMessage(LastVehicleRuntimeSummary, (bWheelSyncReadyAfterCapture && !bHasHardpointWarning) ? FColor::Green : FColor::Yellow);
+}
+
+// [v2.69.0] VehicleData에 저장된 휠 앵커 레이아웃을 에디터 프리뷰 Pawn에 다시 적용합니다.
+void ACFVehiclePawn::ApplyVehicleLayoutFromDataInEditor()
+{
+	if (!VehicleData)
+	{
+		LastVehicleRuntimeSummary = TEXT("VehicleLayoutEditorApply: VehicleData=Missing");
+		UE_LOG(LogTemp, Warning, TEXT("%s"), *LastVehicleRuntimeSummary);
+		ShowVehicleLayoutEditorMessage(LastVehicleRuntimeSummary, FColor::Red);
+		return;
+	}
+
+	Modify();
+	ApplyVehicleVisualConfig();
+	ApplyVehicleLayoutConfig();
+
+	if (!VehicleData->VehicleLayoutConfig.bUseLayoutOverrides)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s"), *LastVehicleRuntimeSummary);
+		ShowVehicleLayoutEditorMessage(LastVehicleRuntimeSummary, FColor::Yellow);
+		return;
+	}
+
+	// [v2.70.0] 수동 적용 버튼에서도 WheelSync 기준 위치 캐시를 새 레이아웃으로 다시 준비합니다.
+	const bool bWheelSyncReadyAfterApply = WheelSyncComp ? WheelSyncComp->TryPrepareWheelSync() : false;
+	LastVehicleRuntimeSummary = FString::Printf(TEXT("%s, WheelSync=%s"), *LastVehicleRuntimeSummary, bWheelSyncReadyAfterApply ? TEXT("Ready") : TEXT("SkippedOrFailed"));
+	UE_LOG(LogTemp, Display, TEXT("%s"), *LastVehicleRuntimeSummary);
+	ShowVehicleLayoutEditorMessage(LastVehicleRuntimeSummary, bWheelSyncReadyAfterApply ? FColor::Green : FColor::Yellow);
+}
+#endif
 
 bool ACFVehiclePawn::ShouldShowAimReticle() const
 {
@@ -1064,6 +1701,7 @@ void ACFVehiclePawn::ApplyVehicleDataConfig()
 	ApplyVehicleReferenceConfig();
 	ApplyVehicleWheelPhysicsConfig();
 	ApplyVehicleWheelVisualConfig();
+	ApplyVehicleTurretVisualConfig();
 	if (VehicleDriveComp && VehicleData)
 	{
 		VehicleDriveComp->ApplyDriveStateConfig(VehicleData->DriveStateConfig);
@@ -1083,6 +1721,571 @@ void ACFVehiclePawn::ApplyVehicleVisualConfig()
 	}
 	// 현재 WheelSync 컴포넌트에는 휠 메쉬 자산 적용 전용 API가 없습니다.
 	// 휠 시각 메쉬 교체는 별도 구현 전까지 여기서 수행하지 않습니다.
+}
+
+// [v2.86.0] 터렛 시각 컴포넌트를 기본 숨김 상태로 되돌립니다.
+void ACFVehiclePawn::ResetTurretVisualComponents()
+{
+	LastTurretMountData = nullptr;
+	bLastTurretMountDataAssigned = false;
+	LastTurretMountId = NAME_None;
+	LastTurretMountSummary = TEXT("TurretMountData: Reset");
+	bLastTurretVisualAttached = false;
+	LastTurretVisualSummary = TEXT("TurretVisual: Reset");
+	LastTurretBaseMeshName = NAME_None;
+	LastTurretYawMeshName = NAME_None;
+	LastTurretPitchMeshName = NAME_None;
+
+	if (TurretMountRootComp)
+	{
+		TurretMountRootComp->SetRelativeTransform(FTransform::Identity);
+		TurretMountRootComp->SetVisibility(false, true);
+		TurretMountRootComp->SetHiddenInGame(true, true);
+	}
+
+	if (TurretBaseMeshComp)
+	{
+		TurretBaseMeshComp->AttachToComponent(TurretMountRootComp, FAttachmentTransformRules::KeepRelativeTransform);
+		TurretBaseMeshComp->SetStaticMesh(nullptr);
+		TurretBaseMeshComp->SetRelativeTransform(FTransform::Identity);
+		TurretBaseMeshComp->SetVisibility(false, true);
+		TurretBaseMeshComp->SetHiddenInGame(true, true);
+	}
+
+	if (TurretYawPivotComp)
+	{
+		TurretYawPivotComp->AttachToComponent(TurretMountRootComp, FAttachmentTransformRules::KeepRelativeTransform);
+		TurretYawPivotComp->SetRelativeTransform(FTransform::Identity);
+	}
+
+	if (TurretYawMeshComp)
+	{
+		TurretYawMeshComp->AttachToComponent(TurretYawPivotComp ? TurretYawPivotComp.Get() : TurretMountRootComp.Get(), FAttachmentTransformRules::KeepRelativeTransform);
+		TurretYawMeshComp->SetStaticMesh(nullptr);
+		TurretYawMeshComp->SetRelativeTransform(FTransform::Identity);
+		TurretYawMeshComp->SetVisibility(false, true);
+		TurretYawMeshComp->SetHiddenInGame(true, true);
+	}
+
+	if (TurretPitchPivotComp)
+	{
+		TurretPitchPivotComp->AttachToComponent(TurretYawMeshComp ? static_cast<USceneComponent*>(TurretYawMeshComp.Get()) : TurretYawPivotComp.Get(), FAttachmentTransformRules::KeepRelativeTransform);
+		TurretPitchPivotComp->SetRelativeTransform(FTransform::Identity);
+	}
+
+	if (TurretPitchMeshComp)
+	{
+		TurretPitchMeshComp->AttachToComponent(TurretPitchPivotComp ? TurretPitchPivotComp.Get() : TurretMountRootComp.Get(), FAttachmentTransformRules::KeepRelativeTransform);
+		TurretPitchMeshComp->SetStaticMesh(nullptr);
+		TurretPitchMeshComp->SetRelativeTransform(FTransform::Identity);
+		TurretPitchMeshComp->SetVisibility(false, true);
+		TurretPitchMeshComp->SetHiddenInGame(true, true);
+	}
+}
+
+// [v2.86.0] 터렛 시각 장착에 사용할 활성 MountProfile을 찾습니다.
+const FCFVehicleMountProfile* ACFVehiclePawn::FindActiveTurretMountProfile() const
+{
+	if (!VehicleData)
+	{
+		return nullptr;
+	}
+
+	// [v2.86.0] VehicleWeaponComp가 우선 사용하는 활성 장착 프로파일 ID입니다.
+	const FName RequestedMountProfileId = VehicleWeaponComp ? VehicleWeaponComp->GetActiveMountProfileId() : FName(TEXT("RoofTurret_MediumOrLarge"));
+
+	// [v2.86.0] 활성 ID와 비교할 차량 장착 프로파일입니다.
+	for (const FCFVehicleMountProfile& MountProfile : VehicleData->MountProfiles)
+	{
+		if (MountProfile.MountProfileId == RequestedMountProfileId)
+		{
+			return &MountProfile;
+		}
+	}
+
+	if (RequestedMountProfileId.IsNone() && !VehicleData->MountProfiles.IsEmpty())
+	{
+		return &VehicleData->MountProfiles[0];
+	}
+
+	return nullptr;
+}
+
+// [v2.86.0] 터렛 시각 장착에 사용할 하드포인트 슬롯을 찾습니다.
+const FCFVehicleHardpointSlot* ACFVehiclePawn::FindTurretHardpointSlot(const FName LocationSlotId) const
+{
+	if (!VehicleData || LocationSlotId.IsNone())
+	{
+		return nullptr;
+	}
+
+	// [v2.86.0] 위치 슬롯 ID와 비교할 차량 하드포인트 슬롯입니다.
+	for (const FCFVehicleHardpointSlot& HardpointSlot : VehicleData->HardpointSlots)
+	{
+		if (HardpointSlot.LocationSlotId == LocationSlotId)
+		{
+			return &HardpointSlot;
+		}
+	}
+
+	return nullptr;
+}
+
+// [v2.86.0] VehicleData MountProfile의 터렛 시각 메쉬를 하드포인트 위치에 붙입니다.
+void ACFVehiclePawn::ApplyVehicleTurretVisualConfig()
+{
+	ResetTurretVisualComponents();
+
+	if (!VehicleData)
+	{
+		LastTurretVisualSummary = TEXT("TurretVisual: VehicleData=Missing");
+		return;
+	}
+
+	if (!TurretMountRootComp || !TurretBaseMeshComp || !TurretYawPivotComp || !TurretYawMeshComp || !TurretPitchPivotComp || !TurretPitchMeshComp)
+	{
+		LastTurretVisualSummary = TEXT("TurretVisual: Components=Missing");
+		return;
+	}
+
+	// [v2.86.0] 현재 터렛 시각 표시를 적용할 활성 장착 프로파일입니다.
+	const FCFVehicleMountProfile* ActiveMountProfile = FindActiveTurretMountProfile();
+	if (!ActiveMountProfile)
+	{
+		LastTurretVisualSummary = TEXT("TurretVisual: MountProfile=Missing");
+		return;
+	}
+
+	if (ActiveMountProfile->MountType != ECFVehicleMountType::Turret)
+	{
+		LastTurretVisualSummary = FString::Printf(TEXT("TurretVisual: SkippedNonTurret, Profile=%s"), *ActiveMountProfile->MountProfileId.ToString());
+		return;
+	}
+
+	// [v2.86.0] 활성 장착 프로파일이 참조하는 하드포인트 슬롯입니다.
+	const FCFVehicleHardpointSlot* HardpointSlot = FindTurretHardpointSlot(ActiveMountProfile->LocationSlotRef);
+	if (!HardpointSlot)
+	{
+		LastTurretVisualSummary = FString::Printf(TEXT("TurretVisual: HardpointSlot=Missing, LocationSlotRef=%s"), *ActiveMountProfile->LocationSlotRef.ToString());
+		return;
+	}
+
+	// [v2.100.0] 터렛 마운트 데이터가 EquipmentPresetData에서 해석됐는지 여부입니다.
+	const bool bUsingEquipmentPresetTurretMountData = ActiveMountProfile->DefaultEquipmentPresetData && ActiveMountProfile->DefaultEquipmentPresetData->DefaultTurretMountData;
+
+	// [v2.100.0] 활성 EquipmentPresetData에서 해석한 터렛 마운트 데이터입니다.
+	UCFTurretMountData* ActiveTurretMountData = bUsingEquipmentPresetTurretMountData
+		? ActiveMountProfile->DefaultEquipmentPresetData->DefaultTurretMountData.Get()
+		: nullptr;
+
+	LastTurretMountData = ActiveTurretMountData;
+	bLastTurretMountDataAssigned = (ActiveTurretMountData != nullptr);
+	LastTurretMountId = ActiveTurretMountData ? ActiveTurretMountData->TurretMountId : NAME_None;
+	LastTurretMountSummary = ActiveTurretMountData ? ActiveTurretMountData->BuildTurretMountSummary() : TEXT("TurretMountData: Missing, Source=EquipmentPresetDataRequired, InlineFallback=Removed");
+
+	// [v2.100.0] 터렛 시각 값을 가져온 원본을 표시할 문자열입니다.
+	const FString TurretVisualSourceText = bUsingEquipmentPresetTurretMountData
+		? TEXT("EquipmentPresetData")
+		: TEXT("MissingEquipmentPresetTurretMountData");
+
+	// [v2.88.0] 현재 적용할 Base 메쉬입니다.
+	UStaticMesh* ResolvedTurretBaseMesh = ActiveTurretMountData ? ActiveTurretMountData->TurretBaseMesh.Get() : nullptr;
+
+	// [v2.87.0] 현재 적용할 Yaw 메쉬입니다.
+	UStaticMesh* ResolvedTurretYawMesh = ActiveTurretMountData ? ActiveTurretMountData->TurretYawMesh.Get() : nullptr;
+
+	// [v2.87.0] 현재 적용할 Pitch 메쉬입니다.
+	UStaticMesh* ResolvedTurretPitchMesh = ActiveTurretMountData ? ActiveTurretMountData->TurretPitchMesh.Get() : nullptr;
+
+	// [v2.88.0] 현재 적용할 Base 메쉬 상대 Transform입니다.
+	const FTransform ResolvedTurretBaseRelativeTransform = ActiveTurretMountData ? ActiveTurretMountData->TurretBaseRelativeTransform : FTransform::Identity;
+
+	// [v2.88.0] 현재 적용할 Yaw 피벗 소켓 이름입니다.
+	const FName ResolvedYawPivotSocketName = ActiveTurretMountData ? ActiveTurretMountData->YawPivotSocketName : NAME_None;
+
+	// [v2.87.0] 현재 적용할 Yaw 메쉬 상대 Transform입니다.
+	const FTransform ResolvedTurretYawRelativeTransform = ActiveTurretMountData ? ActiveTurretMountData->TurretYawRelativeTransform : FTransform::Identity;
+
+	// [v2.87.0] 현재 적용할 Pitch 메쉬 상대 Transform입니다.
+	const FTransform ResolvedTurretPitchRelativeTransform = ActiveTurretMountData ? ActiveTurretMountData->TurretPitchRelativeTransform : FTransform::Identity;
+
+	// [v2.87.0] 현재 적용할 Pitch 피벗 소켓 이름입니다.
+	const FName ResolvedPitchPivotSocketName = ActiveTurretMountData ? ActiveTurretMountData->PitchPivotSocketName : NAME_None;
+
+	// [v2.93.0] Muzzle FireOrigin 전환에서 사용할 소켓 이름입니다.
+	const FName ResolvedMuzzleSocketName = ActiveTurretMountData ? ActiveTurretMountData->MuzzleSocketName : NAME_None;
+
+	// [v2.88.0] 활성 터렛 마운트 소스에 Base 메쉬가 지정되어 있는지 여부입니다.
+	const bool bHasBaseMesh = ResolvedTurretBaseMesh != nullptr;
+
+	// [v2.87.0] 활성 터렛 마운트 소스에 Yaw 메쉬가 지정되어 있는지 여부입니다.
+	const bool bHasYawMesh = ResolvedTurretYawMesh != nullptr;
+
+	// [v2.87.0] 활성 터렛 마운트 소스에 Pitch 메쉬가 지정되어 있는지 여부입니다.
+	const bool bHasPitchMesh = ResolvedTurretPitchMesh != nullptr;
+
+	// [v2.92.0] 이름이 지정됐지만 실제 메쉬에서 찾지 못한 필수 소켓 목록입니다.
+	TArray<FString> MissingRequiredSocketDescriptions;
+
+	if (!bHasBaseMesh && !bHasYawMesh && !bHasPitchMesh)
+	{
+		LastTurretVisualSummary = FString::Printf(
+			TEXT("TurretVisual: MeshMissingOptional, Profile=%s, Slot=%s, MountData=%s, Source=%s"),
+			*ActiveMountProfile->MountProfileId.ToString(),
+			*HardpointSlot->LocationSlotId.ToString(),
+			*LastTurretMountId.ToString(),
+			*TurretVisualSourceText);
+		return;
+	}
+
+	// [v2.86.0] 터렛 장착 위치의 부모가 될 차체 표시 컴포넌트입니다.
+	UStaticMeshComponent* BodyMeshComponent = FindStaticMeshComponentByName(this, TEXT("SM_Body"));
+
+	// [v2.86.0] 차체 표시 컴포넌트가 없을 때 사용할 fallback 부모 컴포넌트입니다.
+	USceneComponent* MountParentComponent = BodyMeshComponent ? Cast<USceneComponent>(BodyMeshComponent) : GetRootComponent();
+	if (!MountParentComponent)
+	{
+		LastTurretVisualSummary = TEXT("TurretVisual: MountParent=Missing");
+		return;
+	}
+
+	// [v2.91.0] 하드포인트 슬롯에 저장된 차량/차체 기준 상대 Transform입니다.
+	const FTransform HardpointLocalTransform(HardpointSlot->LocalRotation, HardpointSlot->LocalLocation);
+
+	// [v2.91.0] 터렛 루트가 맞아야 하는 하드포인트 월드 위치입니다.
+	FVector ExpectedHardpointWorldLocation = (HardpointLocalTransform * MountParentComponent->GetComponentTransform()).GetLocation();
+
+	// [v2.90.0] 하드포인트 소켓을 실제 차체 소켓으로 해결했는지 여부입니다.
+	bool bHardpointSocketResolved = false;
+
+	// [v2.92.0] 하드포인트 슬롯에 소켓 이름이 명시되어 있는지 여부입니다.
+	const bool bHardpointSocketNameConfigured = !HardpointSlot->SocketName.IsNone();
+
+	if (BodyMeshComponent && !HardpointSlot->SocketName.IsNone() && BodyMeshComponent->DoesSocketExist(HardpointSlot->SocketName))
+	{
+		// [v2.91.0] 실제 차체 소켓의 월드 Transform입니다.
+		const FTransform HardpointSocketWorldTransform = BodyMeshComponent->GetSocketTransform(HardpointSlot->SocketName, RTS_World);
+
+		ExpectedHardpointWorldLocation = HardpointSocketWorldTransform.GetLocation();
+		TurretMountRootComp->AttachToComponent(BodyMeshComponent, FAttachmentTransformRules::SnapToTargetNotIncludingScale, HardpointSlot->SocketName);
+		TurretMountRootComp->SetRelativeTransform(FTransform::Identity);
+		bHardpointSocketResolved = true;
+	}
+	else
+	{
+		TurretMountRootComp->AttachToComponent(MountParentComponent, FAttachmentTransformRules::KeepRelativeTransform);
+		TurretMountRootComp->SetRelativeTransform(HardpointLocalTransform);
+	}
+
+	if (bHardpointSocketNameConfigured && !bHardpointSocketResolved)
+	{
+		MissingRequiredSocketDescriptions.Add(FString::Printf(TEXT("Hardpoint:%s on SM_Body"), *HardpointSlot->SocketName.ToString()));
+	}
+
+	TurretMountRootComp->UpdateComponentToWorld();
+
+	// [v2.91.0] 실제 터렛 루트 월드 위치입니다.
+	const FVector TurretRootWorldLocation = TurretMountRootComp->GetComponentLocation();
+
+	// [v2.91.0] 기대 하드포인트 위치와 실제 터렛 루트 위치 사이의 거리입니다.
+	const float TurretRootToHardpointDistance = FVector::Dist(TurretRootWorldLocation, ExpectedHardpointWorldLocation);
+
+	TurretMountRootComp->SetVisibility(true, true);
+	TurretMountRootComp->SetHiddenInGame(false, true);
+
+	// [v2.88.0] YawPivot이 Base 메쉬의 YawPivot 소켓에 붙었는지 여부입니다.
+	bool bYawPivotSocketResolved = false;
+
+	// [v2.92.0] Base 메쉬 아래에 Yaw 또는 Pitch 시각 메쉬를 붙여야 해서 YawPivot 소켓이 필요한지 여부입니다.
+	const bool bYawPivotSocketRequired = bHasBaseMesh && (bHasYawMesh || bHasPitchMesh) && !ResolvedYawPivotSocketName.IsNone();
+
+	if (bHasBaseMesh)
+	{
+		TurretBaseMeshComp->AttachToComponent(TurretMountRootComp, FAttachmentTransformRules::KeepRelativeTransform);
+		TurretBaseMeshComp->SetStaticMesh(ResolvedTurretBaseMesh);
+		TurretBaseMeshComp->SetRelativeTransform(ResolvedTurretBaseRelativeTransform);
+		TurretBaseMeshComp->SetVisibility(true, true);
+		TurretBaseMeshComp->SetHiddenInGame(false, true);
+		LastTurretBaseMeshName = ResolvedTurretBaseMesh->GetFName();
+
+		if (!ResolvedYawPivotSocketName.IsNone() && TurretBaseMeshComp->DoesSocketExist(ResolvedYawPivotSocketName))
+		{
+			TurretYawPivotComp->AttachToComponent(TurretBaseMeshComp, FAttachmentTransformRules::SnapToTargetNotIncludingScale, ResolvedYawPivotSocketName);
+			bYawPivotSocketResolved = true;
+		}
+		else
+		{
+			TurretYawPivotComp->AttachToComponent(TurretBaseMeshComp, FAttachmentTransformRules::KeepRelativeTransform);
+		}
+	}
+	else
+	{
+		TurretYawPivotComp->AttachToComponent(TurretMountRootComp, FAttachmentTransformRules::KeepRelativeTransform);
+	}
+
+	TurretYawPivotComp->SetRelativeTransform(FTransform::Identity);
+
+	if (bYawPivotSocketRequired && !bYawPivotSocketResolved)
+	{
+		MissingRequiredSocketDescriptions.Add(FString::Printf(TEXT("YawPivot:%s on %s"), *ResolvedYawPivotSocketName.ToString(), *LastTurretBaseMeshName.ToString()));
+	}
+
+	if (bHasYawMesh)
+	{
+		TurretYawMeshComp->AttachToComponent(TurretYawPivotComp, FAttachmentTransformRules::KeepRelativeTransform);
+		TurretYawMeshComp->SetStaticMesh(ResolvedTurretYawMesh);
+		TurretYawMeshComp->SetRelativeTransform(ResolvedTurretYawRelativeTransform);
+		TurretYawMeshComp->SetVisibility(true, true);
+		TurretYawMeshComp->SetHiddenInGame(false, true);
+		LastTurretYawMeshName = ResolvedTurretYawMesh->GetFName();
+	}
+
+	// [v2.86.0] Pitch 메쉬가 Yaw 메쉬의 피벗 소켓에 붙었는지 여부입니다.
+	bool bPitchSocketResolved = false;
+
+	// [v2.92.0] Yaw 메쉬 아래에 Pitch 메쉬를 붙여야 해서 PitchPivot 소켓이 필요한지 여부입니다.
+	const bool bPitchPivotSocketRequired = bHasYawMesh && bHasPitchMesh && !ResolvedPitchPivotSocketName.IsNone();
+
+	// [v2.88.0] PitchPivot을 붙일 기본 부모 컴포넌트입니다.
+	USceneComponent* PitchPivotParentComponent = bHasYawMesh ? static_cast<USceneComponent*>(TurretYawMeshComp.Get()) : TurretYawPivotComp.Get();
+
+	if (bHasYawMesh && !ResolvedPitchPivotSocketName.IsNone() && TurretYawMeshComp->DoesSocketExist(ResolvedPitchPivotSocketName))
+	{
+		TurretPitchPivotComp->AttachToComponent(TurretYawMeshComp, FAttachmentTransformRules::SnapToTargetNotIncludingScale, ResolvedPitchPivotSocketName);
+		bPitchSocketResolved = true;
+	}
+	else
+	{
+		TurretPitchPivotComp->AttachToComponent(PitchPivotParentComponent, FAttachmentTransformRules::KeepRelativeTransform);
+	}
+
+	TurretPitchPivotComp->SetRelativeTransform(FTransform::Identity);
+
+	if (bPitchPivotSocketRequired && !bPitchSocketResolved)
+	{
+		MissingRequiredSocketDescriptions.Add(FString::Printf(TEXT("PitchPivot:%s on %s"), *ResolvedPitchPivotSocketName.ToString(), *LastTurretYawMeshName.ToString()));
+	}
+
+	if (bHasPitchMesh)
+	{
+		TurretPitchMeshComp->AttachToComponent(TurretPitchPivotComp, FAttachmentTransformRules::KeepRelativeTransform);
+		TurretPitchMeshComp->SetStaticMesh(ResolvedTurretPitchMesh);
+		TurretPitchMeshComp->SetRelativeTransform(ResolvedTurretPitchRelativeTransform);
+		TurretPitchMeshComp->SetVisibility(true, true);
+		TurretPitchMeshComp->SetHiddenInGame(false, true);
+		LastTurretPitchMeshName = ResolvedTurretPitchMesh->GetFName();
+	}
+
+	// [v2.93.0] Pitch 메쉬에 Muzzle 소켓이 실제로 존재하는지 여부입니다.
+	bool bMuzzleSocketResolved = false;
+
+	// [v2.93.0] Muzzle FireOrigin 전환을 위해 Muzzle 소켓을 필수로 볼 수 있는지 여부입니다.
+	const bool bMuzzleSocketRequired = bHasPitchMesh && !ResolvedMuzzleSocketName.IsNone();
+
+	if (bMuzzleSocketRequired && TurretPitchMeshComp->DoesSocketExist(ResolvedMuzzleSocketName))
+	{
+		bMuzzleSocketResolved = true;
+	}
+
+	if (bMuzzleSocketRequired && !bMuzzleSocketResolved)
+	{
+		MissingRequiredSocketDescriptions.Add(FString::Printf(TEXT("Muzzle:%s on %s"), *ResolvedMuzzleSocketName.ToString(), *LastTurretPitchMeshName.ToString()));
+	}
+
+	// [v2.92.0] 하드포인트 소켓의 최종 부착 상태를 디버그에 표시할 문자열입니다.
+	FString HardpointSocketStatusText = TEXT("MissingRequiredSocketFallback");
+	if (HardpointSlot->SocketName.IsNone())
+	{
+		HardpointSocketStatusText = TEXT("SkippedNoSocketName");
+	}
+	else if (bHardpointSocketResolved)
+	{
+		HardpointSocketStatusText = TEXT("Resolved");
+	}
+
+	// [v2.92.0] YawPivot 소켓의 최종 부착 상태를 디버그에 표시할 문자열입니다.
+	FString YawPivotStatusText = TEXT("MissingRequiredSocketFallback");
+	if (!bHasBaseMesh)
+	{
+		YawPivotStatusText = TEXT("FallbackNoBaseMesh");
+	}
+	else if (!(bHasYawMesh || bHasPitchMesh))
+	{
+		YawPivotStatusText = TEXT("SkippedNoChildMesh");
+	}
+	else if (ResolvedYawPivotSocketName.IsNone())
+	{
+		YawPivotStatusText = TEXT("FallbackNoSocketName");
+	}
+	else if (bYawPivotSocketResolved)
+	{
+		YawPivotStatusText = TEXT("Resolved");
+	}
+
+	// [v2.92.0] PitchPivot 소켓의 최종 부착 상태를 디버그에 표시할 문자열입니다.
+	FString PitchPivotStatusText = TEXT("MissingRequiredSocketFallback");
+	if (!bHasPitchMesh)
+	{
+		PitchPivotStatusText = TEXT("SkippedNoPitchMesh");
+	}
+	else if (!bHasYawMesh)
+	{
+		PitchPivotStatusText = TEXT("FallbackNoYawMesh");
+	}
+	else if (ResolvedPitchPivotSocketName.IsNone())
+	{
+		PitchPivotStatusText = TEXT("FallbackNoSocketName");
+	}
+	else if (bPitchSocketResolved)
+	{
+		PitchPivotStatusText = TEXT("Resolved");
+	}
+
+	// [v2.93.0] Muzzle 소켓의 최종 FireOrigin 전환 상태를 디버그에 표시할 문자열입니다.
+	FString MuzzleSocketStatusText = TEXT("MissingRequiredSocketFallback");
+	if (!bHasPitchMesh)
+	{
+		MuzzleSocketStatusText = TEXT("FallbackNoPitchMesh");
+	}
+	else if (ResolvedMuzzleSocketName.IsNone())
+	{
+		MuzzleSocketStatusText = TEXT("FallbackNoSocketName");
+	}
+	else if (bMuzzleSocketResolved)
+	{
+		MuzzleSocketStatusText = TEXT("Resolved");
+	}
+
+	// [v2.92.0] 필수 소켓 검증의 전체 상태를 디버그에 표시할 문자열입니다.
+	const FString SocketValidationStatusText = MissingRequiredSocketDescriptions.IsEmpty() ? TEXT("OK") : TEXT("MissingRequiredSocket");
+
+	// [v2.92.0] 누락된 필수 소켓 목록을 한 줄 요약으로 묶은 문자열입니다.
+	const FString MissingRequiredSocketSummary = MissingRequiredSocketDescriptions.IsEmpty() ? TEXT("None") : FString::Join(MissingRequiredSocketDescriptions, TEXT(" | "));
+
+	if (!MissingRequiredSocketDescriptions.IsEmpty())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("TurretVisual missing required socket(s): %s"), *MissingRequiredSocketSummary);
+	}
+
+	bLastTurretVisualAttached = true;
+	LastTurretVisualSummary = FString::Printf(
+		TEXT("TurretVisual: Attached, Profile=%s, Slot=%s, HardpointSocket=%s, HardpointSocketResolved=%s, HardpointSocketStatus=%s, SocketValidation=%s, MissingRequiredSockets=%s, RootWorld=(%.1f, %.1f, %.1f), ExpectedWorld=(%.1f, %.1f, %.1f), RootDelta=%.2f, Parent=%s, MountData=%s, Source=%s, BaseMesh=%s, YawMesh=%s, PitchMesh=%s, YawPivot=%s, PitchPivot=%s, MuzzleSocket=%s, MuzzleStatus=%s"),
+		*ActiveMountProfile->MountProfileId.ToString(),
+		*HardpointSlot->LocationSlotId.ToString(),
+		*HardpointSlot->SocketName.ToString(),
+		bHardpointSocketResolved ? TEXT("Yes") : TEXT("No"),
+		*HardpointSocketStatusText,
+		*SocketValidationStatusText,
+		*MissingRequiredSocketSummary,
+		TurretRootWorldLocation.X,
+		TurretRootWorldLocation.Y,
+		TurretRootWorldLocation.Z,
+		ExpectedHardpointWorldLocation.X,
+		ExpectedHardpointWorldLocation.Y,
+		ExpectedHardpointWorldLocation.Z,
+		TurretRootToHardpointDistance,
+		*MountParentComponent->GetName(),
+		*LastTurretMountId.ToString(),
+		*TurretVisualSourceText,
+		*LastTurretBaseMeshName.ToString(),
+		*LastTurretYawMeshName.ToString(),
+		*LastTurretPitchMeshName.ToString(),
+		*YawPivotStatusText,
+		*PitchPivotStatusText,
+		*ResolvedMuzzleSocketName.ToString(),
+		*MuzzleSocketStatusText);
+}
+
+// [v2.89.0] 현재 Aim 상태에서 터렛이 바라볼 월드 방향을 계산합니다.
+FVector ACFVehiclePawn::ResolveTurretAimWorldDirection() const
+{
+	if (VehicleAimComp)
+	{
+		// [v2.89.0] AimComp가 보유한 현재 로컬 조준 상태입니다.
+		const FCFVehicleLocalAimState LocalAimState = VehicleAimComp->GetLocalAimState();
+
+		if (TurretYawPivotComp && !LocalAimState.LocalAimTargetLocation.IsNearlyZero())
+		{
+			// [v2.89.0] 터렛 Yaw 피벗 위치에서 조준 목표까지의 월드 방향입니다.
+			const FVector DirectionToAimTarget = LocalAimState.LocalAimTargetLocation - TurretYawPivotComp->GetComponentLocation();
+			if (!DirectionToAimTarget.IsNearlyZero())
+			{
+				return DirectionToAimTarget.GetSafeNormal();
+			}
+		}
+
+		if (!LocalAimState.LocalAimDirection.IsNearlyZero())
+		{
+			return LocalAimState.LocalAimDirection.GetSafeNormal();
+		}
+	}
+
+	if (VehicleCameraComp)
+	{
+		// [v2.89.0] 카메라 컴포넌트가 직접 제공하는 현재 조준 방향입니다.
+		const FVector CameraAimDirection = VehicleCameraComp->GetCurrentAimDirection();
+		if (!CameraAimDirection.IsNearlyZero())
+		{
+			return CameraAimDirection.GetSafeNormal();
+		}
+	}
+
+	// [v2.89.0] AimComp와 CameraComp가 유효하지 않을 때 사용할 Actor 정면 방향입니다.
+	const FVector ActorForwardDirection = GetActorForwardVector().GetSafeNormal();
+	if (!ActorForwardDirection.IsNearlyZero())
+	{
+		return ActorForwardDirection;
+	}
+
+	return FVector::ForwardVector;
+}
+
+// [v2.89.0] WeaponComp가 계산한 터렛 Yaw / Pitch 각도를 시각 피벗 컴포넌트에 적용합니다.
+void ACFVehiclePawn::UpdateVehicleTurretAimVisuals(const float DeltaSeconds)
+{
+	if (!VehicleWeaponComp)
+	{
+		return;
+	}
+
+	if (!TurretMountRootComp || !TurretYawPivotComp || !TurretPitchPivotComp)
+	{
+		VehicleWeaponComp->ResetTurretState();
+		return;
+	}
+
+	if (!bLastTurretVisualAttached)
+	{
+		VehicleWeaponComp->UpdateTurretState(DeltaSeconds, GetActorForwardVector(), FTransform::Identity, false);
+		TurretYawPivotComp->SetRelativeRotation(FRotator::ZeroRotator);
+		TurretPitchPivotComp->SetRelativeRotation(FRotator::ZeroRotator);
+		return;
+	}
+
+	// [v2.89.0] 터렛 조준 계산에 사용할 월드 방향입니다.
+	const FVector TurretAimWorldDirection = ResolveTurretAimWorldDirection();
+
+	// [v2.89.0] 터렛 로컬 각도 계산의 기준이 되는 터렛 장착 루트 Transform입니다.
+	const FTransform TurretReferenceTransform = TurretMountRootComp->GetComponentTransform();
+
+	// [v2.89.0] WeaponComp가 터렛 상태 갱신에 성공했는지 여부입니다.
+	const bool bTurretStateUpdated = VehicleWeaponComp->UpdateTurretState(DeltaSeconds, TurretAimWorldDirection, TurretReferenceTransform, bLastTurretVisualAttached);
+	if (!bTurretStateUpdated)
+	{
+		return;
+	}
+
+	// [v2.89.0] 시각 피벗에 적용할 최신 터렛 조준 추적 상태입니다.
+	const FCFVehicleTurretState TurretState = VehicleWeaponComp->GetTurretState();
+
+	// [v2.89.0] Yaw 피벗에 적용할 상대 회전입니다.
+	const FRotator YawPivotRelativeRotation(0.0f, TurretState.CurrentYawDeg, 0.0f);
+
+	// [v2.89.0] Pitch 피벗에 적용할 상대 회전입니다.
+	const FRotator PitchPivotRelativeRotation(TurretState.CurrentPitchDeg, 0.0f, 0.0f);
+
+	TurretYawPivotComp->SetRelativeRotation(YawPivotRelativeRotation);
+	TurretPitchPivotComp->SetRelativeRotation(PitchPivotRelativeRotation);
 }
 
 // [v2.68.0] VehicleData의 바퀴 앵커 레이아웃 오버라이드를 BP Wheel_Anchor_* 컴포넌트에 적용합니다.
@@ -1123,8 +2326,15 @@ void ACFVehiclePawn::ApplyVehicleLayoutConfig()
 			return;
 		}
 
-		WheelAnchorComponent->SetRelativeLocation(WheelAnchorPose.RelativeLocation);
-		WheelAnchorComponent->SetRelativeRotation(WheelAnchorPose.RelativeRotation);
+		#if WITH_EDITOR
+		if (GIsEditor)
+		{
+			WheelAnchorComponent->Modify();
+		}
+		#endif
+
+		WheelAnchorComponent->SetRelativeLocationAndRotation(WheelAnchorPose.RelativeLocation, WheelAnchorPose.RelativeRotation, false, nullptr, ETeleportType::TeleportPhysics);
+		WheelAnchorComponent->UpdateComponentToWorld();
 		++AppliedWheelAnchorCount;
 	};
 
@@ -1171,7 +2381,13 @@ void ACFVehiclePawn::ApplyVehicleMovementConfig()
 	ResolvedVehicleMovementComponent->SteeringSetup.SteeringType = VehicleMovementConfig.SteeringType;
 	ResolvedVehicleMovementComponent->SteeringSetup.AngleRatio = VehicleMovementConfig.SteeringAngleRatio;
 	ResolvedVehicleMovementComponent->bLegacyWheelFrictionPosition = VehicleMovementConfig.bLegacyWheelFrictionPosition;
-	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: MovementProfile=%s, MaxTorque=%.1f, MaxRPM=%.1f, Differential=%s, SteeringType=%s"), *VehicleMovementConfig.MovementProfileName.ToString(), VehicleMovementConfig.EngineMaxTorque, VehicleMovementConfig.EngineMaxRPM, *UEnum::GetValueAsString(VehicleMovementConfig.DifferentialType), *UEnum::GetValueAsString(VehicleMovementConfig.SteeringType));
+
+	ResolvedVehicleMovementComponent->SetMaxEngineTorque(VehicleMovementConfig.EngineMaxTorque);
+	ResolvedVehicleMovementComponent->SetDragCoefficient(VehicleMovementConfig.DragCoefficient);
+	ResolvedVehicleMovementComponent->SetDownforceCoefficient(VehicleMovementConfig.DownforceCoefficient);
+	ResolvedVehicleMovementComponent->SetDifferentialFrontRearSplit(VehicleMovementConfig.FrontRearSplit);
+
+	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: MovementProfile=%s, RuntimeTorque=%.1f, ConfigMaxRPM=%.1f, ThrottleScale=%.2f, Drag=%.2f, Downforce=%.2f, Differential=%s, SteeringType=%s, RuntimeSetters=EngineTorque/Drag/Downforce/DiffSplit"), *VehicleMovementConfig.MovementProfileName.ToString(), VehicleMovementConfig.EngineMaxTorque, VehicleMovementConfig.EngineMaxRPM, VehicleMovementConfig.ThrottleInputScale, VehicleMovementConfig.DragCoefficient, VehicleMovementConfig.DownforceCoefficient, *UEnum::GetValueAsString(VehicleMovementConfig.DifferentialType), *UEnum::GetValueAsString(VehicleMovementConfig.SteeringType));
 }
 
 void ACFVehiclePawn::ApplyVehicleWheelPhysicsConfig()
@@ -1198,8 +2414,11 @@ void ACFVehiclePawn::ApplyVehicleWheelPhysicsConfig()
 	// [v2.56.1] 런타임 휠 물리 덮어쓰기를 사용할지 여부입니다.
 	const bool bUseRuntimeWheelPhysicsOverrides = VehicleMovementConfig.bUseMovementOverrides;
 
+	// [v2.72.0] 실제 런타임 휠 인스턴스까지 갱신 요청한 개수입니다.
+	int32 RuntimeWheelApplyCount = 0;
+
 	// [v2.56.1] 휠 setup에 클래스/오프셋을 적용합니다.
-	const auto ConfigureWheelSetup = [&](FChaosWheelSetup& WheelSetup, const TSubclassOf<UChaosVehicleWheel> WheelClass, const bool bIsFrontWheel)
+	const auto ConfigureWheelSetup = [&](FChaosWheelSetup& WheelSetup, const int32 WheelIndex, const TSubclassOf<UChaosVehicleWheel> WheelClass, const bool bIsFrontWheel)
 	{
 		WheelSetup.WheelClass = WheelClass;
 		WheelSetup.AdditionalOffset = bIsFrontWheel ? VehicleMovementConfig.FrontWheelAdditionalOffset : VehicleMovementConfig.RearWheelAdditionalOffset;
@@ -1222,8 +2441,16 @@ void ACFVehiclePawn::ApplyVehicleWheelPhysicsConfig()
 
 		// [v2.56.1] 클래스 기본값 임시 변경 전 복구용 스냅샷입니다.
 		const FCFWheelClassRuntimeSnapshot WheelClassRuntimeSnapshot = CaptureWheelClassRuntimeSnapshot(*WheelClassDefaultObject);
+
 		ApplyVehicleMovementWheelTuningToWheelClass(*WheelClassDefaultObject, VehicleMovementConfig, bIsFrontWheel);
 		WheelSetup.WheelClass = WheelClass;
+
+		if (ResolvedVehicleMovementComponent->Wheels.IsValidIndex(WheelIndex))
+		{
+			ApplyVehicleMovementWheelTuningToRuntime(*ResolvedVehicleMovementComponent, VehicleMovementConfig, WheelIndex, bIsFrontWheel);
+			++RuntimeWheelApplyCount;
+		}
+
 		RestoreWheelClassRuntimeSnapshot(*WheelClassDefaultObject, WheelClassRuntimeSnapshot);
 	};
 
@@ -1243,13 +2470,18 @@ void ACFVehiclePawn::ApplyVehicleWheelPhysicsConfig()
 			? VehicleReferenceConfig.FrontWheelClass
 			: VehicleReferenceConfig.RearWheelClass;
 
-		ConfigureWheelSetup(WheelSetup, WheelClass, bIsFrontWheel);
+		ConfigureWheelSetup(WheelSetup, WheelIndex, WheelClass, bIsFrontWheel);
 	}
 
-	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: WheelPhysicsOverrides=%s, FrontWheelClass=%s, RearWheelClass=%s, FrontOffset=%s, RearOffset=%s"),
+	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: WheelPhysicsOverrides=%s, RuntimeWheelApply=%d/%d, FrontWheelClass=%s, RearWheelClass=%s, FrontSteer=%.1f, FrictionF/R=%.2f/%.2f, FrontOffset=%s, RearOffset=%s"),
 		bUseRuntimeWheelPhysicsOverrides ? TEXT("True") : TEXT("False"),
+		RuntimeWheelApplyCount,
+		ResolvedVehicleMovementComponent->WheelSetups.Num(),
 		VehicleReferenceConfig.FrontWheelClass ? *VehicleReferenceConfig.FrontWheelClass->GetName() : TEXT("None"),
 		VehicleReferenceConfig.RearWheelClass ? *VehicleReferenceConfig.RearWheelClass->GetName() : TEXT("None"),
+		VehicleMovementConfig.FrontWheelMaxSteerAngle,
+		VehicleMovementConfig.FrontWheelFrictionForceMultiplier,
+		VehicleMovementConfig.RearWheelFrictionForceMultiplier,
 		*VehicleMovementConfig.FrontWheelAdditionalOffset.ToCompactString(),
 		*VehicleMovementConfig.RearWheelAdditionalOffset.ToCompactString());
 }
@@ -1262,35 +2494,47 @@ void ACFVehiclePawn::ApplyVehicleWheelVisualConfig()
 		return;
 	}
 
+	// [v2.102.0] VehicleData 기준 휠 시각 설정입니다.
+	const FCFVehicleWheelVisualConfig& WheelVisualConfig = VehicleData->WheelVisualConfig;
+
+	// [v2.102.0] VehicleData 기준 휠 메시 참조 설정입니다.
+	const FCFVehicleVisualConfig& VehicleVisualConfig = VehicleData->VehicleVisualConfig;
+
+	// [v2.102.0] 휠 메시 자동 스케일 목표 반지름을 제공하는 이동 설정입니다.
+	const FCFVehicleMovementConfig& VehicleMovementConfig = VehicleData->VehicleMovementConfig;
+
 	// VehicleData 기준 WheelSync 기본 설정값을 반영합니다.
-	WheelSyncComp->ExpectedWheelCount = VehicleData->WheelVisualConfig.ExpectedWheelCount;
-	WheelSyncComp->FrontWheelCountForSteering = VehicleData->WheelVisualConfig.FrontWheelCountForSteering;
+	WheelSyncComp->ExpectedWheelCount = WheelVisualConfig.ExpectedWheelCount;
+	WheelSyncComp->FrontWheelCountForSteering = WheelVisualConfig.FrontWheelCountForSteering;
+
+	// [v2.102.0] 런타임 요약에 남길 휠 메시 자동 스케일 적용 결과입니다.
+	FString WheelMeshAutoScaleSummary = WheelVisualConfig.bAutoScaleWheelMeshToRadius ? TEXT("AutoScale=On") : TEXT("AutoScale=Off");
 
 	// 앞왼쪽 휠 메시 컴포넌트에 VehicleData의 FL 휠 메시를 적용합니다.
 	if (UStaticMeshComponent* WheelMeshFLComp = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_FL")))
 	{
-		WheelMeshFLComp->SetStaticMesh(VehicleData->VehicleVisualConfig.WheelMeshFL);
+		ApplyWheelMeshVisualConfigToComponent(WheelMeshFLComp, VehicleVisualConfig.WheelMeshFL, VehicleMovementConfig.FrontWheelRadius, WheelVisualConfig, WheelMeshAutoScaleSummary);
 	}
 
 	// 앞오른쪽 휠 메시 컴포넌트에 VehicleData의 FR 휠 메시를 적용합니다.
 	if (UStaticMeshComponent* WheelMeshFRComp = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_FR")))
 	{
-		WheelMeshFRComp->SetStaticMesh(VehicleData->VehicleVisualConfig.WheelMeshFR);
+		ApplyWheelMeshVisualConfigToComponent(WheelMeshFRComp, VehicleVisualConfig.WheelMeshFR, VehicleMovementConfig.FrontWheelRadius, WheelVisualConfig, WheelMeshAutoScaleSummary);
 	}
 
 	// 뒤왼쪽 휠 메시 컴포넌트에 VehicleData의 RL 휠 메시를 적용합니다.
 	if (UStaticMeshComponent* WheelMeshRLComp = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_RL")))
 	{
-		WheelMeshRLComp->SetStaticMesh(VehicleData->VehicleVisualConfig.WheelMeshRL);
+		ApplyWheelMeshVisualConfigToComponent(WheelMeshRLComp, VehicleVisualConfig.WheelMeshRL, VehicleMovementConfig.RearWheelRadius, WheelVisualConfig, WheelMeshAutoScaleSummary);
 	}
 
 	// 뒤오른쪽 휠 메시 컴포넌트에 VehicleData의 RR 휠 메시를 적용합니다.
 	if (UStaticMeshComponent* WheelMeshRRComp = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_RR")))
 	{
-		WheelMeshRRComp->SetStaticMesh(VehicleData->VehicleVisualConfig.WheelMeshRR);
+		ApplyWheelMeshVisualConfigToComponent(WheelMeshRRComp, VehicleVisualConfig.WheelMeshRR, VehicleMovementConfig.RearWheelRadius, WheelVisualConfig, WheelMeshAutoScaleSummary);
 	}
 
-	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: WheelVisual ExpectedWheelCount=%d, FrontWheelCount=%d"), WheelSyncComp->ExpectedWheelCount, WheelSyncComp->FrontWheelCountForSteering);
+	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: WheelVisual ExpectedWheelCount=%d, FrontWheelCount=%d, %s"), WheelSyncComp->ExpectedWheelCount, WheelSyncComp->FrontWheelCountForSteering, *WheelMeshAutoScaleSummary);
 }
 
 void ACFVehiclePawn::ApplyVehicleReferenceConfig()
@@ -1307,7 +2551,15 @@ void ACFVehiclePawn::SetVehicleThrottleInput(const float InThrottleValue)
 {
 	if (VehicleDriveComp)
 	{
-		VehicleDriveComp->ApplyThrottleInput(InThrottleValue);
+		// [v2.73.0] VehicleData에서 읽은 스로틀 입력 배율입니다.
+		const float ThrottleInputScale = (VehicleData && VehicleData->VehicleMovementConfig.bUseMovementOverrides)
+			? FMath::Clamp(VehicleData->VehicleMovementConfig.ThrottleInputScale, 0.0f, 1.0f)
+			: 1.0f;
+
+		// [v2.73.0] 최종적으로 DriveComp에 전달할 보정 스로틀 입력입니다.
+		const float ScaledThrottleInput = FMath::Clamp(InThrottleValue * ThrottleInputScale, -1.0f, 1.0f);
+
+		VehicleDriveComp->ApplyThrottleInput(ScaledThrottleInput);
 	}
 }
 
@@ -1363,6 +2615,9 @@ FCFVehicleDebugSnapshot ACFVehiclePawn::GetVehicleDebugSnapshot() const
 
 	// [v2.14.1] 현재 WheelSync 컴포넌트 존재 여부를 먼저 고정합니다.
 	const bool bHasWheelSyncComponent = (WheelSyncComp != nullptr);
+
+	// [v2.76.0] 현재 Weapon 컴포넌트 존재 여부를 먼저 고정합니다.
+	const bool bHasVehicleWeaponComponent = (VehicleWeaponComp != nullptr);
 
 	// [v2.14.1] Drive 카테고리 채우기에 사용할 최신 Drive 상태 스냅샷입니다.
 	FCFVehicleDriveStateSnapshot CurrentDriveStateSnapshot;
@@ -1429,6 +2684,91 @@ FCFVehicleDebugSnapshot ACFVehiclePawn::GetVehicleDebugSnapshot() const
 		DebugSnapshot.Aim.LastFireResult = LastFireResult;
 	}
 
+	// [v2.76.0] Weapon 카테고리는 VehicleWeaponComp가 제공하는 런타임과 FireOrigin 상태를 표시용으로만 읽습니다.
+	DebugSnapshot.Weapon.bHasVehicleWeaponComponent = bHasVehicleWeaponComponent;
+	if (DebugSnapshot.Weapon.bHasVehicleWeaponComponent)
+	{
+		// [v2.78.0] Weapon Debug에서 fallback으로 표시할 Aim Profile 최대 거리입니다.
+		const float FallbackWeaponRange = VehicleAimComp ? VehicleAimComp->GetDefaultAimProfile().MaxAimDistance : 0.0f;
+
+		// [v2.78.0] Weapon Debug에서 쿨다운 계산에 사용할 현재 월드 시간입니다.
+		const float CurrentWeaponTimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
+
+		DebugSnapshot.Weapon.bWeaponRuntimeReady = VehicleWeaponComp->IsWeaponRuntimeReady();
+		DebugSnapshot.Weapon.ActiveMountProfileId = VehicleWeaponComp->GetActiveMountProfileId();
+		DebugSnapshot.Weapon.LastFireOrigin = VehicleWeaponComp->GetLastFireOrigin();
+		DebugSnapshot.Weapon.LastWeaponRuntimeSummary = VehicleWeaponComp->GetLastWeaponRuntimeSummary();
+
+		// [v2.99.0] 현재 활성 장착 프로파일에서 우선 해석한 EquipmentPresetData입니다.
+		UCFEquipmentPresetData* ActiveEquipmentPresetData = VehicleWeaponComp->GetActiveEquipmentPresetData();
+
+		DebugSnapshot.Weapon.ActiveEquipmentPresetData = ActiveEquipmentPresetData;
+		DebugSnapshot.Weapon.bActiveEquipmentPresetDataAssigned = (ActiveEquipmentPresetData != nullptr);
+		DebugSnapshot.Weapon.bActiveEquipmentPresetDataCompatible = VehicleWeaponComp->IsActiveEquipmentPresetCompatible();
+		DebugSnapshot.Weapon.ActiveEquipmentPresetSummary = VehicleWeaponComp->GetActiveEquipmentPresetSummary();
+
+		if (ActiveEquipmentPresetData)
+		{
+			DebugSnapshot.Weapon.ActiveEquipmentPresetId = ActiveEquipmentPresetData->EquipmentId;
+		}
+
+		// [v2.77.0] 현재 활성 장착 프로파일에 연결된 WeaponData입니다.
+		UCFWeaponData* ActiveWeaponData = VehicleWeaponComp->GetActiveWeaponData();
+
+		DebugSnapshot.Weapon.ActiveWeaponData = ActiveWeaponData;
+		DebugSnapshot.Weapon.bActiveWeaponDataCompatible = VehicleWeaponComp->IsActiveWeaponDataCompatible();
+		DebugSnapshot.Weapon.ActiveWeaponSummary = VehicleWeaponComp->GetActiveWeaponSummary();
+		DebugSnapshot.Weapon.ActiveProjectileData = VehicleWeaponComp->GetActiveProjectileData();
+		DebugSnapshot.Weapon.ActiveProjectileSummary = VehicleWeaponComp->GetActiveProjectileSummary();
+		DebugSnapshot.Weapon.bActiveProjectileSpawnReady = VehicleWeaponComp->IsActiveProjectileSpawnReady();
+		DebugSnapshot.Weapon.ActiveProjectileExecutionSummary = VehicleWeaponComp->GetActiveProjectileExecutionSummary();
+		DebugSnapshot.Weapon.ActiveDamageData = VehicleWeaponComp->GetActiveDamageData();
+		DebugSnapshot.Weapon.ActiveDamageId = VehicleWeaponComp->GetActiveDamageId();
+		DebugSnapshot.Weapon.ActiveDamageSummary = VehicleWeaponComp->GetActiveDamageSummary();
+		DebugSnapshot.Weapon.ActiveDamageResolutionSummary = VehicleWeaponComp->GetActiveDamageResolutionSummary();
+		DebugSnapshot.Weapon.bHasLastDamageHitContext = bHasLastDamageHitContext;
+		DebugSnapshot.Weapon.LastDamageHitContext = LastDamageHitContext;
+		DebugSnapshot.Weapon.LastDamageHitContextSummary = LastDamageHitContextSummary;
+		DebugSnapshot.Weapon.ActiveWeaponMaxRange = VehicleWeaponComp->GetActiveWeaponMaxRange(FallbackWeaponRange);
+		DebugSnapshot.Weapon.ActiveWeaponFireRatePerMinute = VehicleWeaponComp->GetActiveWeaponFireRatePerMinute();
+		DebugSnapshot.Weapon.ActiveWeaponCooldownSeconds = VehicleWeaponComp->GetActiveWeaponCooldownSeconds();
+		DebugSnapshot.Weapon.ActiveWeaponRemainingCooldownSeconds = VehicleWeaponComp->GetRemainingCooldownSeconds(CurrentWeaponTimeSeconds);
+		DebugSnapshot.Weapon.LastAcceptedWeaponFireTimeSeconds = VehicleWeaponComp->GetLastAcceptedFireTimeSeconds();
+		DebugSnapshot.Weapon.TurretState = VehicleWeaponComp->GetTurretState();
+		DebugSnapshot.Weapon.TurretRuntimeSummary = VehicleWeaponComp->GetLastTurretRuntimeSummary();
+
+		if (ActiveWeaponData)
+		{
+			DebugSnapshot.Weapon.ActiveWeaponId = ActiveWeaponData->WeaponId;
+		}
+
+		if (DebugSnapshot.Weapon.ActiveProjectileData)
+		{
+			DebugSnapshot.Weapon.ActiveProjectileId = DebugSnapshot.Weapon.ActiveProjectileData->ProjectileId;
+		}
+	}
+
+	// [v2.87.0] 터렛 마운트 / 시각 장착 상태는 WeaponComp 런타임과 별개로 표시용 캐시에서 읽습니다.
+	DebugSnapshot.Weapon.ActiveTurretMountData = LastTurretMountData;
+	DebugSnapshot.Weapon.bActiveTurretMountDataAssigned = bLastTurretMountDataAssigned;
+	DebugSnapshot.Weapon.ActiveTurretMountId = LastTurretMountId;
+	DebugSnapshot.Weapon.ActiveTurretMountSummary = LastTurretMountSummary;
+	DebugSnapshot.Weapon.bTurretVisualAttached = bLastTurretVisualAttached;
+	DebugSnapshot.Weapon.TurretVisualSummary = LastTurretVisualSummary;
+	DebugSnapshot.Weapon.TurretBaseMeshName = LastTurretBaseMeshName;
+	DebugSnapshot.Weapon.TurretYawMeshName = LastTurretYawMeshName;
+	DebugSnapshot.Weapon.TurretPitchMeshName = LastTurretPitchMeshName;
+
+	// [v2.83.0] Projectile Pool 디버그 카운트는 WeaponComp 상태와 별개로 표시용으로만 읽습니다.
+	DebugSnapshot.Weapon.bHasProjectilePoolComponent = (ProjectilePoolComp != nullptr);
+	if (DebugSnapshot.Weapon.bHasProjectilePoolComponent)
+	{
+		DebugSnapshot.Weapon.TotalPooledProjectileCount = ProjectilePoolComp->GetTotalPooledProjectileCount();
+		DebugSnapshot.Weapon.ActivePooledProjectileCount = ProjectilePoolComp->GetActivePooledProjectileCount();
+		DebugSnapshot.Weapon.InactivePooledProjectileCount = ProjectilePoolComp->GetInactivePooledProjectileCount();
+		DebugSnapshot.Weapon.LastProjectileReleaseSummary = ProjectilePoolComp->GetLastProjectileReleaseSummary();
+	}
+
 	DebugSnapshot.Overview.bRuntimeReady = bVehicleRuntimeReady;
 	DebugSnapshot.Overview.DeviceMode = InputDeviceMode;
 	DebugSnapshot.Overview.InputOwner = CurrentInputOwnership;
@@ -1491,6 +2831,12 @@ FCFVehicleDebugAim ACFVehiclePawn::GetVehicleDebugAim() const
 {
 	// [v2.16.0] 상세 패널이 필요한 Aim 카테고리만 직접 읽을 수 있도록 반환합니다.
 	return GetVehicleDebugSnapshot().Aim;
+}
+
+// [v2.76.0] 상세 패널이 필요한 Weapon 카테고리만 직접 읽을 수 있도록 반환합니다.
+FCFVehicleDebugWeapon ACFVehiclePawn::GetVehicleDebugWeapon() const
+{
+	return GetVehicleDebugSnapshot().Weapon;
 }
 
 FCFVehicleDebugRuntime ACFVehiclePawn::GetVehicleDebugRuntime() const
@@ -2325,18 +3671,44 @@ FCFVehicleFireRequest ACFVehiclePawn::BuildFireCommand()
 	// [v2.63.0] 이번 로컬 발사 명령에 사용할 요청 ID입니다.
 	const int32 FireRequestId = NextFireRequestId++;
 
-	if (VehicleAimComp)
-	{
-		return VehicleAimComp->BuildFireRequest(FireRequestId, ClientFireTimeSeconds);
-	}
-
 	// [v2.63.0] AimComp가 없을 때도 크래시 없이 반환할 fallback 발사 명령입니다.
 	FCFVehicleFireRequest FireRequest;
-	FireRequest.FireRequestId = FireRequestId;
-	FireRequest.ClientFireTimeSeconds = ClientFireTimeSeconds;
-	FireRequest.AimOrigin = GetActorLocation();
-	FireRequest.AimDirection = GetActorForwardVector();
-	FireRequest.PredictedAimTargetLocation = GetActorLocation() + GetActorForwardVector() * 1000.0f;
+	if (VehicleAimComp)
+	{
+		FireRequest = VehicleAimComp->BuildFireRequest(FireRequestId, ClientFireTimeSeconds);
+	}
+	else
+	{
+		FireRequest.FireRequestId = FireRequestId;
+		FireRequest.ClientFireTimeSeconds = ClientFireTimeSeconds;
+		FireRequest.AimOrigin = GetActorLocation();
+		FireRequest.AimDirection = GetActorForwardVector();
+		FireRequest.PredictedAimTargetLocation = GetActorLocation() + GetActorForwardVector() * 1000.0f;
+	}
+
+	if (VehicleWeaponComp)
+	{
+		// [v2.75.0] VehicleData MountProfile과 하드포인트 슬롯에서 계산한 실제 발사 원점입니다.
+		FCFVehicleFireOrigin ResolvedFireOrigin;
+		if (VehicleWeaponComp->BuildFireOrigin(FireRequest.AimDirection, ResolvedFireOrigin))
+		{
+			// [v2.93.0] 하드포인트 FireOrigin에서 Muzzle 소켓 기준으로 보정할 최종 발사 원점입니다.
+			FCFVehicleFireOrigin FinalFireOrigin = ResolvedFireOrigin;
+
+			// [v2.93.0] Muzzle 소켓 FireOrigin 보정 결과 요약입니다.
+			FString MuzzleFireOriginSummary;
+
+			if (TryBuildMuzzleFireOrigin(FinalFireOrigin, MuzzleFireOriginSummary))
+			{
+				VehicleWeaponComp->RecordResolvedFireOrigin(FinalFireOrigin, MuzzleFireOriginSummary);
+			}
+
+			FireRequest.AimOrigin = FinalFireOrigin.WorldFireLocation;
+			FireRequest.AimDirection = FinalFireOrigin.WorldFireDirection;
+			FireRequest.WeaponGroupId = FinalFireOrigin.MountProfileId;
+		}
+	}
+
 	return FireRequest;
 }
 
@@ -2393,26 +3765,56 @@ bool ACFVehiclePawn::ValidateFireCommand(const FCFVehicleFireRequest& FireComman
 		return false;
 	}
 
-	if (!VehicleAimComp->IsFireRequestWithinDefaultProfile(FireCommand))
-	{
-		OutFireResult.RejectReason = ECFVehicleFireRejectReason::OutOfWeaponArc;
-		return false;
-	}
-
 	if (VehicleAimComp->GetLocalAimState().bLocalAimBlocked)
 	{
 		OutFireResult.RejectReason = ECFVehicleFireRejectReason::AimBlocked;
 		return false;
 	}
 
+	if (VehicleWeaponComp && VehicleWeaponComp->GetActiveWeaponData())
+	{
+		// [v2.78.0] 활성 WeaponData가 현재 MountProfile과 호환되는지 여부입니다.
+		const bool bActiveWeaponDataCompatible = VehicleWeaponComp->IsActiveWeaponDataCompatible();
+		if (!bActiveWeaponDataCompatible)
+		{
+			OutFireResult.RejectReason = ECFVehicleFireRejectReason::NoWeapon;
+			return false;
+		}
+
+		// [v2.78.0] 이번 발사 명령의 월드 시간입니다.
+		const float CurrentFireTimeSeconds = FireCommand.ClientFireTimeSeconds;
+
+		// [v2.78.0] 현재 활성 무기가 아직 쿨다운 중인지 여부입니다.
+		const bool bActiveWeaponOnCooldown = VehicleWeaponComp->IsActiveWeaponOnCooldown(CurrentFireTimeSeconds);
+		if (bActiveWeaponOnCooldown)
+		{
+			OutFireResult.RejectReason = ECFVehicleFireRejectReason::WeaponCooldown;
+			return false;
+		}
+	}
+
 	OutFireResult.bAccepted = true;
 	OutFireResult.RejectReason = ECFVehicleFireRejectReason::None;
+	if (ShouldUseProjectileActorFire())
+	{
+		// [v2.81.0] Projectile 모드에서 예측 표시용으로 사용할 최대 비행 거리입니다.
+		const float ProjectilePredictionDistance = VehicleWeaponComp->GetActiveWeaponMaxRange(MaxAimDistance);
+
+		// [v2.81.0] Projectile 모드에서 즉시 HitScan 없이 표시할 예측 위치입니다.
+		const FVector ProjectilePredictionLocation = AimOrigin + AimDirection.GetSafeNormal() * ProjectilePredictionDistance;
+
+		OutFireResult.ValidationAimTargetLocation = ProjectilePredictionLocation;
+		OutFireResult.LocalHitLocation = ProjectilePredictionLocation;
+		OutFireResult.LocalHitNormal = FVector::UpVector;
+		return true;
+	}
+
 	RunLocalDummyHitScan(FireCommand, OutFireResult);
 	return true;
 }
 
-// [v2.63.0] 싱글플레이 로컬 더미 HitScan Trace를 실행하고 FireResult에 결과를 채웁니다.
-bool ACFVehiclePawn::RunLocalDummyHitScan(const FCFVehicleFireRequest& FireCommand, FCFVehicleFireResult& InOutFireResult) const
+// [v2.97.0] 싱글플레이 로컬 더미 HitScan Trace를 실행하고 FireResult와 Damage HitContext Debug에 결과를 채웁니다.
+bool ACFVehiclePawn::RunLocalDummyHitScan(const FCFVehicleFireRequest& FireCommand, FCFVehicleFireResult& InOutFireResult)
 {
 	if (!VehicleAimComp)
 	{
@@ -2428,8 +3830,11 @@ bool ACFVehiclePawn::RunLocalDummyHitScan(const FCFVehicleFireRequest& FireComma
 	// [v2.63.0] 로컬 Trace 방향입니다.
 	const FVector TraceDirection = FVector(FireCommand.AimDirection).GetSafeNormal();
 
-	// [v2.63.0] 로컬 Trace에 사용할 최대 거리입니다.
-	const float TraceDistance = VehicleAimComp->GetDefaultAimProfile().MaxAimDistance;
+	// [v2.78.0] WeaponData가 없을 때 사용할 기존 Aim Profile 최대 거리입니다.
+	const float FallbackTraceDistance = VehicleAimComp->GetDefaultAimProfile().MaxAimDistance;
+
+	// [v2.78.0] 로컬 Trace에 사용할 최종 최대 거리입니다.
+	const float TraceDistance = VehicleWeaponComp ? VehicleWeaponComp->GetActiveWeaponMaxRange(FallbackTraceDistance) : FallbackTraceDistance;
 
 	// [v2.63.0] 로컬 Trace 종료 위치입니다.
 	const FVector TraceEnd = TraceStart + TraceDirection * TraceDistance;
@@ -2439,6 +3844,7 @@ bool ACFVehiclePawn::RunLocalDummyHitScan(const FCFVehicleFireRequest& FireComma
 		InOutFireResult.ValidationAimTargetLocation = TraceEnd;
 		InOutFireResult.LocalHitLocation = TraceEnd;
 		InOutFireResult.LocalHitNormal = FVector::UpVector;
+		RecordDummyHitScanDamageHitContext(FireCommand, InOutFireResult, nullptr, false);
 		return false;
 	}
 
@@ -2465,6 +3871,8 @@ bool ACFVehiclePawn::RunLocalDummyHitScan(const FCFVehicleFireRequest& FireComma
 		InOutFireResult.LocalHitNormal = FVector::UpVector;
 	}
 
+	RecordDummyHitScanDamageHitContext(FireCommand, InOutFireResult, bHit ? &HitResult : nullptr, bHit);
+
 	if (bDrawLocalAimTraceDebug)
 	{
 		// [v2.63.0] 로컬 Trace 디버그 라인 색상입니다.
@@ -2480,6 +3888,278 @@ bool ACFVehiclePawn::RunLocalDummyHitScan(const FCFVehicleFireRequest& FireComma
 	return bHit;
 }
 
+// [v2.97.0] Dummy HitScan 결과를 Damage HitContext Debug로 기록합니다.
+void ACFVehiclePawn::RecordDummyHitScanDamageHitContext(
+	const FCFVehicleFireRequest& FireCommand,
+	const FCFVehicleFireResult& FireResult,
+	const FHitResult* HitResult,
+	const bool bBlockingHit)
+{
+	// [v2.97.0] 현재 활성 DamageData입니다.
+	UCFDamageData* ActiveDamageData = VehicleWeaponComp ? VehicleWeaponComp->GetActiveDamageData() : nullptr;
+
+	// [v2.97.0] 현재 활성 DamageId 또는 fallback DamageProfileId입니다.
+	const FName ActiveDamageId = VehicleWeaponComp ? VehicleWeaponComp->GetActiveDamageId() : NAME_None;
+
+	// [v2.97.0] 현재 활성 WeaponData입니다.
+	UCFWeaponData* ActiveWeaponData = VehicleWeaponComp ? VehicleWeaponComp->GetActiveWeaponData() : nullptr;
+
+	// [v2.97.0] 현재 활성 ProjectileData입니다.
+	UCFProjectileData* ActiveProjectileData = VehicleWeaponComp ? VehicleWeaponComp->GetActiveProjectileData() : nullptr;
+
+	// [v2.97.0] 기록할 Damage HitContext입니다.
+	FCFDamageHitContext DamageHitContext;
+	DamageHitContext.DamageData = ActiveDamageData;
+	DamageHitContext.DamageId = ActiveDamageData ? ActiveDamageData->DamageId : ActiveDamageId;
+	DamageHitContext.WeaponId = ActiveWeaponData ? ActiveWeaponData->WeaponId : FireCommand.WeaponGroupId;
+	DamageHitContext.ProjectileId = ActiveProjectileData ? ActiveProjectileData->ProjectileId : (ActiveWeaponData ? ActiveWeaponData->ProjectileDataId : NAME_None);
+	DamageHitContext.HitActor = (bBlockingHit && HitResult) ? HitResult->GetActor() : nullptr;
+	DamageHitContext.ImpactLocation = FireResult.LocalHitLocation;
+	DamageHitContext.ImpactNormal = FireResult.LocalHitNormal.GetSafeNormal();
+	if (DamageHitContext.ImpactNormal.IsNearlyZero())
+	{
+		DamageHitContext.ImpactNormal = FVector::UpVector;
+	}
+	DamageHitContext.IncomingDirection = FVector(FireCommand.AimDirection).GetSafeNormal();
+	if (DamageHitContext.IncomingDirection.IsNearlyZero())
+	{
+		DamageHitContext.IncomingDirection = GetActorForwardVector().GetSafeNormal();
+	}
+	if (DamageHitContext.IncomingDirection.IsNearlyZero())
+	{
+		DamageHitContext.IncomingDirection = FVector::ForwardVector;
+	}
+	DamageHitContext.InstigatorActor = this;
+	DamageHitContext.FlightDurationSeconds = 0.0f;
+	DamageHitContext.bFromProjectileActor = false;
+	DamageHitContext.bBlockingHit = bBlockingHit;
+
+	StoreLastDamageHitContext(DamageHitContext);
+}
+
+// [v2.97.0] Projectile Pool에서 반환된 Hit 발사체를 Damage HitContext Debug로 기록합니다.
+void ACFVehiclePawn::RecordProjectileDamageHitContextFromPool(const ACFProjectileActor* InProjectileActor)
+{
+	if (!InProjectileActor)
+	{
+		return;
+	}
+
+	// [v2.97.0] HitContext를 만들 ProjectileData입니다.
+	UCFProjectileData* LastProjectileData = InProjectileActor->GetLastDeactivatedProjectileData();
+
+	// [v2.97.0] 현재 활성 WeaponData입니다.
+	UCFWeaponData* ActiveWeaponData = VehicleWeaponComp ? VehicleWeaponComp->GetActiveWeaponData() : nullptr;
+
+	// [v2.97.0] 기록할 Damage HitContext입니다.
+	FCFDamageHitContext DamageHitContext;
+	DamageHitContext.DamageData = LastProjectileData ? LastProjectileData->DefaultDamageData : nullptr;
+	DamageHitContext.DamageId = DamageHitContext.DamageData
+		? DamageHitContext.DamageData->DamageId
+		: (LastProjectileData ? LastProjectileData->DamageProfileId : NAME_None);
+	DamageHitContext.WeaponId = ActiveWeaponData ? ActiveWeaponData->WeaponId : NAME_None;
+	DamageHitContext.ProjectileId = InProjectileActor->GetLastDeactivatedProjectileId();
+	DamageHitContext.HitActor = InProjectileActor->GetLastHitActor();
+	DamageHitContext.ImpactLocation = InProjectileActor->GetLastImpactLocation();
+	DamageHitContext.ImpactNormal = InProjectileActor->GetLastImpactNormal().GetSafeNormal();
+	if (DamageHitContext.ImpactNormal.IsNearlyZero())
+	{
+		DamageHitContext.ImpactNormal = FVector::UpVector;
+	}
+	DamageHitContext.IncomingDirection = InProjectileActor->GetLastIncomingDirection().GetSafeNormal();
+	if (DamageHitContext.IncomingDirection.IsNearlyZero())
+	{
+		DamageHitContext.IncomingDirection = FVector::ForwardVector;
+	}
+	DamageHitContext.InstigatorActor = InProjectileActor->GetLastInstigatorActor();
+	DamageHitContext.FlightDurationSeconds = InProjectileActor->GetLastFlightDurationSeconds();
+	DamageHitContext.bFromProjectileActor = true;
+	DamageHitContext.bBlockingHit = true;
+
+	StoreLastDamageHitContext(DamageHitContext);
+}
+
+// [v2.97.0] 마지막 Damage HitContext Debug와 표시 요약을 저장합니다.
+void ACFVehiclePawn::StoreLastDamageHitContext(const FCFDamageHitContext& InDamageHitContext)
+{
+	LastDamageHitContext = InDamageHitContext;
+	bHasLastDamageHitContext = true;
+	LastDamageHitContextSummary = BuildDamageHitContextSummary(LastDamageHitContext);
+}
+
+// [v2.97.0] VehicleDebug Panel에 표시할 Damage HitContext 요약 문자열을 생성합니다.
+FString ACFVehiclePawn::BuildDamageHitContextSummary(const FCFDamageHitContext& InDamageHitContext) const
+{
+	// [v2.97.0] HitContext 소스 경로를 표시할 문자열입니다.
+	const FString SourceText = InDamageHitContext.bFromProjectileActor ? TEXT("ProjectileActor") : TEXT("DummyHitScan");
+
+	// [v2.97.0] 실제 적중 여부를 표시할 문자열입니다.
+	const FString HitText = InDamageHitContext.bBlockingHit ? TEXT("Yes") : TEXT("No");
+
+	// [v2.97.0] 맞은 Actor 이름입니다.
+	const FString HitActorName = InDamageHitContext.HitActor ? InDamageHitContext.HitActor->GetName() : TEXT("None");
+
+	// [v2.97.0] 발사 주체 Actor 이름입니다.
+	const FString InstigatorActorName = InDamageHitContext.InstigatorActor ? InDamageHitContext.InstigatorActor->GetName() : TEXT("None");
+
+	return FString::Printf(
+		TEXT("DamageHitContext: Source=%s, Hit=%s, DamageId=%s, Weapon=%s, Projectile=%s, HitActor=%s, Instigator=%s, Location=(%.1f, %.1f, %.1f), Normal=(%.2f, %.2f, %.2f), Incoming=(%.2f, %.2f, %.2f), Flight=%.2fs"),
+		*SourceText,
+		*HitText,
+		*InDamageHitContext.DamageId.ToString(),
+		*InDamageHitContext.WeaponId.ToString(),
+		*InDamageHitContext.ProjectileId.ToString(),
+		*HitActorName,
+		*InstigatorActorName,
+		InDamageHitContext.ImpactLocation.X,
+		InDamageHitContext.ImpactLocation.Y,
+		InDamageHitContext.ImpactLocation.Z,
+		InDamageHitContext.ImpactNormal.X,
+		InDamageHitContext.ImpactNormal.Y,
+		InDamageHitContext.ImpactNormal.Z,
+		InDamageHitContext.IncomingDirection.X,
+		InDamageHitContext.IncomingDirection.Y,
+		InDamageHitContext.IncomingDirection.Z,
+		InDamageHitContext.FlightDurationSeconds);
+}
+
+// [v2.93.0] Turret Pitch 메쉬의 Muzzle 소켓으로 최종 FireOrigin을 보정합니다.
+bool ACFVehiclePawn::TryBuildMuzzleFireOrigin(FCFVehicleFireOrigin& InOutFireOrigin, FString& OutFireOriginSummary) const
+{
+	OutFireOriginSummary = FString();
+
+	if (!LastTurretMountData || !TurretPitchMeshComp)
+	{
+		return false;
+	}
+
+	// [v2.93.0] Muzzle 소켓을 찾을 Pitch 메쉬 컴포넌트가 실제 메쉬를 보유했는지 여부입니다.
+	const bool bPitchMeshReady = TurretPitchMeshComp->GetStaticMesh() != nullptr;
+	if (!bPitchMeshReady)
+	{
+		return false;
+	}
+
+	// [v2.93.0] TurretMountData에서 지정한 총구 소켓 이름입니다.
+	const FName MuzzleSocketName = LastTurretMountData->MuzzleSocketName;
+	if (MuzzleSocketName.IsNone())
+	{
+		return false;
+	}
+
+	if (!TurretPitchMeshComp->DoesSocketExist(MuzzleSocketName))
+	{
+		return false;
+	}
+
+	// [v2.93.0] Pitch 메쉬 Muzzle 소켓의 월드 Transform입니다.
+	const FTransform MuzzleSocketWorldTransform = TurretPitchMeshComp->GetSocketTransform(MuzzleSocketName, RTS_World);
+
+	// [v2.93.0] 최종 FireOrigin에 사용할 Muzzle 소켓 월드 위치입니다.
+	const FVector MuzzleSocketWorldLocation = MuzzleSocketWorldTransform.GetLocation();
+	if (MuzzleSocketWorldLocation.ContainsNaN())
+	{
+		return false;
+	}
+
+	// [v2.93.0] 최종 발사 방향을 어느 기준에서 얻었는지 표시할 디버그 문자열입니다.
+	FString DirectionSourceText = TEXT("MuzzleSocketX");
+
+	// [v2.93.0] Muzzle 소켓의 X축을 기준으로 계산한 월드 발사 방향입니다.
+	FVector MuzzleSocketForwardDirection = MuzzleSocketWorldTransform.GetUnitAxis(EAxis::X).GetSafeNormal();
+	if (MuzzleSocketForwardDirection.ContainsNaN() || MuzzleSocketForwardDirection.IsNearlyZero())
+	{
+		// [v2.93.0] Muzzle 소켓 방향이 비정상일 때 사용할 현재 터렛 조준 방향입니다.
+		const FVector AimFallbackDirection = ResolveTurretAimWorldDirection().GetSafeNormal();
+		MuzzleSocketForwardDirection = AimFallbackDirection;
+		DirectionSourceText = TEXT("TurretAimFallback");
+	}
+
+	if (MuzzleSocketForwardDirection.ContainsNaN() || MuzzleSocketForwardDirection.IsNearlyZero())
+	{
+		// [v2.93.0] 터렛 조준 방향도 비정상일 때 유지할 기존 하드포인트 FireOrigin 방향입니다.
+		const FVector ExistingFireOriginDirection = InOutFireOrigin.WorldFireDirection.GetSafeNormal();
+		MuzzleSocketForwardDirection = ExistingFireOriginDirection;
+		DirectionSourceText = TEXT("PreviousFireOriginFallback");
+	}
+
+	if (MuzzleSocketForwardDirection.ContainsNaN() || MuzzleSocketForwardDirection.IsNearlyZero())
+	{
+		return false;
+	}
+
+	InOutFireOrigin.bResolved = true;
+	InOutFireOrigin.WorldFireLocation = MuzzleSocketWorldLocation;
+	InOutFireOrigin.WorldFireDirection = MuzzleSocketForwardDirection;
+
+	OutFireOriginSummary = FString::Printf(
+		TEXT("VehicleWeaponFireOrigin: Resolved, Source=MuzzleSocket, Profile=%s, Slot=%s, Muzzle=%s, PitchMesh=%s, DirectionSource=%s, Location=(%.1f, %.1f, %.1f), Direction=(%.3f, %.3f, %.3f)"),
+		*InOutFireOrigin.MountProfileId.ToString(),
+		*InOutFireOrigin.LocationSlotId.ToString(),
+		*MuzzleSocketName.ToString(),
+		*TurretPitchMeshComp->GetStaticMesh()->GetName(),
+		*DirectionSourceText,
+		InOutFireOrigin.WorldFireLocation.X,
+		InOutFireOrigin.WorldFireLocation.Y,
+		InOutFireOrigin.WorldFireLocation.Z,
+		InOutFireOrigin.WorldFireDirection.X,
+		InOutFireOrigin.WorldFireDirection.Y,
+		InOutFireOrigin.WorldFireDirection.Z);
+
+	return true;
+}
+
+// [v2.81.0] 현재 활성 무기가 Projectile Actor 스폰 경로를 사용할 수 있는지 반환합니다.
+bool ACFVehiclePawn::ShouldUseProjectileActorFire() const
+{
+	if (!VehicleWeaponComp)
+	{
+		return false;
+	}
+
+	return VehicleWeaponComp->IsActiveProjectileSpawnReady();
+}
+
+// [v2.82.0] 현재 활성 ProjectileData를 사용해 FireOrigin에서 Projectile Actor를 Pool로 확보합니다.
+bool ACFVehiclePawn::TrySpawnProjectileActorFromFireCommand(const FCFVehicleFireRequest& FireCommand)
+{
+	if (!VehicleWeaponComp)
+	{
+		return false;
+	}
+
+	if (!ProjectilePoolComp)
+	{
+		return false;
+	}
+
+	// [v2.81.0] Projectile Actor 스폰에 사용할 활성 ProjectileData입니다.
+	UCFProjectileData* ActiveProjectileData = VehicleWeaponComp->GetActiveProjectileData();
+	if (!ActiveProjectileData || !ActiveProjectileData->ProjectileActorClass)
+	{
+		return false;
+	}
+
+	// [v2.81.0] Projectile Actor 발사에 사용할 방향입니다.
+	FVector LaunchDirection = FVector(FireCommand.AimDirection).GetSafeNormal();
+	if (LaunchDirection.ContainsNaN() || LaunchDirection.IsNearlyZero())
+	{
+		return false;
+	}
+
+	// [v2.81.0] Projectile Actor를 스폰할 Transform입니다.
+	const FTransform ProjectileSpawnTransform(LaunchDirection.Rotation(), FVector(FireCommand.AimOrigin));
+
+	// [v2.82.0] Pool에서 재사용하거나 새로 확보한 공통 Projectile Actor입니다.
+	ACFProjectileActor* AcquiredProjectileActor = ProjectilePoolComp->AcquireProjectile(
+		ActiveProjectileData,
+		ProjectileSpawnTransform,
+		LaunchDirection,
+		this);
+
+	return AcquiredProjectileActor != nullptr;
+}
+
 // [v2.63.0] Fire 입력을 싱글플레이 로컬 발사 경로로 처리합니다.
 void ACFVehiclePawn::HandleFireStarted(const FInputActionValue&)
 {
@@ -2488,7 +4168,18 @@ void ACFVehiclePawn::HandleFireStarted(const FInputActionValue&)
 	// [v2.63.0] 로컬 발사 검증 결과를 담을 임시 결과입니다.
 	FCFVehicleFireResult FireResult;
 
-	ValidateFireCommand(LastFireRequest, FireResult);
+	// [v2.81.0] 로컬 발사 검증이 승인되었는지 여부입니다.
+	const bool bFireCommandAccepted = ValidateFireCommand(LastFireRequest, FireResult);
+	if (bFireCommandAccepted && ShouldUseProjectileActorFire())
+	{
+		// [v2.81.0] Projectile Actor 스폰이 성공했는지 여부입니다.
+		const bool bProjectileActorSpawned = TrySpawnProjectileActorFromFireCommand(LastFireRequest);
+		if (!bProjectileActorSpawned)
+		{
+			RunLocalDummyHitScan(LastFireRequest, FireResult);
+		}
+	}
+
 	ApplyFireResult(LastFireRequest, FireResult);
 }
 
@@ -2497,6 +4188,11 @@ void ACFVehiclePawn::ApplyFireResult(const FCFVehicleFireRequest& FireCommand, c
 {
 	LastFireRequest = FireCommand;
 	LastFireResult = FireResult;
+
+	if (FireResult.bAccepted && VehicleWeaponComp)
+	{
+		VehicleWeaponComp->RecordAcceptedFire(FireCommand.ClientFireTimeSeconds);
+	}
 
 	if (VehicleAimComp)
 	{

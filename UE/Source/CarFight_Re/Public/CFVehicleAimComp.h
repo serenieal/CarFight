@@ -1,15 +1,17 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.8.0
-// Date: 2026-06-19
+// Version: 1.9.0
+// Date: 2026-07-02
 // Description: CarFight 싱글플레이 차량 Aim 시스템 기준 클래스
 // Changelog:
+// - v1.9.0: 터렛 안정화 전 발사 정책에 맞춰 로컬 발사 가능 예측에서 조준각 초과를 단독 차단 조건에서 제외.
 // - v1.8.0: ServerAimState / RepAimVisualState 계열 API를 FireValidationState / AimVisualState 명칭으로 교체.
 // - v1.7.0: BP에 보이는 Aim 상태 getter 설명을 싱글플레이 로컬 플레이어/검증 상태 기준으로 정리.
 // - v1.6.0: 로컬 Fire Command 전환에 맞춰 발사 요청/결과 함수 설명을 싱글플레이 의미로 정리.
 // - v1.5.0: 싱글플레이 기준선에서 Aim 시각 상태의 UE 복제 등록과 OnRep 경로를 제거.
 // - v1.4.0: 싱글플레이 전환에 맞춰 AimComp 기본 컴포넌트 복제를 비활성화.
 // Migration:
+// - 조준각 내부 여부는 LocalAimState / FireValidationState 디버그 상태로 유지하되 기본 발사 거부 조건으로 쓰지 않는다.
 // - GetServerAimState는 GetFireValidationState로 교체한다.
 // - GetRepAimVisualState는 GetAimVisualState로 교체한다.
 // - ApplyServerFireResult / BuildServerAimStateFromFireRequest / UpdateRepAimVisualFromFireResult는 FireValidation/AimVisual 명칭 함수로 교체한다.
