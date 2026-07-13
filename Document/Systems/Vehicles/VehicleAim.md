@@ -1,10 +1,49 @@
 # VehicleAim
 
-## 문서 목적
+- Version: 1.2.0
+- Date: 2026-07-09
+- Status: Current / Single Player Local Aim Flow
+- Scope: `VehicleCamera`가 만든 조준 결과를 로컬 표시, 로컬 발사 검증 상태, 로컬 시각화 상태로 분리해 관리하는 현재 기준 문서
+
+---
+
+## 1. 문서 목적
+
 이 문서는 현재 프로젝트에서 `VehicleAim` 기능이 실제로 어떤 일을 하는지, 그리고 그 기능이 어떤 자산/클래스/설정 구성으로 동작하는지를 기록한다.
 이 문서는 미래 설계나 개선 계획이 아니라, **현재 확인된 구현 상태**를 기준으로 작성한다.
 
-## 문서 범위
+현재 CarFight의 전투 구현 기준은 **싱글플레이 로컬 차량 전투**다.
+따라서 이 문서에서 `VehicleAim`은 서버 검증/복제 시각화 계층이 아니라, 로컬 조준 상태와 로컬 발사 검증 상태를 분리해 보관하는 차량 조준 중간 계층으로 본다.
+
+---
+
+## 2. 현재 기준
+
+현재 기준은 아래와 같다.
+
+```text
+- 서버 권한 발사, 복제, 2클라 검증, 서버 대기 UI는 현재 구현 범위로 보지 않는다.
+- 과거 멀티플레이 기준 용어가 남아 있는 경우에는 Legacy / Deferred 흔적으로 본다.
+- 현재 문서 기준에서는 로컬 발사 검증과 로컬 피드백 용어를 우선 사용한다.
+```
+
+용어 기준:
+
+```text
+ServerAimState     -> FireValidationState
+RepAimVisualState  -> AimVisualState
+WaitingServer      -> FirePending
+ServerRejected     -> FireRejected
+NoAuthority        -> InvalidLocalState
+```
+
+`FireValidationState`는 서버 검증 상태가 아니라, 현재 로컬 Fire Command 처리 결과를 기록하는 상태다.
+`AimVisualState`는 복제 시각화 상태가 아니라, 로컬 UI/디버그/후속 이펙트가 읽는 조준 시각화 상태다.
+
+---
+
+## 3. 문서 범위
+
 이 문서에서 말하는 `VehicleAim` 기능은 아래 요소를 묶어서 본다.
 
 - 핵심 컴포넌트: `UCFVehicleAimComp`
@@ -16,284 +55,509 @@
 - 로컬 발사 검증 상태: `FCFVehicleFireValidationState`
 - 로컬 조준 시각 상태: `FCFVehicleAimVisualState`
 - 현재 대표 입력/전투 연결 경로:
+  - `ACFVehiclePawn::HandleFireStarted()`
   - `ACFVehiclePawn::BuildFireCommand()`
   - `ACFVehiclePawn::ValidateFireCommand()`
   - `ACFVehiclePawn::RunLocalDummyHitScan()`
   - `ACFVehiclePawn::ApplyFireResult()`
 
-즉, 현재 기준 `VehicleAim`은 **카메라 조준점만 계산하는 기능이 아니라, 로컬 조준 표시 / 로컬 발사 검증 상태 / 조준 시각 상태 / Fire Command 생성 보조까지 묶은 싱글플레이 조준-발사 중간 계층**으로 본다.
+즉, 현재 기준 `VehicleAim`은 카메라 조준점만 계산하는 기능이 아니다.
+`VehicleCamera`가 만든 조준 결과를 읽고, 로컬 Reticle 표시 상태, 로컬 발사 검증 상태, 로컬 조준 시각 상태, Fire Command 생성 보조까지 묶은 싱글플레이 조준-발사 중간 계층으로 본다.
 
-## 이 기능이 현재 실제로 하는 일
-현재 구현 기준 `VehicleAim`의 핵심 역할은 **VehicleCamera가 계산한 조준 결과를 차량 무기 조준각 기준으로 해석하고, 로컬 Reticle 표시 상태, 로컬 발사 검증 상태, 조준 시각 상태로 나누어 관리하는 것**이다.
+---
+
+## 4. 현재 실제 역할
+
+현재 구현 기준 `VehicleAim`의 핵심 역할은 **VehicleCamera가 계산한 조준 결과를 차량 기준 AimProfile로 해석하고, Local Aim 상태 / FireValidationState / AimVisualState로 분리해 관리하는 것**이다.
 
 현재 `VehicleAim`은 아래 일을 한다.
 
-### 1. Aim 런타임 참조를 준비한다
+1. Aim 런타임 참조를 준비한다.
+2. 로컬 제어 Pawn에서 Aim 표시 상태를 계산한다.
+3. 로컬 플레이어 기준 Aim 방향과 Reticle 상태를 만든다.
+4. 차량 로컬 조준각을 계산한다.
+5. 기본 AimProfile의 범위 안/밖을 계산한다.
+6. Fire Command 생성을 보조한다.
+7. 로컬 발사 검증 결과를 FireValidationState에 반영한다.
+8. 로컬 Aim 시각 상태를 AimVisualState에 반영한다.
+
+---
+
+## 5. Aim 런타임 참조 준비
+
 `UCFVehicleAimComp`는 `BeginPlay()`에서 `InitializeAimRuntime()`을 호출한다.
 
 현재 초기화에서 확인하는 참조:
-- Owner 차량 Pawn: `ACFVehiclePawn`
-- 차량 카메라 컴포넌트: `UCFVehicleCameraComp`
+
+```text
+- Owner 차량 Pawn: ACFVehiclePawn
+- 차량 카메라 컴포넌트: UCFVehicleCameraComp
+```
 
 관련 함수:
-- `InitializeAimRuntime()`
-- `RefreshAimRuntimeReferences()`
-- `ResolveOwnerVehiclePawn()`
-- `ResolveVehicleCameraComp()`
+
+```text
+- InitializeAimRuntime()
+- RefreshAimRuntimeReferences()
+- ResolveOwnerVehiclePawn()
+- ResolveVehicleCameraComp()
+```
 
 현재 동작:
-- Owner Actor를 `ACFVehiclePawn`으로 캐스팅한다.
-- Owner Pawn에서 `VehicleCameraComp`를 가져온다.
-- 두 참조가 모두 있으면 `bAimRuntimeReady = true`로 본다.
-- 결과는 `LastAimRuntimeSummary` 문자열로 남긴다.
 
-즉 현재 `VehicleAim`은 **VehicleCamera를 직접 만들거나 소유하지 않고, 현재 차량 Pawn에 붙어 있는 CameraComp를 찾아 조준 해석에 사용한다.**
+```text
+- Owner Actor를 ACFVehiclePawn으로 캐스팅한다.
+- Owner Pawn에서 VehicleCameraComp를 가져온다.
+- 두 참조가 모두 있으면 bAimRuntimeReady = true로 본다.
+- 결과는 LastAimRuntimeSummary 문자열로 남긴다.
+```
 
-### 2. 로컬 제어 Pawn에서 Aim 표시를 계산한다
+즉 현재 `VehicleAim`은 `VehicleCamera`를 직접 만들거나 소유하지 않고, 현재 차량 Pawn에 붙어 있는 `VehicleCameraComp`를 찾아 조준 해석에 사용한다.
+
+---
+
+## 6. 로컬 제어 Pawn에서 Aim 표시 계산
+
 `UCFVehicleAimComp::TickComponent()`는 싱글플레이 로컬 Pawn 기준으로 Reticle 상태를 갱신한다.
 
 현재 의미:
+
+```text
 - 현재 목표는 싱글플레이 로컬 조준/발사 검증이다.
 - Dedicated Server는 현재 구현 목표가 아니며, 방어 코드 수준에서 Local Reticle 계산을 생략한다.
 - 로컬 발사 검증 상태는 Fire 입력 처리 흐름에서 별도로 갱신된다.
+```
 
 즉 현재 `VehicleAim`에서 Local Aim은 **로컬 플레이어 표시용 상태**이고, 온라인 서버 표시 상태로 취급하지 않는다.
 
-### 3. 로컬 플레이어 기준 Aim 상태를 계산한다
+---
+
+## 7. Local Aim 상태 계산
+
 `RefreshLocalAimState()`는 로컬 제어 Pawn에서만 실제 Local Aim 상태를 갱신한다.
 
 현재 처리 흐름:
+
+```text
 1. 런타임 참조가 준비되지 않았으면 다시 참조를 찾는다.
-2. 참조가 없으면 Reticle을 `Hidden`으로 둔다.
-3. Pawn이 로컬 제어가 아니면 Reticle을 `Hidden`으로 둔다.
-4. `VehicleCameraComp->GetCameraRuntimeState()`에서 카메라 런타임 상태를 읽는다.
-5. 카메라의 `AimHitLocation`을 목표 위치로 사용한다.
+2. 참조가 없으면 Reticle을 Hidden으로 둔다.
+3. Pawn이 로컬 제어가 아니면 Reticle을 Hidden으로 둔다.
+4. VehicleCameraComp->GetCameraRuntimeState()에서 카메라 런타임 상태를 읽는다.
+5. 카메라의 AimHitLocation을 목표 위치로 사용한다.
 6. Owner 차량 위치에서 목표 위치까지의 방향을 구한다.
 7. 목표 위치가 비정상적이면 차량 정면 방향을 fallback으로 사용한다.
 8. 월드 조준 방향을 차량 로컬 Yaw/Pitch 각도로 변환한다.
-9. `DefaultAimProfile`의 Yaw/Pitch 범위 안에 있는지 확인한다.
-10. 카메라 런타임 상태의 `bAimBlocked`를 읽는다.
-11. `bWithinWeaponArc && !bAimBlocked`이면 로컬 발사 가능으로 본다.
-12. 결과를 `FCFVehicleLocalAimState`에 저장한다.
+9. DefaultAimProfile의 Yaw/Pitch 범위 안에 있는지 계산한다.
+10. 카메라 런타임 상태의 bAimBlocked를 읽는다.
+11. 조준 방향이 유효하고 bAimBlocked가 아니면 Local Aim 기준 발사 가능 예측으로 본다.
+12. bLocalWithinWeaponArc는 별도 표시/디버그 값으로 저장한다.
+13. 결과를 FCFVehicleLocalAimState에 저장한다.
+```
 
 현재 `LocalAimState`에 저장되는 핵심 값:
-- `LocalAimTargetLocation`
-- `LocalAimDirection`
-- `LocalReticleState`
-- `bLocalCanFire`
-- `bLocalWithinWeaponArc`
-- `bLocalAimBlocked`
 
-즉 현재 Local Aim은 **최종 전투 결과가 아니라, 로컬 플레이어가 즉시 Reticle을 표시하기 위한 예측/표시 상태**다.
+```text
+- LocalAimTargetLocation
+- LocalAimDirection
+- LocalReticleState
+- bLocalCanFire
+- bLocalWithinWeaponArc
+- bLocalAimBlocked
+```
 
-### 4. 차량 로컬 조준각을 계산한다
+중요한 기준:
+
+```text
+bLocalCanFire = 조준 방향 유효 && !bAimBlocked
+bLocalWithinWeaponArc = 기준 AimProfile 범위 안/밖 표시값
+```
+
+현재 P0 싱글플레이 기준에서 `bLocalWithinWeaponArc`는 **단독 발사 차단 조건이 아니다.**
+실제 발사 성공 여부는 `WeaponFire`의 `ValidateFireCommand()` 결과가 최종 기준이다.
+
+즉 현재 Local Aim은 최종 전투 결과가 아니라, 로컬 플레이어가 즉시 Reticle을 표시하기 위한 예측/표시 상태다.
+
+---
+
+## 8. 차량 로컬 조준각 계산
+
 `CalculateAimAnglesRelativeToVehicle()`는 월드 조준 방향을 차량 Actor의 로컬 공간 방향으로 변환한다.
 
 현재 계산 방식:
-- `OwnerVehiclePawn->GetActorTransform().InverseTransformVectorNoScale(AimDirection)`으로 월드 방향을 차량 로컬 방향으로 변환한다.
-- 로컬 방향의 `Y/X`로 Yaw를 계산한다.
-- 로컬 방향의 `Z / 수평 길이`로 Pitch를 계산한다.
+
+```text
+- OwnerVehiclePawn->GetActorTransform().InverseTransformVectorNoScale(AimDirection)으로 월드 방향을 차량 로컬 방향으로 변환한다.
+- 로컬 방향의 Y/X로 Yaw를 계산한다.
+- 로컬 방향의 Z / 수평 길이로 Pitch를 계산한다.
+```
 
 현재 의미:
+
+```text
 - 차량 정면 기준 좌우 조준각은 Yaw로 본다.
 - 차량 기준 상하 조준각은 Pitch로 본다.
-- 이 값이 `DefaultAimProfile` 범위 안에 있어야 무기 조준각 안으로 본다.
+- 이 값이 DefaultAimProfile 범위 안에 있으면 조준각 내부로 본다.
+```
 
-### 5. Default Aim Profile로 조준 가능 범위를 제한한다
+단, 조준각 내부 여부는 현재 기본적으로 **표시/디버그용 상태**다.
+이 값을 곧바로 발사 성공/실패 판정으로 해석하지 않는다.
+
+---
+
+## 9. Default Aim Profile 기준
+
 현재 `UCFVehicleAimComp`는 `FCFVehicleAimProfile DefaultAimProfile`을 가진다.
 
 현재 기본 프로필 항목:
-- `ProfileName`
-- `MinYawDeg`
-- `MaxYawDeg`
-- `MinPitchDeg`
-- `MaxPitchDeg`
-- `MaxAimDistance`
+
+```text
+- ProfileName
+- MinYawDeg
+- MaxYawDeg
+- MinPitchDeg
+- MaxPitchDeg
+- MaxAimDistance
+```
 
 `IsAimWithinDefaultProfile()`은 현재 Yaw/Pitch가 기본 프로필 범위 안에 있는지만 검사한다.
 
 현재 의미:
-- 이 프로필은 아직 무기별/터렛별 완성 튜닝 체계가 아니라, Aim 시스템이 가진 기본 제한값이다.
-- 현재 발사 요청의 `WeaponGroupId`는 `DefaultAimProfile.ProfileName`을 사용한다.
-- 후속 무기 시스템이 들어오면 무기별 AimProfile로 분리될 수 있다.
 
-### 6. Reticle 상태를 만든다
+```text
+- 이 프로필은 아직 무기별/터렛별 완성 튜닝 체계가 아니라, Aim 시스템이 가진 기본 제한값이다.
+- 현재 발사 요청의 WeaponGroupId는 기본적으로 DefaultAimProfile.ProfileName을 사용한다.
+- 후속 무기 시스템이 들어오면 무기별 AimProfile로 분리될 수 있다.
+```
+
+---
+
+## 10. Reticle 상태 생성
+
 `BuildLocalReticleState()`는 현재 Local Aim 조건을 `ECFVehicleReticleState`로 바꾼다.
 
 현재 실제 계산에서 사용하는 상태:
-- `Hidden`
-- `Blocked`
-- `OutOfArc`
-- `Ready`
 
-현재 판정 순서:
-1. Aim 런타임이 준비되지 않으면 `Hidden`
-2. 조준이 막혔으면 `Blocked`
-3. 무기 조준각 밖이면 `OutOfArc`
-4. 발사 가능이면 `Ready`
-5. 나머지는 `Hidden`
+```text
+- Hidden
+- Blocked
+- Ready
+- OutOfArc
+```
+
+현재 코드 기준 판정 순서:
+
+```text
+1. Aim 런타임이 준비되지 않으면 Hidden
+2. 조준이 막혔으면 Blocked
+3. bCanFire가 true이면 Ready
+4. bWithinWeaponArc가 false이면 OutOfArc
+5. 나머지는 Hidden
+```
+
+중요한 점은 `Ready` 판정이 `OutOfArc` 판정보다 먼저 나온다는 것이다.
+현재 `bCanFire`는 조준 방향 유효성과 `bAimBlocked`를 중심으로 계산되며, `bWithinWeaponArc`를 직접 요구하지 않는다.
+
+따라서 현재 P0 싱글플레이 기준에서는 아래처럼 해석한다.
+
+```text
+OutOfArc = 조준각 경고/디버그 상태
+OutOfArc != 무조건 발사 불가
+```
 
 `ECFVehicleReticleState` enum에는 그 외에도 아래 상태가 정의돼 있다.
-- `NoWeapon`
-- `Cooldown`
-- `Reloading`
-- `FirePending`
-- `FireRejected`
+
+```text
+- NoWeapon
+- Cooldown
+- Reloading
+- FirePending
+- FireRejected
+```
 
 현재 의미:
-- enum은 후속 무기/탄약/쿨다운/발사 처리 상태까지 고려해 넓게 정의돼 있다.
-- 하지만 현재 실제 `BuildLocalReticleState()` 계산에서 사용하는 상태는 제한적이다.
 
-### 7. Fire Command 데이터를 생성한다
+```text
+- enum은 후속 무기/탄약/쿨다운/발사 처리 상태까지 고려해 넓게 정의돼 있다.
+- 하지만 현재 BuildLocalReticleState() 계산에서 상시 사용하는 상태는 제한적이다.
+- NoWeapon, Cooldown, Reloading, FirePending, FireRejected는 weapon fire UI / FireFeedback 확장 단계에서 실제 표시 경로가 정리되어야 한다.
+```
+
+---
+
+## 11. Fire Command 데이터 생성
+
 `UCFVehicleAimComp::BuildFireRequest()`는 현재 Local Aim 상태를 기반으로 로컬 발사 명령 데이터를 만든다.
 
 현재 채우는 값:
-- `FireRequestId`
-- `ClientFireTimeSeconds`
-- `PredictedAimTargetLocation`
-- `AimDirection`
-- `WeaponGroupId`
-- `AimOrigin`
+
+```text
+- FireRequestId
+- ClientFireTimeSeconds
+- PredictedAimTargetLocation
+- AimDirection
+- WeaponGroupId
+- AimOrigin
+```
 
 현재 `AimOrigin`:
-- `OwnerVehiclePawn`이 있으면 차량 Actor 위치를 사용한다.
+
+```text
+- OwnerVehiclePawn이 있으면 차량 Actor 위치를 사용한다.
+```
 
 현재 의미:
-- 현재 조준 방향과 예측 목표 위치를 로컬 발사 검증에 넘긴다.
-- 함수명과 구조체명에는 `Request`가 남아 있지만, 현재 의미는 네트워크 요청이 아니라 로컬 Fire Command 데이터다.
-- 최종 전투 결과는 아직 만들지 않으며, 로컬 검증과 더미 HitScan 확인에 사용한다.
 
-### 8. 로컬 발사 검증 결과를 Aim 상태에 반영한다
+```text
+- 현재 조준 방향과 예측 목표 위치를 로컬 발사 검증에 넘긴다.
+- 함수명과 구조체명에는 Request가 남아 있지만, 현재 의미는 네트워크 요청이 아니라 로컬 Fire Command 데이터다.
+- 최종 전투 결과는 아직 만들지 않으며, 로컬 검증과 더미 HitScan 확인에 사용한다.
+```
+
+---
+
+## 12. 로컬 발사 검증 결과 반영
+
 현재 로컬 발사 결과는 AimComp의 검증 상태와 시각 상태에 반영된다.
 
 관련 함수:
-- `BuildFireValidationStateFromFireCommand()`
-- `ApplyFireValidationResult()`
-- `UpdateAimVisualFromFireResult()`
+
+```text
+- BuildFireValidationStateFromFireCommand()
+- ApplyFireValidationResult()
+- UpdateAimVisualFromFireResult()
+```
 
 현재 `BuildFireValidationStateFromFireCommand()` 역할:
+
+```text
 - 발사 명령의 예측 목표 위치를 검증 상태에 저장한다.
 - 요청 조준 방향이 기본 프로필 안에 있는지 계산한다.
 - 승인 여부와 거부 사유를 저장한다.
 - 승인/거부된 요청 ID를 기록한다.
+```
 
 현재 `ApplyFireValidationResult()` 역할:
-- 확정 목표 위치를 `FireValidationState`에 반영한다.
-- 승인 여부를 `bValidationCanFire`에 반영한다.
+
+```text
+- 확정 목표 위치를 FireValidationState에 반영한다.
+- 승인 여부를 bValidationCanFire에 반영한다.
 - 거부 사유와 요청 ID를 기록한다.
+- FireResult.RejectReason이 OutOfWeaponArc일 경우 bValidationWithinWeaponArc를 false로 반영할 수 있다.
+```
 
 현재 의미:
-- Local Aim은 즉시 표시용이고, Fire Validation은 발사 검증 결과 기록용이다.
-- 두 상태를 분리해 UI 표시와 발사 판정 기록이 서로 덮어쓰지 않게 한다.
 
-### 9. 로컬 Aim 시각 상태를 갱신한다
+```text
+- Local Aim은 즉시 표시용이다.
+- FireValidationState는 발사 검증 결과 기록용이다.
+- 두 상태를 분리해 UI 표시와 발사 판정 기록이 서로 덮어쓰지 않게 한다.
+```
+
+중요한 현재 기준:
+
+```text
+실제 발사 성공 여부 = ACFVehiclePawn::ValidateFireCommand() 결과
+LocalAimState.bLocalCanFire = Reticle 표시용 예측값
+FireValidationState.bValidationCanFire = 실제 Fire Command 검증 결과 기록값
+```
+
+---
+
+## 13. ValidateFireCommand와의 관계
+
+`VehicleAim`은 발사 명령 데이터를 만들고 결과 상태를 보관하지만, 현재 실제 로컬 발사 검증은 `ACFVehiclePawn::ValidateFireCommand()`가 수행한다.
+
+현재 `ValidateFireCommand()`가 검사하는 대표 조건:
+
+```text
+- Controller 존재 여부
+- VehicleAimComp 존재 여부
+- Aim runtime 준비 여부
+- AimDirection 유효성
+- AimOrigin 유효성
+- Pawn 위치와 AimOrigin 사이 거리
+- LocalAimState.bLocalAimBlocked 여부
+- 활성 WeaponData 호환 여부
+- 활성 무기 쿨다운 여부
+```
+
+현재 기준에서 `ValidateFireCommand()`는 `OutOfArc`를 기본 발사 거부 조건으로 사용하지 않는다.
+후속 설계에서 `OutOfArc` 또는 `OutOfWeaponArc`를 실제 발사 거부 조건으로 사용할 경우, 아래 문서를 함께 갱신해야 한다.
+
+```text
+- Document/Systems/Vehicles/VehicleAim.md
+- Document/Systems/Combat/WeaponFire.md
+- Document/Systems/UI/AimReticle.md
+- Document/Systems/Combat/FireFeedback.md
+```
+
+---
+
+## 14. 로컬 Aim 시각 상태 갱신
+
 `AimVisualState`는 발사 결과를 UI/디버그/후속 시각 효과가 읽을 수 있게 보관하는 로컬 상태다.
 
 현재 `UpdateAimVisualFromFireResult()` 동작:
+
+```text
 - 발사 요청의 조준 방향을 정규화한다.
 - 비정상 방향이면 Local Aim 방향 또는 차량 정면 방향을 fallback으로 사용한다.
 - 발사 결과의 목표 위치, 적중 위치, 요청 예측 목표 위치 순서로 시각 목표 위치를 결정한다.
-- 발사 승인 여부를 `bIsFiringVisual`에 넣는다.
-- `WeaponGroupId`를 `WeaponVisualMode`에 넣는다.
+- 발사 승인 여부를 bIsFiringVisual에 넣는다.
+- WeaponGroupId를 WeaponVisualMode에 넣는다.
+```
 
 현재 의미:
-- `AimVisualState`는 전투 판정용 데이터가 아니다.
-- 로컬 UI, 디버그, 후속 발사 이펙트가 조준 방향/목표/발사 시각화를 읽기 위한 최소 상태다.
 
-## 현재 기준 기능의 성격 정리
+```text
+- AimVisualState는 전투 판정용 데이터가 아니다.
+- 로컬 UI, 디버그, 후속 발사 이펙트가 조준 방향/목표/발사 시각화를 읽기 위한 최소 상태다.
+```
+
+---
+
+## 15. 현재 기준 기능의 성격 정리
+
 현재 구현을 종합하면 `VehicleAim`은 아래 역할을 가진다.
 
-1. **카메라 조준 결과 해석 계층**
-   - `VehicleCameraComp`의 `CameraRuntimeState`를 읽는다.
-   - Aim 목표 위치와 방향을 차량 기준 각도로 변환한다.
-   - 기본 AimProfile의 조준각 안/밖을 판정한다.
+### 15.1 카메라 조준 결과 해석 계층
 
-2. **로컬 Reticle 상태 공급 계층**
-   - Local Aim 상태를 만든다.
-   - Reticle 상태와 발사 가능 예측 값을 제공한다.
-   - 로컬 제어 Pawn이 아니면 표시 상태를 숨긴다.
+```text
+- VehicleCameraComp의 CameraRuntimeState를 읽는다.
+- Aim 목표 위치와 방향을 차량 기준 각도로 변환한다.
+- 기본 AimProfile의 조준각 안/밖을 계산한다.
+```
 
-3. **로컬 발사 검증 상태 기록 계층**
-   - Fire Command 데이터를 만든다.
-   - 로컬 처리 결과를 FireValidationState에 반영한다.
-   - 승인/거부 요청 ID와 거부 사유를 기록한다.
+### 15.2 로컬 Reticle 상태 공급 계층
 
-4. **로컬 시각 상태 계층**
-   - UI/디버그/후속 이펙트가 읽을 최소 조준 방향/목표/발사 시각 상태를 보관한다.
-   - 실제 전투 판정용이 아니라 시각화용 데이터로 본다.
+```text
+- Local Aim 상태를 만든다.
+- Reticle 상태와 발사 가능 예측 값을 제공한다.
+- 로컬 제어 Pawn이 아니면 표시 상태를 숨긴다.
+- bLocalWithinWeaponArc를 표시/디버그용 값으로 제공한다.
+```
+
+### 15.3 로컬 발사 검증 상태 기록 계층
+
+```text
+- Fire Command 데이터를 만든다.
+- 로컬 처리 결과를 FireValidationState에 반영한다.
+- 승인/거부 요청 ID와 거부 사유를 기록한다.
+```
+
+### 15.4 로컬 시각 상태 계층
+
+```text
+- UI/디버그/후속 이펙트가 읽을 최소 조준 방향/목표/발사 시각 상태를 보관한다.
+- 실제 전투 판정용이 아니라 시각화용 데이터로 본다.
+```
 
 따라서 현재 `VehicleAim`은 단순한 조준점 계산기가 아니라,
 **VehicleCamera와 WeaponFire 사이에서 Local 표시, 로컬 검증, 로컬 시각화를 분리해주는 차량 조준 운영 기능**이라고 보는 것이 맞다.
 
-## 현재 동작 방식
-현재 `VehicleAim`은 아래 방식으로 동작한다.
+---
 
-### 1. 생성 및 초기화
+## 16. 현재 동작 방식
+
+### 16.1 생성 및 초기화
+
 `UCFVehicleAimComp` 생성자에서 수행하는 일:
+
+```text
 - Tick 활성화
-- `bAimRuntimeReady = false`
-- `LastAimRuntimeSummary = "Constructed"`
+- bAimRuntimeReady = false
+- LastAimRuntimeSummary = "Constructed"
+```
 
 `BeginPlay()`에서 수행하는 일:
-- `InitializeAimRuntime()` 호출
 
-### 2. Tick 기반 Local Aim 갱신
+```text
+- InitializeAimRuntime() 호출
+```
+
+### 16.2 Tick 기반 Local Aim 갱신
+
 매 Tick에서 수행하는 일:
-- Dedicated Server처럼 로컬 표시가 없는 실행 환경이면 Reticle을 숨기고 종료
-- 그 외에는 `RefreshLocalAimState()` 호출
 
-### 3. 발사 명령 생성 및 처리 연결
+```text
+- Dedicated Server처럼 로컬 표시가 없는 실행 환경이면 Reticle을 숨기고 종료
+- 그 외에는 RefreshLocalAimState() 호출
+```
+
+### 16.3 발사 명령 생성 및 처리 연결
+
 현재 발사 명령의 상위 흐름은 `ACFVehiclePawn` 쪽에서 관리한다.
 
 대표 흐름:
-1. `ACFVehiclePawn::HandleFireStarted()`
-2. `ACFVehiclePawn::BuildFireCommand()`
-3. `VehicleAimComp->BuildFireRequest()`
-4. `ACFVehiclePawn::ValidateFireCommand()`
-5. `ACFVehiclePawn::RunLocalDummyHitScan()`
-6. `ACFVehiclePawn::ApplyFireResult()`
-7. `VehicleAimComp->BuildFireValidationStateFromFireCommand()`
-8. `VehicleAimComp->ApplyFireValidationResult()`
-9. `VehicleAimComp->UpdateAimVisualFromFireResult()`
+
+```text
+1. ACFVehiclePawn::HandleFireStarted()
+2. ACFVehiclePawn::BuildFireCommand()
+3. VehicleAimComp->BuildFireRequest()
+4. ACFVehiclePawn::ValidateFireCommand()
+5. ACFVehiclePawn::RunLocalDummyHitScan()
+6. ACFVehiclePawn::ApplyFireResult()
+7. VehicleAimComp->BuildFireValidationStateFromFireCommand()
+8. VehicleAimComp->ApplyFireValidationResult()
+9. VehicleAimComp->UpdateAimVisualFromFireResult()
+```
 
 현재 구조 해석:
-- `VehicleAimComp`는 발사 명령 데이터를 만들고 Aim 상태를 갱신한다.
-- 로컬 발사 검증과 더미 HitScan Trace는 `ACFVehiclePawn`이 수행한다.
-- 현재 경로는 RPC를 거치지 않는 싱글플레이 로컬 처리 흐름이다.
 
-## 현재 표시 조건 / 실행 조건
+```text
+- VehicleAimComp는 발사 명령 데이터를 만들고 Aim 상태를 갱신한다.
+- 로컬 발사 검증과 더미 HitScan Trace는 ACFVehiclePawn이 수행한다.
+- 현재 경로는 RPC를 거치지 않는 싱글플레이 로컬 처리 흐름이다.
+```
+
+---
+
+## 17. 현재 표시 조건 / 실행 조건
+
 현재 `VehicleAim`이 정상 동작하려면 아래 조건이 중요하다.
 
-- Owner가 `ACFVehiclePawn`이어야 한다.
-- Owner Pawn에 `VehicleCameraComp`가 있어야 한다.
-- Local Aim 계산은 `OwnerVehiclePawn->IsLocallyControlled()`인 경우에만 의미가 있다.
+```text
+- Owner가 ACFVehiclePawn이어야 한다.
+- Owner Pawn에 VehicleCameraComp가 있어야 한다.
+- Local Aim 계산은 OwnerVehiclePawn->IsLocallyControlled()인 경우에만 의미가 있다.
 - Dedicated Server에서는 방어 코드상 Local Reticle 계산을 하지 않는다.
 - 발사 검증은 현재 싱글플레이 로컬 흐름에서 수행된다.
-- `AimVisualState`는 로컬 발사 결과를 UI/디버그/후속 이펙트가 읽기 위한 상태다.
+- AimVisualState는 로컬 발사 결과를 UI/디버그/후속 이펙트가 읽기 위한 상태다.
+```
 
-## 현재 자산 / 클래스 역할
+---
+
+## 18. 현재 자산 / 클래스 역할
 
 ### `UCFVehicleAimComp`
+
 - 종류: C++ ActorComponent
 - 현재 역할: Aim 런타임 참조 준비, Local Aim 계산, Reticle 상태 제공, Fire Command 생성 보조, FireValidationState 갱신, AimVisualState 관리
 
 ### `CFVehicleAimTypes.h`
+
 - 종류: C++ 공용 타입
 - 현재 역할: Reticle 상태 enum, FireRejectReason enum, AimProfile, Local/FireValidation/AimVisual 상태, FireRequest/FireResult 구조 정의
 
 ### `ACFVehiclePawn`
+
 - 종류: C++ Pawn
 - 현재 역할: VehicleAimComp 소유, 발사 입력 처리, Fire Command 생성 요청, 로컬 검증, 로컬 더미 HitScan, FireResult 적용
 
 ### `UCFVehicleCameraComp`
+
 - 종류: C++ ActorComponent
 - 현재 역할: Aim 목표 위치, Aim 가림 여부 등 카메라 런타임 상태 공급
 
 ### `UCFAimReticleWidget`
+
 - 종류: C++ UserWidget 부모 클래스
 - 현재 역할: VehicleAimComp의 Local Aim/Reticle 상태를 읽어 UI 표시로 변환
 
-## 현재 생성 및 연결 구조
+---
+
+## 19. 현재 생성 및 연결 구조
+
 현재 연결 구조는 아래와 같다.
 
 ```text
@@ -322,22 +586,32 @@ HandleFireStarted
   -> VehicleAimComp.UpdateAimVisualFromFireResult
 ```
 
-## 현재 기능 책임
+---
+
+## 20. 현재 기능 책임
+
 현재 `VehicleAim`의 책임은 아래와 같다.
 
+```text
 - Owner Pawn과 VehicleCameraComp 참조를 준비한다.
 - CameraRuntimeState의 Aim 목표 위치를 읽는다.
 - 차량 로컬 기준 Aim Yaw/Pitch를 계산한다.
-- 기본 AimProfile 범위 안/밖을 판정한다.
+- 기본 AimProfile 범위 안/밖을 계산한다.
 - 로컬 Reticle 상태를 계산한다.
 - 로컬 발사 가능 예측 값을 보관한다.
+- bLocalWithinWeaponArc를 표시/디버그용 값으로 보관한다.
 - Fire Command 생성을 보조한다.
 - 로컬 발사 결과를 FireValidationState에 반영한다.
 - 로컬 Aim 시각 상태를 관리한다.
+```
 
-## 현재 기준 비책임 항목
+---
+
+## 21. 현재 기준 비책임 항목
+
 현재 구현상 `VehicleAim`의 직접 책임이 아닌 것은 아래와 같다.
 
+```text
 - 실제 무기 장착/해제 시스템
 - 탄약 수량 관리
 - 쿨다운/재장전 시간 계산
@@ -347,73 +621,143 @@ HandleFireStarted
 - 멀티플레이 RPC / 복제 경로
 - Dedicated Server에서 UI 생성
 - 최종 전투 밸런스 결정
+```
 
-현재 `VehicleAim`은 **무기 시스템 자체가 아니라, 카메라 조준 결과와 향후 무기 발사 사이의 조준 해석/상태 보관 계층**이다.
+현재 `VehicleAim`은 무기 시스템 자체가 아니라, 카메라 조준 결과와 무기 발사 사이의 조준 해석/상태 보관 계층이다.
 
-## 현재 문서 기준의 핵심 결론
+---
+
+## 22. 현재 문서 기준의 핵심 결론
+
 현재 `VehicleAim` 기능은,
 
 **VehicleCamera가 만든 조준 결과를 Local 표시, 로컬 검증, 로컬 시각화 상태로 나누어 관리하는 차량 조준 중간 계층**이다.
 
 이 문서에서 가장 중요하게 봐야 할 현재 역할은 다음 한 줄로 요약할 수 있다.
 
-> `VehicleAim`은 현재 차량의 조준 방향이 무기 조준각 안에 있는지, 조준이 막혔는지, 로컬 표시와 로컬 발사 검증에서 어떤 상태로 읽혀야 하는지를 정리해주는 현재 상태 기능이다.
+> `VehicleAim`은 현재 차량의 조준 방향이 기준 AimProfile 안에 있는지, 조준이 막혔는지, 로컬 표시와 로컬 발사 검증에서 어떤 상태로 읽혀야 하는지를 분리해 보관하는 현재 상태 기능이다.
 
-## 현재 문서에서 미확인인 항목
+다만 현재 P0 싱글플레이 기준에서 `bLocalWithinWeaponArc`와 `OutOfArc`는 **표시/디버그 기준**이며, 단독 발사 차단 조건이 아니다.
+실제 발사 성공 여부는 `WeaponFire`의 `ValidateFireCommand()` 결과를 기준으로 판단한다.
+
+---
+
+## 23. 현재 문서에서 미확인인 항목
+
 아래는 아직 이 문서에서 확정하지 않은 내용이다.
 
-- 실제 무기 데이터/터렛 데이터가 `DefaultAimProfile`을 대체하는 최종 경로
-- `NoWeapon`, `Cooldown`, `Reloading`, `FirePending`, `FireRejected` 상태를 실제로 전환하는 최종 운영 경로
-- `AimVisualState`를 실제 발사 이펙트가 소비하는 최종 경로
-- `AimProfileOverride` 또는 무기별 AimProfile과 `VehicleCamera`의 연결 정책
-- 로컬 발사 검증에서 LocalAimState의 `bLocalAimBlocked`를 계속 참고할지 장기 정책
+```text
+- 실제 무기 데이터/터렛 데이터가 DefaultAimProfile을 대체하는 최종 경로
+- NoWeapon, Cooldown, Reloading, FirePending, FireRejected 상태를 실제로 전환하는 최종 운영 경로
+- AimVisualState를 실제 발사 이펙트가 소비하는 최종 경로
+- AimProfileOverride 또는 무기별 AimProfile과 VehicleCamera의 연결 정책
+- 로컬 발사 검증에서 LocalAimState.bLocalAimBlocked를 계속 참고할지 장기 정책
+- OutOfArc / OutOfWeaponArc를 후속 단계에서 실제 발사 거부 조건으로 승격할지 여부
+```
 
-## 문서 갱신 조건
+---
+
+## 24. 문서 갱신 조건
+
 아래 변경이 생기면 이 문서를 함께 갱신한다.
 
-- `UCFVehicleAimComp`의 Local Aim 계산 규칙 변경
-- `ECFVehicleReticleState` 상태 전환 규칙 변경
-- `FCFVehicleAimProfile` 구조 변경
+```text
+- UCFVehicleAimComp의 Local Aim 계산 규칙 변경
+- ECFVehicleReticleState 상태 전환 규칙 변경
+- FCFVehicleAimProfile 구조 변경
 - FireRequest/FireResult 구조 변경
-- 로컬 발사 검증 책임이 `ACFVehiclePawn`에서 다른 시스템으로 이동할 때
-- `AimVisualState` 소비 정책 변경
+- 로컬 발사 검증 책임이 ACFVehiclePawn에서 다른 시스템으로 이동할 때
+- AimVisualState 소비 정책 변경
 - 무기/터렛 데이터와 AimProfile 연결 방식 변경
+- bLocalWithinWeaponArc를 실제 발사 차단 조건으로 사용하기로 할 때
+- ValidateFireCommand가 OutOfWeaponArc를 실제 거부 사유로 사용하게 될 때
+```
 
-## 문서 버전 관리
-- 현재 문서 버전: `1.1.0`
-- 문서 상태: `Current / Single Player Aim Flow`
+---
+
+## 25. 문서 버전 관리
+
+- 현재 문서 버전: `1.2.0`
+- 문서 상태: `Current / Single Player Local Aim Flow`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
   - 기능 설명 본문이 바뀌면 체인지로그도 같이 갱신한다.
   - 구현 변경 없이 표현만 다듬은 경우와, 기능 이해에 영향을 주는 내용 변경을 구분해서 기록한다.
 
 ### 버전 증가 기준
+
 - `Major`
   - 기능 해석 자체가 바뀌는 수준의 대규모 재작성
   - Aim이 무기 시스템 전체 문서로 확장되거나 분리될 때
 - `Minor`
   - 새로운 Aim 상태, 발사 검증 항목, 로컬 시각 상태 항목이 추가될 때
   - 무기/터렛 데이터와 실제 연결될 때
+  - `bLocalWithinWeaponArc`나 `OutOfArc`의 운영 정책이 바뀔 때
 - `Patch`
   - 오탈자 수정
   - 표현 명확화
   - 근거 보강
   - 본문 의미는 유지한 채 설명 정밀도만 올라갈 때
 
-## 체인지로그
-### v1.1.0 - 2026-06-19
-- 현재 Aim 발사 경로를 서버/RPC 기준에서 싱글플레이 로컬 Fire Command 기준으로 정정했다.
-- `FireValidationState`, `AimVisualState`, `FirePending`, `FireRejected` 명칭을 현재 코드 기준으로 반영했다.
+---
+
+## 26. Migration
+
+### v1.1.0 -> v1.2.0
+
+```text
+- bWithinWeaponArc && !bAimBlocked이면 로컬 발사 가능으로 본다는 설명을 제거한다.
+- 현재 기준 bLocalCanFire는 조준 방향 유효성과 bAimBlocked를 중심으로 계산되는 표시용 예측값으로 본다.
+- bLocalWithinWeaponArc는 표시/디버그용 값으로 해석한다.
+- OutOfArc는 현재 P0 싱글플레이 기준에서 단독 발사 차단 조건이 아니라 조준각 경고/디버그 상태로 해석한다.
+- 실제 발사 성공 여부는 WeaponFire의 ValidateFireCommand() 결과를 기준으로 판단한다.
+```
+
+### v1.0.0 -> v1.1.0
+
+```text
+- 서버/RPC 기준 설명을 싱글플레이 로컬 Fire Command 기준으로 정정했다.
+- FireValidationState, AimVisualState, FirePending, FireRejected 명칭을 현재 코드 기준으로 반영했다.
 - 멀티플레이 RPC / 복제 설명을 현재 책임에서 제외하고 과거/미래 온라인 전환 후보로 분리했다.
+```
+
+---
+
+## 27. Changelog
+
+### v1.2.0 - 2026-07-09
+
+```text
+- bLocalWithinWeaponArc를 현재 P0 싱글플레이 기준에서 표시/디버그용 상태로 명시
+- bLocalCanFire와 실제 발사 성공 여부를 분리해 설명
+- BuildLocalReticleState()의 현재 코드 기준 판정 순서를 정정
+- OutOfArc가 단독 발사 차단 조건이 아님을 명시
+- ValidateFireCommand()가 현재 OutOfArc를 기본 거부 조건으로 사용하지 않는다는 기준 추가
+- AimReticle / WeaponFire / FireFeedback와 함께 갱신해야 하는 OutOfArc 정책 변경 조건 추가
+```
+
+### v1.1.0 - 2026-06-19
+
+```text
+- 현재 Aim 발사 경로를 서버/RPC 기준에서 싱글플레이 로컬 Fire Command 기준으로 정정했다.
+- FireValidationState, AimVisualState, FirePending, FireRejected 명칭을 현재 코드 기준으로 반영했다.
+- 멀티플레이 RPC / 복제 설명을 현재 책임에서 제외하고 과거/미래 온라인 전환 후보로 분리했다.
+```
 
 ### v1.0.0 - 2026-06-02
-- `VehicleAim` 시스템 문서 최초 작성
-- `UCFVehicleAimComp`, `CFVehicleAimTypes`, `ACFVehiclePawn` 발사 요청 흐름 기준으로 현재 기능 범위 정리
+
+```text
+- VehicleAim 시스템 문서 최초 작성
+- UCFVehicleAimComp, CFVehicleAimTypes, ACFVehiclePawn 발사 요청 흐름 기준으로 현재 기능 범위 정리
 - Local Aim / Server Aim / Rep Aim Visual 책임 분리 기록
 - 현재 Reticle 상태 계산 범위와 미확정 상태 기록
+```
 
-## 마지막 확인 기준
-- 확인 일시: `2026-06-19`
+---
+
+## 28. 마지막 확인 기준
+
+- 확인 일시: `2026-07-09`
 - 확인 근거:
   - `UE/Source/CarFight_Re/Public/CFVehicleAimComp.h`
   - `UE/Source/CarFight_Re/Private/CFVehicleAimComp.cpp`
@@ -422,7 +766,15 @@ HandleFireStarted
   - `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp`
   - `UE/Source/CarFight_Re/Private/UI/CFAimReticleWidget.cpp`
   - `UE/Source/CarFight_Re/Private/UI/CFVehicleDebugPanelWidget.cpp`
+  - `Document/Systems/UI/AimReticle.md`
+  - `Document/Systems/Combat/WeaponFire.md`
 
-## Change Note
+---
+
+## 29. Change Note
+
+```text
 - 2026-06-19: 현재 코드에서 제거/변경된 서버 RPC 명칭을 현재 상태 문서의 현행 설명에서 제외했다.
-- 과거 멀티플레이 설계 기록은 `Document/Plan/AimPlan/CF_AimNet.md`와 이전 체인지로그에 남긴다.
+- 2026-07-09: OutOfArc / bLocalWithinWeaponArc를 발사 차단 기준으로 오해하지 않도록 현재 P0 싱글플레이 기준으로 재정리했다.
+- 과거 멀티플레이 설계 기록은 Document/Plan/AimPlan/CF_AimNet.md와 이전 체인지로그에 남긴다.
+```

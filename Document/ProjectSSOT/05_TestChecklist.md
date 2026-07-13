@@ -1,7 +1,7 @@
 # CarFight — 05_TestChecklist
 
-> 문서 버전: v1.2.0
-> 작성일(Asia/Seoul): 2026-06-18
+> 문서 버전: v1.4.0
+> 작성일(Asia/Seoul): 2026-07-13
 > 문서 상태: Active
 > 역할: CarFight의 **완료된 Systems 기준 최소 회귀 테스트**를 관리한다.
 
@@ -60,6 +60,9 @@
 5. 2026-06-18 싱글 전환 기준에서는 서버/멀티/2클라 테스트를 기본 회귀 조건으로 쓰지 않는다.
 6. 서버/멀티 항목은 현재 사이클에서 N/A로 두고, 서버 작업 재개 결정이 있을 때만 다시 활성화한다.
 7. 2026-06-19 전투 루프 기준에서는 조준/발사/피격/피해/피드백을 서버 없이 싱글 PIE에서 먼저 검증한다.
+8. 2026-07-09 Reticle / FireFeedback 정리 기준에서는 서버 대기 / 서버 거부 표현을 현재 UI PASS 기준으로 쓰지 않는다.
+9. OutOfArc / bLocalWithinWeaponArc는 현재 P0 싱글플레이 기준에서 단독 발사 차단 조건이 아니라 조준각 경고/디버그 상태로 본다.
+10. 발사 성공 여부는 WeaponFire의 LastFireResult / ValidateFireCommand 결과를 기준으로 판단한다.
 ```
 
 ---
@@ -83,10 +86,59 @@
 
 ```text
 1. 기준 차량 1대가 주행 중 조준과 발사를 수행한다.
-2. 발사 성공/불가/쿨다운 상태가 이펙트, 사운드, 조준 UI로 읽힌다.
-3. 발사 결과가 피격 판정과 피해 처리로 이어진다.
+2. 발사 성공/불가/쿨다운 상태가 Reticle, 간단한 UI, 이펙트, 사운드 후보로 읽힌다.
+3. 발사 결과가 빗나감/피격 기록으로 남고, 후속 단계에서 피해 처리로 이어질 수 있어야 한다.
 4. 주행, 조준, 발사, 피격, 피해 흐름을 반복해도 상태가 꼬이지 않는다.
 5. 조작감, 전투 템포, 피드백 문제를 기능 차단과 품질 후속으로 분리한다.
+```
+
+---
+
+## 4-3. 2026-07-09 WeaponFire / FireFeedback 테스트 기준
+
+Reticle 관련 작업 전 최소 검증 기준은 아래다.
+
+```text
+1. WeaponFire는 판정/기록 담당으로 본다.
+2. AimReticle / FireFeedback은 표시 담당으로 본다.
+3. Reticle은 서버 상태를 표시하지 않는다.
+4. FirePending은 서버 대기가 아니라 로컬 발사 처리 피드백 상태다.
+5. FireRejected는 서버 거부가 아니라 로컬 발사 조건 미충족 상태다.
+6. WeaponCooldown은 Cooldown 표시 후보로 변환될 수 있어야 한다.
+7. NoWeapon은 무기 없음 표시 후보로 변환될 수 있어야 한다.
+8. AimBlocked는 Blocked 표시 후보로 변환될 수 있어야 한다.
+9. OutOfArcWarning은 발사 차단이 아니라 보조 경고/디버그 상태로 본다.
+```
+
+## 4-4. 2026-07-13 Reticle / FireFeedback 검증 결과
+
+확인 완료:
+
+```text
+- Unreal Editor 타깃 빌드 성공
+- WBP_AimReticle Reticle 이미지 5개와 FireFeedback TextBlock 바인딩 확인
+- Ready 상태의 흰색 Reticle 확인
+- FireSuccess 상태의 녹색 Reticle / 텍스트 확인
+- FireSuccess 표시 후 Cooldown 파란색 상태 전환 확인
+- 연속 Fire 입력 후 쿨다운 종료 시 FireFeedback 텍스트가 남지 않음
+- 전용 Text_OutOfArcWarning이 실제 OutOfArcWarning 피드백에서만 일반 State/Hint를 대체함
+- 조준각 밖에서 FireSuccess / Cooldown / FireRejected 피드백이 활성화되어도 일반 FireFeedback 텍스트가 가려지지 않음
+```
+
+아직 확인하지 않은 항목:
+
+```text
+- NoWeapon 실제 PIE 표시와 회색 상태
+- AimBlocked 실제 PIE 표시와 주황 상태
+- NoWeapon / AimBlocked 유지 시간 종료 후 텍스트 제거
+```
+
+상태 판정:
+
+```text
+- CF-TC-006 조준 Reticle: PASS
+- CF-TC-013 차량 무기 조준/발사: PARTIAL
+- CF-TC-014 발사 피드백/UI: PARTIAL
 ```
 
 ---
@@ -102,19 +154,19 @@
 | `CF-TC-003` | Vehicle | 카메라 | 차량 기준 카메라가 정상 추적/회전 | `Document/Systems/Vehicles/VehicleCamera.md` | `TODO` |
 | `CF-TC-004` | Input | 기본 입력 등록 | Enhanced Input Mapping Context 등록 성공 | `Document/Systems/Input/Input.md` | `TODO` |
 | `CF-TC-005` | UI | 차량 디버그 표시 | 디버그 HUD/Panel이 필요한 조건에서 표시 | `Document/Systems/UI/VehicleDebug.md`, `Document/Systems/UI/VehicleDebugPanel.md` | `TODO` |
-| `CF-TC-006` | UI | 조준 Reticle | 조준 Reticle 표시/갱신이 정상 | `Document/Systems/UI/AimReticle.md` | `TODO` |
+| `CF-TC-006` | UI | 조준 Reticle | 조준 Reticle 표시/갱신이 정상이며 로컬 발사 결과 피드백 후보와 충돌하지 않음 | `Document/Systems/UI/AimReticle.md`, `Document/Systems/Combat/FireFeedback.md` | `PASS` |
 | `CF-TC-007` | Network | Dedicated Server 실행 | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/Systems/Network/ServerSpawn.md` | `N/A` |
 | `CF-TC-008` | Network | 1클라 Spawn/Possess | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/Systems/Network/ServerSpawn.md` | `N/A` |
 | `CF-TC-009` | Network | 2클라 Spawn/Possess | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/Systems/Network/ServerSpawn.md` | `N/A` |
 | `CF-TC-010` | Network | 입력 분리 | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/Systems/Network/ServerSpawn.md`, `Document/Systems/Input/Input.md` | `N/A` |
 | `CF-TC-011` | Network | 이동 복제 | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/Systems/Network/ServerSpawn.md` | `N/A` |
 | `CF-TC-012` | Config | 런타임 설정 | 현재 Config 기준 경로/모드가 깨지지 않음 | `Document/Systems/Config/ProjectRuntimeConfig.md` | `TODO` |
-| `CF-TC-013` | Combat | 차량 무기 조준/발사 | 조준 방향으로 발사 요청이 생성되고 성공/불가 상태가 구분됨 | `Document/Systems/Combat/WeaponFire.md`, `Document/Systems/Vehicles/VehicleAim.md` | `TODO` |
-| `CF-TC-014` | Feedback | 발사 이펙트/사운드/UI | 발사 성공/불가/쿨다운 상태가 화면/소리/UI로 읽힘 | `Document/Systems/Combat/FireFeedback.md`, `Document/Systems/UI/AimReticle.md` | `TODO` |
-| `CF-TC-015` | Combat | 피격 판정 | 발사 결과가 빗나감/피격으로 구분되어 기록됨 | `Document/Systems/Combat/HitDamage.md` | `TODO` |
-| `CF-TC-016` | Combat | 피해 처리 | 피격 결과가 피해량과 생존 상태에 반영됨 | `Document/Systems/Combat/HitDamage.md` | `TODO` |
-| `CF-TC-017` | Loop | 주행/전투 반복 | 주행, 조준, 발사, 피격, 피해 루프를 반복해도 상태가 꼬이지 않음 | `Document/Systems/Combat/CoreLoop.md` | `TODO` |
-| `CF-TC-018` | Feel | 전투 템포/피드백 | 조작감, 발사 리듬, 피격 반응 문제가 기능 차단과 품질 후속으로 분리됨 | `Document/Systems/Combat/CombatFeel.md` | `TODO` |
+| `CF-TC-013` | Combat | 차량 무기 조준/발사 | 조준 방향으로 로컬 발사 명령이 생성되고 성공/불가/쿨다운 상태가 구분됨 | `Document/Systems/Combat/WeaponFire.md`, `Document/Systems/Vehicles/VehicleAim.md`, `Document/Systems/UI/VehicleDebugPanel.md` | `PARTIAL` |
+| `CF-TC-014` | Feedback | 발사 피드백/UI | 발사 성공/불가/쿨다운/무기 없음 상태가 Reticle 또는 FireFeedback UI 기준으로 읽힘 | `Document/Systems/Combat/FireFeedback.md`, `Document/Systems/UI/AimReticle.md`, `Document/Systems/Combat/WeaponFire.md` | `PARTIAL` |
+| `CF-TC-015` | Combat | 피격 판정 기록 | 발사 결과가 빗나감/피격으로 구분되어 Debug Context로 기록됨 | `Document/Systems/Combat/DamageHitContext.md`, `Document/Systems/Combat/Projectile.md` | `TODO` |
+| `CF-TC-016` | Combat | 피해 처리 | 피격 결과가 피해량과 생존 상태에 반영됨 | `Document/Systems/Combat/HitDamage.md` 예정 | `TODO` |
+| `CF-TC-017` | Loop | 주행/전투 반복 | 주행, 조준, 발사, 피격, 피해 루프를 반복해도 상태가 꼬이지 않음 | `Document/Systems/Combat/CoreLoop.md` 예정 | `TODO` |
+| `CF-TC-018` | Feel | 전투 템포/피드백 | 조작감, 발사 리듬, 피격 반응 문제가 기능 차단과 품질 후속으로 분리됨 | `Document/Systems/Combat/CombatFeel.md` 예정 | `TODO` |
 
 ---
 
@@ -199,6 +251,8 @@
 ```text
 - 현재 AimComp가 의도한 기준으로 조준 방향/타겟 정보를 계산한다.
 - UI Reticle과 연결되는 데이터가 유효하다.
+- LocalAimState와 FireValidationState를 구분해 확인할 수 있다.
+- bLocalWithinWeaponArc / OutOfArc는 표시/디버그 상태로 확인한다.
 - 서버 권한 발사 구조는 현재 보류하고, 로컬 Aim / Reticle 피드백을 우선한다.
 ```
 
@@ -207,6 +261,7 @@
 ```text
 - 조준 데이터가 UI 또는 후속 Fire 요청에서 읽을 수 있는 형태로 유지된다.
 - 서버 없이 로컬 조준 상태와 Reticle 상태를 확인할 수 있다.
+- OutOfArc를 단독 발사 차단으로 오해하지 않도록 Debug / UI 기준이 분리되어 있다.
 ```
 
 ---
@@ -238,7 +293,9 @@
 
 ## 8.1 AimReticle
 
-- 관련 문서: `Document/Systems/UI/AimReticle.md`
+- 관련 문서:
+  - `Document/Systems/UI/AimReticle.md`
+  - `Document/Systems/Combat/FireFeedback.md`
 
 ### 확인 항목
 
@@ -246,6 +303,9 @@
 - Reticle 위젯이 필요한 조건에서 생성된다.
 - 조준 상태 변화가 Reticle에 반영된다.
 - 싱글 PIE에서 로컬 차량 기준 Reticle 표시/갱신을 확인한다.
+- Reticle은 서버 대기 / 서버 거부 상태를 표시하지 않는다.
+- FirePending / FireRejected는 로컬 발사 피드백 상태로 해석된다.
+- Cooldown / NoWeapon / FireRejected 표시 후보가 WeaponFire 결과와 충돌하지 않는다.
 ```
 
 ### PASS 기준
@@ -253,6 +313,7 @@
 ```text
 - 로컬 클라이언트 화면에서 Reticle이 정상 표시된다.
 - Aim 상태 변화가 Reticle 표시 상태로 읽힌다.
+- 로컬 발사 결과 피드백이 Reticle 기준과 충돌하지 않는다.
 ```
 
 ---
@@ -269,6 +330,8 @@
 - 디버그 UI 생성 조건이 명확하다.
 - 표시 텍스트가 현재 Systems 기준 필드와 맞는다.
 - 너무 긴 Runtime 문자열이 가독성을 해치지 않는지 확인한다.
+- Aim / Weapon / Camera / Runtime 섹션이 필요한 정보를 제공한다.
+- Weapon 섹션에서 WeaponData, 쿨다운, Projectile, DamageHitContext, FireOrigin 상태를 확인할 수 있다.
 - 서버 전용 UI 차단 검증은 현재 사이클에서 N/A다.
 ```
 
@@ -276,36 +339,43 @@
 
 ```text
 - 디버그 UI가 테스트 중 필요한 정보를 제공한다.
-- 싱글 PIE에서 주행/카메라/Aim/WheelSync 정보를 읽을 수 있다.
+- 싱글 PIE에서 주행/카메라/Aim/Weapon/WheelSync 정보를 읽을 수 있다.
+- Debug Panel은 판정 계산기가 아니라 Snapshot 표시 UI로 동작한다.
 ```
 
 ---
 
 ## 9. Combat / Feedback / Loop 테스트
 
-현재 전투 루프 테스트는 아직 완료된 Systems 기준이 아니라, 다음 구현 후 회귀 테스트로 승격할 후보다.
-구현 전에는 `TODO` 상태를 유지한다.
+현재 전투 루프 테스트는 싱글플레이 로컬 기준으로 검증한다.
+`WeaponFire`, `FireFeedback`, `Projectile`, `DamageHitContext` 기준 문서는 현재 `Document/Systems/Combat/` 아래에 존재한다.
+단, 실제 플레이 테스트 결과가 아직 기록되지 않은 항목은 `TODO` 상태를 유지한다.
 
 ## 9.1 WeaponFire
 
 - 관련 문서:
-  - `Document/Systems/Combat/WeaponFire.md` 예정
+  - `Document/Systems/Combat/WeaponFire.md`
   - `Document/Systems/Vehicles/VehicleAim.md`
+  - `Document/Systems/UI/VehicleDebugPanel.md`
 
 ### 확인 항목
 
 ```text
-- Fire 입력이 로컬 기준에서 발사 요청으로 연결된다.
+- Fire 입력이 로컬 기준에서 발사 명령으로 연결된다.
 - 발사 원점과 발사 방향을 확인할 수 있다.
 - 발사 성공 / 발사 불가 / 쿨다운 상태가 구분된다.
+- LastFireResult와 RejectReason을 확인할 수 있다.
+- Weapon Debug에서 WeaponData / Cooldown / FireOrigin 상태를 확인할 수 있다.
+- OutOfArc / bLocalWithinWeaponArc는 단독 발사 차단 조건으로 취급하지 않는다.
 - 서버 권한 발사와 복제 검증은 현재 사이클에서 N/A다.
 ```
 
 ### PASS 기준
 
 ```text
-- 싱글 PIE에서 기준 차량이 조준 방향으로 발사 요청을 만든다.
-- 실패 시 원인을 입력 / 조준 / 쿨다운 / 데이터 문제로 분리할 수 있다.
+- 싱글 PIE에서 기준 차량이 조준 방향으로 로컬 발사 명령을 만든다.
+- 실패 시 원인을 입력 / 조준 막힘 / 쿨다운 / 데이터 문제로 분리할 수 있다.
+- 발사 결과가 AimComp / VehicleDebug 상태에 기록된다.
 ```
 
 ---
@@ -313,45 +383,52 @@
 ## 9.2 FireFeedback
 
 - 관련 문서:
-  - `Document/Systems/Combat/FireFeedback.md` 예정
+  - `Document/Systems/Combat/FireFeedback.md`
   - `Document/Systems/UI/AimReticle.md`
+  - `Document/Systems/Combat/WeaponFire.md`
 
 ### 확인 항목
 
 ```text
-- 발사 성공 시 최소 이펙트와 사운드가 발생한다.
-- 발사 불가 또는 쿨다운 상태가 조준 UI로 구분된다.
+- 발사 성공 시 최소 피드백 후보가 발생하거나 표시 기준이 확인된다.
+- 발사 불가 또는 쿨다운 상태가 조준 UI / Reticle / Debug로 구분된다.
+- NoWeapon / WeaponCooldown / AimBlocked / FireRejected 표시 후보가 구분된다.
 - 피드백 호출과 실제 판정 흐름이 분리되어 있다.
 - UI 표시 문구는 한국어 표시 정책을 따른다.
+- 서버 대기 / 서버 거부 표현을 현재 UI 표시 기준으로 쓰지 않는다.
 ```
 
 ### PASS 기준
 
 ```text
-- 플레이어가 발사 성공, 발사 불가, 대기 상태를 즉시 이해할 수 있다.
+- 플레이어가 발사 성공, 발사 불가, 쿨다운, 무기 없음 상태를 즉시 이해할 수 있다.
 - 이펙트/사운드가 없어도 판정 흐름을 추적할 수 있다.
+- 피드백은 WeaponFire 판정 결과를 임의로 바꾸지 않는다.
 ```
 
 ---
 
-## 9.3 HitDamage
+## 9.3 HitDamage / DamageHitContext
 
-- 관련 문서: `Document/Systems/Combat/HitDamage.md` 예정
+- 관련 문서:
+  - `Document/Systems/Combat/DamageHitContext.md`
+  - `Document/Systems/Combat/Projectile.md`
+  - `Document/Systems/Combat/HitDamage.md` 예정
 
 ### 확인 항목
 
 ```text
 - 발사 결과가 빗나감 / 피격으로 구분된다.
-- 피격 결과가 피해량으로 변환된다.
-- 피해량이 현재 체력 또는 생존 상태에 반영된다.
+- Dummy HitScan 또는 Projectile Actor 충돌 결과가 DamageHitContext로 기록된다.
+- 피격 결과가 후속 피해량으로 변환될 준비가 되어 있다.
 - 피해 처리 실패 시 Aim / Fire / Hit / Damage 중 어느 단계 문제인지 분리된다.
 ```
 
 ### PASS 기준
 
 ```text
-- 로컬 테스트에서 피격과 피해 누적을 반복 확인할 수 있다.
-- 피해 결과가 UI 또는 디버그에서 확인 가능하다.
+- 로컬 테스트에서 피격/빗나감 기록을 확인할 수 있다.
+- 피해 적용이 미구현이어도 HitContext 기록 경로는 추적 가능하다.
 ```
 
 ---
@@ -467,7 +544,7 @@
 
 ```text
 - DefaultEngine.ini의 주요 GameMode/ServerGameMode 연결이 현재 싱글 전환 기준과 맞는다.
-- 기본 실행 경로에서 `CFMPGameMode`가 의도치 않게 사용되지 않는지 확인한다.
+- 기본 실행 경로에서 CFMPGameMode가 의도치 않게 사용되지 않는지 확인한다.
 - 입력/맵/런타임 설정 경로가 현재 Systems 문서와 충돌하지 않는다.
 - 오래된 ProjectSSOT/Plan 경로가 남아 있으면 실제 구조에 맞게 수정 후보로 기록한다.
 ```
@@ -535,7 +612,7 @@
 
 ## 15. 문서 버전 관리
 
-- 현재 문서 버전: `v1.2.0`
+- 현재 문서 버전: `v1.4.0`
 - 문서 상태: `Active`
 
 ### 버전 증가 기준
@@ -549,6 +626,28 @@
 ---
 
 ## 16. 체인지로그
+
+### v1.4.0 - 2026-07-13
+
+```text
+- CF-TC-006 조준 Reticle을 PASS로 갱신
+- CF-TC-013 차량 무기 조준/발사와 CF-TC-014 발사 피드백/UI를 PARTIAL로 갱신
+- Ready / FireSuccess / Cooldown 색상 전환과 연속 입력 후 텍스트 종료 확인 결과 추가
+- 전용 OutOfArc 경고의 중복 방지, 종료 조건, 다른 FireFeedback 비가림 확인 결과 추가
+- NoWeapon / AimBlocked 실제 PIE 검증을 남은 항목으로 기록
+```
+
+### v1.3.0 - 2026-07-09
+
+```text
+- WeaponFire / FireFeedback / AimReticle / VehicleAim 문서 교통정리 결과를 테스트 기준에 반영
+- FireFeedback.md 신규 Systems 문서를 예정 표현에서 현재 참조 문서로 전환
+- WeaponFire.md 예정 표현을 제거하고 현재 Systems 문서 기준으로 정리
+- CF-TC-013 / CF-TC-014 / CF-TC-015 관련 문서 참조를 최신화
+- OutOfArc / bLocalWithinWeaponArc를 단독 발사 차단 조건이 아닌 조준각 경고/디버그 상태로 명시
+- FirePending / FireRejected를 서버 상태가 아닌 로컬 발사 피드백 상태로 정리
+- VehicleDebugPanel의 Aim / Weapon 섹션을 전투 검증 기준에 반영
+```
 
 ### v1.2.0 - 2026-06-19
 

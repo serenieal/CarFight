@@ -1,7 +1,7 @@
 # CarFight — 03_FeatureQueue
 
-> 문서 버전: v1.2.0
-> 작성일(Asia/Seoul): 2026-06-18
+> 문서 버전: v1.4.0
+> 작성일(Asia/Seoul): 2026-07-13
 > 문서 상태: Active
 > 역할: CarFight의 **기능 후보 / 착수 판단 / 클라이언트·서버·관리툴 필요성**을 한 곳에서 관리한다.
 
@@ -86,14 +86,14 @@ CarFight 문서 흐름은 아래 기준으로 본다.
 | `CF-FQ-013` | 카메라/로컬 조준 고도화 | 서버 판정 없이 차량 카메라, Local Aim, Reticle 피드백을 싱글 기준으로 정리 | `P0` | `Done` | 필요 | 불필요 | 불필요 | `Document/Systems/Vehicles/VehicleCamera.md`, `Document/Systems/Vehicles/VehicleAim.md`, `Document/Systems/UI/AimReticle.md` 갱신 |
 | `CF-FQ-014` | WheelSync 시각 품질 폴리싱 | 고속 휠 스핀/조향/서스펜션 시각 품질을 기능 FAIL과 품질 후속으로 분리하고 개선 | `P1` | `Candidate` | 필요 | 불필요 | 불필요 | `Document/Systems/Vehicles/WheelSync.md` 갱신 |
 | `CF-FQ-015` | 차량 데이터 튜닝 패스 | 기준 차량 1대의 Movement/Wheel/DriveState 값을 추적 가능한 데이터 기준으로 정리 | `P1` | `Candidate` | 필요 | 불필요 | 불필요 | `Document/Systems/Vehicles/VehicleData.md` 갱신 |
-| `CF-FQ-016` | 차량 무기 조준 및 발사 | 기준 차량 1대에서 로컬 조준 상태를 실제 발사 경로로 연결 | `P0` | `Ready` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/WeaponFire.md`, `Document/Systems/Vehicles/VehicleAim.md` 갱신 |
-| `CF-FQ-017` | 발사 피드백 구현 | 발사 이펙트, 사운드, 조준 UI로 발사 성공/불가/쿨다운 상태를 읽히게 만들기 | `P0` | `Candidate` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/FireFeedback.md`, `Document/Systems/UI/AimReticle.md` 갱신 |
+| `CF-FQ-016` | 차량 무기 조준 및 발사 | 기준 차량 1대에서 로컬 조준 상태를 실제 발사 경로로 연결하고 WeaponFire 결과를 기록 | `P0` | `Done` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/WeaponFire.md`, `Document/Systems/Vehicles/VehicleAim.md`, `Document/Systems/UI/VehicleDebugPanel.md` 갱신 |
+| `CF-FQ-017` | 발사 피드백 구현 | WeaponFire 결과를 Reticle, 간단한 UI, VFX, SFX 후보로 읽히게 만들기 | `P0` | `Active` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/FireFeedback.md`, `Document/Systems/UI/AimReticle.md` 갱신 |
 | `CF-FQ-018` | 피격 판정 및 피해 처리 | 발사 결과를 피격 판정과 피해 누적으로 연결해 전투 결과가 남게 만들기 | `P0` | `Candidate` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/HitDamage.md` |
 | `CF-FQ-019` | 주행/전투 반복 테스트 | 주행 중 조준/발사/피격/피해가 반복되는지 PIE 기준으로 검증 | `P1` | `Candidate` | 필요 | 불필요 | 불필요 | `Document/ProjectSSOT/05_TestChecklist.md`, `Document/Systems/Combat/CoreLoop.md` 갱신 |
 | `CF-FQ-020` | 조작감/전투 템포/피드백 개선 | 조작감, 발사 리듬, 피격 반응, UI/사운드 피드백을 핵심 루프 기준으로 조정 | `P1` | `Candidate` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/CombatFeel.md` |
 | `CF-FQ-021` | 핵심 게임 루프 검증 | 싱글 차량 전투 루프가 다음 개발 단계로 넘어갈 수 있는지 PASS/FAIL 판정 | `P1` | `Candidate` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/CoreLoop.md`, `Document/ProjectSSOT/05_TestChecklist.md` 갱신 |
 | `CF-FQ-001` | 서버 권한 발사 요청 | 2클라 환경에서 발사 요청을 서버 권한 구조로 통과시키기 | `Icebox` | `Deferred` | 필요 | 필요 | 불필요 | `Document/Systems/Network/ServerFire.md` 또는 `Document/Systems/Combat/Fire.md` |
-| `CF-FQ-002` | 조준/발사 피드백 분리 | 서버 판정과 로컬 조준/이펙트/Reticle 피드백 책임 분리 | `Icebox` | `Deferred` | 필요 | 필요 | 불필요 | 현재는 `CF-FQ-013`의 로컬 피드백으로 대체 |
+| `CF-FQ-002` | 조준/발사 피드백 분리 | 서버 판정과 로컬 조준/이펙트/Reticle 피드백 책임 분리 | `Icebox` | `Deferred` | 필요 | 필요 | 불필요 | 현재는 `CF-FQ-017`의 로컬 FireFeedback으로 대체 |
 | `CF-FQ-003` | 체력/대미지 최소 구조 | 장기 전투 확장을 위한 체력/생존 상태 기반. 현재 최소 피해 처리는 `CF-FQ-018`에서 먼저 다룸 | `P2` | `Deferred` | 필요 | 불필요 | 낮음 | `Document/Systems/Combat/Damage.md` |
 | `CF-FQ-004` | 리스폰 최소 구조 | 2클라 전투 테스트 반복 가능 상태 만들기 | `Icebox` | `Deferred` | 필요 | 필요 | 낮음 | `Document/Systems/Network/Respawn.md` |
 | `CF-FQ-005` | 전투 결과 기록 | 매치 종료/승패/기본 결과 기록 기반 만들기 | `Icebox` | `Deferred` | 필요 | 필요 | 중간 | `Document/Systems/Combat/MatchResult.md` |
@@ -110,19 +110,57 @@ CarFight 문서 흐름은 아래 기준으로 본다.
 현재 기준 최우선 후보는 아래 순서다.
 
 ```text
-1. CF-FQ-016 차량 무기 조준 및 발사
-2. CF-FQ-017 발사 피드백 구현
-3. CF-FQ-018 피격 판정 및 피해 처리
-4. CF-FQ-019 주행/전투 반복 테스트
-5. CF-FQ-020 조작감/전투 템포/피드백 개선
-6. CF-FQ-021 핵심 게임 루프 검증
+1. CF-FQ-017 발사 피드백 구현 최종 PIE 검증
+2. CF-FQ-018 피격 판정 및 피해 처리
+3. CF-FQ-019 주행/전투 반복 테스트
+4. CF-FQ-020 조작감/전투 템포/피드백 개선
+5. CF-FQ-021 핵심 게임 루프 검증
+6. CF-FQ-012 1대 차량 주행감 고도화
 ```
 
 이유:
-- 싱글 실행 기준선과 로컬 Aim / Fire / Reticle 골격은 확인된 기반으로 본다.
-- 이제 체감 품질을 올리려면 발사 입력이 실제 전투 결과로 이어져야 한다.
-- 서버 권한 발사 요청과 2클라 검증은 현재 싱글 전투 루프 검증 목표와 충돌하므로 `Deferred`로 유지한다.
-- 무기 종류, 탄종, 장갑, AI, 피팅 전체 확장보다 최소 전투 루프를 먼저 닫는다.
+
+```text
+- CF-FQ-016 차량 무기 조준 및 발사는 WeaponFire / VehicleAim / VehicleDebugPanel Systems 기준으로 Done이다.
+- CF-FQ-017의 C++ ViewData, WBP Reticle, 상태별 색상, FireSuccess → Cooldown → 종료 흐름은 구현 및 빌드가 완료됐다.
+- Ready / FireSuccess / Cooldown 색상 전환, 연속 입력 후 텍스트 종료, OutOfArc 전용 경고 조건은 PIE에서 확인됐다.
+- NoWeapon과 AimBlocked의 실제 PIE 표시 검증이 남아 있으므로 CF-FQ-017은 Active로 유지한다.
+- 남은 검증 후 CF-FQ-017을 Done 처리하고 CF-FQ-018 피격 판정 및 피해 처리로 이동한다.
+- 서버 권한 발사 요청과 2클라 검증은 현재 싱글 전투 루프 검증 목표와 충돌하므로 Deferred로 유지한다.
+```
+
+---
+
+## 6-1. Reticle / FireFeedback 현재 구현 및 완료 기준
+
+`CF-FQ-017`의 현재 구현 판단과 Done 전 검증에는 아래 문서를 우선한다.
+
+```text
+- Document/Systems/Combat/FireFeedback.md
+- Document/Systems/UI/AimReticle.md
+- Document/Systems/Combat/WeaponFire.md
+- Document/Systems/Vehicles/VehicleAim.md
+- Document/Systems/UI/VehicleDebugPanel.md
+```
+
+현재 구현 상태:
+
+```text
+- WeaponFire는 판정/기록 담당이고, ACFVehiclePawn::BuildFireFeedbackViewData()가 UI용 표시 데이터를 만든다.
+- UCFAimReticleWidget은 기본 Aim 상태와 FireFeedback ViewData를 합쳐 최종 Reticle 상태, 텍스트, 색상을 갱신한다.
+- WBP_AimReticle에는 중앙점/4방향 브라켓, FireFeedback State/Hint, Cooldown, 전용 OutOfArc 경고가 연결되어 있다.
+- FireSuccess는 짧게 성공 색상으로 표시된 뒤 Cooldown으로 전환되고, 쿨다운 종료 후 텍스트가 사라진다.
+- OutOfArcWarning은 전용 보조 경고로 표시하며 주 Reticle 상태와 색상을 강제로 덮어쓰지 않는다.
+- FirePending은 타입과 표시 문구만 유지하며 현재 동기 발사 구조에서는 사용하지 않는다.
+```
+
+Done 전 남은 검증:
+
+```text
+- NoWeapon 실제 PIE 표시 및 회색 상태 확인
+- AimBlocked 실제 PIE 표시 및 주황 상태 확인
+- 위 두 상태의 유지 시간 종료 후 텍스트 제거 확인
+```
 
 ---
 
@@ -195,7 +233,7 @@ Document/Plan/<기능명>/DecisionLog.md
 
 ## 10. 문서 버전 관리
 
-- 현재 문서 버전: `v1.2.0`
+- 현재 문서 버전: `v1.4.0`
 - 문서 상태: `Active`
 
 ### 버전 증가 기준
@@ -209,6 +247,28 @@ Document/Plan/<기능명>/DecisionLog.md
 ---
 
 ## 11. 체인지로그
+
+### v1.4.0 - 2026-07-13
+
+```text
+- CF-FQ-017 발사 피드백 구현 상태를 Ready에서 Active로 변경
+- Reticle 이미지/텍스트 상태별 색상과 FireSuccess → Cooldown → 종료 흐름의 구현 및 PIE 확인 결과 반영
+- 전용 OutOfArc 경고의 중복 방지, 종료 조건, 다른 FireFeedback 비가림 조건 확인 결과 반영
+- NoWeapon / AimBlocked 실제 PIE 검증을 Done 전 남은 조건으로 명시
+- 다음 우선순위를 CF-FQ-017 최종 검증 후 CF-FQ-018 착수 순서로 갱신
+```
+
+### v1.3.0 - 2026-07-09
+
+```text
+- CF-FQ-016 차량 무기 조준 및 발사를 Done으로 조정
+- CF-FQ-017 발사 피드백 구현을 Ready로 조정
+- 현재 최우선 착수 후보를 FireFeedback / Reticle 구현 기준으로 재정렬
+- FireFeedback.md 신규 Systems 문서 생성 상태를 완료 후 Systems 위치와 착수 기준에 반영
+- CF-FQ-002 조준/발사 피드백 분리의 현재 대체 기준을 CF-FQ-017 로컬 FireFeedback으로 갱신
+- Reticle / FireFeedback 착수 기준 섹션을 추가
+- OutOfArc / FirePending / FireRejected / Cooldown / NoWeapon 관련 현재 기준을 기능 큐에 반영
+```
 
 ### v1.2.0 - 2026-06-19
 
