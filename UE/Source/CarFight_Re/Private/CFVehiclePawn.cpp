@@ -1,9 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.103.0
-// Date: 2026-07-08
+// Version: 2.107.0
+// Date: 2026-07-10
 // Description: CarFight 싱글플레이 차량 Pawn 구현
 // Changelog:
+// - v2.107.0: OutOfWeaponArc 경고 표시를 발사 실패 피드백 유지 시간 안에서만 활성화.
+// - v2.106.0: 발사 성공 피드백을 쿨다운보다 우선 표시하고 성공 표시 종료 후 쿨다운 상태로 전환.
+// - v2.105.1: FireFeedback FName 삼항 연산의 문자열/EName 형식 불일치를 명시적 FName 생성으로 수정.
+// - v2.105.0: 연속 발사 후 WeaponCooldown / OutOfWeaponArc FireFeedback이 종료되지 않던 문제를 표시 유지 조건 기준으로 수정.
+// - v2.104.0: Pawn에서 Reticle / FireFeedback UI용 ViewData를 생성하고 발사 결과 적용 시 피드백 시작 시간을 기록.
 // - v2.103.0: 자동 스케일된 휠 메시의 바운드 중심을 Wheel_Mesh 원점에 맞춰 시각 휠과 물리 휠 중심 불일치를 보정.
 // - v2.102.0: VehicleData WheelVisualConfig 옵션이 켜진 경우 WheelRadius 기준으로 Wheel_Mesh_* 표시 스케일을 자동 보정.
 // - v2.100.0: 터렛 시각 장착에서 MountProfile legacy 직접 TurretMountData fallback을 제거하고 EquipmentPresetData 전용 경로로 전환.
@@ -4189,6 +4194,9 @@ void ACFVehiclePawn::ApplyFireResult(const FCFVehicleFireRequest& FireCommand, c
 	LastFireRequest = FireCommand;
 	LastFireResult = FireResult;
 
+	// [v2.104.0] 마지막 로컬 FireFeedback 표시 시작 시간을 기록합니다.
+	LastFireFeedbackStartTimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : -1.0;
+
 	if (FireResult.bAccepted && VehicleWeaponComp)
 	{
 		VehicleWeaponComp->RecordAcceptedFire(FireCommand.ClientFireTimeSeconds);
@@ -4200,6 +4208,136 @@ void ACFVehiclePawn::ApplyFireResult(const FCFVehicleFireRequest& FireCommand, c
 		VehicleAimComp->ApplyFireValidationResult(FireResult);
 		VehicleAimComp->UpdateAimVisualFromFireResult(FireCommand, FireResult);
 	}
+}
+
+// [v2.104.0] Reticle / FireFeedback UI가 읽을 현재 로컬 발사 피드백 표시 데이터를 만듭니다.
+FCFVehicleFireFeedbackViewData ACFVehiclePawn::BuildFireFeedbackViewData() const
+{
+	// [v2.104.0] Reticle / FireFeedback UI에 반환할 표시 데이터입니다.
+	FCFVehicleFireFeedbackViewData ViewData;
+	ViewData.LastRejectReason = LastFireResult.RejectReason;
+
+	// [v2.104.0] 현재 월드 시간 또는 fallback 0초입니다.
+	const double CurrentTimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+
+	// [v2.104.0] 유효한 피드백 시작 시간이 있는지 여부입니다.
+	const bool bHasValidFeedbackStartTime = LastFireFeedbackStartTimeSeconds >= 0.0;
+
+	// [v2.104.0] 마지막 피드백 시작 이후 지난 시간입니다.
+	const double FeedbackAgeSeconds = bHasValidFeedbackStartTime
+		? CurrentTimeSeconds - LastFireFeedbackStartTimeSeconds
+		: 1000000.0;
+
+	// [v2.104.0] 현재 활성 무기의 전체 쿨다운 시간입니다.
+	const float TotalCooldownSeconds = VehicleWeaponComp
+		? VehicleWeaponComp->GetActiveWeaponCooldownSeconds()
+		: 0.0f;
+
+	// [v2.104.0] 현재 활성 무기의 남은 쿨다운 시간입니다.
+	const float RemainingCooldownSeconds = VehicleWeaponComp
+		? VehicleWeaponComp->GetRemainingCooldownSeconds(static_cast<float>(CurrentTimeSeconds))
+		: 0.0f;
+
+	ViewData.TotalCooldownSeconds = TotalCooldownSeconds;
+	ViewData.RemainingCooldownSeconds = RemainingCooldownSeconds;
+	ViewData.bShowCooldown = TotalCooldownSeconds > 0.0f && RemainingCooldownSeconds > 0.0f;
+	ViewData.CooldownRatio = ViewData.bShowCooldown
+		? FMath::Clamp(RemainingCooldownSeconds / TotalCooldownSeconds, 0.0f, 1.0f)
+		: 0.0f;
+
+	if (VehicleAimComp)
+	{
+		// [v2.104.0] 로컬 플레이어 기준 현재 Aim 상태입니다.
+		const FCFVehicleLocalAimState LocalAimState = VehicleAimComp->GetLocalAimState();
+		ViewData.bShowOutOfArcWarning = !LocalAimState.bLocalWithinWeaponArc;
+	}
+
+	if (LastFireResult.bAccepted)
+	{
+		// [v2.106.0] 발사 성공 직후에는 쿨다운보다 성공 피드백을 먼저 표시할지 판단합니다.
+		const bool bWithinSuccessFeedbackTime = FeedbackAgeSeconds <= FireSuccessFeedbackDurationSeconds;
+		if (bWithinSuccessFeedbackTime)
+		{
+			ViewData.FeedbackState = ECFVehicleFireFeedbackState::FireSuccess;
+			ViewData.bFeedbackActive = true;
+			ViewData.bOverrideReticleState = false;
+			ViewData.FeedbackDisplayKey = TEXT("FireSuccess");
+			return ViewData;
+		}
+	}
+
+	if (ViewData.bShowCooldown)
+	{
+		// [v2.106.0] 성공 피드백 유지 시간이 끝난 뒤 남은 쿨다운을 주 상태로 표시합니다.
+		ViewData.FeedbackState = ECFVehicleFireFeedbackState::Cooldown;
+		ViewData.bFeedbackActive = true;
+		ViewData.bOverrideReticleState = true;
+		ViewData.FeedbackDisplayKey = TEXT("Cooldown");
+		return ViewData;
+	}
+
+	if (LastFireResult.bAccepted)
+	{
+		// [v2.106.0] 성공 피드백과 쿨다운이 모두 끝나면 이전 성공 결과를 화면에 남기지 않습니다.
+		ViewData.FeedbackState = ECFVehicleFireFeedbackState::None;
+		ViewData.bFeedbackActive = false;
+		ViewData.bOverrideReticleState = false;
+		ViewData.FeedbackDisplayKey = NAME_None;
+		return ViewData;
+	}
+
+	// [v2.104.0] 발사 실패 피드백 유지 시간 안에 있는지 여부입니다.
+	const bool bWithinRejectedFeedbackTime = FeedbackAgeSeconds <= FireRejectedFeedbackDurationSeconds;
+
+	switch (LastFireResult.RejectReason)
+	{
+	case ECFVehicleFireRejectReason::NoWeapon:
+		ViewData.FeedbackState = ECFVehicleFireFeedbackState::NoWeapon;
+		ViewData.bFeedbackActive = bWithinRejectedFeedbackTime;
+		ViewData.bOverrideReticleState = true;
+		ViewData.FeedbackDisplayKey = TEXT("NoWeapon");
+		break;
+
+	case ECFVehicleFireRejectReason::WeaponCooldown:
+		// [v2.105.1] 마지막 거부 사유가 남아 있어도 실제 쿨다운이 끝나면 피드백을 비활성화합니다.
+		ViewData.FeedbackState = ECFVehicleFireFeedbackState::Cooldown;
+		ViewData.bFeedbackActive = ViewData.bShowCooldown;
+		ViewData.bOverrideReticleState = ViewData.bShowCooldown;
+		ViewData.FeedbackDisplayKey = ViewData.bShowCooldown ? FName(TEXT("Cooldown")) : NAME_None;
+		break;
+
+	case ECFVehicleFireRejectReason::AimBlocked:
+		ViewData.FeedbackState = ECFVehicleFireFeedbackState::AimBlocked;
+		ViewData.bFeedbackActive = bWithinRejectedFeedbackTime;
+		ViewData.bOverrideReticleState = true;
+		ViewData.FeedbackDisplayKey = TEXT("AimBlocked");
+		break;
+
+	case ECFVehicleFireRejectReason::OutOfWeaponArc:
+		// [v2.107.0] 조준각 경고 텍스트는 발사 실패 피드백 유지 시간 안에서만 활성화합니다.
+		ViewData.FeedbackState = ECFVehicleFireFeedbackState::OutOfArcWarning;
+		ViewData.bFeedbackActive = bWithinRejectedFeedbackTime;
+		ViewData.bOverrideReticleState = false;
+		ViewData.bShowOutOfArcWarning = bWithinRejectedFeedbackTime;
+		ViewData.FeedbackDisplayKey = bWithinRejectedFeedbackTime ? FName(TEXT("OutOfArcWarning")) : NAME_None;
+		break;
+
+	case ECFVehicleFireRejectReason::None:
+		ViewData.FeedbackState = ECFVehicleFireFeedbackState::None;
+		ViewData.bFeedbackActive = false;
+		ViewData.bOverrideReticleState = false;
+		ViewData.FeedbackDisplayKey = NAME_None;
+		break;
+
+	default:
+		ViewData.FeedbackState = ECFVehicleFireFeedbackState::FireRejected;
+		ViewData.bFeedbackActive = bWithinRejectedFeedbackTime;
+		ViewData.bOverrideReticleState = true;
+		ViewData.FeedbackDisplayKey = TEXT("FireRejected");
+		break;
+	}
+
+	return ViewData;
 }
 
 void ACFVehiclePawn::HandleHandbrakeStarted(const FInputActionValue&)

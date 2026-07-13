@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.101.0
-// Date: 2026-07-03
+// Version: 2.102.0
+// Date: 2026-07-09
 // Description: CarFight 싱글플레이 차량 Pawn 기준 클래스
 // Changelog:
+// - v2.102.0: Reticle / FireFeedback UI가 읽을 Pawn 측 FireFeedback ViewData 설정과 생성 함수를 추가.
 // - v2.101.0: VehicleDebug EquipmentPresetData 기준 설명을 legacy 직접 fallback 제거 정책에 맞게 갱신.
 // - v2.100.0: VehicleDebug Weapon 카테고리에 활성 EquipmentPresetData 상태를 추가하고 터렛 시각 장착도 EquipmentPresetData 우선 해석으로 전환.
 // - v2.99.0: ActiveTurretMountData Debug 툴팁을 MountProfile inline fallback 제거 정책에 맞게 정리.
@@ -86,6 +87,7 @@
 #include "CFVehicleAimTypes.h"
 #include "CFVehicleCameraTypes.h"
 #include "CFDamageTypes.h"
+#include "CFVehicleFireFeedbackTypes.h"
 #include "CFVehicleWeaponTypes.h"
 #include "Components/SlateWrapperTypes.h"
 #include "Engine/EngineTypes.h"
@@ -1003,6 +1005,18 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Aim", meta=(DisplayName="마지막 발사 결과 (LastFireResult)", ToolTip="마지막 로컬 발사 검증 결과 디버그 캐시입니다."))
 	FCFVehicleFireResult LastFireResult;
 
+	// [v2.102.0] 마지막 로컬 발사 피드백이 시작된 월드 시간입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|FireFeedback", meta=(DisplayName="마지막 FireFeedback 시작 시간 (LastFireFeedbackStartTimeSeconds)", ToolTip="Reticle / FireFeedback UI가 최근 발사 성공 또는 실패 피드백 표시 시간을 계산할 때 사용하는 월드 시간입니다."))
+	double LastFireFeedbackStartTimeSeconds = -1.0;
+
+	// [v2.102.0] 발사 성공 피드백을 화면에 유지할 시간입니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|FireFeedback", meta=(ClampMin="0.0", DisplayName="발사 성공 피드백 유지 시간 (FireSuccessFeedbackDurationSeconds)", ToolTip="발사 성공 피드백을 Reticle UI에 짧게 표시할 시간입니다."))
+	float FireSuccessFeedbackDurationSeconds = 0.12f;
+
+	// [v2.102.0] 발사 실패 피드백을 화면에 유지할 시간입니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|FireFeedback", meta=(ClampMin="0.0", DisplayName="발사 실패 피드백 유지 시간 (FireRejectedFeedbackDurationSeconds)", ToolTip="발사 실패 또는 조건 미충족 피드백을 Reticle UI에 표시할 시간입니다."))
+	float FireRejectedFeedbackDurationSeconds = 0.35f;
+
 	// [v2.97.0] 마지막 Damage HitContext 기록이 존재하는지 여부입니다.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Damage", meta=(DisplayName="마지막 Damage HitContext 존재 여부 (bHasLastDamageHitContext)", ToolTip="Dummy HitScan 또는 Projectile Actor 충돌로 마지막 Damage HitContext Debug가 기록됐는지 여부입니다."))
 	bool bHasLastDamageHitContext = false;
@@ -1135,6 +1149,10 @@ public:
 
 	// [v2.97.0] Projectile Pool에서 반환된 Hit 발사체를 Damage HitContext Debug로 기록합니다.
 	void RecordProjectileDamageHitContextFromPool(const ACFProjectileActor* InProjectileActor);
+
+	// [v2.102.0] Reticle / FireFeedback UI가 읽을 현재 로컬 발사 피드백 표시 데이터를 만듭니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|FireFeedback", meta=(DisplayName="FireFeedback 표시 데이터 만들기 (BuildFireFeedbackViewData)", ToolTip="마지막 로컬 발사 결과, 무기 쿨다운, 로컬 조준 상태를 Reticle / FireFeedback UI 표시 데이터로 변환합니다."))
+	FCFVehicleFireFeedbackViewData BuildFireFeedbackViewData() const;
 
 	// [v2.86.0] 현재 터렛 시각 장착 요약 문자열을 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Turret", meta=(ToolTip="현재 활성 장착 프로파일의 터렛 시각 메쉬 장착 상태 요약을 반환합니다."))
