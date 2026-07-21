@@ -2,8 +2,8 @@
 
 > 역할: CarFight 프로젝트의 **현재 실제 기준선 / 임시 운영 편차 / 현재 리스크**를 고정한다.
 > 공통 규칙 원본: `Document/SSOT/`
-> 문서 버전: v2.2.0
-> 마지막 정리(Asia/Seoul): 2026-06-19
+> 문서 버전: v2.3.0
+> 마지막 정리(Asia/Seoul): 2026-07-15
 
 
 ---
@@ -11,6 +11,89 @@
 ## 먼저 확인할 방향
 - 최종 방향은 `00_Vision.md`를 기준으로 본다.
 - 이 문서는 그 방향 아래에서 **지금 실제로 굴러가는 상태만** 적는다.
+
+---
+
+## 2026-07-15 현재 프로젝트 상태
+
+### 1. 현재 완료된 전투 기준선
+
+현재 싱글 기준 차량의 최소 전투 판정 루프는 아래 범위까지 완료됐다.
+
+```text
+- CF-FQ-016 차량 무기 조준 및 발사: Done
+- CF-FQ-017 Reticle / FireFeedback UI: Done
+- CF-FQ-018 피격 판정 및 피해 처리: Done
+- CF-FQ-022 조준점·터렛·총구 정렬: Done
+- CF-FQ-023 고속 Projectile 연속 충돌: Done
+```
+
+현재 검증된 흐름:
+
+```text
+차량 주행
+→ Reticle 목표와 터렛 / Muzzle 정렬
+→ 승인된 HitScan 또는 Projectile 발사
+→ 시각 차체 SM_Body 첫 Blocking Hit
+→ FCFDamageHitContext 생성
+→ BaseDamage 체력 누적 감소
+→ 최초 Destroyed 상태 전환
+→ Reticle / FireFeedback 상태 표시
+```
+
+### 2. 현재 활성 병목
+
+현재 기능 병목은 발사·피격·피해 판정이 아니라 **전투 결과를 실제 화면 효과와 소리로 표현하는 연출 계층 부재**다.
+
+```text
+- 발사 성공 Muzzle FX와 발사 사운드 없음
+- HitScan / Projectile Impact FX와 Impact 사운드 없음
+- 최초 차량 파괴 FX와 파괴 사운드 없음
+- ProjectileData.ImpactEffectId는 임시 ID로만 존재
+- C++에 Niagara / USoundBase 연출 데이터 계약이 없음
+```
+
+따라서 현재 활성 작업은 다음으로 고정한다.
+
+```text
+CF-FQ-024 전투 FX 및 사운드 구현
+→ 발사·Impact·파괴 연출 P0 사용자 PIE 완료
+→ CF-FQ-019 주행·전투 반복 테스트
+→ CF-FQ-020 조작감·전투 템포·피드백 개선
+→ CF-FQ-021 핵심 게임 루프 검증
+```
+
+대표 Plan:
+
+```text
+Document/Plan/CombatFxAudio/ImplementationDesign.md
+```
+
+### 3. 현재 구현 원칙
+
+```text
+- 전투 판정과 연출을 분리한다.
+- 발사 승인, 첫 Impact와 최초 파괴 전환은 기존 C++ 판정이 소유한다.
+- Niagara, 사운드와 Attenuation 선택은 DataAsset과 Unreal Editor 자산이 소유한다.
+- 연출 자산이 없거나 재생에 실패해도 발사·피해·파괴 결과는 유지한다.
+- 소스 코드에 특정 FX / Audio 자산 경로를 하드코딩하지 않는다.
+- P0에서는 발사, Impact와 파괴의 최소 1회성 연출만 구현한다.
+```
+
+### 4. 현재 리스크와 대응
+
+| 리스크 | 내용 | 대응 |
+|---|---|---|
+| 연출 중복 | Projectile OnHit와 보조 Sweep 또는 추가 피해에서 같은 FX/Sound가 반복될 위험 | 기존 첫 Impact 및 최초 Destroyed 1회 판정을 연출 트리거로 사용 |
+| Pool 잔류 | Projectile Pool 재사용 시 Trail 또는 AudioComponent 상태가 남을 위험 | 활성화·반환 시 연출 상태 명시적 초기화 |
+| 판정 결합 | 연출 실패가 발사·피해 실패로 이어질 위험 | 연출 요청은 결과 판정 이후 호출하고 null-safe로 처리 |
+| 자산 하드코딩 | 임시 자산 경로가 C++에 고정될 위험 | 공용 Combat FX / Audio DataAsset 참조 사용 |
+| 과도한 폴리싱 | 완성형 사운드·표면 분기·파괴 연출로 범위가 확산될 위험 | P0 필수 6개 연출을 먼저 완료하고 나머지는 CF-FQ-020으로 이관 |
+
+### 5. 과거 상태 기록 해석
+
+아래 `2026-06-18 현재 프로젝트 상태` 이후 내용은 싱글 전환 당시의 기준과 역사 기록이다.
+현재 기능 진행 상태와 우선순위는 이 `2026-07-15 현재 프로젝트 상태`, `02_Roadmap.md`, `03_FeatureQueue.md`를 우선한다.
 
 ---
 
@@ -461,6 +544,12 @@ DA_PoliceCar
 ---
 
 ## 변경 이력
+- v2.3.0 (2026-07-15)
+  - 완료된 조준·발사·Reticle/UI·피격·피해·고속 Projectile 기준선을 현재 상태로 추가했다.
+  - 현재 병목을 실제 전투 FX / Audio 부재로 정리하고 CF-FQ-024를 활성 작업으로 지정했다.
+  - 현재 진행 순서를 CF-FQ-024 → CF-FQ-019 → CF-FQ-020 → CF-FQ-021로 갱신했다.
+  - 판정과 연출 분리, 데이터 기반 자산 참조, 중복·Pool 잔류 방지 원칙과 리스크를 추가했다.
+
 - v2.2.0 (2026-06-19)
   - 다음 개발 기준을 싱글 로컬 전투 루프 구현/검증 순서로 갱신했다.
   - 현재 확인된 Aim Fire/Reticle 골격과 앞으로 구현할 차량 무기/피격/피해 시스템을 분리했다.
@@ -488,3 +577,16 @@ DA_PoliceCar
 - v1.1.0 (2026-04-15)
   - 문서 버전 / 마지막 정리 날짜를 갱신했다.
   - 현재 카메라 기준선 섹션을 추가했다.
+
+---
+
+## Migration
+
+### v2.3.0 적용 안내
+
+```text
+- 2026-06-18 이하 상태는 과거 싱글 전환 기록으로 유지한다.
+- 현재 진행 판단은 2026-07-15 상태 섹션과 CF-FQ-024 대표 Plan을 우선한다.
+- 완료된 발사·피격·피해 Systems는 유지하며 실제 FX / Audio가 이미 구현된 것으로 해석하지 않는다.
+- CF-FQ-024 완료 전에는 신규 CombatFxAudio Systems 문서를 Current로 승격하지 않는다.
+```

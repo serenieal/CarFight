@@ -1,8 +1,8 @@
 # CombatPlan README
 
-- 문서 버전: v0.3
+- 문서 버전: v0.4
 - 작성일: 2026-06-02
-- 최근 갱신일: 2026-06-19
+- 최근 갱신일: 2026-07-14
 - 문서 상태: Current
 - 담당 범위: CarFight 전략 / 전투 시스템 기획 허브 운영 원칙
 
@@ -10,7 +10,7 @@
 
 ## 1. 목적
 
-`Document/Plan/CombatPlan/`은 CarFight의 전략 / 전투 시스템 기획을 누적 관리하는 전용 폴더다.
+`Document/ProjectSSOT/CombatPlan/`은 CarFight의 전략 / 전투 시스템 기획을 누적 관리하는 전용 폴더다.
 
 이 폴더는 단일 문서를 저장하기 위한 임시 위치가 아니라, 전투 시스템의 기준 문서들을 관리하는 계획 문서 허브로 사용한다.
 
@@ -60,7 +60,7 @@ CarFight의 전투 정체성은 반드시 자동차 기반으로 재해석한다
 ## 3. 현재 문서 구조
 
 ```text
-Document/Plan/CombatPlan/
+Document/ProjectSSOT/CombatPlan/
   README.md               # 이 폴더의 목적과 운영 원칙
   00_Index.md             # 전투 시스템 전체 기획 목차
   01_Identity.md          # 전투 정체성
@@ -128,7 +128,11 @@ Document/Plan/CombatPlan/
 
 ## 5. 운영 방식
 
-새 기획을 정할 때는 먼저 `00_Index.md`에서 위치를 확인한다.
+CombatPlan을 읽을 때는 먼저 `00_Index.md`에서 작업 주제와 필요한 번호 문서를 선택한다.
+전투 작업이 아닌 경우 CombatPlan 전체를 읽지 않는다.
+전투 작업인 경우에도 `README.md`, `00_Index.md`, 선택한 주제 문서만 먼저 읽고 나머지는 필요할 때 추가한다.
+
+새 기획을 정할 때도 먼저 `00_Index.md`에서 반영 위치를 확인한다.
 
 결정된 내용은 해당 번호 문서에 반영하고, 중요한 결정은 `DecisionLog.md`에도 별도로 기록한다.
 
@@ -146,6 +150,12 @@ Document/Plan/CombatPlan/
 
 ## 6. Changelog
 
+### v0.4
+
+- CombatPlan의 안내 경로를 실제 위치인 `Document/ProjectSSOT/CombatPlan/`으로 정정.
+- 전투 작업이 아닌 경우 CombatPlan 전체를 읽지 않는 규칙 추가.
+- 전투 작업도 `00_Index.md`에서 필요한 번호 문서만 선택해서 읽도록 운영 규칙 보강.
+
 ### v0.3
 
 - CombatPlan 기준 전투 범위를 싱글플레이 AI 교전으로 명시.
@@ -160,6 +170,14 @@ Document/Plan/CombatPlan/
 
 ### v0.1
 
-- `Document/Plan/CombatPlan/` 전투 시스템 기획 허브 생성.
+- `Document/ProjectSSOT/CombatPlan/` 전투 시스템 기획 허브 생성.
 - 문서 구조와 운영 규칙 정의.
 - 전투 시스템 전체 목차의 저장 위치 확정.
+
+---
+
+## 7. Migration
+
+- CombatPlan 파일과 폴더는 이동하지 않았다.
+- 기존 `Document/Plan/CombatPlan/` 참조만 실제 위치인 `Document/ProjectSSOT/CombatPlan/`으로 정정했다.
+- 앞으로 전투 설계 작업은 `00_Index.md`를 먼저 읽고 필요한 번호 문서만 선택한다.

@@ -1,9 +1,9 @@
 # VehicleAim
 
-- Version: 1.2.0
-- Date: 2026-07-09
-- Status: Current / Single Player Local Aim Flow
-- Scope: `VehicleCamera`가 만든 조준 결과를 로컬 표시, 로컬 발사 검증 상태, 로컬 시각화 상태로 분리해 관리하는 현재 기준 문서
+- Version: 1.8.1
+- Date: 2026-07-21
+- Status: Current / P0 Aim Alignment and CF-FQ-025 Turret Reticle User PIE Verified
+- Scope: `VehicleCamera`가 만든 조준 결과와 `FCFVehicleWeaponAimSolution`을 로컬 표시/검증/시각 상태로 관리하는 현재 구현
 
 ---
 
@@ -54,6 +54,7 @@ NoAuthority        -> InvalidLocalState
 - 로컬 발사 명령 주체: `ACFVehiclePawn::BuildFireCommand()` 계열 함수
 - 로컬 발사 검증 상태: `FCFVehicleFireValidationState`
 - 로컬 조준 시각 상태: `FCFVehicleAimVisualState`
+- 무기 조준 해 상태: `FCFVehicleWeaponAimSolution`
 - 현재 대표 입력/전투 연결 경로:
   - `ACFVehiclePawn::HandleFireStarted()`
   - `ACFVehiclePawn::BuildFireCommand()`
@@ -148,10 +149,11 @@ NoAuthority        -> InvalidLocalState
 7. 목표 위치가 비정상적이면 차량 정면 방향을 fallback으로 사용한다.
 8. 월드 조준 방향을 차량 로컬 Yaw/Pitch 각도로 변환한다.
 9. DefaultAimProfile의 Yaw/Pitch 범위 안에 있는지 계산한다.
-10. 카메라 런타임 상태의 bAimBlocked를 읽는다.
-11. 조준 방향이 유효하고 bAimBlocked가 아니면 Local Aim 기준 발사 가능 예측으로 본다.
-12. bLocalWithinWeaponArc는 별도 표시/디버그 값으로 저장한다.
-13. 결과를 FCFVehicleLocalAimState에 저장한다.
+10. 카메라 런타임 상태의 목표 표면 선택용 Blocking Hit 여부를 기록한다.
+11. FCFVehicleWeaponAimSolution에서 정책값, 요구 방향, 현재 Muzzle 방향, 실제 최종 방향과 정렬/차단 상태를 읽는다.
+12. 유효한 Aim Solution과 최종 방향이 있고 MuzzleBlocked가 아니며 정책상 정렬이 발사를 막지 않으면 Local Aim 기준 발사 가능 예측으로 본다.
+13. bLocalWithinWeaponArc는 별도 표시/디버그 값으로 저장한다.
+14. 결과를 FCFVehicleLocalAimState에 저장한다.
 ```
 
 현재 `LocalAimState`에 저장되는 핵심 값:
@@ -163,12 +165,13 @@ NoAuthority        -> InvalidLocalState
 - bLocalCanFire
 - bLocalWithinWeaponArc
 - bLocalAimBlocked
+- bLocalAimTraceHasBlockingHit
 ```
 
 중요한 기준:
 
 ```text
-bLocalCanFire = 조준 방향 유효 && !bAimBlocked
+bLocalCanFire = Aim Solution 유효 && 최종 AimDirection 유효 && !MuzzleBlocked && (bAllowFireWhileAligning || !정렬 중)
 bLocalWithinWeaponArc = 기준 AimProfile 범위 안/밖 표시값
 ```
 
@@ -179,7 +182,135 @@ bLocalWithinWeaponArc = 기준 AimProfile 범위 안/밖 표시값
 
 ---
 
+## 7-1. 현재 Reticle / Turret / Muzzle 정렬 구현
+
+2026-07-13 사용자 PIE에서 화면 Reticle과 실제 사격 방향 불일치가 확인됐고, 2026-07-14 C++ 구현에서 아래 단일 Aim Solution 구조로 정리됐다.
+
+현재 코드 기준 방향 생성 지점은 아래와 같다.
+
+```text
+Camera Aim Target
+- FollowCamera 위치에서 카메라 방향으로 WeaponHit Trace
+- AimHitLocation 생성
+
+DesiredAimDirection
+- Muzzle 위치에서 AimHitLocation 방향 계산
+
+Turret Aim Direction
+- DesiredAimDirection을 계속 추적
+
+Final Fire Direction
+- 정렬 중 정책 true이면 CurrentMuzzleDirection
+- 정렬 완료이면 DesiredAimDirection
+- 정렬 중 정책 false이면 ValidateFireCommand에서 거부
+```
+
+각 방향은 의미가 다르지만 하나의 `FCFVehicleWeaponAimSolution`에서 함께 기록한다.
+
+```text
+DesiredAimDirection = 요구 방향
+CurrentMuzzleDirection = 현재 총구 방향
+AimDirection = 실제 최종 발사 방향
+```
+
+카메라 Aim Trace, Dummy HitScan, Muzzle obstruction은 모두 `WeaponHit` 응답 기준을 사용한다.
+
+현재 상태 해석:
+
+```text
+- LocalAimTargetLocation은 카메라가 선택한 목표점이다.
+- DesiredAimDirection은 Muzzle에서 Reticle 목표점으로 향하는 요구 방향이다.
+- CurrentMuzzleDirection은 현재 Muzzle Socket X축 방향이다.
+- AimDirection은 HitScan과 Projectile이 공유하는 실제 최종 발사 방향이다.
+- 정렬 중 정책 true이면 AimDirection은 CurrentMuzzleDirection이다.
+- 정렬 완료 후 AimDirection은 DesiredAimDirection이다.
+- 정렬 중 정책 false이면 ValidateFireCommand가 TurretAligning 또는 WeaponNotAligned로 거부한다.
+- MuzzleBlocked는 실제 최종 AimDirection 경로를 검사하며 정책과 관계없이 거부한다.
+```
+
+이 구현의 설계와 검증 기준은 아래 문서를 우선한다.
+
+```text
+Document/Plan/AimFireAlignment/ImplementationDesign.md
+```
+
+현재 구조 요약:
+
+```text
+- Reticle이 지시하는 월드 위치를 DesiredAimTargetLocation SSOT로 사용
+- Camera Aim Trace와 실제 무기 Trace의 WeaponHit 기준 통일
+- Muzzle → DesiredAimTargetLocation 요구 방향 계산
+- 터렛이 요구 방향을 추적
+- CurrentMuzzleDirection과 요구 방향의 정렬 오차 계산
+- 터렛별 정책에 따라 정렬 중 현재 Muzzle 방향 발사 또는 정렬 완료 전 거부
+- 총구 앞 장애물 별도 Trace
+- OutOfArc와 TurretAligning 분리
+```
+
+---
+
+## 7-2. 조준 레티클과 터렛 레티클 데이터 책임
+
+2026-07-21 확정 기준:
+
+```text
+Image_CenterDot
+→ 사용자가 화면 내에서 지정하는 조준 레티클
+→ Camera Aim Trace
+→ AimTargetLocation
+
+AimTargetLocation
+→ 터렛이 추적할 3D 목표점
+
+CurrentMuzzleDirection
+→ 터렛이 현재 실제로 조준하는 방향
+→ Image_WeaponReticle 터렛 레티클의 3D 지점 계산 기준
+
+AimDirection
+→ 정렬 상태와 발사 허용 정책을 반영한 실제 Fire Command 방향
+→ 터렛 레티클의 제품 의미 기준이 아님
+```
+
+터렛 레티클은 HitScan/Projectile, 중력 적용 여부, 첫 충돌과 착탄 위치에 의존하지 않는다.
+투사체 착탄 위치는 VehicleAim Reticle 데이터에 합치지 않고 후속 별도 3D 표시 기능에서 다룬다.
+
+현재 C++은 `bHasValidTurretReticlePoint`, `TurretReticleWorldLocation`, `TurretReticleDistance`를 제공한다.
+`TurretReticleWorldLocation`은 `AimOrigin + CurrentMuzzleDirection × TurretReticleDistance`이며, 비교 거리는 `AimOrigin`에서 `AimTargetLocation`까지의 거리다.
+UI는 이 터렛 레티클 전용 값만 소비하고 기존 `ECFWeaponReticleMode`와 `WeaponPreviewWorldLocation`은 Legacy Debug로만 보존한다.
+공식 에디터 빌드와 2026-07-21 사용자 PIE에서 계획한 터렛 레티클 동작을 확인했다.
+세부 기준은 `Document/Plan/ReticleAimDirection/ImplementationDesign.md` v0.3.2를 따른다.
+
+---
+
 ## 8. 차량 로컬 조준각 계산
+
+### 8.1 AimFireAlignment Core 구현 상태
+
+2026-07-13 Core C++ 구현 이후 현재 기준은 아래와 같다.
+
+```text
+- Camera Aim Trace는 WeaponHit 기준을 사용한다.
+- UCFVehicleAimComp는 FCFVehicleWeaponAimSolution을 보관한다.
+- AimOrigin은 Muzzle 위치를 우선 사용한다.
+- DesiredAimDirection은 Muzzle 위치에서 Reticle 목표점으로 향하는 요구 방향이다.
+- CurrentMuzzleDirection은 현재 Muzzle Socket X축 방향이다.
+- AimDirection은 정책과 정렬 상태를 반영한 실제 최종 발사 방향이다.
+- HitScan / Projectile은 같은 AimOrigin / AimDirection / AimTargetLocation을 공유한다.
+- CurrentMuzzleDirection과 DesiredAimDirection의 정렬 오차를 WeaponAlignmentErrorDeg로 기록한다.
+- TurretAligning, WeaponNotAligned, MuzzleBlocked를 별도 거부 사유로 기록한다.
+- VehicleDebug Panel은 Weapon Aim Solution 하위 섹션으로 현재 값을 표시한다.
+```
+
+검증 상태:
+
+```text
+- Align Fire Policy 포함 Unreal Editor 타깃 빌드 성공
+- 싱글 PIE에서 정렬 완료 후 Reticle 목표점과 실제 탄착 일치 PASS
+- bAllowFireWhileAligning=true 정렬 중 발사 승인과 CurrentMuzzleDirection 진행 PASS
+- bAllowFireWhileAligning=false 정렬 중 거부와 정렬 완료 후 승인 PASS
+- TurretAligning amber, WeaponNotAligned 비가림, 정책 양쪽 MuzzleBlocked 발사 차단 PASS
+- 주행·거리별 정량 오차와 경계각은 CF-FQ-019 확장 회귀
+```
 
 `CalculateAimAnglesRelativeToVehicle()`는 월드 조준 방향을 차량 Actor의 로컬 공간 방향으로 변환한다.
 
@@ -240,8 +371,9 @@ bLocalWithinWeaponArc = 기준 AimProfile 범위 안/밖 표시값
 ```text
 - Hidden
 - Blocked
-- Ready
 - OutOfArc
+- TurretAligning
+- Ready
 ```
 
 현재 코드 기준 판정 순서:
@@ -249,13 +381,14 @@ bLocalWithinWeaponArc = 기준 AimProfile 범위 안/밖 표시값
 ```text
 1. Aim 런타임이 준비되지 않으면 Hidden
 2. 조준이 막혔으면 Blocked
-3. bCanFire가 true이면 Ready
-4. bWithinWeaponArc가 false이면 OutOfArc
-5. 나머지는 Hidden
+3. bWithinWeaponArc가 false이면 OutOfArc
+4. Weapon Aim Solution이 정렬 대기 중이면 TurretAligning
+5. bCanFire가 true이면 Ready
+6. 나머지는 Hidden
 ```
 
-중요한 점은 `Ready` 판정이 `OutOfArc` 판정보다 먼저 나온다는 것이다.
-현재 `bCanFire`는 조준 방향 유효성과 `bAimBlocked`를 중심으로 계산되며, `bWithinWeaponArc`를 직접 요구하지 않는다.
+중요한 점은 정상 정렬 대기 상태가 더 이상 `Hidden`으로 떨어지지 않는다는 것이다.
+현재 `bCanFire`는 유효한 Weapon Aim Solution과 최종 AimDirection, MuzzleBlocked, `bAllowFireWhileAligning` 정책을 중심으로 계산되며, `bWithinWeaponArc`를 직접 요구하지 않는다. 정렬 중 발사가 가능해도 Reticle은 `TurretAligning`을 유지한다.
 
 따라서 현재 P0 싱글플레이 기준에서는 아래처럼 해석한다.
 
@@ -376,7 +509,8 @@ FireValidationState.bValidationCanFire = 실제 Fire Command 검증 결과 기�
 - AimDirection 유효성
 - AimOrigin 유효성
 - Pawn 위치와 AimOrigin 사이 거리
-- LocalAimState.bLocalAimBlocked 여부
+- 최신 Weapon Aim Solution의 MuzzleBlocked 여부
+- bAllowFireWhileAligning=false일 때 TurretAligning / WeaponNotAligned 여부
 - 활성 WeaponData 호환 여부
 - 활성 무기 쿨다운 여부
 ```
@@ -601,6 +735,7 @@ HandleFireStarted
 - 로컬 발사 가능 예측 값을 보관한다.
 - bLocalWithinWeaponArc를 표시/디버그용 값으로 보관한다.
 - Fire Command 생성을 보조한다.
+- Weapon Aim Solution을 보관하고 UI/Debug/WeaponFire 경로에 제공한다.
 - 로컬 발사 결과를 FireValidationState에 반영한다.
 - 로컬 Aim 시각 상태를 관리한다.
 ```
@@ -677,8 +812,8 @@ HandleFireStarted
 
 ## 25. 문서 버전 관리
 
-- 현재 문서 버전: `1.2.0`
-- 문서 상태: `Current / Single Player Local Aim Flow`
+- 현재 문서 버전: `1.6.0`
+- 문서 상태: `Current / P0 Aim Alignment PIE Verified`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
   - 기능 설명 본문이 바뀌면 체인지로그도 같이 갱신한다.
@@ -703,6 +838,55 @@ HandleFireStarted
 
 ## 26. Migration
 
+### v1.5.0 -> v1.6.0
+
+```text
+- `bAllowFireWhileAligning=true/false` 양쪽의 정렬 중 발사 정책을 사용자 PIE 결과로 확정한다.
+- 정렬 완료 후 Reticle 목표점과 실제 탄착 일치를 P0 검증 기준에 포함한다.
+- TurretAligning amber, WeaponNotAligned 비가림과 MuzzleBlocked 발사 차단을 현재 동작으로 사용한다.
+- 주행·거리별 정량 오차와 경계각 검증은 CF-FQ-019 확장 회귀로 관리한다.
+- 코드와 DataAsset은 변경하지 않는다.
+```
+
+### v1.4.1 -> v1.5.0
+
+```text
+- Weapon Aim Solution은 bAllowFireWhileAligning, DesiredAimDirection, CurrentMuzzleDirection, 실제 최종 AimDirection을 구분한다.
+- bLocalCanFire는 정책 true이면 정렬 중에도 true가 될 수 있지만 LocalReticleState는 TurretAligning을 유지한다.
+- MuzzleBlocked는 실제 최종 발사 방향 경로를 기준으로 정책과 관계없이 발사를 차단한다.
+- `Tools/BuildEditor.bat`는 성공했고 PIE는 Pending이다.
+```
+
+### v1.4.0 -> v1.4.1
+
+```text
+- TurretAligning은 ECFVehicleReticleState enum 주 상태로 추가됐다.
+- BuildLocalReticleState는 Runtime 미준비, MuzzleBlocked, OutOfArc, TurretAligning, Ready, Hidden 순서로 해석한다.
+- 정상 정렬 대기 경로는 Hidden이 아니라 TurretAligning을 반환해야 한다.
+- Reticle Recovery Hotfix 빌드는 성공했지만 PIE 검증 전이므로 PIE PASS로 기록하지 않는다.
+```
+
+### v1.3.0 -> v1.4.0
+
+```text
+- Camera Aim Trace는 WeaponHit 기준으로 해석한다.
+- 발사 경로는 가능한 경우 FCFVehicleWeaponAimSolution의 AimOrigin / AimDirection / AimTargetLocation을 사용한다.
+- TurretAligning, WeaponNotAligned, MuzzleBlocked는 OutOfArc / AimBlocked와 원인을 구분해 기록한다.
+- VehicleDebug Panel에서 Weapon Aim Solution 섹션으로 현재 조준 해를 확인한다.
+- C++ 빌드는 완료됐지만 PIE에서 Reticle 목표점과 실제 탄착 일치를 별도로 검증해야 한다.
+```
+
+### v1.2.0 -> v1.3.0
+
+```text
+- 현재 Reticle 목표와 실제 Muzzle 발사 방향이 일치하지 않는 상태를 현행 한계로 기록한다.
+- 현재 Camera Aim Trace는 ECC_Visibility, 실제 무기 Trace는 WeaponHit을 사용한다.
+- 현재 LocalAimDirection은 차량 Actor 위치, 터렛 방향은 TurretYawPivot 위치, 최종 발사 방향은 Muzzle Socket X축을 기준으로 한다.
+- 조준 정렬 구현 전까지 이 방향들을 동일한 Aim Solution으로 간주하지 않는다.
+- 목표 구조와 코드 변경 기준은 Document/Plan/AimFireAlignment/ImplementationDesign.md를 우선한다.
+- 현재 코드와 데이터 마이그레이션은 이 문서 갱신에서 수행하지 않는다.
+```
+
 ### v1.1.0 -> v1.2.0
 
 ```text
@@ -724,6 +908,75 @@ HandleFireStarted
 ---
 
 ## 27. Changelog
+
+### v1.8.1 - 2026-07-21
+
+```text
+- CurrentMuzzleDirection 기반 터렛 레티클을 사용자 PIE PASS로 확정했다.
+- 탄종과 착탄 위치에 독립적인 터렛 레티클 데이터 계약을 현재 검증 완료 상태로 전환했다.
+```
+
+### v1.8.0 - 2026-07-21
+
+```text
+- Weapon Aim Solution에 탄종 독립 터렛 레티클 유효성, 월드 위치와 비교 거리를 추가했다.
+- CurrentMuzzleDirection과 AimTargetLocation 깊이를 사용하는 계산 계약을 현재 구현으로 기록했다.
+- Legacy Weapon Preview와 Image_WeaponReticle 제품 의미를 분리했다.
+- 공식 에디터 빌드 PASS와 사용자 PIE 대기 상태를 기록했다.
+```
+
+### v1.7.0 - 2026-07-21
+
+```text
+- Image_CenterDot 조준 레티클이 AimTargetLocation을 선택하고 터렛이 이를 추적하는 책임을 확정했다.
+- Image_WeaponReticle 터렛 레티클의 기준을 AimDirection이 아닌 CurrentMuzzleDirection으로 확정했다.
+- 터렛 레티클을 탄종과 착탄 위치에서 분리하고 투사체 착탄 위치를 후속 3D 표시로 이관했다.
+- 기존 DirectImpact/LaunchDirection Preview 소비 경로를 구현 정렬 대기로 기록했다.
+```
+
+### v1.6.0 - 2026-07-14
+
+```text
+- CF-FQ-022 P0 사용자 PIE 통과를 현재 VehicleAim 상태에 반영했다.
+- 정책 true/false, 정렬 완료 탄착, TurretAligning·WeaponNotAligned·MuzzleBlocked 검증을 기록했다.
+- PIE Pending 상태를 P0 Aim Alignment Verified로 변경했다.
+- 확장 조준 회귀는 CF-FQ-019로 이관했다.
+```
+
+### v1.5.0 - 2026-07-14
+
+```text
+- 터렛별 정렬 중 발사 허용 정책과 Aim Solution 방향 3종의 현재 구현을 반영했다.
+- bLocalCanFire와 TurretAligning Reticle을 분리한 상태 계산 기준을 기록했다.
+- Align Fire Policy 빌드 완료와 PIE Pending을 기록했다.
+```
+
+### v1.4.1 - 2026-07-13
+
+```text
+- Reticle Recovery Hotfix로 LocalReticleState TurretAligning 복구 기준 반영
+- BuildLocalReticleState 우선순위와 bLocalCanFire 해석을 현재 코드 기준으로 정정
+- BuildEditor.bat 성공과 PIE Pending 상태를 기록
+```
+
+### v1.4.0 - 2026-07-13
+
+```text
+- FCFVehicleWeaponAimSolution 기반 AimOrigin / AimDirection / AimTargetLocation 공유 구조 반영
+- Camera Aim Trace가 WeaponHit 기준을 사용한다는 현재 구현 반영
+- TurretAligning / WeaponNotAligned / MuzzleBlocked 거부 사유와 Debug 확인 기준 추가
+- AimFireAlignment C++ 빌드 완료와 PIE Pending 상태를 분리 기록
+```
+
+### v1.3.0 - 2026-07-13
+
+```text
+- Reticle 목표점과 실제 Muzzle 발사 방향이 일치하지 않는 사용자 PIE 확인 결과 반영
+- Camera, Vehicle Actor, Turret Pivot, Muzzle Socket이 서로 다른 방향 기준을 사용하는 현재 구조 기록
+- Camera Aim Trace ECC_Visibility와 실제 WeaponHit Trace 채널 불일치 기록
+- DesiredAimTargetLocation SSOT, Muzzle 기준 요구 방향, 터렛 정렬 오차, 총구 장애물 검사를 후속 설계로 연결
+- Document/Plan/AimFireAlignment/ImplementationDesign.md 기준 문서 추가
+```
 
 ### v1.2.0 - 2026-07-09
 
@@ -757,7 +1010,7 @@ HandleFireStarted
 
 ## 28. 마지막 확인 기준
 
-- 확인 일시: `2026-07-09`
+- 확인 일시: `2026-07-14`
 - 확인 근거:
   - `UE/Source/CarFight_Re/Public/CFVehicleAimComp.h`
   - `UE/Source/CarFight_Re/Private/CFVehicleAimComp.cpp`
@@ -774,6 +1027,7 @@ HandleFireStarted
 ## 29. Change Note
 
 ```text
+- 2026-07-21: 과거 정렬 완료 후 탄착 일치 기록은 발사 방향 정합성 증거로 유지하되 터렛 레티클의 의미 정의와 분리했다.
 - 2026-06-19: 현재 코드에서 제거/변경된 서버 RPC 명칭을 현재 상태 문서의 현행 설명에서 제외했다.
 - 2026-07-09: OutOfArc / bLocalWithinWeaponArc를 발사 차단 기준으로 오해하지 않도록 현재 P0 싱글플레이 기준으로 재정리했다.
 - 과거 멀티플레이 설계 기록은 Document/Plan/AimPlan/CF_AimNet.md와 이전 체인지로그에 남긴다.

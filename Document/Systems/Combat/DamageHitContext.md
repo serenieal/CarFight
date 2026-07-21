@@ -1,9 +1,9 @@
 # DamageHitContext
 
-- Version: 1.0.0
-- Date: 2026-07-09
-- Status: Current
-- Scope: 현재 구현된 DamageData, DamageHitContext 타입, Dummy HitScan / Projectile 충돌 Debug 기록
+- Version: 1.5.0
+- Date: 2026-07-15
+- Status: Current / HitDamage Input Contract Verified
+- Scope: DamageData와 DamageHitContext 타입, 시각 차체 기반 HitScan/Projectile 기록, 검증된 HitDamage 공용 입력 계약
 
 ---
 
@@ -11,12 +11,12 @@
 
 이 문서는 CarFight의 현재 `DamageHitContext` 구현이 실제로 어떤 일을 하는지 기록한다.
 
-이 문서는 미래 Damage Runtime 설계서가 아니다.
-아래 항목은 이 문서의 범위에서 제외한다.
+이 문서는 `DamageHitContext` 자체의 기록 책임을 설명하며, 체력 소유와 피해 계산은 `Document/Systems/Combat/HitDamage.md`가 설명한다.
+아래 항목은 `DamageHitContext` 자체의 직접 책임에서 제외한다.
 
 ```text
-- 실제 HP 차감
-- 차량 파괴 상태 전환
+- CurrentHealth와 MaxHealth 소유
+- 차량 파괴 상태 판정
 - 장갑 관통 계산
 - 모듈 손상 계산
 - 범위 피해 적용
@@ -25,7 +25,7 @@
 - 서버 권한 피해 처리
 ```
 
-현재 문서 기준 `DamageHitContext`는 **Dummy HitScan과 Projectile Actor 충돌 결과를 같은 형식으로 기록하고, VehicleDebug Panel에서 읽을 수 있게 하는 Debug 중심의 피해 후보 컨텍스트 기능**이다.
+현재 문서 기준 `DamageHitContext`는 **Dummy HitScan과 Projectile Actor의 피격 결과를 같은 형식으로 기록하고, HitDamage 공용 피해 적용 입력과 VehicleDebug 표시 데이터로 전달하는 런타임 컨텍스트 기능**이다.
 
 ---
 
@@ -69,11 +69,11 @@ ImpulseStrength
 ```text
 - DamageData 직접 참조 슬롯은 ProjectileData.DefaultDamageData 하나다.
 - WeaponData는 DamageData를 직접 소유하지 않는다.
-- HitScan / Laser처럼 Actor를 스폰하지 않는 발사도 가상 ProjectileData를 통해 DamageData를 참조하는 기준이다.
-- 현재 P0 코드에서는 DamageData를 실제 HP 차감에 사용하지 않고 Debug 확인에 사용한다.
+- HitScan / Laser처럼 Actor를 스폰하지 않는 발사도 가상 ProjectileData를 통해 DamageData를 참조한다.
+- BaseDamage와 bCanDamageSelf는 HitDamage의 최소 차량 체력 계산에 사용된다.
 ```
 
-현재 `BaseDamage`, `ArmorPenetration`, `ExplosionDamage`, `ImpulseStrength` 등은 데이터 필드로 존재하지만, 이 문서 기준 현재 런타임 피해 계산을 수행하지 않는다.
+현재 `ArmorPenetration`, `ExplosionDamage`, `ModuleDamageScale`, `ImpulseStrength` 등은 데이터 필드로 존재하지만 아직 현재 최소 체력 계산에는 적용하지 않는다.
 
 ---
 
@@ -143,7 +143,7 @@ Dummy HitScan의 현재 특징은 아래다.
 - bFromProjectileActor = false
 - FlightDurationSeconds = 0.0
 - bBlockingHit으로 Hit / Miss를 구분한다.
-- 실제 피해 적용은 하지 않는다.
+- 생성한 Context는 HitDamage 공용 진입점으로 전달되어 유효 대상에 BaseDamage를 적용한다.
 ```
 
 ---
@@ -163,6 +163,7 @@ DamageProfileId
 ActiveWeaponData
 LastDeactivatedProjectileId
 LastHitActor
+LastHitComponentName
 LastImpactLocation
 LastImpactNormal
 LastIncomingDirection
@@ -176,7 +177,57 @@ Projectile Actor 경로의 현재 특징은 아래다.
 - bFromProjectileActor = true
 - bBlockingHit = true
 - FlightDurationSeconds에 실제 비행 시간이 기록된다.
-- 실제 피해 적용은 하지 않는다.
+- 생성한 Context는 HitDamage 공용 진입점으로 전달되어 유효 대상에 BaseDamage를 적용한다.
+```
+
+## 6-1. 현재 차량 피격 컴포넌트 기준
+
+2026-07-13 구현과 사용자 PIE 확인 결과, 현재 차량 무기 피격은 시각 차체 `SM_Body` 기준으로 전환됐다.
+
+```text
+WeaponHit Trace Channel        = ECC_GameTraceChannel1
+Projectile Object Channel      = ECC_GameTraceChannel2
+VehicleVisualHit Profile       = QueryOnly
+VehicleMesh                    = WeaponHit / Projectile Ignore
+SM_Body                        = WeaponHit / Projectile Block
+Dummy HitScan                  = WeaponHit
+Projectile                     = Projectile Object Type
+```
+
+현재 결과:
+
+```text
+- 일반 속도 Dummy HitScan이 SM_Body에서 명중한다.
+- 일반 속도 Projectile이 SM_Body에서 Blocking Hit을 만든다.
+- VehicleMesh Physics Asset은 차량 물리를 유지하면서 무기 피격 Query를 가로채지 않는다.
+- FCFDamageHitContext.HitComponentName에 실제 피격 컴포넌트 이름이 기록된다.
+- DamageHitContext Summary에서 HitComponent=SM_Body를 확인할 수 있다.
+- 30 FPS + 기준 InitialSpeed 4배 Projectile이 차량과 얇은 벽에서 첫 Blocking Hit을 기록한다.
+- 중복 Impact와 Pool 재사용에서 DamageHitContext 중복 또는 누락이 관찰되지 않았다.
+```
+
+현재 후속 한계:
+
+```text
+- BaseDamage 체력 감소와 파괴 상태는 CF-FQ-018에서 구현·검증 완료했다.
+- 장갑·모듈·범위 피해와 파괴 연출은 아직 현재 최소 피해 범위가 아니다.
+- 전체 FPS·속도 매트릭스, 이동 차량과 주행 중 조준은 CF-FQ-019 확장 회귀 범위다.
+```
+
+현재 후속 순서:
+
+```text
+1. CF-FQ-017 NoWeapon / AimBlocked 최종 상태 검증
+2. CF-FQ-019 주행·전투 반복 및 확장 회귀
+3. 장갑·모듈·범위 피해는 별도 FeatureQueue 승인 후 진행
+```
+
+관련 설계:
+
+```text
+Document/Plan/HitDamage/ImplementationDesign.md
+Document/Plan/AimFireAlignment/ImplementationDesign.md
+Document/Plan/ProjectileContinuousCollision/ImplementationDesign.md
 ```
 
 ---
@@ -203,6 +254,7 @@ DamageId
 Weapon
 Projectile
 HitActor
+HitComponent
 Instigator
 Location
 Normal
@@ -240,7 +292,8 @@ UCFEquipmentPresetData.DefaultWeaponData
 - Dummy HitScan 결과와 Projectile Actor 충돌 결과를 같은 구조로 기록한다.
 - Hit / Miss를 bBlockingHit으로 구분한다.
 - Projectile Actor 경로와 Dummy HitScan 경로를 bFromProjectileActor로 구분한다.
-- 피격 위치, 노멀, 입사 방향, 발사 주체, 피격 Actor를 저장한다.
+- 피격 위치, 노멀, 입사 방향, 발사 주체, 피격 Actor, 피격 컴포넌트 이름을 저장한다.
+- 유효한 Context를 HitDamage 공용 피해 적용 입력으로 제공한다.
 - VehicleDebug Panel에서 읽을 요약 문자열을 만든다.
 ```
 
@@ -262,33 +315,51 @@ UCFEquipmentPresetData.DefaultWeaponData
 - 피격 이펙트 / 사운드 출력
 ```
 
-현재 `UCFDamageData` 안에 피해량, 관통력, 폭발, 모듈, 충격 관련 필드가 있더라도, 이 문서 기준으로는 **저장과 Debug 확인용 데이터**로만 본다.
+`DamageHitContext` 자체는 체력을 소유하거나 피해량을 최종 계산하지 않는다. 다만 Context가 보유한 `DamageData`의 `BaseDamage`와 `bCanDamageSelf`는 `HitDamage`가 현재 최소 피해 처리에 사용한다.
 
 ---
 
 ## 11. 현재 문서 기준의 핵심 결론
 
-현재 `DamageHitContext`는 **피해 처리 시스템이 아니라, 발사 결과가 무엇을 맞혔는지와 어떤 DamageData 후보를 사용할 수 있는지 기록하는 Debug 컨텍스트 기능**이다.
+현재 `DamageHitContext`는 **체력을 직접 소유하는 시스템이 아니라, HitScan과 Projectile의 피격 결과를 동일 형식으로 보존하고 HitDamage에 전달하는 공용 입력 컨텍스트**다.
 
 가장 중요한 현재 역할은 다음 한 줄로 요약할 수 있다.
 
-> `DamageHitContext`는 현재 “HitScan과 Projectile 충돌 결과를 같은 형태로 저장하고 VehicleDebug에서 읽을 수 있게 만드는 현재 구현 기능”이다.
+> `DamageHitContext`는 현재 “무엇이 어디에 맞았는지를 기록하고, 같은 입력을 HitDamage와 VehicleDebug가 함께 사용하게 만드는 런타임 계약”이다.
 
 ---
 
-## 12. 현재 미확인 항목
+## 12. 현재 확인 및 미완료 항목
 
-아래 항목은 코드상 경로는 존재하지만, 이 문서 작성 시점에 에디터 자산 연결 상태를 직접 확인하지 않았다.
+확인 완료:
 
 ```text
-- 실제 ProjectileData 에셋의 DefaultDamageData 연결 상태
-- 실제 DamageData 에셋의 BaseDamage / DamageType 값
-- PIE에서 Dummy HitScan 명중 시 LastDamageHitContextSummary 표시 여부
-- PIE에서 Projectile Actor 충돌 시 LastDamageHitContextSummary 표시 여부
-- 충돌 대상 Actor의 Collision 설정이 HitContext 기록에 적합한지 여부
+- WeaponHit / Projectile / VehicleVisualHit 충돌 설정 구현
+- VehicleMesh 무기 Query 제외와 SM_Body 시각 차체 피격
+- 일반 속도 Dummy HitScan과 Projectile의 SM_Body 충돌
+- FCFDamageHitContext.HitComponentName 저장
+- VehicleDebug Summary의 HitComponent 표시
+- 고속 Projectile P0 집중 스트레스 HitContext 기록
+- Reticle 목표점, 터렛·Muzzle 정렬과 실제 탄착 P0 PIE
+- 정책 true/false 발사 방향·거부와 MuzzleBlocked
+- Unreal Editor 타깃 빌드 성공
 ```
 
-이 항목은 추측으로 PASS 처리하지 않는다.
+추가 확인 완료:
+
+```text
+- DA_HeavyShell.DefaultDamageData → DA_DamageAsset 연결
+- DA_DamageAsset BaseDamage=25, DamageType=Kinetic, bCanDamageSelf=false
+- BaseDamage 체력 누적 감소와 체력 0 이하 파괴 상태 전환
+- 파괴 이후 TargetDestroyed 거부와 파괴 이벤트 1회성
+```
+
+후속 검증:
+
+```text
+- 전체 FPS·속도 매트릭스, 이동 차량과 주행 중 조준 확장 회귀
+- 장갑·모듈·범위 피해와 완성형 파괴 연출
+```
 
 ---
 
@@ -302,12 +373,110 @@ UCFEquipmentPresetData.DefaultWeaponData
 - Dummy HitScan HitContext 기록 방식 변경
 - Projectile Actor HitContext 기록 방식 변경
 - VehicleDebug Damage 표시 방식 변경
-- 실제 HP 차감 기능이 별도 시스템으로 추가되어 현재 책임 경계가 바뀌는 경우
+- HitDamage 공용 피해 적용 계약 또는 DamageHitContext 전달 시점이 변경되는 경우
 ```
 
 ---
 
-## 14. Changelog
+## 14. Migration
+
+### v1.4.0 -> v1.5.0
+
+```text
+- DamageHitContext를 Debug 후보 기록에서 HitDamage 공용 피해 적용 입력 계약으로 현재화했다.
+- BaseDamage와 bCanDamageSelf가 최소 피해 계산에 사용되는 현재 동작을 반영했다.
+- 체력과 파괴 상태 소유권은 UCFVehicleHealthComp 및 Systems/Combat/HitDamage.md에 유지한다.
+- 장갑·모듈·범위 피해는 여전히 후속 범위다.
+```
+
+### v1.3.0 -> v1.4.0
+
+```text
+- CF-FQ-022 조준 정렬 P0 사용자 PIE 통과를 DamageHitContext 입력 계약에 반영한다.
+- Reticle 목표점과 실제 Muzzle 발사 방향 불일치를 Damage Runtime 선행 미완료 목록에서 제거한다.
+- CF-FQ-022와 CF-FQ-023이 모두 완료돼 최소 Damage Runtime 착수가 가능하다.
+- DefaultDamageData, BaseDamage, 체력 감소와 파괴 상태는 CF-FQ-018 구현 범위로 유지한다.
+- 확장 주행·전투 회귀는 CF-FQ-019에서 수행한다.
+```
+
+### v1.2.0 -> v1.3.0
+
+```text
+- 고속 Projectile의 Sweep/Sub-step/보조 Sphere Sweep과 중복 처리 방지를 현재 구현으로 반영한다.
+- 30 FPS + 기준 속도 4배 집중 스트레스 PIE에서 신뢰 가능한 DamageHitContext가 유지된 결과를 기록한다.
+- 고속 연속 충돌은 Damage Runtime 선행 미완료 목록에서 제거한다.
+- 실제 Damage Runtime의 남은 직접 선행 조건은 CF-FQ-022 사용자 PIE 완료다.
+- 전체 매트릭스와 이동 차량 검증은 CF-FQ-019 확장 회귀로 이관한다.
+```
+
+### v1.1.0 -> v1.2.0
+
+```text
+- WeaponHit / Projectile / VehicleVisualHit 기반 시각 차체 피격을 현재 구현으로 사용한다.
+- FCFDamageHitContext.HitComponentName과 VehicleDebug HitComponent 표시를 현재 기준에 포함한다.
+- 일반 속도 SM_Body Hit은 확인됐지만 고속 Projectile HitContext는 아직 신뢰 완료 상태로 보지 않는다.
+- 조준 정렬과 고속 연속 충돌 완료 후 실제 Damage Runtime을 연결한다.
+- 관련 Plan은 AimFireAlignment, ProjectileContinuousCollision, HitDamage 순서로 확인한다.
+```
+
+### v1.0.0 -> v1.1.0
+
+```text
+- 코드와 자산은 변경하지 않는다.
+- 현재 VehicleMesh Physics Asset 기반 피격 상태를 현행 구현으로 기록한다.
+- 시각 차체 기반 피격 전환은 Document/Plan/HitDamage/ImplementationDesign.md의 후속 코드 작업에서 수행한다.
+- HitComponent 기록 필드가 추가되면 FCFDamageHitContext 사용처와 VehicleDebug 표시를 함께 갱신한다.
+```
+
+---
+
+## 15. Changelog
+
+### v1.5.0 - 2026-07-15
+
+```text
+- CF-FQ-018 Done과 CF-TC-016 사용자 PIE PASS를 반영했다.
+- DamageHitContext가 HitDamage 공용 피해 적용 입력으로 사용되는 현재 흐름을 기록했다.
+- DefaultDamageData, BaseDamage, 자기 피해 정책과 파괴 후 추가 피해 거부 확인 결과를 반영했다.
+- 체력 소유와 파괴 판정은 Systems/Combat/HitDamage.md 책임으로 분리했다.
+```
+
+### v1.4.0 - 2026-07-14
+
+```text
+- CF-FQ-022 P0 사용자 PIE 통과를 Damage Runtime 입력 계약에 반영했다.
+- Reticle·Muzzle 방향 불일치를 현재 남은 한계에서 제거했다.
+- CF-FQ-018 Damage Runtime 착수에 필요한 조준 정렬과 고속 충돌 선행 조건 완료를 기록했다.
+- 남은 미구현 범위를 DefaultDamageData, BaseDamage, 체력 감소와 파괴 상태로 정리했다.
+```
+
+### v1.3.0 - 2026-07-14
+
+```text
+- P0 고속 Projectile 연속 충돌 구현과 집중 스트레스 PIE 결과를 반영했다.
+- 30 FPS + 기준 속도 4배에서 차량/얇은 벽 첫 HitContext 기록과 중복 방지, Pool 재사용 정상 동작을 기록했다.
+- 고속 Projectile 누락을 현재 남은 한계에서 제거했다.
+- Damage Runtime의 남은 직접 선행 조건을 CF-FQ-022 사용자 PIE로 정리했다.
+```
+
+### v1.2.0 - 2026-07-13
+
+```text
+- WeaponHit / Projectile / VehicleVisualHit 기반 시각 차체 피격 구현 결과 반영
+- FCFDamageHitContext.HitComponentName과 Summary HitComponent 표시 반영
+- 일반 속도 HitScan / Projectile의 SM_Body 충돌 사용자 PIE 확인 결과 반영
+- 고속 Projectile 터널링과 Reticle·Muzzle 방향 불일치를 Damage Runtime 선행 한계로 기록
+- AimFireAlignment / ProjectileContinuousCollision Plan 연결
+```
+
+### v1.1.0 - 2026-07-13
+
+```text
+- 현재 VehicleMesh Physics Asset이 HitScan / Projectile 피격을 받는 구조 확인 결과 추가
+- SM_Body가 NoCollision이라 현재 피격에 참여하지 않는 상태 추가
+- FCFDamageHitContext가 HitActor만 저장하고 HitComponent는 저장하지 않는 현재 한계 명시
+- CF-FQ-018에서 시각 차체 기반 피격 분리 후 피해 처리로 진행하는 순서와 Plan 문서 연결
+```
 
 ### v1.0.0 - 2026-07-09
 
@@ -319,14 +488,18 @@ UCFEquipmentPresetData.DefaultWeaponData
 
 ---
 
-## 15. 마지막 확인 기준
+## 16. 마지막 확인 기준
 
-- 확인 일시: 2026-07-09
+- 확인 일시: 2026-07-15
 - 확인 근거:
   - `UE/Source/CarFight_Re/Public/CFDamageData.h`
   - `UE/Source/CarFight_Re/Public/CFDamageTypes.h`
   - `UE/Source/CarFight_Re/Public/CFProjectileData.h`
   - `UE/Source/CarFight_Re/Public/CFProjectileActor.h`
   - `UE/Source/CarFight_Re/Public/CFProjectilePoolComp.h`
-  - `UE/Source/CarFight_Re/Public/CFVehiclePawn.h`
+    - `UE/Source/CarFight_Re/Public/CFVehiclePawn.h`
   - `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp`
+  - `UE/Source/CarFight_Re/Private/CFProjectileActor.cpp`
+  - `/Game/CarFight/Vehicles/Blueprints/BP_CFVehiclePawn.BP_CFVehiclePawn` 자산 상세 덤프
+  - `Document/Plan/HitDamage/ImplementationDesign.md`
+

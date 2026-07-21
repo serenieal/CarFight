@@ -348,6 +348,49 @@ CarFight는 직접 조준 감각과 차량/터렛/락온/자원 운용이 함께
 
 ---
 
+## CF-PDL-0008 — Reticle/UI 피드백과 실제 전투 FX/Audio를 분리하고 데이터 기반 연출 계층으로 구현한다
+
+- 상태: `Accepted`
+- 결정일: 2026-07-15
+
+### 결정
+
+```text
+CF-FQ-017은 Reticle 색상, 상태 문구와 쿨다운 UI를 소유하는 완료 기능으로 유지한다.
+실제 발사, Impact와 차량 파괴 Niagara / 공간 사운드는 CF-FQ-024가 별도 기능으로 소유한다.
+발사 승인, 첫 Blocking Hit과 최초 Destroyed 전환은 기존 전투 C++ 판정이 소유하고, 연출 계층은 확정된 결과를 다시 계산하지 않는다.
+FX / Audio 자산은 WeaponData, ProjectileData, VehicleData가 참조하는 공용 연출 DataAsset에서 선택하며 소스 코드에 자산 경로를 하드코딩하지 않는다.
+```
+
+### 이유
+
+```text
+UI 피드백과 월드 연출을 한 기능으로 묶으면 완료된 Reticle 상태를 다시 열게 되고, 전투 판정과 자산 제작의 생명주기가 섞인다.
+현재 발사·피격·피해·파괴 판정은 검증됐으므로 연출은 그 결과를 소비하는 독립 계층이어야 한다.
+DataAsset 기반 참조를 사용하면 1인 개발 환경에서 C++ 재빌드 없이 Niagara, SoundCue 또는 MetaSound와 Attenuation을 교체·튜닝할 수 있다.
+```
+
+### 영향
+
+```text
+- CF-FQ-024를 P0 Active 기능으로 추가한다.
+- 대표 Plan은 Document/Plan/CombatFxAudio/ImplementationDesign.md를 사용한다.
+- C++는 호출 시점, 요청 데이터, null 안전성, 중복 방지와 Projectile Pool 초기화를 담당한다.
+- Blueprint와 Unreal Editor 자산은 Niagara, SoundWave/SoundCue/MetaSound, Attenuation과 DataAsset 연결을 담당한다.
+- 연출 자산 누락 또는 재생 실패는 발사·피해·파괴 결과를 취소하지 않는다.
+- P0는 발사, 첫 Impact와 최초 파괴의 1회성 연출까지만 포함하며 고급 믹싱·표면 분기·Geometry Collection 파괴는 후속으로 둔다.
+- 완료 검증은 CF-TC-021이 소유한다.
+```
+
+### 변경 조건
+
+```text
+멀티플레이 원격 연출 복제, 물리 표면별 Impact, 완성형 차량 오디오 또는 대규모 Presentation Subsystem이 필요해지면 데이터 소유와 호출 주체를 재검토한다.
+그 전까지 판정과 연출 분리, 데이터 기반 자산 참조 원칙을 유지한다.
+```
+
+---
+
 ## 5. 후속 결정 후보
 
 아래 항목은 아직 확정하지 않았다.
@@ -356,10 +399,10 @@ CarFight는 직접 조준 감각과 차량/터렛/락온/자원 운용이 함께
 - 싱글용 GameMode를 새로 만들지, 기존 기본 실행 흐름을 조정할지
 - `CFMPGameMode`와 `CarFight_ReServer.Target.cs`를 장기 보존할지 별도 브랜치/Archive 기준으로 분리할지
 - CFNetSmooth 서브모듈을 현재 프로젝트에서 언제 다시 볼지
-- 첫 기준 무기를 어떤 방식으로 구현할지
-- 발사 방식의 1차 구현을 라인트레이스 / 투사체 / 임시 판정 중 어디로 둘지
-- 체력/피해 상태를 차량 Pawn, 전투 컴포넌트, 별도 DataAsset 중 어디에 둘지
-- 발사 이펙트/사운드/조준 UI의 최소 범위를 어디까지로 둘지
+- 기준 전투 사운드를 SoundCue와 MetaSound Source 중 어느 방식으로 제작할지
+- Projectile Trail과 비행 사운드를 CF-FQ-024 P0 선택 범위에 포함할지 CF-FQ-020으로 이관할지
+- 물리 표면별 Impact FX / Audio 분기를 언제 도입할지
+- 엔진음, 타이어음과 차량 충돌음을 다루는 전체 차량 Audio 기능을 언제 별도 Feature로 열지
 ```
 
 ---
@@ -382,7 +425,7 @@ CarFight는 직접 조준 감각과 차량/터렛/락온/자원 운용이 함께
 
 ## 7. 문서 버전 관리
 
-- 현재 문서 버전: `v1.2.0`
+- 현재 문서 버전: `v1.3.0`
 - 문서 상태: `Active`
 
 ### 버전 증가 기준
@@ -396,6 +439,15 @@ CarFight는 직접 조준 감각과 차량/터렛/락온/자원 운용이 함께
 ---
 
 ## 8. 체인지로그
+
+### v1.3.0 - 2026-07-15
+
+```text
+- CF-PDL-0008 판정과 전투 FX/Audio 분리 및 데이터 기반 연출 계층 결정을 추가했다.
+- CF-FQ-017 UI와 CF-FQ-024 Niagara/공간 사운드 기능 경계를 고정했다.
+- 완료된 무기·발사·피해 관련 후속 결정 후보를 제거하고 Audio/FX 후속 후보로 갱신했다.
+- CF-TC-021을 전투 FX/Audio 완료 검증으로 연결했다.
+```
 
 ### v1.2.0 - 2026-06-19
 
@@ -430,4 +482,17 @@ CarFight는 직접 조준 감각과 차량/터렛/락온/자원 운용이 함께
 - 기능 단위 수직 절단 개발 방식 결정 기록
 - 관리툴 도입 기준 결정 기록
 - 서버/클라이언트 책임 경계 결정 기록
+```
+
+---
+
+## 9. Migration
+
+### v1.3.0 적용 안내
+
+```text
+- CF-FQ-017의 완료 상태와 Systems 문서는 유지한다.
+- 실제 전투 FX / Audio 신규 구현은 CF-FQ-024와 CombatFxAudio Plan을 사용한다.
+- 연출 자산 미연결 상태를 전투 판정 실패로 처리하지 않는다.
+- CF-FQ-024 완료 전에는 신규 CombatFxAudio Systems 문서를 만들거나 Current로 승격하지 않는다.
 ```

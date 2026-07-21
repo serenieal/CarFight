@@ -1,7 +1,7 @@
 # CarFight — 05_TestChecklist
 
-> 문서 버전: v1.4.0
-> 작성일(Asia/Seoul): 2026-07-13
+> 문서 버전: v1.9.0
+> 작성일(Asia/Seoul): 2026-07-15
 > 문서 상태: Active
 > 역할: CarFight의 **완료된 Systems 기준 최소 회귀 테스트**를 관리한다.
 
@@ -63,6 +63,11 @@
 8. 2026-07-09 Reticle / FireFeedback 정리 기준에서는 서버 대기 / 서버 거부 표현을 현재 UI PASS 기준으로 쓰지 않는다.
 9. OutOfArc / bLocalWithinWeaponArc는 현재 P0 싱글플레이 기준에서 단독 발사 차단 조건이 아니라 조준각 경고/디버그 상태로 본다.
 10. 발사 성공 여부는 WeaponFire의 LastFireResult / ValidateFireCommand 결과를 기준으로 판단한다.
+11. 무기 피격 형상은 VehicleMesh Physics Asset이 아니라 플레이어에게 보이는 시각 차체 SM_Body를 기준으로 전환한다.
+12. Reticle이 지시하는 월드 목표점, 터렛 추적 방향, Muzzle 발사 방향, 실제 탄환 방향은 하나의 Aim Solution을 공유해야 한다.
+13. 고속 Projectile은 단일 프레임 위치 검사만으로 PASS 처리하지 않고 Sweep/Sub-stepping 및 필요 시 보조 Sphere Sweep으로 연속 충돌을 검증한다.
+14. 터렛 정렬 중 발사는 `UCFTurretMountData.bAllowFireWhileAligning`의 true/false 정책을 각각 검증하며, 두 정책 모두 `MuzzleBlocked`와 `TurretAligning` 표시 의미를 유지해야 한다.
+15. 전투 FX / Audio는 승인된 발사, 첫 Blocking Hit와 최초 Destroyed 전환에만 1회 발생해야 하며 연출 실패가 전투 판정을 바꾸면 안 된다.
 ```
 
 ---
@@ -125,12 +130,14 @@ Reticle 관련 작업 전 최소 검증 기준은 아래다.
 - 조준각 밖에서 FireSuccess / Cooldown / FireRejected 피드백이 활성화되어도 일반 FireFeedback 텍스트가 가려지지 않음
 ```
 
-아직 확인하지 않은 항목:
+2026-07-15 최종 사용자 PIE 확인:
 
 ```text
-- NoWeapon 실제 PIE 표시와 회색 상태
-- AimBlocked 실제 PIE 표시와 주황 상태
-- NoWeapon / AimBlocked 유지 시간 종료 후 텍스트 제거
+- NoWeapon 회색 Reticle과 무기 없음 안내 문구: PASS
+- AimBlocked 주황 Reticle과 조준 가림 안내 문구: PASS
+- 두 실패 상태의 유지 시간 종료 후 텍스트 제거: PASS
+- AimBlocked 장애물 제거 후 정상 Aim 상태 복귀: PASS
+- Ready → FireSuccess → Cooldown → Ready 정상 발사 회귀: PASS
 ```
 
 상태 판정:
@@ -138,7 +145,164 @@ Reticle 관련 작업 전 최소 검증 기준은 아래다.
 ```text
 - CF-TC-006 조준 Reticle: PASS
 - CF-TC-013 차량 무기 조준/발사: PARTIAL
-- CF-TC-014 발사 피드백/UI: PARTIAL
+- CF-TC-014 발사 피드백/UI: PASS
+```
+
+## 4-5. 2026-07-13 시각 메시 기반 피격 검증 결과
+
+구현 및 확인 완료:
+
+```text
+- WeaponHit Trace Channel, Projectile Object Channel, VehicleVisualHit Profile 구현
+- VehicleMesh는 차량 물리를 유지하면서 WeaponHit / Projectile Ignore
+- SM_Body는 QueryOnly 상태에서 WeaponHit / Projectile Block
+- HitScan과 Projectile의 HitComponentName 기록
+- Unreal Editor 타깃 빌드 성공
+- 일반 속도 HitScan / Projectile이 SM_Body에서 정상 충돌하는 것을 사용자 PIE에서 확인
+- 차량 주행 물리와 시각 차체 피격 분리가 정상 작동
+```
+
+후속 범위:
+
+```text
+- Reticle·Muzzle 정렬과 최소 BaseDamage 체력 감소는 P0 사용자 PIE 완료
+- 전체 FPS·속도 조합, 이동 차량과 주행 중 반복 전투는 CF-FQ-019 확장 회귀로 남음
+- 장갑·모듈 피해와 완성형 파괴 연출은 후속 기능 범위
+```
+
+현재 판정:
+
+```text
+- CF-TC-015 시각 메시 기반 피격 판정 기록: PASS
+  - 일반 속도 시각 차체 Hit PASS
+  - 30 FPS + 기준 속도 4배 P0 집중 스트레스 PASS
+- CF-TC-016 피해 처리: PASS
+  - 최소 Damage Runtime C++와 공식 Editor 빌드 완료
+  - BaseDamage 체력 누적 감소, 파괴 전환, 추가 피해 거부와 이벤트 1회성 사용자 PIE 확인
+- CF-TC-020 고속 Projectile 연속 충돌: PASS (P0 집중 스트레스 범위)
+```
+
+## 4-6. 2026-07-13 Aim / Projectile 신뢰성 선행 기준
+
+조준 정렬 기준:
+
+```text
+- Reticle의 월드 목표점을 DesiredAimTargetLocation 단일 기준으로 사용한다.
+- Camera Aim Trace와 실제 무기 Trace는 WeaponHit 응답표를 공유한다.
+- 터렛은 Muzzle → DesiredAimTargetLocation 요구 방향을 추적한다.
+- CurrentMuzzleDirection과 DesiredLaunchDirection의 정렬 오차를 계산한다.
+- `UCFTurretMountData.bAllowFireWhileAligning=true`이면 정렬 중 현재 Muzzle 방향 발사를 허용한다.
+- `bAllowFireWhileAligning=false`이면 정렬 완료 전 발사를 거부한다.
+- 정렬 완료 후에는 Muzzle → Reticle 목표 방향을 사용한다.
+- 총구 앞 장애물은 실제 최종 발사 방향 Trace로 확인하며 정책과 관계없이 발사를 차단한다.
+```
+
+고속 Projectile 기준:
+
+```text
+- bSweepCollision과 UpdatedComponent를 명시적으로 검증한다.
+- 고속/중력 Projectile은 Sub-stepping을 사용한다.
+- 잔여 터널링은 Previous → Current CollisionRadius Sphere Sweep으로 검출한다.
+- OnComponentHit과 보조 Sweep은 동일 Impact를 두 번 처리하지 않는다.
+- P0 완료는 30 FPS + 기준 속도 4배의 차량 집중 발사와 얇은 벽 첫 Hit, Pool 재사용 스트레스로 검증한다.
+- 60 / 120 FPS와 기준 속도 1배 / 2배, 이동 차량 검증은 CF-FQ-019 확장 회귀로 수행한다.
+```
+
+2026-07-14 P0 검증 결과:
+
+```text
+- 차량 집중 발사: PASS
+- 얇은 벽 앞 차량 배치와 첫 Blocking Hit: PASS
+- 중복 Impact: 없음
+- Pool 재사용 이상: 없음
+- 판정: CF-TC-020 PASS / CF-FQ-023 Done
+```
+
+## 4-7. 2026-07-13 AimFireAlignment 빌드 결과
+
+구현 및 빌드 확인:
+
+```text
+- Camera Aim Trace와 무기 Trace의 WeaponHit 기준 통일 코드 반영
+- FCFVehicleWeaponAimSolution, TurretAligning, WeaponNotAligned, MuzzleBlocked 상태 기록 경로 반영
+- HitScan / Projectile이 같은 AimOrigin / AimDirection / Target을 사용하도록 Core 경로 반영
+- Reticle UI가 TurretAligning을 정렬 중 문구와 amber 보조 색상으로 표시
+- VehicleDebug Panel Aim 섹션에 Weapon Aim Solution 표시 추가
+- Reticle Recovery Hotfix 포함 Unreal Editor 타깃 빌드 성공
+```
+
+Align Fire Policy 구현 및 빌드 완료:
+
+```text
+- `UCFTurretMountData.bAllowFireWhileAligning` 터렛별 스위치와 기본값 true 반영
+- Weapon Aim Solution에 정책값, DesiredAimDirection, CurrentMuzzleDirection, 실제 최종 AimDirection 분리
+- 정책 true의 정렬 중 CurrentMuzzleDirection 발사와 정책 false의 정렬 거부 코드 반영
+- 실제 최종 발사 경로 기준 MuzzleBlocked 검사 반영
+- `Tools/BuildEditor.bat` 성공
+```
+
+2026-07-14 사용자 PIE 확인:
+
+```text
+- Reticle 목표점과 정렬 완료 후 실제 탄착 일치: PASS
+- 터렛 정렬 중 TurretAligning amber 표시: PASS
+- `bAllowFireWhileAligning=true` 정렬 중 발사 승인과 CurrentMuzzleDirection 진행: PASS
+- `bAllowFireWhileAligning=false` 정렬 중 발사 거부와 정렬 완료 후 승인: PASS
+- WeaponNotAligned가 빨간 FireRejected로 주 Reticle을 덮지 않음: PASS
+- 정책 true/false 양쪽 총구 장애물 MuzzleBlocked 발사 차단: PASS
+```
+
+현재 판정:
+
+```text
+- CF-TC-019 Reticle·터렛·총구 정렬: PASS
+  - AimFireAlignment / Reticle Recovery / Align Fire Policy 공식 빌드 완료
+  - P0 축약 사용자 PIE 완료
+  - 주행·거리별 정량 오차와 경계각 검증은 CF-FQ-019 확장 회귀
+```
+
+## 4-8. CF-FQ-024 전투 FX / Audio 검증 기준
+
+현재 구현 전 테스트 계약:
+
+```text
+- 승인된 발사 1회당 실제 Muzzle 위치에서 발사 FX와 공간 사운드가 각 1회 발생한다.
+- Cooldown, NoWeapon, AimBlocked와 MuzzleBlocked 거부에서는 발사 FX와 사운드가 발생하지 않는다.
+- HitScan과 Projectile은 FCFDamageHitContext의 첫 ImpactPoint / ImpactNormal에서 FX와 사운드를 각 1회 발생시킨다.
+- Projectile OnComponentHit과 보조 Sweep은 같은 Impact 연출을 중복 재생하지 않는다.
+- 최초 Destroyed 상태 전환에서만 파괴 FX와 사운드가 각 1회 발생하며 추가 피해에서 반복되지 않는다.
+- Projectile Pool 재사용에서 Trail, Niagara 또는 Audio 상태가 남지 않는다.
+- 연출 자산이 비어 있거나 재생에 실패해도 발사·피해·파괴 판정은 유지된다.
+```
+
+현재 판정:
+
+```text
+- CF-FQ-024: Active / Implementation Not Started
+- CF-TC-021: TODO
+- 신규 Build / PIE 결과 없음
+```
+
+## 4-9. 2026-07-21 이중 레티클 검증 결과
+
+구현 및 빌드 확인:
+
+```text
+- Weapon Aim Solution에 bHasValidTurretReticlePoint, TurretReticleWorldLocation, TurretReticleDistance 추가
+- TurretReticleWorldLocation은 CurrentMuzzleDirection과 사용자 조준점 비교 거리로 계산
+- Image_WeaponReticle의 ECFWeaponReticleMode / WeaponPreviewWorldLocation 소비 제거
+- DirectImpact / LaunchDirection Preview는 Legacy Debug로만 보존
+- Tools\BuildEditor.bat PASS
+```
+
+2026-07-21 사용자 PIE 확인:
+
+```text
+- 계획한 Image_CenterDot 조준 레티클 동작 유지: PASS
+- Image_WeaponReticle의 실제 터렛 방향 추적: PASS
+- 정렬 중 분리와 정렬 완료 수렴: PASS
+- 탄종과 착탄 위치에서 분리된 터렛 레티클 의미: PASS
+- 판정: CF-TC-022 PASS / CF-FQ-025 Done
 ```
 
 ---
@@ -162,11 +326,15 @@ Reticle 관련 작업 전 최소 검증 기준은 아래다.
 | `CF-TC-011` | Network | 이동 복제 | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/Systems/Network/ServerSpawn.md` | `N/A` |
 | `CF-TC-012` | Config | 런타임 설정 | 현재 Config 기준 경로/모드가 깨지지 않음 | `Document/Systems/Config/ProjectRuntimeConfig.md` | `TODO` |
 | `CF-TC-013` | Combat | 차량 무기 조준/발사 | 조준 방향으로 로컬 발사 명령이 생성되고 성공/불가/쿨다운 상태가 구분됨 | `Document/Systems/Combat/WeaponFire.md`, `Document/Systems/Vehicles/VehicleAim.md`, `Document/Systems/UI/VehicleDebugPanel.md` | `PARTIAL` |
-| `CF-TC-014` | Feedback | 발사 피드백/UI | 발사 성공/불가/쿨다운/무기 없음 상태가 Reticle 또는 FireFeedback UI 기준으로 읽힘 | `Document/Systems/Combat/FireFeedback.md`, `Document/Systems/UI/AimReticle.md`, `Document/Systems/Combat/WeaponFire.md` | `PARTIAL` |
-| `CF-TC-015` | Combat | 피격 판정 기록 | 발사 결과가 빗나감/피격으로 구분되어 Debug Context로 기록됨 | `Document/Systems/Combat/DamageHitContext.md`, `Document/Systems/Combat/Projectile.md` | `TODO` |
-| `CF-TC-016` | Combat | 피해 처리 | 피격 결과가 피해량과 생존 상태에 반영됨 | `Document/Systems/Combat/HitDamage.md` 예정 | `TODO` |
+| `CF-TC-014` | Feedback | 발사 피드백/UI | 발사 성공/불가/쿨다운/무기 없음 상태가 Reticle 또는 FireFeedback UI 기준으로 읽힘 | `Document/Systems/Combat/FireFeedback.md`, `Document/Systems/UI/AimReticle.md`, `Document/Systems/Combat/WeaponFire.md` | `PASS` |
+| `CF-TC-015` | Combat | 시각 메시 기반 피격 판정 기록 | HitScan/Projectile이 SM_Body 시각 차체에서 명중하고 P0 고속 집중 조건에서도 DamageHitContext로 누락 없이 기록됨 | `Document/Plan/HitDamage/ImplementationDesign.md`, `Document/Plan/ProjectileContinuousCollision/ImplementationDesign.md`, `Document/Systems/Combat/DamageHitContext.md`, `Document/Systems/Combat/Projectile.md` | `PASS` |
+| `CF-TC-016` | Combat | 피해 처리 | BaseDamage가 차량 체력에 정확히 한 번 누적되고 체력 0 이하에서 파괴 상태가 한 번만 전환됨 | `Document/Systems/Combat/HitDamage.md`, `Document/Systems/Combat/DamageHitContext.md` | `PASS` |
 | `CF-TC-017` | Loop | 주행/전투 반복 | 주행, 조준, 발사, 피격, 피해 루프를 반복해도 상태가 꼬이지 않음 | `Document/Systems/Combat/CoreLoop.md` 예정 | `TODO` |
 | `CF-TC-018` | Feel | 전투 템포/피드백 | 조작감, 발사 리듬, 피격 반응 문제가 기능 차단과 품질 후속으로 분리됨 | `Document/Systems/Combat/CombatFeel.md` 예정 | `TODO` |
+| `CF-TC-019` | Combat | Reticle·터렛·총구 정렬 | 동일 Aim Solution을 공유하고, `bAllowFireWhileAligning` true/false 양쪽에서 실제 발사 방향·거부 조건·TurretAligning·MuzzleBlocked 표시가 정책대로 동작함 | `Document/Plan/AimFireAlignment/ImplementationDesign.md`, `Document/Systems/Vehicles/VehicleAim.md`, `Document/Systems/Combat/WeaponFire.md`, `Document/Systems/UI/AimReticle.md` | `PASS` |
+| `CF-TC-020` | Combat | 고속 Projectile 연속 충돌 | 30 FPS + 기준 속도 4배에서 차량과 얇은 벽을 통과하지 않고 첫 Hit을 한 번 기록하며 Pool 재사용이 정상임 | `Document/Plan/ProjectileContinuousCollision/ImplementationDesign.md`, `Document/Systems/Combat/Projectile.md`, `Document/Systems/Combat/DamageHitContext.md` | `PASS` |
+| `CF-TC-021` | Presentation | 전투 FX / Audio | 승인된 발사, 첫 Impact와 최초 파괴에서 FX·Sound가 각 1회 발생하고 거부·중복 판정·Pool 재사용에서 중복 또는 잔류가 없음 | `Document/Plan/CombatFxAudio/ImplementationDesign.md`, 완료 후 `Document/Systems/Combat/CombatFxAudio.md` | `TODO` |
+| `CF-TC-022` | UI | 조준·터렛 이중 레티클 | Image_CenterDot은 사용자 조준점을 유지하고 Image_WeaponReticle은 CurrentMuzzleDirection 기반 터렛 조준 지점을 탄종·착탄 위치와 무관하게 표시 | `Document/Plan/ReticleAimDirection/ImplementationDesign.md`, `Document/Systems/UI/AimReticle.md`, `Document/Systems/Vehicles/VehicleAim.md` | `PASS` |
 
 ---
 
@@ -253,6 +421,10 @@ Reticle 관련 작업 전 최소 검증 기준은 아래다.
 - UI Reticle과 연결되는 데이터가 유효하다.
 - LocalAimState와 FireValidationState를 구분해 확인할 수 있다.
 - bLocalWithinWeaponArc / OutOfArc는 표시/디버그 상태로 확인한다.
+- Reticle 월드 목표점이 DesiredAimTargetLocation 단일 기준으로 유지되는지 확인한다.
+- Muzzle → DesiredAimTargetLocation 요구 방향과 CurrentMuzzleDirection의 정렬 오차를 확인한다.
+- TurretAligning과 OutOfArc가 서로 다른 원인으로 구분되는지 확인한다.
+- 총구 앞 장애물 Trace 결과를 확인한다.
 - 서버 권한 발사 구조는 현재 보류하고, 로컬 Aim / Reticle 피드백을 우선한다.
 ```
 
@@ -262,6 +434,9 @@ Reticle 관련 작업 전 최소 검증 기준은 아래다.
 - 조준 데이터가 UI 또는 후속 Fire 요청에서 읽을 수 있는 형태로 유지된다.
 - 서버 없이 로컬 조준 상태와 Reticle 상태를 확인할 수 있다.
 - OutOfArc를 단독 발사 차단으로 오해하지 않도록 Debug / UI 기준이 분리되어 있다.
+- Reticle 목표점, 터렛 요구 방향, 총구 발사 방향이 동일 Aim Solution에서 파생된다.
+- `bAllowFireWhileAligning=true`의 정렬 중 발사 허용과 `false`의 정렬 중 발사 차단을 각각 확인할 수 있다.
+- 총구 앞 장애물 차단은 두 정책 모두에서 원인별로 확인할 수 있다.
 ```
 
 ---
@@ -303,9 +478,11 @@ Reticle 관련 작업 전 최소 검증 기준은 아래다.
 - Reticle 위젯이 필요한 조건에서 생성된다.
 - 조준 상태 변화가 Reticle에 반영된다.
 - 싱글 PIE에서 로컬 차량 기준 Reticle 표시/갱신을 확인한다.
+- 주 Reticle은 플레이어가 지정한 DesiredAimTargetLocation을 나타내는 Command Reticle로 해석한다.
+- TurretAligning / Ready / Blocked 상태가 서로 구분된다.
 - Reticle은 서버 대기 / 서버 거부 상태를 표시하지 않는다.
 - FirePending / FireRejected는 로컬 발사 피드백 상태로 해석된다.
-- Cooldown / NoWeapon / FireRejected 표시 후보가 WeaponFire 결과와 충돌하지 않는다.
+- Cooldown / NoWeapon / FireRejected 표시가 WeaponFire 결과와 충돌하지 않는다.
 ```
 
 ### PASS 기준
@@ -313,6 +490,8 @@ Reticle 관련 작업 전 최소 검증 기준은 아래다.
 ```text
 - 로컬 클라이언트 화면에서 Reticle이 정상 표시된다.
 - Aim 상태 변화가 Reticle 표시 상태로 읽힌다.
+- Reticle이 지정한 목표점과 실제 탄착이 허용 오차 안에서 일치한다.
+- 터렛 정렬 중과 정렬 완료를 UI에서 구분할 수 있다.
 - 로컬 발사 결과 피드백이 Reticle 기준과 충돌하지 않는다.
 ```
 
@@ -363,18 +542,25 @@ Reticle 관련 작업 전 최소 검증 기준은 아래다.
 ```text
 - Fire 입력이 로컬 기준에서 발사 명령으로 연결된다.
 - 발사 원점과 발사 방향을 확인할 수 있다.
+- FireRequest.AimDirection이 Muzzle → DesiredAimTargetLocation 요구 방향을 사용한다.
+- CurrentMuzzleDirection과 DesiredLaunchDirection의 정렬 오차를 확인할 수 있다.
+- `bAllowFireWhileAligning=true`에서 정렬 중 현재 Muzzle 방향 발사, `false`에서 정렬 중 발사 거부가 구분된다.
+- 총구 앞 장애물 거부는 두 정책 모두에서 별도로 구분된다.
 - 발사 성공 / 발사 불가 / 쿨다운 상태가 구분된다.
 - LastFireResult와 RejectReason을 확인할 수 있다.
-- Weapon Debug에서 WeaponData / Cooldown / FireOrigin 상태를 확인할 수 있다.
-- OutOfArc / bLocalWithinWeaponArc는 단독 발사 차단 조건으로 취급하지 않는다.
+- Weapon Debug에서 WeaponData / Cooldown / FireOrigin / Aim Alignment 상태를 확인할 수 있다.
+- OutOfArc / bLocalWithinWeaponArc는 TurretAligning과 구분한다.
 - 서버 권한 발사와 복제 검증은 현재 사이클에서 N/A다.
 ```
 
 ### PASS 기준
 
 ```text
-- 싱글 PIE에서 기준 차량이 조준 방향으로 로컬 발사 명령을 만든다.
-- 실패 시 원인을 입력 / 조준 막힘 / 쿨다운 / 데이터 문제로 분리할 수 있다.
+- 싱글 PIE에서 기준 차량이 Reticle 목표점을 향하는 로컬 발사 명령을 만든다.
+- `bAllowFireWhileAligning=true`이면 정렬 중 현재 Muzzle 방향으로 발사가 승인된다.
+- `bAllowFireWhileAligning=false`이면 정렬 완료 후에만 발사가 승인된다.
+- 정렬 완료 후에는 두 정책 모두 Reticle 목표 방향을 사용한다.
+- 실패 시 원인을 입력 / 터렛 정렬 / 총구 막힘 / 쿨다운 / 데이터 문제로 분리할 수 있다.
 - 발사 결과가 AimComp / VehicleDebug 상태에 기록된다.
 ```
 
@@ -419,7 +605,17 @@ Reticle 관련 작업 전 최소 검증 기준은 아래다.
 
 ```text
 - 발사 결과가 빗나감 / 피격으로 구분된다.
+- VehicleMesh의 보이지 않는 돌출부가 무기 피격을 받지 않는지 확인한다.
+- SM_Body의 보이는 차체 표면에서 HitScan과 Projectile이 Blocking Hit을 만드는지 확인한다.
+- HitResult.HitComponent가 SM_Body 또는 승인된 시각 피격 컴포넌트인지 확인한다.
 - Dummy HitScan 또는 Projectile Actor 충돌 결과가 DamageHitContext로 기록된다.
+- 고속 Projectile을 30 / 60 / 120 FPS에서 발사한다.
+- 기준 속도 1배 / 2배 / 4배에서 얇은 벽과 SM_Body 통과 여부를 확인한다.
+- OnComponentHit과 보조 Sweep이 같은 충돌을 두 번 기록하지 않는지 확인한다.
+- 첫 Blocking Hit만 DamageHitContext에 기록되는지 확인한다.
+- 차량 주행과 지면/벽 물리 충돌이 기존처럼 유지되는지 확인한다.
+- 벽과 지형은 무기 Trace와 Projectile을 계속 차단하는지 확인한다.
+- 자기 차량 Ignore 정책이 유지되는지 확인한다.
 - 피격 결과가 후속 피해량으로 변환될 준비가 되어 있다.
 - 피해 처리 실패 시 Aim / Fire / Hit / Damage 중 어느 단계 문제인지 분리된다.
 ```
@@ -427,8 +623,14 @@ Reticle 관련 작업 전 최소 검증 기준은 아래다.
 ### PASS 기준
 
 ```text
-- 로컬 테스트에서 피격/빗나감 기록을 확인할 수 있다.
-- 피해 적용이 미구현이어도 HitContext 기록 경로는 추적 가능하다.
+- 보이는 SM_Body 차체 표면과 실제 무기 피격 표면이 기능적으로 일치한다.
+- VehicleMesh Physics Asset은 차량 물리에만 참여하고 무기 피격 Query를 가로채지 않는다.
+- HitScan과 일반/고속 Projectile 모두 승인된 시각 피격 컴포넌트에서 Hit을 기록한다.
+- 고속/저프레임에서도 얇은 충돌체를 통과하지 않는다.
+- 한 Projectile Activation에서 Impact와 Pool 반환이 정확히 한 번 발생한다.
+- 로컬 테스트에서 피격/빗나감과 HitComponent를 확인할 수 있다.
+- DamageHitContext와 DamageApplyResult를 통해 피격 기록부터 체력 변경 결과까지 추적할 수 있다.
+- 차량 주행 물리와 월드 충돌에 회귀가 없다.
 ```
 
 ---
@@ -612,7 +814,7 @@ Reticle 관련 작업 전 최소 검증 기준은 아래다.
 
 ## 15. 문서 버전 관리
 
-- 현재 문서 버전: `v1.4.0`
+- 현재 문서 버전: `v1.9.0`
 - 문서 상태: `Active`
 
 ### 버전 증가 기준
@@ -626,6 +828,124 @@ Reticle 관련 작업 전 최소 검증 기준은 아래다.
 ---
 
 ## 16. 체인지로그
+
+### v1.9.0 - 2026-07-21
+
+```text
+- CF-FQ-025 이중 레티클의 공식 빌드와 사용자 PIE 결과를 기록했다.
+- CF-TC-022 조준·터렛 이중 레티클 회귀 테스트를 추가하고 PASS로 등록했다.
+- 터렛 레티클을 CurrentMuzzleDirection 기반이며 탄종·착탄 위치와 독립적인 표시로 고정했다.
+```
+
+### v1.8.7 - 2026-07-15
+
+```text
+- CF-FQ-024 전투 FX / Audio의 구현 전 테스트 계약을 추가했다.
+- 승인 발사, 첫 Impact, 최초 파괴의 1회성 연출과 거부·중복·Pool 잔류 방지 기준을 고정했다.
+- CF-TC-021 전투 FX / Audio 테스트를 TODO로 등록했다.
+- 신규 구현, 빌드 또는 PIE 결과는 아직 기록하지 않았다.
+```
+
+### v1.8.6 - 2026-07-15
+
+```text
+- 사용자 PIE에서 NoWeapon 회색 표시, AimBlocked 주황 표시와 두 상태의 텍스트 만료를 확인했다.
+- 장애물 제거 후 정상 Aim 복귀와 Ready → FireSuccess → Cooldown → Ready 회귀를 확인했다.
+- CF-TC-014 발사 피드백/UI를 PARTIAL에서 PASS로 변경했다.
+- CF-TC-013은 더 넓은 WeaponFire 회귀 항목이므로 PARTIAL을 유지했다.
+```
+
+### v1.8.5 - 2026-07-15
+
+```text
+- 사용자 싱글 PIE에서 최소 Damage Runtime 정상 동작을 확인했다.
+- BaseDamage 체력 누적 감소, 체력 0 이하 파괴 전환, 추가 피해 TargetDestroyed 거부와 파괴 이벤트 1회성을 PASS 처리했다.
+- CF-TC-016을 PARTIAL에서 PASS로 변경하고 현재 구현 문서를 Systems/Combat/HitDamage.md로 연결했다.
+- 전체 속도·FPS 조합과 이동 차량 반복 전투는 CF-FQ-019 확장 회귀로 유지했다.
+```
+
+### v1.8.4 - 2026-07-14
+
+```text
+- CF-FQ-018 최소 Damage Runtime C++와 공식 Editor 빌드 성공을 반영했다.
+- CF-TC-016을 TODO에서 PARTIAL로 변경하고 사용자 PIE 피해 누적·파괴 전환을 남은 조건으로 기록했다.
+- HitScan/Projectile 공용 피해 적용과 Projectile 첫 Impact 1회 적용 계약을 검증 기준에 반영했다.
+- 사용자 확인 전에는 피해 처리를 PASS로 기록하지 않았다.
+```
+
+### v1.8.3 - 2026-07-14
+
+```text
+- CF-FQ-022 P0 사용자 PIE 결과를 CF-TC-019에 기록했다.
+- 정책 true/false, 정렬 완료 탄착, TurretAligning amber와 양쪽 MuzzleBlocked를 PASS 처리했다.
+- CF-TC-019 상태를 PARTIAL에서 PASS로 변경했다.
+- 주행·거리별 정량 조준 검증은 CF-FQ-019 확장 회귀로 이관했다.
+```
+
+### v1.8.2 - 2026-07-14
+
+```text
+- 사용자 PIE 축약 스트레스 테스트 통과를 기록했다.
+- CF-TC-015와 CF-TC-020을 P0 집중 스트레스 범위 PASS로 변경했다.
+- 30 FPS + 기준 속도 4배 차량 집중 발사, 얇은 벽 첫 Blocking Hit, 중복 Impact 없음과 Pool 재사용 정상을 기록했다.
+- 전체 FPS·속도 매트릭스와 이동 차량 검증을 CF-FQ-019 확장 회귀로 이관했다.
+```
+
+### v1.8.1 - 2026-07-14
+
+```text
+- Align Fire Policy C++ 구현과 `BuildEditor.bat` 성공을 CF-TC-019에 기록했다.
+- 정책 true/false, 실제 최종 발사 경로 MuzzleBlocked, TurretAligning amber 검증은 PIE Pending으로 유지했다.
+- CF-TC-019는 PARTIAL을 유지하고 사용자 확인 없이 PIE PASS를 기록하지 않았다.
+```
+
+### v1.8.0 - 2026-07-14
+
+```text
+- `UCFTurretMountData.bAllowFireWhileAligning` true/false 양쪽 검증 기준을 CF-TC-019에 추가했다.
+- true일 때 정렬 중 현재 Muzzle 방향 발사, false일 때 정렬 완료 전 거부 기준을 기록했다.
+- MuzzleBlocked는 항상 거부하고 TurretAligning amber 표시는 두 정책 모두 유지하도록 기록했다.
+- 기존 AimFireAlignment 빌드 PASS와 Align Fire Policy 코드/빌드 Pending 상태를 분리했다.
+```
+
+### v1.7.1 - 2026-07-13
+
+```text
+- Reticle Recovery Hotfix 정적 구현 상태와 BuildEditor.bat 성공 상태 기록
+- CF-TC-019 빌드 PASS / PIE Pending 상태 반영
+- CF-TC-019는 PARTIAL / PIE Pending 유지
+```
+
+### v1.7.0 - 2026-07-13
+
+```text
+- AimFireAlignment Core/Presentation C++ 구현과 Unreal Editor 타깃 빌드 성공 결과 추가
+- CF-TC-019를 TODO에서 PARTIAL로 변경
+- PIE 검증은 Pending으로 남기고 PASS 기록을 보류
+- TurretAligning / WeaponNotAligned / MuzzleBlocked UI/Debug 확인 항목 추가
+```
+
+### v1.6.0 - 2026-07-13
+
+```text
+- 일반 속도 HitScan / Projectile의 SM_Body 시각 차체 충돌 PIE 확인 결과 반영
+- CF-TC-015를 TODO에서 PARTIAL로 변경하고 고속 Projectile 연속 충돌을 남은 조건으로 명시
+- CF-TC-019 Reticle·터렛·총구 정렬 테스트 추가
+- CF-TC-020 고속 Projectile 연속 충돌 테스트 추가
+- DesiredAimTargetLocation, AimAlignmentError, Muzzle obstruction 기준 추가
+- Sweep/Sub-stepping, 보조 Sphere Sweep, 중복 Impact 방지 테스트 기준 추가
+- Document/Plan/AimFireAlignment 및 ProjectileContinuousCollision 설계 문서 연결
+```
+
+### v1.5.0 - 2026-07-13
+
+```text
+- 현재 차량 피격이 VehicleMesh Physics Asset 기준이라는 확인 결과 추가
+- SM_Body를 시각 차체 기반 무기 피격 표면으로 전환한다는 테스트 원칙 추가
+- CF-TC-015를 시각 메시 기반 HitScan/Projectile 피격 판정 기록 기준으로 보강
+- VehicleMesh 무기 Query 제외, SM_Body 명중, HitComponent 확인, 차량 주행 물리 회귀 검증 항목 추가
+- Document/Plan/HitDamage/ImplementationDesign.md를 CF-TC-015 관련 설계 문서로 연결
+```
 
 ### v1.4.0 - 2026-07-13
 
@@ -674,4 +994,25 @@ Reticle 관련 작업 전 최소 검증 기준은 아래다.
 - Systems 기준 최소 회귀 테스트 인덱스 작성
 - Vehicles / Input / UI / Network / Config 테스트 섹션 추가
 - 테스트 기록 양식과 실패 분류 기준 추가
+```
+
+---
+
+## 17. Migration
+
+### v1.9.0 적용 안내
+
+```text
+- CF-TC-022는 PASS이며 CF-FQ-025 완료 범위의 최소 회귀 기준으로 사용한다.
+- 후속 투사체 착탄 위치 3D 기능은 CF-TC-022의 두 Reticle 의미를 변경하면 안 된다.
+- 기존 CF-TC-006, 014, 019와 신규 CF-TC-022의 PASS 상태를 함께 보호한다.
+```
+
+### v1.8.7 적용 안내
+
+```text
+- CF-TC-021은 구현 전 TODO이며 PASS 또는 PARTIAL로 해석하지 않는다.
+- 테스트 기준은 Document/Plan/CombatFxAudio/ImplementationDesign.md를 사용한다.
+- 사용자 PIE 확인 전에는 CF-FQ-024 Done 또는 CombatFxAudio Systems 승격을 기록하지 않는다.
+- 기존 CF-TC-014, 015, 016, 019, 020의 PASS 상태는 유지한다.
 ```

@@ -1,9 +1,9 @@
 # FireFeedback
 
-- Version: 1.1.0
-- Date: 2026-07-13
-- Status: Current / P0 UI Implemented / Partial State Verification
-- Scope: 싱글플레이 로컬 발사 결과를 FireFeedback ViewData로 변환하고 WBP Reticle의 텍스트와 색상으로 표시하는 현재 기준 문서
+- Version: 1.3.0
+- Date: 2026-07-15
+- Status: Current / P0 FireFeedback User PIE Verified
+- Scope: 싱글플레이 로컬 발사 결과와 AimFireAlignment 거부 사유를 FireFeedback ViewData로 변환하고 WBP Reticle의 텍스트와 색상으로 표시하는 현재 기준 문서
 
 ---
 
@@ -114,7 +114,7 @@ WBP_AimReticle
 
 ```text
 CFVehiclePawn.cpp        v2.107.0
-CFAimReticleWidget.cpp   v1.5.1
+CFAimReticleWidget.cpp   v1.6.0
 ```
 
 ---
@@ -218,6 +218,7 @@ CFAimReticleWidget.cpp   v1.5.1
 | `NoWeapon` | 무기 없음 / 비호환 | `RejectReason == NoWeapon` |
 | `AimBlocked` | 조준선 막힘 | `RejectReason == AimBlocked` |
 | `OutOfArcWarning` | 조준각 거부 피드백 | `RejectReason == OutOfWeaponArc` |
+| `OutOfArcWarning` + `FeedbackDisplayKey=TurretAligning` | 터렛 정렬 중 보조 표시 | `RejectReason == TurretAligning` |
 | `FirePending` | 발사 처리 중 후보 | 현재 활성화 경로 없음 |
 
 `OutOfArcWarning`은 현재 P0 싱글플레이 기준에서 주 Reticle을 덮어쓰는 단독 발사 차단 상태가 아니다.
@@ -240,11 +241,15 @@ CFAimReticleWidget.cpp   v1.5.1
 | `NoAmmo` | `FireRejected` | `FireRejected` | 현재 탄약/재장전 시스템 미구현이므로 일반 거부로 처리 |
 | `OutOfWeaponArc` | `OutOfArcWarning` | BaseReticleState 유지 + 전용 보조 경고 | 주 상태/색상 덮어쓰기 없음 |
 | `AimBlocked` | `AimBlocked` | `Blocked` | 조준선 막힘 |
+| `TurretAligning` | `OutOfArcWarning` + `FeedbackDisplayKey=TurretAligning` | BaseReticleState 유지 + `정렬 중` 보조 경고 | 주 상태/색상 덮어쓰기 없음 |
+| `WeaponNotAligned` | 없음 또는 Debug 전용 | BaseReticleState 유지 | 빨간 FireRejected로 주 Reticle 덮어쓰기 없음 |
+| `MuzzleBlocked` | `AimBlocked` | `Blocked` | 총구 앞 WeaponHit 경로 막힘 |
 | `InvalidAimOrigin` | `FireRejected` | `FireRejected` | 발사 원점 비정상 |
 | `InvalidAimDirection` | `FireRejected` | `FireRejected` | 발사 방향 비정상 |
 | `TraceMiss` | `FireRejected` | `FireRejected` | 현재 별도 MissFeedback 상태가 없어 기본 거부로 매핑 |
 
 현재 P0 기준에서는 UI 상태를 지나치게 세분화하지 않는다.
+`bAllowFireWhileAligning=true`인 정렬 중 발사는 승인될 수 있으므로 거부 피드백을 만들지 않지만, 기본 Reticle은 계속 `TurretAligning` amber 상태를 유지한다. 정책 false일 때만 기존 `TurretAligning` / `WeaponNotAligned` 거부 매핑을 사용한다.
 먼저 플레이어가 아래 네 가지를 구분할 수 있으면 충분하다.
 
 ```text
@@ -311,6 +316,9 @@ NoWeapon        -> 회색, 주 Reticle 상태 덮어쓰기
 AimBlocked      -> 주황색, Blocked 상태로 덮어쓰기
 FireRejected    -> 빨간색, FireRejected 상태로 덮어쓰기
 OutOfArcWarning -> 노란색 전용 보조 경고, 주 상태/색상 덮어쓰기 없음
+TurretAligning  -> amber 전용 보조 경고, 주 상태/색상 덮어쓰기 없음
+MuzzleBlocked   -> 주황색 Blocked 표시
+WeaponNotAligned -> 주 Reticle 빨간 덮어쓰기 없음
 ```
 
 전용 `Text_OutOfArcWarning`이 있을 때 일반 State/Hint를 숨기는 조건은 현재 활성 피드백 자체가 `OutOfArcWarning`인 경우로 제한한다. 조준각 밖이어도 `FireSuccess`, `Cooldown`, `FireRejected`가 현재 피드백이면 해당 일반 문구가 유지된다.
@@ -330,6 +338,10 @@ OutOfArcWarning -> 노란색 전용 보조 경고, 주 상태/색상 덮어쓰�
 - FireSuccess → Cooldown → 종료 흐름
 - WeaponCooldown과 OutOfArcWarning 텍스트 잔류 수정
 - 전용 OutOfArc 경고 중복 방지와 다른 피드백 비가림 조건 수정
+- TurretAligning 정렬 중 문구와 amber 보조 색상 표시
+- WeaponNotAligned 빨간 FireRejected 주 상태 덮어쓰기 방지
+- MuzzleBlocked AimBlocked / Blocked 표시 연결
+- VehicleDebug Panel Weapon Aim Solution 표시
 ```
 
 PIE 확인 완료:
@@ -341,14 +353,20 @@ PIE 확인 완료:
 - 연속 입력 후 쿨다운 종료 시 텍스트 제거
 - 조준각 밖에서 FireSuccess / Cooldown / FireRejected 일반 문구 유지
 - 실제 OutOfArcWarning에서 전용 경고가 일반 문구를 대체
+- TurretAligning amber, WeaponNotAligned 비가림, MuzzleBlocked 주황 Blocked 표시
+- NoWeapon 회색 Reticle과 "무기 없음" / "사용 가능한 무기 없음" 문구
+- AimBlocked 주황 Reticle과 "조준 가림" / "조준선이 막힘" 문구
+- NoWeapon / AimBlocked 유지 시간 종료 후 FireFeedback 텍스트 제거
+- 장애물 제거 후 정상 Aim 복귀
+- Ready → FireSuccess → Cooldown → Ready 정상 발사 회귀
 ```
 
-Done 전 남은 확인:
+현재 판정:
 
 ```text
-- NoWeapon 실제 표시와 회색 상태
-- AimBlocked 실제 표시와 주황 상태
-- NoWeapon / AimBlocked 유지 시간 종료 후 텍스트 제거
+- Unreal Editor 타깃 빌드: PASS
+- CF-FQ-017: Done
+- CF-TC-014: PASS
 ```
 
 P0에서 계속 제외하는 항목:
@@ -464,9 +482,6 @@ P0에서는 텍스트를 너무 많이 보여주기보다, Debug Panel에서 상
 아래 항목은 아직 확정하지 않았다.
 
 ```text
-- NoWeapon 실제 PIE 표시와 회색 상태
-- AimBlocked 실제 PIE 표시와 주황 상태
-- NoWeapon / AimBlocked 유지 시간 종료 후 텍스트 제거
 - 발사 성공 VFX / SFX 자산명과 연결 시점
 - 실패 피드백에 별도 사운드를 사용할지 여부
 - Cooldown 숫자 표시를 게이지로 확장할지 여부
@@ -494,8 +509,8 @@ P0에서는 텍스트를 너무 많이 보여주기보다, Debug Panel에서 상
 
 ## 19. 문서 버전 관리
 
-- 현재 문서 버전: `1.1.0`
-- 문서 상태: `Current / P0 UI Implemented / Partial State Verification`
+- 현재 문서 버전: `1.3.0`
+- 문서 상태: `Current / P0 FireFeedback User PIE Verified`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
   - 기능 설명 본문이 바뀌면 체인지로그도 같이 갱신한다.
@@ -518,6 +533,34 @@ P0에서는 텍스트를 너무 많이 보여주기보다, Debug Panel에서 상
 ---
 
 ## 20. Migration
+
+### v1.2.1 -> v1.3.0
+
+```text
+- NoWeapon와 AimBlocked의 실제 UI 색상, 문구와 피드백 만료를 사용자 PIE 기준으로 확정한다.
+- 장애물 제거 후 정상 Aim 복귀와 정상 발사 회귀를 Current 동작으로 사용한다.
+- CF-FQ-017 Done / CF-TC-014 PASS로 전환한다.
+- 코드와 WBP 자산 마이그레이션은 필요하지 않다.
+```
+
+### v1.2.0 -> v1.2.1
+
+```text
+- 정렬 중 발사 허용 정책은 발사 승인 여부만 바꾸며 기존 TurretAligning amber 주 상태를 제거하지 않는다.
+- 정책 false의 TurretAligning / WeaponNotAligned 거부 표시와 MuzzleBlocked Blocked 표시는 기존 의미를 유지한다.
+- WBP 구조와 바인딩은 변경하지 않았고 `Tools/BuildEditor.bat`만 검증했다.
+- PIE 표시는 Pending이다.
+```
+
+### v1.1.0 -> v1.2.0
+
+```text
+- TurretAligning은 FeedbackDisplayKey로 구분하고 `정렬 중` 문구와 TurretAligningReticleColor를 사용한다.
+- WeaponNotAligned는 빨간 FireRejected로 주 Reticle을 덮지 않는다.
+- MuzzleBlocked는 AimBlocked / Blocked 주황 표시 경로를 사용한다.
+- 기존 WBP Optional 바인딩 이름은 변경하지 않는다.
+- C++ 빌드는 완료됐지만 PIE 표시 검증은 별도로 수행해야 한다.
+```
 
 ### v1.0.0 -> v1.1.0
 
@@ -545,6 +588,30 @@ P0에서는 텍스트를 너무 많이 보여주기보다, Debug Panel에서 상
 
 ## 21. Changelog
 
+### v1.3.0 - 2026-07-15
+
+```text
+- NoWeapon 회색 표시, AimBlocked 주황 표시와 두 상태의 문구 만료를 사용자 PIE로 확인했다.
+- 장애물 제거 후 정상 Aim 복귀와 Ready → FireSuccess → Cooldown → Ready 회귀를 확인했다.
+- CF-FQ-017 Done / CF-TC-014 PASS를 Current 상태에 반영했다.
+```
+
+### v1.2.1 - 2026-07-14
+
+```text
+- Align Fire Policy가 기존 FireFeedback 매핑을 유지하는 조건을 명시했다.
+- 정책 true의 정렬 중 승인과 TurretAligning amber 표시가 공존하는 기준을 기록했다.
+- C++ 빌드 완료와 PIE Pending을 기록했다.
+```
+
+### v1.2.0 - 2026-07-13
+
+```text
+- TurretAligning / WeaponNotAligned / MuzzleBlocked FireFeedback 표시 정책 반영
+- TurretAligning amber 보조 경고와 WeaponNotAligned 비덮어쓰기 정책 기록
+- AimFireAlignment Presentation 빌드 완료와 PIE Pending 상태 분리 기록
+```
+
 ### v1.1.0 - 2026-07-13
 
 ```text
@@ -571,7 +638,7 @@ P0에서는 텍스트를 너무 많이 보여주기보다, Debug Panel에서 상
 
 ## 22. 마지막 확인 기준
 
-- 확인 일시: `2026-07-13`
+- 확인 일시: `2026-07-15`
 - 확인 근거:
   - `Document/Systems/Combat/WeaponFire.md`
   - `Document/Systems/UI/AimReticle.md`

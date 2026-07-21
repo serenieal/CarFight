@@ -2,8 +2,8 @@
 
 > 역할: CarFight 현재 기준 차량 코어의 **유지 결정 / 교체 결정 / 임시 운영 판단**을 기록한다.
 > 상위 방향 문서: `00_Vision.md`
-> 문서 버전: v1.1.1
-> 마지막 정리(Asia/Seoul): 2026-07-08
+> 문서 버전: v1.3.0
+> 마지막 정리(Asia/Seoul): 2026-07-13
 
 
 ---
@@ -451,11 +451,80 @@
   - 기존 BP 수동 스케일과 기존 차량 외형을 말 없이 바꾸면 회귀 위험이 크다.
   - 휠 반지름 불일치는 공통 WheelSync 회전/서스펜션 로직보다 VehicleData 해석 단계에서 정렬하는 편이 안전하다.
   - 자동 스케일을 WheelSync 기준 캡처 전에 적용하면 이후 스핀/조향/서스펜션 Tick과 책임이 섞이지 않는다.
-  - `WheelRadius`가 물리와 시각에 모두 반영되어도 StaticMesh 바운드 중심이 원점에서 어긋나면 바퀴가 반지름 변경량만큼 계속 파묻혀 보일 수 있다.
+        - `WheelRadius`가 물리와 시각에 모두 반영되어도 StaticMesh 바운드 중심이 원점에서 어긋나면 바퀴가 반지름 변경량만큼 계속 파묻혀 보일 수 있다.
+
+---
+
+### CF-DL-0073 — 차량 무기 피격 형상은 시각 차체를 기준으로 분리한다
+- 판정: 확정
+- 결정:
+  - 차량 주행 물리를 담당하는 `VehicleMesh` Physics Asset을 최종 무기 피격 형상으로 사용하지 않는다.
+  - `VehicleMesh`는 Chaos Vehicle 물리, 지면/벽/차량 물리 충돌을 담당한다.
+  - 화면에 보이는 `SM_Body` StaticMesh는 Query 전용 차체 무기 피격 표면을 담당한다.
+  - HitScan과 Projectile은 무기 피격 Query에서 `VehicleMesh`를 무시하고 `SM_Body` 또는 승인된 시각 피격 컴포넌트에서 명중해야 한다.
+  - P0에서는 휠과 터렛 시각 메시의 독립 피해를 제외하고 차체 `SM_Body`만 피격 대상으로 본다.
+- 이유:
+  - 현재 자산 덤프 기준 `VehicleMesh`는 `QueryAndPhysics / Vehicle / Visibility Block`이고 `SM_Body`는 `NoCollision / Visibility Ignore`다.
+  - 현재 Dummy HitScan은 `ECC_Visibility`를 사용하고 Projectile Collision은 모든 채널을 Block하므로 실제 피격은 Physics Asset을 기준으로 발생한다.
+  - 보이는 차체와 실제 피격 외곽이 다르면 보이지 않는 공간에 맞거나 보이는 표면을 탄이 통과하는 문제가 생긴다.
+  - 향후 장갑 패널과 모듈별 피해를 확장하려면 시각 파츠를 기준으로 피격 책임을 분리하는 편이 안전하다.
+- 구현 전 미확정:
+  - HitScan Trace Channel, Projectile Object Channel, 시각 차체 Collision Profile의 최종 이름과 슬롯은 별도 구현 설계에서 확정한다.
+- 관련 문서:
+  - `Document/Plan/HitDamage/ImplementationDesign.md`
+  - `Document/Systems/Combat/DamageHitContext.md`
+
+---
+
+### CF-DL-0074 — Reticle 월드 목표점을 터렛과 실제 발사의 단일 조준 기준으로 사용한다
+- 판정: 확정
+- 결정:
+  - 화면 Reticle이 지시하는 월드 위치를 `DesiredAimTargetLocation` 성격의 단일 조준 기준으로 사용한다.
+  - 카메라 Aim Trace, 터렛 요구 방향, Muzzle 요구 발사 방향, HitScan 및 Projectile 초기 방향은 같은 Aim Solution에서 파생한다.
+  - 중력 없는 직선 무기의 요구 방향은 `MuzzleWorldLocation → DesiredAimTargetLocation`으로 계산한다.
+  - 현재 Muzzle 방향과 요구 방향의 정렬 오차가 허용 범위 안에 들어온 뒤 실제 발사를 허용한다.
+  - 카메라는 목표를 볼 수 있지만 총구 앞이 막힌 상황을 별도 Muzzle Trace로 검사한다.
+  - `OutOfArc`와 `TurretAligning`은 분리한다.
+- 이유:
+  - 현재 카메라, 차량 중심, 터렛 피벗, Muzzle Socket이 서로 다른 방향 기준을 사용해 Reticle과 탄착이 일치하지 않을 수 있다.
+  - 터렛 회전 성능을 전투 요소로 유지하면서도 실제 발사 결과를 플레이어 조준 의도와 일치시키려면 단일 Aim Solution이 필요하다.
+  - 정렬되지 않은 총신에서 탄환만 목표점으로 꺾어 발사하면 시각과 판정이 다시 분리된다.
+- 후속:
+  - 중력 Projectile의 탄도 발사 해와 이동 표적 선행 조준은 별도 확장으로 둔다.
+- 관련 문서:
+  - `Document/Plan/AimFireAlignment/ImplementationDesign.md`
+  - `Document/Systems/Vehicles/VehicleAim.md`
+  - `Document/Systems/UI/AimReticle.md`
+
+---
+
+### CF-DL-0075 — 고속 Projectile은 연속 구간 충돌을 보장한다
+- 판정: 확정
+- 결정:
+  - 실제 Projectile 판정은 `ProjectileMovementComponent`의 Sweep 이동을 명시적으로 사용한다.
+  - 고속, 중력, 유도 Projectile은 Sub-stepping을 사용하고 시간 간격과 반복 횟수를 탄종별 데이터로 조정할 수 있게 한다.
+  - Sweep/Sub-stepping 후에도 터널링이 남으면 이전 위치부터 현재 위치까지 `CollisionRadius` 기반 보조 Sphere Sweep을 사용한다.
+  - `OnComponentHit`과 보조 Sweep은 단일 Impact 처리 함수와 Activation별 1회 처리 플래그를 공유한다.
+  - CCD는 보조 안전장치이며 단독 해결책으로 보지 않는다.
+  - 비행 시간을 플레이어가 인지하기 어려운 초고속 탄종은 HitScan 판정과 Tracer 시각 표현을 분리할 수 있다.
+- 이유:
+  - 사용자 PIE에서 고속 Projectile이 프레임 사이의 충돌체를 통과하는 터널링이 확인됐다.
+  - 실제 피해 처리 전에 HitContext가 속도와 프레임률에 관계없이 신뢰 가능해야 한다.
+  - 중복 Impact 처리를 막지 않으면 한 발이 피해를 두 번 적용할 수 있다.
+- 관련 문서:
+  - `Document/Plan/ProjectileContinuousCollision/ImplementationDesign.md`
+  - `Document/Systems/Combat/Projectile.md`
+  - `Document/Systems/Combat/DamageHitContext.md`
 
 ---
 
 ## 변경 이력
+- v1.3.0 (2026-07-13)
+  - Reticle 월드 목표점을 터렛/Muzzle/실제 발사의 단일 조준 기준으로 사용하는 결정을 CF-DL-0074로 추가했다.
+  - 고속 Projectile의 Sweep/Sub-stepping/보조 Sphere Sweep과 단일 Impact 처리 결정을 CF-DL-0075로 추가했다.
+- v1.2.0 (2026-07-13)
+  - 차량 무기 피격 형상을 VehicleMesh Physics Asset이 아니라 SM_Body 시각 차체 기준으로 분리하는 결정을 CF-DL-0073으로 추가했다.
+  - Collision Channel/Profile의 구체 이름과 슬롯은 구현 설계에서 확정하는 미확정 항목으로 분리했다.
 - v1.1.1 (2026-07-08)
   - WheelRadius 기준 휠 메시 자동 스케일과 메시 바운드 중심 보정 정책을 CF-DL-0072로 추가했다.
 - v1.1.0 (2026-04-15)

@@ -1,9 +1,9 @@
 # WeaponFire
 
-- Version: 1.1.0
-- Date: 2026-07-09
-- Status: Current / Single Player Local Fire
-- Scope: 현재 구현된 차량 로컬 발사 명령, 무기 데이터 해석, 터렛 FireOrigin, 쿨다운, HitScan / Projectile 분기, 발사 결과 기록과 UI 피드백 연결 기준
+- Version: 1.5.1
+- Date: 2026-07-21
+- Status: Current / Muzzle Clearance User PIE Verified
+- Scope: 현재 구현된 차량 로컬 발사 명령, 무기 데이터 해석, Weapon Aim Solution, 쿨다운, HitScan / Projectile 분기, 발사 결과 기록과 UI 피드백 연결 기준
 
 ---
 
@@ -128,8 +128,19 @@ VehicleData
 - Pitch 메쉬에 해당 Muzzle 소켓이 존재한다.
 ```
 
-조건을 만족하면 최종 FireOrigin은 Pitch 메쉬의 `Muzzle` 소켓 위치와 소켓 X축 방향을 우선 사용한다.
+조건을 만족하면 최종 FireOrigin은 Pitch 메쉬의 `Muzzle` 소켓 위치를 우선 사용한다.
+AimFireAlignment 구현 이후 실제 발사 방향은 가능한 경우 `FCFVehicleWeaponAimSolution.AimDirection`을 사용한다.
 조건을 만족하지 않으면 기존 하드포인트 FireOrigin fallback을 유지한다.
+
+`FCFVehicleWeaponAimSolution`의 방향 의미는 아래와 같다.
+
+```text
+DesiredAimDirection = Muzzle에서 Reticle 목표점으로 향하는 요구 방향
+CurrentMuzzleDirection = 현재 Muzzle Socket X축 방향
+AimDirection = HitScan과 Projectile이 공유하는 실제 최종 발사 방향
+```
+
+정렬 중 `bAllowFireWhileAligning=true`이면 `AimDirection=CurrentMuzzleDirection`, 정렬 완료 후에는 `AimDirection=DesiredAimDirection`이다.
 
 ### 4.5 발사 가능 조건 검증
 
@@ -138,11 +149,14 @@ VehicleData
 ```text
 - Controller 존재 여부
 - VehicleAimComp 존재 여부
+- VehicleWeaponComp 존재 여부
 - Aim runtime 준비 여부
+- Weapon Aim Solution 유효성
 - AimDirection 유효성
 - AimOrigin 유효성
 - Pawn 위치와 AimOrigin 사이 거리
-- LocalAimState.bLocalAimBlocked 여부
+- MuzzleBlocked 여부
+- bAllowFireWhileAligning=false일 때 TurretAligning / WeaponNotAligned 여부
 - 활성 WeaponData 호환 여부
 - 활성 무기 쿨다운 여부
 ```
@@ -163,9 +177,26 @@ AimBlocked
 InvalidAimOrigin
 InvalidAimDirection
 TraceMiss
+TurretAligning
+WeaponNotAligned
+MuzzleBlocked
 ```
 
-현재 `ValidateFireCommand`에서 실제로 핵심 사용되는 거부 사유는 아래 범주다.
+현재 `ValidateFireCommand`에서 실제로 핵심 사용되는 거부 사유는 아래 범주다. `TurretAligning`과 `WeaponNotAligned`는 `bAllowFireWhileAligning=false`일 때만 거부하며, `MuzzleBlocked`는 정책과 관계없이 항상 거부한다.
+
+`MuzzleBlocked`는 전체 Command 경로가 아니라 총구 바로 앞의 안전 구간에만 적용한다. 기본 안전 거리는 `TurretMountData.MuzzleClearanceDistanceCm=150cm`이며, Command 목표가 더 가까우면 목표 거리까지만 검사한다. 안전 구간 이후의 벽·지형·차량은 발사를 막지 않고 실제 HitScan 또는 Projectile 충돌로 처리한다. 안전 구간 안에서도 첫 적중 Actor가 `VehicleHealthComp`를 가진 차량이면 유효 피해 대상으로 발사를 허용한다. 값이 `0`이면 총구 가림 사전 검사를 비활성화한다.
+
+2026-07-21 사용자 PIE에서 먼 낮은 벽이 더 이상 `MuzzleBlocked`를 만들지 않고 정상 조준·발사 상태를 유지하는 것을 확인했다. 총구 안전 거리 안의 근접 장애물 차단 회귀는 별도 최종 확인 항목으로 유지한다.
+
+2026-07-14 사용자 PIE에서 아래 발사 정책을 확인했다.
+
+```text
+- bAllowFireWhileAligning=true: 정렬 중 발사 승인, CurrentMuzzleDirection 진행 PASS
+- bAllowFireWhileAligning=false: 정렬 중 발사 거부, 정렬 완료 후 승인 PASS
+- 정렬 완료 후 Reticle 목표점 탄착 PASS
+- 정책 true/false 양쪽 MuzzleBlocked 발사 차단 PASS
+- TurretAligning amber 유지와 WeaponNotAligned 비가림 PASS
+```
 
 ```text
 InvalidOwner
@@ -175,6 +206,9 @@ InvalidAimDirection
 InvalidAimOrigin
 AimBlocked
 WeaponCooldown
+TurretAligning
+WeaponNotAligned
+MuzzleBlocked
 None
 ```
 
@@ -363,6 +397,9 @@ Reticle 또는 FireFeedback이 읽을 수 있는 대표 후보 데이터는 아�
 | `NoAmmo` | `FireRejected` 또는 `Reloading` | 현재 탄약 시스템 미구현. 후속 상태 |
 | `OutOfWeaponArc` | `OutOfArc` | 호환용 상태. 현재 기본 거부 조건 아님 |
 | `AimBlocked` | `Blocked` | 조준선 막힘 |
+| `TurretAligning` | `OutOfArcWarning` + `정렬 중` | 터렛/총구가 목표 방향으로 정렬 중 |
+| `WeaponNotAligned` | Debug / 일반 발사 불가 후보 | 무기 정렬 오차가 허용 범위를 초과. 주 Reticle을 빨간색으로 덮지 않음 |
+| `MuzzleBlocked` | `Blocked` 또는 `AimBlocked` | 총구에서 목표점까지의 WeaponHit 경로가 막힘 |
 | `InvalidAimOrigin` | `FireRejected` | 발사 원점 비정상 |
 | `InvalidAimDirection` | `FireRejected` | 발사 방향 비정상 |
 | `TraceMiss` | 별도 Miss 피드백 후보 | 현재 피해 판정 후속 상태 |
@@ -399,6 +436,7 @@ CooldownRatio = ActiveWeaponRemainingCooldownSeconds / ActiveWeaponCooldownSecon
 - Aim 상태와 Weapon 상태를 기준으로 발사 가능 여부를 검증한다.
 - MountProfile / EquipmentPresetData / WeaponData / ProjectileData를 해석한다.
 - 하드포인트 또는 Muzzle 소켓 기준 발사 원점과 방향을 만든다.
+- 가능한 경우 Weapon Aim Solution의 AimOrigin / AimDirection / Target을 HitScan과 Projectile이 공유하게 한다.
 - 쿨다운을 기록하고 검증한다.
 - Projectile Actor 실행 경로와 Dummy HitScan fallback 경로를 분기한다.
 - 발사 결과를 AimComp와 VehicleDebug 상태에 반영한다.
@@ -476,8 +514,8 @@ CooldownRatio = ActiveWeaponRemainingCooldownSeconds / ActiveWeaponCooldownSecon
 
 ## 13. 문서 버전 관리
 
-- 현재 문서 버전: `1.1.0`
-- 문서 상태: `Current / Single Player Local Fire`
+- 현재 문서 버전: `1.5.1`
+- 문서 상태: `Current / Muzzle Clearance User PIE Verified`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
   - 기능 설명 본문이 바뀌면 체인지로그도 같이 갱신한다.
@@ -501,6 +539,53 @@ CooldownRatio = ActiveWeaponRemainingCooldownSeconds / ActiveWeaponCooldownSecon
 
 ## 14. Migration
 
+### v1.4.1 -> v1.5.0
+
+```text
+- MuzzleBlocked의 검사 범위를 전체 Command 경로에서 총구 안전 구간으로 축소한다.
+- 기존 TurretMountData는 MuzzleClearanceDistanceCm=150cm 기본값을 사용하며, 0이면 사전 검사를 비활성화한다.
+- 안전 구간 이후의 충돌은 발사를 허용하고 실제 HitScan 또는 Projectile 적중 처리에 맡긴다.
+- UHT와 C++ 컴파일은 PASS이며, 실행 중인 에디터의 DLL 잠금으로 최종 링크와 사용자 PIE는 Pending이다.
+```
+
+### v1.4.0 -> v1.4.1
+
+```text
+- VehicleHealthComp를 가진 차량이 총구 Trace의 첫 적중 대상이면 MuzzleBlocked가 아니라 정상 발사 대상으로 처리한다.
+- 벽, 지형 등 비피해 장애물의 MuzzleBlocked 발사 차단은 유지한다.
+- C++ 에디터 타깃 빌드는 PASS이며, 차량 선상 배치와 낮은 벽 회귀 PIE는 Pending이다.
+```
+
+### v1.3.0 -> v1.4.0
+
+```text
+- 정렬 중 발사 정책 true/false의 실제 승인·거부 동작을 사용자 PIE 결과로 확정한다.
+- 정렬 완료 후 Reticle 목표점과 실제 발사 결과 일치를 현재 기준에 포함한다.
+- MuzzleBlocked는 정책값과 관계없이 항상 발사를 차단하는 현재 동작으로 사용한다.
+- TurretAligning amber와 WeaponNotAligned 비가림을 발사 피드백 계약에 포함한다.
+- 확장 조준 회귀는 CF-FQ-019에서 수행한다.
+```
+
+### v1.2.0 -> v1.3.0
+
+```text
+- `UCFTurretMountData.bAllowFireWhileAligning` 기본값 true를 발사 검증에 연결했다.
+- 정렬 중 정책 true이면 현재 Muzzle 방향, 정렬 완료 후에는 요구 방향을 `FireRequest.AimDirection`으로 사용한다.
+- HitScan과 Projectile은 동일한 최종 `FireRequest.AimDirection`을 계속 공유한다.
+- Muzzle obstruction은 실제 최종 발사 경로를 검사하며 MuzzleBlocked는 항상 거부한다.
+- `Tools/BuildEditor.bat`는 성공했고 PIE는 Pending이다.
+```
+
+### v1.1.0 -> v1.2.0
+
+```text
+- BuildFireCommand는 가능한 경우 FCFVehicleWeaponAimSolution의 AimOrigin / AimDirection / AimTargetLocation을 사용한다.
+- Muzzle Socket X축은 현재 총구 방향 측정과 정렬 오차 계산에 사용하고, 최종 요구 발사 방향은 Muzzle -> Reticle 목표점으로 계산한다.
+- TurretAligning / WeaponNotAligned / MuzzleBlocked를 별도 RejectReason으로 기록한다.
+- WeaponNotAligned는 Reticle 주 상태를 빨간 FireRejected로 덮지 않는 UI 정책을 유지한다.
+- C++ 빌드는 완료됐지만 PIE에서 Reticle 목표와 실제 탄착 일치를 별도로 검증해야 한다.
+```
+
 ### v1.0.0 -> v1.1.0
 
 ```text
@@ -514,6 +599,56 @@ CooldownRatio = ActiveWeaponRemainingCooldownSeconds / ActiveWeaponCooldownSecon
 ---
 
 ## 15. Changelog
+
+### v1.5.1 - 2026-07-21
+
+```text
+- 먼 낮은 벽이 MuzzleBlocked로 오판되지 않는 것을 사용자 PIE PASS로 기록했다.
+- 총구 안전 거리 이후 충돌을 발사 허용 대상으로 처리하는 현재 계약을 검증 완료 상태로 전환했다.
+- 총구 안전 거리 안의 근접 장애물 차단 회귀는 별도 최종 확인 항목으로 유지한다.
+```
+
+### v1.5.0 - 2026-07-21
+
+```text
+- 먼 벽과 지형까지 MuzzleBlocked로 처리하던 전체 경로 판정을 폐기했다.
+- TurretMountData에 터렛별 MuzzleClearanceDistanceCm을 추가하고 기본값을 150cm로 설정했다.
+- 총구 안전 구간 이후 충돌은 발사 실행 경로가 처리하도록 책임을 분리했다.
+- UHT와 변경 C++ 컴파일 PASS, 에디터 DLL 잠금으로 링크 및 사용자 PIE Pending을 기록했다.
+```
+
+### v1.4.1 - 2026-07-21
+
+```text
+- 총구와 Command 목표 사이의 피해 가능한 차량을 MuzzleBlocked로 오판하던 회귀 수정 계약을 반영했다.
+- 비피해 장애물 차단과 피해 가능한 첫 적중 대상 허용의 책임 경계를 명시했다.
+- Tools/BuildEditor.bat PASS와 사용자 PIE Pending 상태를 분리 기록했다.
+```
+
+### v1.4.0 - 2026-07-14
+
+```text
+- CF-FQ-022 P0 사용자 PIE 결과를 WeaponFire 현재 계약에 반영했다.
+- 정책 true/false 정렬 중 발사, 정렬 완료 탄착과 정책 양쪽 MuzzleBlocked를 PASS로 기록했다.
+- PIE Pending 상태를 P0 Aim Fire Policy Verified로 변경했다.
+- 확장 조준 회귀는 CF-FQ-019로 이관했다.
+```
+
+### v1.3.0 - 2026-07-14
+
+```text
+- 터렛별 정렬 중 발사 허용 정책과 실제 최종 발사 방향 선택을 현재 구현 기준으로 반영했다.
+- 정책 조건부 TurretAligning / WeaponNotAligned 거부와 무조건 MuzzleBlocked 거부 기준을 기록했다.
+- Align Fire Policy 빌드 완료와 PIE Pending을 기록했다.
+```
+
+### v1.2.0 - 2026-07-13
+
+```text
+- Weapon Aim Solution 기반 발사 원점/방향/목표 공유 구조 반영
+- TurretAligning / WeaponNotAligned / MuzzleBlocked RejectReason 추가 기준 반영
+- HitScan / Projectile 방향 통일과 PIE Pending 상태 기록
+```
 
 ### v1.1.0 - 2026-07-09
 

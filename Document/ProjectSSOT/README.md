@@ -1,7 +1,7 @@
 # ProjectSSOT 운영 가이드 (CarFight)
 
-> 문서 버전: v2.2.0
-> 마지막 정리(Asia/Seoul): 2026-06-19
+> 문서 버전: v2.5.0
+> 마지막 정리(Asia/Seoul): 2026-07-15
 > 문서 상태: Active
 > 역할: `Document/ProjectSSOT/`의 읽기 순서, 문서 역할, 생명주기를 고정한다.
 
@@ -34,20 +34,29 @@ CarFight 문서 구조는 아래처럼 분리한다.
 
 | 위치 | 역할 |
 |---|---|
+| `Document/ActiveWork.md` | 현재 활성 작업, 마지막 작업 초점과 대표 Plan 연결 |
 | `Document/ProjectSSOT/` | 프로젝트 현재 판단 기준 |
-| `Document/Plan/` | 앞으로 개발할 기능의 상세 계획 |
-| `Document/Systems/` | 개발 완료된 기능의 현재 구현 기준 |
+| `Document/Plan/` | 착수된 기능의 상세 구현·검증 계획과 작업 체크포인트 |
+| `Document/Systems/` | 검증된 현재 구현 구조와 책임 |
+| `Document/DesignSource/` | 원본 기획과 장기 북극성 |
 | `Document/SSOT/` | 여러 프로젝트에 공통 적용되는 기준 |
-| `Document/ProjectSSOT/Archive/` | 비활성 / 역사 기록 |
+| `Document/ProjectSSOT/Archive/` | 비활성 프로젝트 판단과 역사 기록 |
+| `Document/Plan/Archive/` | 완료·보류·대체된 과거 Plan |
 
 중요 원칙:
 
 ```text
-ProjectSSOT = 판단 기준
-Plan = 진행 중 계획
-Systems = 완료된 현재 구현
-Archive = 역사 기록
+ProjectSSOT = 무엇을 왜 해야 하는지 판단한다.
+ActiveWork = 지금 어떤 활성 작업을 복원하거나 전환할지 선택한다.
+Plan = 선택된 작업을 어떻게 구현하고 검증할지 정의한다.
+Systems = 현재 실제로 어떻게 구현되어 있는지 설명한다.
+DesignSource = 장기적으로 어디로 갈지 보여준다.
+Archive = 현재 판단 또는 착수 기준에서 내려온 기록을 보존한다.
 ```
+
+`ActiveWork.md`는 ProjectSSOT를 대체하지 않는다.
+프로젝트 우선순위와 착수 승인은 Roadmap과 FeatureQueue가 결정하고, ActiveWork는 그중 현재 실제로 진행 중인 작업과 대표 Plan을 연결한다.
+대표 Plan은 상세 체크포인트를 관리하며, 현재 구현 판정은 실제 코드·에셋과 Systems를 우선한다.
 
 ---
 
@@ -79,25 +88,28 @@ Archive = 역사 기록
 
 ---
 
-## 2-2. 2026-06-19 현재 전투 루프 개발 기준
+## 2-2. 2026-07-15 현재 전투 루프 개발 기준
 
-현재 싱글 실행 기준선과 로컬 Aim / Fire / Reticle 골격은 확인된 기반으로 본다.
-다음 개발은 서버 전투가 아니라 **싱글 로컬 전투 루프**를 먼저 닫는 순서로 진행한다.
+싱글 실행, 조준·발사, Reticle/UI, 피격·피해, 조준 정렬과 고속 Projectile 신뢰성은 완료 기반으로 본다.
+현재 개발은 실제 전투 FX / Audio를 연결한 뒤 반복 전투와 핵심 루프 검증으로 진행한다.
 
 현재 개발 순서:
 
 ```text
-1. 차량 무기 조준 및 발사 기능 구현
-2. 발사 이펙트, 사운드, 조준 UI 구현
-3. 피격 판정 및 피해 처리 구현
-4. 주행과 전투 흐름 반복 테스트
-5. 조작감, 전투 템포, 피드백 개선
-6. 핵심 게임 루프 검증
+완료: CF-FQ-016 차량 무기 조준 및 발사
+완료: CF-FQ-017 Reticle / FireFeedback UI
+완료: CF-FQ-018 피격 판정 및 피해 처리
+완료: CF-FQ-022 조준점·터렛·총구 정렬
+완료: CF-FQ-023 고속 Projectile 연속 충돌
+현재: CF-FQ-024 전투 FX 및 사운드 구현
+다음: CF-FQ-019 주행/전투 반복 테스트
+다음: CF-FQ-020 조작감/전투 템포/피드백 개선
+다음: CF-FQ-021 핵심 게임 루프 검증
 ```
 
-이 순서는 `Document/ProjectSSOT/02_Roadmap.md`의 현재 활성 로드맵을 우선한다.
-세부 설계가 필요하면 `Document/Plan/CombatPlan/`의 기존 전투 기획을 참고하되,
-현재 구현 착수 범위는 `03_FeatureQueue.md`에서 승격한 기능만 따른다.
+`CF-FQ-017`의 UI 표시와 `CF-FQ-024`의 실제 Niagara / 공간 사운드는 서로 다른 기능 생명주기로 관리한다.
+현재 활성 상세 설계는 `Document/Plan/CombatFxAudio/ImplementationDesign.md`를 사용한다.
+전체 순서는 `Document/ProjectSSOT/02_Roadmap.md`, 착수 상태는 `03_FeatureQueue.md`를 우선한다.
 
 ---
 
@@ -304,6 +316,17 @@ ProjectSSOT에 있는 내용 = 프로젝트 판단 기준
 
 AI가 현재 구현을 확인할 때 Plan을 기준으로 단정하면 안 된다.
 
+Plan의 공식 진입과 활성·보관 분류는 다음 색인을 사용한다.
+
+```text
+Document/Plan/README.md
+Document/Plan/Archive/README.md
+```
+
+Plan 루트 색인은 폴더와 대표 진입 문서 단위로만 관리한다.
+Plan 하위에 Draft, Working, Notes 또는 세부 작업 파일이 추가될 때마다 이 ProjectSSOT README를 갱신하지 않는다.
+새 Plan 폴더가 공식 착수 대상으로 승격될 때만 `Document/Plan/README.md`를 갱신한다.
+
 ---
 
 ## 10. 문서 정리 결과
@@ -327,6 +350,32 @@ AI가 현재 구현을 확인할 때 Plan을 기준으로 단정하면 안 된�
 ---
 
 ## 11. 변경 이력
+
+### v2.5.0 - 2026-07-15
+
+```text
+- 완료된 전투 판정 기준선과 현재 CF-FQ-024 전투 FX / Audio 활성 상태를 반영
+- CF-FQ-017 Reticle/UI와 CF-FQ-024 Niagara/공간 사운드를 별도 기능 생명주기로 분리
+- 현재 진행 순서를 CF-FQ-024 → CF-FQ-019 → CF-FQ-020 → CF-FQ-021로 갱신
+- CombatFxAudio 대표 Plan을 현재 활성 상세 설계로 연결
+```
+
+### v2.4.0 - 2026-07-14
+
+```text
+- Document/ActiveWork.md를 현재 활성 작업과 대표 Plan 연결 계층으로 역할 표에 추가
+- ProjectSSOT, ActiveWork, Plan, Systems, DesignSource와 Archive의 책임 경계 명시
+- ActiveWork가 Roadmap과 FeatureQueue의 우선순위·착수 판단을 대체하지 않는다고 명시
+- 대표 Plan은 상세 체크포인트, 실제 코드·에셋과 Systems는 현재 구현 판정을 담당하도록 정리
+```
+
+### v2.3.0 - 2026-07-14
+
+```text
+- Plan 루트와 Archive 루트의 폴더 단위 색인 운영 원칙 추가
+- Plan 하위 개별 파일 추가 시 ProjectSSOT README를 갱신하지 않는 규칙 추가
+- CombatPlan 안내 경로를 실제 위치인 Document/ProjectSSOT/CombatPlan/으로 정정
+```
 
 ### v2.2.0 - 2026-06-19
 
@@ -388,4 +437,28 @@ AI가 현재 구현을 확인할 때 Plan을 기준으로 단정하면 안 된�
 ```text
 - 문서 버전 / 마지막 정리 날짜 추가
 - 당시 CameraPlan 보조 실행 계획 문서 연결
+```
+
+---
+
+## 12. Migration
+
+### v2.5.0 적용 안내
+
+```text
+- CF-FQ-017은 Reticle / FireFeedback UI 완료 기능으로 유지한다.
+- 실제 발사·Impact·파괴 Niagara와 공간 사운드는 CF-FQ-024가 소유한다.
+- 현재 활성 Plan은 Document/Plan/CombatFxAudio/ImplementationDesign.md다.
+- CombatFxAudio는 구현·빌드·사용자 PIE 완료 전까지 Systems 현재 기능으로 읽지 않는다.
+- 다음 반복 테스트 CF-FQ-019는 CF-FQ-024 완료 후 착수한다.
+```
+
+### v2.4.0 적용 안내
+
+```text
+- 기존 ProjectSSOT 루트 00~05 문서와 읽기 순서는 변경하지 않는다.
+- ActiveWork는 프로젝트 판단 문서가 아니라 현재 활성 작업과 대표 Plan을 연결하는 보조 계층으로 사용한다.
+- 프로젝트 우선순위와 착수 여부는 계속 Roadmap과 FeatureQueue가 결정한다.
+- 대표 Plan은 상세 작업 체크포인트를 관리하며, 현재 구현 판정은 실제 코드·에셋과 Systems를 우선한다.
+- 전체 문서 권한 우선순위와 상태 모델은 Document/Document_Entry.md v2.4를 기준으로 한다.
 ```

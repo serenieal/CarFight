@@ -1,9 +1,9 @@
 # Projectile
 
-- Version: 1.0.0
-- Date: 2026-07-09
-- Status: Current
-- Scope: 현재 구현된 ProjectileData, 공통 Projectile Actor, Projectile Pool, 충돌/수명/비활성화 Debug 기록
+- Version: 1.3.0
+- Date: 2026-07-15
+- Status: Current / P0 Collision and First-Impact Damage Verified
+- Scope: 현재 ProjectileData/Actor/Pool, 시각 차체 충돌, 첫 Impact 피해 적용과 P0 고속 연속 충돌 구현
 
 ---
 
@@ -15,7 +15,7 @@
 아래 항목은 이 문서의 범위에서 제외한다.
 
 ```text
-- 실제 HP 차감
+- 차량 체력과 파괴 상태 자체의 소유
 - 폭발 범위 피해 적용
 - 충돌 시 VFX / SFX / Decal 출력
 - 탄종별 고급 탄도 모델
@@ -23,7 +23,7 @@
 - 서버 권한 Projectile 판정
 ```
 
-현재 문서 기준 `Projectile`은 **ProjectileData를 읽어 공통 Projectile Actor를 활성화하고, 반복 발사 부담을 줄이기 위해 Projectile Actor Pool로 재사용하며, 충돌/수명/비활성화 결과를 Debug 정보로 남기는 기능**이다.
+현재 문서 기준 `Projectile`은 **ProjectileData를 읽어 공통 Projectile Actor를 활성화하고, 첫 유효 Impact에서 HitDamage를 한 번 호출하며, 충돌/수명 결과를 보존한 뒤 Pool로 재사용하는 기능**이다.
 
 ---
 
@@ -81,7 +81,7 @@ DamageProfileId
 ```
 
 `ImpactEffectId`는 현재 데이터 필드로 존재하지만, 실제 VFX/SFX 출력은 현재 구현 범위로 보지 않는다.
-`DefaultDamageData`와 `DamageProfileId`는 현재 Damage HitContext Debug 연결에 사용된다.
+`DefaultDamageData`는 첫 유효 Impact의 `DamageHitContext`와 HitDamage 입력에 사용된다. `DamageProfileId`는 DamageData 미연결 시 Debug fallback 식별자로만 사용한다.
 
 ---
 
@@ -139,10 +139,10 @@ LifeExpired
 
 ---
 
-## 6. 현재 충돌 기록
+## 6. 현재 충돌·피해 기록
 
-현재 `ACFProjectileActor`는 충돌 시 실제 Damage 적용을 하지 않는다.
-대신 Pool 반환 뒤 Damage HitContext Debug를 만들 수 있도록 마지막 충돌 정보를 보존한다.
+현재 `ACFProjectileActor`는 첫 유효 Impact에서 `FCFDamageHitContext`를 만들고 HitDamage 공용 진입점을 한 번 호출한다.
+그 뒤 Pool 반환과 Debug 표시를 위해 마지막 충돌 정보와 `FCFDamageApplyResult`를 함께 보존한다.
 
 현재 보존하는 값은 아래다.
 
@@ -150,6 +150,7 @@ LifeExpired
 LastDeactivatedProjectileData
 LastDeactivatedInstigatorActor
 LastHitActor
+LastHitComponentName
 LastImpactLocation
 LastImpactNormal
 LastIncomingDirection
@@ -160,6 +161,48 @@ LastFlightDurationSeconds
 ```
 
 이 정보는 `ACFVehiclePawn::RecordProjectileDamageHitContextFromPool`에서 `FCFDamageHitContext`를 만드는 데 사용된다.
+
+현재 충돌 채널과 차량 응답:
+
+```text
+Projectile Collision Object Type = CFCollisionChannels::Projectile
+VehicleMesh                       = Projectile Ignore
+SM_Body                           = QueryOnly / Projectile Block
+DamageHitContext                  = HitComponentName 기록
+```
+
+2026-07-13 PIE에서 일반 속도 Projectile이 `SM_Body` 시각 차체에 정상 충돌하는 것을 확인했다.
+
+### 6.1 고속 Projectile 연속 충돌
+
+2026-07-14 `CF-FQ-023`에서 다음 고속 충돌 정책을 구현했다.
+
+```text
+- ProjectileMovement bSweepCollision 명시 적용
+- bForceSubStepping과 MaxSimulationTimeStep / MaxSimulationIterations 데이터 적용
+- PreviousCollisionLocation → CurrentCollisionLocation 보조 Sphere Sweep
+- ResolveProjectileImpact() 단일 처리 경로
+- bImpactResolvedThisActivation 활성화별 중복 Impact 방지
+- Pool 재활성화 시 PreviousLocation과 Impact 상태 초기화
+```
+
+사용자 PIE 확인 결과:
+
+```text
+일반 속도 SM_Body 충돌 = PASS
+피격 Actor / 피격 컴포넌트 기록 = PASS
+30 FPS + 기준 InitialSpeed 4배 차량 집중 발사 = PASS
+얇은 벽 첫 Blocking Hit과 관통 방지 = PASS
+중복 Impact와 Pool 재사용 = PASS
+```
+
+전체 60 / 120 FPS 조합과 이동 차량 교차 충돌은 `CF-FQ-019` 확장 회귀 테스트에서 추가 확인한다.
+
+상세 설계와 검증 근거:
+
+```text
+Document/Plan/ProjectileContinuousCollision/ImplementationDesign.md
+```
 
 ---
 
@@ -254,6 +297,7 @@ GetLastFlightDurationSeconds
 GetLastHitActorName
 GetLastDeactivatedProjectileData
 GetLastHitActor
+GetLastHitComponentName
 GetLastImpactLocation
 GetLastImpactNormal
 GetLastIncomingDirection
@@ -272,8 +316,9 @@ GetLastInstigatorActor
 - 발사체를 활성화하고 이동시킨다.
 - 충돌 또는 수명 종료로 비활성화한다.
 - Projectile Actor를 Pool로 재사용한다.
-- 마지막 충돌/비활성화 정보를 Debug로 보존한다.
-- Hit으로 Pool 반환된 Projectile 정보를 차량 Pawn의 Damage HitContext Debug 기록으로 전달한다.
+- 첫 유효 Impact에서 HitDamage 공용 진입점을 정확히 한 번 호출한다.
+- 마지막 충돌/비활성화 정보와 피해 적용 결과를 Debug로 보존한다.
+- Hit으로 Pool 반환된 Projectile 정보를 차량 Pawn의 DamageHitContext와 DamageApplyResult 기록으로 전달한다.
 ```
 
 ---
@@ -283,7 +328,8 @@ GetLastInstigatorActor
 현재 `Projectile` 기능은 아래를 직접 수행하지 않는다.
 
 ```text
-- 실제 HP 차감
+- 차량 MaxHealth / CurrentHealth 소유
+- 파괴 상태의 최종 판정과 이벤트 소유
 - 실제 폭발 피해 계산
 - 장갑 관통 계산
 - 모듈 손상 계산
@@ -293,33 +339,48 @@ GetLastInstigatorActor
 - 서버 권한 충돌 판정
 ```
 
-현재 충돌 정보는 Debug 기록과 HitContext 생성 후보로만 사용된다.
+Projectile은 피해 적용을 요청하고 결과를 보존하지만 체력과 파괴 상태 자체는 `UCFVehicleHealthComp`와 HitDamage가 소유한다.
 
 ---
 
 ## 12. 현재 문서 기준의 핵심 결론
 
-현재 `Projectile`은 **ProjectileData 기반 발사체 Actor 실행과 Pool 재사용, 충돌/수명 종료 Debug 기록을 담당하는 로컬 발사체 런타임 기능**이다.
+현재 `Projectile`은 **ProjectileData 기반 발사체 Actor 실행, 첫 Impact 피해 요청, 충돌 결과 보존과 Pool 재사용을 담당하는 로컬 발사체 런타임 기능**이다.
 
 가장 중요한 현재 역할은 다음 한 줄로 요약할 수 있다.
 
-> `Projectile`은 현재 “발사체를 실제 Actor로 날리고, 충돌이나 수명 종료를 기록한 뒤, Pool로 재사용하는 기능”이다.
+> `Projectile`은 현재 “발사체를 실제 Actor로 날리고 첫 유효 충돌의 피해를 한 번 적용한 뒤 결과를 보존해 Pool로 재사용하는 기능”이다.
 
 ---
 
-## 13. 현재 미확인 항목
+## 13. 현재 미확인 / 미완료 항목
 
-아래 항목은 코드상 경로는 존재하지만, 이 문서 작성 시점에 에디터 자산 연결 상태를 직접 확인하지 않았다.
+확인 완료:
 
 ```text
-- 실제 ProjectileData 에셋의 ProjectileActorClass 연결 상태
-- ProjectileStaticMesh 연결 상태
-- Projectile Actor Blueprint의 부모 클래스 설정 상태
-- PIE에서 Pool 재사용이 실제로 발생하는지 여부
-- Projectile Actor 충돌 채널과 맵 내 목표물 충돌 설정
+- Projectile Object Channel과 VehicleVisualHit 응답 구현
+- 일반 속도 Projectile의 SM_Body 시각 차체 충돌
+- HitComponentName의 DamageHitContext 기록
+- bSweepCollision과 UpdatedComponent 적용
+- Sub-stepping / MaxSimulationTimeStep / MaxSimulationIterations 적용
+- Previous → Current 보조 Sphere Sweep
+- 활성화별 중복 Impact 방지와 Pool 재사용 상태 초기화
+- 30 FPS + 기준 InitialSpeed 4배 차량 집중 발사
+- 얇은 벽 첫 Blocking Hit과 관통 방지
+- Unreal Editor 타깃 빌드
+- 첫 유효 Impact의 BaseDamage 적용과 파괴 상태 전환 사용자 PIE
+- Pool 반환 시 피해 중복 적용 없음
 ```
 
-이 항목은 추측으로 PASS 처리하지 않는다.
+확장 회귀 항목:
+
+```text
+- 60 / 120 FPS와 기준 속도 1배 / 2배 전체 조합
+- 이동 차량 SM_Body 교차 충돌
+- 동시 Projectile 다수의 성능 비용
+```
+
+확장 항목은 `CF-FQ-019`에서 검증하며 현재 P0 Projectile 연속 충돌 기능은 완료 상태다.
 
 ---
 
@@ -333,12 +394,73 @@ GetLastInstigatorActor
 - Projectile Pool 확보 / 반환 정책 변경
 - Projectile Actor 충돌 정보 보존 방식 변경
 - Vehicle Pawn과 Projectile Pool 연결 방식 변경
-- 실제 Damage 적용이 Projectile Actor 안으로 들어오는 구조 변경
+- Projectile Actor의 첫 Impact 피해 적용 또는 DamageApplyResult 보존 방식 변경
 ```
 
 ---
 
-## 15. Changelog
+## 15. Migration
+
+### v1.2.0 -> v1.3.0
+
+```text
+- Projectile Actor가 첫 유효 Impact에서 HitDamage 공용 진입점을 한 번 호출하는 현재 동작을 반영한다.
+- Pool 반환 경로는 피해를 재적용하지 않고 저장된 DamageApplyResult만 전달한다.
+- 차량 체력과 파괴 상태 소유권은 UCFVehicleHealthComp와 Systems/Combat/HitDamage.md에 유지한다.
+- 폭발·장갑·모듈 피해는 후속 범위다.
+```
+
+### v1.1.0 -> v1.2.0
+
+```text
+- UCFProjectileData의 Sweep/Sub-step/보조 Sweep/CCD 설정을 현재 구현으로 반영한다.
+- ACFProjectileActor의 Previous → Current Sphere Sweep과 단일 ResolveProjectileImpact 경로를 현재 기준으로 사용한다.
+- 30 FPS + 기준 속도 4배 집중 스트레스 PIE 통과를 P0 완료 근거로 사용한다.
+- 전체 FPS·속도 조합과 이동 차량 검증은 CF-FQ-019 확장 회귀로 이관한다.
+- 실제 HP 차감과 Damage Runtime은 여전히 Projectile의 책임이 아니다.
+```
+
+### v1.0.0 -> v1.1.0
+
+```text
+- Projectile Object Type은 CFCollisionChannels::Projectile을 사용한다.
+- 차량 시각 차체 SM_Body가 Projectile을 Block하고 VehicleMesh는 Ignore한다.
+- LastHitComponentName을 보존하고 DamageHitContext.HitComponentName으로 전달한다.
+- 현재 일반 속도 충돌은 확인됐지만 고속 연속 충돌은 보장되지 않는다.
+- 고속 충돌 구현 기준은 Document/Plan/ProjectileContinuousCollision/ImplementationDesign.md를 우선한다.
+- 이 문서 갱신에서는 Projectile 코드와 DataAsset을 변경하지 않는다.
+```
+
+---
+
+## 16. Changelog
+
+### v1.3.0 - 2026-07-15
+
+```text
+- CF-FQ-018 최소 Damage Runtime과 사용자 PIE PASS를 Projectile 현재 동작에 반영했다.
+- 첫 유효 Impact 피해 적용, DamageApplyResult 보존과 Pool 반환 중복 차감 방지를 기록했다.
+- Projectile과 HitDamage의 책임 경계를 현재 구현 기준으로 정리했다.
+```
+
+### v1.2.0 - 2026-07-14
+
+```text
+- Sweep/Sub-stepping/보조 Sphere Sweep과 중복 Impact 방지의 현재 구현을 반영했다.
+- 일반 속도 Visual HitContext와 30 FPS + 기준 속도 4배 집중 스트레스 PIE 통과를 기록했다.
+- 얇은 벽 첫 Blocking Hit, 관통 방지와 Pool 재사용 정상 동작을 기록했다.
+- CF-FQ-023 P0 완료와 CF-FQ-019 확장 회귀 이관을 반영했다.
+```
+
+### v1.1.0 - 2026-07-13
+
+```text
+- Projectile 전용 Object Channel과 SM_Body 시각 차체 충돌 현재 구현 반영
+- LastHitComponentName / DamageHitContext HitComponentName 기록 반영
+- 일반 속도 Projectile 시각 차체 충돌 사용자 PIE 확인 결과 반영
+- 고속 Projectile 터널링을 현재 미완료 한계로 기록
+- Sweep/Sub-stepping/보조 Sphere Sweep 설계 문서 연결
+```
 
 ### v1.0.0 - 2026-07-09
 
@@ -350,9 +472,9 @@ GetLastInstigatorActor
 
 ---
 
-## 16. 마지막 확인 기준
+## 17. 마지막 확인 기준
 
-- 확인 일시: 2026-07-09
+- 확인 일시: 2026-07-15
 - 확인 근거:
   - `UE/Source/CarFight_Re/Public/CFProjectileData.h`
   - `UE/Source/CarFight_Re/Public/CFProjectileActor.h`
