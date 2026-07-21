@@ -38,3 +38,6 @@ UE/*.slnx
 UE/Plugins/Tripo3DUEBridge-UE5.8-Win64/
 skills/skills/carfight-mcp-assetdump/
 /outputs
+/CarFight_AudioVault
+.gopymcp-write-*.tmp
+*.gopymcp.bak
