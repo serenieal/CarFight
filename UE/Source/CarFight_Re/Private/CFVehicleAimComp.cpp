@@ -1,15 +1,21 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.9.0
-// Date: 2026-07-02
+// Version: 1.11.0
+// Date: 2026-07-14
 // Description: CarFight 싱글플레이 차량 Aim 시스템 구현
 // Changelog:
+// - v1.11.0: 터렛 정책에 따라 정렬 중 bLocalCanFire를 허용하고 TurretAligning Reticle 상태는 독립적으로 유지.
+// - v1.10.1: 정상 정렬 대기 경로가 Hidden으로 떨어지지 않도록 TurretAligning Reticle 우선순위를 추가.
+// - v1.10.0: Weapon Aim Solution 저장/조회와 LocalAimState 반영 로직을 추가.
 // - v1.9.0: 터렛 안정화 전 발사 정책에 맞춰 조준각 초과를 표시 상태로만 남기고 로컬 발사 예측 차단에서 제외.
 // - v1.8.0: 발사 검증/시각 상태 저장과 갱신 경로를 FireValidationState / AimVisualState 명칭으로 교체.
 // - v1.6.0: 로컬 Fire Command 전환에 맞춰 발사 요청/결과 처리 설명과 Aim 시각 상태 갱신 조건을 정리.
 // - v1.5.0: 싱글플레이 기준선에서 Aim 시각 상태의 UE 복제 등록과 OnRep 경로를 제거.
 // - v1.4.0: 싱글플레이 전환에 맞춰 AimComp 기본 컴포넌트 복제를 비활성화.
 // Migration:
+// - bLocalCanFire는 유효한 Weapon Aim Solution, 유효한 최종 AimDirection, MuzzleBlocked=false, 정렬 정책을 함께 반영한다.
+// - BuildLocalReticleState는 Runtime 미준비, MuzzleBlocked, OutOfArc, TurretAligning, Ready, Hidden 순서로 상태를 해석한다.
+// - Pawn이 SetWeaponAimSolution으로 전달한 MuzzleBlocked/정렬 상태를 LocalAimState의 CanFire/Blocked/ReticleState에 반영한다.
 // - OutOfWeaponArc는 호환용 상태로 유지하지만, 기본 로컬 발사 검증에서는 조준각 초과를 단독 거부 사유로 쓰지 않는다.
 // - GetServerAimState / ApplyServerFireResult 계열 호출은 FireValidationState 명칭 함수로 교체한다.
 // - GetRepAimVisualState / UpdateRepAimVisualFromFireResult 호출은 AimVisualState 명칭 함수로 교체한다.
@@ -104,6 +110,16 @@ FCFVehicleFireValidationState UCFVehicleAimComp::GetFireValidationState() const
 FCFVehicleAimVisualState UCFVehicleAimComp::GetAimVisualState() const
 {
 	return AimVisualState;
+}
+
+FCFVehicleWeaponAimSolution UCFVehicleAimComp::GetWeaponAimSolution() const
+{
+	return WeaponAimSolution;
+}
+
+void UCFVehicleAimComp::SetWeaponAimSolution(const FCFVehicleWeaponAimSolution& InWeaponAimSolution)
+{
+	WeaponAimSolution = InWeaponAimSolution;
 }
 
 FCFVehicleAimProfile UCFVehicleAimComp::GetDefaultAimProfile() const
@@ -236,6 +252,7 @@ bool UCFVehicleAimComp::IsFireRequestWithinDefaultProfile(const FCFVehicleFireRe
 	return bHasAimAngles && IsAimWithinDefaultProfile(AimYawDeg, AimPitchDeg);
 }
 
+// [v1.11.0] Weapon Aim Solution의 정책과 정렬 상태를 반영해 로컬 Aim 및 Reticle 상태를 갱신합니다.
 void UCFVehicleAimComp::RefreshLocalAimState(const float DeltaSeconds)
 {
 	// [v1.1.0] 현재 호출에서 DeltaSeconds 인자를 의도적으로 보관하지 않음을 명확히 합니다.
@@ -254,6 +271,7 @@ void UCFVehicleAimComp::RefreshLocalAimState(const float DeltaSeconds)
 		LocalAimState.bLocalCanFire = false;
 		LocalAimState.bLocalWithinWeaponArc = false;
 		LocalAimState.bLocalAimBlocked = false;
+		LocalAimState.bLocalAimTraceHasBlockingHit = false;
 		LastAimRuntimeSummary = TEXT("AimRuntime: LocalAimSkipped MissingRuntimeReferences");
 		return;
 	}
@@ -264,6 +282,7 @@ void UCFVehicleAimComp::RefreshLocalAimState(const float DeltaSeconds)
 		LocalAimState.bLocalCanFire = false;
 		LocalAimState.bLocalWithinWeaponArc = false;
 		LocalAimState.bLocalAimBlocked = false;
+		LocalAimState.bLocalAimTraceHasBlockingHit = false;
 		LastAimRuntimeSummary = TEXT("AimRuntime: LocalAimSkipped NotLocallyControlled");
 		return;
 	}
@@ -300,21 +319,39 @@ void UCFVehicleAimComp::RefreshLocalAimState(const float DeltaSeconds)
 	// [v1.1.0] DefaultAimProfile 기준 현재 조준이 무기 조준각 안에 있는지 여부입니다.
 	const bool bWithinWeaponArc = bHasAimAngles && IsAimWithinDefaultProfile(AimYawDeg, AimPitchDeg);
 
-	// [v1.1.0] Camera Runtime State에서 전달된 현재 조준 가림 여부입니다.
-	const bool bAimBlocked = CameraRuntimeState.bAimBlocked;
+	// [v1.10.0] Camera Runtime State에서 전달된 목표 표면 선택용 Blocking Hit 여부입니다.
+	const bool bAimTraceHasBlockingHit = CameraRuntimeState.bAimTraceHasBlockingHit;
 
-	// [v1.9.0] 로컬 예측 기준 조준 방향이 유효한지 여부입니다.
-	const bool bHasResolvedAimDirection = !ResolvedAimDirection.IsNearlyZero();
+	// [v1.10.0] Weapon Aim Solution이 현재 로컬 조준 목표와 연결할 수 있는 유효 상태인지 여부입니다.
+	const bool bHasWeaponAimSolution = WeaponAimSolution.bHasValidSolution;
 
-	// [v1.9.0] 로컬 예측 기준 발사 가능 여부입니다.
-	const bool bCanFire = bHasResolvedAimDirection && !bAimBlocked;
+	// [v1.10.0] Weapon Aim Solution 기준 실제 발사 차단 여부입니다.
+	const bool bWeaponAimBlocked = bHasWeaponAimSolution && WeaponAimSolution.bMuzzleBlocked;
+
+	// [v1.10.1] Weapon Aim Solution 기준 터렛 또는 총구가 아직 조준점에 정렬 중인지 여부입니다.
+	const bool bWeaponIsAligning = bHasWeaponAimSolution
+		&& (WeaponAimSolution.bTurretAligning || WeaponAimSolution.bWeaponNotAligned);
+
+	// [v1.11.0] Weapon Aim Solution의 실제 최종 발사 방향이 유효한지 여부입니다.
+	const bool bHasResolvedAimDirection = bHasWeaponAimSolution
+		&& !WeaponAimSolution.AimDirection.ContainsNaN()
+		&& !WeaponAimSolution.AimDirection.IsNearlyZero();
+
+	// [v1.11.0] 정렬 상태가 현재 터렛 정책에서 발사를 차단하는지 여부입니다.
+	const bool bAlignmentBlocksFire = bWeaponIsAligning && !WeaponAimSolution.bAllowFireWhileAligning;
+
+	// [v1.11.0] 로컬 예측 기준 발사 가능 여부입니다.
+	const bool bCanFire = bHasResolvedAimDirection
+		&& !WeaponAimSolution.bMuzzleBlocked
+		&& !bAlignmentBlocksFire;
 
 	LocalAimState.LocalAimTargetLocation = AimTargetLocation;
-	LocalAimState.LocalAimDirection = ResolvedAimDirection;
+	LocalAimState.LocalAimDirection = bHasWeaponAimSolution ? WeaponAimSolution.DesiredAimDirection.GetSafeNormal() : ResolvedAimDirection;
 	LocalAimState.bLocalWithinWeaponArc = bWithinWeaponArc;
-	LocalAimState.bLocalAimBlocked = bAimBlocked;
+	LocalAimState.bLocalAimBlocked = bWeaponAimBlocked;
+	LocalAimState.bLocalAimTraceHasBlockingHit = bAimTraceHasBlockingHit;
 	LocalAimState.bLocalCanFire = bCanFire;
-	LocalAimState.LocalReticleState = BuildLocalReticleState(bWithinWeaponArc, bAimBlocked, bCanFire);
+	LocalAimState.LocalReticleState = BuildLocalReticleState(bWithinWeaponArc, bWeaponAimBlocked, bWeaponIsAligning, bCanFire);
 }
 
 bool UCFVehicleAimComp::CalculateAimAnglesRelativeToVehicle(const FVector& AimDirection, float& OutYawDeg, float& OutPitchDeg) const
@@ -353,7 +390,7 @@ bool UCFVehicleAimComp::IsAimWithinDefaultProfile(const float AimYawDeg, const f
 	return bWithinYaw && bWithinPitch;
 }
 
-ECFVehicleReticleState UCFVehicleAimComp::BuildLocalReticleState(const bool bWithinWeaponArc, const bool bAimBlocked, const bool bCanFire) const
+ECFVehicleReticleState UCFVehicleAimComp::BuildLocalReticleState(const bool bWithinWeaponArc, const bool bAimBlocked, const bool bWeaponIsAligning, const bool bCanFire) const
 {
 	if (!bAimRuntimeReady)
 	{
@@ -363,13 +400,17 @@ ECFVehicleReticleState UCFVehicleAimComp::BuildLocalReticleState(const bool bWit
 	{
 		return ECFVehicleReticleState::Blocked;
 	}
-	if (bCanFire)
-	{
-		return ECFVehicleReticleState::Ready;
-	}
 	if (!bWithinWeaponArc)
 	{
 		return ECFVehicleReticleState::OutOfArc;
+	}
+	if (bWeaponIsAligning)
+	{
+		return ECFVehicleReticleState::TurretAligning;
+	}
+	if (bCanFire)
+	{
+		return ECFVehicleReticleState::Ready;
 	}
 	return ECFVehicleReticleState::Hidden;
 }

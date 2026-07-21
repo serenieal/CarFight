@@ -1,12 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.4.0
-// Date: 2026-07-10
+// Version: 1.7.0
+// Date: 2026-07-21
 // Description: Aim Reticle UI용 C++ 부모 위젯 클래스입니다.
 // Changelog:
+// - v1.7.0: Image_WeaponReticle을 탄종별 Preview가 아닌 CurrentMuzzleDirection 기반 터렛 레티클 월드 지점에 연결.
+// - v1.6.0: Weapon Preview 월드 위치를 화면 좌표로 투영해 선택적 Weapon Reticle 이미지를 표시.
+// - v1.5.0: TurretAligning FireFeedback 표시용 amber 색상과 표시 키 판별 헬퍼를 추가.
 // - v1.4.0: 선택적 Reticle 이미지와 FireFeedback TextBlock에 상태별 색상을 안전하게 적용.
 // - v1.3.0: Pawn FireFeedback ViewData를 읽어 Reticle 상태와 선택적 피드백 TextBlock에 반영.
 // Migration:
+// - Image_WeaponReticle은 터렛 레티클이며 탄종, 중력, 첫 충돌 또는 착탄 위치를 표시하지 않는다.
+// - Image_WeaponReticle은 선택 사항이며, WBP에 없어도 기존 Command Reticle과 FireFeedback은 그대로 동작한다.
+// - TurretAligning은 ReticleState enum 확장 없이 FireFeedback DisplayKey로 해석하므로 기존 WBP 바인딩은 유지한다.
 // - 기존 Reticle TextBlock은 유지한다.
 // - 신규 Text_FireFeedbackState / Text_FireFeedbackHint / Text_Cooldown은 선택 사항이며 WBP에 없어도 동작한다.
 // - Image_CenterDot / Image_LeftBracket / Image_RightBracket / Image_TopBracket / Image_BottomBracket과 Text_OutOfArcWarning은 선택 사항이며, 추가 시 Is Variable을 활성화한다.
@@ -114,6 +120,10 @@ protected:
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_OutOfArcWarning = nullptr;
 
+	// [v1.7.0] 현재 터렛 조준 3D 지점을 표시할 선택적 터렛 Reticle 이미지 위젯 참조입니다.
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UImage> Image_WeaponReticle = nullptr;
+
 	// [v1.0.0] Reticle이 조준 상태를 읽어올 차량 Pawn 참조입니다.
 	UPROPERTY(BlueprintReadOnly, Category="CarFight|Aim|Reticle", meta=(DisplayName="차량 Pawn 참조 (VehiclePawnRef)", ToolTip="현재 Reticle UI가 조준 상태를 읽어올 차량 Pawn 참조입니다."))
 	TObjectPtr<ACFVehiclePawn> VehiclePawnRef = nullptr;
@@ -162,6 +172,18 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="CarFight|Aim|Reticle|Style", meta=(DisplayName="각도 경고 색상 (OutOfArcWarningColor)", ToolTip="Text_OutOfArcWarning에 적용할 노란색 계열의 보조 경고 색상입니다."))
 	FLinearColor OutOfArcWarningColor = FLinearColor(1.0f, 0.85f, 0.10f, 1.0f);
 
+	// [v1.5.0] 터렛 정렬 중 보조 경고에 사용할 색상입니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="CarFight|Aim|Reticle|Style", meta=(DisplayName="터렛 정렬 중 Reticle 색상 (TurretAligningReticleColor)", ToolTip="TurretAligning 피드백에 적용할 amber 계열의 편집 가능한 색상입니다. 주 Reticle 상태는 덮어쓰지 않습니다."))
+	FLinearColor TurretAligningReticleColor = FLinearColor(1.0f, 0.62f, 0.12f, 1.0f);
+
+	// [v1.7.0] 터렛 Reticle 이미지에 사용할 기본 색상입니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="CarFight|Aim|Reticle|Weapon", meta=(DisplayName="터렛 Reticle 색상 (WeaponReticleColor)", ToolTip="현재 터렛이 조준하는 3D 지점을 표시하는 Image_WeaponReticle에 적용할 기본 색상입니다."))
+	FLinearColor WeaponReticleColor = FLinearColor(0.15f, 0.92f, 1.0f, 0.85f);
+
+	// [v1.7.0] 터렛 Reticle 이미지에 적용할 기본 불투명도입니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="CarFight|Aim|Reticle|Weapon", meta=(ClampMin="0.0", ClampMax="1.0", DisplayName="터렛 Reticle 불투명도 (WeaponReticleOpacity)", ToolTip="터렛 레티클 월드 지점이 유효할 때 Image_WeaponReticle에 적용할 불투명도입니다."))
+	float WeaponReticleOpacity = 0.85f;
+
 	// [v1.4.0] 재장전 상태에 사용할 색상입니다.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="CarFight|Aim|Reticle|Style", meta=(DisplayName="재장전 Reticle 색상 (ReloadingReticleColor)", ToolTip="Reloading 상태에 적용할 청록색 계열의 색상입니다."))
 	FLinearColor ReloadingReticleColor = FLinearColor(0.20f, 0.70f, 0.90f, 1.0f);
@@ -180,11 +202,20 @@ private:
 	// [v1.4.0] 현재 캐시값에 맞는 이미지와 피드백 텍스트 색상을 안전하게 갱신합니다.
 	void RefreshVisualStyle();
 
+	// [v1.7.0] Weapon Aim Solution의 터렛 조준 월드 지점을 화면 좌표로 투영해 선택적 터렛 Reticle을 갱신합니다.
+	void RefreshWeaponReticle(const FCFVehicleWeaponAimSolution& InWeaponAimSolution);
+
+	// [v1.6.0] 선택적 Weapon Reticle 이미지를 안전하게 숨깁니다.
+	void HideWeaponReticle();
+
 	// [v1.4.0] 현재 Reticle 상태와 활성 FireFeedback 기준의 주 Reticle 색상을 반환합니다.
 	FLinearColor GetMainReticleColor() const;
 
 	// [v1.4.0] 현재 활성 FireFeedback 기준의 피드백 텍스트 색상을 반환합니다.
 	FLinearColor GetFireFeedbackTextColor() const;
+
+	// [v1.5.0] 현재 FireFeedback이 터렛 정렬 중 보조 표시인지 반환합니다.
+	bool IsTurretAligningFeedbackActive() const;
 
 	// [v1.4.0] 전달된 Reticle 상태에 대응하는 기본 색상을 반환합니다.
 	FLinearColor GetReticleStateColor(ECFVehicleReticleState InReticleState) const;

@@ -1,9 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.9.0
-// Date: 2026-07-02
+// Version: 1.10.1
+// Date: 2026-07-13
 // Description: CarFight 싱글플레이 차량 Aim 시스템 기준 클래스
 // Changelog:
+// - v1.10.1: Weapon Aim Solution 정렬 대기 상태를 Reticle TurretAligning 상태로 분리.
+// - v1.10.0: Weapon Aim Solution 저장/조회 API를 추가하고 LocalAimState 반영 기준으로 연결.
 // - v1.9.0: 터렛 안정화 전 발사 정책에 맞춰 로컬 발사 가능 예측에서 조준각 초과를 단독 차단 조건에서 제외.
 // - v1.8.0: ServerAimState / RepAimVisualState 계열 API를 FireValidationState / AimVisualState 명칭으로 교체.
 // - v1.7.0: BP에 보이는 Aim 상태 getter 설명을 싱글플레이 로컬 플레이어/검증 상태 기준으로 정리.
@@ -11,6 +13,9 @@
 // - v1.5.0: 싱글플레이 기준선에서 Aim 시각 상태의 UE 복제 등록과 OnRep 경로를 제거.
 // - v1.4.0: 싱글플레이 전환에 맞춰 AimComp 기본 컴포넌트 복제를 비활성화.
 // Migration:
+// - BuildLocalReticleState 호출자는 정렬 대기 여부를 bWeaponIsAligning으로 전달해야 한다.
+// - Pawn은 Muzzle 기준 AimOrigin/AimDirection/Target을 계산한 뒤 SetWeaponAimSolution으로 AimComp에 전달한다.
+// - Camera Trace Hit은 bLocalAimTraceHasBlockingHit으로만 표시하고, 발사 차단은 Weapon Aim Solution의 MuzzleBlocked를 사용한다.
 // - 조준각 내부 여부는 LocalAimState / FireValidationState 디버그 상태로 유지하되 기본 발사 거부 조건으로 쓰지 않는다.
 // - GetServerAimState는 GetFireValidationState로 교체한다.
 // - GetRepAimVisualState는 GetAimVisualState로 교체한다.
@@ -73,6 +78,14 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|Aim", meta=(ToolTip="현재 로컬 디버그와 발사 결과 표시에 사용할 Aim 시각 상태를 반환합니다."))
 	FCFVehicleAimVisualState GetAimVisualState() const;
 
+	// [v1.10.0] 현재 무기 발사 기준 Aim Solution을 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Aim", meta=(ToolTip="현재 Muzzle 기준 발사 원점, 방향, Reticle 목표점, 차단 판정을 묶은 Weapon Aim Solution을 반환합니다."))
+	FCFVehicleWeaponAimSolution GetWeaponAimSolution() const;
+
+	// [v1.10.0] Pawn이 계산한 무기 발사 기준 Aim Solution을 저장합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|Aim", meta=(ToolTip="Pawn이 계산한 Muzzle 기준 발사 원점, 방향, Reticle 목표점, 차단 판정을 AimComp에 저장합니다."))
+	void SetWeaponAimSolution(const FCFVehicleWeaponAimSolution& InWeaponAimSolution);
+
 	// [v1.0.0] 기본 Aim Profile을 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|Aim", meta=(ToolTip="현재 AimComp가 보유한 기본 Aim Profile을 반환합니다."))
 	FCFVehicleAimProfile GetDefaultAimProfile() const;
@@ -116,7 +129,7 @@ protected:
 	bool IsAimWithinDefaultProfile(float AimYawDeg, float AimPitchDeg) const;
 
 	// [v1.1.0] Local Aim 계산 결과를 Reticle 상태로 변환합니다.
-	ECFVehicleReticleState BuildLocalReticleState(bool bWithinWeaponArc, bool bAimBlocked, bool bCanFire) const;
+	ECFVehicleReticleState BuildLocalReticleState(bool bWithinWeaponArc, bool bAimBlocked, bool bWeaponIsAligning, bool bCanFire) const;
 
 	// [v1.0.0] Owner Actor를 차량 Pawn으로 해석합니다.
 	ACFVehiclePawn* ResolveOwnerVehiclePawn() const;
@@ -148,6 +161,10 @@ private:
 	// [v1.8.0] 로컬 디버그와 발사 결과 표시에 사용할 Aim 시각 상태입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(AllowPrivateAccess="true", DisplayName="Aim 시각 상태 (AimVisualState)", ToolTip="싱글플레이에서 로컬 디버그와 발사 결과 표시에 사용할 Aim 시각 상태입니다. 전투 판정용 데이터가 아닙니다."))
 	FCFVehicleAimVisualState AimVisualState;
+
+	// [v1.10.0] Muzzle 기준 발사 원점, 방향, Reticle 목표점, 차단 판정을 묶은 최신 조준 해석 결과입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Aim", meta=(AllowPrivateAccess="true", DisplayName="Weapon Aim Solution (WeaponAimSolution)", ToolTip="BuildFireCommand, HitScan, Projectile이 공통으로 사용할 최신 Muzzle 기준 조준 해석 결과입니다."))
+	FCFVehicleWeaponAimSolution WeaponAimSolution;
 
 	// [v1.0.0] Owner Pawn과 CameraComp 참조가 모두 준비되었는지 여부입니다.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Aim", meta=(AllowPrivateAccess="true", DisplayName="Aim 런타임 준비 완료 여부 (bAimRuntimeReady)", ToolTip="Owner 차량 Pawn과 VehicleCameraComp 참조가 모두 준비되었는지 여부입니다."))

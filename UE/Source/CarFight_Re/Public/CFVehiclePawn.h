@@ -1,9 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.102.0
-// Date: 2026-07-09
+// Version: 2.111.0
+// Date: 2026-07-14
 // Description: CarFight 싱글플레이 차량 Pawn 기준 클래스
 // Changelog:
+// - v2.111.0: VehicleHealthComp를 추가하고 HitScan/Projectile DamageHitContext를 BaseDamage 체력 감소와 파괴 상태 결과에 연결.
+// - v2.109.0: Muzzle 기준 Weapon Aim Solution 계산 경로를 추가하고 FireCommand/터렛 추적/검증이 같은 AimOrigin/AimDirection/Target을 사용하도록 준비.
+// - v2.108.0: SM_Body 전용 WeaponHit / Projectile 피격 표면 구성 함수와 Damage HitContext 피격 컴포넌트 기록을 추가.
 // - v2.102.0: Reticle / FireFeedback UI가 읽을 Pawn 측 FireFeedback ViewData 설정과 생성 함수를 추가.
 // - v2.101.0: VehicleDebug EquipmentPresetData 기준 설명을 legacy 직접 fallback 제거 정책에 맞게 갱신.
 // - v2.100.0: VehicleDebug Weapon 카테고리에 활성 EquipmentPresetData 상태를 추가하고 터렛 시각 장착도 EquipmentPresetData 우선 해석으로 전환.
@@ -45,6 +48,11 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth 적용 전 기준선 정리를 위해 차량 NetDebug/OwnerVisual/OwnerBodyVisual 실험 플래그 기본값을 False로 통일.
 // Migration:
+// - 기존 BP_CFVehiclePawn 계열은 VehicleHealthComp 기본 서브오브젝트를 자동 상속하며 BP에 수동 컴포넌트 추가가 필요하지 않다.
+// - HitScan과 Projectile은 같은 DamageHitContext 피해 적용 경로를 사용하며, 파괴 상태가 되어도 이번 P0에서는 입력과 물리를 자동 중지하지 않는다.
+// - 기존 VehicleData와 DamageData 자산은 저장하지 않아도 C++ 기본값 MaxHealth=100, BaseDamage=25, bCanDamageSelf=false를 사용한다.
+// - Muzzle 소켓 또는 Reticle 목표점이 유효하지 않으면 fallback 방향으로 발사하지 않고 발사 검증에서 안전하게 거부한다.
+// - WeaponNotAligned는 LastFireResult에는 기록하지만 FireFeedback의 일반 FireRejected 빨간 오버라이드로 표시하지 않는다.
 // - MountProfile.DefaultEquipmentPresetData가 있으면 터렛 시각 장착과 Weapon Debug는 EquipmentPresetData를 단일 소스로 사용한다.
 // - EquipmentPresetData가 없거나 내부 TurretMountData / WeaponData 참조가 비어 있으면 해당 Debug는 Missing 상태로 표시하고 MountProfile 직접 fallback은 사용하지 않는다.
 // - OutOfWeaponArc는 호환용 enum 값으로 남지만, P0 터렛 발사 정책에서는 조준각 초과만으로 발사를 막지 않는다.
@@ -59,8 +67,8 @@
 // - MuzzleSocketName이 Pitch 메쉬에 존재하면 최종 FireOrigin 위치와 방향은 해당 소켓을 우선 사용한다.
 // - Muzzle 소켓이 없거나 Pitch 메쉬가 없으면 기존 하드포인트 FireOrigin fallback을 유지한다.
 // - DamageData는 ProjectileData.DefaultDamageData만 직접 참조하며, HitScan / Laser도 가상 ProjectileData로 연결한다.
-// - DamageData가 비어 있어도 실제 피해 적용은 아직 수행하지 않으며 기존 발사 / Projectile / Dummy HitScan fallback 흐름을 유지한다.
-// - Damage HitContext는 Debug 표시 전용이며 실제 HP 차감 / 모듈 손상을 수행하지 않는다.
+// - DamageData가 비어 있으면 기존 발사 / Projectile / Dummy HitScan 결과 기록은 유지하지만 VehicleHealthComp 피해 적용은 MissingDamageData로 거부한다.
+// - Damage HitContext는 Debug 기록과 최소 BaseDamage 체력 적용 입력으로 사용하며 장갑 / 모듈 손상은 아직 수행하지 않는다.
 // - ProjectileData가 없어도 기존 Dummy HitScan / FireOrigin / 발사 간격 검증은 유지한다.
 // - Projectile Actor 스폰은 WeaponData.FireMode가 Projectile이고 ProjectileData / ProjectileActorClass가 모두 유효할 때만 실행한다.
 // - Projectile Pool 확보 조건이 맞지 않거나 Pool 확보 실패 시 기존 Dummy HitScan fallback을 유지한다.
@@ -99,6 +107,7 @@ class UCFVehicleCameraComp;
 class UCFVehicleAimComp;
 class UCFVehicleWeaponComp;
 class UCFProjectilePoolComp;
+class UCFVehicleHealthComp;
 class UCFEquipmentPresetData;
 class UCFProjectileData;
 class UCFDamageData;
@@ -658,6 +667,18 @@ struct FCFVehicleDebugWeapon
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="마지막 Damage HitContext 요약 (LastDamageHitContextSummary)", ToolTip="VehicleDebug Panel에 표시할 마지막 Damage HitContext 요약 문자열입니다."))
 	FString LastDamageHitContextSummary = TEXT("DamageHitContext: None");
 
+	// [v2.111.0] 마지막 피해 적용 결과가 존재하는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="마지막 피해 적용 결과 존재 여부 (bHasLastDamageApplyResult)", ToolTip="마지막 HitScan 또는 Projectile 명중의 피해 적용 결과가 기록됐는지 여부입니다."))
+	bool bHasLastDamageApplyResult = false;
+
+	// [v2.111.0] 마지막 직접 피해 적용과 체력 변화 결과입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="마지막 피해 적용 결과 (LastDamageApplyResult)", ToolTip="피해 적용 여부, 거부 사유, 적용량, 체력 변화와 파괴 전환을 기록합니다."))
+	FCFDamageApplyResult LastDamageApplyResult;
+
+	// [v2.111.0] 마지막 피해 적용 결과의 한글 표시 요약입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="마지막 피해 적용 결과 요약 (LastDamageApplyResultSummary)", ToolTip="VehicleDebug Panel에 표시할 피해 적용 결과 요약입니다."))
+	FString LastDamageApplyResultSummary = TEXT("피해 적용 기록 없음");
+
 	// [v2.83.0] 현재 Pawn이 ProjectilePoolComp를 보유하고 있는지 여부입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="ProjectilePoolComp 보유 여부 (bHasProjectilePoolComponent)", ToolTip="현재 Pawn이 발사체 재사용 Pool 컴포넌트를 보유하고 있는지 여부입니다."))
 	bool bHasProjectilePoolComponent = false;
@@ -951,7 +972,11 @@ public:
 
 	// [v2.82.0] 반복 발사되는 Projectile Actor를 재사용하는 Pool 컴포넌트입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="ProjectilePool 컴포넌트 (ProjectilePoolComp)", ToolTip="반복 발사되는 Projectile Actor를 재사용해 Spawn / Destroy 부담을 줄이는 Pool 컴포넌트입니다."))
-	TObjectPtr<UCFProjectilePoolComp> ProjectilePoolComp = nullptr;
+			TObjectPtr<UCFProjectilePoolComp> ProjectilePoolComp = nullptr;
+
+	// [v2.111.0] 차량 최대/현재 체력과 파괴 상태를 관리하는 런타임 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="차량 체력 컴포넌트 (VehicleHealthComp)", ToolTip="VehicleData 최대 체력, 현재 체력, 직접 피해와 파괴 상태를 관리합니다."))
+	TObjectPtr<UCFVehicleHealthComp> VehicleHealthComp = nullptr;
 
 	// [v2.86.0] P0 터렛 시각 장착 위치를 잡는 루트 컴포넌트입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components|Turret", meta=(AllowPrivateAccess="true", DisplayName="터렛 장착 루트 (TurretMountRootComp)", ToolTip="현재 활성 하드포인트 위치에 배치되는 터렛 시각 장착 루트입니다."))
@@ -1028,6 +1053,18 @@ public:
 	// [v2.97.0] 마지막 Damage HitContext 표시 요약입니다.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Damage", meta=(DisplayName="마지막 Damage HitContext 요약 (LastDamageHitContextSummary)", ToolTip="VehicleDebug Panel에 표시할 마지막 Damage HitContext 요약 문자열입니다."))
 	FString LastDamageHitContextSummary = TEXT("DamageHitContext: None");
+
+	// [v2.111.0] 마지막 피해 적용 결과가 존재하는지 여부입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Damage", meta=(DisplayName="마지막 피해 적용 결과 존재 여부 (bHasLastDamageApplyResult)", ToolTip="마지막 HitScan 또는 Projectile 명중의 피해 적용 결과가 기록됐는지 여부입니다."))
+	bool bHasLastDamageApplyResult = false;
+
+	// [v2.111.0] 마지막 직접 피해 적용과 체력 변화 결과입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Damage", meta=(DisplayName="마지막 피해 적용 결과 (LastDamageApplyResult)", ToolTip="피해 적용 여부, 거부 사유, 적용량, 체력 변화와 파괴 전환을 기록합니다."))
+	FCFDamageApplyResult LastDamageApplyResult;
+
+	// [v2.111.0] 마지막 피해 적용 결과의 한글 표시 요약입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Damage", meta=(DisplayName="마지막 피해 적용 결과 요약 (LastDamageApplyResultSummary)", ToolTip="VehicleDebug Panel에 표시할 피해 적용 결과 요약입니다."))
+	FString LastDamageApplyResultSummary = TEXT("피해 적용 기록 없음");
 
 	// [v2.67.0] 로컬 HitScan 더미 Trace 디버그 라인 표시 여부입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Aim", meta=(DisplayName="로컬 Aim Trace 디버그 표시 (bDrawLocalAimTraceDebug)", ToolTip="True이면 로컬 HitScan 더미 Trace를 디버그 라인으로 표시합니다."))
@@ -1145,7 +1182,11 @@ public:
 
 	// [v2.82.0] 차량 Projectile Pool 컴포넌트를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(ToolTip="반복 발사되는 Projectile Actor를 재사용하는 Pool 컴포넌트를 반환합니다."))
-	UCFProjectilePoolComp* GetProjectilePoolComp() const { return ProjectilePoolComp; }
+			UCFProjectilePoolComp* GetProjectilePoolComp() const { return ProjectilePoolComp; }
+
+	// [v2.111.0] 차량 체력 컴포넌트를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(DisplayName="차량 체력 컴포넌트 반환", ToolTip="현재 차량의 최대 체력, 현재 체력과 파괴 상태를 관리하는 컴포넌트를 반환합니다."))
+	UCFVehicleHealthComp* GetVehicleHealthComp() const { return VehicleHealthComp; }
 
 	// [v2.97.0] Projectile Pool에서 반환된 Hit 발사체를 Damage HitContext Debug로 기록합니다.
 	void RecordProjectileDamageHitContextFromPool(const ACFProjectileActor* InProjectileActor);
@@ -1348,13 +1389,22 @@ protected:
 	void RecordDummyHitScanDamageHitContext(const FCFVehicleFireRequest& FireCommand, const FCFVehicleFireResult& FireResult, const FHitResult* HitResult, bool bBlockingHit);
 
 	// [v2.97.0] 마지막 Damage HitContext Debug와 표시 요약을 저장합니다.
-	void StoreLastDamageHitContext(const FCFDamageHitContext& InDamageHitContext);
+		void StoreLastDamageHitContext(const FCFDamageHitContext& InDamageHitContext);
+
+	// [v2.111.0] 마지막 피해 적용 결과와 표시 요약을 저장합니다.
+	void StoreLastDamageApplyResult(FCFDamageApplyResult InDamageApplyResult);
 
 	// [v2.97.0] VehicleDebug Panel에 표시할 Damage HitContext 요약 문자열을 생성합니다.
 	FString BuildDamageHitContextSummary(const FCFDamageHitContext& InDamageHitContext) const;
 
 	// [v2.93.0] Turret Pitch 메쉬의 Muzzle 소켓으로 최종 FireOrigin을 보정합니다.
 	bool TryBuildMuzzleFireOrigin(FCFVehicleFireOrigin& InOutFireOrigin, FString& OutFireOriginSummary) const;
+
+	// [v2.109.0] Muzzle 위치에서 Reticle 목표점으로 향하는 공통 Weapon Aim Solution을 계산합니다.
+	bool BuildWeaponAimSolution(FCFVehicleWeaponAimSolution& OutWeaponAimSolution, FCFVehicleFireOrigin* OutFireOrigin = nullptr, FString* OutFireOriginSummary = nullptr) const;
+
+	// [v2.109.0] 현재 Weapon Aim Solution을 다시 계산해 AimComp에 저장합니다.
+	void RefreshWeaponAimSolution();
 
 	// [v2.81.0] 현재 활성 무기가 Projectile Actor 스폰 경로를 사용할 수 있는지 반환합니다.
 	bool ShouldUseProjectileActorFire() const;
@@ -1370,6 +1420,8 @@ protected:
 
 	void ApplyVehicleDataConfig();
 	void ApplyVehicleVisualConfig();
+	// [v2.108.0] VehicleMesh는 무기 채널을 무시하고 SM_Body만 시각 피격 표면으로 구성합니다.
+	void ConfigureVehicleVisualHitCollision();
 	// [v2.86.0] VehicleData MountProfile의 터렛 시각 메쉬를 하드포인트 위치에 붙입니다.
 	void ApplyVehicleTurretVisualConfig();
 	// [v2.89.0] 현재 Aim 상태에서 터렛이 바라볼 월드 방향을 계산합니다.

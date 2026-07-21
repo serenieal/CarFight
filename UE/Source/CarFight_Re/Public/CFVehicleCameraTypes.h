@@ -1,14 +1,22 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 0.1.2
-// Date: 2026-06-15
-// Description: CarFight 차량 카메라 공용 타입 정의 (카메라 Yaw 완충 런타임 표시 추가)
+// Version: 0.1.4
+// Date: 2026-07-20
+// Description: CarFight 차량 카메라 공용 타입 정의 (Aim Trace 목표 Actor 추가)
+// Changelog:
+// - v0.1.4: Camera Aim Trace가 선택한 Actor를 런타임 상태에 추가.
+// - v0.1.3: Camera Aim Trace 표면 선택 Hit을 AimBlocked와 분리하기 위해 bAimTraceHasBlockingHit을 추가.
+// Migration:
+// - AimTraceHitActor는 현재 프레임의 목표 표면 식별용이며, 발사 대상 잠금이나 소유권을 의미하지 않는다.
+// - Camera Aim Trace Hit은 목표 표면 선택 결과이며, 총구 장애물 판정은 Weapon Aim Solution의 MuzzleBlocked를 사용한다.
 // Scope: 카메라 모드, Aim Profile, 모드 플래그, 런타임 스냅샷을 공통으로 정의합니다.
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "CFVehicleCameraTypes.generated.h"
+
+class AActor;
 
 /**
  * 차량 카메라의 현재 대표 모드입니다.
@@ -169,6 +177,14 @@ struct FCFVehicleCameraRuntimeState
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime", meta=(DisplayName="조준 가림 여부 (bAimBlocked)", ToolTip="현재 카메라 시선 또는 Aim Trace가 즉시 장애물에 막혀 있는지 여부입니다."))
 	bool bAimBlocked = false;
+
+	// [v0.1.3] Camera Aim Trace가 표면 선택용 Blocking Hit을 얻었는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime", meta=(DisplayName="Aim Trace Blocking Hit 여부 (bAimTraceHasBlockingHit)", ToolTip="카메라 Aim Trace가 목표 표면을 선택하기 위해 Blocking Hit을 얻었는지 여부입니다. 이 값만으로 조준 가림으로 처리하지 않습니다."))
+	bool bAimTraceHasBlockingHit = false;
+
+	// [v0.1.4] Camera Aim Trace가 현재 목표 표면으로 선택한 Actor입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime", meta=(DisplayName="Aim Trace 적중 Actor (AimTraceHitActor)", ToolTip="카메라 Aim Trace가 현재 목표 표면으로 선택한 Actor입니다. 총구 Trace가 같은 목표를 적중했는지 판별할 때 사용합니다."))
+	TObjectPtr<AActor> AimTraceHitActor = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime", meta=(DisplayName="현재 Aim 사격 가능 여부 (bWeaponCanFireAtCurrentAim)", ToolTip="현재 Aim 상태가 사격 가능으로 해석되는지 여부입니다. 1차 구현에서는 제한각 내 여부와 가림 상태를 기준으로 계산합니다."))
 	bool bWeaponCanFireAtCurrentAim = true;

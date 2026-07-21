@@ -1,9 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.5.1
-// Date: 2026-07-13
+// Version: 1.8.0
+// Date: 2026-07-21
 // Description: Aim Reticle UI용 C++ 부모 위젯 클래스 구현입니다.
 // Changelog:
+// - v1.8.0: Image_WeaponReticle을 탄종별 Weapon Preview가 아닌 CurrentMuzzleDirection 기반 터렛 레티클 지점에 투영.
+// - v1.7.1: Weapon Reticle Canvas Slot의 앵커를 좌측 상단으로 고정해 뷰포트 좌표가 중복 오프셋되지 않도록 수정.
+// - v1.7.0: Weapon Preview 월드 위치를 화면 좌표로 투영해 선택적 Weapon Reticle 이미지를 표시.
+// - v1.6.1: TurretAligning Reticle 상태와 Tick 유지형 Hidden 표시를 추가.
+// - v1.6.0: TurretAligning FireFeedback DisplayKey를 정렬 중 문구와 amber 색상으로 표시.
 // - v1.5.1: 전용 OutOfArc 경고가 실제 OutOfArcWarning 피드백일 때만 일반 FireFeedback 텍스트를 대체하도록 조건을 제한.
 // - v1.5.0: Text_OutOfArcWarning이 바인딩된 경우 OutOfArc 경고를 전용 텍스트에만 표시하고 일반 FireFeedback 텍스트 중복을 방지.
 // - v1.4.0: 선택적 Reticle 이미지와 FireFeedback TextBlock에 상태별 색상을 안전하게 적용.
@@ -11,6 +16,11 @@
 // - v1.2.0: Reticle enum 값 이름을 FirePending / FireRejected 싱글플레이 명칭으로 교체.
 // - v1.1.0: 싱글플레이 전환에 맞춰 서버 대기/거부 표시 문구를 로컬 발사 처리/거부 문구로 변경.
 // Migration:
+// - Image_WeaponReticle은 bHasValidTurretReticlePoint와 TurretReticleWorldLocation만 소비하며 Legacy Weapon Preview 모드와 착탄 정보에는 의존하지 않는다.
+// - Image_WeaponReticle의 디자이너 앵커 값과 관계없이 런타임에는 좌측 상단 앵커를 사용한다.
+// - Image_WeaponReticle은 BindWidgetOptional로 사용하며 누락 시 기존 Command Reticle과 FireFeedback에는 영향이 없다.
+// - 상태 기반 Hidden은 Root Visibility를 바꾸지 않고 RenderOpacity 0으로만 표현한다.
+// - TurretAligning은 ReticleState enum 상태와 기존 FireFeedback DisplayKey 보조 표시를 함께 지원한다.
 // - ECFVehicleReticleState::WaitingServer는 FirePending으로, ServerRejected는 FireRejected로 교체한다.
 // - WBP에서 색상 적용이 필요하면 신규 Optional 이미지 5개와 Text_OutOfArcWarning의 Is Variable을 활성화한다.
 // Scope: VehicleAimComp의 Reticle 상태를 읽어 선택적 TextBlock과 위젯 가시성을 갱신합니다.
@@ -19,8 +29,11 @@
 
 #include "CFVehicleAimComp.h"
 #include "CFVehiclePawn.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
+#include "GameFramework/PlayerController.h"
 
 // [v1.0.0] Reticle이 읽을 차량 Pawn 참조를 설정하고 즉시 갱신합니다.
 void UCFAimReticleWidget::SetVehiclePawnRef(ACFVehiclePawn* InVehiclePawnRef)
@@ -41,6 +54,7 @@ void UCFAimReticleWidget::RefreshFromPawn()
 	if (!IsValid(VehiclePawnRef))
 	{
 		bCachedCanFire = false;
+		HideWeaponReticle();
 		ApplyFireFeedbackViewData(FCFVehicleFireFeedbackViewData());
 		ApplyReticleState(FallbackReticleState);
 		UpdateReticleVisibility();
@@ -52,6 +66,7 @@ void UCFAimReticleWidget::RefreshFromPawn()
 	if (!IsValid(VehicleAimComp))
 	{
 		bCachedCanFire = false;
+		HideWeaponReticle();
 		ApplyFireFeedbackViewData(FCFVehicleFireFeedbackViewData());
 		ApplyReticleState(FallbackReticleState);
 		UpdateReticleVisibility();
@@ -62,6 +77,9 @@ void UCFAimReticleWidget::RefreshFromPawn()
 	const FCFVehicleLocalAimState LocalAimState = VehicleAimComp->GetLocalAimState();
 	bCachedCanFire = LocalAimState.bLocalCanFire;
 
+	// [v1.7.0] Weapon Reticle 표시 위치를 계산할 최신 Weapon Aim Solution입니다.
+	const FCFVehicleWeaponAimSolution WeaponAimSolution = VehicleAimComp->GetWeaponAimSolution();
+
 	// [v1.3.0] VehicleAimComp가 계산한 기본 Reticle 상태입니다.
 	const ECFVehicleReticleState BaseReticleState = VehicleAimComp->GetReticleState();
 
@@ -71,6 +89,7 @@ void UCFAimReticleWidget::RefreshFromPawn()
 	const ECFVehicleReticleState FinalReticleState = ResolveReticleStateFromFireFeedback(CachedFireFeedbackViewData, BaseReticleState);
 
 	ApplyReticleState(FinalReticleState);
+	RefreshWeaponReticle(WeaponAimSolution);
 	UpdateReticleVisibility();
 }
 
@@ -84,10 +103,10 @@ void UCFAimReticleWidget::ApplyReticleState(const ECFVehicleReticleState InRetic
 // [v1.0.0] 현재 Reticle 상태에 따라 위젯 가시성을 갱신합니다.
 void UCFAimReticleWidget::UpdateReticleVisibility()
 {
-	// [v1.0.0] Reticle이 화면에 표시되어야 하는지 여부입니다.
-	const bool bShouldShowReticle = CachedReticleState != ECFVehicleReticleState::Hidden;
+	// [v1.6.1] 논리적 Hidden 상태를 Tick 유지 방식으로 표현하기 위한 위젯 불투명도입니다.
+	const float ReticleRenderOpacity = CachedReticleState == ECFVehicleReticleState::Hidden ? 0.0f : 1.0f;
 
-	SetVisibility(bShouldShowReticle ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	SetRenderOpacity(ReticleRenderOpacity);
 }
 
 // [v1.0.0] 현재 Reticle 상태를 UI 표시용 텍스트로 반환합니다.
@@ -101,6 +120,8 @@ FText UCFAimReticleWidget::GetReticleStateDisplayText() const
 		return FText::FromString(TEXT("조준: 가림"));
 	case ECFVehicleReticleState::OutOfArc:
 		return FText::FromString(TEXT("조준: 각도 밖"));
+	case ECFVehicleReticleState::TurretAligning:
+		return FText::FromString(TEXT("조준: 터렛 정렬 중"));
 	case ECFVehicleReticleState::NoWeapon:
 		return FText::FromString(TEXT("조준: 무기 없음"));
 	case ECFVehicleReticleState::Cooldown:
@@ -157,6 +178,9 @@ void UCFAimReticleWidget::ApplyFireFeedbackViewData(const FCFVehicleFireFeedback
 // [v1.0.0] 현재 캐시값을 선택적 TextBlock들에 반영합니다.
 void UCFAimReticleWidget::RefreshTextBlocks()
 {
+	// [v1.6.0] 현재 피드백이 터렛 정렬 중 표시인지 여부입니다.
+	const bool bIsTurretAligningFeedback = IsTurretAligningFeedbackActive();
+
 	// [v1.5.1] 전용 OutOfArc 경고 TextBlock이 일반 FireFeedback 텍스트를 대체할 수 있는지 여부입니다.
 	const bool bUseDedicatedOutOfArcWarning = IsValid(Text_OutOfArcWarning)
 		&& CachedFireFeedbackViewData.bFeedbackActive
@@ -166,6 +190,16 @@ void UCFAimReticleWidget::RefreshTextBlocks()
 	// [v1.5.0] 일반 FireFeedback State/Hint TextBlock에 현재 피드백 문구를 표시할지 여부입니다.
 	const bool bShowGeneralFireFeedbackText = CachedFireFeedbackViewData.bFeedbackActive
 		&& !bUseDedicatedOutOfArcWarning;
+
+	// [v1.6.0] 일반 FireFeedback State TextBlock에 표시할 최종 문구입니다.
+	const FText FireFeedbackStateText = bIsTurretAligningFeedback
+		? FText::FromString(TEXT("정렬 중"))
+		: GetFireFeedbackStateDisplayText(CachedFireFeedbackViewData.FeedbackState);
+
+	// [v1.6.0] 일반 FireFeedback Hint TextBlock에 표시할 최종 보조 문구입니다.
+	const FText FireFeedbackHintText = bIsTurretAligningFeedback
+		? FText::FromString(TEXT("터렛이 목표 방향으로 정렬 중"))
+		: GetFireFeedbackHintDisplayText(CachedFireFeedbackViewData.FeedbackState);
 
 	if (Text_ReticleState)
 	{
@@ -186,7 +220,7 @@ void UCFAimReticleWidget::RefreshTextBlocks()
 	{
 		Text_FireFeedbackState->SetText(
 			bShowGeneralFireFeedbackText
-				? GetFireFeedbackStateDisplayText(CachedFireFeedbackViewData.FeedbackState)
+				? FireFeedbackStateText
 				: FText::GetEmpty());
 	}
 
@@ -194,7 +228,7 @@ void UCFAimReticleWidget::RefreshTextBlocks()
 	{
 		Text_FireFeedbackHint->SetText(
 			bShowGeneralFireFeedbackText
-				? GetFireFeedbackHintDisplayText(CachedFireFeedbackViewData.FeedbackState)
+				? FireFeedbackHintText
 				: FText::GetEmpty());
 	}
 
@@ -252,11 +286,119 @@ void UCFAimReticleWidget::RefreshVisualStyle()
 
 	if (Text_OutOfArcWarning)
 	{
+		// [v1.6.0] OutOfArcWarning 전용 TextBlock이 TurretAligning 문구를 표시해야 하는지 여부입니다.
+		const bool bUseTurretAligningWarningText = IsTurretAligningFeedbackActive();
+
+		// [v1.6.0] OutOfArcWarning 전용 TextBlock에 표시할 최종 문구입니다.
+		const FText OutOfArcWarningText = bUseTurretAligningWarningText
+			? FText::FromString(TEXT("정렬 중"))
+			: FText::FromString(TEXT("각도 경고"));
+
+		// [v1.6.0] OutOfArcWarning 전용 TextBlock에 적용할 최종 색상입니다.
+		const FLinearColor OutOfArcWarningTextColor = bUseTurretAligningWarningText
+			? TurretAligningReticleColor
+			: OutOfArcWarningColor;
+
 		Text_OutOfArcWarning->SetText(
 			CachedFireFeedbackViewData.bShowOutOfArcWarning
-				? FText::FromString(TEXT("각도 경고"))
+				? OutOfArcWarningText
 				: FText::GetEmpty());
-		Text_OutOfArcWarning->SetColorAndOpacity(OutOfArcWarningColor);
+		Text_OutOfArcWarning->SetColorAndOpacity(OutOfArcWarningTextColor);
+	}
+
+	if (Image_WeaponReticle)
+	{
+		Image_WeaponReticle->SetColorAndOpacity(FLinearColor(
+			WeaponReticleColor.R,
+			WeaponReticleColor.G,
+			WeaponReticleColor.B,
+			WeaponReticleOpacity));
+	}
+}
+
+// [v1.8.0] Weapon Aim Solution의 터렛 조준 월드 지점을 화면 좌표로 투영해 선택적 터렛 Reticle을 갱신합니다.
+void UCFAimReticleWidget::RefreshWeaponReticle(const FCFVehicleWeaponAimSolution& InWeaponAimSolution)
+{
+	if (!IsValid(Image_WeaponReticle))
+	{
+		return;
+	}
+
+	if (!InWeaponAimSolution.bHasValidSolution
+		|| !InWeaponAimSolution.bHasValidTurretReticlePoint
+		|| InWeaponAimSolution.TurretReticleWorldLocation.ContainsNaN())
+	{
+		HideWeaponReticle();
+		return;
+	}
+
+	// [v1.7.0] Weapon Reticle 투영에 사용할 로컬 플레이어 컨트롤러입니다.
+	APlayerController* PlayerController = IsValid(VehiclePawnRef) ? Cast<APlayerController>(VehiclePawnRef->GetController()) : nullptr;
+	if (!IsValid(PlayerController))
+	{
+		HideWeaponReticle();
+		return;
+	}
+
+	// [v1.7.0] DPI 스케일이 반영된 위젯 좌표계의 Weapon Reticle 화면 위치입니다.
+	FVector2D WeaponReticleScreenPosition = FVector2D::ZeroVector;
+
+	// [v1.8.0] 터렛 조준 월드 지점이 화면 좌표로 투영 가능한지 여부입니다.
+	const bool bProjectedToScreen = UWidgetLayoutLibrary::ProjectWorldLocationToWidgetPosition(
+		PlayerController,
+		InWeaponAimSolution.TurretReticleWorldLocation,
+		WeaponReticleScreenPosition,
+		false);
+
+	if (!bProjectedToScreen || WeaponReticleScreenPosition.ContainsNaN())
+	{
+		HideWeaponReticle();
+		return;
+	}
+
+	// [v1.7.0] 현재 Viewport의 위젯 좌표계 크기입니다.
+	const FVector2D ViewportSize = UWidgetLayoutLibrary::GetViewportWidgetGeometry(this).GetLocalSize();
+
+	// [v1.7.0] Weapon Reticle이 화면 안에 들어와 있는지 여부입니다.
+	const bool bWeaponReticleOnScreen =
+		ViewportSize.X > 0.0f
+		&& ViewportSize.Y > 0.0f
+		&& WeaponReticleScreenPosition.X >= 0.0f
+		&& WeaponReticleScreenPosition.Y >= 0.0f
+		&& WeaponReticleScreenPosition.X <= ViewportSize.X
+		&& WeaponReticleScreenPosition.Y <= ViewportSize.Y;
+
+	if (!bWeaponReticleOnScreen)
+	{
+		HideWeaponReticle();
+		return;
+	}
+
+	if (UCanvasPanelSlot* WeaponReticleCanvasSlot = Cast<UCanvasPanelSlot>(Image_WeaponReticle->Slot))
+	{
+		WeaponReticleCanvasSlot->SetAnchors(FAnchors(0.0f, 0.0f));
+		WeaponReticleCanvasSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+		WeaponReticleCanvasSlot->SetPosition(WeaponReticleScreenPosition);
+	}
+	else
+	{
+		Image_WeaponReticle->SetRenderTranslation(WeaponReticleScreenPosition);
+	}
+
+	Image_WeaponReticle->SetVisibility(ESlateVisibility::HitTestInvisible);
+	Image_WeaponReticle->SetColorAndOpacity(FLinearColor(
+		WeaponReticleColor.R,
+		WeaponReticleColor.G,
+		WeaponReticleColor.B,
+		WeaponReticleOpacity));
+}
+
+// [v1.7.0] 선택적 Weapon Reticle 이미지를 안전하게 숨깁니다.
+void UCFAimReticleWidget::HideWeaponReticle()
+{
+	if (IsValid(Image_WeaponReticle))
+	{
+		Image_WeaponReticle->SetVisibility(ESlateVisibility::Collapsed);
 	}
 }
 
@@ -278,6 +420,11 @@ FLinearColor UCFAimReticleWidget::GetFireFeedbackTextColor() const
 	if (!CachedFireFeedbackViewData.bFeedbackActive)
 	{
 		return GetReticleStateColor(CachedReticleState);
+	}
+
+	if (IsTurretAligningFeedbackActive())
+	{
+		return TurretAligningReticleColor;
 	}
 
 	switch (CachedFireFeedbackViewData.FeedbackState)
@@ -302,6 +449,14 @@ FLinearColor UCFAimReticleWidget::GetFireFeedbackTextColor() const
 	}
 }
 
+// [v1.5.0] 현재 FireFeedback이 터렛 정렬 중 보조 표시인지 반환합니다.
+bool UCFAimReticleWidget::IsTurretAligningFeedbackActive() const
+{
+	return CachedFireFeedbackViewData.bFeedbackActive
+		&& CachedFireFeedbackViewData.FeedbackState == ECFVehicleFireFeedbackState::OutOfArcWarning
+		&& CachedFireFeedbackViewData.FeedbackDisplayKey == TEXT("TurretAligning");
+}
+
 // [v1.4.0] 전달된 Reticle 상태에 대응하는 기본 색상을 반환합니다.
 FLinearColor UCFAimReticleWidget::GetReticleStateColor(const ECFVehicleReticleState InReticleState) const
 {
@@ -311,6 +466,8 @@ FLinearColor UCFAimReticleWidget::GetReticleStateColor(const ECFVehicleReticleSt
 		return AimBlockedReticleColor;
 	case ECFVehicleReticleState::OutOfArc:
 		return ReadyReticleColor;
+	case ECFVehicleReticleState::TurretAligning:
+		return TurretAligningReticleColor;
 	case ECFVehicleReticleState::NoWeapon:
 		return NoWeaponReticleColor;
 	case ECFVehicleReticleState::Cooldown:
@@ -339,6 +496,8 @@ FText UCFAimReticleWidget::GetReticleHintDisplayText() const
 		return FText::FromString(TEXT("목표가 가려짐"));
 	case ECFVehicleReticleState::OutOfArc:
 		return FText::FromString(TEXT("무기 조준각 밖"));
+	case ECFVehicleReticleState::TurretAligning:
+		return FText::FromString(TEXT("총구가 조준점을 추적 중"));
 	case ECFVehicleReticleState::NoWeapon:
 		return FText::FromString(TEXT("사용 가능한 무기 없음"));
 	case ECFVehicleReticleState::Cooldown:

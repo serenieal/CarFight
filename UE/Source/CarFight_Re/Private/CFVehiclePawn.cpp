@@ -1,9 +1,19 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.107.0
-// Date: 2026-07-10
+// Version: 2.117.0
+// Date: 2026-07-21
 // Description: CarFight 싱글플레이 차량 Pawn 구현
 // Changelog:
+// - v2.117.0: MuzzleBlocked를 전체 조준 경로가 아닌 TurretMountData의 총구 안전 거리 안에서만 판정하도록 수정.
+// - v2.116.0: 총구 Trace가 VehicleHealthComp를 가진 유효 피해 대상을 먼저 맞으면 MuzzleBlocked로 오판하지 않도록 수정.
+// - v2.115.0: CurrentMuzzleDirection을 조준 목표 거리까지 연장한 탄종 독립 터렛 레티클 월드 지점을 Aim Solution에 추가.
+// - v2.114.0: LaunchDirection Preview를 Command 목표 깊이로 투영하고 Camera/Muzzle Trace가 같은 Actor를 적중하면 목표 표면으로 허용.
+// - v2.113.0: 중력 Projectile을 LaunchDirection Weapon Reticle 모드로 분리해 초기 발사 방향 표식을 제공.
+// - v2.112.0: 실제 최종 발사 방향의 WeaponHit Trace를 MuzzleBlocked와 직선 Weapon Preview World 데이터가 공유하도록 확장.
+// - v2.111.0: VehicleHealthComp 생성, VehicleData 최대 체력 초기화, HitScan/Projectile 공용 BaseDamage 적용과 Debug 결과 연결.
+// - v2.110.0: 터렛별 정렬 중 발사 정책에 따라 실제 Muzzle/요구 방향을 선택하고 검증과 obstruction 경로를 통일.
+// - v2.109.0: Muzzle 기준 Weapon Aim Solution을 추가해 FireCommand, HitScan, Projectile, 터렛 추적 방향을 Reticle 목표점 기준으로 통합.
+// - v2.108.0: SM_Body를 WeaponHit / Projectile 전용 QueryOnly 피격 표면으로 구성하고 Damage HitContext에 피격 컴포넌트 이름을 기록.
 // - v2.107.0: OutOfWeaponArc 경고 표시를 발사 실패 피드백 유지 시간 안에서만 활성화.
 // - v2.106.0: 발사 성공 피드백을 쿨다운보다 우선 표시하고 성공 표시 종료 후 쿨다운 상태로 전환.
 // - v2.105.1: FireFeedback FName 삼항 연산의 문자열/EName 형식 불일치를 명시적 FName 생성으로 수정.
@@ -55,6 +65,13 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth Visual/Shell 적용 전 기준선을 깨끗하게 만들기 위해 차량 진단 로그와 Owner 표시 안정화 기본값을 False로 통일.
 // Migration:
+// - MuzzleBlocked는 MuzzleClearanceDistanceCm 안의 비피해 장애물만 차단하며, 더 먼 충돌은 실제 HitScan/Projectile 적중 처리에 맡긴다.
+// - 총구와 Command 목표 사이의 피해 가능한 차량은 정상 적중 대상으로 발사를 허용하며, 비피해 장애물은 기존처럼 MuzzleBlocked로 거부한다.
+// - bAllowFireWhileAligning=true인 터렛은 정렬 중 현재 Muzzle 방향으로 발사하며, false인 터렛은 기존처럼 정렬 완료 전 거부한다.
+// - 중력 Projectile의 LaunchDirection Preview는 예상 탄착점이 아니라 AimDirection 기준 초기 발사 방향 표식이다.
+// - MuzzleBlocked는 정책과 관계없이 실제 최종 발사 경로를 기준으로 항상 발사를 거부한다.
+// - Muzzle 소켓 또는 Reticle 목표점이 유효하지 않으면 fallback 방향으로 발사하지 않고 발사 검증에서 안전하게 거부한다.
+// - WeaponNotAligned는 LastFireResult에는 기록하지만 FireFeedback에서 일반 FireRejected 빨간 오버라이드를 만들지 않는다.
 // - 자동 휠 메시 스케일을 켠 차량은 기본적으로 메시 바운드 중심 보정도 함께 적용된다. 기존 수동 Wheel_Mesh 상대 위치를 유지해야 하면 bAutoCenterWheelMeshBoundsToOrigin=false로 끈다.
 // - 기존 차량은 WheelVisualConfig.bAutoScaleWheelMeshToRadius=false 기본값으로 기존 Wheel_Mesh_* 수동 스케일을 유지한다.
 // - 자동 휠 메시 스케일은 StaticMesh 로컬 바운드 반지름을 기준으로 하므로 축이 다른 메시에서는 WheelMeshRadiusMeasureMode를 조정한다.
@@ -72,8 +89,8 @@
 // - VehicleDebug Panel의 터렛 시각 요약에서 하드포인트 소켓 위치와 터렛 루트 위치 차이를 확인할 수 있다.
 // - MuzzleSocketName이 Pitch 메쉬에 존재하면 최종 FireOrigin 위치와 방향은 해당 소켓을 우선 사용한다.
 // - Muzzle 소켓이 없거나 Pitch 메쉬가 없으면 기존 하드포인트 FireOrigin fallback을 유지한다.
-// - DamageData가 비어 있거나 ProjectileData.DamageProfileId fallback만 있어도 실제 피해 적용은 하지 않고 기존 Fire / Projectile / Dummy HitScan 흐름을 유지한다.
-// - Damage HitContext 기록은 Debug 표시 전용이며 실제 HP 차감 / 모듈 손상을 수행하지 않는다.
+// - DamageData가 비어 있거나 ProjectileData.DamageProfileId fallback만 있으면 기존 Fire / Projectile / Dummy HitScan 흐름은 유지하지만 VehicleHealthComp 피해 적용은 MissingDamageData로 거부한다.
+// - Damage HitContext 기록은 Debug와 최소 BaseDamage 체력 적용 입력으로 사용하며 장갑 / 모듈 손상은 수행하지 않는다.
 // - Projectile Actor 확보는 WeaponData.FireMode가 Projectile이고 ProjectileData / ProjectileActorClass가 모두 유효할 때만 실행한다.
 // - Projectile Pool 확보 조건이 맞지 않거나 Pool 확보 실패 시 기존 Dummy HitScan fallback을 유지한다.
 // - WeaponData가 없으면 기존 Aim Profile MaxAimDistance와 즉시 발사 흐름을 유지한다.
@@ -98,6 +115,7 @@
 
 #include "CFVehiclePawn.h"
 
+#include "CFCollisionChannels.h"
 #include "CFEquipmentPresetData.h"
 #include "CFProjectileData.h"
 #include "CFProjectileActor.h"
@@ -108,6 +126,7 @@
 #include "CFVehicleAimComp.h"
 #include "CFVehicleCameraComp.h"
 #include "CFVehicleDriveComp.h"
+#include "CFVehicleHealthComp.h"
 #include "CFWeaponData.h"
 #include "CFVehicleWeaponComp.h"
 #include "CFWheelSyncComp.h"
@@ -128,6 +147,7 @@
 #include "Engine/LocalPlayer.h"
 #include "Engine/StaticMesh.h"
 #include "GameFramework/PlayerController.h"
+#include "PhysicsEngine/BodySetup.h"
 #include "InputAction.h"
 #include "InputActionValue.h"
 #include "InputCoreTypes.h"
@@ -314,6 +334,24 @@ namespace
 		}
 
 		return nullptr;
+	}
+
+	// [v2.108.0] StaticMesh가 Query 충돌에 사용할 Simple Collision을 가지고 있는지 검사합니다.
+	bool HasStaticMeshSimpleCollision(const UStaticMeshComponent* StaticMeshComponent)
+	{
+		if (!StaticMeshComponent || !StaticMeshComponent->GetStaticMesh())
+		{
+			return false;
+		}
+
+		// [v2.108.0] Simple Collision 정보를 담고 있는 BodySetup입니다.
+		const UBodySetup* BodySetup = StaticMeshComponent->GetStaticMesh()->GetBodySetup();
+		if (!BodySetup)
+		{
+			return false;
+		}
+
+		return BodySetup->AggGeom.GetElementCount() > 0;
 	}
 
 	// [v2.102.0] 휠 메시 자동 스케일 요약 문자열에 항목을 이어 붙입니다.
@@ -737,7 +775,10 @@ ACFVehiclePawn::ACFVehiclePawn()
 	VehicleCameraComp = CreateDefaultSubobject<UCFVehicleCameraComp>(TEXT("VehicleCameraComp"));
 	VehicleAimComp = CreateDefaultSubobject<UCFVehicleAimComp>(TEXT("VehicleAimComp"));
 	VehicleWeaponComp = CreateDefaultSubobject<UCFVehicleWeaponComp>(TEXT("VehicleWeaponComp"));
-	ProjectilePoolComp = CreateDefaultSubobject<UCFProjectilePoolComp>(TEXT("ProjectilePoolComp"));
+		ProjectilePoolComp = CreateDefaultSubobject<UCFProjectilePoolComp>(TEXT("ProjectilePoolComp"));
+
+	// [v2.111.0] 차량 최대/현재 체력과 파괴 상태를 관리할 기본 서브오브젝트입니다.
+	VehicleHealthComp = CreateDefaultSubobject<UCFVehicleHealthComp>(TEXT("VehicleHealthComp"));
 	OwnerVisualRootComp = CreateDefaultSubobject<USceneComponent>(TEXT("OwnerVisualRoot"));
 	if (OwnerVisualRootComp)
 	{
@@ -1124,9 +1165,13 @@ bool ACFVehiclePawn::InitializeVehicleRuntime()
 	const bool bAimReady = VehicleAimComp ? VehicleAimComp->InitializeAimRuntime() : false;
 
 	// [v2.75.0] WeaponComp가 VehicleData MountProfile과 하드포인트 슬롯을 해석했는지 여부입니다.
-	const bool bWeaponReady = VehicleWeaponComp ? VehicleWeaponComp->InitializeWeaponRuntime(this, VehicleData) : false;
-	bVehicleRuntimeReady = bDriveReady && bWheelSyncReady;
-	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: Data=%s, Drive=%s, WheelSync=%s, Aim=%s, Weapon=%s, OwnerVisual=%s, Ready=%s | %s | %s | %s"), VehicleData ? TEXT("Present") : TEXT("Missing"), bDriveReady ? TEXT("Ready") : TEXT("Missing"), bWheelSyncReady ? TEXT("Ready") : TEXT("Missing"), bAimReady ? TEXT("Ready") : TEXT("Missing"), bWeaponReady ? TEXT("Ready") : TEXT("Missing"), bOwnerVisualReady ? TEXT("Ready") : TEXT("Skipped"), bVehicleRuntimeReady ? TEXT("True") : TEXT("False"), *DataConfigSummary, *LayoutConfigSummary, *TurretVisualConfigSummary);
+		const bool bWeaponReady = VehicleWeaponComp ? VehicleWeaponComp->InitializeWeaponRuntime(this, VehicleData) : false;
+
+	// [v2.111.0] VehicleData 최대 체력 또는 안전 기본값으로 차량 체력이 준비됐는지 여부입니다.
+	const bool bHealthReady = VehicleHealthComp ? VehicleHealthComp->InitializeFromVehicleData(VehicleData) : false;
+
+	bVehicleRuntimeReady = bDriveReady && bWheelSyncReady && bHealthReady;
+	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: Data=%s, Drive=%s, WheelSync=%s, Aim=%s, Weapon=%s, Health=%s, OwnerVisual=%s, Ready=%s | %s | %s | %s"), VehicleData ? TEXT("Present") : TEXT("Missing"), bDriveReady ? TEXT("Ready") : TEXT("Missing"), bWheelSyncReady ? TEXT("Ready") : TEXT("Missing"), bAimReady ? TEXT("Ready") : TEXT("Missing"), bWeaponReady ? TEXT("Ready") : TEXT("Missing"), bHealthReady ? TEXT("Ready") : TEXT("Missing"), bOwnerVisualReady ? TEXT("Ready") : TEXT("Skipped"), bVehicleRuntimeReady ? TEXT("True") : TEXT("False"), *DataConfigSummary, *LayoutConfigSummary, *TurretVisualConfigSummary);
 	return bVehicleRuntimeReady;
 }
 
@@ -1717,6 +1762,7 @@ void ACFVehiclePawn::ApplyVehicleVisualConfig()
 {
 	if (!VehicleData)
 	{
+		ConfigureVehicleVisualHitCollision();
 		return;
 	}
 	UStaticMeshComponent* ChassisStaticMeshComp = FindStaticMeshComponentByName(this, TEXT("SM_Body"));
@@ -1726,6 +1772,48 @@ void ACFVehiclePawn::ApplyVehicleVisualConfig()
 	}
 	// 현재 WheelSync 컴포넌트에는 휠 메쉬 자산 적용 전용 API가 없습니다.
 	// 휠 시각 메쉬 교체는 별도 구현 전까지 여기서 수행하지 않습니다.
+
+	ConfigureVehicleVisualHitCollision();
+}
+
+// [v2.108.0] VehicleMesh는 무기 채널을 무시하고 SM_Body만 시각 피격 표면으로 구성합니다.
+void ACFVehiclePawn::ConfigureVehicleVisualHitCollision()
+{
+	// [v2.108.0] 무기 피격 채널을 무시하도록 정리할 모든 PrimitiveComponent 목록입니다.
+	TArray<UPrimitiveComponent*> PrimitiveComponents;
+	GetComponents<UPrimitiveComponent>(PrimitiveComponents);
+
+	for (UPrimitiveComponent* PrimitiveComponent : PrimitiveComponents)
+	{
+		if (!PrimitiveComponent)
+		{
+			continue;
+		}
+
+		PrimitiveComponent->SetCollisionResponseToChannel(CFCollisionChannels::WeaponHit, ECR_Ignore);
+		PrimitiveComponent->SetCollisionResponseToChannel(CFCollisionChannels::Projectile, ECR_Ignore);
+	}
+
+	// [v2.108.0] 무기 피격 표면으로 사용할 시각 차체 StaticMeshComponent입니다.
+	UStaticMeshComponent* BodyMeshComponent = FindStaticMeshComponentByName(this, TEXT("SM_Body"));
+	if (!BodyMeshComponent)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("VehicleVisualHitCollision: SM_Body component missing on %s."), *GetName());
+		return;
+	}
+
+	BodyMeshComponent->SetCollisionProfileName(CFCollisionChannels::VehicleVisualHitProfileName, false);
+	BodyMeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	BodyMeshComponent->SetCollisionObjectType(ECC_WorldDynamic);
+	BodyMeshComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
+	BodyMeshComponent->SetCollisionResponseToChannel(CFCollisionChannels::WeaponHit, ECR_Block);
+	BodyMeshComponent->SetCollisionResponseToChannel(CFCollisionChannels::Projectile, ECR_Block);
+	BodyMeshComponent->SetGenerateOverlapEvents(false);
+
+	if (!HasStaticMeshSimpleCollision(BodyMeshComponent))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("VehicleVisualHitCollision: SM_Body StaticMesh has no Simple Collision. WeaponHit/Projectile may not hit %s."), *GetName());
+	}
 }
 
 // [v2.86.0] 터렛 시각 컴포넌트를 기본 숨김 상태로 되돌립니다.
@@ -2201,11 +2289,18 @@ void ACFVehiclePawn::ApplyVehicleTurretVisualConfig()
 		*MuzzleSocketStatusText);
 }
 
-// [v2.89.0] 현재 Aim 상태에서 터렛이 바라볼 월드 방향을 계산합니다.
+// [v2.110.0] 최종 발사 방향과 분리된 요구 조준 방향으로 터렛이 바라볼 월드 방향을 계산합니다.
 FVector ACFVehiclePawn::ResolveTurretAimWorldDirection() const
 {
 	if (VehicleAimComp)
 	{
+		// [v2.109.0] AimComp에 저장된 최신 Weapon Aim Solution입니다.
+		const FCFVehicleWeaponAimSolution WeaponAimSolution = VehicleAimComp->GetWeaponAimSolution();
+		if (WeaponAimSolution.bHasValidSolution && !WeaponAimSolution.DesiredAimDirection.IsNearlyZero())
+		{
+			return WeaponAimSolution.DesiredAimDirection.GetSafeNormal();
+		}
+
 		// [v2.89.0] AimComp가 보유한 현재 로컬 조준 상태입니다.
 		const FCFVehicleLocalAimState LocalAimState = VehicleAimComp->GetLocalAimState();
 
@@ -2250,12 +2345,20 @@ void ACFVehiclePawn::UpdateVehicleTurretAimVisuals(const float DeltaSeconds)
 {
 	if (!VehicleWeaponComp)
 	{
+		if (VehicleAimComp)
+		{
+			VehicleAimComp->SetWeaponAimSolution(FCFVehicleWeaponAimSolution());
+		}
 		return;
 	}
 
 	if (!TurretMountRootComp || !TurretYawPivotComp || !TurretPitchPivotComp)
 	{
 		VehicleWeaponComp->ResetTurretState();
+		if (VehicleAimComp)
+		{
+			VehicleAimComp->SetWeaponAimSolution(FCFVehicleWeaponAimSolution());
+		}
 		return;
 	}
 
@@ -2264,6 +2367,10 @@ void ACFVehiclePawn::UpdateVehicleTurretAimVisuals(const float DeltaSeconds)
 		VehicleWeaponComp->UpdateTurretState(DeltaSeconds, GetActorForwardVector(), FTransform::Identity, false);
 		TurretYawPivotComp->SetRelativeRotation(FRotator::ZeroRotator);
 		TurretPitchPivotComp->SetRelativeRotation(FRotator::ZeroRotator);
+		if (VehicleAimComp)
+		{
+			VehicleAimComp->SetWeaponAimSolution(FCFVehicleWeaponAimSolution());
+		}
 		return;
 	}
 
@@ -2291,6 +2398,8 @@ void ACFVehiclePawn::UpdateVehicleTurretAimVisuals(const float DeltaSeconds)
 
 	TurretYawPivotComp->SetRelativeRotation(YawPivotRelativeRotation);
 	TurretPitchPivotComp->SetRelativeRotation(PitchPivotRelativeRotation);
+
+	RefreshWeaponAimSolution();
 }
 
 // [v2.68.0] VehicleData의 바퀴 앵커 레이아웃 오버라이드를 BP Wheel_Anchor_* 컴포넌트에 적용합니다.
@@ -2733,7 +2842,10 @@ FCFVehicleDebugSnapshot ACFVehiclePawn::GetVehicleDebugSnapshot() const
 		DebugSnapshot.Weapon.ActiveDamageResolutionSummary = VehicleWeaponComp->GetActiveDamageResolutionSummary();
 		DebugSnapshot.Weapon.bHasLastDamageHitContext = bHasLastDamageHitContext;
 		DebugSnapshot.Weapon.LastDamageHitContext = LastDamageHitContext;
-		DebugSnapshot.Weapon.LastDamageHitContextSummary = LastDamageHitContextSummary;
+			DebugSnapshot.Weapon.LastDamageHitContextSummary = LastDamageHitContextSummary;
+	DebugSnapshot.Weapon.bHasLastDamageApplyResult = bHasLastDamageApplyResult;
+	DebugSnapshot.Weapon.LastDamageApplyResult = LastDamageApplyResult;
+	DebugSnapshot.Weapon.LastDamageApplyResultSummary = LastDamageApplyResultSummary;
 		DebugSnapshot.Weapon.ActiveWeaponMaxRange = VehicleWeaponComp->GetActiveWeaponMaxRange(FallbackWeaponRange);
 		DebugSnapshot.Weapon.ActiveWeaponFireRatePerMinute = VehicleWeaponComp->GetActiveWeaponFireRatePerMinute();
 		DebugSnapshot.Weapon.ActiveWeaponCooldownSeconds = VehicleWeaponComp->GetActiveWeaponCooldownSeconds();
@@ -3693,31 +3805,36 @@ FCFVehicleFireRequest ACFVehiclePawn::BuildFireCommand()
 
 	if (VehicleWeaponComp)
 	{
-		// [v2.75.0] VehicleData MountProfile과 하드포인트 슬롯에서 계산한 실제 발사 원점입니다.
-		FCFVehicleFireOrigin ResolvedFireOrigin;
-		if (VehicleWeaponComp->BuildFireOrigin(FireRequest.AimDirection, ResolvedFireOrigin))
+		// [v2.109.0] Muzzle 기준으로 계산한 공통 Weapon Aim Solution입니다.
+		FCFVehicleWeaponAimSolution WeaponAimSolution;
+
+		// [v2.109.0] Weapon Aim Solution과 같은 기준으로 기록할 FireOrigin입니다.
+		FCFVehicleFireOrigin FinalFireOrigin;
+
+		// [v2.109.0] Weapon Aim Solution 계산 결과를 WeaponComp 디버그에 남길 요약입니다.
+		FString WeaponAimSolutionSummary;
+
+		if (BuildWeaponAimSolution(WeaponAimSolution, &FinalFireOrigin, &WeaponAimSolutionSummary))
 		{
-			// [v2.93.0] 하드포인트 FireOrigin에서 Muzzle 소켓 기준으로 보정할 최종 발사 원점입니다.
-			FCFVehicleFireOrigin FinalFireOrigin = ResolvedFireOrigin;
+			VehicleWeaponComp->RecordResolvedFireOrigin(FinalFireOrigin, WeaponAimSolutionSummary);
+			VehicleAimComp->SetWeaponAimSolution(WeaponAimSolution);
 
-			// [v2.93.0] Muzzle 소켓 FireOrigin 보정 결과 요약입니다.
-			FString MuzzleFireOriginSummary;
-
-			if (TryBuildMuzzleFireOrigin(FinalFireOrigin, MuzzleFireOriginSummary))
-			{
-				VehicleWeaponComp->RecordResolvedFireOrigin(FinalFireOrigin, MuzzleFireOriginSummary);
-			}
-
-			FireRequest.AimOrigin = FinalFireOrigin.WorldFireLocation;
-			FireRequest.AimDirection = FinalFireOrigin.WorldFireDirection;
+			FireRequest.AimOrigin = WeaponAimSolution.AimOrigin;
+			FireRequest.AimDirection = WeaponAimSolution.AimDirection;
+			FireRequest.PredictedAimTargetLocation = WeaponAimSolution.AimTargetLocation;
 			FireRequest.WeaponGroupId = FinalFireOrigin.MountProfileId;
+		}
+		else if (VehicleAimComp)
+		{
+			VehicleAimComp->SetWeaponAimSolution(WeaponAimSolution);
+			FireRequest.AimDirection = FVector::ZeroVector;
 		}
 	}
 
 	return FireRequest;
 }
 
-// [v2.63.0] 싱글플레이 로컬 발사 명령을 최소 검증하고 결과를 채웁니다.
+// [v2.110.0] 터렛별 정렬 중 발사 정책을 포함해 싱글플레이 로컬 발사 명령을 검증하고 결과를 채웁니다.
 bool ACFVehiclePawn::ValidateFireCommand(const FCFVehicleFireRequest& FireCommand, FCFVehicleFireResult& OutFireResult)
 {
 	OutFireResult = FCFVehicleFireResult();
@@ -3737,9 +3854,23 @@ bool ACFVehiclePawn::ValidateFireCommand(const FCFVehicleFireRequest& FireComman
 		return false;
 	}
 
+	if (!VehicleWeaponComp)
+	{
+		OutFireResult.RejectReason = ECFVehicleFireRejectReason::NoWeapon;
+		return false;
+	}
+
 	if (!VehicleAimComp->IsAimRuntimeReady())
 	{
 		OutFireResult.RejectReason = ECFVehicleFireRejectReason::VehicleDisabled;
+		return false;
+	}
+
+	// [v2.109.0] 로컬 검증에 사용할 최신 Weapon Aim Solution입니다.
+	const FCFVehicleWeaponAimSolution WeaponAimSolution = VehicleAimComp->GetWeaponAimSolution();
+	if (!WeaponAimSolution.bHasValidSolution)
+	{
+		OutFireResult.RejectReason = ECFVehicleFireRejectReason::InvalidAimDirection;
 		return false;
 	}
 
@@ -3770,9 +3901,21 @@ bool ACFVehiclePawn::ValidateFireCommand(const FCFVehicleFireRequest& FireComman
 		return false;
 	}
 
-	if (VehicleAimComp->GetLocalAimState().bLocalAimBlocked)
+	if (WeaponAimSolution.bMuzzleBlocked)
 	{
-		OutFireResult.RejectReason = ECFVehicleFireRejectReason::AimBlocked;
+		OutFireResult.RejectReason = ECFVehicleFireRejectReason::MuzzleBlocked;
+		return false;
+	}
+
+	if (!WeaponAimSolution.bAllowFireWhileAligning && WeaponAimSolution.bTurretAligning)
+	{
+		OutFireResult.RejectReason = ECFVehicleFireRejectReason::TurretAligning;
+		return false;
+	}
+
+	if (!WeaponAimSolution.bAllowFireWhileAligning && WeaponAimSolution.bWeaponNotAligned)
+	{
+		OutFireResult.RejectReason = ECFVehicleFireRejectReason::WeaponNotAligned;
 		return false;
 	}
 
@@ -3860,8 +4003,8 @@ bool ACFVehiclePawn::RunLocalDummyHitScan(const FCFVehicleFireRequest& FireComma
 	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(CarFightLocalAimTrace), false);
 	QueryParams.AddIgnoredActor(this);
 
-	// [v2.63.0] 로컬 Trace가 월드의 가시성 채널에 적중했는지 여부입니다.
-	const bool bHit = World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_Visibility, QueryParams);
+	// [v2.108.0] 로컬 Trace가 무기 피격 전용 채널에 적중했는지 여부입니다.
+	const bool bHit = World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, CFCollisionChannels::WeaponHit, QueryParams);
 
 	if (bHit)
 	{
@@ -3919,6 +4062,7 @@ void ACFVehiclePawn::RecordDummyHitScanDamageHitContext(
 	DamageHitContext.WeaponId = ActiveWeaponData ? ActiveWeaponData->WeaponId : FireCommand.WeaponGroupId;
 	DamageHitContext.ProjectileId = ActiveProjectileData ? ActiveProjectileData->ProjectileId : (ActiveWeaponData ? ActiveWeaponData->ProjectileDataId : NAME_None);
 	DamageHitContext.HitActor = (bBlockingHit && HitResult) ? HitResult->GetActor() : nullptr;
+	DamageHitContext.HitComponentName = (bBlockingHit && HitResult && HitResult->GetComponent()) ? HitResult->GetComponent()->GetFName() : NAME_None;
 	DamageHitContext.ImpactLocation = FireResult.LocalHitLocation;
 	DamageHitContext.ImpactNormal = FireResult.LocalHitNormal.GetSafeNormal();
 	if (DamageHitContext.ImpactNormal.IsNearlyZero())
@@ -3936,52 +4080,40 @@ void ACFVehiclePawn::RecordDummyHitScanDamageHitContext(
 	}
 	DamageHitContext.InstigatorActor = this;
 	DamageHitContext.FlightDurationSeconds = 0.0f;
-	DamageHitContext.bFromProjectileActor = false;
+		DamageHitContext.bFromProjectileActor = false;
 	DamageHitContext.bBlockingHit = bBlockingHit;
 
+	// [v2.111.0] HitScan DamageHitContext로 대상 차량 체력에 직접 피해 적용을 시도한 결과입니다.
+	FCFDamageApplyResult DamageApplyResult;
+	UCFVehicleHealthComp::TryApplyDamageToActor(DamageHitContext, DamageApplyResult);
+
 	StoreLastDamageHitContext(DamageHitContext);
+	StoreLastDamageApplyResult(DamageApplyResult);
 }
 
 // [v2.97.0] Projectile Pool에서 반환된 Hit 발사체를 Damage HitContext Debug로 기록합니다.
 void ACFVehiclePawn::RecordProjectileDamageHitContextFromPool(const ACFProjectileActor* InProjectileActor)
 {
-	if (!InProjectileActor)
+	if (!InProjectileActor || !InProjectileActor->HasLastDamageHitContext())
 	{
 		return;
 	}
 
-	// [v2.97.0] HitContext를 만들 ProjectileData입니다.
-	UCFProjectileData* LastProjectileData = InProjectileActor->GetLastDeactivatedProjectileData();
+	// [v2.111.0] Projectile Actor의 첫 유효 Impact에서 이미 생성된 Damage HitContext 복사본입니다.
+	FCFDamageHitContext DamageHitContext = InProjectileActor->GetLastDamageHitContext();
 
-	// [v2.97.0] 현재 활성 WeaponData입니다.
+	// [v2.111.0] Projectile HitContext에 WeaponId가 없을 때 보완할 현재 활성 WeaponData입니다.
 	UCFWeaponData* ActiveWeaponData = VehicleWeaponComp ? VehicleWeaponComp->GetActiveWeaponData() : nullptr;
+	if (DamageHitContext.WeaponId.IsNone() && ActiveWeaponData)
+	{
+		DamageHitContext.WeaponId = ActiveWeaponData->WeaponId;
+	}
 
-	// [v2.97.0] 기록할 Damage HitContext입니다.
-	FCFDamageHitContext DamageHitContext;
-	DamageHitContext.DamageData = LastProjectileData ? LastProjectileData->DefaultDamageData : nullptr;
-	DamageHitContext.DamageId = DamageHitContext.DamageData
-		? DamageHitContext.DamageData->DamageId
-		: (LastProjectileData ? LastProjectileData->DamageProfileId : NAME_None);
-	DamageHitContext.WeaponId = ActiveWeaponData ? ActiveWeaponData->WeaponId : NAME_None;
-	DamageHitContext.ProjectileId = InProjectileActor->GetLastDeactivatedProjectileId();
-	DamageHitContext.HitActor = InProjectileActor->GetLastHitActor();
-	DamageHitContext.ImpactLocation = InProjectileActor->GetLastImpactLocation();
-	DamageHitContext.ImpactNormal = InProjectileActor->GetLastImpactNormal().GetSafeNormal();
-	if (DamageHitContext.ImpactNormal.IsNearlyZero())
-	{
-		DamageHitContext.ImpactNormal = FVector::UpVector;
-	}
-	DamageHitContext.IncomingDirection = InProjectileActor->GetLastIncomingDirection().GetSafeNormal();
-	if (DamageHitContext.IncomingDirection.IsNearlyZero())
-	{
-		DamageHitContext.IncomingDirection = FVector::ForwardVector;
-	}
-	DamageHitContext.InstigatorActor = InProjectileActor->GetLastInstigatorActor();
-	DamageHitContext.FlightDurationSeconds = InProjectileActor->GetLastFlightDurationSeconds();
-	DamageHitContext.bFromProjectileActor = true;
-	DamageHitContext.bBlockingHit = true;
+	// [v2.111.0] Projectile Actor가 첫 Impact에서 이미 실행한 직접 피해 적용 결과 복사본입니다.
+	FCFDamageApplyResult DamageApplyResult = InProjectileActor->GetLastDamageApplyResult();
 
 	StoreLastDamageHitContext(DamageHitContext);
+	StoreLastDamageApplyResult(DamageApplyResult);
 }
 
 // [v2.97.0] 마지막 Damage HitContext Debug와 표시 요약을 저장합니다.
@@ -3990,6 +4122,14 @@ void ACFVehiclePawn::StoreLastDamageHitContext(const FCFDamageHitContext& InDama
 	LastDamageHitContext = InDamageHitContext;
 	bHasLastDamageHitContext = true;
 	LastDamageHitContextSummary = BuildDamageHitContextSummary(LastDamageHitContext);
+}
+
+// [v2.111.0] 마지막 피해 적용 결과와 표시 요약을 저장합니다.
+void ACFVehiclePawn::StoreLastDamageApplyResult(FCFDamageApplyResult InDamageApplyResult)
+{
+	LastDamageApplyResult = MoveTemp(InDamageApplyResult);
+	bHasLastDamageApplyResult = true;
+	LastDamageApplyResultSummary = UCFVehicleHealthComp::BuildDamageApplyResultSummary(LastDamageApplyResult);
 }
 
 // [v2.97.0] VehicleDebug Panel에 표시할 Damage HitContext 요약 문자열을 생성합니다.
@@ -4004,17 +4144,21 @@ FString ACFVehiclePawn::BuildDamageHitContextSummary(const FCFDamageHitContext& 
 	// [v2.97.0] 맞은 Actor 이름입니다.
 	const FString HitActorName = InDamageHitContext.HitActor ? InDamageHitContext.HitActor->GetName() : TEXT("None");
 
+	// [v2.108.0] 실제 피격 컴포넌트 이름입니다.
+	const FString HitComponentName = InDamageHitContext.HitComponentName.IsNone() ? TEXT("None") : InDamageHitContext.HitComponentName.ToString();
+
 	// [v2.97.0] 발사 주체 Actor 이름입니다.
 	const FString InstigatorActorName = InDamageHitContext.InstigatorActor ? InDamageHitContext.InstigatorActor->GetName() : TEXT("None");
 
 	return FString::Printf(
-		TEXT("DamageHitContext: Source=%s, Hit=%s, DamageId=%s, Weapon=%s, Projectile=%s, HitActor=%s, Instigator=%s, Location=(%.1f, %.1f, %.1f), Normal=(%.2f, %.2f, %.2f), Incoming=(%.2f, %.2f, %.2f), Flight=%.2fs"),
+		TEXT("DamageHitContext: Source=%s, Hit=%s, DamageId=%s, Weapon=%s, Projectile=%s, HitActor=%s, HitComponent=%s, Instigator=%s, Location=(%.1f, %.1f, %.1f), Normal=(%.2f, %.2f, %.2f), Incoming=(%.2f, %.2f, %.2f), Flight=%.2fs"),
 		*SourceText,
 		*HitText,
 		*InDamageHitContext.DamageId.ToString(),
 		*InDamageHitContext.WeaponId.ToString(),
 		*InDamageHitContext.ProjectileId.ToString(),
 		*HitActorName,
+		*HitComponentName,
 		*InstigatorActorName,
 		InDamageHitContext.ImpactLocation.X,
 		InDamageHitContext.ImpactLocation.Y,
@@ -4112,6 +4256,375 @@ bool ACFVehiclePawn::TryBuildMuzzleFireOrigin(FCFVehicleFireOrigin& InOutFireOri
 		InOutFireOrigin.WorldFireDirection.Z);
 
 	return true;
+}
+
+// [v2.114.0] 터렛 정책의 최종 발사 방향과 목표 깊이 기준 Weapon Preview World 데이터를 포함한 Weapon Aim Solution을 계산합니다.
+bool ACFVehiclePawn::BuildWeaponAimSolution(FCFVehicleWeaponAimSolution& OutWeaponAimSolution, FCFVehicleFireOrigin* OutFireOrigin, FString* OutFireOriginSummary) const
+{
+	OutWeaponAimSolution = FCFVehicleWeaponAimSolution();
+
+	if (OutFireOrigin)
+	{
+		*OutFireOrigin = FCFVehicleFireOrigin();
+	}
+
+	if (OutFireOriginSummary)
+	{
+		*OutFireOriginSummary = FString();
+	}
+
+	if (!VehicleAimComp || !VehicleWeaponComp)
+	{
+		return false;
+	}
+
+	// [v2.109.0] AimComp가 보유한 현재 로컬 조준 상태입니다.
+	const FCFVehicleLocalAimState LocalAimState = VehicleAimComp->GetLocalAimState();
+
+	// [v2.114.0] Camera Runtime에서 읽은 현재 Aim Trace 상태입니다.
+	const FCFVehicleCameraRuntimeState CameraRuntimeState = VehicleCameraComp
+		? VehicleCameraComp->GetCameraRuntimeState()
+		: FCFVehicleCameraRuntimeState();
+
+	// [v2.109.0] Camera Runtime에서 확인한 표면 선택용 Aim Trace Hit 여부입니다.
+	const bool bAimTraceHasBlockingHit = VehicleCameraComp
+		? CameraRuntimeState.bAimTraceHasBlockingHit
+		: LocalAimState.bLocalAimTraceHasBlockingHit;
+	OutWeaponAimSolution.bAimTraceHasBlockingHit = bAimTraceHasBlockingHit;
+
+	// [v2.114.0] Camera Aim Trace가 현재 Command 목표 표면으로 선택한 Actor입니다.
+	AActor* AimTraceHitActor = VehicleCameraComp ? CameraRuntimeState.AimTraceHitActor.Get() : nullptr;
+
+	// [v2.109.0] Reticle이 선택한 단일 월드 목표점입니다.
+	const FVector AimTargetLocation = LocalAimState.LocalAimTargetLocation;
+	if (AimTargetLocation.ContainsNaN() || AimTargetLocation.IsNearlyZero())
+	{
+		return false;
+	}
+
+	// [v2.109.0] Muzzle 계산 전 VehicleWeaponComp가 만든 기본 FireOrigin입니다.
+	FCFVehicleFireOrigin ResolvedFireOrigin;
+	if (!VehicleWeaponComp->BuildFireOrigin(LocalAimState.LocalAimDirection, ResolvedFireOrigin))
+	{
+		return false;
+	}
+
+	// [v2.109.0] Muzzle 소켓 위치를 반영한 최종 FireOrigin입니다.
+	FCFVehicleFireOrigin FinalFireOrigin = ResolvedFireOrigin;
+
+	// [v2.109.0] Muzzle FireOrigin 계산 결과 요약입니다.
+	FString MuzzleFireOriginSummary;
+	if (!TryBuildMuzzleFireOrigin(FinalFireOrigin, MuzzleFireOriginSummary))
+	{
+		return false;
+	}
+
+	// [v2.109.0] Muzzle에서 Reticle 목표점까지의 원본 방향 벡터입니다.
+	const FVector RawDesiredLaunchDirection = AimTargetLocation - FinalFireOrigin.WorldFireLocation;
+	if (RawDesiredLaunchDirection.ContainsNaN() || RawDesiredLaunchDirection.IsNearlyZero())
+	{
+		return false;
+	}
+
+	// [v2.110.0] Muzzle에서 Reticle 목표점으로 향하는 요구 발사 방향입니다.
+	const FVector DesiredAimDirection = RawDesiredLaunchDirection.GetSafeNormal();
+
+	// [v2.109.0] Muzzle 소켓 X축 기준 현재 포신 방향입니다.
+	const FVector CurrentMuzzleDirection = FinalFireOrigin.WorldFireDirection.GetSafeNormal();
+	if (CurrentMuzzleDirection.ContainsNaN() || CurrentMuzzleDirection.IsNearlyZero())
+	{
+		return false;
+	}
+
+	// [v2.109.0] 총구 X축과 요구 발사 방향의 내적입니다.
+	const float MuzzleAlignmentDot = FMath::Clamp(FVector::DotProduct(CurrentMuzzleDirection, DesiredAimDirection), -1.0f, 1.0f);
+
+	// [v2.109.0] 총구 X축과 요구 발사 방향 사이의 각도 오차입니다.
+	const float WeaponAlignmentErrorDeg = FMath::RadiansToDegrees(FMath::Acos(MuzzleAlignmentDot));
+
+	// [v2.109.0] TurretMountData에서 재사용할 안정화 허용 오차입니다.
+	const float StabilizationToleranceDeg = LastTurretMountData
+		? FMath::Max(0.0f, LastTurretMountData->StabilizationToleranceDeg)
+		: 0.0f;
+
+	// [v2.109.0] 현재 터렛 추적 상태입니다.
+	const FCFVehicleTurretState CurrentTurretState = VehicleWeaponComp->GetTurretState();
+
+	// [v2.109.0] 터렛이 안정화 대기 중인지 여부입니다.
+	const bool bTurretAligning = LastTurretMountData && !CurrentTurretState.bTurretSettled;
+
+	// [v2.109.0] 총구 방향이 요구 발사 방향 허용 오차 밖인지 여부입니다.
+	const bool bWeaponNotAligned = WeaponAlignmentErrorDeg > StabilizationToleranceDeg;
+
+	// [v2.110.0] 활성 TurretMountData가 정렬 중 발사를 허용하는지 여부입니다.
+	const bool bAllowFireWhileAligning = LastTurretMountData && LastTurretMountData->bAllowFireWhileAligning;
+
+	// [v2.110.0] 터렛 또는 총구가 아직 요구 방향에 정렬 중인지 여부입니다.
+	const bool bWeaponIsAligning = bTurretAligning || bWeaponNotAligned;
+
+	// [v2.110.0] BuildFireCommand, HitScan, Projectile이 공통으로 사용할 실제 최종 발사 방향입니다.
+	const FVector FinalFireDirection = (bWeaponIsAligning && bAllowFireWhileAligning)
+		? CurrentMuzzleDirection
+		: DesiredAimDirection;
+
+	// [v2.112.0] 터렛 Reticle과 Weapon Preview가 사용할 명령 목표까지의 거리입니다.
+	const float CommandPathDistance = RawDesiredLaunchDirection.Size();
+
+	// [v2.117.0] TurretMountData가 없을 때 사용할 총구 안전 검사 기본 거리입니다.
+	const float DefaultMuzzleClearanceDistanceCm = 150.0f;
+
+	// [v2.117.0] 총구 바로 앞에서 발사체가 안전하게 빠져나갈 수 있는지 검사할 최대 거리입니다.
+	const float MuzzleClearanceDistanceCm = LastTurretMountData
+		? FMath::Max(0.0f, LastTurretMountData->MuzzleClearanceDistanceCm)
+		: DefaultMuzzleClearanceDistanceCm;
+
+	// [v2.117.0] Command 목표가 총구 안전 거리보다 가까울 때 목표를 넘겨 검사하지 않도록 제한한 거리입니다.
+	const float MuzzleBlockTraceDistance = FMath::Min(CommandPathDistance, MuzzleClearanceDistanceCm);
+
+	// [v2.115.0] 사용자 조준점과 같은 깊이에서 터렛 방향을 비교할 수 있는 거리인지 여부입니다.
+	const bool bHasValidTurretReticleDistance = FMath::IsFinite(CommandPathDistance) && CommandPathDistance > UE_KINDA_SMALL_NUMBER;
+
+	// [v2.115.0] CurrentMuzzleDirection을 사용자 조준점과 같은 거리까지 연장한 터렛 조준 월드 지점입니다.
+	const FVector TurretReticleWorldLocation = bHasValidTurretReticleDistance
+		? FinalFireOrigin.WorldFireLocation + CurrentMuzzleDirection * CommandPathDistance
+		: FVector::ZeroVector;
+
+	// [v2.115.0] 터렛 레티클 월드 지점을 UI에 제공할 수 있는지 여부입니다.
+	const bool bHasValidTurretReticlePoint = bHasValidTurretReticleDistance && !TurretReticleWorldLocation.ContainsNaN();
+
+	// [v2.112.0] Preview 거리 fallback에 사용할 기본 AimProfile 최대 거리입니다.
+	const float FallbackPreviewDistance = FMath::Max(0.0f, VehicleAimComp->GetDefaultAimProfile().MaxAimDistance);
+
+	// [v2.112.0] 현재 활성 WeaponData입니다.
+	UCFWeaponData* ActiveWeaponData = VehicleWeaponComp->GetActiveWeaponData();
+
+	// [v2.112.0] 현재 활성 ProjectileData입니다.
+	UCFProjectileData* ActiveProjectileData = VehicleWeaponComp->GetActiveProjectileData();
+
+	// [v2.112.0] 활성 WeaponData가 현재 MountProfile에서 호환되는지 여부입니다.
+	const bool bActiveWeaponCompatible = ActiveWeaponData && VehicleWeaponComp->IsActiveWeaponDataCompatible();
+
+	// [v2.113.0] 현재 활성 무기가 제공할 Weapon Reticle 월드 데이터의 의미입니다.
+	ECFWeaponReticleMode WeaponReticleMode = ECFWeaponReticleMode::Hidden;
+	if (bActiveWeaponCompatible)
+	{
+		if (ActiveWeaponData->FireMode == ECFWeaponFireMode::HitScan)
+		{
+			WeaponReticleMode = ECFWeaponReticleMode::DirectImpact;
+		}
+		else if (ActiveWeaponData->FireMode == ECFWeaponFireMode::Projectile && ActiveProjectileData)
+		{
+			WeaponReticleMode = ActiveProjectileData->bAffectedByGravity
+				? ECFWeaponReticleMode::LaunchDirection
+				: ECFWeaponReticleMode::DirectImpact;
+		}
+	}
+
+	// [v2.113.0] 활성 무기 또는 AimProfile fallback에서 얻은 Weapon Reticle Preview 최대 거리입니다.
+	const float PreviewMaxRange = WeaponReticleMode != ECFWeaponReticleMode::Hidden
+		? VehicleWeaponComp->GetActiveWeaponMaxRange(FallbackPreviewDistance)
+		: 0.0f;
+
+	// [v2.112.0] Preview 계산에 사용할 최대 거리가 안전한지 여부입니다.
+	const bool bHasValidPreviewRange = FMath::IsFinite(PreviewMaxRange) && PreviewMaxRange > 0.0f;
+
+	// [v2.113.0] DirectImpact만 최대 사거리 Preview를 위해 Trace를 확장합니다.
+	const bool bShouldTracePreviewMaxRange = WeaponReticleMode == ECFWeaponReticleMode::DirectImpact && bHasValidPreviewRange;
+
+	// [v2.113.0] MuzzleBlocked와 DirectImpact Preview가 공유할 WeaponHit Trace 거리입니다.
+	const float SharedTraceDistance = bShouldTracePreviewMaxRange
+		? FMath::Max(CommandPathDistance, PreviewMaxRange)
+		: CommandPathDistance;
+
+	// [v2.112.0] 실제 최종 발사 방향을 따라 계산한 공유 WeaponHit Trace 종료 위치입니다.
+	const FVector SharedTraceEnd = FinalFireOrigin.WorldFireLocation + FinalFireDirection * SharedTraceDistance;
+
+	// [v2.112.0] MuzzleBlocked와 Preview가 함께 해석할 공유 WeaponHit Trace 결과입니다.
+	FHitResult SharedWeaponHitResult;
+
+	// [v2.109.0] Muzzle 앞 장애물 Trace에서 현재 Pawn을 무시하기 위한 쿼리 설정입니다.
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(CarFightMuzzleBlockTrace), false);
+	QueryParams.AddIgnoredActor(this);
+
+	// [v2.109.0] Muzzle 앞 장애물 Trace에 사용할 월드입니다.
+	UWorld* World = GetWorld();
+
+	// [v2.112.0] 공유 WeaponHit Trace가 Blocking Hit을 얻었는지 여부입니다.
+	bool bHasSharedWeaponHit = false;
+
+	// [v2.110.0] 실제 최종 발사 경로에서 검사 거리보다 앞에 WeaponHit Blocking Hit이 발생했는지 여부입니다.
+	bool bMuzzleBlocked = false;
+	if (World && FMath::IsFinite(SharedTraceDistance) && SharedTraceDistance > 0.0f && !SharedTraceEnd.ContainsNaN())
+	{
+		bHasSharedWeaponHit = World->LineTraceSingleByChannel(
+			SharedWeaponHitResult,
+			FinalFireOrigin.WorldFireLocation,
+			SharedTraceEnd,
+			CFCollisionChannels::WeaponHit,
+			QueryParams);
+
+		// [v2.114.0] 총구 Trace가 Camera Aim Trace와 같은 목표 Actor를 적중했는지 여부입니다.
+		const bool bSharedWeaponHitMatchesAimTarget = bAimTraceHasBlockingHit
+			&& IsValid(AimTraceHitActor)
+			&& SharedWeaponHitResult.GetActor() == AimTraceHitActor;
+
+		// [v2.116.0] 총구 Trace가 가장 먼저 적중한 Actor입니다.
+		AActor* SharedWeaponHitActor = SharedWeaponHitResult.GetActor();
+
+		// [v2.116.0] 첫 적중 Actor가 실제 발사로 피해를 받을 수 있는 차량 표적인지 여부입니다.
+		const bool bSharedWeaponHitIsDamageableVehicle = IsValid(SharedWeaponHitActor)
+			&& IsValid(SharedWeaponHitActor->FindComponentByClass<UCFVehicleHealthComp>());
+
+		// [v2.117.0] 첫 적중이 총구 안전 검사 거리 안에 있는지 여부입니다.
+		const bool bSharedWeaponHitWithinMuzzleClearance = FMath::IsFinite(SharedWeaponHitResult.Distance)
+			&& SharedWeaponHitResult.Distance < MuzzleBlockTraceDistance;
+
+		bMuzzleBlocked = bHasSharedWeaponHit
+			&& !bSharedWeaponHitMatchesAimTarget
+			&& !bSharedWeaponHitIsDamageableVehicle
+			&& bSharedWeaponHitWithinMuzzleClearance;
+	}
+
+	if (!bHasValidPreviewRange)
+	{
+		WeaponReticleMode = ECFWeaponReticleMode::Hidden;
+	}
+
+	// [v2.113.0] Weapon Reticle Preview가 유효한지 여부입니다.
+	bool bHasValidWeaponPreview = WeaponReticleMode != ECFWeaponReticleMode::Hidden && bHasValidPreviewRange;
+
+	// [v2.112.0] Preview 결과가 최대 거리 안의 Blocking Hit인지 여부입니다.
+	bool bWeaponPreviewHasBlockingHit = false;
+
+	// [v2.112.0] Preview가 표시할 월드 위치입니다.
+	FVector WeaponPreviewWorldLocation = FVector::ZeroVector;
+
+	// [v2.112.0] Preview 시작점에서 결과 위치까지의 거리입니다.
+	float WeaponPreviewDistance = 0.0f;
+
+	if (bHasValidWeaponPreview)
+	{
+		if (WeaponReticleMode == ECFWeaponReticleMode::DirectImpact
+			&& bHasSharedWeaponHit
+			&& FMath::IsFinite(SharedWeaponHitResult.Distance)
+			&& SharedWeaponHitResult.Distance <= PreviewMaxRange)
+		{
+			bWeaponPreviewHasBlockingHit = true;
+			WeaponPreviewWorldLocation = SharedWeaponHitResult.ImpactPoint;
+			WeaponPreviewDistance = FMath::Max(0.0f, SharedWeaponHitResult.Distance);
+		}
+		else if (WeaponReticleMode == ECFWeaponReticleMode::LaunchDirection)
+		{
+			// [v2.114.0] 카메라와 총구 시차를 제거하기 위해 실제 발사 방향을 Command 목표와 같은 깊이까지 연장한 위치입니다.
+			WeaponPreviewWorldLocation = FinalFireOrigin.WorldFireLocation + FinalFireDirection * CommandPathDistance;
+			WeaponPreviewDistance = CommandPathDistance;
+			bWeaponPreviewHasBlockingHit = false;
+		}
+		else
+		{
+			WeaponPreviewWorldLocation = FinalFireOrigin.WorldFireLocation + FinalFireDirection * PreviewMaxRange;
+			WeaponPreviewDistance = PreviewMaxRange;
+		}
+
+		if (WeaponPreviewWorldLocation.ContainsNaN() || !FMath::IsFinite(WeaponPreviewDistance) || WeaponPreviewDistance <= 0.0f)
+		{
+			WeaponReticleMode = ECFWeaponReticleMode::Hidden;
+			bHasValidWeaponPreview = false;
+			bWeaponPreviewHasBlockingHit = false;
+			WeaponPreviewWorldLocation = FVector::ZeroVector;
+			WeaponPreviewDistance = 0.0f;
+		}
+	}
+
+	FinalFireOrigin.WorldFireDirection = FinalFireDirection;
+
+	OutWeaponAimSolution.bHasValidSolution = true;
+	OutWeaponAimSolution.bTurretAligning = bTurretAligning;
+	OutWeaponAimSolution.bWeaponNotAligned = bWeaponNotAligned;
+	OutWeaponAimSolution.bAllowFireWhileAligning = bAllowFireWhileAligning;
+	OutWeaponAimSolution.bMuzzleBlocked = bMuzzleBlocked;
+	OutWeaponAimSolution.bHasValidTurretReticlePoint = bHasValidTurretReticlePoint;
+	OutWeaponAimSolution.TurretReticleWorldLocation = bHasValidTurretReticlePoint ? TurretReticleWorldLocation : FVector::ZeroVector;
+	OutWeaponAimSolution.TurretReticleDistance = bHasValidTurretReticlePoint ? CommandPathDistance : 0.0f;
+	OutWeaponAimSolution.WeaponReticleMode = WeaponReticleMode;
+	OutWeaponAimSolution.bHasValidWeaponPreview = bHasValidWeaponPreview;
+	OutWeaponAimSolution.bWeaponPreviewHasBlockingHit = bWeaponPreviewHasBlockingHit;
+	OutWeaponAimSolution.WeaponPreviewWorldLocation = WeaponPreviewWorldLocation;
+	OutWeaponAimSolution.WeaponPreviewDistance = WeaponPreviewDistance;
+	OutWeaponAimSolution.AimOrigin = FinalFireOrigin.WorldFireLocation;
+	OutWeaponAimSolution.AimDirection = FinalFireDirection;
+	OutWeaponAimSolution.DesiredAimDirection = DesiredAimDirection;
+	OutWeaponAimSolution.CurrentMuzzleDirection = CurrentMuzzleDirection;
+	OutWeaponAimSolution.AimTargetLocation = AimTargetLocation;
+	OutWeaponAimSolution.WeaponAlignmentErrorDeg = WeaponAlignmentErrorDeg;
+
+	if (OutFireOrigin)
+	{
+		*OutFireOrigin = FinalFireOrigin;
+	}
+
+	if (OutFireOriginSummary)
+	{
+		// [v2.113.0] FireOrigin 요약에 기록할 Weapon Reticle 모드 문자열입니다.
+		const TCHAR* WeaponReticleModeText = TEXT("Hidden");
+		switch (WeaponReticleMode)
+		{
+		case ECFWeaponReticleMode::DirectImpact:
+			WeaponReticleModeText = TEXT("DirectImpact");
+			break;
+		case ECFWeaponReticleMode::LaunchDirection:
+			WeaponReticleModeText = TEXT("LaunchDirection");
+			break;
+		case ECFWeaponReticleMode::Hidden:
+		default:
+			WeaponReticleModeText = TEXT("Hidden");
+			break;
+		}
+
+		*OutFireOriginSummary = FString::Printf(
+			TEXT("%s, AllowFireWhileAligning=%s, DesiredAimDirection=(%.3f, %.3f, %.3f), CurrentMuzzleDirection=(%.3f, %.3f, %.3f), FinalAimDirection=(%.3f, %.3f, %.3f), Target=(%.1f, %.1f, %.1f), AlignmentErrorDeg=%.2f, TurretAligning=%s, WeaponNotAligned=%s, MuzzleBlocked=%s, WeaponReticleMode=%s, WeaponPreviewValid=%s, WeaponPreviewHit=%s, WeaponPreviewLocation=(%.1f, %.1f, %.1f), WeaponPreviewDistance=%.1f"),
+			*MuzzleFireOriginSummary,
+			bAllowFireWhileAligning ? TEXT("True") : TEXT("False"),
+			DesiredAimDirection.X,
+			DesiredAimDirection.Y,
+			DesiredAimDirection.Z,
+			CurrentMuzzleDirection.X,
+			CurrentMuzzleDirection.Y,
+			CurrentMuzzleDirection.Z,
+			FinalFireDirection.X,
+			FinalFireDirection.Y,
+			FinalFireDirection.Z,
+			AimTargetLocation.X,
+			AimTargetLocation.Y,
+			AimTargetLocation.Z,
+			WeaponAlignmentErrorDeg,
+			bTurretAligning ? TEXT("Yes") : TEXT("No"),
+			bWeaponNotAligned ? TEXT("Yes") : TEXT("No"),
+			bMuzzleBlocked ? TEXT("Yes") : TEXT("No"),
+			WeaponReticleModeText,
+			bHasValidWeaponPreview ? TEXT("Yes") : TEXT("No"),
+			bWeaponPreviewHasBlockingHit ? TEXT("Yes") : TEXT("No"),
+			WeaponPreviewWorldLocation.X,
+			WeaponPreviewWorldLocation.Y,
+			WeaponPreviewWorldLocation.Z,
+			WeaponPreviewDistance);
+	}
+
+	return true;
+}
+
+// [v2.109.0] 현재 Weapon Aim Solution을 다시 계산해 AimComp에 저장합니다.
+void ACFVehiclePawn::RefreshWeaponAimSolution()
+{
+	if (!VehicleAimComp)
+	{
+		return;
+	}
+
+	// [v2.109.0] AimComp에 저장할 최신 Weapon Aim Solution입니다.
+	FCFVehicleWeaponAimSolution WeaponAimSolution;
+	BuildWeaponAimSolution(WeaponAimSolution);
+	VehicleAimComp->SetWeaponAimSolution(WeaponAimSolution);
 }
 
 // [v2.81.0] 현재 활성 무기가 Projectile Actor 스폰 경로를 사용할 수 있는지 반환합니다.
@@ -4307,10 +4820,26 @@ FCFVehicleFireFeedbackViewData ACFVehiclePawn::BuildFireFeedbackViewData() const
 		break;
 
 	case ECFVehicleFireRejectReason::AimBlocked:
+	case ECFVehicleFireRejectReason::MuzzleBlocked:
 		ViewData.FeedbackState = ECFVehicleFireFeedbackState::AimBlocked;
 		ViewData.bFeedbackActive = bWithinRejectedFeedbackTime;
 		ViewData.bOverrideReticleState = true;
 		ViewData.FeedbackDisplayKey = TEXT("AimBlocked");
+		break;
+
+	case ECFVehicleFireRejectReason::TurretAligning:
+		ViewData.FeedbackState = ECFVehicleFireFeedbackState::OutOfArcWarning;
+		ViewData.bFeedbackActive = bWithinRejectedFeedbackTime;
+		ViewData.bOverrideReticleState = false;
+		ViewData.bShowOutOfArcWarning = bWithinRejectedFeedbackTime;
+		ViewData.FeedbackDisplayKey = bWithinRejectedFeedbackTime ? FName(TEXT("TurretAligning")) : NAME_None;
+		break;
+
+	case ECFVehicleFireRejectReason::WeaponNotAligned:
+		ViewData.FeedbackState = ECFVehicleFireFeedbackState::None;
+		ViewData.bFeedbackActive = false;
+		ViewData.bOverrideReticleState = false;
+		ViewData.FeedbackDisplayKey = NAME_None;
 		break;
 
 	case ECFVehicleFireRejectReason::OutOfWeaponArc:

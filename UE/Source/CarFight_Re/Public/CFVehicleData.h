@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.21.0
-// Date: 2026-07-08
-// Description: CarFight 차량 루트 DataAsset 전투 장착 프로파일 및 휠 메시 자동 스케일 설정 추가
-// Scope: 차량 시각 자산, Wheel Class 참조, VehicleMovement/WheelVisual/Layout 소비 구조에서 DA 기본값과 레거시 자산 보정을 함께 다룹니다.
+// Version: 1.22.0
+// Date: 2026-07-14
+// Description: CarFight 차량 루트 DataAsset 내구도 설정 추가
+// Scope: 차량 시각 자산, Wheel Class 참조, VehicleMovement/WheelVisual/Layout와 최대 체력 설정을 함께 다룹니다.
 // Changelog:
+// - v1.22.0: 최소 Damage Runtime에서 사용할 VehicleDurabilityConfig.MaxHealth 설정을 추가.
 // - v1.21.0: 자동 스케일된 휠 메시의 바운드 중심을 Wheel_Mesh 원점에 맞추는 중심 보정 옵션을 추가.
 // - v1.20.0: WheelRadius 기준으로 휠 StaticMesh 표시 크기를 자동 보정하는 WheelVisual 옵션과 측정 모드를 추가.
 // - v1.19.0: 전투 FireOrigin P0 검증을 위해 HardpointSlots를 참조하는 MountProfiles 배열을 추가.
@@ -349,6 +350,16 @@ struct FCFVehicleReferenceConfig
 	TSubclassOf<UChaosVehicleWheel> RearWheelClass;
 };
 
+USTRUCT(BlueprintType)
+struct FCFVehicleDurabilityConfig
+{
+	GENERATED_BODY()
+
+	// [v1.22.0] 차량 체력 컴포넌트가 최초 초기화에 사용할 최대 체력입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Durability", meta=(ClampMin="1.0", DisplayName="최대 체력 (MaxHealth)", ToolTip="VehicleHealthComp가 최초 초기화에 사용할 차량 최대 체력입니다. 기존 VehicleData는 C++ 기본값 100을 사용합니다."))
+	float MaxHealth = 100.0f;
+};
+
 UCLASS(BlueprintType)
 class CARFIGHT_RE_API UCFVehicleData : public UPrimaryDataAsset
 {
@@ -387,6 +398,10 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="차량 참조 설정 (VehicleReferenceConfig)", ToolTip="전륜과 후륜 Wheel Class 등 차량 참조형 자산 설정입니다."))
 	FCFVehicleReferenceConfig VehicleReferenceConfig;
+
+	// [v1.22.0] 차량 최대 체력 값을 묶은 내구도 설정입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="차량 내구도 설정 (VehicleDurabilityConfig)", ToolTip="VehicleHealthComp가 초기화할 최대 체력을 제공합니다. 현재 단계에서는 MaxHealth만 사용합니다."))
+	FCFVehicleDurabilityConfig VehicleDurabilityConfig;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="DriveState 설정 (DriveStateConfig)", ToolTip="차량별 DriveState 판정 임계값과 히스테리시스 설정입니다."))
 	FCFVehicleDriveStateConfig DriveStateConfig;

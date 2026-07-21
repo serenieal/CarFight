@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.4.0
-// Date: 2026-07-02
+// Version: 1.5.0
+// Date: 2026-07-14
 // Description: CarFight 차량 발사체 DataAsset
 // Scope: WeaponData가 참조할 최소 ProjectileData와 디버그 요약 함수를 제공합니다.
 // Changelog:
+// - v1.5.0: ProjectileMovement Sweep / Sub-step, 보조 연속 Sphere Sweep, CCD 설정을 탄종별 데이터로 추가.
 // - v1.4.0: HitScan / Laser용 가상 ProjectileData까지 포함하는 DamageData 단일 소유 정책을 명시.
 // - v1.3.0: 발사체별 기본 DamageData 직접 참조를 추가하고 디버그 요약에 DamageData 연결 상태를 포함.
 // - v1.2.0: 공통 Projectile Actor용 메시 설정을 추가하고 ProjectileActorClass 타입을 CFProjectileActor로 제한.
@@ -16,6 +17,7 @@
 // - ProjectileActorClass는 CFProjectileActor 기반 Blueprint를 지정한다.
 // - HitScan / Laser처럼 실제 Actor를 스폰하지 않는 무기는 ProjectileActorClass를 비운 가상 ProjectileData를 사용한다.
 // - DefaultDamageData는 DamageData의 단일 직접 참조 슬롯이며, 비어 있으면 DamageProfileId를 디버그 fallback으로만 표시한다.
+// - 기존 ProjectileData 자산은 신규 연속 충돌 필드의 C++ 기본값을 사용하므로 이번 코드 작업에서 .uasset 저장이 필요하지 않다.
 
 #pragma once
 
@@ -39,8 +41,8 @@ public:
 	// [v1.0.0] 기본 발사체 데이터 값을 초기화합니다.
 	UCFProjectileData();
 
-	// [v1.3.0] 디버그 패널에 표시할 발사체 데이터, 스폰 준비, DamageData 연결 요약 문자열을 생성합니다.
-	UFUNCTION(BlueprintPure, Category="CarFight|ProjectileData", meta=(DisplayName="발사체 요약 생성 (Build Projectile Summary)", ToolTip="디버그 패널과 로그에 표시할 핵심 발사체 데이터와 스폰 준비 요약 문자열을 생성합니다."))
+	// [v1.5.0] 디버그 패널에 표시할 발사체 데이터, 연속 충돌, DamageData 연결 요약 문자열을 생성합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|ProjectileData", meta=(DisplayName="발사체 요약 생성 (Build Projectile Summary)", ToolTip="디버그 패널과 로그에 표시할 핵심 발사체 데이터, 연속 충돌 설정, 스폰 준비 상태를 생성합니다."))
 	FString BuildProjectileSummary() const;
 
 	// [v1.1.0] Projectile Actor 스폰 후보 클래스가 지정되어 있는지 반환합니다.
@@ -70,6 +72,30 @@ public:
 	// [v1.0.0] 발사체 충돌 판정에 사용할 반경입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileData|Collision", meta=(ClampMin="0.0", DisplayName="충돌 반경 (CollisionRadius)", ToolTip="Projectile Actor 전환 뒤 발사체 충돌 판정에 사용할 반경입니다. Dummy HitScan 단계에서는 표시용 기준값입니다."))
 	float CollisionRadius = 8.0f;
+
+	// [v1.5.0] ProjectileMovement가 이동 구간을 Sweep으로 검사할지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileData|Collision", meta=(DisplayName="이동 Sweep 충돌 사용 (bUseSweepCollision)", ToolTip="True이면 ProjectileMovement가 이전 위치에서 다음 위치까지 충돌 형상을 Sweep해 첫 Blocking Hit을 검사합니다. 실제 충돌 발사체의 기본값은 True입니다."))
+	bool bUseSweepCollision = true;
+
+	// [v1.5.0] 한 프레임 이동을 더 작은 시뮬레이션 단계로 분할할지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileData|Movement", meta=(DisplayName="강제 Sub-step 사용 (bForceSubStepping)", ToolTip="True이면 고속 또는 중력 발사체의 한 프레임 이동을 더 작은 단계로 나누어 충돌 누락과 궤적 오차를 줄입니다."))
+	bool bForceSubStepping = true;
+
+	// [v1.5.0] ProjectileMovement가 한 번에 처리할 최대 시뮬레이션 시간 간격입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileData|Movement", meta=(ClampMin="0.001", ClampMax="0.050", DisplayName="최대 시뮬레이션 시간 간격 (MaxSimulationTimeStep)", ToolTip="Sub-step 한 단계의 최대 시간입니다. 기본값은 1/120초입니다. 값이 작을수록 정밀하지만 비용이 증가합니다."))
+	float MaxSimulationTimeStep = 0.008333f;
+
+	// [v1.5.0] 한 프레임에서 허용할 최대 ProjectileMovement 시뮬레이션 반복 횟수입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileData|Movement", meta=(ClampMin="1", ClampMax="32", DisplayName="최대 시뮬레이션 반복 (MaxSimulationIterations)", ToolTip="한 프레임에서 Sub-step을 처리할 최대 횟수입니다. 기본값은 8입니다."))
+	int32 MaxSimulationIterations = 8;
+
+	// [v1.5.0] ProjectileMovement 이후 이전 위치부터 현재 위치까지 보조 Sphere Sweep을 수행할지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileData|Collision", meta=(DisplayName="보조 연속 Sweep 사용 (bUseSupplementalContinuousSweep)", ToolTip="True이면 ProjectileMovement가 놓친 잔여 터널링을 막기 위해 이전 위치부터 현재 위치까지 CollisionRadius 기반 Sphere Sweep을 추가로 수행합니다."))
+	bool bUseSupplementalContinuousSweep = true;
+
+	// [v1.5.0] 충돌 Sphere의 CCD를 보조 안전장치로 사용할지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileData|Collision", meta=(DisplayName="CCD 보조 사용 (bUseCCD)", ToolTip="True이면 충돌 Sphere에 CCD를 보조로 사용합니다. 주 해결책은 Sweep, Sub-step, 보조 연속 Sweep이며 기본값은 False입니다."))
+	bool bUseCCD = false;
 
 	// [v1.2.0] 실제 발사체 스폰에 사용할 CFProjectileActor 기반 클래스입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileData|Actor", meta=(DisplayName="발사체 Actor 클래스 (ProjectileActorClass)", ToolTip="Projectile 전환 뒤 FireOrigin 위치와 방향에서 스폰할 Actor 클래스입니다. 비어 있으면 Dummy HitScan fallback을 유지합니다."))

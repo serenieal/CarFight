@@ -1,13 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-07-02
+// Version: 1.1.0
+// Date: 2026-07-14
 // Description: CarFight 차량 피해 DataAsset 구현
-// Scope: DamageData 기본값과 디버그 요약 생성을 제공합니다.
+// Scope: DamageData 기본값과 직접 피해 정책을 포함한 디버그 요약 생성을 제공합니다.
 // Changelog:
+// - v1.1.0: 자기 피해 허용 정책을 DamageData 요약 문자열에 추가.
 // - v1.0.0: DamageData 최소 필드와 디버그 요약 생성을 추가.
 // Migration:
-// - 실제 HP 차감 / 모듈 손상 / 장갑 계산은 후속 Damage Runtime으로 분리하고, 이 단계에서는 값 저장과 Debug 확인만 수행한다.
+// - BaseDamage만 최소 VehicleHealthComp 직접 피해에 사용하고 장갑, 모듈, 범위 피해와 물리 충격은 후속으로 유지한다.
 
 #include "CFDamageData.h"
 
@@ -28,11 +29,15 @@ FString UCFDamageData::BuildDamageSummary() const
 	// [v1.0.0] 범위 피해 설정 스위치를 표시할 문자열입니다.
 	const FString UseRadialDamageText = bUseRadialDamage ? TEXT("Yes") : TEXT("No");
 
+	// [v1.1.0] 자기 피해 허용 정책을 표시할 문자열입니다.
+	const FString CanDamageSelfText = bCanDamageSelf ? TEXT("Yes") : TEXT("No");
+
 	return FString::Printf(
-		TEXT("DamageData: Id=%s, Type=%s, Base=%.1f, Pen=%.1f, UseRadial=%s, RadialGate=%s, Radius=%.1f, InnerRadius=%.1f, Explosion=%.1f, MinScale=%.2f, ModuleScale=%.2f, Impulse=%.1f"),
+		TEXT("DamageData: Id=%s, Type=%s, Base=%.1f, SelfDamage=%s, Pen=%.1f, UseRadial=%s, RadialGate=%s, Radius=%.1f, InnerRadius=%.1f, Explosion=%.1f, MinScale=%.2f, ModuleScale=%.2f, Impulse=%.1f"),
 		*DamageId.ToString(),
 		*DamageTypeText,
 		BaseDamage,
+		*CanDamageSelfText,
 		ArmorPenetration,
 		*UseRadialDamageText,
 		*RadialDamageText,

@@ -1,9 +1,15 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.25.0
-// Date: 2026-07-03
+// Version: 1.31.0
+// Date: 2026-07-21
 // Description: VehicleDebug Panel용 C++ 부모 위젯 클래스 구현입니다.
 // Changelog:
+// - v1.31.0: 탄종 독립 터렛 레티클 유효성, 월드 위치와 비교 거리를 표시하고 기존 Weapon Preview 행을 Legacy로 구분.
+// - v1.30.0: Weapon Aim Solution 하위 섹션에 Weapon Reticle Mode 표시 행을 추가.
+// - v1.29.0: Weapon Aim Solution 하위 섹션에 직선 Weapon Preview 유효성, Blocking Hit, 월드 위치와 거리를 추가.
+// - v1.28.0: Damage HitContext 섹션에 직접 피해 적용 결과, 체력 변화와 파괴 전환 요약을 추가.
+// - v1.27.0: Damage HitContext 섹션에 피격 컴포넌트 이름을 독립 항목으로 표시.
+// - v1.26.0: Aim 섹션에 Weapon Aim Solution 표시를 추가하고 신규 발사 거부 사유 표시명을 한국어로 변환.
 // - v1.25.0: Weapon 섹션에 EquipmentPresetData 지정 여부 / ID / 호환성 / 요약 하위 섹션을 추가.
 // - v1.24.0: Weapon 섹션에 마지막 Damage HitContext Debug 표시를 추가.
 // - v1.23.0: DamageData 표시 설명을 ProjectileData 단일 소유 정책에 맞게 정리.
@@ -27,6 +33,11 @@
 // - v1.8.2: Aim 검증 하위 섹션 표시명을 서버 조준에서 로컬 발사 검증 기준으로 변경.
 // - v1.8.1: 싱글플레이 기준에 맞춰 Aim 디버그 패널의 복제 시각 표시 문구를 Aim 시각 표시로 변경.
 // Migration:
+// - 터렛 레티클 검증은 신규 Turret Reticle 세 행을 사용하며 기존 Weapon Preview 행은 과거 구현 확인용 Legacy Debug로만 해석한다.
+// - Weapon Reticle Mode 표시는 Aim Solution 결과만 읽으며 Debug Panel에서 무기 모드 판정이나 Trace를 다시 수행하지 않는다.
+// - Weapon Preview 표시는 AimComp에 캐시된 Weapon Aim Solution 값을 읽는 Debug 전용 표시이며 Trace를 다시 계산하지 않는다.
+// - 피격 컴포넌트 이름 표시는 기존 DamageHitContext 값을 별도 행으로 노출할 뿐 충돌 판정과 피해 처리는 변경하지 않는다.
+// - Weapon Aim Solution 표시는 Debug 전용이며 조준/발사 계산은 변경하지 않는다.
 // - EquipmentPresetData 표시는 Debug 전용이며 FireOrigin / Projectile / Damage 판정을 변경하지 않는다.
 // - Base 메쉬 표시는 Debug 전용이며 FireOrigin / Projectile / Damage 판정을 변경하지 않는다.
 // - TurretMountData 표시는 Debug 전용이며 FireOrigin / Projectile / Damage 판정을 변경하지 않는다.
@@ -47,6 +58,7 @@
 
 #include "UI/CFVehicleDebugPanelWidget.h"
 
+#include "CFVehicleAimComp.h"
 #include "Blueprint/WidgetTree.h"
 #include "UI/CFVehicleDebugNavItemWidget.h"
 #include "UI/CFVehicleDebugSectionWidget.h"
@@ -581,7 +593,22 @@ FString UCFVehicleDebugPanelWidget::ConvertEnumValueToDisplayString(const TCHAR*
 	// [v1.0.0] enum 풀네임에서 실제 값 이름 시작 위치를 찾습니다.
 	if (DisplayString.FindLastChar(TEXT(':'), ValueSeparatorIndex) && ValueSeparatorIndex + 1 < DisplayString.Len())
 	{
-		return DisplayString.Mid(ValueSeparatorIndex + 1);
+		DisplayString = DisplayString.Mid(ValueSeparatorIndex + 1);
+	}
+
+	if (DisplayString == TEXT("TurretAligning"))
+	{
+		return TEXT("터렛 정렬 중");
+	}
+
+	if (DisplayString == TEXT("WeaponNotAligned"))
+	{
+		return TEXT("무기 정렬 실패");
+	}
+
+	if (DisplayString == TEXT("MuzzleBlocked"))
+	{
+		return TEXT("총구 막힘");
 	}
 
 	return DisplayString;
@@ -1586,6 +1613,7 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildCame
 	CameraSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_mode"), TEXT("현재 모드"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(CameraState.CurrentCameraMode))));
 	CameraSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_profile"), TEXT("조준 프로필"), CameraState.ActiveAimProfileName.ToString()));
 	CameraSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_aim_blocked"), TEXT("조준 막힘"), CameraState.bAimBlocked ? TEXT("예") : TEXT("아니오"), CameraState.bAimBlocked));
+	CameraSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_aim_trace_blocking_hit"), TEXT("조준 Trace Blocking Hit"), CameraState.bAimTraceHasBlockingHit ? TEXT("예") : TEXT("아니오"), !CameraState.bAimTraceHasBlockingHit));
 	CameraSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_can_fire"), TEXT("발사 가능"), CameraState.bWeaponCanFireAtCurrentAim ? TEXT("예") : TEXT("아니오"), !CameraState.bWeaponCanFireAtCurrentAim));
 	CameraSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_compression"), TEXT("압축 비율"), FString::Printf(TEXT("%.2f"), InCamera.CollisionCompressionRatio), InCamera.bCameraCompressedByCollision));
 	CameraSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_current_fov"), TEXT("현재 FOV"), FString::Printf(TEXT("%.1f"), CameraState.CurrentFOV)));
@@ -1613,6 +1641,7 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildCame
 	TSharedRef<FCFVehicleDebugSectionViewData> TraceSectionViewData =
 		FCFVehicleDebugSectionViewData::MakeSection(TEXT("CameraTrace"), TEXT("트레이스"), ECFVehicleDebugSectionKind::Subsection, true);
 	TraceSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_trace_blocked"), TEXT("조준 막힘"), CameraState.bAimBlocked ? TEXT("예") : TEXT("아니오"), CameraState.bAimBlocked));
+	TraceSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_trace_blocking_hit"), TEXT("Blocking Hit"), CameraState.bAimTraceHasBlockingHit ? TEXT("예") : TEXT("아니오"), !CameraState.bAimTraceHasBlockingHit));
 	TraceSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_trace_can_fire"), TEXT("발사 가능"), CameraState.bWeaponCanFireAtCurrentAim ? TEXT("예") : TEXT("아니오"), !CameraState.bWeaponCanFireAtCurrentAim));
 	TraceSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_trace_distance"), TEXT("트레이스 거리"), FString::Printf(TEXT("%.1f"), CameraState.AimTraceDistance)));
 	TraceSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("camera_trace_hit"), TEXT("명중 위치"), FString::Printf(TEXT("(%.1f, %.1f, %.1f)"), CameraState.AimHitLocation.X, CameraState.AimHitLocation.Y, CameraState.AimHitLocation.Z)));
@@ -1641,6 +1670,12 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildAimS
 	// [v1.8.3] Aim Section에서 사용할 표시용 Aim 시각 상태입니다.
 	const FCFVehicleAimVisualState& AimVisualState = InAim.AimVisualState;
 
+	// [v1.26.0] Weapon Aim Solution을 읽어올 Aim 컴포넌트입니다.
+	const UCFVehicleAimComp* VehicleAimComp = IsValid(VehiclePawnRef) ? VehiclePawnRef->GetVehicleAimComp() : nullptr;
+
+	// [v1.26.0] AimComp가 계산해 캐시한 무기 조준 해입니다.
+	const FCFVehicleWeaponAimSolution WeaponAimSolution = IsValid(VehicleAimComp) ? VehicleAimComp->GetWeaponAimSolution() : FCFVehicleWeaponAimSolution();
+
 	// [v1.8.0] Navigation 배지와 주요 필드에 표시할 Reticle 상태 문자열입니다.
 	const FString ReticleStateText = ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InAim.ReticleState));
 
@@ -1666,6 +1701,7 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildAimS
 	AimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_local_can_fire"), TEXT("로컬 발사 가능"), LocalAimState.bLocalCanFire ? TEXT("예") : TEXT("아니오"), !LocalAimState.bLocalCanFire));
 	AimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_within_arc"), TEXT("무기 조준각 내부"), LocalAimState.bLocalWithinWeaponArc ? TEXT("예") : TEXT("아니오"), !LocalAimState.bLocalWithinWeaponArc));
 	AimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_blocked"), TEXT("조준 막힘"), LocalAimState.bLocalAimBlocked ? TEXT("예") : TEXT("아니오"), LocalAimState.bLocalAimBlocked));
+	AimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_weapon_solution_valid"), TEXT("무기 조준 해"), WeaponAimSolution.bHasValidSolution ? TEXT("유효") : TEXT("무효"), !WeaponAimSolution.bHasValidSolution));
 	AimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeMultilineField(TEXT("aim_runtime_summary"), TEXT("런타임 요약"), InAim.AimRuntimeSummary));
 
 	// [v1.8.0] Local Aim 하위 섹션 ViewData입니다.
@@ -1674,6 +1710,28 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildAimS
 	LocalAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_local_target"), TEXT("목표 위치"), FString::Printf(TEXT("(%.1f, %.1f, %.1f)"), LocalAimState.LocalAimTargetLocation.X, LocalAimState.LocalAimTargetLocation.Y, LocalAimState.LocalAimTargetLocation.Z)));
 	LocalAimSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("aim_local_direction"), TEXT("조준 방향"), FString::Printf(TEXT("(%.2f, %.2f, %.2f)"), LocalAimState.LocalAimDirection.X, LocalAimState.LocalAimDirection.Y, LocalAimState.LocalAimDirection.Z)));
 	AimSectionViewData->AddChildSection(LocalAimSectionViewData);
+
+	// [v1.26.0] Weapon Aim Solution 하위 섹션 ViewData입니다.
+	TSharedRef<FCFVehicleDebugSectionViewData> WeaponAimSolutionSectionViewData =
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("WeaponAimSolution"), TEXT("무기 조준 해"), ECFVehicleDebugSectionKind::Subsection, true);
+	WeaponAimSolutionSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("weapon_aim_solution_valid"), TEXT("유효 여부"), WeaponAimSolution.bHasValidSolution ? TEXT("예") : TEXT("아니오"), !WeaponAimSolution.bHasValidSolution));
+	WeaponAimSolutionSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("weapon_aim_solution_trace_hit"), TEXT("Camera Aim Trace Hit"), WeaponAimSolution.bAimTraceHasBlockingHit ? TEXT("예") : TEXT("아니오"), !WeaponAimSolution.bAimTraceHasBlockingHit));
+	WeaponAimSolutionSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("weapon_aim_solution_turret_aligning"), TEXT("터렛 정렬 중"), WeaponAimSolution.bTurretAligning ? TEXT("예") : TEXT("아니오"), WeaponAimSolution.bTurretAligning));
+	WeaponAimSolutionSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("weapon_aim_solution_weapon_not_aligned"), TEXT("무기 정렬 실패"), WeaponAimSolution.bWeaponNotAligned ? TEXT("예") : TEXT("아니오"), WeaponAimSolution.bWeaponNotAligned));
+	WeaponAimSolutionSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("weapon_aim_solution_muzzle_blocked"), TEXT("총구 막힘"), WeaponAimSolution.bMuzzleBlocked ? TEXT("예") : TEXT("아니오"), WeaponAimSolution.bMuzzleBlocked));
+	WeaponAimSolutionSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("weapon_aim_solution_turret_reticle_valid"), TEXT("터렛 레티클 유효 여부"), WeaponAimSolution.bHasValidTurretReticlePoint ? TEXT("예") : TEXT("아니오"), !WeaponAimSolution.bHasValidTurretReticlePoint));
+	WeaponAimSolutionSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("weapon_aim_solution_turret_reticle_location"), TEXT("터렛 레티클 월드 위치"), FString::Printf(TEXT("(%.1f, %.1f, %.1f)"), WeaponAimSolution.TurretReticleWorldLocation.X, WeaponAimSolution.TurretReticleWorldLocation.Y, WeaponAimSolution.TurretReticleWorldLocation.Z), !WeaponAimSolution.bHasValidTurretReticlePoint));
+	WeaponAimSolutionSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("weapon_aim_solution_turret_reticle_distance"), TEXT("터렛 레티클 비교 거리"), FString::Printf(TEXT("%.1f"), WeaponAimSolution.TurretReticleDistance), !WeaponAimSolution.bHasValidTurretReticlePoint));
+	WeaponAimSolutionSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("weapon_aim_solution_reticle_mode"), TEXT("Legacy Weapon Preview Mode"), ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(WeaponAimSolution.WeaponReticleMode)), WeaponAimSolution.WeaponReticleMode == ECFWeaponReticleMode::Hidden));
+	WeaponAimSolutionSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("weapon_aim_solution_preview_valid"), TEXT("Legacy Weapon Preview 유효 여부"), WeaponAimSolution.bHasValidWeaponPreview ? TEXT("예") : TEXT("아니오"), !WeaponAimSolution.bHasValidWeaponPreview));
+	WeaponAimSolutionSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("weapon_aim_solution_preview_hit"), TEXT("Legacy Weapon Preview Blocking Hit"), WeaponAimSolution.bWeaponPreviewHasBlockingHit ? TEXT("예") : TEXT("아니오"), WeaponAimSolution.bHasValidWeaponPreview && !WeaponAimSolution.bWeaponPreviewHasBlockingHit));
+	WeaponAimSolutionSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("weapon_aim_solution_preview_location"), TEXT("Legacy Weapon Preview 월드 위치"), FString::Printf(TEXT("(%.1f, %.1f, %.1f)"), WeaponAimSolution.WeaponPreviewWorldLocation.X, WeaponAimSolution.WeaponPreviewWorldLocation.Y, WeaponAimSolution.WeaponPreviewWorldLocation.Z), !WeaponAimSolution.bHasValidWeaponPreview));
+	WeaponAimSolutionSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("weapon_aim_solution_preview_distance"), TEXT("Legacy Weapon Preview 거리"), FString::Printf(TEXT("%.1f"), WeaponAimSolution.WeaponPreviewDistance), !WeaponAimSolution.bHasValidWeaponPreview));
+	WeaponAimSolutionSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("weapon_aim_solution_origin"), TEXT("발사 시작 위치"), FString::Printf(TEXT("(%.1f, %.1f, %.1f)"), WeaponAimSolution.AimOrigin.X, WeaponAimSolution.AimOrigin.Y, WeaponAimSolution.AimOrigin.Z), !WeaponAimSolution.bHasValidSolution));
+	WeaponAimSolutionSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("weapon_aim_solution_direction"), TEXT("발사 방향"), FString::Printf(TEXT("(%.2f, %.2f, %.2f)"), WeaponAimSolution.AimDirection.X, WeaponAimSolution.AimDirection.Y, WeaponAimSolution.AimDirection.Z), !WeaponAimSolution.bHasValidSolution));
+	WeaponAimSolutionSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("weapon_aim_solution_target"), TEXT("목표 위치"), FString::Printf(TEXT("(%.1f, %.1f, %.1f)"), WeaponAimSolution.AimTargetLocation.X, WeaponAimSolution.AimTargetLocation.Y, WeaponAimSolution.AimTargetLocation.Z), !WeaponAimSolution.bHasValidSolution));
+	WeaponAimSolutionSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("weapon_aim_solution_alignment_error"), TEXT("정렬 오차"), FString::Printf(TEXT("%.2f 도"), WeaponAimSolution.WeaponAlignmentErrorDeg), WeaponAimSolution.bWeaponNotAligned));
+	AimSectionViewData->AddChildSection(WeaponAimSolutionSectionViewData);
 
 	// [v1.8.2] 발사 검증 하위 섹션 ViewData입니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> FireValidationSectionViewData =
@@ -1935,13 +1993,16 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildWeap
 	DamageHitContextSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("damage_hit_context_damage_id"), TEXT("피해 ID"), LastDamageHitContext.DamageId.ToString(), LastDamageHitContext.DamageId.IsNone()));
 	DamageHitContextSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("damage_hit_context_weapon_id"), TEXT("무기 ID"), LastDamageHitContext.WeaponId.ToString(), LastDamageHitContext.WeaponId.IsNone()));
 	DamageHitContextSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("damage_hit_context_projectile_id"), TEXT("발사체 ID"), LastDamageHitContext.ProjectileId.ToString(), LastDamageHitContext.ProjectileId.IsNone()));
-	DamageHitContextSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("damage_hit_context_actor"), TEXT("피격 Actor"), DamageHitContextActorText, InWeapon.bHasLastDamageHitContext && LastDamageHitContext.bBlockingHit && !LastDamageHitContext.HitActor));
+				DamageHitContextSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("damage_hit_context_actor"), TEXT("피격 Actor"), DamageHitContextActorText, InWeapon.bHasLastDamageHitContext && LastDamageHitContext.bBlockingHit && !LastDamageHitContext.HitActor));
+	DamageHitContextSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("damage_hit_context_component"), TEXT("피격 컴포넌트"), LastDamageHitContext.HitComponentName.ToString(), InWeapon.bHasLastDamageHitContext && LastDamageHitContext.bBlockingHit && LastDamageHitContext.HitComponentName.IsNone()));
 	DamageHitContextSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("damage_hit_context_instigator"), TEXT("발사 주체"), DamageHitContextInstigatorText, InWeapon.bHasLastDamageHitContext && !LastDamageHitContext.InstigatorActor));
 	DamageHitContextSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("damage_hit_context_location"), TEXT("피격 위치"), FString::Printf(TEXT("(%.1f, %.1f, %.1f)"), LastDamageHitContext.ImpactLocation.X, LastDamageHitContext.ImpactLocation.Y, LastDamageHitContext.ImpactLocation.Z), false));
 	DamageHitContextSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("damage_hit_context_normal"), TEXT("피격 노멀"), FString::Printf(TEXT("(%.2f, %.2f, %.2f)"), LastDamageHitContext.ImpactNormal.X, LastDamageHitContext.ImpactNormal.Y, LastDamageHitContext.ImpactNormal.Z), false));
 	DamageHitContextSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("damage_hit_context_incoming"), TEXT("입사 방향"), FString::Printf(TEXT("(%.2f, %.2f, %.2f)"), LastDamageHitContext.IncomingDirection.X, LastDamageHitContext.IncomingDirection.Y, LastDamageHitContext.IncomingDirection.Z), false));
 	DamageHitContextSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("damage_hit_context_flight"), TEXT("비행 시간"), FString::Printf(TEXT("%.2f 초"), LastDamageHitContext.FlightDurationSeconds), false));
-	DamageHitContextSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeMultilineField(TEXT("damage_hit_context_summary"), TEXT("요약"), InWeapon.LastDamageHitContextSummary));
+		DamageHitContextSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeMultilineField(TEXT("damage_hit_context_summary"), TEXT("HitContext 요약"), InWeapon.LastDamageHitContextSummary));
+	DamageHitContextSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("damage_apply_recorded"), TEXT("피해 적용 기록"), InWeapon.bHasLastDamageApplyResult ? TEXT("있음") : TEXT("없음"), !InWeapon.bHasLastDamageApplyResult));
+	DamageHitContextSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeMultilineField(TEXT("damage_apply_summary"), TEXT("피해 적용 결과"), InWeapon.LastDamageApplyResultSummary.IsEmpty() ? TEXT("피해 적용 기록 없음") : InWeapon.LastDamageApplyResultSummary));
 	WeaponSectionViewData->AddChildSection(DamageHitContextSectionViewData);
 
 	// [v1.15.0] Projectile Pool 카운트 하위 섹션 ViewData입니다.

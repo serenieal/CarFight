@@ -1,12 +1,19 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 0.1.4
-// Date: 2026-06-15
-// Description: CarFight 차량 카메라 컴포넌트 구현 초안 (카메라 Yaw 완충 옵션 추가)
+// Version: 0.1.6
+// Date: 2026-07-20
+// Description: CarFight 차량 카메라 컴포넌트 구현 초안 (WeaponHit Aim Trace 적용)
+// Changelog:
+// - v0.1.6: Camera Aim Trace가 선택한 Actor를 런타임 상태에 보존해 같은 목표 표면 판정을 지원.
+// - v0.1.5: Camera Aim Trace를 WeaponHit 채널로 변경하고 표면 Hit을 AimBlocked와 분리.
+// Migration:
+// - AimTraceHitActor는 매 Aim Trace 결과로 갱신되며 미적중 또는 런타임 무효 시 비운다.
+// - Camera Trace Hit은 Reticle 목표 표면 선택 결과로만 사용하고, 실제 발사 차단은 MuzzleBlocked 판정에서 처리한다.
 // Scope: 차량 중심 피벗 기반 자유 조준, 제한각 Clamp, SpringArm 연동, Aim Trace 계산 골격을 구현합니다.
 
 #include "CFVehicleCameraComp.h"
 
+#include "CFCollisionChannels.h"
 #include "CFVehiclePawn.h"
 
 #include "Camera/CameraComponent.h"
@@ -630,6 +637,8 @@ void UCFVehicleCameraComp::UpdateAimTrace(const FCFVehicleCameraTuningConfig& Ca
 		CameraRuntimeState.AimHitLocation = FVector::ZeroVector;
 		CameraRuntimeState.AimTraceDistance = 0.0f;
 		CameraRuntimeState.bAimBlocked = false;
+		CameraRuntimeState.bAimTraceHasBlockingHit = false;
+		CameraRuntimeState.AimTraceHitActor = nullptr;
 		CameraRuntimeState.bWeaponCanFireAtCurrentAim = true;
 		return;
 	}
@@ -640,12 +649,14 @@ void UCFVehicleCameraComp::UpdateAimTrace(const FCFVehicleCameraTuningConfig& Ca
 
 	FHitResult AimHitResult;
 	FCollisionQueryParams CollisionQueryParams(SCENE_QUERY_STAT(CFVehicleCameraAimTrace), false, OwnerActor);
-	const bool bHasBlockingHit = CurrentWorld->LineTraceSingleByChannel(AimHitResult, TraceStart, TraceEnd, ECC_Visibility, CollisionQueryParams);
+	const bool bHasBlockingHit = CurrentWorld->LineTraceSingleByChannel(AimHitResult, TraceStart, TraceEnd, CFCollisionChannels::WeaponHit, CollisionQueryParams);
 
-	CameraRuntimeState.bAimBlocked = bHasBlockingHit;
+	CameraRuntimeState.bAimBlocked = false;
+	CameraRuntimeState.bAimTraceHasBlockingHit = bHasBlockingHit;
+	CameraRuntimeState.AimTraceHitActor = bHasBlockingHit ? AimHitResult.GetActor() : nullptr;
 	CameraRuntimeState.AimHitLocation = bHasBlockingHit ? AimHitResult.ImpactPoint : TraceEnd;
 	CameraRuntimeState.AimTraceDistance = bHasBlockingHit ? AimHitResult.Distance : CameraTuningConfig.AimTraceLength;
-	CameraRuntimeState.bWeaponCanFireAtCurrentAim = !CameraRuntimeState.bAimBlocked;
+	CameraRuntimeState.bWeaponCanFireAtCurrentAim = true;
 
 	if (bDrawAimTraceDebug)
 	{

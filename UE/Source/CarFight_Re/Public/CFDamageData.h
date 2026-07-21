@@ -1,15 +1,17 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-07-02
+// Version: 1.1.0
+// Date: 2026-07-14
 // Description: CarFight 차량 피해 DataAsset
-// Scope: ProjectileData가 참조할 최소 DamageData와 디버그 요약 함수를 제공합니다.
+// Scope: ProjectileData가 참조할 최소 DamageData와 직접 피해 정책, 디버그 요약 함수를 제공합니다.
 // Changelog:
+// - v1.1.0: BaseDamage를 최소 차량 체력 런타임에 연결하고 bCanDamageSelf 자기 피해 정책을 추가.
 // - v1.0.0: DamageData 최소 필드, 피해 타입, 직접 피해 / 관통 / 폭발 / 모듈 피해 / 물리 반응 후보값을 추가.
 // Migration:
-// - P0에서는 DamageData를 실제 HP 차감에 바로 사용하지 않고 데이터 연결과 Debug 확인에 먼저 사용한다.
+// - 기존 DamageData 인스턴스는 bCanDamageSelf=false 기본값을 사용하므로 발사 주체와 피격 대상이 같은 자기 피해는 적용하지 않는다.
 // - DamageData 직접 참조 슬롯은 ProjectileData.DefaultDamageData 하나만 사용한다.
 // - HitScan / Laser처럼 실제 Actor를 스폰하지 않는 무기도 가상 ProjectileData를 통해 이 DamageData를 참조한다.
+// - ArmorPenetration, 범위 피해, 모듈 피해와 ImpulseStrength는 계속 후속 계산 후보이며 이번 P0에서는 BaseDamage만 체력에 적용한다.
 
 #pragma once
 
@@ -46,9 +48,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|DamageData|Type", meta=(DisplayName="피해 타입 (DamageType)", ToolTip="이 피해 규칙의 기본 종류입니다. P0 후보는 Kinetic, Explosive, Energy입니다."))
 	ECFDamageType DamageType = ECFDamageType::Kinetic;
 
-	// [v1.0.0] 직접 명중 시 사용할 기본 피해량입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|DamageData|Direct", meta=(ClampMin="0.0", DisplayName="기본 피해량 (BaseDamage)", ToolTip="직접 명중 시 사용할 기본 피해량입니다. P0에서는 실제 HP 차감 없이 Debug 확인에 먼저 사용합니다."))
+	// [v1.0.0] 직접 명중 시 차량 현재 체력에서 차감할 기본 피해량입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|DamageData|Direct", meta=(ClampMin="0.0", DisplayName="기본 피해량 (BaseDamage)", ToolTip="유효한 HitScan 또는 Projectile 직접 명중 시 대상 VehicleHealthComp의 현재 체력에서 차감할 기본 피해량입니다."))
 	float BaseDamage = 25.0f;
+
+	// [v1.1.0] 발사 주체와 피격 대상이 같은 자기 피해를 허용할지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|DamageData|Direct", meta=(DisplayName="자기 피해 허용 (bCanDamageSelf)", ToolTip="True이면 발사 주체와 피격 대상 Actor가 같아도 BaseDamage를 적용합니다. False이면 자기 피해를 거부합니다."))
+	bool bCanDamageSelf = false;
 
 	// [v1.0.0] 장갑 계산에서 사용할 관통 기준값입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|DamageData|Direct", meta=(ClampMin="0.0", DisplayName="장갑 관통력 (ArmorPenetration)", ToolTip="후속 장갑 계산에서 사용할 관통 기준값입니다. P0에서는 저장과 표시만 합니다."))
