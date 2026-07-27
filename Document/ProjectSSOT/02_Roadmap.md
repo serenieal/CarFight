@@ -3,8 +3,8 @@
 > 역할: CarFight 프로젝트의 **현재 해야 할 일 / 우선순위 / 완료 조건 / 진행 순서**를 고정한다.
 > 기준 상태 문서: `01_ProjectState.md`
 > 상위 방향 문서: `00_Vision.md`
-> 문서 버전: v2.3.0
-> 마지막 정리(Asia/Seoul): 2026-07-15
+> 문서 버전: v2.7.0
+> 마지막 정리(Asia/Seoul): 2026-07-27
 
 
 ---
@@ -27,6 +27,36 @@
 
 이번 사이클은 2~3개월 일정 단축을 목표로 한다.
 서버 권한 전투, Dedicated Server 검증, 2클라 테스트, CFNetSmooth 차량 적용, 서버 런처, 세션/로비는 현재 범위에서 제외한다.
+
+---
+
+## 현재 우선순위 상태 (2026-07-27)
+
+`CF-FQ-024 전투 FX`는 최종 사용자 PIE까지 완료됐다. 현재 자동 선택된 Active 작업은 없다.
+
+```text
+1. CF-FQ-024 전투 FX: Done / User PIE PASS / CF-TC-021 PASS
+2. CF-FQ-019 주행과 전투 흐름 반복 테스트: Candidate / 착수 가능
+3. CF-FQ-026 타겟 선택 시스템: Paused / TS-P0-08 체크포인트 보존
+4. CF-FQ-020 조작감, 전투 템포, 피드백 개선: Candidate
+5. CF-FQ-021 핵심 게임 루프 검증: Candidate
+```
+
+전투 FX 완료 체크포인트:
+
+```text
+- UCFCombatFxData / UCFCombatFxComp 데이터 기반 런타임 완료
+- ACFCombatFxPreviewActor EditorOnly 튜닝 도구 완료
+- DA_FX_ProtoWeaponFire / ShellImpact / VehicleDead 3개 AssetDump 성공
+- Impact P0는 NS_BasicHit을 현재 크기 그대로 사용
+- 차량별 Destroyed 위치는 SM_Body.FX_Destroyed 소켓으로 해결
+- Muzzle 승인 1회·거부 0회, Impact 첫 1회, Destroyed 최초 1회 검증 PASS
+- 중복·잔류 없음과 기존 조준·발사·피해·파괴 회귀 PASS
+- Current System: Document/Systems/Combat/CombatFx.md
+```
+
+`CF-FQ-019`는 다음 순서상 우선 Candidate지만 사용자의 명시적 선택 전에는 Active로 전환하지 않는다.
+이 상태는 타겟 선택 기능을 취소하지 않으며 `CF-FQ-026`의 완료 코드와 Automation 결과는 Paused 체크포인트로 유지한다.
 
 ---
 
@@ -53,25 +83,36 @@
 - 조준점·터렛·총구 정렬과 고속 Projectile 신뢰성: 완료
 ```
 
-현재 병목:
+현재 남은 사이클 과제:
 
 ```text
-1. 승인된 발사에 실제 Muzzle Niagara와 공간 사운드가 없다.
-2. HitScan / Projectile 첫 Impact에 실제 FX와 사운드가 없다.
-3. 최초 차량 파괴 상태에 실제 FX와 사운드가 없다.
-4. 반복 전투에서 연출 중복과 Projectile Pool 잔류를 검증하지 않았다.
-5. FX / Audio까지 포함한 전투 템포와 핵심 루프 검증이 남아 있다.
+1. 완료된 주행·조준·발사·피격·피해·전투 FX를 반복 전투에서 함께 회귀 검증한다.
+2. 전체 FPS·속도 조합과 이동 차량 대상 반복 전투를 확인한다.
+3. 전투 템포와 피드백 문제를 기능 차단과 품질 개선으로 분리한다.
+4. 핵심 게임 루프가 다음 개발 단계로 넘어갈 수 있는지 최종 판정한다.
 ```
 
-따라서 현재 진행 순서는 아래로 고정한다.
+프로젝트 전역 사운드 정책:
 
 ```text
-1. C2-B / CF-FQ-024 전투 FX 및 사운드 구현
-2. C4 / CF-FQ-019 주행과 전투 흐름 반복 테스트
-3. C5 / CF-FQ-020 조작감, 전투 템포, 피드백 개선
-4. C6 / CF-FQ-021 핵심 게임 루프 검증
-5. CF-FQ-012 1대 차량 주행감 고도화 후속
+- CarFight는 게임 사운드를 구현하지 않는다.
+- SoundWave, SoundCue, MetaSound Source, Sound Attenuation 자산을 제작·도입하지 않는다.
+- USoundBase, UAudioComponent와 사운드 재생 코드를 추가하지 않는다.
+- 엔진음, 타이어음, 충돌음, 무기음, 피격음, 파괴음, UI음과 BGM은 완료 조건에서 제외한다.
+- Unreal의 기본 플랫폼 오디오 설정은 엔진 생성 설정으로 남길 수 있으나 게임 기능으로 간주하지 않는다.
 ```
+
+따라서 현재 진행 순서는 아래로 유지한다.
+
+```text
+완료: C2-B / CF-FQ-024 전투 FX
+다음 Candidate: C4 / CF-FQ-019 주행과 전투 흐름 반복 테스트
+후속 Candidate: C5 / CF-FQ-020 조작감, 전투 템포, 피드백 개선
+후속 Candidate: C6 / CF-FQ-021 핵심 게임 루프 검증
+장기 후속: CF-FQ-012 1대 차량 주행감 고도화
+```
+
+새 단계는 사용자 선택 후에만 Active로 전환한다.
 
 ### 이번 사이클에서 하지 않을 것
 
@@ -101,7 +142,7 @@
 
 1. 확인된 싱글 실행 / 기준 차량 조작 / 로컬 Aim / Fire / Reticle 기반을 유지한다.
 2. 기준 차량 1대에 최소 무기 조준 / 발사 경로를 구현한다.
-3. 발사 성공/불가/쿨다운 같은 상태를 이펙트, 사운드, 조준 UI로 읽히게 한다.
+3. 발사 성공/불가/쿨다운 같은 상태를 시각 이펙트와 조준 UI로 읽히게 한다.
 4. 피격 판정과 피해 처리를 붙여 전투 결과가 남게 한다.
 5. 주행 중 조준/발사/피격/피해가 반복되는 테스트 루프를 만든다.
 6. 조작감, 전투 템포, 피드백을 한 번에 크게 바꾸지 않고 관찰 가능한 단위로 조정한다.
@@ -138,12 +179,12 @@
 4. **C1 — 차량 무기 조준 및 발사 기능 구현**: 완료
 5. **C2-A — Reticle / FireFeedback UI 구현**: 완료
 6. **C3 — 피격 판정 및 피해 처리 구현**: 완료
-7. **C2-B — 전투 FX 및 사운드 구현**: 현재 Active
-8. **C4 — 주행과 전투 흐름 반복 테스트**: Candidate
+7. **C2-B — 전투 FX 구현**: 완료 / User PIE PASS / CF-TC-021 PASS
+8. **C4 — 주행과 전투 흐름 반복 테스트**: Candidate / 착수 가능
 9. **C5 — 조작감 / 전투 템포 / 피드백 개선**: Candidate
 10. **C6 — 핵심 게임 루프 검증**: Candidate
 
-현재 Active 단계의 완료 조건을 만족하기 전에는 다음 단계로 넘어가지 않는다.
+현재 Active 단계는 없다. 다음 단계는 사용자가 Candidate를 선택한 뒤 착수한다.
 
 ---
 
@@ -248,35 +289,46 @@ CF-FQ-017 Done
 CF-TC-014 PASS
 ```
 
-### C2-B — 전투 FX 및 사운드
+### C2-B — 전투 FX
 
-상태: `CF-FQ-024 Active`
+상태: `CF-FQ-024 Done / User PIE PASS / CF-TC-021 PASS`
+
+현재 구현 기준:
+
+```text
+Document/Systems/Combat/CombatFx.md
+```
 
 목표:
-- 승인된 발사, 첫 Impact와 최초 차량 파괴 결과를 Niagara와 공간 사운드로 즉시 이해하게 만든다.
+- 승인된 발사, 첫 Impact와 최초 차량 파괴 결과를 Niagara 기반 시각 연출로 즉시 이해하게 만든다.
 
 범위:
 - 판정과 연출을 분리한다.
-- 소스 코드에 특정 연출 자산 경로를 하드코딩하지 않는다.
-- 완성형 무기별 라이브러리보다 기준 무기·발사체·차량의 P0 연출을 우선한다.
+- 소스 코드에 특정 Niagara 자산 경로를 하드코딩하지 않는다.
+- 기준 무기·발사체·차량의 P0 시각 연출을 우선한다.
+- 게임 사운드 자산, 런타임과 오디오 모듈은 프로젝트 전역 범위에서 제외한다.
 - 상세 기준은 `Document/Plan/CombatFxAudio/ImplementationDesign.md`를 따른다.
+- `CombatFxAudio`는 경로 호환용 레거시 디렉터리명이며 현재 범위에 Audio는 포함하지 않는다.
 
-해야 할 일:
-- 실제 Muzzle 위치의 발사 Niagara와 발사 사운드 연결
-- `FCFDamageHitContext` ImpactPoint / ImpactNormal 기반 피격 Niagara와 사운드 연결
-- 최초 Destroyed 상태 전환의 파괴 Niagara와 사운드 연결
-- 발사 거부, 중복 Impact, 파괴 후 추가 피해의 연출 중복 방지
-- Projectile Pool 재사용 시 Trail / Audio 상태 초기화
-- WeaponData / ProjectileData / VehicleData에서 연출 DataAsset 참조
+완료 범위:
+- 실제 Muzzle 위치의 발사 Niagara 연결
+- `FCFDamageHitContext.ImpactLocation / ImpactNormal` 기반 Impact Niagara 연결
+- `SM_Body.FX_Destroyed` 소켓 기반 최초 Destroyed Niagara 연결
+- 발사 거부, 중복 Impact와 파괴 후 추가 피해의 FX 중복 방지
+- WeaponData / ProjectileData / VehicleData의 CombatFxData 참조
+- MaximumLifetimeSeconds Loop 잔류 안전 퓨즈
+- Editor Preview Actor와 DataAsset 튜닝 흐름
+- 게임 오디오 클래스·모듈·에셋 참조 0개 유지
 
 완료 조건:
-- [ ] 승인된 발사 1회당 Muzzle FX와 발사 사운드가 각 1회 발생한다.
-- [ ] 발사 거부 상태에서는 발사 FX와 사운드가 발생하지 않는다.
-- [ ] HitScan과 Projectile의 첫 Impact에서 FX와 사운드가 각 1회 발생한다.
-- [ ] 최초 차량 파괴 전환에서 파괴 FX와 사운드가 각 1회 발생한다.
-- [ ] 중복 충돌, 추가 피해와 Projectile Pool 재사용에서 연출 중복·잔류가 없다.
-- [ ] 연출 자산이 없어도 기존 발사·피해·파괴 판정이 정상 유지된다.
-- [ ] `Tools\BuildEditor.bat`와 사용자 PIE에서 `CF-TC-021`을 통과한다.
+- [x] 승인된 발사 1회당 Muzzle FX가 1회 발생한다.
+- [x] 발사 거부 상태에서는 발사 FX가 발생하지 않는다.
+- [x] HitScan과 Projectile의 첫 Impact에서 FX가 1회 발생한다.
+- [x] 최초 차량 파괴 전환에서 `FX_Destroyed` 소켓 위치의 파괴 FX가 1회 발생한다.
+- [x] 중복 충돌, 추가 피해와 반복 전투에서 Niagara 중복·잔류가 없다.
+- [x] FX 자산 누락 또는 생성 실패가 기존 발사·피해·파괴 판정을 변경하지 않는 null-safe 계약이 구현됐다.
+- [x] 게임 오디오 자산·런타임·모듈 참조가 0개다.
+- [x] Editor 빌드와 사용자 PIE에서 `CF-TC-021`을 통과했다.
 
 ---
 
@@ -311,7 +363,7 @@ CF-TC-015 / CF-TC-016 / CF-TC-020 PASS
 
 ## C4 — 주행과 전투 흐름 반복 테스트
 ### 목표
-주행, 조준, 발사, 피격, 피해와 전투 FX / Audio가 한 흐름으로 반복되는지 확인한다.
+주행, 조준, 발사, 피격, 피해와 전투 시각 FX가 한 흐름으로 반복되는지 확인한다.
 
 ### 범위
 - 테스트는 `DA_PoliceCar`와 현재 기준 테스트 맵을 우선 사용한다.
@@ -320,13 +372,13 @@ CF-TC-015 / CF-TC-016 / CF-TC-020 PASS
 ### 해야 할 일
 - 정지 상태, 저속, 중속, 회전 중 발사 테스트를 나눈다.
 - 발사 중 주행 조작이 끊기지 않는지 확인한다.
-- 휠 시각 품질, 카메라 흔들림, Reticle 가독성, 발사·Impact·파괴 FX/Audio를 함께 관찰한다.
-- 발사 1회당 연출 횟수, Projectile Pool 재사용과 Audio/Niagara 잔류를 확인한다.
-- 실패를 Core / Data / Asset / Input / UI / Audio / FX / Quality / DocMismatch로 분류한다.
+- 휠 시각 품질, 카메라 흔들림, Reticle 가독성, 발사·Impact·파괴 FX를 함께 관찰한다.
+- 발사 1회당 FX 횟수, Projectile Pool 재사용과 Niagara 잔류를 확인한다.
+- 실패를 Core / Data / Asset / Input / UI / FX / Quality / DocMismatch로 분류한다.
 
 ### 완료 조건
 - [ ] 주행 중 조준/발사 입력이 끊기지 않는다.
-- [ ] 같은 루프를 10회 이상 반복해도 입력, UI, 판정, FX와 Audio 상태가 꼬이지 않는다.
+- [ ] 같은 루프를 10회 이상 반복해도 입력, UI, 판정과 FX 상태가 꼬이지 않는다.
 - [ ] 발사·Impact·파괴 연출의 중복과 Projectile Pool 잔류가 없다.
 - [ ] 조작감 문제와 전투 판정·연출 문제를 분리해 기록할 수 있다.
 - [ ] 반복 테스트 결과가 `05_TestChecklist.md`에 반영된다.
@@ -339,7 +391,7 @@ CF-TC-015 / CF-TC-016 / CF-TC-020 PASS
 
 ### 범위
 - 조정은 한 번에 하나의 축만 바꾼다.
-- 차량 주행값, 무기 발사 템포, 조준 UI, 사운드/이펙트를 동시에 크게 바꾸지 않는다.
+- 차량 주행값, 무기 발사 템포, 조준 UI와 시각 이펙트를 동시에 크게 바꾸지 않는다.
 
 ### 해야 할 일
 - 조작감: 주행, 조향, 카메라, 조준이 서로 방해하는지 확인한다.
@@ -363,7 +415,7 @@ CF-TC-015 / CF-TC-016 / CF-TC-020 PASS
 - [ ] 기준 차량 1대를 조작할 수 있다.
 - [ ] 조준 방향을 만들 수 있다.
 - [ ] 발사 입력이 성공/실패 상태로 판정된다.
-- [ ] 발사 피드백이 화면/소리/UI로 읽힌다.
+- [ ] 발사 피드백이 화면과 UI로 읽힌다.
 - [ ] 피격과 피해가 결과로 남는다.
 - [ ] 주행과 전투를 반복해도 상태가 꼬이지 않는다.
 - [ ] 남은 문제를 기능 차단 / 품질 후속 / 장기 확장으로 분리할 수 있다.
@@ -532,6 +584,25 @@ CF-TC-015 / CF-TC-016 / CF-TC-020 PASS
 ---
 
 ## 변경 이력
+- v2.7.0 (2026-07-27)
+  - `CF-FQ-024` 최종 사용자 PIE 전체 PASS와 `CF-TC-021 PASS`를 반영했다.
+  - C2-B 전투 FX를 완료 상태로 전환하고 `Document/Systems/Combat/CombatFx.md`를 Current System으로 연결했다.
+  - Impact `NS_BasicHit` 현재 크기 승인과 차량별 `FX_Destroyed` 소켓 위치 완료를 기록했다.
+  - C4 / `CF-FQ-019`를 선행 조건이 해제된 Candidate로 표시하되 자동 Active 전환하지 않았다.
+  - `CF-FQ-026`은 TS-P0-08 Paused 상태를 그대로 유지했다.
+
+- v2.6.0 (2026-07-24)
+  - 사용자 결정에 따라 `CF-FQ-024 전투 FX`를 현재 단일 Active 단계로 승격했다.
+  - 현재 실행 순서를 FAB 콘텐츠 조사 → Muzzle·Impact·Destroyed 후보 확정 → 공용 FX 계약 구현으로 변경했다.
+  - `CF-FQ-026`을 `TS-P0-08 Paused`로 보존하고 완료 코드와 Automation 결과를 회귀 보호 대상으로 유지했다.
+  - C2-B 상태와 전체 진행 순서를 Active / Phase 0 기준으로 갱신했다.
+
+- v2.4.0 (2026-07-23)
+  - 사용자 결정에 따라 CF-FQ-026 타겟 선택 시스템을 현재 Active 단계로 삽입했다.
+  - TS-P0-01 소스 및 Editor 빌드 PASS, Blueprint·PIE Pending 체크포인트를 기록했다.
+  - CF-FQ-024는 취소하지 않고 Ready / CF-FQ-026 이후 재개 상태로 변경했다.
+  - 기존 전투 사이클의 완료 조건과 후속 순서는 유지했다.
+
 - v2.3.0 (2026-07-15)
   - 완료된 C1, C2-A, C3와 조준·Projectile 신뢰성 작업을 현재 진행 체크포인트에 반영했다.
   - 기존 C2를 Reticle/UI 완료 단계 C2-A와 실제 Niagara/Audio 활성 단계 C2-B로 분리했다.
@@ -577,6 +648,35 @@ CF-TC-015 / CF-TC-016 / CF-TC-020 PASS
 ---
 
 ## Migration
+
+### v2.7.0 적용 안내
+
+```text
+- C2-B / CF-FQ-024는 Done / User PIE PASS / CF-TC-021 PASS다.
+- 현재 전투 FX 구현 판단은 Document/Systems/Combat/CombatFx.md를 우선한다.
+- CombatFxAudio Plan은 완료 이력으로 유지하며 Active 실행 문서로 사용하지 않는다.
+- C4 / CF-FQ-019는 착수 가능하지만 사용자가 선택할 때만 Active로 전환한다.
+- CF-FQ-026은 TS-P0-08 Paused 체크포인트를 유지한다.
+```
+
+### v2.6.0 적용 안내
+
+```text
+- 현재 Active 단계는 C2-B / CF-FQ-024 전투 FX다.
+- 첫 단계는 반입된 FAB 콘텐츠의 NiagaraSystem과 의존성을 확인하는 Phase 0이다.
+- CF-FQ-026은 TS-P0-08 Paused이며 FX 작업 중 TargetSelect 구현을 변경하거나 되돌리지 않는다.
+- 후보 FX가 확정되기 전에는 공용 C++ 런타임 구현으로 넘어가지 않는다.
+- C4 반복 전투 테스트는 CF-FQ-024 사용자 PIE 완료 뒤 착수한다.
+```
+
+### v2.5.0 적용 안내
+
+```text
+- C2-B와 CF-FQ-024는 Niagara 기반 전투 FX 전용 단계로 해석한다.
+- CombatFxAudio는 레거시 경로명이며 Sound 자산이나 Audio 런타임을 뜻하지 않는다.
+- C4~C6의 완료 판정은 화면, UI, 시각 FX와 게임 판정만으로 수행한다.
+- 게임 오디오 에셋·클래스·모듈을 새 작업에 추가하지 않는다.
+```
 
 ### v2.3.0 적용 안내
 

@@ -1,7 +1,7 @@
 # SystemIndex
 
-- Version: 1.10.0
-- Date: 2026-07-15
+- Version: 1.12.0
+- Date: 2026-07-27
 - Status: Active
 - Scope: `Document/Systems/` 하위 문서 위치 안내 색인
 
@@ -37,6 +37,7 @@
 | `Document/Systems/Combat/Projectile.md` | `ProjectileData`, 공통 `CFProjectileActor`, `ProjectilePoolComp`를 통한 발사체 이동·충돌·첫 Impact 피해 요청과 Pool 반환을 기록한다. 일반 속도 `SM_Body`, P0 고속 연속 충돌과 피해 중복 방지를 사용자 PIE로 확인했다. |
 | `Document/Systems/Combat/DamageHitContext.md` | Dummy HitScan과 Projectile의 시각 차체 Hit 결과, `HitComponentName`, 위치/노멀/입사 방향을 같은 `FCFDamageHitContext` 형식으로 기록한다. 이 Context는 현재 `HitDamage`의 공용 피해 적용 입력으로 사용된다. |
 | `Document/Systems/Combat/HitDamage.md` | `DamageData.BaseDamage`, `FCFDamageHitContext`, `FCFDamageApplyResult`와 `UCFVehicleHealthComp`를 연결해 차량 체력 감소, 파괴 상태 1회 전환, 자기 피해 금지와 거부 사유를 처리하는 현재 최소 피해 시스템 문서다. |
+| `Document/Systems/Combat/CombatFx.md` | 승인된 발사, 첫 Impact와 최초 차량 파괴 결과를 DataAsset 기반 Niagara로 정확히 한 번 표현한다. `NS_BasicHit` Impact, 차량별 `SM_Body.FX_Destroyed` 소켓, 최대 수명 안전 퓨즈와 최종 사용자 PIE PASS를 기록한 현재 전투 FX 문서다. |
 
 ---
 
@@ -78,7 +79,7 @@
 
 | 경로 | 문서 내용 |
 | --- | --- |
-| `Document/Systems/UI/AimReticle.md` | 로컬 Aim/FireFeedback 상태를 Reticle 이미지·텍스트·색상으로 표시한다. 정렬 상태뿐 아니라 NoWeapon 회색, AimBlocked 주황, 피드백 만료와 정상 상태 복귀를 사용자 PIE로 확인했다. |
+| `Document/Systems/UI/AimReticle.md` | `Image_CenterDot` 조준 레티클과 `CurrentMuzzleDirection` 기반 `Image_WeaponReticle` 터렛 레티클을 분리해 표시하고, 로컬 Aim/FireFeedback 상태를 이미지·텍스트·색상으로 표현한다. CF-FQ-025 이중 레티클과 기존 NoWeapon, AimBlocked, 피드백 회귀를 사용자 PIE로 확인했다. |
 | `Document/Systems/UI/DisplayTextPolicy.md` | 내부 식별자는 영문으로 유지하고, 화면에 보이는 UI/Debug UI 텍스트는 한국어로 표시한다는 표시 텍스트 정책 문서다. |
 | `Document/Systems/UI/VehicleDebug.md` | 차량 Pawn의 런타임 준비 상태, Drive 상태, 입력 상태, 마지막 상태 전이, 런타임 요약을 문자열로 조합해 로컬 플레이어 위젯으로 표시하는 텍스트 기반 차량 진단 기능 문서다. |
 | `Document/Systems/UI/VehicleDebugPanel.md` | `VehicleDebug Panel`의 Navigation + Selected Section 구조, TopLevel Section, Camera Debug 편입 상태, 표시 언어 정책을 설명하는 문서다. |
@@ -89,7 +90,7 @@
 
 | 경로 | 문서 내용 |
 | --- | --- |
-| `Document/Systems/Vehicles/VehicleAim.md` | `VehicleCamera`가 만든 조준 결과와 Weapon Aim Solution을 Local 표시/검증/시각 상태로 관리한다. 정렬 중 발사 정책 true/false, 정렬 완료 탄착과 `MuzzleBlocked`를 P0 사용자 PIE로 확인했다. |
+| `Document/Systems/Vehicles/VehicleAim.md` | `VehicleCamera`가 만든 조준 결과와 Weapon Aim Solution을 Local 표시·검증 상태로 관리하고, 사용자 조준점과 `CurrentMuzzleDirection` 기반 터렛 레티클 월드 지점을 분리해 제공한다. 정렬 정책, `MuzzleBlocked`와 CF-FQ-025 터렛 레티클을 사용자 PIE로 확인했다. |
 | `Document/Systems/Vehicles/VehicleCamera.md` | Look 입력을 차량 기준 누적 조준 상태로 변환하고, 카메라 모드, Aim Profile, 속도, 충돌 상태를 반영해 SpringArm, FOV, AimTrace를 계산/적용하는 차량 카메라 기능 문서다. |
 | `Document/Systems/Vehicles/VehicleCoreDecisions.md` | 현재 차량 코어의 유지 결정, 교체 결정, 임시 운영 판단을 기록하는 결정 로그 문서다. 차량 코어 변경 전 확인해야 하는 기준 문서다. |
 | `Document/Systems/Vehicles/VehicleData.md` | 차량 하나의 외형, 주행 성격, 휠 물리, 휠 시각 구성, Wheel Class 참조, Drive 상태 판정 기준을 하나의 DataAsset으로 묶어 공급하는 차량 구성 데이터 문서다. |
@@ -106,10 +107,12 @@
 | 찾고 싶은 내용 | 확인할 문서 |
 | --- | --- |
 | 현재 로컬 발사 명령, 무기 데이터 해석, 쿨다운, FireOrigin, 발사 결과 기록 | `Combat/WeaponFire.md` |
-| 발사 성공/실패/쿨다운/무기 없음 상태를 Reticle, HUD, VFX, SFX로 표시하는 기준 | `Combat/FireFeedback.md` |
+| 발사 성공/실패/쿨다운/무기 없음 상태를 Reticle, HUD와 시각 VFX로 표시하는 기준 | `Combat/FireFeedback.md` |
+| 프로젝트 전역 게임 사운드 비지원 결정과 오디오 도입 금지 기준 | `Document/ProjectSSOT/04_ProjectDecisions.md` |
 | Projectile Actor 활성화, 일반 속도 시각 차체 충돌과 P0 고속 연속 충돌 검증 완료 상태 | `Combat/Projectile.md` |
 | Dummy HitScan / Projectile 시각 차체 HitContext와 HitComponent 기록 | `Combat/DamageHitContext.md` |
 | DamageData 기반 체력 감소, 피해 적용 결과와 파괴 상태 | `Combat/HitDamage.md` |
+| Muzzle·Impact·Destroyed Niagara의 데이터 연결, 발생 위치, 1회성, 중복 방지와 잔류 안전 계약 | `Combat/CombatFx.md` |
 | Reticle 목표점, 터렛 추적, Muzzle 방향을 하나의 Aim Solution으로 통합하는 설계 | `Document/Plan/AimFireAlignment/ImplementationDesign.md` |
 | Sweep/Sub-stepping/보조 Sphere Sweep을 통한 고속 Projectile 연속 충돌 설계 | `Document/Plan/ProjectileContinuousCollision/ImplementationDesign.md` |
 | 프로젝트 시작 맵, 렌더링, 입력 백엔드 설정 | `Config/ProjectRuntimeConfig.md` |
@@ -144,6 +147,20 @@
 ---
 
 ## 12. Changelog
+
+### v1.12.0 - 2026-07-27
+
+- `Document/Systems/Combat/CombatFx.md`를 Current System으로 등록했다.
+- `CF-FQ-024 Done`, `CF-TC-021 PASS`와 최종 사용자 PIE 전체 PASS를 반영했다.
+- `NS_BasicHit` Impact 현재 크기 승인과 차량별 `SM_Body.FX_Destroyed` 소켓 위치 기준을 색인에 추가했다.
+- 기능별 찾기 표에 데이터 기반 Muzzle·Impact·Destroyed Niagara 런타임 문서를 연결했다.
+
+### v1.11.0 - 2026-07-22
+
+- `CF-FQ-025` Done과 `CF-TC-022` 사용자 PIE PASS를 반영했다.
+- `AimReticle` 색인에 Image_CenterDot 조준 레티클과 CurrentMuzzleDirection 기반 Image_WeaponReticle 터렛 레티클 책임을 추가했다.
+- `VehicleAim` 색인에 터렛 레티클 월드 지점 제공과 기존 정렬·MuzzleBlocked 회귀 검증 상태를 반영했다.
+- 기능별 현재 구현 설명을 이중 레티클 완료 기준에 맞게 갱신했다.
 
 ### v1.10.0 - 2026-07-15
 
@@ -218,6 +235,12 @@
 ---
 
 ## 13. Migration
+
+### v1.12.0 적용 안내
+
+- `CF-FQ-024`의 현재 구현 판단은 `Document/Systems/Combat/CombatFx.md`를 우선한다.
+- `Document/Plan/CombatFxAudio/ImplementationDesign.md`는 완료 당시 설계와 검증 기록으로 유지한다.
+- `CF-TC-021`은 PASS이며 CombatFx는 P0 사용자 PIE 완료된 Current System이다.
 
 ### v1.10.0 적용 안내
 

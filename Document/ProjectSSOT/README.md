@@ -1,7 +1,7 @@
 # ProjectSSOT 운영 가이드 (CarFight)
 
-> 문서 버전: v2.5.0
-> 마지막 정리(Asia/Seoul): 2026-07-15
+> 문서 버전: v2.8.0
+> 마지막 정리(Asia/Seoul): 2026-07-27
 > 문서 상태: Active
 > 역할: `Document/ProjectSSOT/`의 읽기 순서, 문서 역할, 생명주기를 고정한다.
 
@@ -88,10 +88,10 @@ Archive = 현재 판단 또는 착수 기준에서 내려온 기록을 보존한
 
 ---
 
-## 2-2. 2026-07-15 현재 전투 루프 개발 기준
+## 2-2. 2026-07-27 현재 기능 개발 기준
 
-싱글 실행, 조준·발사, Reticle/UI, 피격·피해, 조준 정렬과 고속 Projectile 신뢰성은 완료 기반으로 본다.
-현재 개발은 실제 전투 FX / Audio를 연결한 뒤 반복 전투와 핵심 루프 검증으로 진행한다.
+싱글 실행, 조준·발사, Reticle/UI, 피격·피해, 조준 정렬, 고속 Projectile 신뢰성, 이중 레티클과 전투 FX는 완료 기반으로 본다.
+현재 자동 선택된 전역 Active 작업은 없다. `CF-FQ-019 주행/전투 반복 테스트`가 다음 착수 Candidate이며, `CF-FQ-026 타겟 선택 시스템`은 `TS-P0-00~07 Done / TS-P0-08 Paused` 체크포인트를 보존한다.
 
 현재 개발 순서:
 
@@ -101,15 +101,18 @@ Archive = 현재 판단 또는 착수 기준에서 내려온 기록을 보존한
 완료: CF-FQ-018 피격 판정 및 피해 처리
 완료: CF-FQ-022 조준점·터렛·총구 정렬
 완료: CF-FQ-023 고속 Projectile 연속 충돌
-현재: CF-FQ-024 전투 FX 및 사운드 구현
-다음: CF-FQ-019 주행/전투 반복 테스트
-다음: CF-FQ-020 조작감/전투 템포/피드백 개선
-다음: CF-FQ-021 핵심 게임 루프 검증
+완료: CF-FQ-025 이중 레티클 및 터렛방향 시각화
+완료: CF-FQ-024 전투 FX 구현 / User PIE PASS / CF-TC-021 PASS
+다음 Candidate: CF-FQ-019 주행/전투 반복 테스트
+일시중지: CF-FQ-026 타겟 선택 시스템 / TS-P0-08
+후속 Candidate: CF-FQ-020 조작감/전투 템포/피드백 개선
+후속 Candidate: CF-FQ-021 핵심 게임 루프 검증
 ```
 
-`CF-FQ-017`의 UI 표시와 `CF-FQ-024`의 실제 Niagara / 공간 사운드는 서로 다른 기능 생명주기로 관리한다.
-현재 활성 상세 설계는 `Document/Plan/CombatFxAudio/ImplementationDesign.md`를 사용한다.
-전체 순서는 `Document/ProjectSSOT/02_Roadmap.md`, 착수 상태는 `03_FeatureQueue.md`를 우선한다.
+프로젝트 결정 `CF-PDL-0009`에 따라 CarFight는 게임 사운드를 지원하지 않는다.
+`CF-FQ-024`는 발사·Impact·최초 파괴의 Niagara 기반 시각 연출을 완료했으며 현재 구현 기준은 `Document/Systems/Combat/CombatFx.md`다.
+완료 Plan 경로는 `Document/Plan/CombatFxAudio/ImplementationDesign.md`를 유지하지만 `CombatFxAudio`는 레거시 디렉터리명이며 Audio 구현을 뜻하지 않는다.
+전체 순서는 `Document/ProjectSSOT/02_Roadmap.md`, 착수 상태는 `03_FeatureQueue.md`, 현재 작업 선택은 `Document/ActiveWork.md`를 우선한다.
 
 ---
 
@@ -351,6 +354,33 @@ Plan 하위에 Draft, Working, Notes 또는 세부 작업 파일이 추가될 �
 
 ## 11. 변경 이력
 
+### v2.8.0 - 2026-07-27
+
+```text
+- CF-FQ-024 전투 FX의 Done / User PIE PASS / CF-TC-021 PASS를 현재 완료 기준선에 반영했다.
+- 현재 자동 선택된 Active 작업이 없고 CF-FQ-019가 다음 착수 Candidate임을 반영했다.
+- CF-FQ-026 타겟 선택 시스템을 TS-P0-08 Paused 체크포인트로 동기화했다.
+- 전투 FX 현재 구현 기준을 Document/Systems/Combat/CombatFx.md로 연결했다.
+```
+
+### v2.7.0 - 2026-07-24
+
+```text
+- 현재 전역 Active를 CF-FQ-026 타겟 선택 시스템으로 동기화했다.
+- CF-FQ-024를 사운드 없는 Niagara 기반 전투 FX 전용 Ready 기능으로 정리했다.
+- CombatFxAudio 경로가 레거시 디렉터리명이며 Audio 구현을 뜻하지 않는다고 명시했다.
+- 프로젝트 전역 사운드 비지원 결정 CF-PDL-0009를 읽기 기준에 반영했다.
+```
+
+### v2.6.0 - 2026-07-22
+
+```text
+- CF-FQ-025 이중 레티클 및 터렛방향 시각화의 Done / User PIE PASS를 현재 완료 기준선에 반영
+- Image_CenterDot 조준 레티클과 CurrentMuzzleDirection 기반 Image_WeaponReticle 터렛 레티클 책임을 완료 계약으로 추가
+- CF-FQ-024를 현재 활성 기능과 신규 구현 시작점으로 유지
+- 현재 개발 기준 날짜와 문서 버전을 최신 상태로 동기화
+```
+
 ### v2.5.0 - 2026-07-15
 
 ```text
@@ -442,6 +472,32 @@ Plan 하위에 Draft, Working, Notes 또는 세부 작업 파일이 추가될 �
 ---
 
 ## 12. Migration
+
+### v2.8.0 적용 안내
+
+```text
+- 새 세션에서 자동 Active 작업을 가정하지 않는다.
+- 다음 신규 착수 후보는 CF-FQ-019이며 사용자가 선택한 뒤 Active로 전환한다.
+- CF-FQ-026 재개 시 Document/Plan/TargetSelectPlan.md의 TS-P0-08 체크포인트에서 시작한다.
+- CF-FQ-024 현재 구현 판단은 Document/Systems/Combat/CombatFx.md를 우선한다.
+```
+
+### v2.7.0 적용 안내
+
+```text
+- 새 세션은 CF-FQ-026과 TargetSelect 대표 Plan을 먼저 복원한다.
+- CF-FQ-024 재개 시 CombatFxAudio 경로의 ImplementationDesign을 사용하되 시각 FX 전용으로 해석한다.
+- SoundWave, SoundCue, MetaSound, Sound Attenuation, USoundBase, UAudioComponent와 오디오 모듈을 추가하지 않는다.
+- 과거 Audio 관련 Changelog와 Migration은 역사 기록으로만 읽는다.
+```
+
+### v2.6.0 적용 안내
+
+```text
+- CF-FQ-025는 완료된 Systems 기준으로 읽고 ReticleAimDirection Plan을 활성 구현 계획으로 해석하지 않는다.
+- 현재 신규 구현은 CF-FQ-024와 Document/Plan/CombatFxAudio/ImplementationDesign.md에서 시작한다.
+- 투사체 착탄 위치의 월드 공간 3D 표시는 별도 Feature 결정 전까지 현재 착수 대상으로 해석하지 않는다.
+```
 
 ### v2.5.0 적용 안내
 

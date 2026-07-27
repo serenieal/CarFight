@@ -1,7 +1,7 @@
 # Projectile
 
-- Version: 1.3.0
-- Date: 2026-07-15
+- Version: 1.3.1
+- Date: 2026-07-24
 - Status: Current / P0 Collision and First-Impact Damage Verified
 - Scope: 현재 ProjectileData/Actor/Pool, 시각 차체 충돌, 첫 Impact 피해 적용과 P0 고속 연속 충돌 구현
 
@@ -17,7 +17,7 @@
 ```text
 - 차량 체력과 파괴 상태 자체의 소유
 - 폭발 범위 피해 적용
-- 충돌 시 VFX / SFX / Decal 출력
+- 충돌 시 VFX / Decal 출력
 - 탄종별 고급 탄도 모델
 - 네트워크 복제 Projectile
 - 서버 권한 Projectile 판정
@@ -80,7 +80,7 @@ DamageProfileId
 - ProjectileMeshRelativeScale
 ```
 
-`ImpactEffectId`는 현재 데이터 필드로 존재하지만, 실제 VFX/SFX 출력은 현재 구현 범위로 보지 않는다.
+`ImpactEffectId`는 현재 데이터 필드로 존재하지만, 실제 VFX / Decal 출력은 현재 구현 범위로 보지 않는다.
 `DefaultDamageData`는 첫 유효 Impact의 `DamageHitContext`와 HitDamage 입력에 사용된다. `DamageProfileId`는 DamageData 미연결 시 Debug fallback 식별자로만 사용한다.
 
 ---
@@ -333,7 +333,7 @@ GetLastInstigatorActor
 - 실제 폭발 피해 계산
 - 장갑 관통 계산
 - 모듈 손상 계산
-- 충돌 이펙트 / 사운드 출력
+- 충돌 VFX / Decal 출력
 - 탄약 소모
 - 네트워크 복제
 - 서버 권한 충돌 판정
@@ -401,6 +401,14 @@ Projectile은 피해 적용을 요청하고 결과를 보존하지만 체력과 
 
 ## 15. Migration
 
+### v1.3.0 -> v1.3.1
+
+```text
+- Projectile 런타임과 데이터 구조는 변경하지 않는다.
+- ImpactEffectId의 후속 표현 의미를 VFX와 Decal로 제한한다.
+- 게임 사운드 구현은 CF-PDL-0009에 따라 Projectile 책임과 후속 범위에서 제외한다.
+```
+
 ### v1.2.0 -> v1.3.0
 
 ```text
@@ -434,6 +442,13 @@ Projectile은 피해 적용을 요청하고 결과를 보존하지만 체력과 
 ---
 
 ## 16. Changelog
+
+### v1.3.1 - 2026-07-24
+
+```text
+- Projectile 비책임 항목과 ImpactEffectId 설명에서 SFX와 사운드 표현을 제거했다.
+- 후속 충돌 표현을 VFX / Decal 전용으로 정리했다.
+```
 
 ### v1.3.0 - 2026-07-15
 

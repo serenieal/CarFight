@@ -1,7 +1,7 @@
 # FireFeedback
 
-- Version: 1.3.0
-- Date: 2026-07-15
+- Version: 1.4.0
+- Date: 2026-07-24
 - Status: Current / P0 FireFeedback User PIE Verified
 - Scope: 싱글플레이 로컬 발사 결과와 AimFireAlignment 거부 사유를 FireFeedback ViewData로 변환하고 WBP Reticle의 텍스트와 색상으로 표시하는 현재 기준 문서
 
@@ -12,10 +12,12 @@
 이 문서는 CarFight의 현재 전투 구현에서 `FireFeedback`이 어떤 책임을 가져야 하는지 기록한다.
 
 현재 CarFight의 전투 구현 기준은 **싱글플레이 로컬 차량 전투**다.
-따라서 이 문서에서 `FireFeedback`은 서버 응답 상태를 표시하는 기능이 아니라, 로컬 `WeaponFire` 결과를 플레이어가 즉시 이해할 수 있는 화면/소리/시각 피드백으로 변환하는 기능으로 본다.
+따라서 이 문서에서 `FireFeedback`은 서버 응답 상태를 표시하는 기능이 아니라, 로컬 `WeaponFire` 결과를 플레이어가 즉시 이해할 수 있는 화면·UI·시각 피드백으로 변환하는 기능으로 본다.
 
 이 문서는 최종 연출 품질 문서가 아니다.
-현재 구현된 Reticle/UI 피드백 기준과 후속 VFX/SFX 확장 경계를 기록하는 현재 상태 문서다.
+현재 구현된 Reticle/UI 피드백 기준과 후속 VFX 확장 경계를 기록하는 현재 상태 문서다.
+
+프로젝트 결정 `CF-PDL-0009`에 따라 게임 사운드는 지원하지 않는다. 이 문서 후반의 과거 `SFX`, `소리`, `사운드` 후보 표현은 역사 기록이며 신규 구현 범위나 완료 조건으로 사용하지 않는다.
 
 ---
 
@@ -54,7 +56,7 @@ NoAuthority     -> InvalidLocalState
 - WeaponFire 결과를 읽는 기준
 - Reticle에 표시할 발사 상태 기준
 - 발사 성공 / 실패 / 쿨다운 / 무기 없음 상태 표시 기준
-- 최소 P0 VFX / SFX 호출 기준
+- 최소 P0 VFX 호출 기준
 - Debug와 플레이어 표시의 책임 분리
 - 피해 판정과 피드백의 책임 분리
 ```
@@ -86,7 +88,7 @@ NoAuthority     -> InvalidLocalState
 ```
 
 즉 `FireFeedback`은 발사 판정자가 아니다.
-발사 판정은 `WeaponFire`가 수행하고, `FireFeedback`은 그 결과를 읽어 화면/소리/시각 표시로 바꾼다.
+발사 판정은 `WeaponFire`가 수행하고, `FireFeedback`은 그 결과를 읽어 화면·UI·시각 표시로 바꾼다.
 
 ### 4.1 현재 구현 구조
 
@@ -151,7 +153,7 @@ CFAimReticleWidget.cpp   v1.6.0
 
 ```text
 - WeaponFire 결과를 플레이어 피드백 상태로 변환한다.
-- Reticle, 간단한 HUD 문구, VFX, SFX 호출 기준을 정한다.
+- Reticle, 간단한 HUD 문구와 VFX 호출 기준을 정한다.
 - 발사 성공 / 발사 불가 / 쿨다운 / 무기 없음 상태를 읽히게 만든다.
 - 판정 결과를 임의로 바꾸지 않는다.
 ```
@@ -374,39 +376,37 @@ P0에서 계속 제외하는 항목:
 ```text
 - 무기별 고유 애니메이션 대량 제작
 - 복잡한 HUD 전체 구조
-- 고품질 VFX / SFX 완성
+- 고품질 VFX 완성
 - 피해 숫자, 킬로그, 전투 로그 UI
 - 멀티플레이 동기화 피드백
 ```
 
 ---
 
-## 12. VFX / SFX 최소 기준
+## 12. VFX 최소 기준
 
-현재 `FireFeedback` 문서에서는 VFX / SFX의 품질을 확정하지 않는다.
-다만 호출 기준은 아래처럼 둔다.
+현재 `FireFeedback`은 Reticle과 HUD 표시를 소유하고, 후속 전투 시각 FX가 따라야 할 호출 조건만 제공한다.
+게임 사운드는 프로젝트 결정 `CF-PDL-0009`에 따라 지원하지 않는다.
 
 ### 12.1 발사 성공
 
 ```text
-- Muzzle 위치 또는 FireOrigin 기준으로 최소 발사 플래시 후보를 호출할 수 있다.
-- 발사 성공 사운드를 1회 재생할 수 있다.
-- Projectile Actor를 사용하든 Dummy HitScan을 사용하든 성공 피드백은 발생할 수 있다.
+- 실제 발사 실행이 성공한 경우에만 Muzzle 또는 FireOrigin 기준 발사 플래시를 1회 요청할 수 있다.
+- Projectile Actor와 Dummy HitScan은 같은 승인 결과 기준을 사용한다.
 ```
 
 ### 12.2 발사 실패
 
 ```text
-- 발사 실패는 실제 총구 플래시를 내지 않는다.
-- 필요하면 짧은 UI 경고 또는 실패 사운드 후보를 사용한다.
-- 실패 사운드는 과하면 피로도가 높으므로 P0에서는 UI 문구 우선으로 둔다.
+- 발사 실패에서는 실제 총구 플래시를 생성하지 않는다.
+- 실패 이유는 Reticle 색상, 상태 문구와 Debug로 표시한다.
 ```
 
 ### 12.3 쿨다운
 
 ```text
-- 쿨다운은 지속 사운드보다 Reticle / UI 표시 우선으로 둔다.
-- 남은 쿨다운 비율 표시 후보를 둔다.
+- 쿨다운은 Reticle, UI 문구와 남은 시간 또는 비율로 표시한다.
+- 청각 피드백과 지속 사운드는 사용하지 않는다.
 ```
 
 ---
@@ -439,7 +439,7 @@ P0에서는 텍스트를 너무 많이 보여주기보다, Debug Panel에서 상
 ```text
 - WeaponFire 결과를 표시 상태로 변환한다.
 - 발사 성공 / 실패 / 쿨다운 / 무기 없음 상태를 플레이어에게 읽히게 한다.
-- Reticle / 간단한 HUD / VFX / SFX 호출 기준을 정리한다.
+- Reticle / 간단한 HUD / VFX 호출 기준을 정리한다.
 - 판정 결과를 변경하지 않는다.
 - 피해 판정을 수행하지 않는다.
 ```
@@ -482,8 +482,7 @@ P0에서는 텍스트를 너무 많이 보여주기보다, Debug Panel에서 상
 아래 항목은 아직 확정하지 않았다.
 
 ```text
-- 발사 성공 VFX / SFX 자산명과 연결 시점
-- 실패 피드백에 별도 사운드를 사용할지 여부
+- 발사 성공 VFX 자산명과 연결 시점
 - Cooldown 숫자 표시를 게이지로 확장할지 여부
 - FirePending을 비동기/충전 무기에서 활성화할지 여부
 - Reloading을 실제 탄약 시스템과 연결할지 여부
@@ -500,7 +499,7 @@ P0에서는 텍스트를 너무 많이 보여주기보다, Debug Panel에서 상
 - AimReticle이 LastFireResult / RejectReason / Cooldown 값을 직접 읽도록 확장될 때
 - RejectReason -> UI 표시 매핑이 바뀔 때
 - Cooldown 표시 방식이 확정될 때
-- VFX / SFX 자산 연결 경로가 확정될 때
+- VFX 자산 연결 경로가 확정될 때
 - OutOfArc / OutOfWeaponArc가 실제 발사 거부 조건으로 승격될 때
 - 피해 판정 / 피해 처리와 피드백 호출 순서가 바뀔 때
 ```
@@ -509,7 +508,7 @@ P0에서는 텍스트를 너무 많이 보여주기보다, Debug Panel에서 상
 
 ## 19. 문서 버전 관리
 
-- 현재 문서 버전: `1.3.0`
+- 현재 문서 버전: `1.4.0`
 - 문서 상태: `Current / P0 FireFeedback User PIE Verified`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
@@ -522,7 +521,7 @@ P0에서는 텍스트를 너무 많이 보여주기보다, Debug Panel에서 상
   - FireFeedback이 전투 HUD 전체 또는 대규모 피드백 시스템으로 확장될 때
   - 서버/멀티플레이 발사 피드백까지 현재 범위로 다시 들어올 때
 - `Minor`
-  - FireFeedback 전담 클래스, Reticle 연동, VFX/SFX 연결, Cooldown 표시 방식이 추가될 때
+  - FireFeedback 전담 클래스, Reticle 연동, VFX 연결, Cooldown 표시 방식이 추가될 때
   - RejectReason 매핑 또는 표시 우선순위가 바뀔 때
 - `Patch`
   - 오탈자 수정
@@ -533,6 +532,15 @@ P0에서는 텍스트를 너무 많이 보여주기보다, Debug Panel에서 상
 ---
 
 ## 20. Migration
+
+### v1.3.0 -> v1.4.0
+
+```text
+- 코드와 WBP 구현은 변경하지 않는다.
+- FireFeedback의 현재 표시 계약은 그대로 유지한다.
+- 후속 연출은 Niagara 기반 VFX만 사용하며 게임 사운드를 연결하지 않는다.
+- 과거 SFX 언급은 v1.4.0 이전 역사 기록으로만 해석한다.
+```
 
 ### v1.2.1 -> v1.3.0
 
@@ -587,6 +595,14 @@ P0에서는 텍스트를 너무 많이 보여주기보다, Debug Panel에서 상
 ---
 
 ## 21. Changelog
+
+### v1.4.0 - 2026-07-24
+
+```text
+- 프로젝트 전역 사운드 비지원 결정에 맞춰 FireFeedback의 현재 책임에서 SFX와 사운드 후보를 제거했다.
+- 발사 성공·실패·쿨다운의 VFX 호출 기준을 시각 연출과 UI 전용으로 정리했다.
+- Sound 미확정 항목과 문서 갱신 조건을 제거했다.
+```
 
 ### v1.3.0 - 2026-07-15
 

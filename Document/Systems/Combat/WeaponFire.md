@@ -1,7 +1,7 @@
 # WeaponFire
 
-- Version: 1.5.1
-- Date: 2026-07-21
+- Version: 1.5.2
+- Date: 2026-07-24
 - Status: Current / Muzzle Clearance User PIE Verified
 - Scope: 현재 구현된 차량 로컬 발사 명령, 무기 데이터 해석, Weapon Aim Solution, 쿨다운, HitScan / Projectile 분기, 발사 결과 기록과 UI 피드백 연결 기준
 
@@ -31,7 +31,7 @@
 - 폭발 범위 피해 적용
 - 서버 권한 발사
 - 멀티플레이 복제
-- 발사 VFX / SFX 완성
+- 발사 VFX 완성
 - 복잡한 전투 HUD 완성
 - 무기 종류 대량 확장
 ```
@@ -359,7 +359,7 @@ LastAcceptedWeaponFireTimeSeconds
 ```text
 WeaponFire = Fire 입력 처리, 발사 가능 검증, 실행 경로 결정, 결과 기록
 AimReticle = 로컬 조준 상태와 간단한 발사 결과 상태 표시
-FireFeedback = 발사 성공/실패/쿨다운을 UI/VFX/SFX 피드백으로 변환
+FireFeedback = 발사 성공/실패/쿨다운을 UI와 VFX 피드백으로 변환
 ```
 
 따라서 UI는 `WeaponFire`의 판정 결과를 임의로 바꾸지 않는다.
@@ -459,7 +459,7 @@ CooldownRatio = ActiveWeaponRemainingCooldownSeconds / ActiveWeaponCooldownSecon
 - 열 누적 / 과열 상태 전이
 - 서버 권한 검증
 - 멀티플레이 복제
-- 완성된 발사 이펙트 / 사운드 출력
+- 완성된 발사 VFX 출력
 - Reticle WBP 표시 스타일 결정
 - FireFeedback 연출 품질 결정
 ```
@@ -514,7 +514,7 @@ CooldownRatio = ActiveWeaponRemainingCooldownSeconds / ActiveWeaponCooldownSecon
 
 ## 13. 문서 버전 관리
 
-- 현재 문서 버전: `1.5.1`
+- 현재 문서 버전: `1.5.2`
 - 문서 상태: `Current / Muzzle Clearance User PIE Verified`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
@@ -538,6 +538,14 @@ CooldownRatio = ActiveWeaponRemainingCooldownSeconds / ActiveWeaponCooldownSecon
 ---
 
 ## 14. Migration
+
+### v1.5.1 -> v1.5.2
+
+```text
+- WeaponFire 런타임과 발사 판정 계약은 변경하지 않는다.
+- FireFeedback 연결 설명과 비책임 항목을 UI와 VFX 전용으로 정리한다.
+- 게임 사운드는 CF-PDL-0009에 따라 WeaponFire 후속 범위에 포함하지 않는다.
+```
 
 ### v1.4.1 -> v1.5.0
 
@@ -599,6 +607,13 @@ CooldownRatio = ActiveWeaponRemainingCooldownSeconds / ActiveWeaponCooldownSecon
 ---
 
 ## 15. Changelog
+
+### v1.5.2 - 2026-07-24
+
+```text
+- WeaponFire 범위와 FireFeedback 연결 설명에서 SFX와 사운드 출력을 제거했다.
+- 후속 발사 표현을 UI와 VFX 전용으로 정리했다.
+```
 
 ### v1.5.1 - 2026-07-21
 

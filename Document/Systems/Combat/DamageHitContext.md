@@ -1,7 +1,7 @@
 # DamageHitContext
 
-- Version: 1.5.0
-- Date: 2026-07-15
+- Version: 1.5.1
+- Date: 2026-07-24
 - Status: Current / HitDamage Input Contract Verified
 - Scope: DamageData와 DamageHitContext 타입, 시각 차체 기반 HitScan/Projectile 기록, 검증된 HitDamage 공용 입력 계약
 
@@ -21,7 +21,7 @@
 - 모듈 손상 계산
 - 범위 피해 적용
 - 물리 충격 적용
-- 피격 VFX / SFX 출력
+- 피격 VFX 출력
 - 서버 권한 피해 처리
 ```
 
@@ -312,7 +312,7 @@ UCFEquipmentPresetData.DefaultWeaponData
 - 폭발 범위 피해 계산
 - 모듈 손상 적용
 - 물리 충격 적용
-- 피격 이펙트 / 사운드 출력
+- 피격 VFX 출력
 ```
 
 `DamageHitContext` 자체는 체력을 소유하거나 피해량을 최종 계산하지 않는다. 다만 Context가 보유한 `DamageData`의 `BaseDamage`와 `bCanDamageSelf`는 `HitDamage`가 현재 최소 피해 처리에 사용한다.
@@ -380,6 +380,14 @@ UCFEquipmentPresetData.DefaultWeaponData
 
 ## 14. Migration
 
+### v1.5.0 -> v1.5.1
+
+```text
+- 코드와 런타임 계약은 변경하지 않는다.
+- DamageHitContext의 비책임 표현을 피격 VFX로 정리하고 게임 사운드 후속 책임을 제거한다.
+- 게임 사운드 비지원 기준은 CF-PDL-0009를 따른다.
+```
+
 ### v1.4.0 -> v1.5.0
 
 ```text
@@ -431,6 +439,13 @@ UCFEquipmentPresetData.DefaultWeaponData
 ---
 
 ## 15. Changelog
+
+### v1.5.1 - 2026-07-24
+
+```text
+- DamageHitContext 비책임 항목에서 SFX와 사운드 출력을 제거했다.
+- 피격 표현 후속 범위를 VFX 전용으로 정리했다.
+```
 
 ### v1.5.0 - 2026-07-15
 

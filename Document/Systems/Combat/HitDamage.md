@@ -1,7 +1,7 @@
 # HitDamage
 
-- Version: 1.0.0
-- Date: 2026-07-15
+- Version: 1.0.1
+- Date: 2026-07-24
 - Status: Current System
 - Feature: `CF-FQ-018 피격 판정 및 피해 처리`
 - Verification: `CarFight_ReEditor Win64 Development` Build PASS / User Single PIE PASS
@@ -218,12 +218,14 @@ OnVehicleDestroyed
 ### Blueprint
 
 ```text
-- 피격 VFX와 SFX
+- 피격 VFX
 - 카메라 또는 차량 흔들림
 - 체력 UI 표시
-- 파괴 VFX/SFX와 애니메이션
+- 파괴 VFX와 애니메이션
 - 파괴 후 입력·물리 정지 연출 연결
 ```
+
+프로젝트 결정 `CF-PDL-0009`에 따라 피격음과 파괴음을 포함한 게임 사운드는 Blueprint 책임에도 포함하지 않는다.
 
 피해량 계산과 생존 판정 로직은 Blueprint에 중복 작성하지 않는다.
 
@@ -304,7 +306,7 @@ Result: PASS
 - 서버 권한 피해와 복제
 - 리스폰
 - 파괴 시 입력/Chaos 물리 자동 정지
-- 완성형 파괴 VFX/SFX
+- 완성형 파괴 VFX
 - Geometry Collection 파괴 전환
 ```
 
@@ -337,10 +339,15 @@ Result: PASS
 
 ## 14. 문서 버전 관리
 
-- 현재 문서 버전: `1.0.0`
+- 현재 문서 버전: `1.0.1`
 - 문서 상태: `Current System`
 
 ### Changelog
+
+#### v1.0.1 - 2026-07-24
+
+- HitDamage 비책임 항목에서 SFX를 제거하고 완성형 파괴 표현을 VFX 전용으로 정리
+- 게임 사운드 비지원 결정 CF-PDL-0009와 현재 Blueprint 책임 설명을 정합화
 
 #### v1.0.0 - 2026-07-15
 
@@ -350,6 +357,12 @@ Result: PASS
 - 사용자 싱글 PIE 통과와 `CF-TC-016 PASS` 기록
 
 ### Migration
+
+#### v1.0.1 적용 안내
+
+- 코드, DamageData와 VehicleHealthComp 런타임은 변경하지 않는다.
+- 파괴 후속 표현은 VFX와 애니메이션만 사용한다.
+- 피격음과 파괴음을 포함한 게임 사운드는 Blueprint 책임이나 후속 기능으로 추가하지 않는다.
 
 #### Initial Current System 적용 안내
 

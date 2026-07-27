@@ -1,9 +1,127 @@
 # CarFight — 04_ProjectDecisions
 
-> 문서 버전: v1.2.0
-> 작성일(Asia/Seoul): 2026-06-19
+> 문서 버전: v1.7.0
+> 작성일(Asia/Seoul): 2026-07-24
 > 문서 상태: Active
 > 역할: CarFight 프로젝트 전체의 **구조 / 서버 / 관리툴 / 운영 / 데이터 흐름 결정**을 기록한다.
+
+---
+
+## 0. 현재 우선순위 결정 — 전투 FX 활성화
+
+### 결정
+
+```text
+- CF-FQ-024 전투 FX를 현재 단일 Active 작업으로 유지한다.
+- 현재 단계는 Phase 0 FAB FX 자산 반입과 후보 선별이다.
+- CF-FQ-026 타겟 선택 시스템은 TS-P0-00~07 Done / TS-P0-08 Paused 상태로 보존한다.
+- CF-FQ-024는 Document/Plan/CombatFxAudio/ImplementationDesign.md와 AssetPreparationChecklist.md를 대표 체크포인트로 사용한다.
+```
+
+### 영향
+
+```text
+- ActiveWork와 ProjectSSOT는 CF-FQ-024를 우선 복원한다.
+- 첫 작업은 반입된 FAB 콘텐츠의 NiagaraSystem 목록과 의존성을 확인하고 Muzzle·Impact·Destroyed 후보를 확정하는 것이다.
+- 기존 직접 조준, 발사, 피해, 이중 레티클과 TargetSelect 판정을 FX 연출이 다시 계산하거나 변경하지 않는다.
+- CF-FQ-026의 코드·에셋·Automation 결과와 TS-P0-08 결함 체크포인트는 그대로 유지한다.
+```
+
+---
+
+## 0-1. CF-PDL-0009 — CarFight는 게임 사운드를 지원하지 않는다
+
+- 상태: `Accepted`
+- 결정일: 2026-07-24
+- 대체 범위: `CF-PDL-0008`의 Audio·공간 사운드·Sound 자산 계약
+
+### 결정
+
+```text
+- CarFight 제품 범위에서 게임 사운드를 제외한다.
+- CF-FQ-024는 전투 FX 전용 기능으로 변경한다.
+- SoundWave, SoundCue, MetaSound Source와 Sound Attenuation 자산을 제작하거나 도입하지 않는다.
+- USoundBase, UAudioComponent와 사운드 재생 API를 게임 런타임에 추가하지 않는다.
+- AudioMixer, Audio Modulation과 별도 오디오 플러그인 의존성을 추가하지 않는다.
+- 엔진음, 타이어음, 충돌음, 무기음, 피격음, 파괴음, UI음과 BGM을 완료 조건으로 요구하지 않는다.
+```
+
+### 이유
+
+```text
+- 제품 방향상 사운드가 필요하지 않다는 사용자 결정이 확정됐다.
+- 현재 저장소에는 게임 사운드 에셋과 런타임이 없어 제거 마이그레이션 비용이 없다.
+- 구현 전에 범위를 닫으면 불필요한 DataAsset 필드, AudioComponent 생명주기, 믹싱과 콘텐츠 제작 비용을 예방할 수 있다.
+```
+
+### 영향
+
+```text
+- 기존 CF-PDL-0008의 판정과 연출 분리 원칙 및 Niagara 데이터 기반 구조는 유지한다.
+- CF-PDL-0008의 Audio 관련 필드, 클래스, 에셋과 테스트 계약은 이 결정으로 대체한다.
+- Unreal 기본 플랫폼 오디오 설정은 엔진 생성 설정으로 유지할 수 있지만 게임 기능으로 간주하지 않는다.
+- 향후 AI와 개발 작업은 사운드 기능을 Candidate, 품질 후속 또는 누락 기능으로 자동 제안하지 않는다.
+```
+
+### 변경 조건
+
+```text
+제품 방향이 다시 변경되고 사용자가 게임 사운드 지원을 명시적으로 재승인한 경우에만 재검토한다.
+단순 품질 개선, 외부 사운드 자산 확보 또는 엔진 기본 기능 존재만으로 이 결정을 변경하지 않는다.
+```
+
+---
+
+## 0-2. CF-PDL-0010 — 세미리얼 FAB 우선 FX 제작과 위치·생명주기 규칙을 사용한다
+
+- 상태: `Accepted`
+- 결정일: 2026-07-24
+- 적용 기능: `CF-FQ-024`
+
+### 결정
+
+```text
+- CarFight 전투 FX의 최종 미술 방향은 세미리얼로 한다.
+- 1인 개발 일정에 맞춰 직접 신규 제작보다 FAB FX 팩 활용을 기본으로 한다.
+- FAB 원본 자산은 직접 수정하지 않고, 필요한 경우 /Game/CarFight/FX/Adapted에 복제한다.
+- P0는 Muzzle, Impact와 Destroyed의 기능적 가독성을 우선하며 고급 미술 통일은 후속으로 둔다.
+- 메시에 고정된 위치는 Mesh Socket, 충돌로 결정되는 위치는 World Transform, 런타임 피벗은 SceneComponent를 사용한다.
+- CarFight의 Muzzle과 FX_Exhaust 소켓 +X축은 FX 방출 방향으로 통일한다.
+- FAB Niagara의 축 차이는 소켓을 바꾸지 않고 FX DataAsset RotationOffset으로 보정한다.
+- 소켓이 없으면 ProjectileData의 Fallback Relative Transform을 사용한다.
+- Muzzle, Impact와 Destroyed 일회성 FX는 UCFCombatFxComp가 요청한다.
+- Projectile 추진 화염과 Trail 지속형 FX는 ACFProjectileActor가 직접 소유하고 Pool 반환 전에 정지·초기화한다.
+- P0에서는 Projectile Trail 자연 소멸, 별도 FX Pool, 다중 노즐과 표면별 Impact를 구현하지 않는다.
+```
+
+### 이유
+
+```text
+- 전담 FX 아티스트가 없는 1인 개발 환경에서 Niagara를 처음부터 제작하면 일정 위험이 크다.
+- 외부 완성 자산을 DataAsset으로 교체 가능하게 연결하면 코드 재작업 없이 후보를 바꿀 수 있다.
+- 위치 유형을 구분하지 않으면 무기·발사체마다 소켓, 컴포넌트와 월드 좌표 예외가 늘어난다.
+- Projectile Actor는 이미 Pool 생명주기를 소유하므로 지속형 FX 초기화도 같은 주체가 담당하는 것이 안전하다.
+- P0에서 자연 소멸과 별도 FX Pool까지 구현하면 시각 품질보다 생명주기 복잡도가 먼저 증가한다.
+```
+
+### 영향
+
+```text
+- 대표 설계는 Document/Plan/CombatFxAudio/ImplementationDesign.md v0.3.0 이상을 사용한다.
+- FAB 자산 반입과 후보 선별은 Document/Plan/CombatFxAudio/AssetPreparationChecklist.md를 사용한다.
+- UCFCombatFxData는 Niagara 선택과 Scale / RotationOffset을 소유한다.
+- UCFProjectileData는 TrailAttachSocketName과 TrailFallbackRelativeTransform 같은 메시 구조 정보를 소유한다.
+- ACFProjectileActor에는 지속형 NiagaraComponent와 Activate / Deactivate / Reset 수명이 추가될 수 있다.
+- CarFight_Re C++에서 Niagara 타입을 사용하기 전 Build.cs에 Niagara 모듈 의존성을 추가한다.
+- FX 자산 또는 소켓 누락은 발사, 이동, 충돌, 피해와 파괴 판정을 실패시키지 않는다.
+```
+
+### 변경 조건
+
+```text
+전담 FX 인력이 추가되거나, 현재 FAB 자산으로 제품 품질 목표를 달성할 수 없다는 반복 검증 결과가 있을 때 제작 정책을 재검토한다.
+멀티플레이 원격 FX, 대규모 동시 전투 또는 자연 소멸 Trail이 실제 플레이 가독성에 필수라고 확인되기 전에는 P0 생명주기 규칙을 확장하지 않는다.
+```
 
 ---
 
@@ -348,7 +466,7 @@ CarFight는 직접 조준 감각과 차량/터렛/락온/자원 운용이 함께
 
 ---
 
-## CF-PDL-0008 — Reticle/UI 피드백과 실제 전투 FX/Audio를 분리하고 데이터 기반 연출 계층으로 구현한다
+## CF-PDL-0008 — Reticle/UI 피드백과 실제 전투 FX를 분리하고 데이터 기반 연출 계층으로 구현한다
 
 - 상태: `Accepted`
 - 결정일: 2026-07-15
@@ -357,9 +475,9 @@ CarFight는 직접 조준 감각과 차량/터렛/락온/자원 운용이 함께
 
 ```text
 CF-FQ-017은 Reticle 색상, 상태 문구와 쿨다운 UI를 소유하는 완료 기능으로 유지한다.
-실제 발사, Impact와 차량 파괴 Niagara / 공간 사운드는 CF-FQ-024가 별도 기능으로 소유한다.
+실제 발사, Impact와 차량 파괴 Niagara는 CF-FQ-024가 별도 기능으로 소유한다.
 발사 승인, 첫 Blocking Hit과 최초 Destroyed 전환은 기존 전투 C++ 판정이 소유하고, 연출 계층은 확정된 결과를 다시 계산하지 않는다.
-FX / Audio 자산은 WeaponData, ProjectileData, VehicleData가 참조하는 공용 연출 DataAsset에서 선택하며 소스 코드에 자산 경로를 하드코딩하지 않는다.
+FX 자산은 WeaponData, ProjectileData, VehicleData가 참조하는 공용 연출 DataAsset에서 선택하며 소스 코드에 자산 경로를 하드코딩하지 않는다.
 ```
 
 ### 이유
@@ -367,7 +485,7 @@ FX / Audio 자산은 WeaponData, ProjectileData, VehicleData가 참조하는 공
 ```text
 UI 피드백과 월드 연출을 한 기능으로 묶으면 완료된 Reticle 상태를 다시 열게 되고, 전투 판정과 자산 제작의 생명주기가 섞인다.
 현재 발사·피격·피해·파괴 판정은 검증됐으므로 연출은 그 결과를 소비하는 독립 계층이어야 한다.
-DataAsset 기반 참조를 사용하면 1인 개발 환경에서 C++ 재빌드 없이 Niagara, SoundCue 또는 MetaSound와 Attenuation을 교체·튜닝할 수 있다.
+DataAsset 기반 참조를 사용하면 1인 개발 환경에서 C++ 재빌드 없이 Niagara 자산과 시각 파라미터를 교체·튜닝할 수 있다.
 ```
 
 ### 영향
@@ -376,7 +494,7 @@ DataAsset 기반 참조를 사용하면 1인 개발 환경에서 C++ 재빌드 �
 - CF-FQ-024를 P0 Active 기능으로 추가한다.
 - 대표 Plan은 Document/Plan/CombatFxAudio/ImplementationDesign.md를 사용한다.
 - C++는 호출 시점, 요청 데이터, null 안전성, 중복 방지와 Projectile Pool 초기화를 담당한다.
-- Blueprint와 Unreal Editor 자산은 Niagara, SoundWave/SoundCue/MetaSound, Attenuation과 DataAsset 연결을 담당한다.
+- Blueprint와 Unreal Editor 자산은 Niagara, Material, Decal과 DataAsset 연결을 담당한다.
 - 연출 자산 누락 또는 재생 실패는 발사·피해·파괴 결과를 취소하지 않는다.
 - P0는 발사, 첫 Impact와 최초 파괴의 1회성 연출까지만 포함하며 고급 믹싱·표면 분기·Geometry Collection 파괴는 후속으로 둔다.
 - 완료 검증은 CF-TC-021이 소유한다.
@@ -385,7 +503,7 @@ DataAsset 기반 참조를 사용하면 1인 개발 환경에서 C++ 재빌드 �
 ### 변경 조건
 
 ```text
-멀티플레이 원격 연출 복제, 물리 표면별 Impact, 완성형 차량 오디오 또는 대규모 Presentation Subsystem이 필요해지면 데이터 소유와 호출 주체를 재검토한다.
+멀티플레이 원격 연출 복제, 물리 표면별 Impact 또는 대규모 Presentation Subsystem이 필요해지면 데이터 소유와 호출 주체를 재검토한다.
 그 전까지 판정과 연출 분리, 데이터 기반 자산 참조 원칙을 유지한다.
 ```
 
@@ -399,10 +517,11 @@ DataAsset 기반 참조를 사용하면 1인 개발 환경에서 C++ 재빌드 �
 - 싱글용 GameMode를 새로 만들지, 기존 기본 실행 흐름을 조정할지
 - `CFMPGameMode`와 `CarFight_ReServer.Target.cs`를 장기 보존할지 별도 브랜치/Archive 기준으로 분리할지
 - CFNetSmooth 서브모듈을 현재 프로젝트에서 언제 다시 볼지
-- 기준 전투 사운드를 SoundCue와 MetaSound Source 중 어느 방식으로 제작할지
-- Projectile Trail과 비행 사운드를 CF-FQ-024 P0 선택 범위에 포함할지 CF-FQ-020으로 이관할지
-- 물리 표면별 Impact FX / Audio 분기를 언제 도입할지
-- 엔진음, 타이어음과 차량 충돌음을 다루는 전체 차량 Audio 기능을 언제 별도 Feature로 열지
+- FAB 자산 조사 후 Vehicle Impact와 World Impact를 P0에서 분리할지
+- Projectile Trail 자연 소멸과 별도 FX Pool을 언제 도입할지
+- 다중 미사일 노즐과 다중 FX 소켓 배열을 언제 지원할지
+- 물리 표면별 Impact FX 분기를 언제 도입할지
+- 파괴 후 차량에 부착되는 지속 연기와 화염을 언제 도입할지
 ```
 
 ---
@@ -425,7 +544,7 @@ DataAsset 기반 참조를 사용하면 1인 개발 환경에서 C++ 재빌드 �
 
 ## 7. 문서 버전 관리
 
-- 현재 문서 버전: `v1.3.0`
+- 현재 문서 버전: `v1.7.0`
 - 문서 상태: `Active`
 
 ### 버전 증가 기준
@@ -439,6 +558,36 @@ DataAsset 기반 참조를 사용하면 1인 개발 환경에서 C++ 재빌드 �
 ---
 
 ## 8. 체인지로그
+
+### v1.7.0 - 2026-07-24
+
+```text
+- 현재 우선순위 결정을 CF-FQ-026 TargetSelect에서 CF-FQ-024 전투 FX 활성화로 변경했다.
+- CF-FQ-024의 현재 단계를 Phase 0 FAB FX 자산 반입과 후보 선별로 고정했다.
+- CF-FQ-026은 TS-P0-00~07 Done / TS-P0-08 Paused로 보존했다.
+- ActiveWork와 ProjectSSOT가 CombatFxAudio Plan과 AssetPreparationChecklist를 우선 복원하도록 변경했다.
+```
+
+### v1.6.0 - 2026-07-24
+
+```text
+- CF-PDL-0010 세미리얼 FAB 우선 FX 제작과 위치·생명주기 결정을 Accepted로 추가했다.
+- FAB 원본 보존, 최소 수정, CarFight Adapted 복제 경로와 P0 범위 제한을 고정했다.
+- 고정 위치 Socket, 충돌 위치 World Transform, 런타임 피벗 SceneComponent 구분을 공식화했다.
+- Muzzle과 FX_Exhaust +X 방출 축, RotationOffset 보정과 Fallback Relative Transform 계약을 추가했다.
+- Projectile 지속형 FX를 ACFProjectileActor가 소유하고 Pool 반환 전 즉시 초기화하도록 결정했다.
+- CF-PDL-0008에 남아 있던 과거 Audio 표현을 CF-PDL-0009 기준에 맞춰 시각 FX 전용으로 정리했다.
+- 후속 결정 후보에서 사운드 관련 항목을 제거하고 실제 FX 확장 후보로 교체했다.
+```
+
+### v1.5.0 - 2026-07-24
+
+```text
+- CF-PDL-0009 게임 사운드 비지원 결정을 Accepted로 추가했다.
+- CF-PDL-0008의 Audio 관련 계약을 CF-PDL-0009로 대체하고 Niagara 기반 시각 연출 원칙만 유지했다.
+- CF-FQ-024를 전투 FX 전용 Ready 기능으로 변경했다.
+- 향후 AI와 개발 작업이 사운드를 후보나 누락 기능으로 자동 제안하지 않도록 고정했다.
+```
 
 ### v1.3.0 - 2026-07-15
 
@@ -487,6 +636,35 @@ DataAsset 기반 참조를 사용하면 1인 개발 환경에서 C++ 재빌드 �
 ---
 
 ## 9. Migration
+
+### v1.7.0 적용 안내
+
+```text
+- 새 세션은 CF-FQ-024와 CombatFxAudio Plan 문서 2개를 우선 복원한다.
+- Phase 0에서는 FAB Niagara 후보 조사와 선별만 수행하고 판정 C++를 변경하지 않는다.
+- CF-FQ-026은 TS-P0-08 Paused이며 TargetSelect 변경은 사용자가 다시 주력 작업으로 전환할 때 재개한다.
+- 전투 FX 구현은 CF-PDL-0009 사운드 비지원과 CF-PDL-0010 FAB 우선 규칙을 함께 따른다.
+```
+
+### v1.6.0 적용 안내
+
+```text
+- CF-FQ-024 재개 시 ImplementationDesign.md와 AssetPreparationChecklist.md를 함께 읽는다.
+- FAB 팩을 프로젝트에 반입하기 전에는 구체 Niagara 자산명이나 성능을 추정으로 확정하지 않는다.
+- 외부 FX 자산은 DataAsset으로 연결하고 원본 폴더를 직접 수정하지 않는다.
+- 소켓 누락을 기능 실패로 처리하지 않고 Fallback Transform을 사용한다.
+- Projectile 지속형 FX 초기화는 ACFProjectileActor와 Projectile Pool 수명 안에서 처리한다.
+- Trail 자연 소멸, 다중 노즐, 표면별 Impact와 지속 파괴 FX는 P0 완료 조건이 아니다.
+```
+
+### v1.5.0 적용 안내
+
+```text
+- CF-PDL-0009가 CF-PDL-0008의 모든 Audio 계약보다 우선한다.
+- CF-FQ-024와 CombatFxAudio 경로는 시각 FX 전용으로 해석한다.
+- Sound 자산, Audio 런타임과 오디오 모듈을 구현하거나 테스트하지 않는다.
+- 제품 방향이 사용자에 의해 명시적으로 재변경되기 전에는 사운드 기능을 재활성화하지 않는다.
+```
 
 ### v1.3.0 적용 안내
 

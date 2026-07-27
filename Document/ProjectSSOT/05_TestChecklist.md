@@ -1,7 +1,7 @@
 # CarFight — 05_TestChecklist
 
-> 문서 버전: v1.9.0
-> 작성일(Asia/Seoul): 2026-07-15
+> 문서 버전: v1.11.0
+> 작성일(Asia/Seoul): 2026-07-27
 > 문서 상태: Active
 > 역할: CarFight의 **완료된 Systems 기준 최소 회귀 테스트**를 관리한다.
 
@@ -67,7 +67,7 @@
 12. Reticle이 지시하는 월드 목표점, 터렛 추적 방향, Muzzle 발사 방향, 실제 탄환 방향은 하나의 Aim Solution을 공유해야 한다.
 13. 고속 Projectile은 단일 프레임 위치 검사만으로 PASS 처리하지 않고 Sweep/Sub-stepping 및 필요 시 보조 Sphere Sweep으로 연속 충돌을 검증한다.
 14. 터렛 정렬 중 발사는 `UCFTurretMountData.bAllowFireWhileAligning`의 true/false 정책을 각각 검증하며, 두 정책 모두 `MuzzleBlocked`와 `TurretAligning` 표시 의미를 유지해야 한다.
-15. 전투 FX / Audio는 승인된 발사, 첫 Blocking Hit와 최초 Destroyed 전환에만 1회 발생해야 하며 연출 실패가 전투 판정을 바꾸면 안 된다.
+15. 전투 시각 FX는 승인된 발사, 첫 Blocking Hit와 최초 Destroyed 전환에만 1회 발생해야 하며 FX 생성 실패가 전투 판정을 바꾸면 안 된다. 게임 오디오 참조는 0개를 유지한다.
 ```
 
 ---
@@ -91,7 +91,7 @@
 
 ```text
 1. 기준 차량 1대가 주행 중 조준과 발사를 수행한다.
-2. 발사 성공/불가/쿨다운 상태가 Reticle, 간단한 UI, 이펙트, 사운드 후보로 읽힌다.
+2. 발사 성공/불가/쿨다운 상태가 Reticle, 간단한 UI와 시각 이펙트로 읽힌다.
 3. 발사 결과가 빗나감/피격 기록으로 남고, 후속 단계에서 피해 처리로 이어질 수 있어야 한다.
 4. 주행, 조준, 발사, 피격, 피해 흐름을 반복해도 상태가 꼬이지 않는다.
 5. 조작감, 전투 템포, 피드백 문제를 기능 차단과 품질 후속으로 분리한다.
@@ -261,27 +261,54 @@ Align Fire Policy 구현 및 빌드 완료:
   - 주행·거리별 정량 오차와 경계각 검증은 CF-FQ-019 확장 회귀
 ```
 
-## 4-8. CF-FQ-024 전투 FX / Audio 검증 기준
+## 4-8. 2026-07-27 전투 FX 최종 검증 결과
 
-현재 구현 전 테스트 계약:
+구현·빌드 확인:
 
 ```text
-- 승인된 발사 1회당 실제 Muzzle 위치에서 발사 FX와 공간 사운드가 각 1회 발생한다.
-- Cooldown, NoWeapon, AimBlocked와 MuzzleBlocked 거부에서는 발사 FX와 사운드가 발생하지 않는다.
-- HitScan과 Projectile은 FCFDamageHitContext의 첫 ImpactPoint / ImpactNormal에서 FX와 사운드를 각 1회 발생시킨다.
-- Projectile OnComponentHit과 보조 Sweep은 같은 Impact 연출을 중복 재생하지 않는다.
-- 최초 Destroyed 상태 전환에서만 파괴 FX와 사운드가 각 1회 발생하며 추가 피해에서 반복되지 않는다.
-- Projectile Pool 재사용에서 Trail, Niagara 또는 Audio 상태가 남지 않는다.
-- 연출 자산이 비어 있거나 재생에 실패해도 발사·피해·파괴 판정은 유지된다.
+- UCFCombatFxData / UCFCombatFxComp 데이터 기반 런타임 구현 완료
+- WeaponData Fire, ProjectileData Impact와 VehicleData Destroyed 참조 구현 완료
+- ACFCombatFxPreviewActor EditorOnly 튜닝 도구 구현 완료
+- MaximumLifetimeSeconds Loop 잔류 안전 퓨즈 구현 완료
+- UCFVehicleData.DestroyedFxSocketName 기본 FX_Destroyed 구현 완료
+- 공식 Admin Editor 빌드 3건 PASS
+- 최신 사용자 직접 Editor 빌드 PASS / Admin Build Job ID 없음
+- /Game/CarFight/FX/Data CombatFxData AssetDump 3개 성공 / 실패 0
+```
+
+최종 사용자 PIE:
+
+```text
+Muzzle
+- 승인된 정상 발사 1회당 FX 1회: PASS
+- 발사 거부에서 FX 0회: PASS
+
+Impact
+- FCFDamageHitContext.ImpactLocation 실제 충돌 위치: PASS
+- 첫 유효 Impact 1회: PASS
+- OnComponentHit / 보조 Sweep 중복 없음: PASS
+- 재생 후 잔류 없음: PASS
+
+Destroyed
+- SM_Body.FX_Destroyed 소켓 위치: PASS
+- 최초 Destroyed 전환 1회: PASS
+- 추가 피해 중복 없음: PASS
+- 재생 후 잔류 없음: PASS
+
+회귀
+- 조준·발사·피격·피해·파괴 기존 흐름: PASS
+- 게임 오디오 자산·클래스·모듈 참조 0개 유지: PASS
 ```
 
 현재 판정:
 
 ```text
-- CF-FQ-024: Active / Implementation Not Started
-- CF-TC-021: TODO
-- 신규 Build / PIE 결과 없음
+- CF-FQ-024: Done / User PIE PASS
+- CF-TC-021: PASS / Visual FX Only
+- Current System: Document/Systems/Combat/CombatFx.md
 ```
+
+프로젝트 결정 `CF-PDL-0009`에 따라 소리 재생 여부는 PASS 조건이 아니며 게임 사운드 테스트를 추가하지 않는다.
 
 ## 4-9. 2026-07-21 이중 레티클 검증 결과
 
@@ -333,7 +360,7 @@ Align Fire Policy 구현 및 빌드 완료:
 | `CF-TC-018` | Feel | 전투 템포/피드백 | 조작감, 발사 리듬, 피격 반응 문제가 기능 차단과 품질 후속으로 분리됨 | `Document/Systems/Combat/CombatFeel.md` 예정 | `TODO` |
 | `CF-TC-019` | Combat | Reticle·터렛·총구 정렬 | 동일 Aim Solution을 공유하고, `bAllowFireWhileAligning` true/false 양쪽에서 실제 발사 방향·거부 조건·TurretAligning·MuzzleBlocked 표시가 정책대로 동작함 | `Document/Plan/AimFireAlignment/ImplementationDesign.md`, `Document/Systems/Vehicles/VehicleAim.md`, `Document/Systems/Combat/WeaponFire.md`, `Document/Systems/UI/AimReticle.md` | `PASS` |
 | `CF-TC-020` | Combat | 고속 Projectile 연속 충돌 | 30 FPS + 기준 속도 4배에서 차량과 얇은 벽을 통과하지 않고 첫 Hit을 한 번 기록하며 Pool 재사용이 정상임 | `Document/Plan/ProjectileContinuousCollision/ImplementationDesign.md`, `Document/Systems/Combat/Projectile.md`, `Document/Systems/Combat/DamageHitContext.md` | `PASS` |
-| `CF-TC-021` | Presentation | 전투 FX / Audio | 승인된 발사, 첫 Impact와 최초 파괴에서 FX·Sound가 각 1회 발생하고 거부·중복 판정·Pool 재사용에서 중복 또는 잔류가 없음 | `Document/Plan/CombatFxAudio/ImplementationDesign.md`, 완료 후 `Document/Systems/Combat/CombatFxAudio.md` | `TODO` |
+| `CF-TC-021` | Presentation | 전투 FX | 승인된 발사, 첫 Impact와 최초 파괴에서 Niagara FX가 각 1회 발생하고 거부·중복 판정·반복 전투에서 중복 또는 잔류가 없으며 게임 오디오 참조가 0개임 | `Document/Systems/Combat/CombatFx.md`, `Document/Plan/CombatFxAudio/ImplementationDesign.md` | `PASS` |
 | `CF-TC-022` | UI | 조준·터렛 이중 레티클 | Image_CenterDot은 사용자 조준점을 유지하고 Image_WeaponReticle은 CurrentMuzzleDirection 기반 터렛 조준 지점을 탄종·착탄 위치와 무관하게 표시 | `Document/Plan/ReticleAimDirection/ImplementationDesign.md`, `Document/Systems/UI/AimReticle.md`, `Document/Systems/Vehicles/VehicleAim.md` | `PASS` |
 
 ---
@@ -588,7 +615,7 @@ Align Fire Policy 구현 및 빌드 완료:
 
 ```text
 - 플레이어가 발사 성공, 발사 불가, 쿨다운, 무기 없음 상태를 즉시 이해할 수 있다.
-- 이펙트/사운드가 없어도 판정 흐름을 추적할 수 있다.
+- 시각 FX 자산이 없어도 UI와 Debug로 판정 흐름을 추적할 수 있다.
 - 피드백은 WeaponFire 판정 결과를 임의로 바꾸지 않는다.
 ```
 
@@ -814,7 +841,7 @@ Align Fire Policy 구현 및 빌드 완료:
 
 ## 15. 문서 버전 관리
 
-- 현재 문서 버전: `v1.9.0`
+- 현재 문서 버전: `v1.11.0`
 - 문서 상태: `Active`
 
 ### 버전 증가 기준
@@ -828,6 +855,24 @@ Align Fire Policy 구현 및 빌드 완료:
 ---
 
 ## 16. 체인지로그
+
+### v1.11.0 - 2026-07-27
+
+```text
+- CF-FQ-024 최종 사용자 PIE 전체 PASS를 기록했다.
+- Muzzle 정상 발사 1회와 발사 거부 0회, Impact 실제 위치·첫 1회·중복·잔류 없음, Destroyed FX_Destroyed 위치·최초 1회·추가 피해 중복·잔류 없음을 PASS 처리했다.
+- 기존 조준·발사·피격·피해·파괴 회귀 PASS를 기록했다.
+- CF-TC-021을 TODO에서 PASS로 변경하고 Document/Systems/Combat/CombatFx.md를 현재 기준 문서로 연결했다.
+- CF-FQ-024를 Done / User PIE PASS로 기록했다.
+```
+
+### v1.10.0 - 2026-07-24
+
+```text
+- CF-TC-021을 전투 FX 전용 시각 연출 테스트로 변경했다.
+- Sound 재생 완료 조건을 제거하고 게임 오디오 에셋·클래스·모듈 참조 0개를 PASS 조건으로 추가했다.
+- 공통 전투 루프와 FireFeedback 테스트 문구를 UI와 시각 FX 기준으로 정리했다.
+```
 
 ### v1.9.0 - 2026-07-21
 
@@ -999,6 +1044,25 @@ Align Fire Policy 구현 및 빌드 완료:
 ---
 
 ## 17. Migration
+
+### v1.11.0 적용 안내
+
+```text
+- CF-TC-021은 PASS이며 CF-FQ-024 완료 범위의 최소 회귀 기준으로 사용한다.
+- 현재 전투 FX 구현 판단은 Document/Systems/Combat/CombatFx.md를 우선한다.
+- Impact는 NS_BasicHit 현재 크기를 P0 승인값으로 사용한다.
+- Destroyed 위치는 차량별 SM_Body.FX_Destroyed 소켓을 기준으로 검증한다.
+- 게임 사운드는 테스트 누락 항목이 아니라 프로젝트 전역 N/A 정책이다.
+```
+
+### v1.10.0 적용 안내
+
+```text
+- CF-TC-021은 Visual FX Only TODO로 해석한다.
+- 소리 재생 여부는 테스트하지 않으며 오디오 참조가 추가되면 정책 위반으로 기록한다.
+- 완료 후 Systems 경로는 Document/Systems/Combat/CombatFx.md를 사용한다.
+- 기존 Combat 판정과 UI PASS 상태는 유지한다.
+```
 
 ### v1.9.0 적용 안내
 

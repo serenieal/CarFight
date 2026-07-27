@@ -2,8 +2,8 @@
 
 > 역할: CarFight 프로젝트의 **현재 실제 기준선 / 임시 운영 편차 / 현재 리스크**를 고정한다.
 > 공통 규칙 원본: `Document/SSOT/`
-> 문서 버전: v2.3.0
-> 마지막 정리(Asia/Seoul): 2026-07-15
+> 문서 버전: v2.12.0
+> 마지막 정리(Asia/Seoul): 2026-07-27
 
 
 ---
@@ -14,11 +14,122 @@
 
 ---
 
-## 2026-07-15 현재 프로젝트 상태
+## 2026-07-27 현재 프로젝트 상태
+
+### 1. 현재 활성 작업
+
+현재 자동 선택된 CarFight 활성 작업은 없다.
+
+```text
+최근 완료: CF-FQ-024 전투 FX / Done / User PIE PASS / CF-TC-021 PASS
+현재 시스템: Document/Systems/Combat/CombatFx.md
+다음 착수 후보: CF-FQ-019 주행·전투 반복 테스트
+일시중지 유지: CF-FQ-026 타겟 선택 시스템 / TS-P0-08
+```
+
+`CF-FQ-019`는 선행 Combat FX 완료로 착수 가능한 Candidate지만 사용자의 명시적 선택 전에는 Active로 전환하지 않는다.
+`CF-FQ-026`은 `TS-P0-00~07 Done / TS-P0-08 P0 검증과 튜닝 Paused` 상태로 보존한다.
+
+### 프로젝트 전역 사운드 제외 결정
+
+```text
+- CarFight는 게임 사운드를 구현하거나 제공하지 않는다.
+- SoundWave, SoundCue, MetaSound Source, Sound Attenuation 자산을 제작·도입하지 않는다.
+- USoundBase, UAudioComponent와 사운드 재생 함수를 런타임 계약에 추가하지 않는다.
+- AudioMixer, Audio Modulation과 별도 오디오 플러그인 의존성을 추가하지 않는다.
+- 엔진음, 타이어음, 차량 충돌음, 무기 발사음, 피격음, 파괴음, UI음과 BGM은 기능·품질·테스트 완료 조건에서 제외한다.
+- Unreal이 생성한 기본 플랫폼 오디오 설정은 유지할 수 있으나 CarFight 게임 기능으로 해석하지 않는다.
+```
+
+아래 과거 상태 기록에 남은 `FX / Audio`, `사운드`, `SFX` 표현은 당시 계획 이력이며 현재 구현 지시로 사용하지 않는다.
+
+### 2. 전투 FX 현재 실제 기준선
+
+현재 확정된 설계 기준:
+
+```text
+- 최종 미술 방향: 세미리얼
+- 제작 정책: FAB FX 팩 우선 활용 / 직접 신규 제작 최소화
+- P0 핵심: Muzzle, 첫 Impact, 최초 Destroyed Niagara FX
+- 고정 위치: Mesh Socket 우선
+- 충돌 위치: FCFDamageHitContext 월드 Transform
+- Projectile 지속 FX: ACFProjectileActor가 소유하고 Pool 반환 전 초기화
+- 게임 사운드: 프로젝트 전역 비지원
+```
+
+현재 구현·자산 상태:
+
+```text
+- UCFCombatFxData와 UCFCombatFxComp C++ 구현 완료
+- CarFight_Re.Build.cs Niagara 모듈 의존성 반영 완료
+- WeaponData DefaultFireFxData, ProjectileData DefaultImpactFxData와 VehicleData DefaultDestroyedFxData 추가 완료
+- ACFVehiclePawn 승인 발사, HitScan Impact, Projectile Impact와 VehicleHealth 최초 파괴 FX 요청 연결 완료
+- ACFCombatFxPreviewActor v1.2.0 EditorOnly 도구 구현 완료
+- Editor Viewport 자동 반복, Uniform Scale, 최대 수명 자동 정지, Override Niagara 적용과 두 Scale 전달 모드 구현 완료
+- UCFCombatFxData.MaximumLifetimeSeconds와 런타임 Loop 강제 제거 안전 퓨즈 구현 완료
+- UCFVehicleData.DestroyedFxSocketName 기본값 `FX_Destroyed`와 SM_Body 소켓 우선 파괴 위치 해석 구현 완료
+- C++ Foundation Build Job bd5a50bf388049ec84123aec4942ae96 / Exit Code 0
+- Editor Preview Tool 최초 Build Job c9682d4a0be24ead95e87a5a7e8b5849 / Exit Code 0
+- Rapid Preview Tuning Build Job 89b6d82710af47e89a4c5b3823037d4e / Exit Code 0
+- 최신 C++ 변경은 사용자가 직접 Editor 빌드 PASS를 확인했으며 Admin Build Job ID는 없다.
+- `/Game/CarFight/FX/Data`의 CombatFxData 3개를 AssetDump로 다시 확인했으며 3개 성공, 0개 실패다.
+- Impact P0 Niagara는 `/Game/sA_Megapack_v1/sA_StylizedAttacksPack/FX/NiagaraSystems/NS_BasicHit`으로 사용자 확정했다.
+- NS_BasicHit의 외부 Transform Scale 미반응은 허용하며 현재 자산 크기를 그대로 사용하고 추가 스케일 튜닝을 중단한다.
+- 현재 기준 VehicleData는 `/Game/CarFight/Vehicles/Data/Definitions/DA_TestSedan`이다.
+- 기준 차체 메시 `/Game/CarFight/Vehicles/Meshes/Sedan/Sedan`에 `FX_Destroyed` 소켓을 배치한 뒤 폭발 위치가 해결됐음을 사용자가 확인했다.
+- Destroyed 위치는 SM_Body 소켓, SM_Body Bounds 중심, Actor Transform, DamageHitContext 순으로 Fallback한다.
+- DA_PoliceCar는 현재 사용하지 않는 폐기 자산이며 신규 FX 연결 대상이 아니다.
+- NS_Explossion은 Loop 반복으로 Destroyed P0 후보에서 제외한다.
+- SmokeBuilder는 NiagaraSystem 0개와 Cascade ParticleSystem 64개이며 현재 Niagara 전용 P0 계약에는 사용하지 않는다.
+- AssetDump 프로필의 DataAsset 프로퍼티 미노출 제한은 유지하며 실제 연결은 사용자 Editor 저장 상태를 우선한다.
+- 최종 사용자 PIE에서 승인 발사 Muzzle 1회, 발사 거부 0회, Impact 실제 위치·첫 1회·중복·잔류 없음, Destroyed FX_Destroyed 소켓 위치·최초 1회·추가 피해 중복 없음과 기존 전투 회귀를 모두 PASS했다.
+- `CF-TC-021`은 PASS이며 현재 구현 문서는 `Document/Systems/Combat/CombatFx.md`다.
+```
+
+따라서 `CF-FQ-024`는 **Done / User PIE PASS / CF-TC-021 PASS**로 판정한다. 현재 구현 기준은 `Document/Systems/Combat/CombatFx.md`로 승격한다.
+
+### 3. 현재 구현 원칙
+
+```text
+- 발사·피격·피해·파괴 판정과 FX 연출을 분리한다.
+- FX 자산 누락 또는 생성 실패가 전투 판정을 취소하지 않는다.
+- FAB 원본은 직접 수정하지 않고 필요한 자산만 CarFight Adapted 경로로 복제한다.
+- Muzzle과 FX_Exhaust 소켓 +X축을 방출 방향으로 통일한다.
+- FAB Niagara 축 차이는 RotationOffset으로 보정한다.
+- Projectile FX 소켓이 없으면 ProjectileData Fallback Relative Transform을 사용한다.
+- Destroyed FX는 차량별 SM_Body.FX_Destroyed 소켓을 우선하고 누락 시 SM_Body Bounds 중심을 사용한다.
+- Impact P0는 NS_BasicHit을 현재 크기 그대로 사용하며 범용 Niagara Scale 완성을 다시 열지 않는다.
+- P0에서는 Trail 자연 소멸, 별도 FX Pool, 다중 노즐과 표면별 Impact를 제외한다.
+- TargetSelect TS-P0-00~07 완료 코드와 에셋은 FX 작업 중 변경하지 않는다.
+```
+
+### 4. 다음 작업 선택 기준
+
+현재 완료 처리 이후 새 기능은 자동 착수하지 않는다.
+
+```text
+우선 착수 후보: CF-FQ-019 주행·전투 반복 테스트
+- 완료된 조준·발사·Projectile·Damage·CombatFx를 반복 전투에서 함께 회귀 검증
+- Candidate 상태이며 사용자 선택 시 Active로 전환
+
+일시중지 복귀 후보: CF-FQ-026 타겟 선택 시스템
+- TS-P0-08 후보 표시·범위·디버그 시각 검증 체크포인트 유지
+- Paused 상태이며 사용자 선택 시 재개
+```
+
+`CF-FQ-024` 후속 품질 개선이 필요하면 기존 Done 상태를 되돌리지 않고 `CF-FQ-020` 또는 별도 기능으로 등록한다.
+
+### 5. 일시중지 작업 해석
+
+`CF-FQ-026 타겟 선택 시스템`은 취소되지 않았다. `TS-P0-00~07 Done`, TargetSelect Automation `7/7 PASS`와 `TS-P0-08` 사용자 PIE 결함 체크포인트를 유지한다. 현재 활성 작업은 없으며 다음 착수 판단은 `ActiveWork.md`와 `03_FeatureQueue.md`를 따른다.
+
+---
+
+## 2026-07-21 현재 프로젝트 상태
 
 ### 1. 현재 완료된 전투 기준선
 
-현재 싱글 기준 차량의 최소 전투 판정 루프는 아래 범위까지 완료됐다.
+현재 싱글 기준 차량의 최소 전투 판정 루프와 조준 표시 기준은 아래 범위까지 완료됐다.
 
 ```text
 - CF-FQ-016 차량 무기 조준 및 발사: Done
@@ -26,12 +137,14 @@
 - CF-FQ-018 피격 판정 및 피해 처리: Done
 - CF-FQ-022 조준점·터렛·총구 정렬: Done
 - CF-FQ-023 고속 Projectile 연속 충돌: Done
+- CF-FQ-025 이중 레티클 및 터렛방향 시각화: Done / User PIE PASS
 ```
 
 현재 검증된 흐름:
 
 ```text
 차량 주행
+→ Image_CenterDot 조준점과 CurrentMuzzleDirection 기반 Image_WeaponReticle 터렛 레티클 표시
 → Reticle 목표와 터렛 / Muzzle 정렬
 → 승인된 HitScan 또는 Projectile 발사
 → 시각 차체 SM_Body 첫 Blocking Hit
@@ -544,6 +657,68 @@ DA_PoliceCar
 ---
 
 ## 변경 이력
+- v2.12.0 (2026-07-27)
+  - 최종 사용자 PIE에서 Muzzle 정상 발사 1회와 거부 0회, Impact 위치·1회성·중복·잔류 없음, Destroyed 소켓 위치·최초 1회·추가 피해 중복 없음과 기존 전투 회귀가 모두 PASS했다.
+  - `CF-FQ-024`를 Done으로 전환하고 `CF-TC-021 PASS`를 현재 기준선에 등록했다.
+  - `Document/Systems/Combat/CombatFx.md`를 Current System으로 승격했다.
+  - 현재 자동 선택된 Active 작업을 비우고 `CF-FQ-019`를 착수 가능한 Candidate로 유지했다.
+  - `CF-FQ-026`은 `TS-P0-08 Paused` 상태를 그대로 보존했다.
+
+- v2.11.0 (2026-07-27)
+  - Impact P0 Niagara를 NS_BasicHit으로 사용자 확정하고 외부 Transform Scale 미반응을 허용해 추가 튜닝을 종료했다.
+  - NS_Impact_1, Adapted Niagara와 공용 User Scale 연결 작업을 P0에서 재개하지 않도록 고정했다.
+  - UCFCombatFxData v1.2.0 Scale 전달 모드와 UCFVehicleData.DestroyedFxSocketName 구현 상태를 현재 기준선에 반영했다.
+  - Sedan 차체의 FX_Destroyed 소켓 적용 후 폭발 위치 해결 사용자 결과를 기록했다.
+  - 사용자의 직접 Editor 빌드 PASS와 CombatFxData AssetDump 3/3 성공을 기록했다.
+  - 현재 상태를 Phase 4 Asset Selection·Destroyed Socket Integration Complete / Final PIE Pending으로 변경했다.
+
+- v2.10.0 (2026-07-25)
+  - ACFCombatFxPreviewActor v1.1.0의 자동 반복, Uniform Scale, 최대 수명 자동 정지와 Override Niagara 적용을 현재 기준선에 반영했다.
+  - Build Job 89b6d82710af47e89a4c5b3823037d4e의 UHT·컴파일·링크 성공과 Exit Code 0을 등록했다.
+  - NS_AOE_Explosion_1을 수동 Loop·세미리얼 검토 대기 후보로 고정했다.
+  - SmokeBuilder NiagaraSystem 0개와 Cascade ParticleSystem 64개를 확인하고 현재 Niagara P0 계약에서 제외했다.
+  - 현재 AssetDump 프로필로는 DataAsset 참조 프로퍼티 값을 검증할 수 없음을 기록했다.
+  - 현재 상태를 Phase 3 Rapid Preview Tuning Build PASS / Manual Review·PIE Pending으로 변경했다.
+
+- v2.9.0 (2026-07-24)
+  - ACFCombatFxPreviewActor EditorOnly 도구 구현과 Build Job c9682d4a0be24ead95e87a5a7e8b5849 Exit Code 0을 현재 기준선에 반영했다.
+  - UCFCombatFxData.MaximumLifetimeSeconds와 런타임 Loop 강제 제거 안전 퓨즈를 기록했다.
+  - `/Game/CarFight/FX/Data`의 CombatFxData 3개가 이미 존재하며 AssetDump 3/3 성공임을 반영했다.
+  - 현재 기준 VehicleData를 DA_TestSedan으로 정정하고 DA_PoliceCar를 신규 FX 연결 대상에서 제외했다.
+  - NS_Explossion을 Loop 반복으로 Destroyed P0 후보에서 제외했다.
+  - 현재 상태를 Phase 2 Editor Preview Tool Build PASS / DataAsset Tuning·PIE Pending으로 변경했다.
+
+- v2.8.0 (2026-07-24)
+  - CF-FQ-024 공용 Combat FX C++ 기반과 Niagara 모듈 의존성 구현 완료를 현재 기준선에 반영했다.
+  - 승인 발사, HitScan·Projectile 첫 Impact와 최초 차량 파괴의 데이터 기반 FX 요청 연결을 기록했다.
+  - Build Job bd5a50bf388049ec84123aec4942ae96의 UHT·Editor 빌드 성공과 Exit Code 0을 공식 증거로 등록했다.
+  - 현재 상태를 Phase 1 C++ Foundation Build PASS / DataAsset·PIE Pending으로 변경했다.
+  - 다음 작업을 CombatFxData 3개 생성, 기존 데이터 연결과 사용자 PIE로 고정했다.
+
+- v2.7.0 (2026-07-24)
+  - 사용자 우선순위 변경에 따라 `CF-FQ-024 전투 FX`를 현재 단일 Active 작업으로 승격했다.
+  - 현재 단계를 `Phase 0 FAB FX 자산 반입과 후보 선별`로 고정했다.
+  - `CF-FQ-026`은 `TS-P0-00~07 Done / TS-P0-08 Paused`로 보존했다.
+  - 전투 FX 현재 실제 기준선, 구현 원칙과 바로 다음 자산 조사 작업을 갱신했다.
+  - 반입된 FAB 콘텐츠는 실제 Niagara 목록과 의존성을 확인하기 전까지 후보 확정으로 해석하지 않도록 했다.
+
+- v2.6.0 (2026-07-24)
+  - CarFight 프로젝트 전역 게임 사운드 비지원 결정을 현재 실제 기준선에 추가했다.
+  - CF-FQ-024를 전투 FX 전용 Ready 작업으로 변경하고 CombatFxAudio 경로를 레거시 이름으로 고정했다.
+  - Sound 자산, Audio 런타임, 오디오 모듈과 청각 테스트 완료 조건을 신규 작업에서 금지했다.
+  - 과거 상태 기록의 Audio 표현은 역사 기록이며 현재 구현 지시가 아니라는 해석 규칙을 추가했다.
+
+- v2.5.0 (2026-07-23)
+  - 현재 단일 활성 작업을 `CF-FQ-026 타겟 선택 시스템`으로 전환했다.
+  - `CF-FQ-024`는 취소하지 않고 구현 재개 가능한 Ready 상태로 보존했다.
+  - TS-P0-01 C++ 계약과 Editor 빌드 PASS, Blueprint·PIE Pending 상태를 현재 실제 기준선으로 추가했다.
+  - 바로 다음 작업을 TS-P0-00 조사 결과 복구와 TS-P0-01 검증으로 고정했다.
+
+- v2.4.0 (2026-07-22)
+  - CF-FQ-025 이중 레티클 및 터렛방향 시각화의 Done / User PIE PASS를 현재 완료 기준선에 추가했다.
+  - Image_CenterDot 조준 레티클과 CurrentMuzzleDirection 기반 Image_WeaponReticle 터렛 레티클의 책임 분리를 검증된 흐름에 반영했다.
+  - 현재 활성 병목과 다음 순서는 CF-FQ-024 전투 FX / Audio 기준을 유지했다.
+
 - v2.3.0 (2026-07-15)
   - 완료된 조준·발사·Reticle/UI·피격·피해·고속 Projectile 기준선을 현재 상태로 추가했다.
   - 현재 병목을 실제 전투 FX / Audio 부재로 정리하고 CF-FQ-024를 활성 작업으로 지정했다.
@@ -581,6 +756,98 @@ DA_PoliceCar
 ---
 
 ## Migration
+
+### v2.12.0 적용 안내
+
+```text
+- CF-FQ-024는 Done / User PIE PASS / CF-TC-021 PASS다.
+- 전투 FX 현재 구현 판단은 Document/Systems/Combat/CombatFx.md를 우선한다.
+- CombatFxAudio Plan은 완료 당시 설계·자산 선택·튜닝 기록으로 유지한다.
+- NS_BasicHit Scale 미반응 분석과 NS_Impact_1 튜닝을 P0 작업으로 다시 열지 않는다.
+- 현재 Active 작업은 없으며 CF-FQ-019는 사용자 선택 시에만 Active로 전환한다.
+- CF-FQ-026은 TS-P0-08 Paused 상태를 유지한다.
+```
+
+### v2.11.0 적용 안내
+
+```text
+- 새 세션은 Impact P0 자산을 NS_BasicHit으로 복원하며 Scale 미반응 분석을 다시 열지 않는다.
+- DA_FX_ProtoShellImpact는 FxScale 1,1,1 기준으로 두고 현재 Niagara 내부 크기를 그대로 사용한다.
+- Destroyed FX는 각 차량 SM_Body StaticMesh의 FX_Destroyed 소켓 위치를 사용한다.
+- 소켓 누락 시 SM_Body Bounds 중심 Fallback을 허용하며 위치 오프셋 공통값으로 차량 차이를 해결하지 않는다.
+- 다음 작업은 후보 조사나 Preview 튜닝이 아니라 최종 통합 PIE 한 번이다.
+- PIE PASS 후에만 CF-FQ-024를 Done으로 전환하고 Document/Systems/Combat/CombatFx.md를 생성한다.
+```
+
+### v2.10.0 적용 안내
+
+```text
+- 새 세션은 ACFCombatFxPreviewActor v1.1.0과 Build Job 89b6d82710af47e89a4c5b3823037d4e PASS 상태로 복원한다.
+- FX 크기는 PreviewUniformScale과 자동 반복 재생으로 먼저 조정한다.
+- Override 후보 확정 시 DataAsset 적용 버튼으로 Niagara와 튜닝값을 함께 반영할 수 있다.
+- NS_AOE_Explosion_1은 수동 확인 전까지 최종 Destroyed 후보로 해석하지 않는다.
+- SmokeBuilder Cascade 자산을 위해 현재 Niagara 계약을 확장하지 않는다.
+- 실제 FX 참조 연결은 Editor Details에서 확인하고 저장 후 최종 PIE를 진행한다.
+```
+
+### v2.9.0 적용 안내
+
+```text
+- 새 세션은 ACFCombatFxPreviewActor와 MaximumLifetimeSeconds 안전 퓨즈가 구현·빌드 완료된 상태로 복원한다.
+- 공식 Preview Tool 빌드 증거는 Build Job c9682d4a0be24ead95e87a5a7e8b5849 / Exit Code 0이다.
+- /Game/CarFight/FX/Data의 기존 CombatFxData 3개를 재생성하지 않는다.
+- FX 크기·회전·위치 보정은 Preview Actor에서 먼저 수행하고 DataAsset에 적용·저장한다.
+- 현재 기준 VehicleData는 DA_TestSedan이며 DA_PoliceCar를 신규 FX 연결 대상으로 사용하지 않는다.
+- NS_Explossion은 Loop 부적합 후보이므로 비Loop Destroyed 후보로 교체한다.
+- MaximumLifetimeSeconds는 영구 잔류 방지 안전 퓨즈이며 Loop 자산 채택 근거가 아니다.
+- 사용자 PIE PASS 전에는 CF-FQ-024를 Done 또는 Current System으로 승격하지 않는다.
+```
+
+### v2.8.0 적용 안내
+
+```text
+- 새 세션은 Combat FX C++와 Editor 빌드가 완료된 상태로 복원한다.
+- 공식 성공 증거는 Build Job bd5a50bf388049ec84123aec4942ae96 / Exit Code 0이다.
+- 다음 작업은 CombatFxData 3개 생성과 DA_ProtoTurretCannon, DA_HeavyShell, 현재 기준 DA_PoliceCar 참조 연결이다.
+- FX DataAsset 또는 Niagara 미연결 상태는 기존 전투 판정 실패가 아니다.
+- 사용자 PIE PASS 전에는 CF-FQ-024를 Done 또는 Current System으로 승격하지 않는다.
+```
+
+### v2.7.0 적용 안내
+
+```text
+- 새 세션은 CF-FQ-024와 CombatFxAudio/ImplementationDesign.md를 우선 복원한다.
+- 첫 작업은 AssetPreparationChecklist.md에 따라 반입된 FAB 콘텐츠를 조사하는 Phase 0이다.
+- CF-FQ-026은 TS-P0-08 Paused이며 FX 작업 중 TargetSelect 구현과 검증 증거를 정리하거나 되돌리지 않는다.
+- FAB Niagara 후보가 확정되기 전에는 Combat FX C++ 구현과 DataAsset 생성을 시작하지 않는다.
+- 게임 오디오 자산·클래스·모듈과 청각 테스트를 추가하지 않는다.
+```
+
+### v2.6.0 적용 안내
+
+```text
+- 새 세션은 CF-FQ-026 TargetSelect를 우선 복원한다.
+- CF-FQ-024는 사운드를 제외한 전투 FX 전용 Ready 기능이다.
+- CombatFxAudio 경로명은 유지하지만 UCFCombatFxData와 UCFCombatFxComp 같은 FX 전용 명칭을 사용한다.
+- 게임 오디오 자산·클래스·모듈과 테스트 조건을 추가하지 않는다.
+```
+
+### v2.5.0 적용 안내
+
+```text
+- 새 세션은 CF-FQ-026과 Document/Plan/TargetSelectPlan.md를 우선 복원한다.
+- TS-P0-01 소스와 빌드 성공을 P0 기능 완료나 Systems 승격으로 해석하지 않는다.
+- 기존 전투 FX / Audio 계획과 완료 전투 Systems는 삭제하거나 재작성하지 않는다.
+- CF-FQ-024는 TargetSelect P0 진행 후 재개 가능한 Ready 작업이다.
+```
+
+### v2.4.0 적용 안내
+
+```text
+- CF-FQ-025는 Done / User PIE PASS이며 현재 구현 판단은 AimReticle, VehicleAim과 VehicleDebugPanel Systems 문서를 우선한다.
+- ReticleAimDirection Plan은 완료 당시 설계 기록이며 현재 활성 작업 복원에는 사용하지 않는다.
+- 현재 활성 작업과 신규 구현 시작점은 계속 CF-FQ-024 CombatFxAudio Plan이다.
+```
 
 ### v2.3.0 적용 안내
 

@@ -1,8 +1,8 @@
 # CombatPlan Index
 
-- 문서 버전: v0.21
+- 문서 버전: v0.23
 - 작성일: 2026-06-02
-- 최근 갱신일: 2026-07-15
+- 최근 갱신일: 2026-07-27
 - 문서 상태: Current
 - 담당 범위: CarFight 전략 / 전투 시스템 전체 목차
 
@@ -66,20 +66,25 @@
 - 자동차의 정체성은 접지, 선회, 제동, 충돌, 지형, 장갑 방향에서 드러나야 한다.
 - 고정 무기가 아닌 모든 무기에는 각속도 개념이 존재한다.
 - 강한 한 방 무기는 강해야 하지만, 빠르게 붙거나 측면을 파고드는 상대를 쉽게 따라잡지는 못해야 한다.
-- 발사, Impact와 파괴 결과는 플레이어가 즉시 이해할 수 있도록 화면 FX와 공간 사운드가 판정 결과에 1:1로 대응해야 한다.
+- 발사, Impact와 파괴 결과는 플레이어가 즉시 이해할 수 있도록 화면 UI와 시각 FX가 판정 결과에 1:1로 대응해야 한다.
+- CarFight는 게임 사운드를 지원하지 않으며 청각 피드백을 전투 완성 조건이나 장기 확장 후보로 요구하지 않는다.
 
 ### 4.1 현재 P0 전투 표현 연결
 
-현재 실제 구현 순서와 상세 범위는 ProjectSSOT와 활성 Plan이 소유한다.
+현재 실제 구현 순서와 상세 범위는 ProjectSSOT, Systems와 대표 Plan이 소유한다.
 
 ```text
-현재 활성 기능: CF-FQ-024 전투 FX 및 사운드 구현
-대표 Plan: Document/Plan/CombatFxAudio/ImplementationDesign.md
-검증 ID: CF-TC-021
+현재 전역 Active: 없음
+최근 완료: CF-FQ-024 전투 FX / Done / User PIE PASS
+현재 구현: Document/Systems/Combat/CombatFx.md
+완료 Plan: Document/Plan/CombatFxAudio/ImplementationDesign.md
+검증 ID: CF-TC-021 PASS / Visual FX Only
+다음 Candidate: CF-FQ-019 주행·전투 반복 테스트
+일시중지: CF-FQ-026 타겟 선택 시스템 / TS-P0-08
 ```
 
-P0에서는 승인된 발사, 첫 Impact와 최초 차량 파괴가 Niagara와 공간 사운드로 1회씩 읽히는 최소 기준을 먼저 닫는다.
-무기별 완성형 연출, 물리 표면별 분기, 전체 차량 오디오와 고급 믹싱은 이 장기 CombatPlan의 방향을 따르되 현재 기능 범위로 자동 활성화하지 않는다.
+승인된 발사, 첫 Impact와 최초 차량 파괴가 Niagara FX로 정확히 1회씩 읽히는 P0 기준은 완료됐다.
+`CombatFxAudio`는 레거시 디렉터리명이며 SoundWave, MetaSound, AudioComponent, 차량 오디오와 믹싱은 프로젝트 전역 비지원 범위다.
 
 ---
 
@@ -480,6 +485,19 @@ P1 우선순위 후보:
 ---
 
 ## 23. Changelog
+
+### v0.23
+
+- CF-FQ-024 전투 FX Done / User PIE PASS / CF-TC-021 PASS를 현재 P0 전투 표현 기준에 반영.
+- 현재 전역 Active가 없고 CF-FQ-019가 다음 Candidate임을 반영.
+- CF-FQ-026은 TS-P0-08 Paused 체크포인트로 동기화.
+- 전투 FX 현재 구현 기준을 Document/Systems/Combat/CombatFx.md로 연결.
+
+### v0.22
+
+- 프로젝트 전역 게임 사운드 비지원 결정 `CF-PDL-0009`를 전투 표현 원칙에 반영.
+- 현재 전역 Active를 CF-FQ-026, 후속 Ready를 시각 FX 전용 CF-FQ-024로 정정.
+- CF-TC-021을 Visual FX Only 검증으로 변경하고 Audio 관련 장기 확장 문구를 제거.
 
 ### v0.21
 
