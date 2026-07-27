@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.122.0
-// Date: 2026-07-24
+// Version: 2.123.0
+// Date: 2026-07-25
 // Description: CarFight 싱글플레이 차량 Pawn 구현
 // Changelog:
+// - v2.123.0: 이름이 SM_Body인 표준 차체 StaticMeshComponent를 Combat FX에 제공하는 getter를 구현.
 // - v2.122.0: 차량 TargetPoint를 SM_Body Bounds 중심에 자동 정렬해 인스턴스별 후보 대표 위치 불일치를 보정.
 // - v2.121.0: TS-P0-06 WBP_TargetSelect 기본 로드와 로컬 Viewport 생성·갱신·정리 수명을 연결.
 // - v2.120.0: TS-P0-05 선택·해제 Input Action 로드, Enhanced Input 바인딩과 후보 확정·Manual 해제 명령을 구현.
@@ -70,6 +71,7 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth Visual/Shell 적용 전 기준선을 깨끗하게 만들기 위해 차량 진단 로그와 Owner 표시 안정화 기본값을 False로 통일.
 // Migration:
+// - 파괴 FX는 GetVehicleBodyMeshComponent로 SM_Body를 찾고 차량별 FX_Destroyed 소켓을 우선 사용한다.
 // - 차량 TargetPoint는 SM_Body Bounds 중심에 자동 정렬하며 PreferredBoundsLocalOffset으로 차량별 미세 조정한다.
 // - 선택 입력은 현재 후보가 유효할 때만 선택을 변경하고 후보가 없으면 기존 선택을 유지한다.
 // - 해제 입력은 Manual 사유로 선택만 해제하며 후보 유지와 자동 다음 타겟 금지 정책을 보존한다.
@@ -134,6 +136,7 @@
 #include "CFVehicleAimComp.h"
 #include "CFVehicleCameraComp.h"
 #include "CFVehicleDriveComp.h"
+#include "CFCombatFxComp.h"
 #include "CFVehicleHealthComp.h"
 #include "CFTargetSelectComp.h"
 #include "CFWeaponData.h"
@@ -788,7 +791,8 @@ ACFVehiclePawn::ACFVehiclePawn()
 		ProjectilePoolComp = CreateDefaultSubobject<UCFProjectilePoolComp>(TEXT("ProjectilePoolComp"));
 
 	// [v2.111.0] 차량 최대/현재 체력과 파괴 상태를 관리할 기본 서브오브젝트입니다.
-	VehicleHealthComp = CreateDefaultSubobject<UCFVehicleHealthComp>(TEXT("VehicleHealthComp"));
+						VehicleHealthComp = CreateDefaultSubobject<UCFVehicleHealthComp>(TEXT("VehicleHealthComp"));
+	CombatFxComp = CreateDefaultSubobject<UCFCombatFxComp>(TEXT("CombatFxComp"));
 
 	// [v2.118.0] 후보와 지속 선택 대상의 최소 상태 계약을 관리할 기본 서브오브젝트입니다.
 					TargetSelectComp = CreateDefaultSubobject<UCFTargetSelectComp>(TEXT("TargetSelectComp"));
@@ -1032,6 +1036,22 @@ ECFTargetTrackState ACFVehiclePawn::GetTargetTrackState_Implementation() const
 	return IsValid(VehicleHealthComp) && !VehicleHealthComp->IsDestroyed()
 		? ECFTargetTrackState::Visible
 		: ECFTargetTrackState::Invalid;
+}
+
+UStaticMeshComponent* ACFVehiclePawn::GetVehicleBodyMeshComponent() const
+{
+	TArray<UStaticMeshComponent*> StaticMeshComponents;
+	GetComponents<UStaticMeshComponent>(StaticMeshComponents);
+
+	for (UStaticMeshComponent* StaticMeshComponent : StaticMeshComponents)
+	{
+		if (IsValid(StaticMeshComponent) && StaticMeshComponent->GetFName() == FName(TEXT("SM_Body")))
+		{
+			return StaticMeshComponent;
+		}
+	}
+
+	return nullptr;
 }
 
 bool ACFVehiclePawn::ConfirmCurrentTargetCandidate()
@@ -1284,7 +1304,12 @@ bool ACFVehiclePawn::InitializeVehicleRuntime()
 		const bool bWeaponReady = VehicleWeaponComp ? VehicleWeaponComp->InitializeWeaponRuntime(this, VehicleData) : false;
 
 	// [v2.111.0] VehicleData 최대 체력 또는 안전 기본값으로 차량 체력이 준비됐는지 여부입니다.
-	const bool bHealthReady = VehicleHealthComp ? VehicleHealthComp->InitializeFromVehicleData(VehicleData) : false;
+		const bool bHealthReady = VehicleHealthComp ? VehicleHealthComp->InitializeFromVehicleData(VehicleData) : false;
+
+	if (CombatFxComp)
+	{
+		CombatFxComp->InitializeCombatFxRuntime(this, VehicleData, VehicleHealthComp);
+	}
 
 	bVehicleRuntimeReady = bDriveReady && bWheelSyncReady && bHealthReady;
 	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: Data=%s, Drive=%s, WheelSync=%s, Aim=%s, Weapon=%s, Health=%s, OwnerVisual=%s, Ready=%s | %s | %s | %s"), VehicleData ? TEXT("Present") : TEXT("Missing"), bDriveReady ? TEXT("Ready") : TEXT("Missing"), bWheelSyncReady ? TEXT("Ready") : TEXT("Missing"), bAimReady ? TEXT("Ready") : TEXT("Missing"), bWeaponReady ? TEXT("Ready") : TEXT("Missing"), bHealthReady ? TEXT("Ready") : TEXT("Missing"), bOwnerVisualReady ? TEXT("Ready") : TEXT("Skipped"), bVehicleRuntimeReady ? TEXT("True") : TEXT("False"), *DataConfigSummary, *LayoutConfigSummary, *TurretVisualConfigSummary);
@@ -4265,6 +4290,11 @@ void ACFVehiclePawn::RecordDummyHitScanDamageHitContext(
 
 	// [v2.111.0] HitScan DamageHitContext로 대상 차량 체력에 직접 피해 적용을 시도한 결과입니다.
 	FCFDamageApplyResult DamageApplyResult;
+		if (CombatFxComp && ActiveProjectileData)
+	{
+		CombatFxComp->PlayImpactFx(ActiveProjectileData->DefaultImpactFxData, DamageHitContext);
+	}
+
 	UCFVehicleHealthComp::TryApplyDamageToActor(DamageHitContext, DamageApplyResult);
 
 	StoreLastDamageHitContext(DamageHitContext);
@@ -4290,7 +4320,13 @@ void ACFVehiclePawn::RecordProjectileDamageHitContextFromPool(const ACFProjectil
 	}
 
 	// [v2.111.0] Projectile Actor가 첫 Impact에서 이미 실행한 직접 피해 적용 결과 복사본입니다.
-	FCFDamageApplyResult DamageApplyResult = InProjectileActor->GetLastDamageApplyResult();
+		FCFDamageApplyResult DamageApplyResult = InProjectileActor->GetLastDamageApplyResult();
+
+	UCFProjectileData* ImpactProjectileData = InProjectileActor->GetLastDeactivatedProjectileData();
+	if (CombatFxComp && ImpactProjectileData)
+	{
+		CombatFxComp->PlayImpactFx(ImpactProjectileData->DefaultImpactFxData, DamageHitContext);
+	}
 
 	StoreLastDamageHitContext(DamageHitContext);
 	StoreLastDamageApplyResult(DamageApplyResult);
@@ -4902,7 +4938,13 @@ void ACFVehiclePawn::ApplyFireResult(const FCFVehicleFireRequest& FireCommand, c
 
 	if (FireResult.bAccepted && VehicleWeaponComp)
 	{
-		VehicleWeaponComp->RecordAcceptedFire(FireCommand.ClientFireTimeSeconds);
+				VehicleWeaponComp->RecordAcceptedFire(FireCommand.ClientFireTimeSeconds);
+
+		UCFWeaponData* ActiveWeaponData = VehicleWeaponComp->GetActiveWeaponData();
+		if (CombatFxComp && ActiveWeaponData)
+		{
+			CombatFxComp->PlayFireFx(ActiveWeaponData->DefaultFireFxData, FVector(FireCommand.AimOrigin), FVector(FireCommand.AimDirection));
+		}
 	}
 
 	if (VehicleAimComp)

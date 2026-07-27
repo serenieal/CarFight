@@ -28,6 +28,7 @@
 #include "Engine/DataAsset.h"
 #include "CFWeaponData.generated.h"
 
+class UCFCombatFxData;
 class UCFProjectileData;
 
 /**
@@ -136,6 +137,9 @@ FCFTargetUsePolicy TargetUsePolicy;
 	FName AmmoTypeId = TEXT("ProtoShell");
 
 	// [v1.1.0] 이 무기가 기본으로 사용할 발사체 DataAsset입니다.
+		UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|FX", meta=(DisplayName="기본 발사 FX 데이터", ToolTip="승인된 발사 위치와 방향에서 재생할 CombatFxData입니다. 비어 있어도 발사 판정은 유지합니다."))
+	TObjectPtr<UCFCombatFxData> DefaultFireFxData = nullptr;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Refs", meta=(DisplayName="기본 발사체 데이터 (DefaultProjectileData)", ToolTip="이 무기가 기본으로 발사할 ProjectileData입니다. 비어 있으면 기존 Dummy HitScan fallback을 유지합니다."))
 	TObjectPtr<UCFProjectileData> DefaultProjectileData = nullptr;
 

@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.22.0
-// Date: 2026-07-14
-// Description: CarFight 차량 루트 DataAsset 내구도 설정 추가
+// Version: 1.23.0
+// Date: 2026-07-25
+// Description: CarFight 차량 루트 DataAsset 파괴 FX 소켓 설정 추가
 // Scope: 차량 시각 자산, Wheel Class 참조, VehicleMovement/WheelVisual/Layout와 최대 체력 설정을 함께 다룹니다.
 // Changelog:
+// - v1.23.0: 차량별 파괴 FX 위치를 SM_Body 소켓으로 지정하는 DestroyedFxSocketName을 추가.
 // - v1.22.0: 최소 Damage Runtime에서 사용할 VehicleDurabilityConfig.MaxHealth 설정을 추가.
 // - v1.21.0: 자동 스케일된 휠 메시의 바운드 중심을 Wheel_Mesh 원점에 맞추는 중심 보정 옵션을 추가.
 // - v1.20.0: WheelRadius 기준으로 휠 StaticMesh 표시 크기를 자동 보정하는 WheelVisual 옵션과 측정 모드를 추가.
@@ -17,6 +18,7 @@
 // - v1.14.0: VehicleLayoutConfig와 WheelAnchor 포즈 구조를 추가해 차량별 시각 휠 기준 위치를 DataAsset에서 관리.
 // - v1.13.0: VehicleMovement 기본값 재정렬 및 레거시 실험값 자동 마이그레이션 추가.
 // Migration:
+// - 기존 VehicleData는 DestroyedFxSocketName 기본값 FX_Destroyed를 사용하며 소켓이 없으면 SM_Body Bounds 중심으로 fallback한다.
 // - 기존 VehicleData는 bAutoScaleWheelMeshToRadius=false 기본값으로 이전 외형 스케일을 유지한다.
 // - 자동 휠 메시 스케일을 쓸 차량만 DA의 WheelVisualConfig에서 옵션을 명시적으로 켠다.
 // - 자동 스케일 사용 차량은 기본적으로 메시 바운드 중심도 Wheel_Mesh 원점에 맞춘다. 기존 수동 위치를 유지해야 하면 bAutoCenterWheelMeshBoundsToOrigin=false로 끈다.
@@ -41,6 +43,7 @@
 #include "CFVehicleData.generated.h"
 
 class UChaosVehicleWheel;
+class UCFCombatFxData;
 class UStaticMesh;
 
 UENUM(BlueprintType)
@@ -401,7 +404,15 @@ public:
 
 	// [v1.22.0] 차량 최대 체력 값을 묶은 내구도 설정입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="차량 내구도 설정 (VehicleDurabilityConfig)", ToolTip="VehicleHealthComp가 초기화할 최대 체력을 제공합니다. 현재 단계에서는 MaxHealth만 사용합니다."))
-	FCFVehicleDurabilityConfig VehicleDurabilityConfig;
+		FCFVehicleDurabilityConfig VehicleDurabilityConfig;
+
+		// 최초 차량 파괴 전환에서 재생할 기본 Destroyed FX 데이터입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|FX", meta=(DisplayName="기본 파괴 FX 데이터", ToolTip="차량이 최초 파괴 상태로 전환될 때 재생할 CombatFxData입니다. 비어 있어도 파괴 판정은 유지합니다."))
+	TObjectPtr<UCFCombatFxData> DefaultDestroyedFxData = nullptr;
+
+	// 차량별 파괴 FX 위치를 제공할 SM_Body StaticMesh 소켓 이름입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|FX", meta=(DisplayName="파괴 FX 차체 소켓 이름 (DestroyedFxSocketName)", ToolTip="SM_Body에 적용된 차체 StaticMesh에서 파괴 FX 월드 위치와 회전을 읽을 소켓 이름입니다. 기본 FX_Destroyed를 사용하며, 소켓이 없으면 SM_Body Bounds 중심으로 fallback합니다."))
+	FName DestroyedFxSocketName = TEXT("FX_Destroyed");
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="DriveState 설정 (DriveStateConfig)", ToolTip="차량별 DriveState 판정 임계값과 히스테리시스 설정입니다."))
 	FCFVehicleDriveStateConfig DriveStateConfig;

@@ -27,6 +27,7 @@
 #include "CFProjectileData.generated.h"
 
 class UStaticMesh;
+class UCFCombatFxData;
 class UCFDamageData;
 
 /**
@@ -114,7 +115,10 @@ public:
 	FVector ProjectileMeshRelativeScale = FVector::OneVector;
 
 	// [v1.0.0] 피격 표현 후보를 찾기 위한 임시 ID입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileData|Impact", meta=(DisplayName="피격 효과 ID (ImpactEffectId)", ToolTip="후속 VFX / SFX / Decal 연결 전 피격 표현 후보를 구분할 임시 ID입니다."))
+		UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileData|FX", meta=(DisplayName="기본 Impact FX 데이터", ToolTip="첫 유효 Impact 위치와 표면 노멀에서 재생할 CombatFxData입니다. 비어 있어도 충돌과 피해 판정은 유지합니다."))
+	TObjectPtr<UCFCombatFxData> DefaultImpactFxData = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileData|Impact", meta=(DisplayName="피격 효과 ID (ImpactEffectId)", ToolTip="후속 VFX / Decal 연결 전 피격 표현 후보를 구분할 임시 ID입니다."))
 	FName ImpactEffectId = TEXT("ProtoImpact");
 
 	// [v1.4.0] 이 발사체 또는 가상 발사 데이터가 직접 사용할 기본 DamageData입니다.

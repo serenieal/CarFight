@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.121.0
-// Date: 2026-07-24
+// Version: 2.123.0
+// Date: 2026-07-25
 // Description: CarFight 싱글플레이 차량 Pawn 기준 클래스
 // Changelog:
+// - v2.123.0: Combat FX가 차량별 파괴 소켓을 해석할 수 있도록 표준 SM_Body 컴포넌트 getter를 추가.
 // - v2.121.0: TS-P0-06 TargetSelect 전용 HUD 클래스·인스턴스·표시 토글·Viewport 수명 API를 추가.
 // - v2.120.0: TS-P0-05 타겟 선택·수동 해제 Enhanced Input Action과 Pawn 명령 API를 추가.
 // - v2.119.0: TargetPoint 기본 서브오브젝트와 Blueprint 조정 getter를 추가하고 선택 위치를 공용 TargetPoint Fallback으로 전환.
@@ -52,6 +53,7 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth 적용 전 기준선 정리를 위해 차량 NetDebug/OwnerVisual/OwnerBodyVisual 실험 플래그 기본값을 False로 통일.
 // Migration:
+// - 파괴 FX 위치 해석은 GetVehicleBodyMeshComponent가 반환하는 SM_Body의 FX_Destroyed 소켓을 우선 사용한다.
 // - IA_SelectTarget은 현재 후보가 있을 때만 선택을 확정하며 후보가 없으면 기존 선택을 유지한다.
 // - IA_ClearTarget은 Manual 사유로 현재 선택만 해제하고 현재 후보를 유지하며 자동 다음 타겟을 선택하지 않는다.
 // - 기존 BP_CFVehiclePawn 계열은 TargetPoint, TargetSelectComp와 VehicleHealthComp 기본 서브오브젝트를 자동 상속하며 BP에 수동 컴포넌트 추가가 필요하지 않다.
@@ -117,6 +119,7 @@ class UCFVehicleCameraComp;
 class UCFVehicleAimComp;
 class UCFVehicleWeaponComp;
 class UCFProjectilePoolComp;
+class UCFCombatFxComp;
 class UCFVehicleHealthComp;
 class UCFTargetSelectComp;
 class UCFEquipmentPresetData;
@@ -995,8 +998,12 @@ public:
 			TObjectPtr<UCFProjectilePoolComp> ProjectilePoolComp = nullptr;
 
 	// [v2.111.0] 차량 최대/현재 체력과 파괴 상태를 관리하는 런타임 컴포넌트입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="차량 체력 컴포넌트 (VehicleHealthComp)", ToolTip="VehicleData 최대 체력, 현재 체력, 직접 피해와 파괴 상태를 관리합니다."))
-	TObjectPtr<UCFVehicleHealthComp> VehicleHealthComp = nullptr;
+				UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="차량 체력 컴포넌트 (VehicleHealthComp)", ToolTip="VehicleData 최대 체력, 현재 체력, 직접 피해와 파괴 상태를 관리합니다."))
+		TObjectPtr<UCFVehicleHealthComp> VehicleHealthComp = nullptr;
+
+	// 확정된 발사, Impact와 최초 파괴 결과를 Niagara 시각 연출로 변환하는 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="전투 FX 컴포넌트", ToolTip="전투 판정을 변경하지 않고 데이터 기반 Niagara FX를 재생합니다."))
+	TObjectPtr<UCFCombatFxComp> CombatFxComp = nullptr;
 
 	// 차량별 선택·표시 대표 위치를 제공하는 타겟 포인트 컴포넌트입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="타겟 포인트 컴포넌트 (TargetPointComp)", ToolTip="차량별 선택 대표 위치를 제공합니다. 기본적으로 비활성 상태이며 Blueprint에서 위치를 조정하고 bUseAsTargetPoint를 켜면 Bounds보다 우선 사용합니다."))
@@ -1225,9 +1232,13 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(ToolTip="반복 발사되는 Projectile Actor를 재사용하는 Pool 컴포넌트를 반환합니다."))
 			UCFProjectilePoolComp* GetProjectilePoolComp() const { return ProjectilePoolComp; }
 
-	// [v2.111.0] 차량 체력 컴포넌트를 반환합니다.
-	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(DisplayName="차량 체력 컴포넌트 반환", ToolTip="현재 차량의 최대 체력, 현재 체력과 파괴 상태를 관리하는 컴포넌트를 반환합니다."))
+		// [v2.111.0] 차량 체력 컴포넌트를 반환합니다.
+		UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(DisplayName="차량 체력 컴포넌트 반환", ToolTip="현재 차량의 최대 체력, 현재 체력과 파괴 상태를 관리하는 컴포넌트를 반환합니다."))
 	UCFVehicleHealthComp* GetVehicleHealthComp() const { return VehicleHealthComp; }
+
+	// 표준 차체 시각·피격 컴포넌트인 SM_Body를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(DisplayName="차량 차체 메쉬 컴포넌트 반환", ToolTip="이름이 SM_Body인 표준 차체 StaticMeshComponent를 반환합니다. 파괴 FX 소켓과 차체 Bounds 해석에 사용합니다."))
+	UStaticMeshComponent* GetVehicleBodyMeshComponent() const;
 
 	// 차량별 선택 대표 위치를 제공하는 타겟 포인트 컴포넌트를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|TargetSelect", meta=(DisplayName="타겟 포인트 컴포넌트 반환", ToolTip="차량별 선택 대표 위치를 제공하는 TargetPointComp를 반환합니다."))

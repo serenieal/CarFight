@@ -1,8 +1,9 @@
 ﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 // File: CarFight_Re.Build.cs
-// Version: v1.5.0
+// Version: v1.6.0
 // Changelog:
+// - v1.6.0: CF-FQ-024 Combat FX 런타임과 Editor Preview Actor에서 Niagara를 사용하도록 Niagara 의존성을 명시.
 // - v1.5.0: TS-P0-06 Editor Automation에서 WidgetBlueprint 생성·컴파일을 검증할 수 있도록 UMGEditor 의존성을 추가.
 // - v1.4.0: TS-P0-05 Editor Automation에서 Input Action 에셋 등록을 검증할 수 있도록 AssetRegistry 의존성을 추가.
 // - v1.3.0: Editor 자동화 테스트에서 AutomationEditorCommon을 사용할 수 있도록 UnrealEd 의존성을 Editor 빌드에만 추가.
@@ -27,7 +28,8 @@ public class CarFight_Re : ModuleRules
 			"CoreUObject", 
 			"Engine", 
 			"InputCore", 
-			"EnhancedInput",
+									"EnhancedInput",
+			"Niagara",
 			"UMG",
 			"Slate",
 			"SlateCore",
