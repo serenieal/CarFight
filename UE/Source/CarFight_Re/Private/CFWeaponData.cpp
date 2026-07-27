@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.4.0
-// Date: 2026-07-02
+// Version: 1.5.0
+// Date: 2026-07-24
 // Description: CarFight 차량 무기 DataAsset 구현
-// Scope: 차량 장착 프로파일과 무기 데이터의 최소 호환성 검증을 제공합니다.
+// Scope: 차량 장착 프로파일 호환성과 선택 대상 사용 정책 요약을 제공합니다.
 // Changelog:
+// - v1.5.0: TS-P0-07 TargetUsePolicy 필터 개수를 무기 디버그 요약에 추가.
 // - v1.4.0: WeaponData 직접 DamageData 요약을 제거하고 ProjectileData 단일 피해 소유 구조로 정리.
 // - v1.3.0: DefaultDamageData 직접 참조를 디버그 요약에 포함.
 // - v1.2.0: 분당 발사속도 기반 발사 간격 환산과 기존 CooldownSeconds 저장값 마이그레이션을 추가.
@@ -105,13 +106,18 @@ FString UCFWeaponData::BuildWeaponSummary() const
 	const float FireIntervalSeconds = GetFireIntervalSeconds();
 
 	return FString::Printf(
-		TEXT("WeaponData: Id=%s, Size=%s, FireMode=%s, FireRate=%.1fRPM, Interval=%.2fs, Range=%.1f, Projectile=%s, ProjectileAsset=%s, LegacyDamageProfile=%s, LegacyBaseDamage=%.1f"),
+		TEXT("WeaponData: Id=%s, Size=%s, FireMode=%s, FireRate=%.1fRPM, Interval=%.2fs, Range=%.1f, TargetPolicy=Categories:%d/Relations:%d/RequiredTags:%d/ExcludedTags:%d/TrackStates:%d, Projectile=%s, ProjectileAsset=%s, LegacyDamageProfile=%s, LegacyBaseDamage=%.1f"),
 		*WeaponId.ToString(),
 		*WeaponSizeText,
 		*FireModeText,
 		EffectiveFireRatePerMinute,
 		FireIntervalSeconds,
 		MaxRange,
+		TargetUsePolicy.AllowedCategories.Num(),
+		TargetUsePolicy.AllowedRelations.Num(),
+		TargetUsePolicy.RequiredAttributeTags.Num(),
+		TargetUsePolicy.ExcludedAttributeTags.Num(),
+		TargetUsePolicy.AllowedTrackStates.Num(),
 		*ProjectileDataText,
 		*ProjectileAssetText,
 		*DamageProfileId.ToString(),

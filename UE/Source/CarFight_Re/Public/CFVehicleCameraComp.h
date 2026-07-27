@@ -156,10 +156,13 @@ public:
 	FRotator GetCurrentAimRotation() const;
 
 	// [v0.1.0] 현재 카메라가 향하는 월드 방향 벡터를 반환합니다.
-	UFUNCTION(BlueprintPure, Category="CarFight|Vehicle Camera|Aim", meta=(ToolTip="현재 카메라가 향하는 월드 방향 벡터를 반환합니다."))
+			UFUNCTION(BlueprintPure, Category="CarFight|Vehicle Camera|Aim", meta=(ToolTip="현재 카메라가 향하는 월드 방향 벡터를 반환합니다."))
 	FVector GetCurrentAimDirection() const;
 
-	// [v0.1.0] 현재 Aim Trace 적중 위치를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Vehicle Camera|Aim", meta=(DisplayName="현재 Aim Trace 시작 위치 반환", ToolTip="타겟 선택과 카메라 Aim Trace가 공유할 현재 카메라 기준 월드 시작 위치를 반환합니다."))
+	FVector GetCurrentAimTraceStartLocation() const;
+
+	// 현재 Aim Trace 적중 위치를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|Vehicle Camera|Aim", meta=(ToolTip="현재 Aim Trace가 계산한 월드 적중 위치를 반환합니다."))
 	FVector GetCurrentAimHitLocation() const;
 

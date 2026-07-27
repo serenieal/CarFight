@@ -1,9 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.111.0
-// Date: 2026-07-14
+// Version: 2.121.0
+// Date: 2026-07-24
 // Description: CarFight 싱글플레이 차량 Pawn 기준 클래스
 // Changelog:
+// - v2.121.0: TS-P0-06 TargetSelect 전용 HUD 클래스·인스턴스·표시 토글·Viewport 수명 API를 추가.
+// - v2.120.0: TS-P0-05 타겟 선택·수동 해제 Enhanced Input Action과 Pawn 명령 API를 추가.
+// - v2.119.0: TargetPoint 기본 서브오브젝트와 Blueprint 조정 getter를 추가하고 선택 위치를 공용 TargetPoint Fallback으로 전환.
+// - v2.118.0: TargetSelectComp 기본 서브오브젝트와 ICFTargetSelectable 차량 기본 계약을 추가.
 // - v2.111.0: VehicleHealthComp를 추가하고 HitScan/Projectile DamageHitContext를 BaseDamage 체력 감소와 파괴 상태 결과에 연결.
 // - v2.109.0: Muzzle 기준 Weapon Aim Solution 계산 경로를 추가하고 FireCommand/터렛 추적/검증이 같은 AimOrigin/AimDirection/Target을 사용하도록 준비.
 // - v2.108.0: SM_Body 전용 WeaponHit / Projectile 피격 표면 구성 함수와 Damage HitContext 피격 컴포넌트 기록을 추가.
@@ -48,7 +52,11 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth 적용 전 기준선 정리를 위해 차량 NetDebug/OwnerVisual/OwnerBodyVisual 실험 플래그 기본값을 False로 통일.
 // Migration:
-// - 기존 BP_CFVehiclePawn 계열은 VehicleHealthComp 기본 서브오브젝트를 자동 상속하며 BP에 수동 컴포넌트 추가가 필요하지 않다.
+// - IA_SelectTarget은 현재 후보가 있을 때만 선택을 확정하며 후보가 없으면 기존 선택을 유지한다.
+// - IA_ClearTarget은 Manual 사유로 현재 선택만 해제하고 현재 후보를 유지하며 자동 다음 타겟을 선택하지 않는다.
+// - 기존 BP_CFVehiclePawn 계열은 TargetPoint, TargetSelectComp와 VehicleHealthComp 기본 서브오브젝트를 자동 상속하며 BP에 수동 컴포넌트 추가가 필요하지 않다.
+// - TargetPoint는 기본 비활성이라 기존 차량은 Actor Bounds 중심을 유지하며, 차량별 BP에서 위치를 조정하고 bUseAsTargetPoint를 켠 경우에만 우선 사용한다.
+// - ACFVehiclePawn은 기본적으로 Vehicle 분류, Unknown 관계, Identified 정보 단계의 ICFTargetSelectable 계약을 제공하며 파괴된 차량은 선택 불가다.
 // - HitScan과 Projectile은 같은 DamageHitContext 피해 적용 경로를 사용하며, 파괴 상태가 되어도 이번 P0에서는 입력과 물리를 자동 중지하지 않는다.
 // - 기존 VehicleData와 DamageData 자산은 저장하지 않아도 C++ 기본값 MaxHealth=100, BaseDamage=25, bCanDamageSelf=false를 사용한다.
 // - Muzzle 소켓 또는 Reticle 목표점이 유효하지 않으면 fallback 방향으로 발사하지 않고 발사 검증에서 안전하게 거부한다.
@@ -86,7 +94,7 @@
 // - ACFVehiclePawn의 BuildFireRequest / ValidateFireRequestOnServer / RunServerDummyHitScan / ServerRequestFire / ClientReceiveFireResult 호출은 제거하고 로컬 Fire 함수로 교체한다.
 // - BP_CFVehiclePawn의 Actor Replicates/Replicate Movement도 False로 저장해 C++ 기본값과 맞춘다.
 // - 멀티플레이 진단이 다시 필요하면 별도 멀티플레이 브랜치/문서에서 복구한다.
-// Scope: DriveComp / WheelSyncComp / VehicleCameraComp / VehicleAimComp / VehicleWeaponComp / ProjectilePoolComp를 소유하고 차량 런타임, 입력, 카메라 디버그 스냅샷, 로컬 Fire Command를 함께 다룹니다.
+// Scope: DriveComp / WheelSyncComp / VehicleCameraComp / VehicleAimComp / VehicleWeaponComp / ProjectilePoolComp / VehicleHealthComp / TargetPoint / TargetSelectComp를 소유하고 차량 런타임, 입력, 카메라 디버그 스냅샷, 로컬 Fire Command와 타겟 선택 위치·상태 계약을 함께 다룹니다.
 
 #pragma once
 
@@ -97,6 +105,8 @@
 #include "CFDamageTypes.h"
 #include "CFVehicleFireFeedbackTypes.h"
 #include "CFVehicleWeaponTypes.h"
+#include "CFTargetPointComp.h"
+#include "CFTargetSelectable.h"
 #include "Components/SlateWrapperTypes.h"
 #include "Engine/EngineTypes.h"
 #include "WheeledVehiclePawn.h"
@@ -108,12 +118,14 @@ class UCFVehicleAimComp;
 class UCFVehicleWeaponComp;
 class UCFProjectilePoolComp;
 class UCFVehicleHealthComp;
+class UCFTargetSelectComp;
 class UCFEquipmentPresetData;
 class UCFProjectileData;
 class UCFDamageData;
 class UCFTurretMountData;
 class UCFWeaponData;
 class UCFAimReticleWidget;
+class UCFTargetSelectWidget;
 class UCFWheelSyncComp;
 class ACFProjectileActor;
 class UChaosWheeledVehicleMovementComponent;
@@ -795,7 +807,7 @@ struct FCFVehicleDebugSnapshot
  * - BP는 얇은 조립/표현 레이어로 유지하는 것을 목표로 합니다.
  */
 UCLASS(BlueprintType, Blueprintable)
-class CARFIGHT_RE_API ACFVehiclePawn : public AWheeledVehiclePawn
+class CARFIGHT_RE_API ACFVehiclePawn : public AWheeledVehiclePawn, public ICFTargetSelectable
 {
 	GENERATED_BODY()
 
@@ -846,7 +858,15 @@ public:
 
 	// [v2.64.0] 로컬 발사 명령을 시작할 입력 액션입니다.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="발사 입력 액션 (InputAction_Fire)", ToolTip="Aim 기반 로컬 발사 명령을 시작할 Input Action입니다. 비어 있으면 발사 입력 바인딩을 건너뜁니다."))
-	TObjectPtr<UInputAction> InputAction_Fire = nullptr;
+				TObjectPtr<UInputAction> InputAction_Fire = nullptr;
+
+	// 현재 후보를 지속 선택 대상으로 확정할 입력 액션입니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="타겟 선택 입력 액션 (InputAction_SelectTarget)", ToolTip="현재 TargetSelectComp 후보를 지속 선택 대상으로 확정하는 Boolean Input Action입니다. 후보가 없으면 기존 선택을 유지합니다."))
+	TObjectPtr<UInputAction> InputAction_SelectTarget = nullptr;
+
+	// 현재 지속 선택 대상만 수동 해제할 입력 액션입니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="타겟 해제 입력 액션 (InputAction_ClearTarget)", ToolTip="현재 선택 대상을 Manual 사유로 해제하는 Boolean Input Action입니다. 현재 후보는 유지하며 자동 다음 타겟을 선택하지 않습니다."))
+	TObjectPtr<UInputAction> InputAction_ClearTarget = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="입력 장치 모드 (InputDeviceMode)", ToolTip="차량 입력을 어떤 장치로 받을지 고정합니다. Auto는 키보드/마우스와 게임패드를 모두 허용하고, KeyboardMouseOnly는 키보드/마우스만, GamepadOnly는 게임패드만 허용합니다."))
 	ECFVehicleInputDeviceMode InputDeviceMode = ECFVehicleInputDeviceMode::Auto;
@@ -978,6 +998,14 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="차량 체력 컴포넌트 (VehicleHealthComp)", ToolTip="VehicleData 최대 체력, 현재 체력, 직접 피해와 파괴 상태를 관리합니다."))
 	TObjectPtr<UCFVehicleHealthComp> VehicleHealthComp = nullptr;
 
+	// 차량별 선택·표시 대표 위치를 제공하는 타겟 포인트 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="타겟 포인트 컴포넌트 (TargetPointComp)", ToolTip="차량별 선택 대표 위치를 제공합니다. 기본적으로 비활성 상태이며 Blueprint에서 위치를 조정하고 bUseAsTargetPoint를 켜면 Bounds보다 우선 사용합니다."))
+	TObjectPtr<UCFTargetPointComp> TargetPointComp = nullptr;
+
+	// 현재 후보와 지속 선택 대상을 소유하는 타겟 선택 상태 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="타겟 선택 컴포넌트 (TargetSelectComp)", ToolTip="후보, 선택 대상, 표시 정보, 유효성과 추적 상태의 최소 계약을 관리합니다. 후보 탐색, 입력과 HUD는 후속 단계에서 연결합니다."))
+	TObjectPtr<UCFTargetSelectComp> TargetSelectComp = nullptr;
+
 	// [v2.86.0] P0 터렛 시각 장착 위치를 잡는 루트 컴포넌트입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components|Turret", meta=(AllowPrivateAccess="true", DisplayName="터렛 장착 루트 (TurretMountRootComp)", ToolTip="현재 활성 하드포인트 위치에 배치되는 터렛 시각 장착 루트입니다."))
 	TObjectPtr<USceneComponent> TurretMountRootComp = nullptr;
@@ -1088,7 +1116,20 @@ public:
 
 	// [v2.20.0] Aim Reticle 위젯을 Viewport에 추가할 때 사용할 ZOrder입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(ClampMin="0", DisplayName="Aim Reticle ZOrder (AimReticleZOrder)", ToolTip="Aim Reticle 위젯을 Viewport에 추가할 때 사용할 ZOrder입니다."))
-	int32 AimReticleZOrder = 10;
+			int32 AimReticleZOrder = 10;
+
+	// [v2.121.0] 로컬 Pawn에서 생성할 TargetSelect 전용 HUD 위젯 클래스입니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|TargetSelect|HUD", meta=(DisplayName="타겟 선택 HUD 위젯 클래스 (TargetSelectWidgetClass)", ToolTip="Aim Reticle과 별도로 후보와 선택 대상을 표시할 WBP_TargetSelect 클래스입니다. 비어 있으면 생성하지 않습니다."))
+	TSubclassOf<UCFTargetSelectWidget> TargetSelectWidgetClass = nullptr;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|TargetSelect|HUD", meta=(DisplayName="타겟 선택 HUD 위젯 인스턴스 (TargetSelectWidgetInstance)"))
+	TObjectPtr<UCFTargetSelectWidget> TargetSelectWidgetInstance = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|TargetSelect|HUD", meta=(DisplayName="타겟 선택 HUD 표시 여부 (bShowTargetSelectHud)", ToolTip="True이면 로컬 제어 Pawn에서 후보와 선택 타겟 HUD 표시를 허용합니다."))
+	bool bShowTargetSelectHud = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|TargetSelect|HUD", meta=(ClampMin="0", DisplayName="타겟 선택 HUD ZOrder (TargetSelectHudZOrder)", ToolTip="Aim Reticle과 별도 TargetSelect HUD를 Viewport에 추가할 ZOrder입니다."))
+	int32 TargetSelectHudZOrder = 20;
 
 	// [v2.14.4] VehicleDebug HUD/Panel UI 표시를 허용하는 메인 토글입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="VehicleDebug UI 사용 (bEnableDriveStateOnScreenDebug)", ToolTip="True이면 PIE 중 VehicleDebug HUD/Panel UI 표시를 허용합니다. 개발용 온스크린 문자열 출력과는 별도입니다."))
@@ -1188,6 +1229,34 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(DisplayName="차량 체력 컴포넌트 반환", ToolTip="현재 차량의 최대 체력, 현재 체력과 파괴 상태를 관리하는 컴포넌트를 반환합니다."))
 	UCFVehicleHealthComp* GetVehicleHealthComp() const { return VehicleHealthComp; }
 
+	// 차량별 선택 대표 위치를 제공하는 타겟 포인트 컴포넌트를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|TargetSelect", meta=(DisplayName="타겟 포인트 컴포넌트 반환", ToolTip="차량별 선택 대표 위치를 제공하는 TargetPointComp를 반환합니다."))
+	UCFTargetPointComp* GetTargetPointComp() const { return TargetPointComp; }
+
+	// 차량의 공용 타겟 선택 상태 컴포넌트를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|TargetSelect", meta=(DisplayName="타겟 선택 컴포넌트 반환", ToolTip="현재 후보와 지속 선택 대상을 관리하는 TargetSelectComp를 반환합니다."))
+				UCFTargetSelectComp* GetTargetSelectComp() const { return TargetSelectComp; }
+
+	// 현재 유효 후보를 지속 선택 대상으로 확정합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|TargetSelect", meta=(DisplayName="현재 후보 선택 확정 (Confirm Current Target Candidate)", ToolTip="현재 TargetSelectComp 후보가 유효할 때만 지속 선택 대상으로 설정합니다. 후보가 없거나 무효하면 False를 반환하고 기존 선택을 유지합니다."))
+	bool ConfirmCurrentTargetCandidate();
+
+	// 현재 지속 선택 대상만 Manual 사유로 해제합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|TargetSelect", meta=(DisplayName="선택 타겟 수동 해제 (Clear Selected Target Manually)", ToolTip="현재 선택 대상만 Manual 사유로 해제하고 현재 후보는 유지합니다. 선택 대상이 없으면 False를 반환합니다."))
+	bool ClearSelectedTargetManually();
+
+	// [v2.118.0] 현재 차량이 주어진 컨텍스트에서 선택 가능한지 반환합니다.
+	virtual bool IsTargetSelectable_Implementation(const FCFTargetSelectionContext& SelectionContext) const override;
+
+	// [v2.118.0] 타겟 HUD와 장비가 사용할 차량 기본 표시 정보를 반환합니다.
+	virtual FCFTargetDisplayInfo GetTargetDisplayInfo_Implementation() const override;
+
+	// [v2.118.0] 별도 TargetPoint가 연결되기 전 사용할 차량 Bounds 중심을 반환합니다.
+	virtual FVector GetTargetSelectionLocation_Implementation() const override;
+
+	// [v2.118.0] 파괴되지 않은 차량의 P0 기본 추적 상태를 반환합니다.
+	virtual ECFTargetTrackState GetTargetTrackState_Implementation() const override;
+
 	// [v2.97.0] Projectile Pool에서 반환된 Hit 발사체를 Damage HitContext Debug로 기록합니다.
 	void RecordProjectileDamageHitContextFromPool(const ACFProjectileActor* InProjectileActor);
 
@@ -1213,7 +1282,19 @@ public:
 
 	// [v2.20.0] 생성된 Aim Reticle 위젯의 Pawn 참조와 표시 상태를 갱신합니다.
 	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(ToolTip="생성된 Aim Reticle 위젯의 Pawn 참조와 표시 상태를 갱신합니다. 위젯이 없으면 생성하지 않습니다."))
-	void RefreshAimReticleWidget();
+			void RefreshAimReticleWidget();
+
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|TargetSelect|HUD", meta=(DisplayName="타겟 선택 HUD 표시 가능 여부 반환"))
+	bool ShouldShowTargetSelectHud() const;
+
+	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|TargetSelect|HUD", meta=(DisplayName="타겟 선택 HUD 생성"))
+	UCFTargetSelectWidget* CreateTargetSelectWidget();
+
+	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|TargetSelect|HUD", meta=(DisplayName="타겟 선택 HUD 제거"))
+	void DestroyTargetSelectWidget();
+
+	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|TargetSelect|HUD", meta=(DisplayName="타겟 선택 HUD 갱신"))
+	void RefreshTargetSelectWidget();
 
 	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Input", meta=(ToolTip="현재 플레이어 컨트롤러 기준으로 기본 Input Mapping Context 등록을 시도합니다."))
 	bool RegisterDefaultInputMappingContext();
@@ -1413,7 +1494,13 @@ protected:
 	bool TrySpawnProjectileActorFromFireCommand(const FCFVehicleFireRequest& FireCommand);
 
 	// [v2.17.0] 클라이언트 또는 서버 로컬 입력에서 발사 요청을 시작합니다.
-	void HandleFireStarted(const FInputActionValue& InputActionValue);
+				void HandleFireStarted(const FInputActionValue& InputActionValue);
+
+	// 현재 후보 선택 입력을 처리합니다.
+	void HandleSelectTargetStarted(const FInputActionValue& InputActionValue);
+
+	// 현재 선택 대상 수동 해제 입력을 처리합니다.
+	void HandleClearTargetStarted(const FInputActionValue& InputActionValue);
 
 	// [v2.63.0] 로컬 발사 결과를 Pawn과 AimComp 상태에 반영합니다.
 	void ApplyFireResult(const FCFVehicleFireRequest& FireCommand, const FCFVehicleFireResult& FireResult);

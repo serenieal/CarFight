@@ -222,7 +222,28 @@ FVector UCFVehicleCameraComp::GetCurrentAimDirection() const
 	return WorldAimRotation.Vector();
 }
 
-// [v0.1.0] 현재 Aim Trace 적중 위치를 반환합니다.
+FVector UCFVehicleCameraComp::GetCurrentAimTraceStartLocation() const
+{
+	if (FollowCamera)
+	{
+		return FollowCamera->GetComponentLocation();
+	}
+
+	if (CameraAimPivot)
+	{
+		return CameraAimPivot->GetComponentLocation();
+	}
+
+	if (CameraPivotRoot)
+	{
+		return CameraPivotRoot->GetComponentLocation();
+	}
+
+	const AActor* OwnerActor = GetOwner();
+	return OwnerActor ? OwnerActor->GetActorLocation() : FVector::ZeroVector;
+}
+
+// 현재 Aim Trace 적중 위치를 반환합니다.
 FVector UCFVehicleCameraComp::GetCurrentAimHitLocation() const
 {
 	return CameraRuntimeState.AimHitLocation;
@@ -643,7 +664,7 @@ void UCFVehicleCameraComp::UpdateAimTrace(const FCFVehicleCameraTuningConfig& Ca
 		return;
 	}
 
-	const FVector TraceStart = FollowCamera ? FollowCamera->GetComponentLocation() : GetPivotWorldLocation(VehicleCameraData ? VehicleCameraData->CameraTuningConfig : FCFVehicleCameraTuningConfig());
+			const FVector TraceStart = GetCurrentAimTraceStartLocation();
 	const FVector TraceDirection = GetCurrentAimDirection().GetSafeNormal();
 	const FVector TraceEnd = TraceStart + (TraceDirection * CameraTuningConfig.AimTraceLength);
 

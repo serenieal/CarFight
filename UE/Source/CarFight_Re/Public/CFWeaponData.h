@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.5.0
-// Date: 2026-07-02
+// Version: 1.6.0
+// Date: 2026-07-24
 // Description: CarFight 차량 무기 DataAsset
-// Scope: EquipmentPresetData가 참조할 최소 무기 데이터와 호환성 검증 함수를 제공합니다.
+// Scope: EquipmentPresetData가 참조할 무기 데이터, 장착 호환성과 선택 대상 사용 정책을 제공합니다.
 // Changelog:
+// - v1.6.0: TS-P0-07 장비별 대상 분류·관계·속성·추적 상태 정책을 추가.
 // - v1.5.0: MountProfile legacy 직접 WeaponData 슬롯 제거에 맞춰 연결 기준을 EquipmentPresetData.DefaultWeaponData로 갱신.
 // - v1.4.0: DamageData 직접 참조를 제거하고 피해 데이터 소유권을 ProjectileData 단일 경로로 정리.
 // - v1.3.0: 무기 기본 DamageData 직접 참조를 추가하고 ProjectileData DamageData가 없을 때의 fallback 기준으로 정의.
@@ -22,6 +23,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "CFTargetUseTypes.h"
 #include "CFVehicleWeaponTypes.h"
 #include "Engine/DataAsset.h"
 #include "CFWeaponData.generated.h"
@@ -98,8 +100,12 @@ public:
 	float FireRatePerMinute = 75.0f;
 
 	// [v1.0.0] 이 무기의 기본 유효 사거리입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Fire", meta=(ClampMin="0.0", DisplayName="최대 사거리 (MaxRange)", ToolTip="HitScan Trace 또는 Projectile 기준으로 사용할 기본 최대 사거리입니다."))
-	float MaxRange = 10000.0f;
+UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Fire", meta=(ClampMin="0.0", DisplayName="최대 사거리 (MaxRange)", ToolTip="HitScan Trace 또는 Projectile 기준으로 사용할 기본 최대 사거리입니다."))
+float MaxRange = 10000.0f;
+
+// [v1.6.0] 이 무기가 현재 선택 대상에 사용될 수 있는지 평가할 대상 정책입니다.
+UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|TargetUse", meta=(DisplayName="타겟 사용 정책 (TargetUsePolicy)", ToolTip="허용 대상 분류, 관계, 필수·제외 속성 태그와 추적 상태를 정의합니다. 모든 배열이 비어 있으면 유효한 선택 대상을 제한 없이 허용합니다."))
+FCFTargetUsePolicy TargetUsePolicy;
 
 	// [v1.4.0] 기존 에셋 확인용으로만 유지하는 레거시 기준 피해량입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Legacy", meta=(ClampMin="0.0", DisplayName="레거시 기본 피해량 (LegacyBaseDamage)", ToolTip="DamageData 분리 전 사용하던 확인용 피해량입니다. 실제 DamageData는 ProjectileData에서만 참조합니다."))

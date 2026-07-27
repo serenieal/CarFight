@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.17.0
-// Date: 2026-07-03
-// Description: CarFight 차량 전투 장착 프로파일 해석 컴포넌트 구현
-// Scope: VehicleData의 MountProfiles, WeaponData, HardpointSlots를 읽어 P0 FireOrigin, 무기 데이터 상태, 터렛 조준 각도를 계산합니다.
+// Version: 1.18.1
+// Date: 2026-07-24
+// Description: CarFight 차량 전투 장착 프로파일과 선택 대상 사용 평가 컴포넌트 구현
+// Scope: 장착 데이터, FireOrigin, 터렛 상태와 활성 무기의 선택 대상 사용 가능 캐시를 제공합니다.
 // Changelog:
+// - v1.18.1: 이동 중 사거리 진입·이탈을 반영하도록 저빈도 선택 대상 재평가 Tick을 추가.
+// - v1.18.0: TS-P0-07 TargetSelectComp 이벤트 구독과 활성 무기 대상 평가 요청·결과·변경 알림을 구현.
 // - v1.17.0: EquipmentPresetData 내부 참조만 WeaponData / TurretMountData로 해석하고 MountProfile legacy 직접 fallback을 제거.
 // - v1.16.0: MountProfile.DefaultEquipmentPresetData를 우선 해석하고 WeaponData / TurretMountData 직접 참조 fallback을 유지.
 // - v1.15.0: 터렛 회전 제한을 MountProfile 각도와의 교집합에서 TurretMountData 단독 기준으로 전환.
@@ -43,6 +45,7 @@
 #include "CFDamageData.h"
 #include "CFEquipmentPresetData.h"
 #include "CFProjectileData.h"
+#include "CFTargetSelectComp.h"
 #include "CFTurretMountData.h"
 #include "CFWeaponData.h"
 #include "CFVehicleData.h"
@@ -50,17 +53,192 @@
 
 #include "Components/SceneComponent.h"
 
+namespace
+{
+	bool AreTargetUseResultsEquivalent(const FCFTargetUseResult& LeftResult, const FCFTargetUseResult& RightResult)
+	{
+		return LeftResult.EquipmentId == RightResult.EquipmentId
+			&& LeftResult.TargetActor == RightResult.TargetActor
+			&& LeftResult.DisplayInfo.TargetId == RightResult.DisplayInfo.TargetId
+			&& LeftResult.DisplayInfo.TargetCategory == RightResult.DisplayInfo.TargetCategory
+			&& LeftResult.DisplayInfo.Relation == RightResult.DisplayInfo.Relation
+			&& LeftResult.TrackState == RightResult.TrackState
+			&& FMath::IsNearlyEqual(LeftResult.MaxUseDistanceCm, RightResult.MaxUseDistanceCm, 0.1f)
+			&& LeftResult.bEquipmentReady == RightResult.bEquipmentReady
+			&& LeftResult.bHasSelectedTarget == RightResult.bHasSelectedTarget
+			&& LeftResult.bSelectedTargetValid == RightResult.bSelectedTargetValid
+			&& LeftResult.bTargetCompatible == RightResult.bTargetCompatible
+			&& LeftResult.bWithinUseDistance == RightResult.bWithinUseDistance
+			&& LeftResult.bCanUseTarget == RightResult.bCanUseTarget
+			&& LeftResult.FailureReason == RightResult.FailureReason
+			&& LeftResult.FailureAttributeTag == RightResult.FailureAttributeTag;
+	}
+}
+
 // [v1.0.0] 기본 컴포넌트 값을 초기화합니다.
 UCFVehicleWeaponComp::UCFVehicleWeaponComp()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bStartWithTickEnabled = true;
+}
+
+void UCFVehicleWeaponComp::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	UnbindTargetSelectEvents();
+	Super::EndPlay(EndPlayReason);
+}
+
+void UCFVehicleWeaponComp::TickComponent(
+	const float DeltaTime,
+	const ELevelTick TickType,
+	FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	if (!bAutoRefreshTargetUseResult
+		|| !BoundTargetSelectComp.IsValid()
+		|| !BoundTargetSelectComp->HasSelectedTarget())
+	{
+		return;
+	}
+
+	TargetUseRefreshElapsedSeconds += FMath::Max(DeltaTime, 0.0f);
+	const float RefreshIntervalSeconds = FMath::Max(TargetUseRefreshIntervalSeconds, 0.01f);
+	if (TargetUseRefreshElapsedSeconds + KINDA_SMALL_NUMBER < RefreshIntervalSeconds)
+	{
+		return;
+	}
+
+	TargetUseRefreshElapsedSeconds = 0.0f;
+	RefreshActiveWeaponTargetUseResult();
+}
+
+FCFTargetUseRequest UCFVehicleWeaponComp::BuildActiveWeaponTargetUseRequest() const
+{
+	FCFTargetUseRequest UseRequest;
+	UseRequest.EquipmentId = ActiveWeaponData
+		? ActiveWeaponData->WeaponId
+		: (ActiveEquipmentPresetData ? ActiveEquipmentPresetData->EquipmentId : ActiveMountProfileId);
+	UseRequest.bEquipmentReady = bWeaponRuntimeReady && ActiveWeaponData && bActiveWeaponDataCompatible;
+	UseRequest.MaxUseDistanceCm = ActiveWeaponData ? FMath::Max(ActiveWeaponData->MaxRange, 0.0f) : 0.0f;
+	UseRequest.bUseExplicitOrigin = OwnerVehiclePawn != nullptr;
+	UseRequest.ExplicitUseOrigin = OwnerVehiclePawn ? OwnerVehiclePawn->GetActorLocation() : FVector::ZeroVector;
+	if (ActiveWeaponData)
+	{
+		UseRequest.TargetPolicy = ActiveWeaponData->TargetUsePolicy;
+	}
+	return UseRequest;
+}
+
+FCFTargetUseResult UCFVehicleWeaponComp::EvaluateSelectedTargetForActiveWeapon() const
+{
+	const FCFTargetUseRequest UseRequest = BuildActiveWeaponTargetUseRequest();
+	const UCFTargetSelectComp* TargetSelectComponent = BoundTargetSelectComp.Get();
+	if (!TargetSelectComponent && OwnerVehiclePawn)
+	{
+		TargetSelectComponent = OwnerVehiclePawn->GetTargetSelectComp();
+	}
+	if (!TargetSelectComponent)
+	{
+		FCFTargetUseResult MissingSystemResult;
+		MissingSystemResult.EquipmentId = UseRequest.EquipmentId;
+		MissingSystemResult.bEquipmentReady = UseRequest.bEquipmentReady;
+		MissingSystemResult.MaxUseDistanceCm = UseRequest.MaxUseDistanceCm;
+		MissingSystemResult.FailureReason = ECFTargetUseFailureReason::TargetSystemUnavailable;
+		MissingSystemResult.ResultMessage = FText::FromString(TEXT("차량에 TargetSelectComp가 없어 선택 대상을 평가할 수 없습니다."));
+		return MissingSystemResult;
+	}
+	return TargetSelectComponent->EvaluateSelectedTargetForUse(UseRequest);
+}
+
+bool UCFVehicleWeaponComp::RefreshActiveWeaponTargetUseResult()
+{
+	const FCFTargetUseResult NewTargetUseResult = EvaluateSelectedTargetForActiveWeapon();
+	const bool bResultChanged = !AreTargetUseResultsEquivalent(LastActiveWeaponTargetUseResult, NewTargetUseResult);
+	LastActiveWeaponTargetUseResult = NewTargetUseResult;
+
+	if (const UCFTargetSelectComp* TargetSelectComponent = BoundTargetSelectComp.Get())
+	{
+		LastActiveWeaponTargetUseSummary = TargetSelectComponent->BuildTargetUseDebugSummary(LastActiveWeaponTargetUseResult);
+	}
+	else
+	{
+		LastActiveWeaponTargetUseSummary = FString::Printf(
+			TEXT("ActiveWeaponTargetUse: Equipment=%s, TargetSelectComp=Missing, Failure=%s"),
+			*LastActiveWeaponTargetUseResult.EquipmentId.ToString(),
+			*UEnum::GetValueAsString(LastActiveWeaponTargetUseResult.FailureReason));
+	}
+
+	if (bResultChanged)
+	{
+		OnActiveWeaponTargetUseChanged.Broadcast(LastActiveWeaponTargetUseResult);
+	}
+	return LastActiveWeaponTargetUseResult.bCanUseTarget;
+}
+
+void UCFVehicleWeaponComp::BindTargetSelectEvents()
+{
+	UnbindTargetSelectEvents();
+	if (!OwnerVehiclePawn)
+	{
+		return;
+	}
+
+	UCFTargetSelectComp* TargetSelectComponent = OwnerVehiclePawn->GetTargetSelectComp();
+	if (!TargetSelectComponent)
+	{
+		return;
+	}
+
+	BoundTargetSelectComp = TargetSelectComponent;
+	TargetSelectComponent->OnSelectedTargetChanged.AddUniqueDynamic(this, &UCFVehicleWeaponComp::HandleSelectedTargetChangedForWeapon);
+	TargetSelectComponent->OnSelectedTargetCleared.AddUniqueDynamic(this, &UCFVehicleWeaponComp::HandleSelectedTargetClearedForWeapon);
+	TargetSelectComponent->OnSelectedTargetValidityChanged.AddUniqueDynamic(this, &UCFVehicleWeaponComp::HandleSelectedTargetValidityChangedForWeapon);
+	TargetSelectComponent->OnSelectedTargetTrackStateChanged.AddUniqueDynamic(this, &UCFVehicleWeaponComp::HandleSelectedTargetTrackStateChangedForWeapon);
+}
+
+void UCFVehicleWeaponComp::UnbindTargetSelectEvents()
+{
+	if (UCFTargetSelectComp* TargetSelectComponent = BoundTargetSelectComp.Get())
+	{
+		TargetSelectComponent->OnSelectedTargetChanged.RemoveDynamic(this, &UCFVehicleWeaponComp::HandleSelectedTargetChangedForWeapon);
+		TargetSelectComponent->OnSelectedTargetCleared.RemoveDynamic(this, &UCFVehicleWeaponComp::HandleSelectedTargetClearedForWeapon);
+		TargetSelectComponent->OnSelectedTargetValidityChanged.RemoveDynamic(this, &UCFVehicleWeaponComp::HandleSelectedTargetValidityChangedForWeapon);
+		TargetSelectComponent->OnSelectedTargetTrackStateChanged.RemoveDynamic(this, &UCFVehicleWeaponComp::HandleSelectedTargetTrackStateChangedForWeapon);
+	}
+	BoundTargetSelectComp.Reset();
+}
+
+void UCFVehicleWeaponComp::HandleSelectedTargetChangedForWeapon(AActor*, AActor*, FCFTargetDisplayInfo)
+{
+	RefreshActiveWeaponTargetUseResult();
+}
+
+void UCFVehicleWeaponComp::HandleSelectedTargetClearedForWeapon(AActor*, ECFTargetClearReason)
+{
+	RefreshActiveWeaponTargetUseResult();
+}
+
+void UCFVehicleWeaponComp::HandleSelectedTargetValidityChangedForWeapon(AActor*, bool)
+{
+	RefreshActiveWeaponTargetUseResult();
+}
+
+void UCFVehicleWeaponComp::HandleSelectedTargetTrackStateChangedForWeapon(AActor*, ECFTargetTrackState, ECFTargetTrackState)
+{
+	RefreshActiveWeaponTargetUseResult();
 }
 
 // [v1.0.0] Owner Pawn과 VehicleData 참조를 준비합니다.
 bool UCFVehicleWeaponComp::InitializeWeaponRuntime(ACFVehiclePawn* InOwnerVehiclePawn, UCFVehicleData* InVehicleData)
 {
+	UnbindTargetSelectEvents();
 	OwnerVehiclePawn = InOwnerVehiclePawn;
 	CachedVehicleData = InVehicleData;
+	LastActiveWeaponTargetUseResult = FCFTargetUseResult();
+	LastActiveWeaponTargetUseSummary = TEXT("ActiveWeaponTargetUse: Initializing");
+	TargetUseRefreshElapsedSeconds = 0.0f;
+	BindTargetSelectEvents();
 	bWeaponRuntimeReady = false;
 	ActiveEquipmentPresetData = nullptr;
 	bActiveEquipmentPresetCompatible = false;
@@ -82,12 +260,14 @@ bool UCFVehicleWeaponComp::InitializeWeaponRuntime(ACFVehiclePawn* InOwnerVehicl
 	if (!OwnerVehiclePawn)
 	{
 		LastWeaponRuntimeSummary = TEXT("VehicleWeaponRuntime: OwnerVehiclePawn=Missing");
+		RefreshActiveWeaponTargetUseResult();
 		return false;
 	}
 
 	if (!CachedVehicleData)
 	{
 		LastWeaponRuntimeSummary = TEXT("VehicleWeaponRuntime: VehicleData=Missing");
+		RefreshActiveWeaponTargetUseResult();
 		return false;
 	}
 
@@ -96,6 +276,7 @@ bool UCFVehicleWeaponComp::InitializeWeaponRuntime(ACFVehiclePawn* InOwnerVehicl
 	if (!ActiveMountProfile)
 	{
 		LastWeaponRuntimeSummary = FString::Printf(TEXT("VehicleWeaponRuntime: ActiveMountProfile=Missing, Requested=%s"), *ActiveMountProfileId.ToString());
+		RefreshActiveWeaponTargetUseResult();
 		return false;
 	}
 
@@ -104,6 +285,7 @@ bool UCFVehicleWeaponComp::InitializeWeaponRuntime(ACFVehiclePawn* InOwnerVehicl
 	if (!HardpointSlot)
 	{
 		LastWeaponRuntimeSummary = FString::Printf(TEXT("VehicleWeaponRuntime: HardpointSlot=Missing, LocationSlotRef=%s"), *ActiveMountProfile->LocationSlotRef.ToString());
+		RefreshActiveWeaponTargetUseResult();
 		return false;
 	}
 
@@ -130,6 +312,7 @@ bool UCFVehicleWeaponComp::InitializeWeaponRuntime(ACFVehiclePawn* InOwnerVehicl
 		*WeaponCompatibilityText,
 		*ActiveProjectileExecutionSummary,
 		*ActiveDamageResolutionSummary);
+	RefreshActiveWeaponTargetUseResult();
 	return true;
 }
 

@@ -1,9 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.117.0
-// Date: 2026-07-21
+// Version: 2.122.0
+// Date: 2026-07-24
 // Description: CarFight 싱글플레이 차량 Pawn 구현
 // Changelog:
+// - v2.122.0: 차량 TargetPoint를 SM_Body Bounds 중심에 자동 정렬해 인스턴스별 후보 대표 위치 불일치를 보정.
+// - v2.121.0: TS-P0-06 WBP_TargetSelect 기본 로드와 로컬 Viewport 생성·갱신·정리 수명을 연결.
+// - v2.120.0: TS-P0-05 선택·해제 Input Action 로드, Enhanced Input 바인딩과 후보 확정·Manual 해제 명령을 구현.
+// - v2.119.0: TargetPoint 기본 서브오브젝트를 VehicleMesh에 연결하고 차량 선택 위치를 공용 TargetPoint Fallback으로 전환.
+// - v2.118.0: TargetSelectComp 기본 서브오브젝트를 생성하고 차량의 ICFTargetSelectable 기본 표시·위치·추적 계약을 구현.
 // - v2.117.0: MuzzleBlocked를 전체 조준 경로가 아닌 TurretMountData의 총구 안전 거리 안에서만 판정하도록 수정.
 // - v2.116.0: 총구 Trace가 VehicleHealthComp를 가진 유효 피해 대상을 먼저 맞으면 MuzzleBlocked로 오판하지 않도록 수정.
 // - v2.115.0: CurrentMuzzleDirection을 조준 목표 거리까지 연장한 탄종 독립 터렛 레티클 월드 지점을 Aim Solution에 추가.
@@ -65,6 +70,9 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth Visual/Shell 적용 전 기준선을 깨끗하게 만들기 위해 차량 진단 로그와 Owner 표시 안정화 기본값을 False로 통일.
 // Migration:
+// - 차량 TargetPoint는 SM_Body Bounds 중심에 자동 정렬하며 PreferredBoundsLocalOffset으로 차량별 미세 조정한다.
+// - 선택 입력은 현재 후보가 유효할 때만 선택을 변경하고 후보가 없으면 기존 선택을 유지한다.
+// - 해제 입력은 Manual 사유로 선택만 해제하며 후보 유지와 자동 다음 타겟 금지 정책을 보존한다.
 // - MuzzleBlocked는 MuzzleClearanceDistanceCm 안의 비피해 장애물만 차단하며, 더 먼 충돌은 실제 HitScan/Projectile 적중 처리에 맡긴다.
 // - 총구와 Command 목표 사이의 피해 가능한 차량은 정상 적중 대상으로 발사를 허용하며, 비피해 장애물은 기존처럼 MuzzleBlocked로 거부한다.
 // - bAllowFireWhileAligning=true인 터렛은 정렬 중 현재 Muzzle 방향으로 발사하며, false인 터렛은 기존처럼 정렬 완료 전 거부한다.
@@ -127,11 +135,13 @@
 #include "CFVehicleCameraComp.h"
 #include "CFVehicleDriveComp.h"
 #include "CFVehicleHealthComp.h"
+#include "CFTargetSelectComp.h"
 #include "CFWeaponData.h"
 #include "CFVehicleWeaponComp.h"
 #include "CFWheelSyncComp.h"
 #include "CarFightVehicleUtils.h"
 #include "UI/CFAimReticleWidget.h"
+#include "UI/CFTargetSelectWidget.h"
 
 #include "ChaosVehicleWheel.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
@@ -779,6 +789,21 @@ ACFVehiclePawn::ACFVehiclePawn()
 
 	// [v2.111.0] 차량 최대/현재 체력과 파괴 상태를 관리할 기본 서브오브젝트입니다.
 	VehicleHealthComp = CreateDefaultSubobject<UCFVehicleHealthComp>(TEXT("VehicleHealthComp"));
+
+	// [v2.118.0] 후보와 지속 선택 대상의 최소 상태 계약을 관리할 기본 서브오브젝트입니다.
+					TargetSelectComp = CreateDefaultSubobject<UCFTargetSelectComp>(TEXT("TargetSelectComp"));
+
+	// [v2.119.0] Per-vehicle target selection position. Disabled by default for bounds compatibility.
+	TargetPointComp = CreateDefaultSubobject<UCFTargetPointComp>(TEXT("TargetPoint"));
+	if (TargetPointComp)
+	{
+				TargetPointComp->SetupAttachment(GetMesh());
+		TargetPointComp->bUseAsTargetPoint = true;
+		TargetPointComp->bAutoAlignToPreferredBounds = true;
+		TargetPointComp->PreferredBoundsComponentName = TEXT("SM_Body");
+		TargetPointComp->PreferredBoundsLocalOffset = FVector::ZeroVector;
+	}
+
 	OwnerVisualRootComp = CreateDefaultSubobject<USceneComponent>(TEXT("OwnerVisualRoot"));
 	if (OwnerVisualRootComp)
 	{
@@ -950,10 +975,90 @@ ACFVehiclePawn::ACFVehiclePawn()
 		InputAction_Handbrake = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_Handbrake.IA_Handbrake"));
 	}
 
-	if (!InputAction_Look)
+				if (!InputAction_Look)
 	{
 		InputAction_Look = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_LookAround.IA_LookAround"));
 	}
+
+	if (!InputAction_SelectTarget)
+	{
+		InputAction_SelectTarget = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_SelectTarget.IA_SelectTarget"));
+	}
+
+			if (!InputAction_ClearTarget)
+	{
+		InputAction_ClearTarget = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_ClearTarget.IA_ClearTarget"));
+	}
+
+	if (!TargetSelectWidgetClass)
+	{
+		TargetSelectWidgetClass = LoadClass<UCFTargetSelectWidget>(nullptr, TEXT("/Game/CarFight/UI/WBP_TargetSelect.WBP_TargetSelect_C"));
+	}
+}
+
+// [v2.118.0] 현재 차량이 주어진 컨텍스트에서 선택 가능한지 반환합니다.
+bool ACFVehiclePawn::IsTargetSelectable_Implementation(const FCFTargetSelectionContext& SelectionContext) const
+{
+	// [v2.118.0] 자기 선택 허용 여부는 선택을 수행하는 TargetSelectComp에서 검사합니다.
+	(void)SelectionContext;
+
+	return IsValid(this)
+		&& IsValid(VehicleHealthComp)
+		&& !VehicleHealthComp->IsDestroyed();
+}
+
+// [v2.118.0] 타겟 HUD와 장비가 사용할 차량 기본 표시 정보를 반환합니다.
+FCFTargetDisplayInfo ACFVehiclePawn::GetTargetDisplayInfo_Implementation() const
+{
+	FCFTargetDisplayInfo DisplayInfo;
+	DisplayInfo.TargetId = GetFName();
+	DisplayInfo.DisplayName = FText::FromString(GetName());
+	DisplayInfo.TargetCategory = ECFTargetCategory::Vehicle;
+	DisplayInfo.Relation = ECFTargetRelation::Unknown;
+	DisplayInfo.InformationLevel = ECFTargetInfoLevel::Identified;
+	DisplayInfo.AttributeTags.Add(FName(TEXT("Vehicle")));
+	return DisplayInfo;
+}
+
+// [v2.118.0] 별도 TargetPoint가 연결되기 전 사용할 차량 Bounds 중심을 반환합니다.
+FVector ACFVehiclePawn::GetTargetSelectionLocation_Implementation() const
+{
+	return UCFTargetPointComp::ResolveTargetPoint(this).WorldLocation;
+}
+
+// [v2.118.0] 파괴되지 않은 차량의 P0 기본 추적 상태를 반환합니다.
+ECFTargetTrackState ACFVehiclePawn::GetTargetTrackState_Implementation() const
+{
+	return IsValid(VehicleHealthComp) && !VehicleHealthComp->IsDestroyed()
+		? ECFTargetTrackState::Visible
+		: ECFTargetTrackState::Invalid;
+}
+
+bool ACFVehiclePawn::ConfirmCurrentTargetCandidate()
+{
+	if (!TargetSelectComp)
+	{
+		return false;
+	}
+
+	AActor* CurrentCandidateActor = TargetSelectComp->GetCurrentCandidateActor();
+	if (!CurrentCandidateActor)
+	{
+		return false;
+	}
+
+	return TargetSelectComp->SetSelectedTarget(CurrentCandidateActor, TargetSelectComp->GetDefaultSelectionContext());
+}
+
+bool ACFVehiclePawn::ClearSelectedTargetManually()
+{
+	if (!TargetSelectComp || !TargetSelectComp->HasSelectedTarget())
+	{
+		return false;
+	}
+
+	TargetSelectComp->ClearSelectedTarget(ECFTargetClearReason::Manual);
+	return true;
 }
 
 // [v2.5.2] Construction 시점에 차체뿐 아니라 휠 메시도 기존 Wheel_Mesh_* 컴포넌트에 적용해 에디터 뷰포트 미리보기를 갱신합니다.
@@ -984,14 +1089,16 @@ void ACFVehiclePawn::BeginPlay()
 		InitializeVehicleRuntime();
 	}
 
-	if (bCanRunLocalPresentation)
+			if (bCanRunLocalPresentation)
 	{
 		CreateAimReticleWidget();
+		CreateTargetSelectWidget();
 	}
 }
 
 void ACFVehiclePawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	DestroyTargetSelectWidget();
 	DestroyAimReticleWidget();
 
 	Super::EndPlay(EndPlayReason);
@@ -1092,13 +1199,22 @@ void ACFVehiclePawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 		this,
 		&ACFVehiclePawn::HandleHandbrakeStarted,
 		&ACFVehiclePawn::HandleHandbrakeCompleted);
-	if (InputAction_Fire)
+				if (InputAction_Fire)
 	{
 		EnhancedInputComponent->BindAction(InputAction_Fire, ETriggerEvent::Started, this, &ACFVehiclePawn::HandleFireStarted);
 	}
+	if (InputAction_SelectTarget)
+	{
+		EnhancedInputComponent->BindAction(InputAction_SelectTarget, ETriggerEvent::Started, this, &ACFVehiclePawn::HandleSelectTargetStarted);
+	}
+	if (InputAction_ClearTarget)
+	{
+		EnhancedInputComponent->BindAction(InputAction_ClearTarget, ETriggerEvent::Started, this, &ACFVehiclePawn::HandleClearTargetStarted);
+	}
 
 	// [v2.21.0] 소유 입력 컴포넌트가 준비된 뒤 로컬 Viewport UI 생성을 한 번 더 시도합니다.
-	CreateAimReticleWidget();
+			CreateAimReticleWidget();
+	CreateTargetSelectWidget();
 }
 
 bool ACFVehiclePawn::RegisterDefaultInputMappingContext()
@@ -1400,6 +1516,62 @@ void ACFVehiclePawn::RefreshAimReticleWidget()
 	AimReticleWidgetInstance->SetVehiclePawnRef(this);
 	AimReticleWidgetInstance->SetVisibility(ShouldShowAimReticle() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 }
+
+bool ACFVehiclePawn::ShouldShowTargetSelectHud() const
+{
+	return bShowTargetSelectHud && GetNetMode() != NM_DedicatedServer && IsLocallyControlled();
+}
+
+UCFTargetSelectWidget* ACFVehiclePawn::CreateTargetSelectWidget()
+{
+	if (TargetSelectWidgetInstance)
+	{
+		RefreshTargetSelectWidget();
+		return TargetSelectWidgetInstance;
+	}
+	if (!ShouldShowTargetSelectHud() || !TargetSelectWidgetClass)
+	{
+		return nullptr;
+	}
+	APlayerController* OwningPlayerController = Cast<APlayerController>(GetController());
+	if (!OwningPlayerController)
+	{
+		return nullptr;
+	}
+	UCFTargetSelectWidget* CreatedWidget = CreateWidget<UCFTargetSelectWidget>(OwningPlayerController, TargetSelectWidgetClass);
+	if (!CreatedWidget)
+	{
+		return nullptr;
+	}
+	TargetSelectWidgetInstance = CreatedWidget;
+	TargetSelectWidgetInstance->SetVehiclePawnRef(this);
+	TargetSelectWidgetInstance->AddToViewport(TargetSelectHudZOrder);
+	RefreshTargetSelectWidget();
+	return TargetSelectWidgetInstance;
+}
+
+void ACFVehiclePawn::DestroyTargetSelectWidget()
+{
+	if (!TargetSelectWidgetInstance)
+	{
+		return;
+	}
+	TargetSelectWidgetInstance->SetVehiclePawnRef(nullptr);
+	TargetSelectWidgetInstance->RemoveFromParent();
+	TargetSelectWidgetInstance = nullptr;
+}
+
+void ACFVehiclePawn::RefreshTargetSelectWidget()
+{
+	if (!TargetSelectWidgetInstance)
+	{
+		return;
+	}
+	TargetSelectWidgetInstance->SetVehiclePawnRef(this);
+	TargetSelectWidgetInstance->SetVisibility(ShouldShowTargetSelectHud() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	TargetSelectWidgetInstance->RefreshFromTargetSelect();
+}
+
 
 bool ACFVehiclePawn::PrepareWheelSync()
 {
@@ -1762,7 +1934,11 @@ void ACFVehiclePawn::ApplyVehicleVisualConfig()
 {
 	if (!VehicleData)
 	{
-		ConfigureVehicleVisualHitCollision();
+				ConfigureVehicleVisualHitCollision();
+		if (TargetPointComp)
+		{
+			TargetPointComp->AlignToPreferredBoundsComponent();
+		}
 		return;
 	}
 	UStaticMeshComponent* ChassisStaticMeshComp = FindStaticMeshComponentByName(this, TEXT("SM_Body"));
@@ -1773,13 +1949,16 @@ void ACFVehiclePawn::ApplyVehicleVisualConfig()
 	// 현재 WheelSync 컴포넌트에는 휠 메쉬 자산 적용 전용 API가 없습니다.
 	// 휠 시각 메쉬 교체는 별도 구현 전까지 여기서 수행하지 않습니다.
 
-	ConfigureVehicleVisualHitCollision();
+		ConfigureVehicleVisualHitCollision();
+	if (TargetPointComp)
+	{
+		TargetPointComp->AlignToPreferredBoundsComponent();
+	}
 }
 
 // [v2.108.0] VehicleMesh는 무기 채널을 무시하고 SM_Body만 시각 피격 표면으로 구성합니다.
 void ACFVehiclePawn::ConfigureVehicleVisualHitCollision()
 {
-	// [v2.108.0] 무기 피격 채널을 무시하도록 정리할 모든 PrimitiveComponent 목록입니다.
 	TArray<UPrimitiveComponent*> PrimitiveComponents;
 	GetComponents<UPrimitiveComponent>(PrimitiveComponents);
 
@@ -1792,9 +1971,9 @@ void ACFVehiclePawn::ConfigureVehicleVisualHitCollision()
 
 		PrimitiveComponent->SetCollisionResponseToChannel(CFCollisionChannels::WeaponHit, ECR_Ignore);
 		PrimitiveComponent->SetCollisionResponseToChannel(CFCollisionChannels::Projectile, ECR_Ignore);
+		PrimitiveComponent->SetCollisionResponseToChannel(CFCollisionChannels::TargetSelect, ECR_Ignore);
 	}
 
-	// [v2.108.0] 무기 피격 표면으로 사용할 시각 차체 StaticMeshComponent입니다.
 	UStaticMeshComponent* BodyMeshComponent = FindStaticMeshComponentByName(this, TEXT("SM_Body"));
 	if (!BodyMeshComponent)
 	{
@@ -1808,11 +1987,12 @@ void ACFVehiclePawn::ConfigureVehicleVisualHitCollision()
 	BodyMeshComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
 	BodyMeshComponent->SetCollisionResponseToChannel(CFCollisionChannels::WeaponHit, ECR_Block);
 	BodyMeshComponent->SetCollisionResponseToChannel(CFCollisionChannels::Projectile, ECR_Block);
+	BodyMeshComponent->SetCollisionResponseToChannel(CFCollisionChannels::TargetSelect, ECR_Block);
 	BodyMeshComponent->SetGenerateOverlapEvents(false);
 
 	if (!HasStaticMeshSimpleCollision(BodyMeshComponent))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("VehicleVisualHitCollision: SM_Body StaticMesh has no Simple Collision. WeaponHit/Projectile may not hit %s."), *GetName());
+		UE_LOG(LogTemp, Warning, TEXT("VehicleVisualHitCollision: SM_Body StaticMesh has no Simple Collision. WeaponHit, Projectile or TargetSelect may not hit %s."), *GetName());
 	}
 }
 
@@ -4679,6 +4859,16 @@ bool ACFVehiclePawn::TrySpawnProjectileActorFromFireCommand(const FCFVehicleFire
 }
 
 // [v2.63.0] Fire 입력을 싱글플레이 로컬 발사 경로로 처리합니다.
+void ACFVehiclePawn::HandleSelectTargetStarted(const FInputActionValue&)
+{
+	ConfirmCurrentTargetCandidate();
+}
+
+void ACFVehiclePawn::HandleClearTargetStarted(const FInputActionValue&)
+{
+	ClearSelectedTargetManually();
+}
+
 void ACFVehiclePawn::HandleFireStarted(const FInputActionValue&)
 {
 	LastFireRequest = BuildFireCommand();

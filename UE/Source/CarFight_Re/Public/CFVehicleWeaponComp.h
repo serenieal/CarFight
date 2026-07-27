@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.17.0
-// Date: 2026-07-03
-// Description: CarFight 차량 전투 장착 프로파일 해석 컴포넌트
-// Scope: VehicleData의 MountProfiles, WeaponData, HardpointSlots를 읽어 P0 FireOrigin, 무기 데이터 상태, 터렛 조준 각도를 계산합니다.
+// Version: 1.18.1
+// Date: 2026-07-24
+// Description: CarFight 차량 전투 장착 프로파일과 선택 대상 사용 평가 컴포넌트
+// Scope: 장착 데이터, FireOrigin, 터렛 상태와 활성 무기의 선택 대상 사용 가능 결과를 제공합니다.
 // Changelog:
+// - v1.18.1: 이동 중 사거리 진입·이탈을 반영하도록 저빈도 선택 대상 재평가 Tick을 추가.
+// - v1.18.0: TS-P0-07 TargetSelectComp 구독, 활성 무기 대상 평가 요청·캐시·변경 이벤트를 추가.
 // - v1.17.0: MountProfile legacy 직접 WeaponData / TurretMountData 해석 helper를 제거하고 EquipmentPresetData 전용 경로로 전환.
 // - v1.16.0: MountProfile.DefaultEquipmentPresetData를 우선 해석하고 활성 EquipmentPresetData 디버그 상태를 캐시.
 // - v1.15.0: 터렛 회전 제한을 MountProfile 각도와의 교집합에서 TurretMountData 단독 기준으로 전환.
@@ -41,6 +43,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "CFTargetUseTypes.h"
 #include "CFVehicleWeaponTypes.h"
 #include "Components/ActorComponent.h"
 #include "CFVehicleWeaponComp.generated.h"
@@ -49,14 +52,18 @@ class ACFVehiclePawn;
 class UCFDamageData;
 class UCFEquipmentPresetData;
 class UCFProjectileData;
+class UCFTargetSelectComp;
 class UCFTurretMountData;
 class UCFVehicleData;
 class UCFWeaponData;
 class USceneComponent;
 struct FCFVehicleHardpointSlot;
 
+// [v1.18.0] 활성 무기의 선택 대상 사용 가능 결과가 변경됐을 때 전달하는 이벤트입니다.
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCFActiveWeaponTargetUseChangedSignature, FCFTargetUseResult, TargetUseResult);
+
 /**
- * 차량 전투 장착 프로파일을 해석하고 실제 발사 원점을 계산하는 컴포넌트입니다.
+ * 차량 전투 장착 프로파일을 해석하고 실제 발사 원점과 선택 대상 사용 가능 상태를 계산하는 컴포넌트입니다.
  */
 UCLASS(ClassGroup=(CarFight), BlueprintType, Blueprintable, meta=(BlueprintSpawnableComponent))
 class CARFIGHT_RE_API UCFVehicleWeaponComp : public UActorComponent
@@ -65,7 +72,13 @@ class CARFIGHT_RE_API UCFVehicleWeaponComp : public UActorComponent
 
 public:
 	// [v1.0.0] 기본 컴포넌트 값을 초기화합니다.
-	UCFVehicleWeaponComp();
+UCFVehicleWeaponComp();
+
+// [v1.18.0] 선택 컴포넌트 이벤트 구독을 정리합니다.
+virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+// [v1.18.1] 이동 중 대상 거리 변화를 낮은 빈도로 재평가합니다.
+virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 	// [v1.0.0] Owner Pawn과 VehicleData 참조를 준비합니다.
 	UFUNCTION(BlueprintCallable, Category="CarFight|Weapon", meta=(DisplayName="무기 런타임 초기화 (Initialize Weapon Runtime)", ToolTip="Owner 차량 Pawn과 VehicleData를 캐시하고 활성 장착 프로파일을 확인합니다."))
@@ -112,8 +125,40 @@ public:
 	bool IsActiveWeaponDataCompatible() const { return bActiveWeaponDataCompatible; }
 
 	// [v1.1.0] 현재 활성 WeaponData의 디버그 요약 문자열을 반환합니다.
-	UFUNCTION(BlueprintPure, Category="CarFight|Weapon", meta=(DisplayName="활성 WeaponData 요약 반환 (Get Active Weapon Summary)", ToolTip="현재 활성 WeaponData의 핵심 전투 데이터 요약 문자열을 반환합니다."))
-	FString GetActiveWeaponSummary() const { return ActiveWeaponSummary; }
+UFUNCTION(BlueprintPure, Category="CarFight|Weapon", meta=(DisplayName="활성 WeaponData 요약 반환 (Get Active Weapon Summary)", ToolTip="현재 활성 WeaponData의 핵심 전투 데이터 요약 문자열을 반환합니다."))
+FString GetActiveWeaponSummary() const { return ActiveWeaponSummary; }
+
+// [v1.18.0] 활성 무기 데이터와 현재 런타임 상태를 장비 타겟 사용 요청으로 변환합니다.
+UFUNCTION(BlueprintPure, Category="CarFight|Weapon|TargetUse", meta=(DisplayName="활성 무기 타겟 사용 요청 생성", ToolTip="활성 WeaponData의 ID, MaxRange와 TargetUsePolicy를 사용해 선택 대상 평가 요청을 생성합니다."))
+FCFTargetUseRequest BuildActiveWeaponTargetUseRequest() const;
+
+// [v1.18.0] 현재 선택 대상이 활성 무기에 사용 가능한지 즉시 평가합니다.
+UFUNCTION(BlueprintPure, Category="CarFight|Weapon|TargetUse", meta=(DisplayName="활성 무기 선택 타겟 평가", ToolTip="TargetSelectComp의 현재 선택 상태를 읽기 전용으로 평가하며 조준 또는 발사 방향은 변경하지 않습니다."))
+FCFTargetUseResult EvaluateSelectedTargetForActiveWeapon() const;
+
+// [v1.18.0] 활성 무기의 선택 대상 사용 결과 캐시를 갱신합니다.
+UFUNCTION(BlueprintCallable, Category="CarFight|Weapon|TargetUse", meta=(DisplayName="활성 무기 타겟 사용 결과 갱신", ToolTip="현재 선택 상태를 다시 평가하고 실제 결과 변경 때 이벤트를 발생시킵니다."))
+bool RefreshActiveWeaponTargetUseResult();
+
+// [v1.18.0] 마지막으로 캐시된 활성 무기 대상 사용 결과를 반환합니다.
+UFUNCTION(BlueprintPure, Category="CarFight|Weapon|TargetUse", meta=(DisplayName="활성 무기 타겟 사용 결과 반환"))
+FCFTargetUseResult GetLastActiveWeaponTargetUseResult() const { return LastActiveWeaponTargetUseResult; }
+
+// [v1.18.0] 마지막 활성 무기 대상 사용 평가의 한 줄 요약을 반환합니다.
+UFUNCTION(BlueprintPure, Category="CarFight|Weapon|TargetUse", meta=(DisplayName="활성 무기 타겟 사용 요약 반환"))
+FString GetLastActiveWeaponTargetUseSummary() const { return LastActiveWeaponTargetUseSummary; }
+
+// [v1.18.0] 활성 무기의 선택 대상 사용 결과가 실제로 변경될 때 호출됩니다.
+UPROPERTY(BlueprintAssignable, Category="CarFight|Weapon|TargetUse", meta=(DisplayName="활성 무기 타겟 사용 결과 변경 이벤트"))
+FCFActiveWeaponTargetUseChangedSignature OnActiveWeaponTargetUseChanged;
+
+// [v1.18.1] 선택 대상의 이동과 사거리 변화를 자동 재평가할지 여부입니다.
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|Weapon|TargetUse", meta=(DisplayName="타겟 사용 결과 자동 갱신", ToolTip="True이면 선택 대상이 있는 동안 일정 간격으로 거리와 사용 가능 상태를 다시 평가합니다."))
+bool bAutoRefreshTargetUseResult = true;
+
+// [v1.18.1] 선택 대상 거리와 사용 가능 상태를 다시 평가하는 간격입니다.
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|Weapon|TargetUse", meta=(ClampMin="0.01", Units="s", DisplayName="타겟 사용 결과 갱신 간격", ToolTip="선택 대상 이동에 따른 사거리 진입과 이탈을 다시 평가하는 초 단위 간격입니다."))
+float TargetUseRefreshIntervalSeconds = 0.10f;
 
 	// [v1.3.0] 현재 활성 WeaponData에 연결된 ProjectileData를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|Weapon", meta=(DisplayName="활성 ProjectileData 반환 (Get Active Projectile Data)", ToolTip="현재 활성 WeaponData에 연결된 ProjectileData를 반환합니다. 비어 있으면 None입니다."))
@@ -196,6 +241,21 @@ public:
 
 private:
 	// [v1.0.0] 현재 활성 장착 프로파일을 찾습니다.
+					void BindTargetSelectEvents();
+	void UnbindTargetSelectEvents();
+
+					UFUNCTION()
+	void HandleSelectedTargetChangedForWeapon(AActor* PreviousTarget, AActor* NewTarget, FCFTargetDisplayInfo DisplayInfo);
+
+	UFUNCTION()
+	void HandleSelectedTargetClearedForWeapon(AActor* ClearedTarget, ECFTargetClearReason ClearReason);
+
+	UFUNCTION()
+	void HandleSelectedTargetValidityChangedForWeapon(AActor* TargetActor, bool bIsValidTarget);
+
+	UFUNCTION()
+	void HandleSelectedTargetTrackStateChangedForWeapon(AActor* TargetActor, ECFTargetTrackState PreviousState, ECFTargetTrackState NewState);
+
 	const FCFVehicleMountProfile* FindActiveMountProfile() const;
 
 	// [v1.0.0] 위치 슬롯 ID와 일치하는 하드포인트 슬롯을 찾습니다.
@@ -215,7 +275,20 @@ private:
 
 	// [v1.0.0] 무기 런타임을 소유한 차량 Pawn입니다.
 	UPROPERTY(Transient)
-	TObjectPtr<ACFVehiclePawn> OwnerVehiclePawn = nullptr;
+					TObjectPtr<ACFVehiclePawn> OwnerVehiclePawn = nullptr;
+
+	// [v1.18.0] 활성 무기 대상 평가 갱신을 위해 구독 중인 TargetSelectComp입니다.
+	TWeakObjectPtr<UCFTargetSelectComp> BoundTargetSelectComp;
+
+	// [v1.18.0] 외부 UI와 장비 피드백이 읽을 마지막 대상 사용 평가 결과입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Weapon|TargetUse", meta=(AllowPrivateAccess="true", DisplayName="마지막 활성 무기 타겟 사용 결과"))
+	FCFTargetUseResult LastActiveWeaponTargetUseResult;
+
+	// [v1.18.0] 마지막 대상 사용 평가를 한 줄로 표현한 디버그 요약입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Weapon|TargetUse", meta=(AllowPrivateAccess="true", DisplayName="마지막 활성 무기 타겟 사용 요약"))
+				FString LastActiveWeaponTargetUseSummary = TEXT("ActiveWeaponTargetUse: NotInitialized");
+
+			float TargetUseRefreshElapsedSeconds = 0.0f;
 
 	// [v1.0.0] 현재 무기 런타임이 읽을 차량 DataAsset입니다.
 	UPROPERTY(Transient)
