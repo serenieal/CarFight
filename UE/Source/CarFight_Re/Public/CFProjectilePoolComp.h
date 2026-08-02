@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.3.0
-// Date: 2026-07-01
+// Version: 1.5.0
+// Date: 2026-07-30
 // Description: CarFight 발사체 Actor Pool 컴포넌트
-// Scope: ProjectileData가 지정한 Projectile Actor Class별로 발사체를 재사용해 반복 Spawn / Destroy 부담을 줄입니다.
+// Scope: ProjectileData가 지정한 Projectile Actor Class별 재사용과 동일 발사 차량 Projectile 충돌 격리를 관리합니다.
 // Changelog:
+// - v1.5.0: 모든 Actor Class 버킷을 가로질러 같은 발사 차량의 활성 Projectile을 양방향 Ignore로 등록하고 Trace 제외 API를 추가.
+// - v1.4.0: Launch Context 기반 Acquire 경로와 기존 SpawnTransform·LaunchDirection 호출용 Direct Adapter 추가.
 // - v1.3.0: Projectile Actor가 Hit으로 반환될 때 소유 Pawn에 Damage HitContext Debug 기록을 전달.
 // - v1.2.0: 마지막 Projectile 반환 사유 / 대상 / 비행 시간 디버그 요약 getter 추가.
 // - v1.1.0: Pool Debug 표시용 활성 발사체 수 getter와 유효 Actor 기준 카운트 계산 추가.
@@ -14,15 +16,19 @@
 // - Pool 한도 초과 또는 Pool 확보 실패 시 기존 Dummy HitScan fallback을 유지한다.
 // - 마지막 반환 요약은 검증 표시 전용이며 발사 가능 여부를 판정하지 않는다.
 // - HitContext 기록은 Debug 전용이며 실제 Damage 적용은 하지 않는다.
+// - 기존 AcquireProjectile API는 Direct Launch Context를 생성해 신규 Context 경로로 전달한다.
+// - Context 기반 Acquire는 LaunchTransform을 Spawn과 활성화에 동일하게 사용한다.
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "CFProjectileActor.h"
+#include "CFProjectileLaunchTypes.h"
 #include "Components/ActorComponent.h"
 #include "CFProjectilePoolComp.generated.h"
 
 class UCFProjectileData;
+struct FCollisionQueryParams;
 
 /**
  * Projectile Actor Class별로 재사용 가능한 발사체 목록을 보관하는 Pool 버킷입니다.
@@ -57,11 +63,20 @@ public:
 	// [v1.0.0] 발사체 Pool 컴포넌트의 Tick 비활성 기본값과 Pool 제한값을 초기화합니다.
 	UCFProjectilePoolComp();
 
-	// [v1.0.0] ProjectileData에 맞는 발사체 Actor를 Pool에서 확보하고 활성화합니다.
+			// [v1.0.0] 기존 호출 호환을 위해 SpawnTransform과 발사 방향에서 Direct Context를 만들어 발사체를 확보합니다.
 	ACFProjectileActor* AcquireProjectile(UCFProjectileData* InProjectileData, const FTransform& InSpawnTransform, const FVector& InLaunchDirection, AActor* InInstigatorActor);
 
-	// [v1.0.0] 비활성화된 발사체 Actor를 Pool에 반환합니다.
+	// [v1.4.0] Launch Context의 Transform과 초기 월드 Velocity를 사용해 발사체를 Pool에서 확보하고 활성화합니다.
+	ACFProjectileActor* AcquireProjectileWithContext(UCFProjectileData* InProjectileData, const FCFProjectileLaunchContext& InLaunchContext, AActor* InInstigatorActor);
+
+		// [v1.0.0] 비활성화된 발사체 Actor를 Pool에 반환합니다.
 	void ReleaseProjectile(ACFProjectileActor* InProjectileActor);
+
+	// [v1.5.0] 새 Projectile을 같은 발사 차량의 모든 활성 탄종·Volley와 양방향 Ignore로 등록합니다.
+	void RegisterSameSourceProjectileIsolation(ACFProjectileActor* InProjectileActor, AActor* InSourceActor);
+
+	// [v1.5.0] Hitscan Trace가 같은 발사 차량의 현재 활성 Projectile을 건너뛰도록 QueryParams에 추가합니다.
+	void AddActiveSourceProjectilesToQueryParams(AActor* InSourceActor, FCollisionQueryParams& InOutQueryParams) const;
 
 	// [v1.0.0] 현재 Pool이 추적 중인 전체 발사체 Actor 수를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|ProjectilePool", meta=(DisplayName="전체 풀 발사체 수 반환 (Get Total Pooled Projectile Count)", ToolTip="현재 Pool이 추적 중인 전체 발사체 Actor 수를 반환합니다. 활성 / 비활성 Actor를 모두 포함합니다."))

@@ -1,10 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.18.1
-// Date: 2026-07-24
+// Version: 1.22.0
+// Date: 2026-07-29
 // Description: CarFight 차량 전투 장착 프로파일과 선택 대상 사용 평가 컴포넌트
-// Scope: 장착 데이터, FireOrigin, 터렛 상태와 활성 무기의 선택 대상 사용 가능 결과를 제공합니다.
+// Scope: 장착 데이터, FireOrigin, 터렛 상태, Muzzle 순서, 런처 발사 패턴·Release 설정과 활성 무기의 선택 대상 사용 가능 결과를 제공합니다.
 // Changelog:
+// - v1.22.0: FIT-P0-04 Snapshot EquipmentPresetData Override와 활성 프로파일 명시 초기화 API를 추가.
+// - v1.21.0: 활성 WeaponData의 안전한 런처 Release 설정과 전용 요약 Getter를 추가.
+// - v1.20.0: 활성 WeaponData의 안전한 런처 발사 패턴 설정과 전용 요약 Getter를 추가.
+// - v1.19.0: 활성 TurretMountData 캐시와 성공 발사 기반 SingleCycle Muzzle 순환·Reset·Debug 계약을 추가.
 // - v1.18.1: 이동 중 사거리 진입·이탈을 반영하도록 저빈도 선택 대상 재평가 Tick을 추가.
 // - v1.18.0: TS-P0-07 TargetSelectComp 구독, 활성 무기 대상 평가 요청·캐시·변경 이벤트를 추가.
 // - v1.17.0: MountProfile legacy 직접 WeaponData / TurretMountData 해석 helper를 제거하고 EquipmentPresetData 전용 경로로 전환.
@@ -26,6 +30,7 @@
 // - v1.1.0: 활성 MountProfile의 DefaultWeaponData를 읽고 호환성/요약을 디버그로 노출.
 // - v1.0.0: P0 Top_01 터렛 발사 원점 계산을 위한 최소 WeaponComp 추가.
 // Migration:
+// - 활성 WeaponData가 없거나 호환되지 않으면 런처 발사 패턴 Getter는 기존 단발 동작과 같은 SingleCycle / 1발 기본값을 반환한다.
 // - DefaultEquipmentPresetData가 지정되면 TurretMountData / WeaponData의 단일 소스로 사용하고, 프리셋 내부 참조가 비면 해당 장비 데이터는 Missing 상태가 된다.
 // - 터렛이 조준 목표를 따라가는 중이어도 발사는 막지 않으며, 시각 회전값은 TurretMountData의 Min/Max Yaw/Pitch 안에 고정한다.
 // - EquipmentPresetData 내부 TurretMountData가 비어 있으면 터렛 조준 추적은 MissingTurretMountData로 건너뛰며, 발사 / Projectile / 쿨다운 흐름은 유지한다.
@@ -44,6 +49,7 @@
 
 #include "CoreMinimal.h"
 #include "CFTargetUseTypes.h"
+#include "CFLauncherTypes.h"
 #include "CFVehicleWeaponTypes.h"
 #include "Components/ActorComponent.h"
 #include "CFVehicleWeaponComp.generated.h"
@@ -83,6 +89,18 @@ virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponent
 	// [v1.0.0] Owner Pawn과 VehicleData 참조를 준비합니다.
 	UFUNCTION(BlueprintCallable, Category="CarFight|Weapon", meta=(DisplayName="무기 런타임 초기화 (Initialize Weapon Runtime)", ToolTip="Owner 차량 Pawn과 VehicleData를 캐시하고 활성 장착 프로파일을 확인합니다."))
 	bool InitializeWeaponRuntime(ACFVehiclePawn* InOwnerVehiclePawn, UCFVehicleData* InVehicleData);
+
+		// [v1.22.0] 지정 활성 프로파일에서 VehicleData 기본 장비를 사용하는 Legacy Runtime을 초기화합니다.
+	bool InitializeWeaponRuntimeForActiveProfile(ACFVehiclePawn* InOwnerVehiclePawn, UCFVehicleData* InVehicleData, FName InActiveMountProfileId);
+
+	// [v1.22.0] 지정 활성 프로파일에 Snapshot 장비 또는 빈 장착을 적용해 Runtime을 초기화합니다.
+	bool InitializeWeaponRuntimeFromFitting(ACFVehiclePawn* InOwnerVehiclePawn, UCFVehicleData* InVehicleData, FName InActiveMountProfileId, UCFEquipmentPresetData* InEquipmentPresetData);
+
+	// [v1.22.0] 현재 Runtime이 Snapshot 장비 선택을 사용하는지 반환합니다.
+	bool IsUsingRuntimeEquipmentPresetOverride() const { return bUseRuntimeEquipmentPresetOverride; }
+
+	// [v1.22.0] 현재 Snapshot EquipmentPresetData를 반환합니다. 빈 장착이면 None입니다.
+	UCFEquipmentPresetData* GetRuntimeEquipmentPresetOverride() const { return RuntimeEquipmentPresetOverride; }
 
 	// [v1.0.0] 무기 런타임이 활성 장착 프로파일을 사용할 수 있는지 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|Weapon", meta=(DisplayName="무기 런타임 준비 여부 (Is Weapon Runtime Ready)", ToolTip="활성 장착 프로파일과 참조 차량 데이터가 준비되었는지 반환합니다."))
@@ -127,6 +145,22 @@ virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponent
 	// [v1.1.0] 현재 활성 WeaponData의 디버그 요약 문자열을 반환합니다.
 UFUNCTION(BlueprintPure, Category="CarFight|Weapon", meta=(DisplayName="활성 WeaponData 요약 반환 (Get Active Weapon Summary)", ToolTip="현재 활성 WeaponData의 핵심 전투 데이터 요약 문자열을 반환합니다."))
 FString GetActiveWeaponSummary() const { return ActiveWeaponSummary; }
+
+	// [v1.20.0] 활성 WeaponData의 안전하게 보정된 런처 발사 패턴 설정을 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Launcher", meta=(DisplayName="활성 런처 발사 패턴 반환 (Get Active Launcher Fire Pattern Config)", ToolTip="활성 WeaponData가 유효하면 보정된 SingleCycle·Ripple·Salvo 설정을 반환하고, 없거나 호환되지 않으면 SingleCycle 1발 기본값을 반환합니다."))
+	FCFLauncherFirePatternConfig GetActiveLauncherFirePatternConfig() const;
+
+		// [v1.20.0] 활성 WeaponData의 런처 발사 패턴 설정을 한 줄로 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Launcher", meta=(DisplayName="활성 런처 발사 패턴 요약 반환 (Get Active Launcher Fire Pattern Summary)", ToolTip="활성 WeaponData의 발사 패턴, 유효 발사 수, Ripple 간격, Salvo 동시 처리와 실패·쿨다운 정책을 문자열로 반환합니다."))
+	FString GetActiveLauncherFirePatternSummary() const;
+
+	// [v1.21.0] 활성 WeaponData의 안전하게 보정된 런처 Release 설정을 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Launcher", meta=(DisplayName="활성 런처 Release 설정 반환 (Get Active Launcher Release Config)", ToolTip="활성 WeaponData가 유효하면 Direct·Angled·Vertical 설정을 반환하고, 없거나 호환되지 않으면 기존 직사와 같은 Direct / 차량 속도 상속 0을 반환합니다."))
+	FCFLauncherReleaseConfig GetActiveLauncherReleaseConfig() const;
+
+	// [v1.21.0] 활성 WeaponData의 런처 Release 설정을 한 줄로 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Launcher", meta=(DisplayName="활성 런처 Release 요약 반환 (Get Active Launcher Release Summary)", ToolTip="Release Mode, 로컬 사출 방향, 사출 속력, 차량 속도 상속 비율과 안전 검사 거리를 문자열로 반환합니다."))
+	FString GetActiveLauncherReleaseSummary() const;
 
 // [v1.18.0] 활성 무기 데이터와 현재 런타임 상태를 장비 타겟 사용 요청으로 변환합니다.
 UFUNCTION(BlueprintPure, Category="CarFight|Weapon|TargetUse", meta=(DisplayName="활성 무기 타겟 사용 요청 생성", ToolTip="활성 WeaponData의 ID, MaxRange와 TargetUsePolicy를 사용해 선택 대상 평가 요청을 생성합니다."))
@@ -216,9 +250,31 @@ float TargetUseRefreshIntervalSeconds = 0.10f;
 	UFUNCTION(BlueprintCallable, Category="CarFight|Weapon", meta=(DisplayName="승인 발사 시간 기록 (Record Accepted Fire)", ToolTip="로컬 발사 검증이 승인된 시간을 기록해 활성 무기 쿨다운 계산에 사용합니다."))
 	void RecordAcceptedFire(float AcceptedFireTimeSeconds);
 
-	// [v1.2.0] 마지막으로 승인된 발사 시간을 반환합니다.
+		// [v1.2.0] 마지막으로 승인된 발사 시간을 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|Weapon", meta=(DisplayName="마지막 승인 발사 시간 반환 (Get Last Accepted Fire Time)", ToolTip="WeaponComp가 마지막으로 기록한 승인 발사 시간입니다. 아직 없으면 음수입니다."))
 	float GetLastAcceptedFireTimeSeconds() const { return LastAcceptedFireTimeSeconds; }
+
+	// [v1.19.0] 현재 EquipmentPresetData에서 해석한 활성 TurretMountData를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Launcher", meta=(DisplayName="활성 TurretMountData 반환 (Get Active Turret Mount Data)", ToolTip="현재 활성 장비 프리셋에서 해석한 TurretMountData입니다. Muzzle 배열과 발사 정책의 원본입니다."))
+		UCFTurretMountData* GetActiveTurretMountData() const { return CachedActiveTurretMountData; }
+
+	// [v1.19.0] 다음 FireOrigin 해결이 검색을 시작할 MuzzleSocketNames 배열 인덱스를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Launcher", meta=(DisplayName="다음 Muzzle 인덱스 반환 (Get Next Muzzle Socket Index)", ToolTip="다음 SingleCycle 발사 원점 계산이 검색을 시작할 MuzzleSocketNames 배열 인덱스입니다."))
+	int32 GetNextMuzzleSocketIndex() const { return NextMuzzleSocketIndex; }
+
+	// [v1.19.0] Pawn이 실제 메쉬에서 해결한 현재 Muzzle 선택을 Debug 상태로 기록합니다.
+	void RecordResolvedMuzzleSelection(FName MuzzleSocketName, int32 MuzzleSocketIndex, int32 MuzzleSocketCount);
+
+	// [v1.19.0] 승인된 발사에 사용된 Muzzle 다음 인덱스로 SingleCycle 상태를 진행합니다.
+	void AdvanceMuzzleSequenceAfterAcceptedFire(FName MuzzleSocketName, int32 MuzzleSocketIndex, int32 MuzzleSocketCount);
+
+	// [v1.19.0] SingleCycle Muzzle 인덱스와 마지막 해결·발사 상태를 기본값으로 초기화합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|Weapon|Launcher", meta=(DisplayName="Muzzle 순서 초기화 (Reset Muzzle Sequence)", ToolTip="다음 Muzzle 인덱스를 0으로 되돌리고 마지막 해결·발사 Muzzle 상태를 초기화합니다."))
+	void ResetMuzzleSequence();
+
+	// [v1.19.0] 현재 SingleCycle Muzzle 순서와 마지막 해결·발사 결과를 한 줄로 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Launcher", meta=(DisplayName="Muzzle 순서 요약 생성 (Build Muzzle Sequence Summary)", ToolTip="다음 Muzzle 인덱스, 마지막 해결·발사 Muzzle와 승인 발사 기반 진행 횟수를 표시합니다."))
+	FString BuildMuzzleSequenceSummary() const;
 
 	// [v1.0.0] 마지막으로 계산된 발사 원점 결과를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|Weapon", meta=(DisplayName="마지막 발사 원점 반환 (Get Last Fire Origin)", ToolTip="마지막으로 계산된 실제 발사 위치와 방향을 반환합니다."))
@@ -240,6 +296,12 @@ float TargetUseRefreshIntervalSeconds = 0.10f;
 	void ResetTurretState();
 
 private:
+		// [v1.22.0] Legacy 또는 Snapshot Override 설정을 유지한 채 공통 Runtime 초기화를 수행합니다.
+	bool InitializeWeaponRuntimeInternal(ACFVehiclePawn* InOwnerVehiclePawn, UCFVehicleData* InVehicleData);
+
+	// [v1.22.0] VehicleData 기본값 또는 Snapshot Override 장비를 해석합니다.
+	UCFEquipmentPresetData* ResolveActiveEquipmentPresetData(const FCFVehicleMountProfile& ActiveMountProfile) const;
+
 	// [v1.0.0] 현재 활성 장착 프로파일을 찾습니다.
 					void BindTargetSelectEvents();
 	void UnbindTargetSelectEvents();
@@ -302,6 +364,14 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(AllowPrivateAccess="true", DisplayName="장착 부모 컴포넌트 이름 (MountParentComponentName)", ToolTip="하드포인트 위치를 월드 Transform으로 바꿀 때 우선 기준으로 사용할 컴포넌트 이름입니다. 없으면 차량 Actor Transform을 사용합니다."))
 	FName MountParentComponentName = TEXT("SM_Body");
 
+		// [v1.22.0] True이면 VehicleData 기본값 대신 Runtime Equipment Override를 사용합니다.
+	UPROPERTY(Transient)
+	bool bUseRuntimeEquipmentPresetOverride = false;
+
+	// [v1.22.0] Snapshot이 선택한 EquipmentPresetData입니다. 빈 장착이면 None입니다.
+	UPROPERTY(Transient)
+	TObjectPtr<UCFEquipmentPresetData> RuntimeEquipmentPresetOverride = nullptr;
+
 	// [v1.0.0] 현재 WeaponComp가 활성 장착 프로파일을 사용할 수 있는지 여부입니다.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Weapon", meta=(AllowPrivateAccess="true", DisplayName="무기 런타임 준비 여부 (bWeaponRuntimeReady)", ToolTip="활성 장착 프로파일과 차량 데이터 참조가 준비되었는지 여부입니다."))
 	bool bWeaponRuntimeReady = false;
@@ -309,6 +379,10 @@ private:
 	// [v1.16.0] 활성 장착 프로파일에서 우선 해석한 EquipmentPresetData입니다.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Weapon", meta=(AllowPrivateAccess="true", DisplayName="활성 EquipmentPresetData (ActiveEquipmentPresetData)", ToolTip="현재 활성 장착 프로파일에서 우선 해석한 EquipmentPresetData입니다."))
 	TObjectPtr<UCFEquipmentPresetData> ActiveEquipmentPresetData = nullptr;
+
+		// [v1.19.0] 활성 EquipmentPresetData에서 해석한 TurretMountData입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Weapon|Launcher", meta=(AllowPrivateAccess="true", DisplayName="활성 TurretMountData (ActiveTurretMountData)", ToolTip="현재 활성 장비 프리셋에서 해석한 TurretMountData입니다. 참조가 바뀌면 Muzzle 순서를 초기화합니다."))
+		TObjectPtr<UCFTurretMountData> CachedActiveTurretMountData = nullptr;
 
 	// [v1.16.0] 활성 EquipmentPresetData가 활성 장착 프로파일과 호환되는지 여부입니다.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Weapon", meta=(AllowPrivateAccess="true", DisplayName="활성 EquipmentPresetData 호환 여부 (bActiveEquipmentPresetCompatible)", ToolTip="현재 활성 EquipmentPresetData가 장착 타입과 크기 제한을 통과했는지 여부입니다."))
@@ -361,6 +435,26 @@ private:
 	// [v1.4.0] 활성 Projectile 실행 경로를 설명하는 요약 문자열입니다.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Weapon", meta=(AllowPrivateAccess="true", DisplayName="활성 Projectile 실행 요약 (ActiveProjectileExecutionSummary)", ToolTip="Dummy HitScan 유지 또는 Projectile 전환 준비 상태를 설명하는 요약 문자열입니다."))
 	FString ActiveProjectileExecutionSummary = TEXT("ProjectileExecution: DummyHitScanFallback");
+
+		// [v1.19.0] 다음 SingleCycle FireOrigin 해결이 검색을 시작할 설정 Muzzle 배열 인덱스입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Weapon|Launcher", meta=(AllowPrivateAccess="true", DisplayName="다음 Muzzle 인덱스 (NextMuzzleSocketIndex)", ToolTip="다음 발사 원점 계산이 MuzzleSocketNames 배열에서 검색을 시작할 인덱스입니다. 승인 발사 뒤에만 진행합니다."))
+	int32 NextMuzzleSocketIndex = 0;
+
+	// [v1.19.0] 마지막 FireOrigin 계산에서 실제로 해결한 Muzzle 이름입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Weapon|Launcher", meta=(AllowPrivateAccess="true", DisplayName="마지막 해결 Muzzle 이름 (LastResolvedMuzzleSocketName)", ToolTip="마지막 Weapon Aim Solution 계산에서 실제 Pitch 메쉬에 존재해 선택된 Muzzle 소켓 이름입니다."))
+	FName LastResolvedMuzzleSocketName = NAME_None;
+
+	// [v1.19.0] 마지막 FireOrigin 계산에서 해결한 설정 Muzzle 배열 인덱스입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Weapon|Launcher", meta=(AllowPrivateAccess="true", DisplayName="마지막 해결 Muzzle 인덱스 (LastResolvedMuzzleSocketIndex)", ToolTip="마지막 Weapon Aim Solution 계산에서 선택된 MuzzleSocketNames 배열 인덱스입니다."))
+	int32 LastResolvedMuzzleSocketIndex = INDEX_NONE;
+
+	// [v1.19.0] 마지막 승인 발사에 실제 사용된 Muzzle 이름입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Weapon|Launcher", meta=(AllowPrivateAccess="true", DisplayName="마지막 발사 Muzzle 이름 (LastFiredMuzzleSocketName)", ToolTip="마지막 승인 발사 명령에 스냅샷으로 보존된 Muzzle 소켓 이름입니다."))
+	FName LastFiredMuzzleSocketName = NAME_None;
+
+	// [v1.19.0] 마지막 승인 발사 뒤 SingleCycle 순서를 진행한 횟수입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Weapon|Launcher", meta=(AllowPrivateAccess="true", DisplayName="Muzzle 순서 진행 횟수 (MuzzleSequenceAdvanceCount)", ToolTip="승인된 발사 결과로 다음 Muzzle 인덱스를 진행한 누적 횟수입니다. 발사 거부는 증가시키지 않습니다."))
+	int32 MuzzleSequenceAdvanceCount = 0;
 
 	// [v1.2.0] 마지막으로 승인된 발사 시간입니다.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Weapon", meta=(AllowPrivateAccess="true", DisplayName="마지막 승인 발사 시간 (LastAcceptedFireTimeSeconds)", ToolTip="WeaponComp가 마지막으로 기록한 승인 발사 시간입니다. 아직 없으면 음수입니다."))

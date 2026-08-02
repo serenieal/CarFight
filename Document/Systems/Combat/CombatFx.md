@@ -1,7 +1,7 @@
 # CombatFx
 
-- Version: 1.0.0
-- Date: 2026-07-27
+- Version: 1.0.1
+- Date: 2026-07-28
 - Status: Current System / P0 User PIE Verified
 - Feature: `CF-FQ-024 전투 FX`
 - Test: `CF-TC-021 PASS`
@@ -701,7 +701,7 @@ CF-TC-021 = PASS
 
 ```text
 - 모든 게임 사운드와 오디오 옵션
-- Projectile Trail 또는 추진 화염
+- Projectile Trail·Thruster 지속형 FX와 추진 상태 동기화 — 현재 책임은 `Document/Systems/Combat/Projectile.md`가 소유
 - 표면 재질별 Impact 세분화
 - Impact Decal 시스템
 - 지속 파괴 화염과 연기 상태
@@ -757,7 +757,7 @@ Document/Systems/Combat/FireFeedback.md
 - 발사 결과의 Reticle/UI 표시를 소유하며 실제 Niagara 재생은 CombatFx가 소유한다.
 
 Document/Systems/Combat/Projectile.md
-- 첫 유효 Projectile Impact와 Pool 생명주기를 소유하며 확정된 Impact FX 요청은 CombatFx가 소비한다.
+- Projectile 추진, Trail·Thruster 지속형 FX, 첫 유효 Impact와 Pool 생명주기를 소유한다. CombatFx는 그중 확정된 첫 Impact 결과의 일회성 Impact FX 요청만 소비한다.
 
 Document/Systems/Combat/DamageHitContext.md
 - ImpactLocation, ImpactNormal과 Hit 정보를 공용 Context로 제공한다.
@@ -788,10 +788,19 @@ Document/Systems/Combat/HitDamage.md
 
 ## 20. 문서 버전 관리
 
-- 현재 문서 버전: `1.0.0`
+- 현재 문서 버전: `1.0.1`
 - 문서 상태: `Current System / P0 User PIE Verified`
 
 ### Changelog
+
+#### v1.0.1 - 2026-07-28
+
+```text
+- CF-FQ-028 Systems 승격에 맞춰 Projectile 지속형 Trail·Thruster와 추진 상태 동기화의 책임을 Systems/Combat/Projectile.md로 연결했다.
+- CombatFx는 승인 Fire, 첫 Impact와 최초 Destroyed의 일회성 Niagara만 소유한다는 경계를 유지했다.
+- Projectile의 Burning 기반 Thruster와 Pool Reset을 CombatFx 책임으로 오해하지 않도록 비책임·연관 문서를 갱신했다.
+- CombatFx 런타임과 자산 동작 자체는 변경하지 않았다.
+```
 
 #### v1.0.0 - 2026-07-27
 
@@ -808,6 +817,14 @@ Document/Systems/Combat/HitDamage.md
 ```
 
 ### Migration
+
+#### v1.0.1 적용 안내
+
+```text
+- 지속형 Projectile Trail·Thruster와 추진 상태는 Systems/Combat/Projectile.md를 우선한다.
+- CombatFx는 기존 Muzzle·Impact·Destroyed 일회성 Current System만 유지한다.
+- CF-FQ-028 승격은 CombatFx의 재구현이나 CF-TC-021 재검증을 의미하지 않는다.
+```
 
 #### Initial Current System 적용 안내
 

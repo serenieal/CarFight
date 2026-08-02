@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.8.0
-// Date: 2026-07-03
+// Version: 1.9.0
+// Date: 2026-07-28
 // Description: CarFight 차량 전투 장착 프로파일과 발사 원점 공용 타입
-// Scope: 하드포인트 장착 타입, 무기 크기, 장착 프로파일, 터렛 상태, 발사 원점 계산 결과를 제공합니다.
+// Scope: 하드포인트 장착 타입, 무기 크기, 장착 프로파일, 터렛 상태, 선택 Muzzle 스냅샷과 발사 원점 계산 결과를 제공합니다.
 // Changelog:
+// - v1.9.0: FireOrigin에 선택된 Muzzle 소켓 이름, 배열 인덱스와 배열 크기 스냅샷을 추가.
 // - v1.8.0: MountProfile의 DefaultWeaponData / DefaultTurretMountData legacy 직접 슬롯을 삭제하고 EquipmentPresetData 전용 경로로 전환.
 // - v1.7.0: MountProfile에 기본 EquipmentPresetData 참조를 추가하고 WeaponData / TurretMountData 직접 참조를 legacy fallback으로 명시.
 // - v1.6.0: DataAsset 재저장 확인 후 MountProfile의 legacy Min/Max Yaw/Pitch 필드를 실제 삭제.
@@ -190,7 +191,19 @@ struct FCFVehicleFireOrigin
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Weapon|Fire", meta=(DisplayName="월드 발사 위치 (WorldFireLocation)", ToolTip="월드 기준 실제 발사 시작 위치입니다."))
 	FVector WorldFireLocation = FVector::ZeroVector;
 
-	// [v1.0.0] 월드 기준 실제 발사 방향입니다.
+		// [v1.0.0] 월드 기준 실제 발사 방향입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Weapon|Fire", meta=(DisplayName="월드 발사 방향 (WorldFireDirection)", ToolTip="월드 기준 실제 발사 방향입니다."))
 	FVector WorldFireDirection = FVector::ForwardVector;
+
+	// [v1.9.0] 이번 FireOrigin에 실제로 사용된 Pitch 메쉬 Muzzle 소켓 이름입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Weapon|Fire", meta=(DisplayName="선택 Muzzle 소켓 이름 (MuzzleSocketName)", ToolTip="이번 발사 원점 계산에서 실제로 선택한 Pitch 메쉬 Muzzle 소켓 이름입니다. 하드포인트 fallback이면 None입니다."))
+	FName MuzzleSocketName = NAME_None;
+
+	// [v1.9.0] 이번 FireOrigin에 사용된 MuzzleSocketNames 배열 인덱스입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Weapon|Fire", meta=(DisplayName="선택 Muzzle 인덱스 (MuzzleSocketIndex)", ToolTip="이번 발사에 선택한 MuzzleSocketNames 배열 인덱스입니다. 기존 단일 Muzzle fallback은 0, 총구 미해결은 -1입니다."))
+	int32 MuzzleSocketIndex = INDEX_NONE;
+
+	// [v1.9.0] 이번 선택이 순환하는 설정 Muzzle 슬롯 전체 개수입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Weapon|Fire", meta=(DisplayName="설정 Muzzle 슬롯 수 (MuzzleSocketCount)", ToolTip="이번 선택이 순환하는 MuzzleSocketNames 설정 슬롯 수입니다. 기존 단일 Muzzle fallback은 1입니다."))
+	int32 MuzzleSocketCount = 0;
 };

@@ -1,9 +1,22 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.123.0
-// Date: 2026-07-25
+// Version: 2.136.0
+// Date: 2026-08-02
 // Description: CarFight 싱글플레이 차량 Pawn 기준 클래스
 // Changelog:
+// - v2.136.0: 첫 발과 Ripple·Salvo 후속 발사가 같은 Command Target 위치·Guidance Target Actor Snapshot을 Launch Context에 사용하도록 통합.
+// - v2.135.0: Launch Context에 발사 순간 선택 Target Actor Snapshot을 복사해 이미 발사된 미사일 목표를 차량 선택 상태와 분리.
+// - v2.134.0: 차량 코어 Runtime 준비와 전투 Runtime 준비 상태를 분리하고 기존 bVehicleRuntimeReady를 코어 호환 상태로 유지.
+// - v2.133.0: FIT-P0-05 PreRegister Initial Mass 적용, BeginPlay 실제 VehicleMesh 질량 검증과 Cached Snapshot Commit 순서를 추가.
+// - v2.132.0: FIT-P0-04 VehicleFittingComp, 선택적 VehicleFittingData와 출격 Weapon·Defense Snapshot 적용 순서를 추가.
+// - v2.131.0: UI-P0-02 Pause 진입 전 차량 이동·조향·브레이크·핸드브레이크·Look 입력 잔류를 중립화하는 ClearGameplayInputForPause를 추가.
+// - v2.130.0: VehicleDebug Weapon 카테고리에 VehicleDefenseComp 준비·Fallback·현재 상태와 마지막 전체 피해 결과 요약을 추가.
+// - v2.129.0: VehicleDefenseComp 기본 서브오브젝트·초기화와 HitScan 정식 방어 피해 진입점을 추가하고 기존 Health Debug 호환을 유지.
+// - v2.128.0: Hitscan이 같은 차량 Projectile을 Trace에서 제외하고 다른 차량의 요격 가능 Projectile 적중을 Intercepted 경로로 전달.
+// - v2.127.0: LM-P0-04 Direct·Angled·Vertical Launch Context, 차량 속도 상속과 실제 사출 방향 안전 검사 계약을 추가.
+// - v2.126.0: LauncherComp 기본 서브오브젝트와 LM-P0-03B Ripple·Salvo 예약 발사, 고정 Command Target, 내부 쿨다운 우회 실행 계약을 추가.
+// - v2.125.0: 가변 Muzzle 선택, FireRequest·LaunchContext 스냅샷과 승인 발사 기반 SingleCycle 진행을 연결.
+// - v2.124.0: Fire Command에서 Legacy Direct Launch Context를 생성해 ProjectilePool에 전달하는 LM-P0-01 기반 추가.
 // - v2.123.0: Combat FX가 차량별 파괴 소켓을 해석할 수 있도록 표준 SM_Body 컴포넌트 getter를 추가.
 // - v2.121.0: TS-P0-06 TargetSelect 전용 HUD 클래스·인스턴스·표시 토글·Viewport 수명 API를 추가.
 // - v2.120.0: TS-P0-05 타겟 선택·수동 해제 Enhanced Input Action과 Pawn 명령 API를 추가.
@@ -53,6 +66,17 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth 적용 전 기준선 정리를 위해 차량 NetDebug/OwnerVisual/OwnerBodyVisual 실험 플래그 기본값을 False로 통일.
 // Migration:
+// - bVehicleRuntimeReady는 기존 Tick·Debug·Blueprint 호환을 위해 bVehicleCoreRuntimeReady와 같은 값을 유지한다. 전투 HUD와 전투 명령은 bVehicleCombatRuntimeReady를 별도로 확인한다.
+// - 유효 피팅 Snapshot 질량은 PreRegisterAllComponents의 Super 호출 전에 Movement Mass에 1회 기록하고 BeginPlay에서 실제 VehicleMesh 질량을 검증한다.
+// - FittingData 미지정·초기 Invalid Snapshot은 기존 Chaos 질량과 VehicleData Weapon·Defense Legacy 경로를 유지한다.
+// - Physics State 생성 뒤 다른 Target Mass는 거부하며 SetMassOverrideInKg와 Hot Recreate를 호출하지 않는다.
+// - ClearGameplayInputForPause는 차량 입력과 입력 소유권만 중립화하며 진행 중 Launcher Ripple·Salvo 시퀀스를 취소하지 않는다.
+// - Pause 해제 뒤에는 새 Enhanced Input 이벤트부터 다시 Drive 입력을 적용한다.
+// - 신규 VehicleDefense Debug 필드는 VehicleDefenseComp 상태를 읽기만 하며 HitScan·Projectile·Launcher·Pool 피해 실행 경로를 변경하지 않는다.
+// - 기존 WeaponData는 Direct / CarrierVelocityRatio 0 기본값으로 기존 AimDirection·ProjectileData.InitialSpeed 결과를 유지한다.
+// - Angled·Vertical Ejection은 실제 선택 Muzzle Transform과 차량 GetVelocity 스냅샷만 발사 순간 복사하며 이후 런처 Transform을 조회하지 않는다.
+// - 기존 BP_CFVehiclePawn은 LauncherComp 기본 서브오브젝트를 자동 상속하며 WeaponData 기본값 SingleCycle / 1발에서는 기존 발사 흐름과 동일하게 동작한다.
+// - Ripple·Salvo 후속 발사는 첫 입력 순간 Command Target을 고정하고 각 발사 시점의 다음 유효 Muzzle에서 기존 검증·Projectile·FX 경로를 재사용한다.
 // - 파괴 FX 위치 해석은 GetVehicleBodyMeshComponent가 반환하는 SM_Body의 FX_Destroyed 소켓을 우선 사용한다.
 // - IA_SelectTarget은 현재 후보가 있을 때만 선택을 확정하며 후보가 없으면 기존 선택을 유지한다.
 // - IA_ClearTarget은 Manual 사유로 현재 선택만 해제하고 현재 후보를 유지하며 자동 다음 타겟을 선택하지 않는다.
@@ -82,6 +106,8 @@
 // - ProjectileData가 없어도 기존 Dummy HitScan / FireOrigin / 발사 간격 검증은 유지한다.
 // - Projectile Actor 스폰은 WeaponData.FireMode가 Projectile이고 ProjectileData / ProjectileActorClass가 모두 유효할 때만 실행한다.
 // - Projectile Pool 확보 조건이 맞지 않거나 Pool 확보 실패 시 기존 Dummy HitScan fallback을 유지한다.
+// - 기존 Fire Command 필드는 유지하고 Projectile Actor 발사 시 Direct Launch Context로 값 복사해 전달한다.
+// - LM-P0-01에서는 차량 Velocity 상속, Multi-Muzzle, Ripple·Salvo와 Angled·Vertical Ejection을 적용하지 않는다.
 // - WeaponData가 없으면 기존 Aim Profile MaxAimDistance와 즉시 발사 흐름을 유지한다.
 // - 기존 Weapon Debug 필드는 유지하고 WeaponData 관련 필드만 뒤에 추가한다.
 // - 기존 VehicleDebug Overview / Drive / Input / Camera / Aim / Runtime 카테고리는 유지하고 Weapon 카테고리만 추가한다.
@@ -96,7 +122,7 @@
 // - ACFVehiclePawn의 BuildFireRequest / ValidateFireRequestOnServer / RunServerDummyHitScan / ServerRequestFire / ClientReceiveFireResult 호출은 제거하고 로컬 Fire 함수로 교체한다.
 // - BP_CFVehiclePawn의 Actor Replicates/Replicate Movement도 False로 저장해 C++ 기본값과 맞춘다.
 // - 멀티플레이 진단이 다시 필요하면 별도 멀티플레이 브랜치/문서에서 복구한다.
-// Scope: DriveComp / WheelSyncComp / VehicleCameraComp / VehicleAimComp / VehicleWeaponComp / ProjectilePoolComp / VehicleHealthComp / TargetPoint / TargetSelectComp를 소유하고 차량 런타임, 입력, 카메라 디버그 스냅샷, 로컬 Fire Command와 타겟 선택 위치·상태 계약을 함께 다룹니다.
+// Scope: DriveComp / WheelSyncComp / VehicleCameraComp / VehicleAimComp / VehicleWeaponComp / LauncherComp / ProjectilePoolComp / VehicleHealthComp / TargetPoint / TargetSelectComp를 소유하고 차량 런타임, 입력, 카메라 디버그 스냅샷, 로컬 Fire Command·Ripple·Salvo와 타겟 선택 위치·상태 계약을 함께 다룹니다.
 
 #pragma once
 
@@ -118,9 +144,13 @@ class UCFVehicleData;
 class UCFVehicleCameraComp;
 class UCFVehicleAimComp;
 class UCFVehicleWeaponComp;
+class UCFLauncherComp;
 class UCFProjectilePoolComp;
 class UCFCombatFxComp;
 class UCFVehicleHealthComp;
+class UCFVehicleDefenseComp;
+class UCFVehicleFittingComp;
+class UCFVehicleFittingData;
 class UCFTargetSelectComp;
 class UCFEquipmentPresetData;
 class UCFProjectileData;
@@ -138,6 +168,7 @@ class UInputMappingContext;
 class USceneComponent;
 class UStaticMeshComponent;
 struct FCFVehicleHardpointSlot;
+struct FCFProjectileLaunchContext;
 struct FInputActionValue;
 struct FKey;
 
@@ -690,9 +721,33 @@ struct FCFVehicleDebugWeapon
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="마지막 피해 적용 결과 (LastDamageApplyResult)", ToolTip="피해 적용 여부, 거부 사유, 적용량, 체력 변화와 파괴 전환을 기록합니다."))
 	FCFDamageApplyResult LastDamageApplyResult;
 
-	// [v2.111.0] 마지막 피해 적용 결과의 한글 표시 요약입니다.
+		// [v2.111.0] 마지막 피해 적용 결과의 한글 표시 요약입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="마지막 피해 적용 결과 요약 (LastDamageApplyResultSummary)", ToolTip="VehicleDebug Panel에 표시할 피해 적용 결과 요약입니다."))
 	FString LastDamageApplyResultSummary = TEXT("피해 적용 기록 없음");
+
+	// [v2.130.0] 현재 Pawn이 VehicleDefenseComp를 보유하는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="VehicleDefenseComp 보유 여부 (bHasVehicleDefenseComponent)", ToolTip="현재 Pawn이 Shield, 6방향 Armor와 Integrity 분배를 관리하는 VehicleDefenseComp를 보유하는지 표시합니다."))
+	bool bHasVehicleDefenseComponent = false;
+
+	// [v2.130.0] VehicleDefenseComp가 유효한 DefenseData로 초기화됐는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="VehicleDefense 초기화 여부 (bVehicleDefenseInitialized)", ToolTip="True이면 유효한 VehicleDefenseData로 Shield와 6방향 Armor가 초기화된 상태입니다."))
+	bool bVehicleDefenseInitialized = false;
+
+	// [v2.130.0] DefenseData 없이 기존 Integrity 직접 피해 호환 경로를 사용하는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="Legacy 방어 Fallback 여부 (bUsingLegacyDefenseFallback)", ToolTip="True이면 VehicleDefenseData가 없어 기존 VehicleHealthComp 직접 Integrity 피해 호환 경로를 사용합니다."))
+	bool bUsingLegacyDefenseFallback = false;
+
+	// [v2.130.0] 현재 Shield, 방향별 Armor, 재생 상태와 초기화 상태 요약입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="차량 방어 상태 요약 (VehicleDefenseSummary)", ToolTip="VehicleDefenseComp가 계산한 현재 Shield, 6방향 Armor와 재생 상태의 읽기 전용 요약입니다."))
+	FString VehicleDefenseSummary = TEXT("VehicleDefenseComp 없음");
+
+	// [v2.130.0] 현재 초기화 이후 마지막 전체 방어 피해 결과가 저장됐는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="마지막 차량 방어 결과 존재 여부 (bHasLastVehicleDamageResult)", ToolTip="마지막 유효 피해의 Shield, Armor, 관통과 Integrity 전체 결과가 저장됐는지 표시합니다."))
+	bool bHasLastVehicleDamageResult = false;
+
+	// [v2.130.0] 마지막 전체 방어 피해 결과의 Panel 표시용 요약입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="마지막 차량 방어 결과 요약 (LastVehicleDamageResultSummary)", ToolTip="마지막 유효 피해의 방향, Shield 흡수, Armor 흡수·관통과 Integrity 적용 결과를 표시합니다."))
+	FString LastVehicleDamageResultSummary = TEXT("차량 방어 피해 기록 없음");
 
 	// [v2.83.0] 현재 Pawn이 ProjectilePoolComp를 보유하고 있는지 여부입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Weapon", meta=(DisplayName="ProjectilePoolComp 보유 여부 (bHasProjectilePoolComponent)", ToolTip="현재 Pawn이 발사체 재사용 Pool 컴포넌트를 보유하고 있는지 여부입니다."))
@@ -814,13 +869,18 @@ class CARFIGHT_RE_API ACFVehiclePawn : public AWheeledVehiclePawn, public ICFTar
 {
 	GENERATED_BODY()
 
+	friend class UCFLauncherComp;
+
 public:
 	// [v1.1.0] 기본 생성자
 	ACFVehiclePawn();
 
 protected:
-	// [v1.4.0] Construction 시점에 VehicleVisualConfig를 적용해 에디터 미리보기를 갱신합니다.
+		// [v1.4.0] Construction 시점에 VehicleVisualConfig를 적용해 에디터 미리보기를 갱신합니다.
 	virtual void OnConstruction(const FTransform& Transform) override;
+
+	// [v2.133.0] 게임 World의 물리 컴포넌트 등록 전에 초기 피팅 Snapshot 질량을 Movement Mass에 1회 기록합니다.
+	virtual void PreRegisterAllComponents() override;
 
 	// [v1.1.0] BeginPlay에서 런타임 초기화와 입력 매핑 등록을 시도합니다.
 	virtual void BeginPlay() override;
@@ -836,9 +896,14 @@ protected:
 
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn", meta=(DisplayName="차량 데이터 (VehicleData)", ToolTip="차량 루트 DataAsset 참조입니다. 현재 단계에서는 공식 타입을 UCFVehicleData로 고정하고, 세부 VehicleMovement 및 WheelVisual 해석은 후속 단계로 확장합니다."))
-	TObjectPtr<UCFVehicleData> VehicleData = nullptr;
+		TObjectPtr<UCFVehicleData> VehicleData = nullptr;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="기본 입력 매핑 컨텍스트 (DefaultInputMappingContext)", ToolTip="BeginPlay와 SetupPlayerInputComponent에서 등록을 시도할 기본 Input Mapping Context 입니다."))
+	// [v2.132.0] 출격 초기화에서 VehicleData 기본값을 덮어쓸 선택적 피팅 DataAsset입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Fitting", meta=(DisplayName="차량 피팅 데이터 (VehicleFittingData)", ToolTip="지정하면 유효 Snapshot의 Weapon·Defense 입력을 원자 적용합니다. 비어 있으면 기존 VehicleData 기본 경로를 유지합니다."))
+	TObjectPtr<UCFVehicleFittingData> VehicleFittingData = nullptr;
+
+		// [v2.134.0] 현재 차량 Gameplay 입력을 소유하는 Pawn 기본 Mapping Context입니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="기본 입력 매핑 컨텍스트 (DefaultInputMappingContext)", ToolTip="현재 차량 Gameplay 입력의 소유 Context입니다. BeginPlay와 SetupPlayerInputComponent에서 등록을 시도하며, Controller로 입력 소유권을 일괄 이전하기 전에는 Controller Gameplay Context와 중복 지정하지 않습니다."))
 	TObjectPtr<UInputMappingContext> DefaultInputMappingContext = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="차량 이동 입력 액션 (InputAction_VehicleMove)", ToolTip="차량 전진/후진/브레이크/조향을 함께 해석할 2D 이동 Input Action 입니다."))
@@ -991,15 +1056,27 @@ public:
 
 	// [v2.75.0] 차량 장착 프로파일과 실제 발사 원점을 해석하는 Weapon 컴포넌트입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="VehicleWeapon 컴포넌트 (VehicleWeaponComp)", ToolTip="차량 하드포인트와 장착 프로파일을 읽어 실제 발사 원점을 계산하는 컴포넌트입니다."))
-	TObjectPtr<UCFVehicleWeaponComp> VehicleWeaponComp = nullptr;
+		TObjectPtr<UCFVehicleWeaponComp> VehicleWeaponComp = nullptr;
+
+	// [v2.132.0] 출격 피팅 Snapshot 준비·Commit·Rollback과 AppliedFittingSnapshot을 소유하는 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="차량 피팅 컴포넌트 (VehicleFittingComp)"))
+	TObjectPtr<UCFVehicleFittingComp> VehicleFittingComp = nullptr;
+
+		// [v2.126.0] Ripple·Salvo 예약 발사, 취소와 Volley 단위 쿨다운을 관리하는 런처 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="런처 컴포넌트 (LauncherComp)", ToolTip="첫 승인 발사 이후 남은 Ripple·Salvo 발사를 예약하고 장비 변경·차량 파괴·실패 정책에 따라 시퀀스를 완료하거나 취소합니다."))
+	TObjectPtr<UCFLauncherComp> LauncherComp = nullptr;
 
 	// [v2.82.0] 반복 발사되는 Projectile Actor를 재사용하는 Pool 컴포넌트입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="ProjectilePool 컴포넌트 (ProjectilePoolComp)", ToolTip="반복 발사되는 Projectile Actor를 재사용해 Spawn / Destroy 부담을 줄이는 Pool 컴포넌트입니다."))
-			TObjectPtr<UCFProjectilePoolComp> ProjectilePoolComp = nullptr;
+	TObjectPtr<UCFProjectilePoolComp> ProjectilePoolComp = nullptr;
 
-	// [v2.111.0] 차량 최대/현재 체력과 파괴 상태를 관리하는 런타임 컴포넌트입니다.
-				UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="차량 체력 컴포넌트 (VehicleHealthComp)", ToolTip="VehicleData 최대 체력, 현재 체력, 직접 피해와 파괴 상태를 관리합니다."))
-		TObjectPtr<UCFVehicleHealthComp> VehicleHealthComp = nullptr;
+		// [v2.111.0] 차량 최대/현재 내구도와 파괴 상태를 관리하는 런타임 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="차량 내구도 컴포넌트 (VehicleHealthComp)", ToolTip="VehicleData 최대 내구도, 현재 내구도와 파괴 상태를 관리합니다. 기존 Blueprint 호환을 위해 컴포넌트 이름은 유지합니다."))
+	TObjectPtr<UCFVehicleHealthComp> VehicleHealthComp = nullptr;
+
+	// [v2.129.0] 쉴드와 6방향 장갑의 정식 피해 분배를 관리하는 런타임 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="차량 방어 컴포넌트 (VehicleDefenseComp)", ToolTip="VehicleData.DefaultDefenseData를 읽어 쉴드, 6방향 장갑, 관통과 차량 내구도 피해 분배를 관리합니다. 방어 데이터가 없으면 기존 직접 내구도 피해로 Fallback합니다."))
+	TObjectPtr<UCFVehicleDefenseComp> VehicleDefenseComp = nullptr;
 
 	// 확정된 발사, Impact와 최초 파괴 결과를 Niagara 시각 연출로 변환하는 컴포넌트입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="전투 FX 컴포넌트", ToolTip="전투 판정을 변경하지 않고 데이터 기반 Niagara FX를 재생합니다."))
@@ -1047,10 +1124,20 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Runtime", meta=(DisplayName="휠 시각 Tick 사용 (bEnableWheelVisualTick)", ToolTip="True이면 Tick에서 WheelSync의 휠 시각 갱신을 자동 호출합니다."))
 	bool bEnableWheelVisualTick = true;
 
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Runtime", meta=(DisplayName="차량 런타임 준비 완료 여부 (bVehicleRuntimeReady)", ToolTip="Drive / WheelSync 준비가 성공했는지 여부입니다."))
+		// [v2.134.0] 차량 주행·물리·내구도·피팅을 사용할 수 있는 코어 Runtime 준비 여부입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Runtime", meta=(DisplayName="차량 코어 런타임 준비 여부 (bVehicleCoreRuntimeReady)", ToolTip="Drive, WheelSync, Health, 정식 Defense 진입점과 Fitting 적용이 준비되어 차량 기본 주행과 피격 처리를 수행할 수 있으면 True입니다. Aim, Weapon과 Launcher 준비 여부는 포함하지 않습니다."))
+	bool bVehicleCoreRuntimeReady = false;
+
+	// [v2.134.0] 차량 코어와 조준·무기·런처·타겟 선택을 모두 사용할 수 있는 전투 Runtime 준비 여부입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Runtime", meta=(DisplayName="차량 전투 런타임 준비 여부 (bVehicleCombatRuntimeReady)", ToolTip="차량 코어 Runtime에 더해 Aim, Weapon, Launcher와 TargetSelect가 준비되어 전투 HUD와 전투 명령이 사용할 수 있으면 True입니다."))
+	bool bVehicleCombatRuntimeReady = false;
+
+	// [v2.134.0] 기존 Blueprint·Tick·Debug 호환을 위한 차량 코어 Runtime 준비 별칭입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Runtime", meta=(DisplayName="차량 런타임 준비 완료 여부 (bVehicleRuntimeReady)", ToolTip="기존 호환용 값이며 bVehicleCoreRuntimeReady와 같습니다. 전투 준비 여부가 필요하면 bVehicleCombatRuntimeReady를 사용합니다."))
 	bool bVehicleRuntimeReady = false;
 
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Runtime", meta=(DisplayName="런타임 결과 요약 (LastVehicleRuntimeSummary)", ToolTip="마지막 런타임 초기화 결과 요약 문자열입니다."))
+	// [v2.134.0] 마지막 차량 코어·전투 Runtime 초기화 결과 요약 문자열입니다.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Runtime", meta=(DisplayName="런타임 결과 요약 (LastVehicleRuntimeSummary)", ToolTip="마지막 차량 코어와 전투 Runtime 초기화 결과를 함께 요약한 문자열입니다."))
 	FString LastVehicleRuntimeSummary = TEXT("NotInitialized");
 
 	// [v2.17.0] 다음 발사 요청에 사용할 증가형 요청 ID입니다.
@@ -1226,15 +1313,27 @@ public:
 
 	// [v2.75.0] 차량 Weapon 해석 컴포넌트를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(ToolTip="차량 하드포인트와 장착 프로파일을 읽어 실제 발사 원점을 계산하는 Weapon 컴포넌트를 반환합니다."))
-	UCFVehicleWeaponComp* GetVehicleWeaponComp() const { return VehicleWeaponComp; }
+		UCFVehicleWeaponComp* GetVehicleWeaponComp() const { return VehicleWeaponComp; }
+
+	// [v2.132.0] 출격 피팅 Runtime 상태와 Applied Snapshot을 관리하는 컴포넌트를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(DisplayName="차량 피팅 컴포넌트 반환"))
+	UCFVehicleFittingComp* GetVehicleFittingComp() const { return VehicleFittingComp; }
+
+		// [v2.126.0] 차량 Ripple·Salvo 발사 시퀀스를 관리하는 LauncherComp를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(DisplayName="런처 컴포넌트 반환 (Get Launcher Component)", ToolTip="현재 차량의 Ripple·Salvo 예약 발사, 취소와 Volley Debug를 관리하는 LauncherComp를 반환합니다."))
+	UCFLauncherComp* GetLauncherComp() const { return LauncherComp; }
 
 	// [v2.82.0] 차량 Projectile Pool 컴포넌트를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(ToolTip="반복 발사되는 Projectile Actor를 재사용하는 Pool 컴포넌트를 반환합니다."))
-			UCFProjectilePoolComp* GetProjectilePoolComp() const { return ProjectilePoolComp; }
+	UCFProjectilePoolComp* GetProjectilePoolComp() const { return ProjectilePoolComp; }
 
-		// [v2.111.0] 차량 체력 컴포넌트를 반환합니다.
-		UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(DisplayName="차량 체력 컴포넌트 반환", ToolTip="현재 차량의 최대 체력, 현재 체력과 파괴 상태를 관리하는 컴포넌트를 반환합니다."))
+			// [v2.111.0] 차량 내구도 컴포넌트를 기존 이름으로 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(DisplayName="차량 내구도 컴포넌트 반환", ToolTip="현재 차량의 최대 내구도, 현재 내구도와 파괴 상태를 관리하는 VehicleHealthComp를 반환합니다."))
 	UCFVehicleHealthComp* GetVehicleHealthComp() const { return VehicleHealthComp; }
+
+	// [v2.129.0] 차량 쉴드와 방향 장갑을 관리하는 방어 컴포넌트를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(DisplayName="차량 방어 컴포넌트 반환", ToolTip="현재 차량의 쉴드, 6방향 장갑, 관통과 차량 내구도 피해 분배를 관리하는 VehicleDefenseComp를 반환합니다."))
+	UCFVehicleDefenseComp* GetVehicleDefenseComp() const { return VehicleDefenseComp; }
 
 	// 표준 차체 시각·피격 컴포넌트인 SM_Body를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(DisplayName="차량 차체 메쉬 컴포넌트 반환", ToolTip="이름이 SM_Body인 표준 차체 StaticMeshComponent를 반환합니다. 파괴 FX 소켓과 차체 Bounds 해석에 사용합니다."))
@@ -1338,8 +1437,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Input", meta=(ToolTip="Brake 입력을 DriveComp로 전달합니다."))
 	void SetVehicleBrakeInput(float InBrakeValue);
 
-	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Input", meta=(ToolTip="Handbrake 입력을 DriveComp로 전달합니다."))
+		UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Input", meta=(ToolTip="Handbrake 입력을 DriveComp로 전달합니다."))
 	void SetVehicleHandbrakeInput(bool bInHandbrakePressed);
+
+	// [v2.131.0] Pause 진입 전 모든 차량 Gameplay 입력과 입력 소유권을 안전한 중립 상태로 초기화합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="Pause용 Gameplay 입력 초기화 (Clear Gameplay Input For Pause)", ToolTip="Pause 진입 전에 이동, 조향, 브레이크, 핸드브레이크와 Look 입력을 중립화하고 입력 소유권을 해제합니다. 진행 중 Launcher 시퀀스는 취소하지 않습니다."))
+	void ClearGameplayInputForPause();
 
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Drive", meta=(ToolTip="VehicleDriveComp 기준 현재 차량 전체 속도(km/h)를 반환합니다."))
 	float GetVehicleSpeed() const;
@@ -1432,8 +1535,14 @@ protected:
 	// [v2.53.0] Actor 회전과 SM_Body 표시 회전 사이의 지연각을 설정 한도 안으로 제한합니다.
 	FRotator ClampOwnerBodyVisualRotation(const FRotator& CurrentActorRotation, const FRotator& DesiredVisualRotation) const;
 
-	// [v1.5.0] DriveComp 캐시를 재사용해 VehicleMovement 컴포넌트를 안전하게 가져옵니다.
+		// [v1.5.0] DriveComp 캐시를 재사용해 VehicleMovement 컴포넌트를 안전하게 가져옵니다.
 	UChaosWheeledVehicleMovementComponent* ResolveVehicleMovementComponent(const TCHAR* CacheFailureSummary, const TCHAR* MissingComponentSummary);
+
+	// [v2.133.0] PreRegister에서 Cached Snapshot Target을 Movement Mass에 적용하거나 실패 시 Legacy 입력으로 복원합니다.
+	bool PrepareInitialSortieRuntimeMass();
+
+	// [v2.133.0] BeginPlay에서 Movement 설정 질량과 VehicleMesh 실제 질량·PhysicsAsset 계약을 검증합니다.
+	bool VerifyInitialSortieRuntimeMass();
 
 	// [v2.14.1] Snapshot 기반 단일 라인 차량 디버그 문자열을 생성합니다.
 	FString BuildVehicleDebugTextSingleLine(const FCFVehicleDebugSnapshot& VehicleDebugSnapshot, bool bIncludeRuntimeSummary, bool bIncludeTransitionSummary, bool bIncludeInputState) const;
@@ -1468,11 +1577,17 @@ protected:
 	// [v1.6.0] 해석된 차량 이동 입력 결과를 DriveComp 입력으로 적용합니다.
 	void ApplyResolvedVehicleMoveInput(const FCFVehicleMoveInputResult& ResolvedMoveInput);
 
-	// [v2.63.0] 현재 Aim 상태를 기준으로 로컬 발사 명령 데이터를 생성합니다.
+		// [v2.63.0] 현재 Aim 상태를 기준으로 로컬 발사 명령 데이터를 생성합니다.
 	FCFVehicleFireRequest BuildFireCommand();
+
+	// [v2.126.0] 현재 Muzzle을 다시 해결하면서 첫 입력 순간 Command Target을 유지할 후속 발사 명령을 생성합니다.
+	FCFVehicleFireRequest BuildFireCommandForTarget(const FVector& OverrideCommandTargetLocation, bool bUseOverrideTarget);
 
 	// [v2.63.0] 싱글플레이 로컬 발사 명령을 최소 검증하고 결과를 채웁니다.
 	bool ValidateFireCommand(const FCFVehicleFireRequest& FireCommand, FCFVehicleFireResult& OutFireResult);
+
+	// [v2.126.0] 후속 Ripple·Salvo 발사에서 입력 단위 쿨다운만 선택적으로 우회해 나머지 발사 조건을 동일하게 검증합니다.
+	bool ValidateFireCommandInternal(const FCFVehicleFireRequest& FireCommand, FCFVehicleFireResult& OutFireResult, bool bIgnoreWeaponCooldown);
 
 	// [v2.97.0] 싱글플레이 로컬 더미 HitScan Trace를 실행하고 FireResult와 Damage HitContext Debug에 결과를 채웁니다.
 	bool RunLocalDummyHitScan(const FCFVehicleFireRequest& FireCommand, FCFVehicleFireResult& InOutFireResult);
@@ -1492,8 +1607,8 @@ protected:
 	// [v2.93.0] Turret Pitch 메쉬의 Muzzle 소켓으로 최종 FireOrigin을 보정합니다.
 	bool TryBuildMuzzleFireOrigin(FCFVehicleFireOrigin& InOutFireOrigin, FString& OutFireOriginSummary) const;
 
-	// [v2.109.0] Muzzle 위치에서 Reticle 목표점으로 향하는 공통 Weapon Aim Solution을 계산합니다.
-	bool BuildWeaponAimSolution(FCFVehicleWeaponAimSolution& OutWeaponAimSolution, FCFVehicleFireOrigin* OutFireOrigin = nullptr, FString* OutFireOriginSummary = nullptr) const;
+		// [v2.126.0] Muzzle 위치에서 현재 Reticle 또는 명시적 Volley 목표점으로 향하는 공통 Weapon Aim Solution을 계산합니다.
+	bool BuildWeaponAimSolution(FCFVehicleWeaponAimSolution& OutWeaponAimSolution, FCFVehicleFireOrigin* OutFireOrigin = nullptr, FString* OutFireOriginSummary = nullptr, const FVector* OverrideAimTargetLocation = nullptr) const;
 
 	// [v2.109.0] 현재 Weapon Aim Solution을 다시 계산해 AimComp에 저장합니다.
 	void RefreshWeaponAimSolution();
@@ -1501,8 +1616,17 @@ protected:
 	// [v2.81.0] 현재 활성 무기가 Projectile Actor 스폰 경로를 사용할 수 있는지 반환합니다.
 	bool ShouldUseProjectileActorFire() const;
 
-	// [v2.82.0] 현재 활성 ProjectileData를 사용해 FireOrigin에서 Projectile Actor를 Pool로 확보합니다.
+				// [v2.136.0] 현재 WeaponData Release 설정, 실제 Muzzle Transform과 명시적 첫 발사 목표 Actor Snapshot으로 Launch Context를 생성합니다.
+	bool BuildDirectProjectileLaunchContext(const FCFVehicleFireRequest& FireCommand, const UCFProjectileData& InProjectileData, AActor* GuidanceTargetActorSnapshot, FCFProjectileLaunchContext& OutLaunchContext) const;
+
+	// [v2.136.0] 현재 활성 ProjectileData와 현재 선택 목표 Snapshot을 사용해 Projectile Actor를 Pool로 확보하는 호환 경로입니다.
 	bool TrySpawnProjectileActorFromFireCommand(const FCFVehicleFireRequest& FireCommand);
+
+	// [v2.136.0] 검증 승인된 명령을 명시적 목표 Actor Snapshot과 함께 Projectile 또는 HitScan 실행 경로로 처리합니다.
+	bool ExecuteAcceptedFireCommand(const FCFVehicleFireRequest& FireCommand, FCFVehicleFireResult& InOutFireResult, AActor* GuidanceTargetActorSnapshot, bool bAllowProjectileFallback);
+
+	// [v2.136.0] LauncherComp가 예약한 후속 발사를 첫 발사 순간 위치·Actor Snapshot과 다음 Muzzle로 실행합니다.
+	bool ExecuteScheduledLauncherShot(int32 VolleyId, int32 SequenceShotIndex, const FVector& CommandTargetLocation, AActor* GuidanceTargetActorSnapshot);
 
 	// [v2.17.0] 클라이언트 또는 서버 로컬 입력에서 발사 요청을 시작합니다.
 				void HandleFireStarted(const FInputActionValue& InputActionValue);
@@ -1513,8 +1637,11 @@ protected:
 	// 현재 선택 대상 수동 해제 입력을 처리합니다.
 	void HandleClearTargetStarted(const FInputActionValue& InputActionValue);
 
-	// [v2.63.0] 로컬 발사 결과를 Pawn과 AimComp 상태에 반영합니다.
+		// [v2.63.0] 로컬 발사 결과를 Pawn과 AimComp 상태에 반영합니다.
 	void ApplyFireResult(const FCFVehicleFireRequest& FireCommand, const FCFVehicleFireResult& FireResult);
+
+	// [v2.126.0] 승인 발사 결과의 Muzzle·FX·피드백은 유지하면서 쿨다운 기록 여부만 호출자가 선택하게 합니다.
+	void ApplyFireResultInternal(const FCFVehicleFireRequest& FireCommand, const FCFVehicleFireResult& FireResult, bool bRecordCooldown);
 
 	void ApplyVehicleDataConfig();
 	void ApplyVehicleVisualConfig();

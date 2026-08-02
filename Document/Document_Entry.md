@@ -1,8 +1,8 @@
 # Document Entry (CarFight)
 
-- 문서 버전: v2.8
+- 문서 버전: v2.9
 - 작성일: 2026-06-19
-- 최근 갱신일: 2026-07-16
+- 최근 갱신일: 2026-07-27
 - 문서 상태: Current
 - 역할: `Document/` 전체의 작업별 진입 라우터
 
@@ -31,7 +31,7 @@
 | 위치 | 역할 | 현재 기준 여부 |
 | --- | --- | --- |
 | `Document/DesignSource/` | 장기 방향과 원본 기획 참고 | 북극성 참고 자료 |
-| `Document/CodeWorkGate.md` | 웹브라우저 AI의 TaskSource·최종 Codex YAML 작업지시서 생성과 직접 수정 예외 통제 | 코드 작업 준비 최우선 기준 |
+| `Document/CodeWorkGate.md` | 현재 AI 세션의 직접 코드 구현, 변경 보호, 검증과 완료 판정 통제 | 코드 작업 실행 최우선 기준 |
 | `Document/ActiveWork.md` | 현재 활성 작업, 마지막 작업 초점과 대표 체크포인트 연결 | 세션 복원 기준 |
 | `Document/ProjectSSOT/` | CarFight의 현재 상태, 우선순위, 확정 결정, 검증 기준 | 프로젝트 판단 기준 |
 | `Document/Systems/` | 구현 완료된 기능의 현재 구조와 책임 | 현재 구현 기준 |
@@ -74,7 +74,7 @@ AGENTS
 
 ```text
 AGENTS = 작업 방법과 금지사항을 통제한다.
-CodeWorkGate = TaskSource와 최종 Codex YAML 작업지시서 생성, 직접 수정 예외와 작업 출처를 통제한다.
+CodeWorkGate = 현재 AI 세션의 직접 구현, 변경 보호, 검증, 완료 판정과 선택적 외부 위임을 통제한다.
 Document_Entry = 작업 종류에 맞는 진입 경로를 선택한다.
 ActiveWork = 현재 어떤 활성 작업을 복원하거나 전환할지 선택한다.
 ProjectSSOT = 현재 무엇을 왜 해야 하는지 판단한다.
@@ -92,7 +92,7 @@ Link_Audit_Check = 위 관계가 서로 모순되지 않는지 검사한다.
 | 영역 | 책임 | 이 영역의 책임이 아닌 것 |
 | --- | --- | --- |
 | `AGENTS.md` | 작업 절차, Git 보호, 빌드·검증, 세션 복원 규칙 | 기능 설계, 현재 구현 설명, 진행률 기록 |
-| `CodeWorkGate.md` | TaskSource·최종 Codex YAML 작업지시서 생성, 직접 수정 예외와 작업 출처 통제 | 개별 기능 설계, 실제 Codex 실행과 현재 구현 설명 |
+| `CodeWorkGate.md` | 직접 코드 구현의 사전 확인, 변경 보호, 검증, 완료 판정과 선택적 외부 위임 통제 | 개별 기능 설계와 현재 구현 상세 설명 |
 | `Document_Entry.md` | 문서 아키텍처와 작업별 라우팅 | 개별 기능 상세 상태와 파일 전체 목록 |
 | `ActiveWork.md` | 활성 작업 선택, 마지막 작업 초점, 대표 Plan 연결 | 상세 구현 설계, 장문의 세션 로그, 전체 FeatureQueue 복사 |
 | `DesignSource/` | 원본 기획과 장기 북극성 | 현재 착수 승인, 현재 구현 판정 |
@@ -225,7 +225,7 @@ CarFight가 독립 도구의 공개 기능에 의존할 경우 다음 정보만 
 
 | 작업 종류 | 첫 진입 문서 | 다음에 선택할 문서 |
 | --- | --- | --- |
-| 실제 코드·설정·스크립트 구현 또는 수정 | `Document/CodeWorkGate.md` | 소유 저장소 Git 상태, 대표 Plan, TaskSource, 최종 Codex YAML 작업지시서 |
+| 실제 코드·설정·스크립트 구현 또는 수정 | `Document/CodeWorkGate.md` | 소유 저장소 Git 상태, 대표 Plan, 실제 코드, 변경 범위와 검증 방법 |
 | 이전 세션 복원 또는 활성 작업 전환 | `Document/ActiveWork.md` | 선택한 작업의 대표 Plan, 관련 Systems, 실제 코드와 에셋 |
 | 프로젝트 현재 상태와 우선순위 확인 | `Document/ProjectSSOT/README.md` | `01_ProjectState.md`, `02_Roadmap.md`, `03_FeatureQueue.md` |
 | 프로젝트 비전과 장기 방향 확인 | `Document/ProjectSSOT/00_Vision.md` | 필요 시 `Document/DesignSource/README.md` |
@@ -270,26 +270,23 @@ CarFight가 독립 도구의 공개 기능에 의존할 경우 다음 정보만 
 8. Document/Plan/README.md에서 해당 작업 대표 Plan 선택
 9. 필요한 실제 코드와 에셋 확인
 10. 작업 범위, 보호 범위, 완료 조건과 검증 방법 확정
-11. plan.* 기능으로 Codex용 TaskSource 작성 또는 정제
-12. plan.* 기능으로 최종 Codex YAML 작업지시서 생성
-13. quality_gate와 evidence_gate 통과 확인
-14. final_output_ready == true 확인
-15. 사용자에게 TaskSource와 최종 YAML 경로 전달
-16. 대표 Plan에 작업지시서 상태를 `Ready for External Codex`로 기록
+11. 현재 AI 세션이 승인된 저장소 도구로 실제 코드·설정·스크립트 수정
+12. 수정 직후 Git diff 검수
+13. 공식 빌드와 관련 자동 테스트 실행
+14. 필요한 후속 보정과 재검증
+15. 사용자 PIE 또는 Editor 에셋 작업 절차 제공
+16. 관련 대표 Plan, ActiveWork, ProjectSSOT 또는 Systems 동기화
 ```
 
-브라우저 AI 세션의 완료 조건은 실제 코드 수정이 아니라 최종 작업지시서 생성과 경로 전달이다.
-`plan.*` 기능은 Codex 실행기가 아니므로 브라우저 세션에 Codex 실행 도구가 연결되어 있지 않아도 정상이다.
-실제 코드 수정은 사용자가 여는 별도 Codex 세션 또는 사용자가 선택한 Codex 환경에서 최종 YAML을 입력해 수행한다.
+현재 AI 세션의 기본 완료 조건은 실제 구현, diff 검수와 가능한 검증을 같은 작업 흐름에서 수행하는 것이다.
+TaskSource, WorkOrder와 Codex YAML은 복잡한 구현을 구조화할 때 사용할 수 있지만 직접 구현을 시작하기 위한 필수 게이트가 아니다.
+`plan.*` 기능이나 외부 Codex 실행기가 없다는 이유로 소스 작업을 차단하지 않는다.
 
-TaskSource와 최종 Codex YAML이 실제 경로에 존재하기 전에는 브라우저 AI가 소스·설정·스크립트를 수정하지 않는다.
-`plan.*` 기능 자체가 사용할 수 없거나 품질 게이트를 해결할 근거가 없으면 `Blocked — Plan Work-Order Generation Unavailable`로 보고한다.
-Codex 실행 도구 미연결은 차단 사유가 아니다.
-직접 수정은 차단 보고 이후 사용자가 웹브라우저 AI의 직접 수정을 명시적으로 승인한 경우에만 예외로 허용한다.
-일반적인 `수정해줘`, `구현해줘`, `계속해줘`는 직접 수정 승인으로 해석하지 않는다.
-최종 Codex 작업지시서 없이 이루어진 직접 변경은 사후 문서로 출처를 위조하지 않고 `Policy Violation` 또는 `Provenance Missing`으로 기록한다.
+직접 구현이 차단되는 경우는 기존 dirty 변경과의 안전한 분리가 불가능하거나, 사용자 결정 없이 구현 방향을 확정할 수 없거나, 필수 도구가 반복 실패하는 경우로 제한한다.
+사용자의 명시적 요청 없는 commit, push, reset, checkout과 stash는 수행하지 않는다.
 
-별도 Codex 실행 후 검수를 요청받으면 브라우저 AI는 실제 Git diff, 빌드·테스트와 PIE 증거를 확인하고 검증된 결과만 Systems와 작업 상태 문서에 반영한다.
+별도 Codex 실행은 사용자가 명시적으로 요청한 경우에만 선택적으로 사용한다.
+외부 결과를 검수할 때는 실제 Git diff, 빌드·테스트와 PIE 증거를 확인하고 검증된 결과만 Systems와 작업 상태 문서에 반영한다.
 
 ### 4.3 과거 기록을 조사할 때
 
@@ -336,8 +333,8 @@ CarFight 게임 작업의 복원 순서는 다음과 같다.
 6. 선택한 작업의 대표 Plan 체크포인트와 실행 출처 확인
 7. 관련 Systems, ProjectSSOT와 실제 코드·에셋 확인
 8. 완료 범위, 미완료 범위, 빌드 상태, PIE 상태와 다음 작업을 먼저 보고
-9. 코드 작업 재개 전 TaskSource와 최종 Codex YAML 작업지시서의 실제 존재 확인
-10. 저장소와 체크포인트가 일치할 때 미완료 단계부터 재개
+9. 코드 작업 재개 전 변경 허용 파일, 보호 범위와 검증 방법 확인
+10. 저장소와 체크포인트가 일치할 때 현재 AI 세션이 미완료 단계부터 직접 구현 재개
 ```
 
 사용자가 CarFight 작업명 또는 작업 ID를 지정하면 `ActiveWork.md`의 마지막 작업 초점보다 해당 작업을 우선한다.
@@ -471,6 +468,14 @@ Document/
 
 ## 11. Changelog
 
+### v2.9 - 2026-07-27
+
+- CarFight 코드 작업 기본 경로를 별도 Codex 위임에서 현재 AI 세션의 직접 구현으로 변경했다.
+- `CodeWorkGate.md`의 역할을 직접 구현, 변경 보호, 검증과 완료 판정 통제로 갱신했다.
+- 기능 구현 라우팅을 실제 수정 → Git diff → 빌드·자동 테스트 → 사용자 PIE → 문서 동기화 순서로 변경했다.
+- TaskSource, WorkOrder와 Codex YAML을 필수 게이트가 아닌 선택적 보조 산출물로 재분류했다.
+- 별도 Codex 실행은 사용자가 명시적으로 요청한 경우에만 사용하는 선택 경로로 변경했다.
+
 ### v2.8 - 2026-07-16
 
 - `plan.*` 기능을 Codex 실행기가 아니라 TaskSource·최종 Codex YAML 작업지시서 생성기로 명확히 정의.
@@ -543,7 +548,18 @@ Document/
 
 ## 12. Migration
 
-### v2.8 적용 안내
+### v2.9 적용 안내
+
+- 새 CarFight 코드 작업은 `AGENTS.md → CodeWorkGate.md → Document_Entry.md` 순서로 진입한 뒤 현재 AI 세션이 직접 구현한다.
+- TaskSource, WorkOrder와 Codex YAML은 복잡한 작업을 구조화할 때만 선택적으로 사용한다.
+- `plan.*` 기능 또는 외부 Codex 실행기가 없다는 이유로 코드 작업을 차단하지 않는다.
+- 직접 구현 후 실제 Git diff, 공식 빌드, 관련 자동 테스트와 사용자 PIE 증거를 확인한다.
+- 사용자가 명시적으로 요청하지 않으면 commit, push, reset, checkout과 stash를 수행하지 않는다.
+- AssetDump와 GoPyMCP는 독립 저장소이므로 각 저장소의 자체 정책을 따른다.
+
+### v2.8 적용 안내 — 폐기됨, v2.9가 대체
+
+> 아래 내용은 당시 실행 기준 보존용이며 현재 코드 작업 판단에는 사용하지 않는다.
 
 - 브라우저 AI 세션은 `plan.*`으로 TaskSource와 최종 Codex YAML 작업지시서를 생성하고 경로를 전달하는 단계다.
 - `plan.*`은 Codex 실행기가 아니며, Codex 실행 도구가 연결되지 않은 상태는 정상이다.

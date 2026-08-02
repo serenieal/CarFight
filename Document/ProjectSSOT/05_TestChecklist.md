@@ -1,7 +1,7 @@
 # CarFight — 05_TestChecklist
 
-> 문서 버전: v1.11.0
-> 작성일(Asia/Seoul): 2026-07-27
+> 문서 버전: v1.21.0
+> 작성일(Asia/Seoul): 2026-08-02
 > 문서 상태: Active
 > 역할: CarFight의 **완료된 Systems 기준 최소 회귀 테스트**를 관리한다.
 
@@ -68,6 +68,9 @@
 13. 고속 Projectile은 단일 프레임 위치 검사만으로 PASS 처리하지 않고 Sweep/Sub-stepping 및 필요 시 보조 Sphere Sweep으로 연속 충돌을 검증한다.
 14. 터렛 정렬 중 발사는 `UCFTurretMountData.bAllowFireWhileAligning`의 true/false 정책을 각각 검증하며, 두 정책 모두 `MuzzleBlocked`와 `TurretAligning` 표시 의미를 유지해야 한다.
 15. 전투 시각 FX는 승인된 발사, 첫 Blocking Hit와 최초 Destroyed 전환에만 1회 발생해야 하며 FX 생성 실패가 전투 판정을 바꾸면 안 된다. 게임 오디오 참조는 0개를 유지한다.
+16. 비유도 Rocket은 InitialSpeed 분리, IgnitionDelay, Burning 고정 방향 가속과 BurnedOut 관성 비행이 구분되어야 하며 Thruster는 Burning에서만 재생되고 독립 FX Scale이 소켓·Fallback 양쪽에 적용되어야 한다.
+17. 모듈형 런처는 자산 연결·AssetDump PASS만으로 완료 처리하지 않고 실제 Muzzle 순서, Volley 시간, 고정 Command Target, Release 방향, 차량 속도 상속과 Pool 재사용을 사용자 PIE에서 확인해야 한다.
+18. Projectile 충돌 예외는 팀이나 FireRequest가 아니라 발사 차량 Actor를 기준으로 한다. 같은 차량의 모든 탄종·모든 Volley는 서로 무시하고 다른 차량 Projectile은 요격 가능한 실제 충돌 대상으로 유지한다.
 ```
 
 ---
@@ -310,6 +313,100 @@ Destroyed
 
 프로젝트 결정 `CF-PDL-0009`에 따라 소리 재생 여부는 PASS 조건이 아니며 게임 사운드 테스트를 추가하지 않는다.
 
+## 4-8A. 2026-07-28 발사체 추진 최종 검증 결과
+
+구현·빌드 확인:
+
+```text
+- CFProjectileMotorTypes v1.0.0
+- UCFProjectileMotorComp v1.0.0
+- UCFProjectileData v1.7.1
+- ACFProjectileActor v1.8.1
+- CFProjectileMotorTests.cpp v1.0.0
+- CFProjectileFlightFxTests.cpp v1.1.0
+- 추진 Foundation Build Job 2ffd09357e654bb7970a2e379f5ab45f / Exit Code 0
+- FX Scale 보정 최종 Build Job e8b812bd479549299dd116f9bae8996f / Exit Code 0
+- UHT·컴파일·링크 PASS
+- RuntimeContract 자동화 소스 컴파일 PASS
+- 초기 체크포인트(2026-07-28): 해당 작업 범위에서 승인된 실행 경로를 준비하지 않아 Automation Not Run
+- 후속 검증(2026-08-02): `UE/Saved/Automation/CombatRuntime/index.json`에서 `CarFight.ProjectilePropulsion.PP_P0_01.RuntimeContract` Success 확인
+- 실행 수단: 작업 전용 임시 실행 경로 / 공용 재실행 진입점으로 승격하지 않음
+```
+
+사용자 PIE:
+
+```text
+DA_PFX_ThrusterTest
+- 실제 발사와 비유도 추진 동작: PASS
+- IgnitionDelay → Burning → BurnedOut 상태 표현: PASS
+- Thruster FX의 Motor Burning 상태 동기화: PASS
+- FX_Exhaust 메시 소켓 부착: PASS
+- RelativeTransform.Scale 1.0 기준 표시: PASS
+- RelativeTransform.Scale 0.2 적용 시 추진 화염 축소: PASS
+- 사용자 관찰 기준 나머지 비행·FX 동작: PASS
+```
+
+현재 판정:
+
+```text
+- CF-FQ-028: Done / User PIE PASS / Systems Current
+- CF-TC-024: PASS
+- Current System: Document/Systems/Combat/Projectile.md v1.4.0
+- Completed Plan: Document/Plan/ProjectilePropulsionPlan.md v1.2.0
+```
+
+검증 범위 해석:
+
+```text
+- CF-TC-024는 비유도 Rocket 추진과 Burning 기반 Thruster의 P0 완료 기준이다.
+- 60/120 FPS 전체 속도 조합, 이동 차량, 다수 Rocket과 장시간 Pool 반복은 CF-FQ-019 확장 회귀다.
+- CF-FQ-027의 Trail·Thruster 전체 에디터 행렬은 2026-07-30 사용자 PIE에서 PASS했다.
+- CF-TC-023은 PASS이며 CF-FQ-027은 Done이다.
+```
+
+## 4-8B. 2026-07-30 투사체 비행 FX 전체 검증 결과
+
+구현·빌드 확인:
+
+```text
+- UCFProjectileData TrailFxSettings / ThrusterFxSettings 구현 완료
+- ACFProjectileActor Trail·Thruster Origin/Niagara, Socket/Fallback과 Pool Reset 구현 완료
+- CFProjectileFlightFxTests.cpp v1.1.0 RuntimeContract 소스 컴파일 PASS
+- Foundation Build Job 445848ab0f7749fcab8188b164bb1487 / Exit Code 0
+- FX Scale 보정 최종 Build Job e8b812bd479549299dd116f9bae8996f / Exit Code 0
+- 초기 체크포인트(2026-07-30): 해당 작업 범위에서 승인된 실행 경로를 준비하지 않아 Automation Not Run
+- 후속 검증(2026-08-02): `UE/Saved/Automation/CombatRuntime/index.json`에서 `CarFight.ProjectileFlightFx.PFX_P0_01.RuntimeContract` Success 확인
+- 실행 수단: 작업 전용 임시 실행 경로 / 공용 재실행 진입점으로 승격하지 않음
+```
+
+사용자 PIE:
+
+```text
+- Trail-only Projectile: PASS
+- Thruster-only Projectile: PASS
+- Trail + Thruster 동시 재생: PASS
+- FX_Trail·FX_Exhaust 유효 소켓 부착: PASS
+- Missing Socket RelativeTransform Fallback: PASS
+- Hit 종료 FX Reset: PASS
+- LifeExpired 종료 FX Reset: PASS
+- Trail-only·Thruster-only·Both·FX 없음 교차 Pool 재사용 20발 이상: PASS
+- 이전 Ribbon History·연기·화염 잔류 없음: PASS
+- 30 FPS 고속 비행 Bounds·컬링·Ribbon 연속성: PASS
+- 첫 Impact·Damage 단일 처리와 Pool 반환 회귀: PASS
+- 게임 오디오 참조 0개 유지: PASS
+```
+
+현재 판정:
+
+```text
+- CF-FQ-027: Done / User PIE PASS / Systems Current
+- CF-TC-023: PASS
+- Current System: Document/Systems/Combat/Projectile.md v1.5.0
+- Completed Plan: Document/Plan/ProjectileFlightFxPlan.md v1.0.0
+- Automation: PASS — 2026-08-02 최신 로컬 결과에서 `PFX_P0_01.RuntimeContract` Success
+- Reusable Entry Point: Not Defined — 재실행 시 현재 도구·작업 범위를 다시 확인
+```
+
 ## 4-9. 2026-07-21 이중 레티클 검증 결과
 
 구현 및 빌드 확인:
@@ -362,6 +459,296 @@ Destroyed
 | `CF-TC-020` | Combat | 고속 Projectile 연속 충돌 | 30 FPS + 기준 속도 4배에서 차량과 얇은 벽을 통과하지 않고 첫 Hit을 한 번 기록하며 Pool 재사용이 정상임 | `Document/Plan/ProjectileContinuousCollision/ImplementationDesign.md`, `Document/Systems/Combat/Projectile.md`, `Document/Systems/Combat/DamageHitContext.md` | `PASS` |
 | `CF-TC-021` | Presentation | 전투 FX | 승인된 발사, 첫 Impact와 최초 파괴에서 Niagara FX가 각 1회 발생하고 거부·중복 판정·반복 전투에서 중복 또는 잔류가 없으며 게임 오디오 참조가 0개임 | `Document/Systems/Combat/CombatFx.md`, `Document/Plan/CombatFxAudio/ImplementationDesign.md` | `PASS` |
 | `CF-TC-022` | UI | 조준·터렛 이중 레티클 | Image_CenterDot은 사용자 조준점을 유지하고 Image_WeaponReticle은 CurrentMuzzleDirection 기반 터렛 조준 지점을 탄종·착탄 위치와 무관하게 표시 | `Document/Plan/ReticleAimDirection/ImplementationDesign.md`, `Document/Systems/UI/AimReticle.md`, `Document/Systems/Vehicles/VehicleAim.md` | `PASS` |
+| `CF-TC-023` | Presentation | 투사체 비행 FX | Trail·Thruster를 독립·동시 사용하고 소켓·Fallback, Hit·LifeExpired Reset, 20발 이상 Pool 재사용, Ribbon History 무잔류와 30 FPS 고속 Bounds가 정상이며 기존 Impact·Damage를 유지 | `Document/Systems/Combat/Projectile.md`, `Document/Plan/ProjectileFlightFxPlan.md` | `PASS` |
+| `CF-TC-024` | Combat | 비유도 Rocket 추진 | InitialSpeed 분리, IgnitionDelay, Burning 고정 방향 가속, BurnedOut 관성 비행과 Burning 기반 Thruster가 동작하고 FX_Exhaust 소켓·독립 Scale이 적용됨 | `Document/Systems/Combat/Projectile.md`, `Document/Plan/ProjectilePropulsionPlan.md` | `PASS` |
+| `CF-TC-025` | Combat | Projectile Launch Handoff 회귀 | Direct 발사가 기존 위치·방향·초기 속도·추진·충돌·피해를 유지하고 Launch Context가 발사 후 런처와 독립하며 Pool 반환 시 초기화됨 | `Document/Plan/LauncherMissilePlan.md`, `Document/Systems/Combat/Projectile.md` | `PARTIAL` |
+| `CF-TC-026` | Combat | 모듈형 런처·Ejection | Muzzle 1→4→2→3, Ripple 4발·0.15초, 고정 Command Target, SequenceCompleted 쿨다운, 후속 발사 실패 정책, Direct·Angled·Vertical Release와 차량 속도 상속이 정책대로 동작함. 수동 취소는 호출 수단 구현 뒤 별도 검증함 | `Document/Plan/LauncherMissilePlan.md`, `Document/Plan/ModularLauncherPlan.md`, `Document/Systems/Combat/Projectile.md` | `PARTIAL` |
+
+---
+
+## 5-1. CF-TC-025~026 Launcher 통합 PIE
+
+### 5-1.1 사전 상태
+
+```text
+- GlobalDefaultGameMode는 CFSingleGameMode다.
+- GameMode가 스폰하는 BP_CFVehiclePawn CDO.VehicleData는 DA_TestSUV다.
+- 플레이어 기본 차량은 SUV + RocketLauncher로 시작해야 한다.
+- TestMap의 BP_CFVehiclePawn_C_0은 Sedan + HeavyCannon 표적으로 유지된다.
+- TestMap의 BP_CFVehiclePawn_C_1은 SUV + RocketLauncher 배치 차량이다.
+- DA_RocketLauncher 기본값은 Direct / Ripple / 4발 / 0.15초 / ContinueRemaining / SequenceCompleted / CarrierVelocityRatio 0이다.
+```
+
+### 5-1.2 CF-TC-025 Direct Launch Handoff 회귀
+
+```text
+1. PIE를 시작했을 때 플레이어가 SUV 외형과 RocketLauncherYaw·Pitch를 가진다.
+2. 정지 상태에서 발사한 Projectile이 선택 Muzzle 위치에서 생성된다.
+3. Projectile 초기 방향은 현재 조준 방향과 일치하고 갑작스러운 위치 스냅이 없다.
+4. 기존 DA_Rocket_PropTest의 InitialSpeed, IgnitionDelay, Burning 고정 방향 추진과 BurnedOut 관성·중력 비행이 유지된다.
+5. 발사 후 차량 또는 터렛을 회전해도 이미 발사된 Projectile 경로가 런처 Transform을 따라 변경되지 않는다.
+6. 실제 충돌에서 Impact와 Damage가 한 번만 처리되고 HitScan으로 중복 적용되지 않는다.
+7. 최소 5개 Volley를 반복해도 이전 Launch Context, Muzzle, FX, Impact 상태가 다음 Pool 재사용 Projectile에 남지 않는다.
+```
+
+### 5-1.3 CF-TC-026 Direct Ripple 기본 검증
+
+```text
+1. 입력 한 번에 정확히 4발이 발사된다.
+2. 실제 Muzzle 순서는 Muzzle_1 → Muzzle_4 → Muzzle_2 → Muzzle_3이다.
+3. 각 발사 간격은 눈에 띄게 약 0.15초이며 같은 프레임 4발 Salvo처럼 보이지 않는다.
+4. 첫 발 이후 Reticle을 이동해도 진행 중인 나머지 발사는 첫 입력 순간 Command Target을 유지한다.
+5. Volley 진행 중 추가 발사 입력은 두 번째 Volley를 중복 시작하지 않는다.
+6. 무기 쿨다운은 첫 발이 아니라 4발 시퀀스 완료 시점부터 시작한다.
+7. 각 Muzzle의 발사 FX와 Projectile 원점이 해당 발사관 위치와 일치한다.
+8. 한 발이 장애물 또는 Pool 문제로 실패해도 ContinueRemaining 정책에서 남은 발사는 계속되며 실패 수량이 숨겨지지 않는다.
+9. 차량 파괴, 장비 변경 또는 터렛 변경 조건을 만들 수 있으면 진행 중 Volley가 취소되고 이후 예약 발사가 발생하지 않는다.
+```
+
+### 5-1.3A SingleCycle 임시 검증
+
+`DA_RocketLauncher.LauncherFirePatternConfig`를 다음처럼 임시 변경한다.
+
+```text
+FirePattern = SingleCycle
+ProjectileCountPerTrigger = 1
+InterMuzzleDelaySeconds = 0
+MaximumSimultaneousLaunchCount = 1
+CooldownStartPolicy = FirstAcceptedProjectile
+```
+
+PASS 기준:
+
+```text
+- 입력 한 번에 한 발만 발사된다.
+- 승인된 발사마다 Muzzle_1 → Muzzle_4 → Muzzle_2 → Muzzle_3 순서로 진행하고 다시 Muzzle_1로 순환한다.
+- MuzzleBlocked 또는 다른 발사 거부에서는 Muzzle 인덱스가 진행하지 않는다.
+- 다음 승인 발사는 거부되기 전과 같은 Muzzle에서 다시 시도한다.
+```
+
+### 5-1.3A-결과 2026-07-30 사용자 PIE
+
+```text
+CF-TC-025 Direct Launch Handoff
+- 플레이어 SUV + RocketLauncher 진입: PASS
+- Direct 초기 위치·방향·속도: PASS
+- 기존 Rocket IgnitionDelay·Burning·BurnedOut 회귀: PASS
+- 발사 후 차량·터렛과 Projectile 독립: PASS
+- Impact 단일 처리와 Pool 5 Volley 이상 재사용: PASS
+- Damage 적용: 현재 Damage 보강 미완료로 검증 불가 / 런처 실패로 판정하지 않음
+
+CF-TC-026 Direct Ripple
+- 입력 1회당 4발: PASS
+- Muzzle 순서 1→4→2→3: PASS
+- Ripple 약 0.15초: PASS
+- Projectile·Muzzle FX 위치 일치: PASS
+- 첫 입력 Command Target 고정: PASS
+- 진행 중 추가 입력 중복 방지: PASS
+- SequenceCompleted 쿨다운: PASS
+
+CF-TC-026 SingleCycle
+- 입력 1회당 1발: PASS
+- 승인 발사 Muzzle 순환 1→4→2→3→1: PASS
+- Projectile·FX 위치 일치: PASS
+- 쿨다운 중 추가 발사 없음: PASS
+- 발사 거부 시 Projectile·FX 없음: PASS
+- 발사 거부 시 Muzzle 인덱스 유지: PASS
+```
+
+현재 판정:
+
+```text
+CF-TC-025 = PARTIAL / Launch Handoff PASS / Damage 항목 별도 차단
+CF-TC-026 = PARTIAL / Direct Ripple·SingleCycle·Salvo PASS / Ejection·Carrier Velocity Pending / 후속 발사 실패 정책·수동 취소 Deferred
+다음 검증 = Salvo
+```
+
+### 5-1.3B Salvo 임시 검증
+
+```text
+FirePattern = Salvo
+ProjectileCountPerTrigger = 4
+InterMuzzleDelaySeconds = 0
+MaximumSimultaneousLaunchCount = 4
+SequenceFailurePolicy = ContinueRemaining
+CooldownStartPolicy = SequenceCompleted
+```
+
+PASS 기준:
+
+```text
+- 입력 한 번에 네 Muzzle의 Projectile이 같은 프레임 또는 육안으로 구분하기 어려운 최소 간격으로 생성된다.
+- 네 Projectile은 각각 Muzzle_1, Muzzle_4, Muzzle_2, Muzzle_3의 실제 위치를 사용한다.
+- 일부 Pool Acquire 또는 Muzzle 검증이 실패해도 이미 발사된 Projectile을 되돌리지 않는다.
+- 완료 결과에서 시도·승인·실패 수량이 실제 결과와 일치한다.
+- 진행 중 추가 입력은 두 번째 Salvo를 중복 시작하지 않는다.
+- 같은 발사 차량의 Salvo Projectile은 사출 직후 서로 Blocking Hit과 Impact를 만들지 않는다.
+- 다른 Volley·다른 탄종까지 포함한 동일 차량 전체 격리는 복수 무기 환경에서 후속 회귀한다.
+- 차량 SM_Body, 벽과 일반 월드 Blocking Hit은 기존대로 유지한다.
+- 다른 발사 차량 Projectile과의 요격은 AI 또는 별도 적 사격 주체가 준비된 환경에서 후속 회귀한다.
+```
+
+### 5-1.3B-결과 2026-07-30 사용자 PIE와 차량별 충돌 정책 확정
+
+```text
+Salvo Launcher
+- 입력 1회당 4발과 네 Muzzle 동시 사출: PASS
+- 런처 Scheduler와 Muzzle 선택 자체: PASS
+
+발견 결함
+- 네 Projectile이 사출 직후 서로 충돌해 Impact·폭발 처리됨
+- 원인: Projectile 채널 기본 Block에 차량별 예외가 없었음
+
+사용자 확정 정책
+- 같은 차량이 발사한 모든 탄종과 모든 Volley는 서로 충돌하지 않음
+- FireRequestId, WeaponGroupId와 팀은 동일 발사자 판정 기준으로 사용하지 않음
+- 서로 다른 차량이 발사한 Projectile은 기본 Block
+- bCanBeIntercepted=true인 Projectile은 적 Projectile 또는 Hitscan 유효 적중 한 번으로 Intercepted
+
+최종 수정
+- ACFProjectileActor v1.11.0: Projectile 기본 Block, 동일 차량 양방향 Ignore, Intercepted 생명주기
+- UCFProjectilePoolComp v1.5.0: 모든 Actor Class 버킷을 가로지른 동일 Source 등록·Hitscan Query 제외
+- UCFProjectileData v1.9.0: bCanBeIntercepted=true, bDetonateWhenIntercepted=true
+- ACFVehiclePawn v2.128.0: 자기 Projectile Hitscan 제외와 적 Projectile 요격 연결
+- CFProjectileCollisionTests.cpp v2.0.0: SourceIsolation 계약
+- Editor Build Job 940272869b77450797347f76b427faf3 / Exit Code 0
+- Automation Source Compile PASS / Execution Not Run
+
+현재 판정
+- Salvo Launcher 동시 사출: PASS
+- 동일 차량 Salvo 사출 직후 상호 Impact 없음: PASS
+- 차량·월드 대상 일반 충돌 유지: PASS
+- 다른 차량 Projectile·Hitscan 요격: DEFERRED / 현재 적 사격 주체 없음 / AI 전투 단계에서 검증
+- 다른 Volley·다른 탄종 교차 격리와 Pool Ignore Reset: DEFERRED / 복수 무기·사격 주체 환경에서 검증
+- CF-TC-026: PARTIAL 유지
+```
+
+요격과 복수 탄종 교차 격리는 후속 AI 전투 회귀로 이관한다. 후속 발사 실패 정책 ContinueRemaining·StopSequence는 후속 Muzzle만 의도적으로 실패시키는 전용 배치 또는 테스트 훅이 준비된 뒤 검증한다. 수동 CancelFireSequence는 BlueprintCallable API만 있고 현재 입력·UI·게임플레이 호출 경로가 없으므로 Deferred한다. 현재 LM-P0-06에서는 MuzzleBlocked, Ejection과 Carrier Velocity를 확인한 뒤 기본 Pattern을 복구하고 Direct Ripple 1회를 다시 확인한다.
+
+```text
+FirePattern = Ripple
+ProjectileCountPerTrigger = 4
+InterMuzzleDelaySeconds = 0.15
+MaximumSimultaneousLaunchCount = 1
+SequenceFailurePolicy = ContinueRemaining
+CooldownStartPolicy = SequenceCompleted
+```
+
+### 5-1.4 실제 사출 방향 장애물 검증
+
+```text
+1. Direct에서는 기존 AimDirection 기준 MuzzleBlocked가 유지된다.
+2. AngledEjection과 VerticalEjection에서는 Command Target 방향이 아니라 실제 InitialLaunchDirection 바로 앞 장애물을 검사한다.
+3. 사출 방향 앞의 일반 장애물은 MuzzleBlocked로 발사를 거부한다.
+4. 거부된 비Direct 발사는 Dummy HitScan으로 우회하지 않는다.
+5. 장애물을 제거한 뒤 같은 설정으로 다시 발사하면 정상 Projectile이 생성된다.
+```
+
+### 5-1.5 AngledEjection 임시 검증값
+
+검증 중 `DA_RocketLauncher.LauncherReleaseConfig`를 다음처럼 임시 변경한다.
+
+```text
+ReleaseMode = AngledEjection
+LocalEjectionDirection = (1, 0, 1)
+EjectionSpeed = 1200 cm/s
+CarrierVelocityRatio = 0
+LauncherClearanceTraceDistanceCm = 150 cm
+```
+
+PASS 기준:
+
+```text
+- Projectile이 Muzzle 로컬 +X와 +Z 사이 방향으로 분리된다.
+- Command Target 쪽으로 순간 회전하거나 Velocity가 즉시 덮어써지지 않는다.
+- 초기 포물선이 실제 ProjectileMovement와 중력에 의해 형성된다.
+```
+
+### 5-1.6 VerticalEjection 임시 검증값
+
+```text
+ReleaseMode = VerticalEjection
+EjectionSpeed = 900 cm/s
+CarrierVelocityRatio = 0
+LauncherClearanceTraceDistanceCm = 150 cm
+```
+
+PASS 기준:
+
+```text
+- Projectile이 선택 Muzzle 소켓의 로컬 +X 방향으로 사출된다.
+- 현재 RocketLauncherPitch Muzzle_1~4의 회전이 0이므로 메시 로컬 +X와 일치해야 한다.
+- Reticle 목표는 앞쪽에 있어도 초기 사출 방향과 Command Target이 분리되어 유지된다.
+```
+
+### 5-1.7 이동 차량 속도 상속
+
+Angled 또는 Vertical 설정에서 다음 값으로 비교한다.
+
+```text
+CarrierVelocityRatio = 0
+CarrierVelocityRatio = 1
+```
+
+PASS 기준:
+
+```text
+- 정지 차량에서는 두 설정의 초기 차량 상속 성분이 사실상 같다.
+- 전진 차량에서 Ratio 1은 차량 월드 속도 성분을 초기 Projectile Velocity에 더한다.
+- 후진 또는 횡이동 성분도 월드 Velocity 방향대로 반영된다.
+- 발사 뒤 차량의 추가 가속·회전은 이미 발사된 Projectile에 계속 전달되지 않는다.
+```
+
+### 5-1.8 검증 후 기본값 복구
+
+```text
+FirePattern = Ripple
+ProjectileCountPerTrigger = 4
+InterMuzzleDelaySeconds = 0.15
+MaximumSimultaneousLaunchCount = 1
+SequenceFailurePolicy = ContinueRemaining
+CooldownStartPolicy = SequenceCompleted
+
+ReleaseMode = Direct
+LocalEjectionDirection = (1, 0, 1)
+EjectionSpeed = 0
+CarrierVelocityRatio = 0
+LauncherClearanceTraceDistanceCm = 150
+```
+
+복구 후 DataAsset을 저장하고 Direct Ripple 1회를 다시 실행해 기본 상태가 유지되는지 확인한다.
+
+### 5-1.9 사용자 결과 기록 양식
+
+```text
+CF-TC-025 플레이어 Launcher 진입: PASS / FAIL
+CF-TC-025 Direct 위치·방향·속도: PASS / FAIL
+CF-TC-025 기존 Rocket 추진 회귀: PASS / FAIL
+CF-TC-025 발사 후 런처 독립: PASS / FAIL
+CF-TC-025 충돌·피해 단일 처리: PASS / FAIL
+CF-TC-025 5개 Volley Pool 재사용: PASS / FAIL
+
+CF-TC-026 Muzzle 순서 1→4→2→3: PASS / FAIL
+CF-TC-026 SingleCycle 1발·거부 시 인덱스 유지: PASS / FAIL
+CF-TC-026 Ripple 4발·0.15초: PASS / FAIL
+CF-TC-026 Salvo 4발·동시 처리: PASS / FAIL
+CF-TC-026 동일 차량 Salvo 상호 Impact 없음: PASS / FAIL
+CF-TC-026 차량·월드 일반 충돌 유지: PASS / FAIL
+CF-TC-026 다른 차량 Projectile·Hitscan 요격: PASS / FAIL / DEFERRED
+CF-TC-026 Command Target 고정: PASS / FAIL
+CF-TC-026 입력 중복 방지·SequenceCompleted 쿨다운: PASS / FAIL
+CF-TC-026 ContinueRemaining 후속 실패 뒤 남은 발사 계속: DEFERRED / 전용 실패 배치·테스트 훅 필요
+CF-TC-026 StopSequence 후속 실패 시 Cancelled·ShotFailed: DEFERRED / 전용 실패 배치·테스트 훅 필요
+CF-TC-026 수동 CancelFireSequence: DEFERRED / 호출 수단 없음
+CF-TC-026 실제 사출 방향 MuzzleBlocked: PASS / FAIL
+CF-TC-026 AngledEjection: PASS / FAIL
+CF-TC-026 VerticalEjection: PASS / FAIL
+CF-TC-026 CarrierVelocityRatio 0·1 비교: PASS / FAIL
+기본 Direct 설정 복구: PASS / FAIL
+추가 증상:
+```
+
+사용자 PIE 결과가 모두 확인되기 전에는 `CF-TC-025`, `CF-TC-026`, `LM-P0-06`과 `CF-FQ-029`를 PASS·Done으로 변경하지 않는다.
 
 ---
 
@@ -796,6 +1183,9 @@ Destroyed
 테스트 환경:
 엔진 버전:
 실행 방식:
+검증 증거:
+재실행 진입점: Available / Not Defined / N/A
+상태 범위: Current / Historical <날짜·체크포인트>
 대상 맵:
 대상 기능:
 관련 Systems 문서:
@@ -841,7 +1231,7 @@ Destroyed
 
 ## 15. 문서 버전 관리
 
-- 현재 문서 버전: `v1.11.0`
+- 현재 문서 버전: `v1.21.0`
 - 문서 상태: `Active`
 
 ### 버전 증가 기준
@@ -855,6 +1245,51 @@ Destroyed
 ---
 
 ## 16. 체인지로그
+
+### v1.21.0 - 2026-08-02
+
+```text
+- 검증 결과, 증거, 실행 수단, 공용 재실행 진입점과 역사 범위를 분리하는 기록 필드를 추가했다.
+- 발사체 추진과 비행 FX Automation의 초기 Not Run을 당시 체크포인트 상태로 보존했다.
+- 2026-08-02 최신 CombatRuntime 결과에서 PP_P0_01과 PFX_P0_01 RuntimeContract Success를 Current 증거로 반영했다.
+- 당시 실행 수단은 작업 전용 임시 경로이며 공용 저장소 도구나 영구 재실행 계약으로 승격하지 않았음을 명시했다.
+- 과거 Runner Unavailable 표현이 현재의 영구적인 실행 불가 상태로 해석되지 않도록 정정했다.
+```
+
+### v1.14.0 - 2026-07-30
+
+```text
+- CF-FQ-027 투사체 비행 FX의 사용자 PIE 전체 행렬 PASS를 기록했다.
+- Trail-only, Thruster-only, Trail+Thruster, 유효 소켓과 Missing Socket Fallback을 PASS 처리했다.
+- Hit·LifeExpired Reset, 20발 이상 Pool 교차 재사용, Ribbon History 무잔류와 30 FPS 고속 Bounds를 PASS 처리했다.
+- 첫 Impact·Damage 단일 처리, Pool 반환과 게임 오디오 참조 0개 회귀를 확인했다.
+- CF-TC-023을 전체 최소 회귀 테스트 세트에 PASS로 추가하고 CF-FQ-027 Done을 연결했다.
+- Automation은 소스 컴파일 PASS / 실행 Not Run 상태를 유지하며 Runner 미노출 사실을 기록했다.
+```
+
+### v1.13.0 - 2026-07-29
+
+```text
+- LM-P0-05 Launcher Editor Assets 적용과 독립 AssetDump 검증 결과를 반영했다.
+- DA_RocketBody Muzzle 1→4→2→3, DA_RocketLauncher Ripple 4발·0.15초·SequenceCompleted·Direct와 실제 플레이어 진입 경로를 사전 상태로 기록했다.
+- CF-TC-025 Projectile Launch Handoff 회귀와 CF-TC-026 모듈형 런처·Ejection을 TODO로 추가했다.
+- SingleCycle, Direct Ripple, Salvo, 고정 Command Target, Pool 반복, 후속 발사 실패 정책, 실제 사출 방향 MuzzleBlocked, Angled·Vertical과 차량 속도 상속 절차를 추가했다.
+- 수동 CancelFireSequence는 호출 수단 구현 뒤 별도 검증하도록 Deferred했다.
+- 사용자 PIE 전에는 CF-TC-025·026, LM-P0-06, CF-FQ-029를 PASS 또는 Done으로 기록하지 않는다.
+```
+
+### v1.12.0 - 2026-07-28
+
+```text
+- CF-FQ-028 발사체 추진 시스템의 공식 빌드와 사용자 PIE 결과를 등록했다.
+- CF-TC-024 비유도 Rocket 추진 테스트를 PASS로 추가했다.
+- InitialSpeed 분리, IgnitionDelay, Burning 고정 방향 가속, BurnedOut 관성 비행과 Burning 기반 Thruster를 최소 회귀 기준으로 추가했다.
+- FX_Exhaust 소켓과 RelativeTransform.Scale 0.2 정상 축소를 PASS 근거로 기록했다.
+- Document/Systems/Combat/Projectile.md v1.4.0을 현재 구현 기준으로 연결했다.
+- Automation 소스 컴파일 PASS와 실제 실행 Not Run을 분리했다.
+- 반복 전투 확장 회귀는 CF-FQ-019로 유지하고 이번 승격 작업에서 수행하지 않았다.
+- CF-FQ-027 별도 전체 체크리스트와 CF-TC-023은 Paused 상태이며 PASS로 기록하지 않았다.
+```
 
 ### v1.11.0 - 2026-07-27
 
@@ -1044,6 +1479,26 @@ Destroyed
 ---
 
 ## 17. Migration
+
+### v1.13.0 적용 안내
+
+```text
+- 새 세션은 LM-P0-05 자산 적용을 반복하지 않고 CF-TC-025·026 사용자 PIE에서 시작한다.
+- 플레이어 기본 Pawn은 DA_TestSUV + RocketLauncher이며 맵의 Sedan + HeavyCannon은 회귀 표적으로 유지한다.
+- 기본 DA_RocketLauncher는 Ripple 4발·0.15초·ContinueRemaining·SequenceCompleted와 Direct 설정이다. SingleCycle·Salvo·Angled·Vertical·Carrier Velocity 검증 후 반드시 이 Pattern과 Direct / EjectionSpeed 0 / CarrierVelocityRatio 0으로 복구한다.
+- AssetDump PASS는 자산 저장·참조 검증이며 실제 발사 동작 PASS를 대체하지 않는다.
+- 사용자 결과가 제출되기 전에는 CF-FQ-029를 Done 또는 Systems Current로 승격하지 않는다.
+```
+
+### v1.12.0 적용 안내
+
+```text
+- CF-TC-024는 PASS이며 CF-FQ-028 완료 범위의 최소 회귀 기준으로 사용한다.
+- 발사체 추진과 지속형 FX의 현재 구현 판단은 Document/Systems/Combat/Projectile.md를 우선한다.
+- ProjectilePropulsionPlan.md는 완료 당시 검증 기록이다.
+- 반복 전투 확장 회귀는 CF-FQ-019가 소유하며 자동 착수하지 않는다.
+- CF-TC-023은 별도 전체 Flight FX 체크리스트 완료 전까지 PASS로 해석하지 않는다.
+```
 
 ### v1.11.0 적용 안내
 

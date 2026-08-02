@@ -1,8 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.7.1
-// Date: 2026-04-01
-// Description: CarFight 차량 Drive 상태/입력 해석 컴포넌트 구현 (입력 적용/속도 계산 중복 정리)
+// Version: 1.8.0
+// Date: 2026-08-01
+// Description: CarFight 차량 Drive 상태/입력 해석 컴포넌트 구현 (Pause 입력 중립화 포함)
+// Changelog:
+// - v1.8.0: UI-P0-02 Pause 진입 시 네 종류의 Drive 입력을 한 번에 중립화하는 ClearDriveInputs를 구현.
+// Migration:
+// - ClearDriveInputs는 입력 상태와 Chaos 입력만 초기화하며 차량 물리 속도는 보존한다.
 
 #include "CFVehicleDriveComp.h"
 
@@ -256,6 +260,30 @@ void UCFVehicleDriveComp::ApplyHandbrakeInput(bool bInHandbrakePressed)
 	{
 		VehicleMovementComponent.SetHandbrakeInput(bInHandbrakePressed);
 	});
+}
+
+// [v1.8.0] Pause와 UI 전환 전에 현재 Drive 입력을 모두 안전한 중립값으로 초기화합니다.
+void UCFVehicleDriveComp::ClearDriveInputs()
+{
+	CurrentInputState = FCFVehicleInputState();
+
+	// [v1.8.0] 현재 Owner에서 확인되거나 다시 캐시된 Chaos Vehicle Movement입니다.
+	UChaosWheeledVehicleMovementComponent* VehicleMovementComponent = GetVehicleMovementComponent();
+	if (!VehicleMovementComponent)
+	{
+		CacheVehicleMovementComponent();
+		VehicleMovementComponent = GetVehicleMovementComponent();
+	}
+
+	if (VehicleMovementComponent)
+	{
+		VehicleMovementComponent->SetThrottleInput(0.0f);
+		VehicleMovementComponent->SetSteeringInput(0.0f);
+		VehicleMovementComponent->SetBrakeInput(0.0f);
+		VehicleMovementComponent->SetHandbrakeInput(false);
+	}
+
+	UpdateDriveState();
 }
 
 ECFVehicleDriveState UCFVehicleDriveComp::EvaluateDriveState(const FCFVehicleDriveStateSnapshot& InDriveStateSnapshot) const

@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.23.0
-// Date: 2026-07-25
-// Description: CarFight 차량 루트 DataAsset 파괴 FX 소켓 설정 추가
-// Scope: 차량 시각 자산, Wheel Class 참조, VehicleMovement/WheelVisual/Layout와 최대 체력 설정을 함께 다룹니다.
+// Version: 1.25.0
+// Date: 2026-08-01
+// Description: CarFight 차량 루트 DataAsset 피팅 기준 질량과 최대 허용 총중량 추가
+// Scope: 차량 시각 자산, Wheel Class 참조, VehicleMovement/WheelVisual/Layout, 피팅 질량, 최대 체력과 선택적 방어 설정을 함께 다룹니다.
 // Changelog:
+// - v1.25.0: CF-FQ-034 FIT-P0-02 BaseVehicleMassKg와 MaximumGrossMassKg 데이터 계약을 추가.
+// - v1.24.0: CF-FQ-033 DR-P0-01 VehicleDefenseData 선택 참조를 추가하고 기존 None Fallback을 유지.
 // - v1.23.0: 차량별 파괴 FX 위치를 SM_Body 소켓으로 지정하는 DestroyedFxSocketName을 추가.
 // - v1.22.0: 최소 Damage Runtime에서 사용할 VehicleDurabilityConfig.MaxHealth 설정을 추가.
 // - v1.21.0: 자동 스케일된 휠 메시의 바운드 중심을 Wheel_Mesh 원점에 맞추는 중심 보정 옵션을 추가.
@@ -18,6 +20,10 @@
 // - v1.14.0: VehicleLayoutConfig와 WheelAnchor 포즈 구조를 추가해 차량별 시각 휠 기준 위치를 DataAsset에서 관리.
 // - v1.13.0: VehicleMovement 기본값 재정렬 및 레거시 실험값 자동 마이그레이션 추가.
 // Migration:
+// - 기존 VehicleData는 BaseVehicleMassKg=0과 MaximumGrossMassKg=0 기본값으로 현재 주행 결과를 유지한다.
+// - 피팅에 연결할 VehicleData만 실제 기준 질량과 최대 허용 총중량을 명시하며 값을 자동 추정하지 않는다.
+// - 기존 VehicleData는 DefaultDefenseData=None 기본값으로 기존 BaseDamage 직접 Health 적용 경로를 유지한다.
+// - 방어 런타임을 사용할 차량만 DefaultDefenseData에 UCFVehicleDefenseData를 명시적으로 연결한다.
 // - 기존 VehicleData는 DestroyedFxSocketName 기본값 FX_Destroyed를 사용하며 소켓이 없으면 SM_Body Bounds 중심으로 fallback한다.
 // - 기존 VehicleData는 bAutoScaleWheelMeshToRadius=false 기본값으로 이전 외형 스케일을 유지한다.
 // - 자동 휠 메시 스케일을 쓸 차량만 DA의 WheelVisualConfig에서 옵션을 명시적으로 켠다.
@@ -44,6 +50,7 @@
 
 class UChaosVehicleWheel;
 class UCFCombatFxData;
+class UCFVehicleDefenseData;
 class UStaticMesh;
 
 UENUM(BlueprintType)
@@ -389,9 +396,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="하드포인트 위치 슬롯 (HardpointSlots)", ToolTip="이 차량이 제공하는 하드포인트 위치 슬롯 목록입니다. 빈 배열은 아직 하드포인트 위치를 선언하지 않은 상태이며 오류가 아닙니다."))
 	TArray<FCFVehicleHardpointSlot> HardpointSlots;
 
-	// [v1.19.0] 차량별 전투 장착 프로파일 목록입니다.
+		// [v1.19.0] 차량별 전투 장착 프로파일 목록입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="전투 장착 프로파일 (MountProfiles)", ToolTip="이 차량의 하드포인트 위치 슬롯에 어떤 전투 장착 규칙을 연결할지 정의합니다. P0에서는 Top_01 + Turret 프로파일부터 사용합니다."))
 	TArray<FCFVehicleMountProfile> MountProfiles;
+
+	// [v1.25.0] 장비·탄약·방어를 더하기 전 차량 플랫폼 자체의 기준 질량입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Fitting", meta=(ClampMin="0.0", Units="kg", DisplayName="기준 차량 질량 kg (BaseVehicleMassKg)", ToolTip="피팅 질량 계산의 차량 플랫폼 기준값입니다. 0은 미설정이며 기존 주행에는 영향을 주지 않습니다. 피팅에 사용할 차량은 실제 밸런스 기준값을 명시해야 합니다."))
+	float BaseVehicleMassKg = 0.0f;
+
+	// [v1.25.0] 장비·탄약·방어를 포함해 이 차량이 허용하는 최대 총중량입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Fitting", meta=(ClampMin="0.0", Units="kg", DisplayName="최대 허용 총중량 kg (MaximumGrossMassKg)", ToolTip="피팅 적용을 허용하는 최대 차량 총중량입니다. 0은 미설정이며 BaseVehicleMassKg보다 크거나 같아야 합니다."))
+	float MaximumGrossMassKg = 0.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="차량 이동 설정 (VehicleMovementConfig)", ToolTip="VehicleMovement 계열 데이터를 나중에 확장하기 위한 최소 슬롯입니다."))
 	FCFVehicleMovementConfig VehicleMovementConfig;
@@ -402,11 +417,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="차량 참조 설정 (VehicleReferenceConfig)", ToolTip="전륜과 후륜 Wheel Class 등 차량 참조형 자산 설정입니다."))
 	FCFVehicleReferenceConfig VehicleReferenceConfig;
 
-	// [v1.22.0] 차량 최대 체력 값을 묶은 내구도 설정입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="차량 내구도 설정 (VehicleDurabilityConfig)", ToolTip="VehicleHealthComp가 초기화할 최대 체력을 제공합니다. 현재 단계에서는 MaxHealth만 사용합니다."))
-		FCFVehicleDurabilityConfig VehicleDurabilityConfig;
+				// [v1.22.0] 차량 최대 체력 값을 묶은 내구도 설정입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="차량 내구도 설정 (VehicleDurabilityConfig)", ToolTip="VehicleHealthComp가 초기화할 최대 체력을 제공합니다. MaxHealth는 차량 내구도 최대값으로 계속 유지됩니다."))
+	FCFVehicleDurabilityConfig VehicleDurabilityConfig;
 
-		// 최초 차량 파괴 전환에서 재생할 기본 Destroyed FX 데이터입니다.
+	// [v1.24.0] 이 차량이 사용할 쉴드·방향별 장갑 정적 설정입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Defense", meta=(DisplayName="기본 차량 방어 데이터 (DefaultDefenseData)", ToolTip="쉴드, 재생, 장갑 저항과 6방향 장갑 설정을 제공하는 VehicleDefenseData입니다. 비어 있으면 기존 BaseDamage 직접 Health 적용 경로를 유지합니다."))
+	TObjectPtr<UCFVehicleDefenseData> DefaultDefenseData = nullptr;
+
+	// 최초 차량 파괴 전환에서 재생할 기본 Destroyed FX 데이터입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|FX", meta=(DisplayName="기본 파괴 FX 데이터", ToolTip="차량이 최초 파괴 상태로 전환될 때 재생할 CombatFxData입니다. 비어 있어도 파괴 판정은 유지합니다."))
 	TObjectPtr<UCFCombatFxData> DefaultDestroyedFxData = nullptr;
 

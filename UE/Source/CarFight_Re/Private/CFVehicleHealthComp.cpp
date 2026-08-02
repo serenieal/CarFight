@@ -1,14 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-07-14
-// Description: CarFight 차량 체력 런타임 컴포넌트 구현
-// Scope: VehicleData 최대 체력 초기화, DamageHitContext 기반 직접 피해 적용, 파괴 상태와 BP 이벤트를 제공합니다.
+// Version: 1.1.0
+// Date: 2026-07-31
+// Description: CarFight 차량 내구도 런타임 컴포넌트 구현
+// Scope: VehicleData 최대 내구도 초기화, 명시 내구도 피해 적용, 기존 Health API 호환과 파괴 이벤트를 제공합니다.
 // Changelog:
+// - v1.1.0: 기존 BaseDamage 함수를 명시 내구도 피해 Wrapper로 전환하고 Integrity 피해 함수와 별칭 Getter를 추가.
 // - v1.0.0: 최대/현재 체력 초기화, BaseDamage 적용, 자기 피해 차단, 파괴 상태 1회 전환과 결과 요약을 구현.
 // Migration:
 // - 기존 차량은 VehicleData.VehicleDurabilityConfig.MaxHealth의 C++ 기본값 100을 사용한다.
-// - DamageData가 비어 있거나 BaseDamage가 0 이하이면 피해를 적용하지 않고 명시적인 RejectReason을 반환한다.
+// - 기존 ApplyDamageFromHitContext와 TryApplyDamageToActor 결과는 유지한다.
+// - VehicleDefenseComp는 방어 계산 후 남은 피해만 ApplyIntegrityDamageFromHitContext로 전달한다.
 // - 파괴 상태는 이벤트만 발생시키며 차량 입력, 물리, 렌더링을 자동으로 변경하지 않는다.
 
 #include "CFVehicleHealthComp.h"
@@ -40,7 +42,7 @@ namespace
 		case ECFDamageApplyRejectReason::MissingHealthComponent:
 			return TEXT("VehicleHealthComp 없음");
 		case ECFDamageApplyRejectReason::TargetMismatch:
-			return TEXT("체력 소유 Actor 불일치");
+			return TEXT("내구도 소유 Actor 불일치");
 		case ECFDamageApplyRejectReason::TargetDestroyed:
 			return TEXT("이미 파괴된 대상");
 		default:
@@ -49,23 +51,23 @@ namespace
 	}
 }
 
-// [v1.0.0] Tick을 사용하지 않는 차량 체력 컴포넌트 기본값을 초기화합니다.
+// [v1.0.0] Tick을 사용하지 않는 차량 내구도 컴포넌트 기본값을 초기화합니다.
 UCFVehicleHealthComp::UCFVehicleHealthComp()
 {
 	PrimaryComponentTick.bCanEverTick = false;
 	PrimaryComponentTick.bStartWithTickEnabled = false;
 }
 
-// [v1.0.0] VehicleData의 내구도 설정 또는 안전 기본값으로 최대 체력을 준비합니다.
+// [v1.0.0] VehicleData의 내구도 설정 또는 안전 기본값으로 최대 내구도를 준비합니다.
 bool UCFVehicleHealthComp::InitializeFromVehicleData(const UCFVehicleData* InVehicleData)
 {
-	// [v1.0.0] VehicleData가 제공하는 최대 체력 후보값입니다.
+	// [v1.0.0] VehicleData가 제공하는 최대 내구도 후보값입니다.
 	const float VehicleDataMaxHealth = InVehicleData ? InVehicleData->VehicleDurabilityConfig.MaxHealth : 0.0f;
 
-	// [v1.0.0] VehicleData 값이 유효하지 않을 때 사용할 보정된 안전 기본 최대 체력입니다.
+	// [v1.0.0] VehicleData 값이 유효하지 않을 때 사용할 보정된 안전 기본 최대 내구도입니다.
 	const float SafeFallbackMaxHealth = FMath::Max(FallbackMaxHealth, 1.0f);
 
-	// [v1.0.0] 이번 초기화에서 적용할 최종 최대 체력입니다.
+	// [v1.0.0] 이번 초기화에서 적용할 최종 최대 내구도입니다.
 	const float ResolvedMaxHealth = VehicleDataMaxHealth >= 1.0f ? VehicleDataMaxHealth : SafeFallbackMaxHealth;
 
 	MaxHealth = ResolvedMaxHealth;
@@ -85,10 +87,10 @@ bool UCFVehicleHealthComp::InitializeFromVehicleData(const UCFVehicleData* InVeh
 	return true;
 }
 
-// [v1.0.0] 현재 체력과 파괴 상태를 최대 체력 기준으로 초기화합니다.
+// [v1.0.0] 현재 내구도와 파괴 상태를 최대 내구도 기준으로 초기화합니다.
 void UCFVehicleHealthComp::ResetHealthToMaximum()
 {
-	// [v1.0.0] 체력 초기화 이벤트에 전달할 초기화 전 현재 체력입니다.
+	// [v1.0.0] 내구도 초기화 이벤트에 전달할 초기화 전 현재 내구도입니다.
 	const float PreviousHealth = CurrentHealth;
 
 	MaxHealth = FMath::Max(MaxHealth, FMath::Max(FallbackMaxHealth, 1.0f));
@@ -102,9 +104,23 @@ void UCFVehicleHealthComp::ResetHealthToMaximum()
 	}
 }
 
-// [v1.0.0] 이 컴포넌트의 소유 차량에 DamageHitContext의 직접 피해를 적용합니다.
+// [v1.1.0] DamageData.BaseDamage를 읽어 명시 내구도 피해 함수로 전달하는 기존 API 호환 Wrapper입니다.
 bool UCFVehicleHealthComp::ApplyDamageFromHitContext(
 	const FCFDamageHitContext& InDamageHitContext,
+	FCFDamageApplyResult& OutDamageApplyResult)
+{
+	// [v1.1.0] 기존 직접 피해 경로가 DamageData에서 읽은 0 이상의 요청 피해량입니다.
+	const float RequestedDamage = InDamageHitContext.DamageData
+		? FMath::Max(InDamageHitContext.DamageData->BaseDamage, 0.0f)
+		: 0.0f;
+
+	return ApplyIntegrityDamageFromHitContext(InDamageHitContext, RequestedDamage, OutDamageApplyResult);
+}
+
+// [v1.1.0] 방어 계산 후 남은 명시 피해량을 차량 내구도에 적용합니다.
+bool UCFVehicleHealthComp::ApplyIntegrityDamageFromHitContext(
+	const FCFDamageHitContext& InDamageHitContext,
+	const float RequestedIntegrityDamage,
 	FCFDamageApplyResult& OutDamageApplyResult)
 {
 	OutDamageApplyResult = FCFDamageApplyResult();
@@ -112,9 +128,7 @@ bool UCFVehicleHealthComp::ApplyDamageFromHitContext(
 	OutDamageApplyResult.DamageId = InDamageHitContext.DamageData
 		? InDamageHitContext.DamageData->DamageId
 		: InDamageHitContext.DamageId;
-	OutDamageApplyResult.RequestedDamage = InDamageHitContext.DamageData
-		? FMath::Max(InDamageHitContext.DamageData->BaseDamage, 0.0f)
-		: 0.0f;
+	OutDamageApplyResult.RequestedDamage = FMath::Max(RequestedIntegrityDamage, 0.0f);
 	OutDamageApplyResult.HealthBefore = CurrentHealth;
 	OutDamageApplyResult.HealthAfter = CurrentHealth;
 
@@ -136,7 +150,7 @@ bool UCFVehicleHealthComp::ApplyDamageFromHitContext(
 		return false;
 	}
 
-	if (InDamageHitContext.DamageData->BaseDamage <= 0.0f)
+	if (RequestedIntegrityDamage <= 0.0f)
 	{
 		OutDamageApplyResult.RejectReason = ECFDamageApplyRejectReason::NonPositiveDamage;
 		return false;
@@ -150,7 +164,7 @@ bool UCFVehicleHealthComp::ApplyDamageFromHitContext(
 		return false;
 	}
 
-	// [v1.0.0] 이 체력 컴포넌트를 실제로 소유한 Actor입니다.
+	// [v1.0.0] 이 내구도 컴포넌트를 실제로 소유한 Actor입니다.
 	AActor* HealthOwnerActor = GetOwner();
 	if (!HealthOwnerActor || HealthOwnerActor != InDamageHitContext.HitActor)
 	{
@@ -172,20 +186,20 @@ bool UCFVehicleHealthComp::ApplyDamageFromHitContext(
 		return false;
 	}
 
-	// [v1.0.0] 실제 체력에서 차감할 0 이상 직접 피해량입니다.
-	const float RequestedDamage = FMath::Max(InDamageHitContext.DamageData->BaseDamage, 0.0f);
+	// [v1.1.0] 실제 차량 내구도에서 차감할 0 이상 명시 피해량입니다.
+	const float SafeRequestedDamage = FMath::Max(RequestedIntegrityDamage, 0.0f);
 
-	// [v1.0.0] 피해 적용 직전 현재 체력입니다.
+	// [v1.0.0] 피해 적용 직전 현재 차량 내구도입니다.
 	const float PreviousHealth = CurrentHealth;
 
-	CurrentHealth = FMath::Clamp(CurrentHealth - RequestedDamage, 0.0f, MaxHealth);
+	CurrentHealth = FMath::Clamp(CurrentHealth - SafeRequestedDamage, 0.0f, MaxHealth);
 
-	// [v1.0.0] 현재 체력에서 실제로 감소한 피해량입니다.
+	// [v1.0.0] 현재 차량 내구도에서 실제로 감소한 피해량입니다.
 	const float AppliedDamage = FMath::Max(PreviousHealth - CurrentHealth, 0.0f);
 
 	OutDamageApplyResult.bApplied = AppliedDamage > 0.0f;
 	OutDamageApplyResult.RejectReason = ECFDamageApplyRejectReason::None;
-	OutDamageApplyResult.RequestedDamage = RequestedDamage;
+	OutDamageApplyResult.RequestedDamage = SafeRequestedDamage;
 	OutDamageApplyResult.AppliedDamage = AppliedDamage;
 	OutDamageApplyResult.HealthBefore = PreviousHealth;
 	OutDamageApplyResult.HealthAfter = CurrentHealth;
@@ -209,7 +223,7 @@ bool UCFVehicleHealthComp::ApplyDamageFromHitContext(
 	return true;
 }
 
-// [v1.0.0] HitContext의 HitActor에서 VehicleHealthComp를 찾아 공통 피해 적용 경로를 실행합니다.
+// [v1.0.0] HitContext의 HitActor에서 VehicleHealthComp를 찾아 기존 직접 피해 적용 경로를 실행합니다.
 bool UCFVehicleHealthComp::TryApplyDamageToActor(
 	const FCFDamageHitContext& InDamageHitContext,
 	FCFDamageApplyResult& OutDamageApplyResult)
@@ -255,7 +269,7 @@ bool UCFVehicleHealthComp::TryApplyDamageToActor(
 		return false;
 	}
 
-	// [v1.0.0] 실제 피격 Actor에서 찾은 차량 체력 컴포넌트입니다.
+	// [v1.0.0] 실제 피격 Actor에서 찾은 차량 내구도 컴포넌트입니다.
 	UCFVehicleHealthComp* TargetHealthComponent = InDamageHitContext.HitActor->FindComponentByClass<UCFVehicleHealthComp>();
 	if (!TargetHealthComponent)
 	{
@@ -269,7 +283,7 @@ bool UCFVehicleHealthComp::TryApplyDamageToActor(
 // [v1.0.0] VehicleDebug와 로그에서 사용할 피해 적용 결과 요약 문자열을 생성합니다.
 FString UCFVehicleHealthComp::BuildDamageApplyResultSummary(const FCFDamageApplyResult& InDamageApplyResult)
 {
-	// [v1.0.0] 피해가 실제 체력에 적용됐는지 표시할 한글 문자열입니다.
+	// [v1.0.0] 피해가 실제 차량 내구도에 적용됐는지 표시할 한글 문자열입니다.
 	const FString AppliedText = InDamageApplyResult.bApplied ? TEXT("예") : TEXT("아니오");
 
 	// [v1.0.0] 이번 피해로 파괴 상태가 처음 발생했는지 표시할 한글 문자열입니다.
@@ -284,7 +298,7 @@ FString UCFVehicleHealthComp::BuildDamageApplyResultSummary(const FCFDamageApply
 		: TEXT("없음");
 
 	return FString::Printf(
-		TEXT("피해 적용: 적용=%s, 거부 사유=%s, 대상=%s, 피해 ID=%s, 요청=%.1f, 실제=%.1f, 체력=%.1f→%.1f, 이번 타격 파괴=%s"),
+		TEXT("내구도 피해 적용: 적용=%s, 거부 사유=%s, 대상=%s, 피해 ID=%s, 요청=%.1f, 실제=%.1f, 내구도=%.1f→%.1f, 이번 타격 파괴=%s"),
 		*AppliedText,
 		*RejectReasonText,
 		*TargetActorName,
@@ -296,7 +310,7 @@ FString UCFVehicleHealthComp::BuildDamageApplyResultSummary(const FCFDamageApply
 		*DestroyedText);
 }
 
-// [v1.0.0] 현재 체력을 최대 체력으로 나눈 0~1 비율을 반환합니다.
+// [v1.0.0] 현재 차량 내구도를 최대 내구도로 나눈 0~1 비율을 반환합니다.
 float UCFVehicleHealthComp::GetHealthRatio() const
 {
 	return MaxHealth > 0.0f ? FMath::Clamp(CurrentHealth / MaxHealth, 0.0f, 1.0f) : 0.0f;

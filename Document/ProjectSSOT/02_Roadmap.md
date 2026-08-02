@@ -3,8 +3,8 @@
 > 역할: CarFight 프로젝트의 **현재 해야 할 일 / 우선순위 / 완료 조건 / 진행 순서**를 고정한다.
 > 기준 상태 문서: `01_ProjectState.md`
 > 상위 방향 문서: `00_Vision.md`
-> 문서 버전: v2.7.0
-> 마지막 정리(Asia/Seoul): 2026-07-27
+> 문서 버전: v2.19.0
+> 마지막 정리(Asia/Seoul): 2026-07-30
 
 
 ---
@@ -30,33 +30,62 @@
 
 ---
 
-## 현재 우선순위 상태 (2026-07-27)
+## 현재 우선순위 상태 (2026-07-30)
 
-`CF-FQ-024 전투 FX`는 최종 사용자 PIE까지 완료됐다. 현재 자동 선택된 Active 작업은 없다.
-
-```text
-1. CF-FQ-024 전투 FX: Done / User PIE PASS / CF-TC-021 PASS
-2. CF-FQ-019 주행과 전투 흐름 반복 테스트: Candidate / 착수 가능
-3. CF-FQ-026 타겟 선택 시스템: Paused / TS-P0-08 체크포인트 보존
-4. CF-FQ-020 조작감, 전투 템포, 피드백 개선: Candidate
-5. CF-FQ-021 핵심 게임 루프 검증: Candidate
-```
-
-전투 FX 완료 체크포인트:
+`CF-FQ-029 모듈형 런처 및 발사 인계`는 `LM-P0-01~04` C++ 적용·공식 Editor 빌드와 `LM-P0-05 Launcher Editor Assets` 적용·독립 AssetDump 검증을 완료했다. 현재 단계는 `LM-P0-06 Launcher Integration PIE`이며 `CF-TC-025·026`은 사용자 확인 전 TODO다. `CF-FQ-030 물리 제한형 미사일 비행·유도`는 Ready 상태 안에서 `MG-P0-00` 비활성 타입·Config·Guidance 수학과 Editor 빌드를 완료했지만 런타임에는 연결하지 않았다. `MG-P0-01`은 이 통합 검증과 CF-FQ-029 완료 판정을 기다린다.
 
 ```text
-- UCFCombatFxData / UCFCombatFxComp 데이터 기반 런타임 완료
-- ACFCombatFxPreviewActor EditorOnly 튜닝 도구 완료
-- DA_FX_ProtoWeaponFire / ShellImpact / VehicleDead 3개 AssetDump 성공
-- Impact P0는 NS_BasicHit을 현재 크기 그대로 사용
-- 차량별 Destroyed 위치는 SM_Body.FX_Destroyed 소켓으로 해결
-- Muzzle 승인 1회·거부 0회, Impact 첫 1회, Destroyed 최초 1회 검증 PASS
-- 중복·잔류 없음과 기존 조준·발사·피해·파괴 회귀 PASS
-- Current System: Document/Systems/Combat/CombatFx.md
+1. CF-FQ-029 모듈형 런처 및 발사 인계: Active / LM-P0-01~04 Code Applied / LM-P0-05 Assets Applied·AssetDump PASS / LM-P0-06 CF-TC-025·026 User PIE Active
+2. CF-FQ-030 물리 제한형 미사일 비행·유도: Ready / MG-P0-00 Inactive Foundation Code Applied·Build PASS / MG-P0-01은 CF-FQ-029 LM-P0-06·완료 판정 선행
+3. CF-FQ-031 차량 탄약·재장전 런타임: Ready / Documentation Done / Source Not Modified
+4. CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크: Ready / UI-P0-00 Documentation Done / Source·Asset Not Modified
+5. CF-FQ-028 발사체 추진 시스템: Done / User PIE PASS / CF-TC-024 PASS / Systems Current
+6. CF-FQ-027 투사체 비행 FX: Done / User PIE PASS / CF-TC-023 PASS / Systems Current
+7. CF-FQ-026 타겟 선택 시스템: Paused / TS-P0-08 체크포인트 보존
+8. CF-FQ-024 전투 FX: Done / User PIE PASS / CF-TC-021 PASS
+9. CF-FQ-020 조작감, 전투 템포, 피드백 개선: Candidate
+10. CF-FQ-021 핵심 게임 루프 검증: Candidate
+11. CF-FQ-019 주행과 전투 흐름 반복 테스트: Deferred / 런처·미사일 구현 범위 확정 후 재설계
 ```
 
-`CF-FQ-019`는 다음 순서상 우선 Candidate지만 사용자의 명시적 선택 전에는 Active로 전환하지 않는다.
-이 상태는 타겟 선택 기능을 취소하지 않으며 `CF-FQ-026`의 완료 코드와 Automation 결과는 Paused 체크포인트로 유지한다.
+현재 작업은 `CF-FQ-029`다. `CF-FQ-030`, `CF-FQ-031`과 `CF-FQ-032`는 Ready 상태이며 사용자가 실제 착수를 선택하기 전에는 현재 Active 작업을 변경하지 않는다. `CF-FQ-019`는 현재 착수 순서에서 제외한 Deferred 작업이다.
+
+발사체 추진 완료 체크포인트:
+
+```text
+- 완료 Feature: CF-FQ-028 Done
+- 완료 Test: CF-TC-024 PASS
+- Current System: Document/Systems/Combat/Projectile.md v1.5.0
+- 완료 Plan: Document/Plan/ProjectilePropulsionPlan.md v1.2.0
+- CFProjectileMotorTypes v1.0.0
+- UCFProjectileMotorComp v1.0.0
+- UCFProjectileData v1.7.1 / PropulsionConfig·독립 FX Scale
+- ACFProjectileActor v1.8.1 / MotorComp·Burning 기반 Thruster·Pool Reset
+- InitialSpeed 분리 → IgnitionDelay → Burning 고정 방향 가속 → BurnedOut 관성·중력 비행
+- 최종 빌드: e8b812bd479549299dd116f9bae8996f / Exit Code 0
+- Automation: RuntimeContract 소스 컴파일 PASS / 실행 Not Run
+- 사용자 PIE: DA_PFX_ThrusterTest 추진·FX_Exhaust·Scale 0.2 PASS
+- 반복 전투 확장 회귀: CF-FQ-019 Deferred / 런처·미사일 구현 범위 확정 후 재설계
+```
+
+투사체 비행 FX 완료 체크포인트:
+
+```text
+- 완료 Feature: CF-FQ-027 Done
+- 완료 Test: CF-TC-023 PASS
+- Current System: Document/Systems/Combat/Projectile.md v1.5.0
+- 완료 Plan: Document/Plan/ProjectileFlightFxPlan.md v1.0.0
+- Trail-only / Thruster-only / Trail+Thruster: PASS
+- 유효 소켓 / Missing Socket Fallback: PASS
+- Hit·LifeExpired Reset / Pool 20발 이상 / Ribbon History 무잔류: PASS
+- 30 FPS 고속 Bounds·컬링과 Impact·Damage·Pool 회귀: PASS
+- Automation: RuntimeContract 소스 컴파일 PASS / 실행 Not Run — Runner 미노출
+```
+
+`CF-FQ-024`의 일회성 Muzzle·Impact·Destroyed Current System은 다시 열지 않는다.
+`CF-FQ-027`과 `CF-FQ-028`의 검증된 지속형 FX·비유도 Rocket 추진 기준은 `Systems/Combat/Projectile.md`를 우선한다.
+`CF-FQ-019`는 기존 반복 전투 범위를 그대로 실행하지 않고 Deferred로 이동한다. `CF-FQ-029`와 `CF-FQ-030` 이후 런처·미사일을 포함한 새 통합 회귀 범위로 다시 설계한다.
+`CF-FQ-026`의 완료 코드와 Automation 결과는 Paused 체크포인트로 유지한다.
 
 ---
 
@@ -102,17 +131,25 @@
 - Unreal의 기본 플랫폼 오디오 설정은 엔진 생성 설정으로 남길 수 있으나 게임 기능으로 간주하지 않는다.
 ```
 
-따라서 현재 진행 순서는 아래로 유지한다.
+따라서 현재 진행 순서는 아래로 갱신한다.
 
 ```text
 완료: C2-B / CF-FQ-024 전투 FX
-다음 Candidate: C4 / CF-FQ-019 주행과 전투 흐름 반복 테스트
+완료: PROP / CF-FQ-028 발사체 추진 시스템
+- PP-P0-00~09 구현·빌드·사용자 PIE Done
+- PP-P0-10A Systems 승격 Done
+- CF-TC-024 PASS
+- Current System: Document/Systems/Combat/Projectile.md
+현재 Active: LCH / CF-FQ-029 모듈형 런처 및 발사 인계
+현재 단계: LM-P0-01~04 Code Applied / LM-P0-05 Assets Applied·AssetDump PASS / LM-P0-06 Launcher Integration PIE Active
+선행 대기: MSL / CF-FQ-030 물리 제한형 미사일 비행·유도 / Ready / MG-P0-00 Inactive Foundation Build PASS / Runtime Not Connected / MG-P0-01은 CF-TC-025·026 선행
 후속 Candidate: C5 / CF-FQ-020 조작감, 전투 템포, 피드백 개선
 후속 Candidate: C6 / CF-FQ-021 핵심 게임 루프 검증
+후순위 Deferred: C4 / CF-FQ-019 주행과 전투 흐름 반복 테스트 / 런처·미사일 이후 재설계
 장기 후속: CF-FQ-012 1대 차량 주행감 고도화
 ```
 
-새 단계는 사용자 선택 후에만 Active로 전환한다.
+`CF-FQ-028`은 현재 구현 기준으로 승격됐으며 Plan은 완료 이력으로 전환했다. `CF-FQ-019`는 Deferred이며 현재 후보 순서에서 자동 또는 수동 착수 대상으로 해석하지 않는다.
 
 ### 이번 사이클에서 하지 않을 것
 
@@ -180,11 +217,15 @@
 5. **C2-A — Reticle / FireFeedback UI 구현**: 완료
 6. **C3 — 피격 판정 및 피해 처리 구현**: 완료
 7. **C2-B — 전투 FX 구현**: 완료 / User PIE PASS / CF-TC-021 PASS
-8. **C4 — 주행과 전투 흐름 반복 테스트**: Candidate / 착수 가능
-9. **C5 — 조작감 / 전투 템포 / 피드백 개선**: Candidate
-10. **C6 — 핵심 게임 루프 검증**: Candidate
+8. **PFX — CF-FQ-027 투사체 비행 FX**: 완료 / User PIE PASS / CF-TC-023 PASS / Systems Current
+9. **PROP — CF-FQ-028 발사체 추진 시스템**: 완료 / User PIE PASS / CF-TC-024 PASS / Systems Current
+10. **LCH — CF-FQ-029 모듈형 런처 및 발사 인계**: Active / LM-P0-01~04 Code Applied·Build PASS / LM-P0-05 Assets Applied·AssetDump PASS / LM-P0-06 CF-TC-025·026 User PIE Active
+11. **MSL — CF-FQ-030 물리 제한형 미사일 비행·유도**: Ready / MG-P0-00 Inactive Foundation Applied·Build PASS / MG-P0-01은 LCH CF-TC-025·026 사용자 PIE와 완료 판정 선행
+12. **C5 — 조작감 / 전투 템포 / 피드백 개선**: Candidate
+13. **C6 — 핵심 게임 루프 검증**: Candidate
+14. **C4 — 주행과 전투 흐름 반복 테스트**: Deferred / 런처·미사일 구현 범위 확정 후 재설계
 
-현재 Active 단계는 없다. 다음 단계는 사용자가 Candidate를 선택한 뒤 착수한다.
+현재 Active 단계는 LCH / CF-FQ-029다. Launch Handoff, Multi-Muzzle, SingleCycle, Pattern Data, Ripple·Salvo Scheduler와 Angled·Vertical Ejection의 C++·공식 빌드, LM-P0-05 Launcher Editor Assets와 독립 AssetDump 검증은 완료했다. 현재 작업은 LM-P0-06 CF-TC-025·026 사용자 PIE다. MSL / CF-FQ-030은 MG-P0-00 비활성 Foundation만 준비됐으며 MG-P0-01 런타임은 이 검증과 CF-FQ-029 완료 판정 뒤 착수한다.
 
 ---
 
@@ -584,6 +625,79 @@ CF-TC-015 / CF-TC-016 / CF-TC-020 PASS
 ---
 
 ## 변경 이력
+
+### v2.19.0 - 2026-07-30
+
+```text
+- CF-TC-023 투사체 비행 FX 사용자 PIE 전체 행렬을 PASS 처리했다.
+- Trail-only, Thruster-only, Trail+Thruster와 유효 소켓·Missing Socket Fallback을 완료했다.
+- Hit·LifeExpired Reset, Pool 20발 이상, Ribbon History 무잔류와 30 FPS 고속 Bounds 회귀를 완료했다.
+- CF-FQ-027을 Paused에서 Done으로 전환하고 Projectile Current System v1.5.0에 연결했다.
+- Automation은 소스 컴파일 PASS / 실행 Not Run 상태와 Runner 미노출 사실을 유지했다.
+- 현재 Active CF-FQ-029 LM-P0-06과 CF-FQ-030~032 Ready, CF-FQ-019 Deferred 상태는 변경하지 않았다.
+```
+
+### v2.17.0 - 2026-07-29
+
+```text
+- CF-FQ-030 Ready 상태 안에서 MG-P0-00 비활성 Foundation Code Applied와 Editor Build PASS를 반영했다.
+- Flight·Guidance Config 기본 비활성, 제한형 비례항법 순수 수학과 Runtime Not Connected 경계를 기록했다.
+- 현재 Active는 CF-FQ-029 LM-P0-06을 유지하고 MG-P0-01 Flight State는 해당 사용자 PIE 뒤로 유지했다.
+```
+
+### v2.16.0 - 2026-07-29
+
+```text
+- LM-P0-05 Launcher Editor Assets, 실제 플레이 진입 경로와 독립 AssetDump 검증 완료를 반영했다.
+- LM-P0-06 CF-TC-025·026 사용자 PIE를 현재 Active 단계로 이동했다.
+- CF-FQ-030은 LM-P0-06과 CF-FQ-029 완료 판정 이후 착수하는 Ready 작업으로 유지했다.
+- 사용자 PIE 전에는 CF-FQ-029 또는 Launcher Systems를 완료 처리하지 않는다.
+```
+- v2.13.0 (2026-07-28)
+  - 사용자 결정에 따라 `CF-FQ-019 주행·전투 반복 테스트`를 가까운 후속 Candidate에서 Deferred로 이동했다.
+  - 기존 반복 전투 체크리스트는 폐기하지 않고 `CF-FQ-029`와 `CF-FQ-030` 이후 런처·미사일을 포함한 통합 회귀 범위로 다시 설계하도록 고정했다.
+  - 현재 Active `CF-FQ-029`와 Ready `CF-FQ-030`의 순서는 유지했다.
+  - 소스, 에셋, 빌드와 PIE 상태는 변경하지 않았다.
+
+- v2.12.0 (2026-07-28)
+  - `CF-FQ-029 모듈형 런처 및 발사 인계`를 현재 Active 단계로 등록했다.
+  - `CF-FQ-030 물리 제한형 미사일 비행·유도`를 CF-FQ-029 선행 조건을 가진 Ready 단계로 등록했다.
+  - LauncherMissile Plan·Design·Roadmap과 런처·미사일 상세 Plan을 생성했다.
+  - Direct·Angled·Vertical 사출, Single·Ripple·Salvo와 ProjectileMovement 기반 Ejection 순서를 확정했다.
+  - 발사 후 런처 독립, Target Snapshot, 물리 제한형 유도와 명중 비보장 원칙을 고정했다.
+  - 첫 코드 단계를 `LM-P0-01 Projectile Launch Handoff Foundation`으로 제한하고 현재 Source Not Modified / Code Entry Ready로 기록했다.
+  - `CF-FQ-019`, `CF-FQ-027`과 `CF-FQ-026`의 기존 상태는 유지했다.
+
+- v2.11.0 (2026-07-28)
+  - `CF-FQ-028 발사체 추진 시스템`을 Done / User PIE PASS / `CF-TC-024 PASS`로 종료했다.
+  - `Document/Systems/Combat/Projectile.md v1.4.0`을 비유도 Rocket 추진과 지속형 Projectile FX의 Current System으로 승격했다.
+  - `ProjectilePropulsionPlan.md v1.2.0`을 완료 이력 문서로 전환했다.
+  - 현재 Active 단계를 비웠다.
+  - `CF-FQ-019`를 다음 Candidate / Not Started로 유지하고 자동 착수하지 않았다.
+  - `CF-FQ-027`은 런타임 기반이 Current System에 반영됐지만 별도 전체 체크리스트와 `CF-TC-023` 미완료로 Paused 상태를 유지했다.
+  - 이번 승격 작업에서는 반복 전투 회귀를 수행하거나 완료 처리하지 않았다.
+
+- v2.10.0 (2026-07-27)
+  - 사용자가 승인한 비유도 Rocket 실제 추진 설계를 `CF-FQ-028 발사체 추진 시스템`으로 등록하고 단일 Active 단계로 전환했다.
+  - CFProjectileMotorTypes, UCFProjectileMotorComp, ProjectileData PropulsionConfig와 ProjectileActor Motor·Thruster 상태 연결을 PP-P0-01~05 완료 기준으로 등록했다.
+  - InitialSpeed 분리, IgnitionDelay, 고정 LaunchDirection 가속, 최대 추진 속도와 BurnedOut 관성·중력 비행을 구현 순서에 추가했다.
+  - 첫 Build Job 984f0ccab94241148e7b40b9d30a5572의 Automation 타입 오류를 수정하고, 최종 형식 정리 후 Build Job 2ffd09357e654bb7970a2e379f5ab45f Exit Code 0을 공식 증거로 기록했다.
+  - CF-FQ-027은 C++ Foundation을 유지한 채 Editor 자산 연결 단계에서 Paused로 보존하고, CF-FQ-019를 CF-FQ-028 사용자 PIE 후속으로 이동했다.
+
+- v2.9.0 (2026-07-27)
+  - CarFight 코드 작업 기본 방침을 별도 Codex 위임에서 현재 AI 세션의 직접 구현으로 변경했다.
+  - CF-FQ-027의 Plan Work-Order Generation 차단 상태를 해제하고 PFX-P0-01 직접 구현을 다음 단계로 지정했다.
+  - TaskSource와 WorkOrder는 구현 참고 자료로 유지하고 최종 Codex YAML을 착수 조건에서 제거했다.
+  - 직접 구현 후 Git diff, 공식 빌드, Automation과 사용자 PIE 검증 순서는 유지했다.
+
+- v2.8.0 (2026-07-27)
+  - 사용자 선택에 따라 CF-FQ-027 투사체 비행 FX를 현재 단일 Active 단계로 등록했다.
+  - PFX-P0-00에서 대표 Plan, 로드맵, TaskSource와 사람이 검토 가능한 WorkOrder 초안을 준비했다.
+  - ACFProjectileActor 소유, FX_Trail·FX_Exhaust 소켓 우선, ProjectileData Fallback과 Pool 반환 전 Reset을 구현 순서로 고정했다.
+  - 계획 테스트 ID CF-TC-023과 PFX-P0-01~07 코드·빌드·자산·PIE·Systems 승격 순서를 추가했다.
+  - 현재 Admin 표면에 plan.* 품질·증거 게이트가 없어 최종 Codex YAML Missing과 Source Not Modified 상태를 기록했다.
+  - CF-FQ-019를 CF-FQ-027 완료 후 후속 Candidate로 이동하고 CF-FQ-026 TS-P0-08 Paused 상태를 유지했다.
+
 - v2.7.0 (2026-07-27)
   - `CF-FQ-024` 최종 사용자 PIE 전체 PASS와 `CF-TC-021 PASS`를 반영했다.
   - C2-B 전투 FX를 완료 상태로 전환하고 `Document/Systems/Combat/CombatFx.md`를 Current System으로 연결했다.
@@ -648,6 +762,87 @@ CF-TC-015 / CF-TC-016 / CF-TC-020 PASS
 ---
 
 ## Migration
+
+### v2.19.0 적용 안내
+
+```text
+- CF-FQ-027은 Done / CF-TC-023 PASS이며 Active 또는 Paused로 복원하지 않는다.
+- 투사체 비행 FX의 현재 구현 판단은 Document/Systems/Combat/Projectile.md v1.5.0을 우선한다.
+- ProjectileFlightFxPlan.md v1.0.0은 완료 당시 구현·빌드·사용자 PIE 기록으로 유지한다.
+- 현재 단일 Active는 CF-FQ-029 LM-P0-06이며 이번 완료 처리로 런처 우선순위를 변경하지 않는다.
+- Automation 실행은 Runner 미노출로 Not Run 상태를 유지한다.
+```
+
+### v2.13.0 적용 안내
+
+```text
+- CF-FQ-019는 Deferred이며 현재 후속 Candidate로 복원하지 않는다.
+- 기존 CF-FQ-019 테스트 항목은 삭제하지 않고 런처·미사일 구현 뒤 새 통합 회귀 범위의 입력으로 사용한다.
+- 현재 코드 진입점은 LM-P0-01 Projectile Launch Handoff Foundation이다.
+- CF-FQ-029 Active와 CF-FQ-030 Ready 상태는 유지한다.
+```
+
+### v2.12.0 적용 안내
+
+```text
+- 현재 Active 단계는 LCH / CF-FQ-029 모듈형 런처 및 발사 인계다.
+- 대표 Plan은 Document/Plan/LauncherMissilePlan.md다.
+- LM-P0-00 조사·설계·문서 준비는 완료됐으므로 반복하지 않는다.
+- 다음 작업은 LM-P0-01 Projectile Launch Handoff Foundation 직접 구현이다.
+- 첫 Task에서는 기존 직사 발사의 위치·방향·속도와 Rocket FixedThrustDirection을 회귀 보호한다.
+- CF-FQ-030은 CF-FQ-029 Launch Handoff와 Direct Launcher 검증 전에는 코드 착수하지 않는다.
+- CF-FQ-019, CF-FQ-027과 CF-FQ-026의 기존 Candidate·Paused 상태를 유지한다.
+```
+
+### v2.11.0 적용 안내
+
+```text
+- CF-FQ-028은 Done / CF-TC-024 PASS이며 Active로 복원하지 않는다.
+- 현재 구현 판단은 Document/Systems/Combat/Projectile.md를 우선한다.
+- ProjectilePropulsionPlan.md는 완료 이력으로 유지한다.
+- 현재 Active 단계는 없다.
+- CF-FQ-019는 다음 Candidate지만 사용자가 선택하기 전에는 착수하지 않는다.
+- CF-FQ-027과 CF-FQ-026의 Paused 체크포인트를 유지한다.
+```
+
+### v2.10.0 적용 안내
+
+```text
+- 현재 Active 단계는 PROP / CF-FQ-028 발사체 추진 시스템이다.
+- 대표 Plan은 Document/Plan/ProjectilePropulsionPlan.md다.
+- PP-P0-00~07 C++ Foundation과 공식 Editor 빌드는 완료됐으므로 반복 구현하지 않는다.
+- 다음 작업은 Editor 테스트 Rocket ProjectileData 생성, PropulsionConfig·FX_Exhaust 저장과 사용자 PIE다.
+- 기존 ProjectileData는 bUsePropulsion=false 기본값으로 기존 InitialSpeed 비행을 유지한다.
+- CF-FQ-027은 Editor 자산 연결 단계 Paused, CF-FQ-026은 TS-P0-08 Paused 상태를 유지한다.
+- CF-FQ-019는 CF-FQ-028 사용자 PIE 완료 후 착수하는 반복 전투 Candidate다.
+```
+
+### v2.9.0 적용 안내
+
+```text
+- 현재 Active 단계는 CF-FQ-027 투사체 비행 FX다.
+- 새 세션은 CodeWorkGate.md v2.0에 따라 현재 AI 세션이 코드 작업을 직접 수행한다.
+- PFX-P0-00 조사·설계는 완료됐으므로 반복하지 않는다.
+- PFX-P0-01 ProjectileData 계약부터 직접 구현한다.
+- TaskSource와 WorkOrder는 구현 참고 자료이며 최종 Codex YAML을 기다리지 않는다.
+- CF-FQ-024는 Done 상태를 유지하고 일회성 CombatFx를 다시 구현하지 않는다.
+- CF-FQ-019는 CF-FQ-027 완료 후 반복 전투 Candidate다.
+- CF-FQ-026은 TS-P0-08 Paused 상태를 유지한다.
+```
+
+### v2.8.0 적용 안내 — 폐기됨, v2.9.0이 대체
+
+> 아래 내용은 당시 실행 기준 보존용이며 현재 코드 작업 판단에는 사용하지 않는다.
+
+```text
+- 현재 Active 단계는 CF-FQ-027 투사체 비행 FX다.
+- 새 세션은 Document/Plan/ProjectileFlightFxPlan.md의 PFX-P0-00 체크포인트를 우선 복원한다.
+- PFX-P0-00 조사·설계는 완료됐으므로 반복하지 않는다.
+- 최종 Codex YAML은 Missing이며 plan.* 품질·증거 게이트 전에는 소스 변경을 시작하지 않는다.
+- CF-FQ-024는 Done 상태를 유지하고 일회성 CombatFx를 다시 구현하지 않는다.
+- CF-FQ-019는 CF-FQ-027 완료 후 반복 전투 Candidate다.
+- CF-FQ-026은 TS-P0-08 Paused 상태를 유지한다.
+```
 
 ### v2.7.0 적용 안내
 

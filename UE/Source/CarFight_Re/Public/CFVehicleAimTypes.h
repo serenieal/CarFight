@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.10.0
-// Date: 2026-07-21
+// Version: 1.11.0
+// Date: 2026-07-28
 // Description: CarFight 싱글플레이 차량 Aim 시스템의 공용 타입 정의
 // Changelog:
+// - v1.11.0: FireRequest에 발사 순간 선택 Muzzle 이름·인덱스·설정 슬롯 수 스냅샷을 추가.
 // - v1.10.0: 탄종과 착탄 결과에 독립적인 CurrentMuzzleDirection 기반 터렛 레티클 월드 지점을 Weapon Aim Solution에 추가.
 // - v1.9.0: Weapon Reticle 표시 모드를 Hidden / DirectImpact / LaunchDirection으로 구분.
 // - v1.8.0: Weapon Aim Solution에 직선 사격 Preview 유효성, 첫 Blocking Hit, 월드 위치와 거리를 추가.
@@ -335,6 +336,18 @@ struct FCFVehicleFireRequest
 	// [v1.4.0] 로컬 발사 명령이 참조하는 조준 목표 월드 위치입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="조준 목표 위치 (PredictedAimTargetLocation)", ToolTip="로컬 발사 명령이 참조하는 조준 목표 월드 위치입니다. 필드명은 기존 BP 호환을 위해 유지합니다."))
 	FVector PredictedAimTargetLocation = FVector::ZeroVector;
+
+		// [v1.11.0] 발사 명령 생성 순간 실제 선택된 Muzzle 소켓 이름입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="선택 Muzzle 소켓 이름 (MuzzleSocketName)", ToolTip="발사 명령을 만들 때 실제 FireOrigin에 사용된 Muzzle 소켓 이름입니다."))
+	FName MuzzleSocketName = NAME_None;
+
+	// [v1.11.0] 발사 명령 생성 순간 선택된 Muzzle 배열 인덱스입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="선택 Muzzle 인덱스 (MuzzleSocketIndex)", ToolTip="발사 명령을 만들 때 선택된 MuzzleSocketNames 배열 인덱스입니다. 기존 단일 Muzzle는 0입니다."))
+	int32 MuzzleSocketIndex = INDEX_NONE;
+
+	// [v1.11.0] 선택 Muzzle가 순환하는 설정 슬롯 전체 개수입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="설정 Muzzle 슬롯 수 (MuzzleSocketCount)", ToolTip="발사 명령이 스냅샷으로 보존한 MuzzleSocketNames 설정 슬롯 전체 개수입니다. 기존 단일 Muzzle는 1입니다."))
+	int32 MuzzleSocketCount = 0;
 
 	// [v1.0.0] 발사를 요청한 무기 그룹 ID입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(DisplayName="무기 그룹 ID (WeaponGroupId)", ToolTip="발사를 요청한 무기 그룹 ID입니다."))

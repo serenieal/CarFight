@@ -1,9 +1,22 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.123.0
-// Date: 2026-07-25
+// Version: 2.136.0
+// Date: 2026-08-02
 // Description: CarFight 싱글플레이 차량 Pawn 구현
 // Changelog:
+// - v2.136.0: 첫 발사 순간 위치·Actor를 함께 캡처하고 Ripple·Salvo 후속 Launch Context가 현재 TargetSelect를 재조회하지 않도록 수정.
+// - v2.135.0: Projectile Launch Context에 발사 순간 선택 Target Actor를 Snapshot으로 복사해 Direct 미사일의 독립 목표 수명을 연결.
+// - v2.134.0: 차량 코어 Runtime과 전투 Runtime 준비 상태를 분리하고 기존 bVehicleRuntimeReady를 코어 호환 상태로 유지.
+// - v2.133.0: FIT-P0-05 PreRegister Initial Mass 적용, BeginPlay 실제 VehicleMesh 질량 검증과 Cached Snapshot Weapon·Defense Commit을 구현.
+// - v2.132.0: FIT-P0-04 VehicleFittingComp 기본 서브오브젝트와 Legacy·Snapshot Weapon·Defense 출격 초기화 순서를 구현.
+// - v2.131.0: UI-P0-02 Pause 진입 전 Drive·Look·입력 소유권 잔류를 중립화하고 Launcher 시퀀스는 보존하는 ClearGameplayInputForPause를 구현.
+// - v2.130.0: VehicleDebug Snapshot이 VehicleDefenseComp 준비·Fallback·현재 상태와 마지막 전체 피해 결과 요약을 읽도록 연결.
+// - v2.129.0: VehicleDefenseComp 기본 서브오브젝트·런타임 초기화와 HitScan 정식 방어 피해 진입점을 구현하고 기존 Health Debug 결과를 유지.
+// - v2.128.0: Hitscan 동일 차량 Projectile 제외, 다른 차량 Projectile Intercepted 처리와 요격 FX 정책 연결을 구현.
+// - v2.127.0: LM-P0-04 Release 설정 기반 Direct·Angled·Vertical Context, 차량 속도 상속과 비Direct 사출 안전 검사를 구현.
+// - v2.126.0: LauncherComp 기본 서브오브젝트, 고정 Command Target 후속 발사, 내부 쿨다운 우회와 Ripple·Salvo 실행 연결을 추가.
+// - v2.125.0: 가변 Muzzle 소켓 해결, FireRequest·LaunchContext 스냅샷과 승인 발사 기반 SingleCycle 진행을 구현.
+// - v2.124.0: Fire Command 기반 Direct Launch Context 생성과 ProjectilePool Context Acquire 경로를 연결.
 // - v2.123.0: 이름이 SM_Body인 표준 차체 StaticMeshComponent를 Combat FX에 제공하는 getter를 구현.
 // - v2.122.0: 차량 TargetPoint를 SM_Body Bounds 중심에 자동 정렬해 인스턴스별 후보 대표 위치 불일치를 보정.
 // - v2.121.0: TS-P0-06 WBP_TargetSelect 기본 로드와 로컬 Viewport 생성·갱신·정리 수명을 연결.
@@ -71,6 +84,16 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth Visual/Shell 적용 전 기준선을 깨끗하게 만들기 위해 차량 진단 로그와 Owner 표시 안정화 기본값을 False로 통일.
 // Migration:
+// - bVehicleRuntimeReady는 기존 Tick·Debug 호환을 위해 bVehicleCoreRuntimeReady와 같은 값을 유지한다. 전투 HUD와 전투 명령은 bVehicleCombatRuntimeReady를 별도로 사용한다.
+// - 유효 피팅 Snapshot 질량은 게임 World의 PreRegisterAllComponents에서 Super 호출 전에 Movement Mass에 1회 기록한다.
+// - BeginPlay는 같은 Cached Snapshot의 Configured Mass와 VehicleMesh 실제 질량을 검증한 뒤에만 Weapon·Defense를 Commit한다.
+// - FittingData 미지정·초기 Invalid Snapshot은 기존 Chaos 질량과 VehicleData Legacy 입력을 유지한다.
+// - Physics State 생성 뒤 다른 Target Mass는 Runtime Ready 실패로 거부하며 SetMassOverrideInKg와 Hot Recreate를 호출하지 않는다.
+// - VehicleDefense Debug 연결은 컴포넌트 캐시를 읽기만 하며 CF-FQ-029 Launcher·Pool·추진·요격과 실제 피해 판정을 변경하지 않는다.
+// - 기존 WeaponData는 Direct / CarrierVelocityRatio 0 기본값으로 AimDirection·ProjectileData.InitialSpeed 결과를 유지한다.
+// - AngledEjection은 실제 Muzzle 로컬 방향을, VerticalEjection은 실제 Muzzle X축을 사용하며 CommandTargetLocation은 별도로 보존한다.
+// - 기존 BP_CFVehiclePawn은 LauncherComp 기본 서브오브젝트를 자동 상속하며 WeaponData 기본값 SingleCycle / 1발에서는 기존 발사 흐름과 동일하게 동작한다.
+// - Ripple·Salvo는 첫 입력 순간 Command Target을 고정하고 각 후속 발사 시점의 다음 유효 Muzzle에서 기존 검증·Projectile·FX 경로를 재사용한다.
 // - 파괴 FX는 GetVehicleBodyMeshComponent로 SM_Body를 찾고 차량별 FX_Destroyed 소켓을 우선 사용한다.
 // - 차량 TargetPoint는 SM_Body Bounds 중심에 자동 정렬하며 PreferredBoundsLocalOffset으로 차량별 미세 조정한다.
 // - 선택 입력은 현재 후보가 유효할 때만 선택을 변경하고 후보가 없으면 기존 선택을 유지한다.
@@ -103,6 +126,8 @@
 // - Damage HitContext 기록은 Debug와 최소 BaseDamage 체력 적용 입력으로 사용하며 장갑 / 모듈 손상은 수행하지 않는다.
 // - Projectile Actor 확보는 WeaponData.FireMode가 Projectile이고 ProjectileData / ProjectileActorClass가 모두 유효할 때만 실행한다.
 // - Projectile Pool 확보 조건이 맞지 않거나 Pool 확보 실패 시 기존 Dummy HitScan fallback을 유지한다.
+// - Fire Command의 AimOrigin·AimDirection·PredictedAimTargetLocation과 요청 ID를 Direct Launch Context로 복사한다.
+// - LM-P0-01 Direct Context는 InitialSpeed 기반 Velocity와 Zero Carrier Velocity를 사용해 기존 발사 결과를 유지한다.
 // - WeaponData가 없으면 기존 Aim Profile MaxAimDistance와 즉시 발사 흐름을 유지한다.
 // - 기존 FireCommand / FireOrigin 흐름은 유지하고 WeaponData는 우선 디버그와 데이터 연결 확인에만 사용한다.
 // - 기존 VehicleDebug 카테고리와 Fire 함수 시그니처는 유지하고 Weapon 카테고리만 추가한다.
@@ -127,7 +152,9 @@
 
 #include "CFCollisionChannels.h"
 #include "CFEquipmentPresetData.h"
+#include "CFLauncherComp.h"
 #include "CFProjectileData.h"
+#include "CFProjectileLaunchTypes.h"
 #include "CFProjectileActor.h"
 #include "CFProjectilePoolComp.h"
 #include "CFDamageData.h"
@@ -138,6 +165,9 @@
 #include "CFVehicleDriveComp.h"
 #include "CFCombatFxComp.h"
 #include "CFVehicleHealthComp.h"
+#include "CFVehicleDefenseComp.h"
+#include "CFVehicleFittingComp.h"
+#include "CFVehicleFittingData.h"
 #include "CFTargetSelectComp.h"
 #include "CFWeaponData.h"
 #include "CFVehicleWeaponComp.h"
@@ -159,6 +189,7 @@
 #include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "InputAction.h"
@@ -786,12 +817,19 @@ ACFVehiclePawn::ACFVehiclePawn()
 	VehicleDriveComp = CreateDefaultSubobject<UCFVehicleDriveComp>(TEXT("VehicleDriveComp"));
 	WheelSyncComp = CreateDefaultSubobject<UCFWheelSyncComp>(TEXT("WheelSyncComp"));
 	VehicleCameraComp = CreateDefaultSubobject<UCFVehicleCameraComp>(TEXT("VehicleCameraComp"));
-	VehicleAimComp = CreateDefaultSubobject<UCFVehicleAimComp>(TEXT("VehicleAimComp"));
-	VehicleWeaponComp = CreateDefaultSubobject<UCFVehicleWeaponComp>(TEXT("VehicleWeaponComp"));
-		ProjectilePoolComp = CreateDefaultSubobject<UCFProjectilePoolComp>(TEXT("ProjectilePoolComp"));
+		VehicleAimComp = CreateDefaultSubobject<UCFVehicleAimComp>(TEXT("VehicleAimComp"));
+		VehicleWeaponComp = CreateDefaultSubobject<UCFVehicleWeaponComp>(TEXT("VehicleWeaponComp"));
 
-	// [v2.111.0] 차량 최대/현재 체력과 파괴 상태를 관리할 기본 서브오브젝트입니다.
-						VehicleHealthComp = CreateDefaultSubobject<UCFVehicleHealthComp>(TEXT("VehicleHealthComp"));
+	// [v2.132.0] 출격 피팅 Snapshot과 Weapon·Defense 원자 적용 경계를 소유할 기본 서브오브젝트입니다.
+	VehicleFittingComp = CreateDefaultSubobject<UCFVehicleFittingComp>(TEXT("VehicleFittingComp"));
+	LauncherComp = CreateDefaultSubobject<UCFLauncherComp>(TEXT("LauncherComp"));
+	ProjectilePoolComp = CreateDefaultSubobject<UCFProjectilePoolComp>(TEXT("ProjectilePoolComp"));
+
+		// [v2.111.0] 차량 최대/현재 내구도와 파괴 상태를 관리할 기존 이름의 기본 서브오브젝트입니다.
+	VehicleHealthComp = CreateDefaultSubobject<UCFVehicleHealthComp>(TEXT("VehicleHealthComp"));
+
+	// [v2.129.0] 쉴드와 6방향 장갑의 정식 피해 분배를 관리할 기본 서브오브젝트입니다.
+	VehicleDefenseComp = CreateDefaultSubobject<UCFVehicleDefenseComp>(TEXT("VehicleDefenseComp"));
 	CombatFxComp = CreateDefaultSubobject<UCFCombatFxComp>(TEXT("CombatFxComp"));
 
 	// [v2.118.0] 후보와 지속 선택 대상의 최소 상태 계약을 관리할 기본 서브오브젝트입니다.
@@ -876,6 +914,13 @@ ACFVehiclePawn::ACFVehiclePawn()
 	// [v2.44.0] LegacyAxis 목표 조향 초기값입니다.
 	LegacyTargetSteeringInput = 0.0f;
 
+		// [v2.134.0] 차량 주행·물리·내구도·피팅 코어 Runtime 준비 상태 초기값입니다.
+	bVehicleCoreRuntimeReady = false;
+
+	// [v2.134.0] 조준·무기·런처·타겟 선택을 포함한 전투 Runtime 준비 상태 초기값입니다.
+	bVehicleCombatRuntimeReady = false;
+
+	// [v2.134.0] 기존 Tick·Debug 호환용 차량 코어 Runtime 준비 상태 초기값입니다.
 	bVehicleRuntimeReady = false;
 	LastVehicleRuntimeSummary = TEXT("Constructed");
 	bEnableDriveStateOnScreenDebug = false;
@@ -1091,6 +1136,22 @@ void ACFVehiclePawn::OnConstruction(const FTransform& Transform)
 	ApplyVehicleTurretVisualConfig();
 }
 
+// [v2.133.0] 게임 World의 물리 컴포넌트 등록 전에 초기 피팅 Snapshot 질량을 Movement Mass에 1회 기록합니다.
+void ACFVehiclePawn::PreRegisterAllComponents()
+{
+	// [v2.133.0] CDO·Editor Preview·수동 초기화 Pawn에서 초기 출격 질량을 기록하지 않을지 여부입니다.
+	const bool bCanPrepareInitialSortieMass = !HasAnyFlags(RF_ClassDefaultObject)
+		&& bAutoInitializeOnBeginPlay
+		&& GetWorld()
+		&& GetWorld()->IsGameWorld();
+	if (bCanPrepareInitialSortieMass)
+	{
+		PrepareInitialSortieRuntimeMass();
+	}
+
+	Super::PreRegisterAllComponents();
+}
+
 void ACFVehiclePawn::BeginPlay()
 {
 	Super::BeginPlay();
@@ -1118,6 +1179,12 @@ void ACFVehiclePawn::BeginPlay()
 
 void ACFVehiclePawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	// [v2.132.0] 이전 출격의 Prepared·Applied Snapshot이 다음 수명으로 남지 않게 정리합니다.
+	if (VehicleFittingComp)
+	{
+		VehicleFittingComp->ResetFittingRuntimeState();
+	}
+
 	DestroyTargetSelectWidget();
 	DestroyAimReticleWidget();
 
@@ -1269,6 +1336,13 @@ bool ACFVehiclePawn::RegisterDefaultInputMappingContext()
 // [v2.68.0] VehicleData와 표시 계층을 준비한 뒤 WheelSync가 최종 앵커 기준을 캡처할 수 있게 런타임을 초기화합니다.
 bool ACFVehiclePawn::InitializeVehicleRuntime()
 {
+	// [v2.134.0] 새 초기화 시도에서 차량 코어 Runtime 준비 상태를 먼저 초기화합니다.
+	bVehicleCoreRuntimeReady = false;
+
+	// [v2.134.0] 새 초기화 시도에서 전투 Runtime 준비 상태를 먼저 초기화합니다.
+	bVehicleCombatRuntimeReady = false;
+
+	// [v2.134.0] 기존 호환 준비 상태도 차량 코어 상태와 함께 초기화합니다.
 	bVehicleRuntimeReady = false;
 	LastVehicleRuntimeSummary = TEXT("VehicleRuntime: InitializeStarted");
 	ApplyVehicleDataConfig();
@@ -1297,22 +1371,91 @@ bool ACFVehiclePawn::InitializeVehicleRuntime()
 	// [v2.68.0] DataAsset 레이아웃 적용 이후 WheelSync 준비가 성공했는지 여부입니다.
 	const bool bWheelSyncReady = PrepareWheelSync();
 
-	// [v2.15.0] AimComp가 Owner Pawn과 VehicleCameraComp를 안전하게 찾았는지 여부입니다.
+		// [v2.15.0] AimComp가 Owner Pawn과 VehicleCameraComp를 안전하게 찾았는지 여부입니다.
 	const bool bAimReady = VehicleAimComp ? VehicleAimComp->InitializeAimRuntime() : false;
 
-	// [v2.75.0] WeaponComp가 VehicleData MountProfile과 하드포인트 슬롯을 해석했는지 여부입니다.
-		const bool bWeaponReady = VehicleWeaponComp ? VehicleWeaponComp->InitializeWeaponRuntime(this, VehicleData) : false;
+	// [v2.111.0] VehicleData 최대 내구도 또는 안전 기본값으로 차량 내구도가 준비됐는지 여부입니다.
+	const bool bHealthReady = VehicleHealthComp ? VehicleHealthComp->InitializeFromVehicleData(VehicleData) : false;
 
-	// [v2.111.0] VehicleData 최대 체력 또는 안전 기본값으로 차량 체력이 준비됐는지 여부입니다.
-		const bool bHealthReady = VehicleHealthComp ? VehicleHealthComp->InitializeFromVehicleData(VehicleData) : false;
+	// [v2.132.0] 기존 활성 프로파일을 Snapshot Weapon 적용 대상으로 유지할 ID입니다.
+	const FName RequestedActiveMountProfileId = VehicleWeaponComp
+		? VehicleWeaponComp->GetActiveMountProfileId()
+		: NAME_None;
+
+		// [v2.133.0] 첫 BeginPlay는 PreRegister의 Cached 입력을 사용하고, 명시 재초기화는 같은 질량인지 검증한 새 입력만 준비합니다.
+	const bool bFittingPrepared = VehicleFittingComp
+		? (VehicleFittingComp->HasPreparedRuntimeInput()
+			? true
+			: VehicleFittingComp->PrepareInitialSortieFitting(VehicleFittingData, VehicleData, RequestedActiveMountProfileId))
+		: false;
+
+	// [v2.133.0] Snapshot 경로는 Configured Mass와 VehicleMesh 실제 질량 검증을 통과해야 하위 Runtime Commit을 허용합니다.
+	const bool bInitialMassReady = bFittingPrepared && VerifyInitialSortieRuntimeMass();
+
+	// [v2.133.0] 질량 검증을 통과한 같은 Cached Snapshot의 Weapon·Defense 입력만 한 트랜잭션으로 Commit합니다.
+	const bool bFittingApplied = bInitialMassReady && VehicleFittingComp
+		? VehicleFittingComp->CommitPreparedSortieFittingToVehicle(this, VehicleWeaponComp, VehicleDefenseComp)
+		: false;
+
+	// [v2.132.0] Commit 후 실제 Weapon Runtime 준비 상태입니다.
+	const bool bWeaponReady = VehicleWeaponComp && VehicleWeaponComp->IsWeaponRuntimeReady();
+
+	// [v2.132.0] Snapshot 장비가 반영된 최종 Weapon 캐시로 터렛 시각화를 다시 적용합니다.
+	if (bFittingApplied)
+	{
+		ApplyVehicleTurretVisualConfig();
+	}
+
+	// [v2.126.0] LauncherComp를 최종 Weapon Runtime에 연결합니다.
+	const bool bLauncherReady = LauncherComp ? LauncherComp->InitializeLauncherRuntime(this, VehicleWeaponComp) : false;
+
+	// [v2.132.0] Commit 후 실제 DefenseData 초기화 여부입니다.
+	const bool bDefenseDataReady = VehicleDefenseComp && VehicleDefenseComp->IsDefenseInitialized();
+
+	// [v2.129.0] Legacy Fallback 상태여도 정식 방어 진입점을 제공할 컴포넌트 존재 여부입니다.
+	const bool bDefenseComponentReady = VehicleDefenseComp != nullptr;
 
 	if (CombatFxComp)
 	{
 		CombatFxComp->InitializeCombatFxRuntime(this, VehicleData, VehicleHealthComp);
 	}
 
-	bVehicleRuntimeReady = bDriveReady && bWheelSyncReady && bHealthReady;
-	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: Data=%s, Drive=%s, WheelSync=%s, Aim=%s, Weapon=%s, Health=%s, OwnerVisual=%s, Ready=%s | %s | %s | %s"), VehicleData ? TEXT("Present") : TEXT("Missing"), bDriveReady ? TEXT("Ready") : TEXT("Missing"), bWheelSyncReady ? TEXT("Ready") : TEXT("Missing"), bAimReady ? TEXT("Ready") : TEXT("Missing"), bWeaponReady ? TEXT("Ready") : TEXT("Missing"), bHealthReady ? TEXT("Ready") : TEXT("Missing"), bOwnerVisualReady ? TEXT("Ready") : TEXT("Skipped"), bVehicleRuntimeReady ? TEXT("True") : TEXT("False"), *DataConfigSummary, *LayoutConfigSummary, *TurretVisualConfigSummary);
+						// [v2.134.0] 기본 주행·물리·내구도·피팅을 사용할 수 있는 차량 코어 Runtime 준비 상태입니다.
+	bVehicleCoreRuntimeReady = bDriveReady
+		&& bWheelSyncReady
+		&& bHealthReady
+		&& bDefenseComponentReady
+		&& bFittingApplied;
+
+	// [v2.134.0] 전투 Runtime 준비 판정에 포함할 TargetSelectComp 존재 여부입니다.
+	const bool bTargetSelectReady = TargetSelectComp != nullptr;
+
+	// [v2.134.0] 차량 코어에 Aim·Weapon·Launcher·TargetSelect가 모두 연결된 전투 Runtime 준비 상태입니다.
+	bVehicleCombatRuntimeReady = bVehicleCoreRuntimeReady
+		&& bAimReady
+		&& bWeaponReady
+		&& bLauncherReady
+		&& bTargetSelectReady;
+
+	// [v2.134.0] 기존 Tick·Debug·Blueprint 호환 값은 차량 코어 Runtime 준비 상태와 동일하게 유지합니다.
+	bVehicleRuntimeReady = bVehicleCoreRuntimeReady;
+
+	// [v2.129.0] 실제 DefenseData 초기화 또는 Legacy Fallback 상태를 구분해 표시할 방어 런타임 상태입니다.
+	const TCHAR* DefenseRuntimeState = !bDefenseComponentReady
+		? TEXT("Missing")
+		: (bDefenseDataReady ? TEXT("Ready") : TEXT("LegacyFallback"));
+
+				// [v2.132.0] VehicleFittingComp가 기록한 Legacy·Snapshot 적용 결과입니다.
+	const FString FittingRuntimeSummary = VehicleFittingComp
+		? VehicleFittingComp->GetLastFittingRuntimeSummary()
+		: TEXT("FittingRuntime: ComponentMissing");
+
+	// [v2.133.0] Initial Mass Prepare·실제 VehicleMesh 검증 결과입니다.
+	const FString InitialMassSummary = VehicleFittingComp
+		? VehicleFittingComp->GetLastInitialMassSummary()
+		: TEXT("InitialMass: ComponentMissing");
+
+		LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: Data=%s, Fitting=%s, Mass=%s, Drive=%s, WheelSync=%s, Aim=%s, Weapon=%s, Launcher=%s, Health=%s, Defense=%s, TargetSelect=%s, OwnerVisual=%s, CoreReady=%s, CombatReady=%s | %s | %s | %s | %s | %s"), VehicleData ? TEXT("Present") : TEXT("Missing"), bFittingApplied ? TEXT("Applied") : TEXT("Failed"), bInitialMassReady ? TEXT("Ready") : TEXT("Failed"), bDriveReady ? TEXT("Ready") : TEXT("Missing"), bWheelSyncReady ? TEXT("Ready") : TEXT("Missing"), bAimReady ? TEXT("Ready") : TEXT("Missing"), bWeaponReady ? TEXT("Ready") : TEXT("Missing"), bLauncherReady ? TEXT("Ready") : TEXT("Missing"), bHealthReady ? TEXT("Ready") : TEXT("Missing"), DefenseRuntimeState, bTargetSelectReady ? TEXT("Ready") : TEXT("Missing"), bOwnerVisualReady ? TEXT("Ready") : TEXT("Skipped"), bVehicleCoreRuntimeReady ? TEXT("True") : TEXT("False"), bVehicleCombatRuntimeReady ? TEXT("True") : TEXT("False"), *FittingRuntimeSummary, *InitialMassSummary, *DataConfigSummary, *LayoutConfigSummary, *LastTurretVisualSummary);
 	return bVehicleRuntimeReady;
 }
 
@@ -1646,6 +1789,99 @@ UChaosWheeledVehicleMovementComponent* ACFVehiclePawn::ResolveVehicleMovementCom
 		return nullptr;
 	}
 	return ResolvedVehicleMovementComponent;
+}
+
+// [v2.133.0] PreRegister에서 Cached Snapshot Target을 Movement Mass에 적용하거나 실패 시 Legacy 입력으로 복원합니다.
+bool ACFVehiclePawn::PrepareInitialSortieRuntimeMass()
+{
+	if (!VehicleFittingComp)
+	{
+		LastVehicleRuntimeSummary = TEXT("InitialMass: VehicleFittingCompMissing");
+		return false;
+	}
+
+	// [v2.133.0] PreRegister Snapshot의 활성 장착 입력으로 유지할 프로파일 ID입니다.
+	const FName RequestedActiveMountProfileId = VehicleWeaponComp
+		? VehicleWeaponComp->GetActiveMountProfileId()
+		: NAME_None;
+	if (!VehicleFittingComp->PrepareInitialSortieFitting(VehicleFittingData, VehicleData, RequestedActiveMountProfileId))
+	{
+		LastVehicleRuntimeSummary = VehicleFittingComp->GetLastInitialMassSummary();
+		return false;
+	}
+
+	if (!VehicleFittingComp->ShouldApplyPreparedInitialMass())
+	{
+		LastVehicleRuntimeSummary = VehicleFittingComp->GetLastInitialMassSummary();
+		return true;
+	}
+
+	// [v2.133.0] 물리 생성 전에 Target Mass를 기록할 실제 Chaos Wheeled Movement 컴포넌트입니다.
+	UChaosWheeledVehicleMovementComponent* ResolvedVehicleMovementComponent = FindComponentByClass<UChaosWheeledVehicleMovementComponent>();
+	if (!ResolvedVehicleMovementComponent)
+	{
+		const bool bFallbackPrepared = VehicleFittingComp->FallbackPreparedInitialMassToLegacy(VehicleData, RequestedActiveMountProfileId, TEXT("VehicleMovementMissingBeforePhysics"));
+		LastVehicleRuntimeSummary = VehicleFittingComp->GetLastInitialMassSummary();
+		return bFallbackPrepared;
+	}
+
+	// [v2.133.0] 실패 시 Super 호출 전에 복원할 기존 Chaos Movement Mass입니다.
+	const float PreviousMovementMassKg = ResolvedVehicleMovementComponent->Mass;
+	// [v2.133.0] Cached Snapshot에서 읽은 초기 출격 Target Mass입니다.
+	const float TargetMovementMassKg = VehicleFittingComp->GetPreparedInitialMassKg();
+	ResolvedVehicleMovementComponent->Mass = TargetMovementMassKg;
+
+	if (!VehicleFittingComp->RecordInitialMassBeforePhysics(PreviousMovementMassKg, ResolvedVehicleMovementComponent->Mass))
+	{
+		ResolvedVehicleMovementComponent->Mass = PreviousMovementMassKg;
+		const bool bFallbackPrepared = VehicleFittingComp->FallbackPreparedInitialMassToLegacy(VehicleData, RequestedActiveMountProfileId, TEXT("MovementMassRecordFailed"));
+		LastVehicleRuntimeSummary = VehicleFittingComp->GetLastInitialMassSummary();
+		return bFallbackPrepared;
+	}
+
+	LastVehicleRuntimeSummary = VehicleFittingComp->GetLastInitialMassSummary();
+	return true;
+}
+
+// [v2.133.0] BeginPlay에서 Movement 설정 질량과 VehicleMesh 실제 질량·PhysicsAsset 계약을 검증합니다.
+bool ACFVehiclePawn::VerifyInitialSortieRuntimeMass()
+{
+	if (!VehicleFittingComp)
+	{
+		return false;
+	}
+
+	if (VehicleFittingComp->UsesLegacyInitialMass())
+	{
+		return VehicleFittingComp->VerifyInitialMassAfterPhysics(0.0f, 0.0f, false, false, false);
+	}
+
+	// [v2.133.0] Snapshot Target과 비교할 현재 Chaos Movement 설정값입니다.
+	UChaosWheeledVehicleMovementComponent* ResolvedVehicleMovementComponent = ResolveVehicleMovementComponent(TEXT("InitialMass: DriveCompCacheFailed"), TEXT("InitialMass: VehicleMovementMissing"));
+	// [v2.133.0] 실제 Physics State·PhysicsAsset·Body Mass를 제공할 상속 VehicleMesh입니다.
+	USkeletalMeshComponent* VehicleMeshComponent = GetMesh();
+	if (!ResolvedVehicleMovementComponent || !VehicleMeshComponent)
+	{
+		return VehicleFittingComp->VerifyInitialMassAfterPhysics(0.0f, 0.0f, false, false, false);
+	}
+
+	// [v2.133.0] Movement Component에 현재 설정된 Chaos 차량 질량입니다.
+	const float ConfiguredMovementMassKg = ResolvedVehicleMovementComponent->Mass;
+	// [v2.133.0] Physics State 생성 뒤 VehicleMesh BodyInstance가 보고하는 실제 총질량입니다.
+	const float ActualVehicleMeshMassKg = VehicleMeshComponent->GetMass();
+	// [v2.133.0] VehicleMesh가 실제 Physics State를 생성했는지 여부입니다.
+	const bool bHasVehiclePhysicsState = VehicleMeshComponent->IsPhysicsStateCreated();
+	// [v2.133.0] VehicleMesh Root Body가 Chaos 물리 시뮬레이션 중인지 여부입니다.
+	const bool bVehicleSimulatesPhysics = VehicleMeshComponent->IsSimulatingPhysics();
+	// [v2.133.0] VehicleMesh가 실제 충돌·관성 원본 PhysicsAsset을 해석했는지 여부입니다.
+	const bool bHasVehiclePhysicsAsset = VehicleMeshComponent->GetPhysicsAsset() != nullptr;
+
+	return VehicleFittingComp->VerifyInitialMassAfterPhysics(
+		ConfiguredMovementMassKg,
+		ActualVehicleMeshMassKg,
+		bHasVehiclePhysicsState,
+		bVehicleSimulatesPhysics,
+		bHasVehiclePhysicsAsset);
 }
 
 FString ACFVehiclePawn::BuildVehicleDebugTextSingleLine(const FCFVehicleDebugSnapshot& VehicleDebugSnapshot, bool bIncludeRuntimeSummary, bool bIncludeTransitionSummary, bool bIncludeInputState) const
@@ -2168,12 +2404,20 @@ void ACFVehiclePawn::ApplyVehicleTurretVisualConfig()
 		return;
 	}
 
-	// [v2.100.0] 터렛 마운트 데이터가 EquipmentPresetData에서 해석됐는지 여부입니다.
-	const bool bUsingEquipmentPresetTurretMountData = ActiveMountProfile->DefaultEquipmentPresetData && ActiveMountProfile->DefaultEquipmentPresetData->DefaultTurretMountData;
+			// [v2.132.0] Weapon Runtime 준비 후에는 Commit된 Snapshot EquipmentPresetData를 우선합니다.
+	UCFEquipmentPresetData* ResolvedEquipmentPresetData = VehicleWeaponComp
+		&& VehicleWeaponComp->IsWeaponRuntimeReady()
+		&& VehicleWeaponComp->GetActiveMountProfileId() == ActiveMountProfile->MountProfileId
+		? VehicleWeaponComp->GetActiveEquipmentPresetData()
+		: ActiveMountProfile->DefaultEquipmentPresetData.Get();
 
-	// [v2.100.0] 활성 EquipmentPresetData에서 해석한 터렛 마운트 데이터입니다.
+	// [v2.132.0] 최종 EquipmentPresetData에서 TurretMountData를 해석했는지 여부입니다.
+	const bool bUsingEquipmentPresetTurretMountData = ResolvedEquipmentPresetData
+		&& ResolvedEquipmentPresetData->DefaultTurretMountData;
+
+	// [v2.132.0] Legacy 기본값 또는 Snapshot Override의 활성 TurretMountData입니다.
 	UCFTurretMountData* ActiveTurretMountData = bUsingEquipmentPresetTurretMountData
-		? ActiveMountProfile->DefaultEquipmentPresetData->DefaultTurretMountData.Get()
+		? ResolvedEquipmentPresetData->DefaultTurretMountData.Get()
 		: nullptr;
 
 	LastTurretMountData = ActiveTurretMountData;
@@ -2182,8 +2426,10 @@ void ACFVehiclePawn::ApplyVehicleTurretVisualConfig()
 	LastTurretMountSummary = ActiveTurretMountData ? ActiveTurretMountData->BuildTurretMountSummary() : TEXT("TurretMountData: Missing, Source=EquipmentPresetDataRequired, InlineFallback=Removed");
 
 	// [v2.100.0] 터렛 시각 값을 가져온 원본을 표시할 문자열입니다.
-	const FString TurretVisualSourceText = bUsingEquipmentPresetTurretMountData
-		? TEXT("EquipmentPresetData")
+			const FString TurretVisualSourceText = bUsingEquipmentPresetTurretMountData
+		? (VehicleWeaponComp && VehicleWeaponComp->IsUsingRuntimeEquipmentPresetOverride()
+			? TEXT("FittingSnapshotEquipmentPresetData")
+			: TEXT("VehicleDefaultEquipmentPresetData"))
 		: TEXT("MissingEquipmentPresetTurretMountData");
 
 	// [v2.88.0] 현재 적용할 Base 메쉬입니다.
@@ -2497,6 +2743,19 @@ void ACFVehiclePawn::ApplyVehicleTurretVisualConfig()
 // [v2.110.0] 최종 발사 방향과 분리된 요구 조준 방향으로 터렛이 바라볼 월드 방향을 계산합니다.
 FVector ACFVehiclePawn::ResolveTurretAimWorldDirection() const
 {
+	// [v2.126.0] Ripple·Salvo 진행 중에는 사용자가 새로 이동한 Reticle이 아니라 첫 입력 순간 고정 Command Target을 터렛이 계속 추적합니다.
+	FVector ActiveLauncherCommandTargetLocation;
+	if (LauncherComp
+		&& LauncherComp->TryGetActiveCommandTargetLocation(ActiveLauncherCommandTargetLocation)
+		&& TurretYawPivotComp)
+	{
+		const FVector DirectionToLauncherCommandTarget = ActiveLauncherCommandTargetLocation - TurretYawPivotComp->GetComponentLocation();
+		if (!DirectionToLauncherCommandTarget.ContainsNaN() && !DirectionToLauncherCommandTarget.IsNearlyZero())
+		{
+			return DirectionToLauncherCommandTarget.GetSafeNormal();
+		}
+	}
+
 	if (VehicleAimComp)
 	{
 		// [v2.109.0] AimComp에 저장된 최신 Weapon Aim Solution입니다.
@@ -2909,6 +3168,35 @@ void ACFVehiclePawn::SetVehicleHandbrakeInput(const bool bInHandbrakePressed)
 	}
 }
 
+// [v2.131.0] Pause 진입 전 모든 차량 Gameplay 입력과 입력 소유권을 안전한 중립 상태로 초기화합니다.
+void ACFVehiclePawn::ClearGameplayInputForPause()
+{
+	LastVehicleMoveInputResult = FCFVehicleMoveInputResult();
+	LastMoveDirectionIntent = ECFVehicleMoveDirectionIntent::None;
+	CurrentInputOwnership = ECFVehicleInputOwnership::None;
+	LastVehicleMoveInputTimeSec = -1.0f;
+	LastLegacyAxisInputTimeSec = -1.0f;
+
+	TargetSteeringInput = 0.0f;
+	LegacyTargetSteeringInput = 0.0f;
+	CurrentSteeringInput = 0.0f;
+	LastSteeringTurnRate = 0.0f;
+	LastSteeringReturnRate = 0.0f;
+	bSteeringReturningToCenter = false;
+
+	if (VehicleDriveComp)
+	{
+		VehicleDriveComp->ClearDriveInputs();
+	}
+
+	if (VehicleCameraComp)
+	{
+		VehicleCameraComp->ClearLookInput();
+	}
+
+	// [v2.131.0] 진행 중 Ripple·Salvo는 취소하지 않는다. World Pause가 Tick과 게임 시간만 정지시키고 해제 후 동일 상태에서 재개한다.
+}
+
 float ACFVehiclePawn::GetVehicleSpeed() const
 {
 	return VehicleDriveComp ? VehicleDriveComp->GetCurrentSpeedKmh() : 0.0f;
@@ -3068,6 +3356,18 @@ FCFVehicleDebugSnapshot ACFVehiclePawn::GetVehicleDebugSnapshot() const
 		{
 			DebugSnapshot.Weapon.ActiveProjectileId = DebugSnapshot.Weapon.ActiveProjectileData->ProjectileId;
 		}
+	}
+
+		// [v2.130.0] 방어 Debug는 실제 피해를 재계산하지 않고 VehicleDefenseComp의 현재 상태와 마지막 결과 캐시만 읽습니다.
+	DebugSnapshot.Weapon.bHasVehicleDefenseComponent = VehicleDefenseComp != nullptr;
+	if (VehicleDefenseComp)
+	{
+		DebugSnapshot.Weapon.bVehicleDefenseInitialized = VehicleDefenseComp->IsDefenseInitialized();
+		DebugSnapshot.Weapon.bUsingLegacyDefenseFallback = !VehicleDefenseComp->IsDefenseInitialized()
+			|| VehicleDefenseComp->GetActiveDefenseData() == nullptr;
+		DebugSnapshot.Weapon.VehicleDefenseSummary = VehicleDefenseComp->BuildVehicleDefenseSummary();
+		DebugSnapshot.Weapon.bHasLastVehicleDamageResult = VehicleDefenseComp->HasLastVehicleDamageResult();
+		DebugSnapshot.Weapon.LastVehicleDamageResultSummary = VehicleDefenseComp->GetLastVehicleDamageResultSummary();
 	}
 
 	// [v2.87.0] 터렛 마운트 / 시각 장착 상태는 WeaponComp 런타임과 별개로 표시용 캐시에서 읽습니다.
@@ -3984,8 +4284,16 @@ void ACFVehiclePawn::HandleLookReleased(const FInputActionValue&)
 	VehicleCameraComp->ClearLookInput();
 }
 
-// [v2.63.0] 현재 Aim 상태를 기준으로 로컬 발사 명령 데이터를 생성합니다.
+// [v2.126.0] 현재 Aim 상태를 사용하는 기존 발사 명령 생성 경로를 유지합니다.
 FCFVehicleFireRequest ACFVehiclePawn::BuildFireCommand()
+{
+	return BuildFireCommandForTarget(FVector::ZeroVector, false);
+}
+
+// [v2.126.0] 현재 Muzzle을 다시 해결하면서 첫 입력 순간 Command Target을 유지할 후속 발사 명령을 생성합니다.
+FCFVehicleFireRequest ACFVehiclePawn::BuildFireCommandForTarget(
+	const FVector& OverrideCommandTargetLocation,
+	const bool bUseOverrideTarget)
 {
 	// [v2.63.0] 현재 월드 시간 또는 fallback 0초입니다.
 	const float ClientFireTimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
@@ -4008,6 +4316,11 @@ FCFVehicleFireRequest ACFVehiclePawn::BuildFireCommand()
 		FireRequest.PredictedAimTargetLocation = GetActorLocation() + GetActorForwardVector() * 1000.0f;
 	}
 
+		if (bUseOverrideTarget && !OverrideCommandTargetLocation.ContainsNaN())
+	{
+		FireRequest.PredictedAimTargetLocation = OverrideCommandTargetLocation;
+	}
+
 	if (VehicleWeaponComp)
 	{
 		// [v2.109.0] Muzzle 기준으로 계산한 공통 Weapon Aim Solution입니다.
@@ -4016,22 +4329,36 @@ FCFVehicleFireRequest ACFVehiclePawn::BuildFireCommand()
 		// [v2.109.0] Weapon Aim Solution과 같은 기준으로 기록할 FireOrigin입니다.
 		FCFVehicleFireOrigin FinalFireOrigin;
 
-		// [v2.109.0] Weapon Aim Solution 계산 결과를 WeaponComp 디버그에 남길 요약입니다.
+				// [v2.109.0] Weapon Aim Solution 계산 결과를 WeaponComp 디버그에 남길 요약입니다.
 		FString WeaponAimSolutionSummary;
 
-		if (BuildWeaponAimSolution(WeaponAimSolution, &FinalFireOrigin, &WeaponAimSolutionSummary))
+		// [v2.126.0] 후속 Ripple·Salvo 발사에서만 사용할 첫 입력 순간 고정 Command Target 포인터입니다.
+		const FVector* OverrideTargetLocation = bUseOverrideTarget
+			? &OverrideCommandTargetLocation
+			: nullptr;
+
+		if (BuildWeaponAimSolution(WeaponAimSolution, &FinalFireOrigin, &WeaponAimSolutionSummary, OverrideTargetLocation))
 		{
 			VehicleWeaponComp->RecordResolvedFireOrigin(FinalFireOrigin, WeaponAimSolutionSummary);
-			VehicleAimComp->SetWeaponAimSolution(WeaponAimSolution);
+			if (VehicleAimComp && !bUseOverrideTarget)
+			{
+				VehicleAimComp->SetWeaponAimSolution(WeaponAimSolution);
+			}
 
 			FireRequest.AimOrigin = WeaponAimSolution.AimOrigin;
 			FireRequest.AimDirection = WeaponAimSolution.AimDirection;
-			FireRequest.PredictedAimTargetLocation = WeaponAimSolution.AimTargetLocation;
+						FireRequest.PredictedAimTargetLocation = WeaponAimSolution.AimTargetLocation;
+			FireRequest.MuzzleSocketName = FinalFireOrigin.MuzzleSocketName;
+			FireRequest.MuzzleSocketIndex = FinalFireOrigin.MuzzleSocketIndex;
+			FireRequest.MuzzleSocketCount = FinalFireOrigin.MuzzleSocketCount;
 			FireRequest.WeaponGroupId = FinalFireOrigin.MountProfileId;
 		}
-		else if (VehicleAimComp)
+				else
 		{
-			VehicleAimComp->SetWeaponAimSolution(WeaponAimSolution);
+			if (VehicleAimComp && !bUseOverrideTarget)
+			{
+				VehicleAimComp->SetWeaponAimSolution(WeaponAimSolution);
+			}
 			FireRequest.AimDirection = FVector::ZeroVector;
 		}
 	}
@@ -4039,8 +4366,19 @@ FCFVehicleFireRequest ACFVehiclePawn::BuildFireCommand()
 	return FireRequest;
 }
 
-// [v2.110.0] 터렛별 정렬 중 발사 정책을 포함해 싱글플레이 로컬 발사 명령을 검증하고 결과를 채웁니다.
-bool ACFVehiclePawn::ValidateFireCommand(const FCFVehicleFireRequest& FireCommand, FCFVehicleFireResult& OutFireResult)
+// [v2.126.0] 플레이어 입력 발사는 기존 쿨다운을 포함한 전체 검증을 수행합니다.
+bool ACFVehiclePawn::ValidateFireCommand(
+	const FCFVehicleFireRequest& FireCommand,
+	FCFVehicleFireResult& OutFireResult)
+{
+	return ValidateFireCommandInternal(FireCommand, OutFireResult, false);
+}
+
+// [v2.126.0] 후속 Ripple·Salvo 발사에서는 입력 단위 쿨다운만 선택적으로 우회하고 나머지 조건을 동일하게 검증합니다.
+bool ACFVehiclePawn::ValidateFireCommandInternal(
+	const FCFVehicleFireRequest& FireCommand,
+	FCFVehicleFireResult& OutFireResult,
+	const bool bIgnoreWeaponCooldown)
 {
 	OutFireResult = FCFVehicleFireResult();
 	OutFireResult.FireRequestId = FireCommand.FireRequestId;
@@ -4071,8 +4409,22 @@ bool ACFVehiclePawn::ValidateFireCommand(const FCFVehicleFireRequest& FireComman
 		return false;
 	}
 
-	// [v2.109.0] 로컬 검증에 사용할 최신 Weapon Aim Solution입니다.
-	const FCFVehicleWeaponAimSolution WeaponAimSolution = VehicleAimComp->GetWeaponAimSolution();
+		// [v2.126.0] 일반 입력은 AimComp 캐시를, 후속 시퀀스는 고정 Command Target으로 다시 계산한 최신 Weapon Aim Solution을 사용합니다.
+	FCFVehicleWeaponAimSolution WeaponAimSolution;
+	if (bIgnoreWeaponCooldown)
+	{
+		const FVector ScheduledCommandTargetLocation = FVector(FireCommand.PredictedAimTargetLocation);
+		if (!BuildWeaponAimSolution(WeaponAimSolution, nullptr, nullptr, &ScheduledCommandTargetLocation))
+		{
+			OutFireResult.RejectReason = ECFVehicleFireRejectReason::InvalidAimDirection;
+			return false;
+		}
+	}
+	else
+	{
+		WeaponAimSolution = VehicleAimComp->GetWeaponAimSolution();
+	}
+
 	if (!WeaponAimSolution.bHasValidSolution)
 	{
 		OutFireResult.RejectReason = ECFVehicleFireRejectReason::InvalidAimDirection;
@@ -4106,7 +4458,10 @@ bool ACFVehiclePawn::ValidateFireCommand(const FCFVehicleFireRequest& FireComman
 		return false;
 	}
 
-	if (WeaponAimSolution.bMuzzleBlocked)
+		// [v2.127.0] Direct는 기존 Command Target 방향의 MuzzleBlocked 결과를 사용하고 비Direct는 실제 사출 방향 검사를 Projectile 실행 직전에 수행합니다.
+	const FCFLauncherReleaseConfig ActiveReleaseConfig = VehicleWeaponComp->GetActiveLauncherReleaseConfig();
+	if (ActiveReleaseConfig.ReleaseMode == ECFProjectileReleaseMode::Direct
+		&& WeaponAimSolution.bMuzzleBlocked)
 	{
 		OutFireResult.RejectReason = ECFVehicleFireRejectReason::MuzzleBlocked;
 		return false;
@@ -4138,7 +4493,8 @@ bool ACFVehiclePawn::ValidateFireCommand(const FCFVehicleFireRequest& FireComman
 		const float CurrentFireTimeSeconds = FireCommand.ClientFireTimeSeconds;
 
 		// [v2.78.0] 현재 활성 무기가 아직 쿨다운 중인지 여부입니다.
-		const bool bActiveWeaponOnCooldown = VehicleWeaponComp->IsActiveWeaponOnCooldown(CurrentFireTimeSeconds);
+				const bool bActiveWeaponOnCooldown = !bIgnoreWeaponCooldown
+			&& VehicleWeaponComp->IsActiveWeaponOnCooldown(CurrentFireTimeSeconds);
 		if (bActiveWeaponOnCooldown)
 		{
 			OutFireResult.RejectReason = ECFVehicleFireRejectReason::WeaponCooldown;
@@ -4205,8 +4561,12 @@ bool ACFVehiclePawn::RunLocalDummyHitScan(const FCFVehicleFireRequest& FireComma
 	FHitResult HitResult;
 
 	// [v2.63.0] 로컬 Trace에서 Owner Pawn을 무시하기 위한 쿼리 설정입니다.
-	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(CarFightLocalAimTrace), false);
+		FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(CarFightLocalAimTrace), false);
 	QueryParams.AddIgnoredActor(this);
+	if (ProjectilePoolComp)
+	{
+		ProjectilePoolComp->AddActiveSourceProjectilesToQueryParams(this, QueryParams);
+	}
 
 	// [v2.108.0] 로컬 Trace가 무기 피격 전용 채널에 적중했는지 여부입니다.
 	const bool bHit = World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, CFCollisionChannels::WeaponHit, QueryParams);
@@ -4288,14 +4648,32 @@ void ACFVehiclePawn::RecordDummyHitScanDamageHitContext(
 		DamageHitContext.bFromProjectileActor = false;
 	DamageHitContext.bBlockingHit = bBlockingHit;
 
-	// [v2.111.0] HitScan DamageHitContext로 대상 차량 체력에 직접 피해 적용을 시도한 결과입니다.
+			// [v2.129.0] HitScan DamageHitContext를 정식 방어층에 적용한 전체 결과입니다.
+	FCFVehicleDamageResult VehicleDamageResult;
+
+	// [v2.111.0] 기존 VehicleHealth Debug와 Pool 호환에 사용할 차량 내구도 적용 결과입니다.
 	FCFDamageApplyResult DamageApplyResult;
-		if (CombatFxComp && ActiveProjectileData)
+
+	// [v2.128.0] 다른 차량 Projectile 적중을 차량 피해가 아닌 Projectile 요격 경로로 처리했는지 여부입니다.
+	bool bProjectileIntercepted = false;
+	if (bBlockingHit && HitResult)
+	{
+		if (ACFProjectileActor* HitProjectileActor = Cast<ACFProjectileActor>(HitResult->GetActor()))
+		{
+			bProjectileIntercepted = HitProjectileActor->TryResolveProjectileInterception(this, this, *HitResult);
+		}
+	}
+
+	if (CombatFxComp && ActiveProjectileData)
 	{
 		CombatFxComp->PlayImpactFx(ActiveProjectileData->DefaultImpactFxData, DamageHitContext);
 	}
 
-	UCFVehicleHealthComp::TryApplyDamageToActor(DamageHitContext, DamageApplyResult);
+		if (!bProjectileIntercepted)
+	{
+		UCFVehicleDefenseComp::TryApplyDamageToActor(DamageHitContext, VehicleDamageResult);
+		DamageApplyResult = UCFVehicleDefenseComp::BuildIntegrityCompatibilityResult(VehicleDamageResult);
+	}
 
 	StoreLastDamageHitContext(DamageHitContext);
 	StoreLastDamageApplyResult(DamageApplyResult);
@@ -4312,18 +4690,27 @@ void ACFVehiclePawn::RecordProjectileDamageHitContextFromPool(const ACFProjectil
 	// [v2.111.0] Projectile Actor의 첫 유효 Impact에서 이미 생성된 Damage HitContext 복사본입니다.
 	FCFDamageHitContext DamageHitContext = InProjectileActor->GetLastDamageHitContext();
 
-	// [v2.111.0] Projectile HitContext에 WeaponId가 없을 때 보완할 현재 활성 WeaponData입니다.
+		// [v2.128.0] Projectile의 실제 비활성화 사유입니다.
+	const ECFProjectileDeactivateReason ProjectileDeactivateReason = InProjectileActor->GetLastDeactivateReason();
+
+	// [v2.111.0] 일반 World·차량 Hit에서만 누락된 WeaponId를 현재 활성 WeaponData로 보완합니다.
 	UCFWeaponData* ActiveWeaponData = VehicleWeaponComp ? VehicleWeaponComp->GetActiveWeaponData() : nullptr;
-	if (DamageHitContext.WeaponId.IsNone() && ActiveWeaponData)
+	if (ProjectileDeactivateReason == ECFProjectileDeactivateReason::Hit
+		&& DamageHitContext.WeaponId.IsNone()
+		&& ActiveWeaponData)
 	{
 		DamageHitContext.WeaponId = ActiveWeaponData->WeaponId;
 	}
 
 	// [v2.111.0] Projectile Actor가 첫 Impact에서 이미 실행한 직접 피해 적용 결과 복사본입니다.
-		FCFDamageApplyResult DamageApplyResult = InProjectileActor->GetLastDamageApplyResult();
+	FCFDamageApplyResult DamageApplyResult = InProjectileActor->GetLastDamageApplyResult();
 
 	UCFProjectileData* ImpactProjectileData = InProjectileActor->GetLastDeactivatedProjectileData();
-	if (CombatFxComp && ImpactProjectileData)
+	const bool bShouldPlayProjectileImpactFx = ImpactProjectileData
+		&& (ProjectileDeactivateReason == ECFProjectileDeactivateReason::Hit
+			|| (ProjectileDeactivateReason == ECFProjectileDeactivateReason::Intercepted
+				&& ImpactProjectileData->bDetonateWhenIntercepted));
+	if (CombatFxComp && bShouldPlayProjectileImpactFx)
 	{
 		CombatFxComp->PlayImpactFx(ImpactProjectileData->DefaultImpactFxData, DamageHitContext);
 	}
@@ -4388,63 +4775,89 @@ FString ACFVehiclePawn::BuildDamageHitContextSummary(const FCFDamageHitContext& 
 		InDamageHitContext.FlightDurationSeconds);
 }
 
-// [v2.93.0] Turret Pitch 메쉬의 Muzzle 소켓으로 최종 FireOrigin을 보정합니다.
+// [v2.125.0] Turret Pitch 메쉬에서 현재 SingleCycle 순서에 맞는 Muzzle 소켓으로 최종 FireOrigin을 보정합니다.
 bool ACFVehiclePawn::TryBuildMuzzleFireOrigin(FCFVehicleFireOrigin& InOutFireOrigin, FString& OutFireOriginSummary) const
 {
 	OutFireOriginSummary = FString();
 
-	if (!LastTurretMountData || !TurretPitchMeshComp)
+	if (!LastTurretMountData || !TurretPitchMeshComp || !TurretPitchMeshComp->GetStaticMesh())
 	{
 		return false;
 	}
 
-	// [v2.93.0] Muzzle 소켓을 찾을 Pitch 메쉬 컴포넌트가 실제 메쉬를 보유했는지 여부입니다.
-	const bool bPitchMeshReady = TurretPitchMeshComp->GetStaticMesh() != nullptr;
-	if (!bPitchMeshReady)
+	// [v2.125.0] 신규 가변 Muzzle 배열입니다. 비어 있으면 기존 단일 MuzzleSocketName을 사용합니다.
+	const TArray<FName>& ConfiguredMuzzleSocketNames = LastTurretMountData->MuzzleSocketNames;
+	const bool bUsingLegacySingleMuzzle = ConfiguredMuzzleSocketNames.IsEmpty();
+	const int32 MuzzleSocketCount = bUsingLegacySingleMuzzle ? 1 : ConfiguredMuzzleSocketNames.Num();
+	if (MuzzleSocketCount <= 0)
 	{
 		return false;
 	}
 
-	// [v2.93.0] TurretMountData에서 지정한 총구 소켓 이름입니다.
-	const FName MuzzleSocketName = LastTurretMountData->MuzzleSocketName;
-	if (MuzzleSocketName.IsNone())
+	if (!bUsingLegacySingleMuzzle && LastTurretMountData->bRequireAllMuzzles)
+	{
+		for (const FName RequiredMuzzleSocketName : ConfiguredMuzzleSocketNames)
+		{
+			if (RequiredMuzzleSocketName.IsNone() || !TurretPitchMeshComp->DoesSocketExist(RequiredMuzzleSocketName))
+			{
+				return false;
+			}
+		}
+	}
+
+	// [v2.125.0] 다음 승인 발사 전까지 유지되는 SingleCycle 검색 시작 인덱스입니다.
+	const int32 RequestedStartIndex = VehicleWeaponComp
+		? VehicleWeaponComp->GetNextMuzzleSocketIndex()
+		: 0;
+	const int32 SafeStartIndex = FMath::Clamp(RequestedStartIndex, 0, MuzzleSocketCount - 1);
+
+	// [v2.125.0] 실제 Pitch 메쉬에 존재해 이번 FireOrigin에 사용할 Muzzle 소켓입니다.
+	FName SelectedMuzzleSocketName = NAME_None;
+	int32 SelectedMuzzleSocketIndex = INDEX_NONE;
+	for (int32 SearchOffset = 0; SearchOffset < MuzzleSocketCount; ++SearchOffset)
+	{
+		const int32 CandidateMuzzleSocketIndex = (SafeStartIndex + SearchOffset) % MuzzleSocketCount;
+		const FName CandidateMuzzleSocketName = bUsingLegacySingleMuzzle
+			? LastTurretMountData->MuzzleSocketName
+			: ConfiguredMuzzleSocketNames[CandidateMuzzleSocketIndex];
+
+		if (!CandidateMuzzleSocketName.IsNone() && TurretPitchMeshComp->DoesSocketExist(CandidateMuzzleSocketName))
+		{
+			SelectedMuzzleSocketName = CandidateMuzzleSocketName;
+			SelectedMuzzleSocketIndex = CandidateMuzzleSocketIndex;
+			break;
+		}
+	}
+
+	if (SelectedMuzzleSocketName.IsNone() || SelectedMuzzleSocketIndex == INDEX_NONE)
 	{
 		return false;
 	}
 
-	if (!TurretPitchMeshComp->DoesSocketExist(MuzzleSocketName))
-	{
-		return false;
-	}
+	// [v2.125.0] 선택된 Pitch 메쉬 Muzzle 소켓의 월드 Transform입니다.
+	const FTransform MuzzleSocketWorldTransform = TurretPitchMeshComp->GetSocketTransform(SelectedMuzzleSocketName, RTS_World);
 
-	// [v2.93.0] Pitch 메쉬 Muzzle 소켓의 월드 Transform입니다.
-	const FTransform MuzzleSocketWorldTransform = TurretPitchMeshComp->GetSocketTransform(MuzzleSocketName, RTS_World);
-
-	// [v2.93.0] 최종 FireOrigin에 사용할 Muzzle 소켓 월드 위치입니다.
+	// [v2.125.0] 최종 FireOrigin에 사용할 Muzzle 소켓 월드 위치입니다.
 	const FVector MuzzleSocketWorldLocation = MuzzleSocketWorldTransform.GetLocation();
 	if (MuzzleSocketWorldLocation.ContainsNaN())
 	{
 		return false;
 	}
 
-	// [v2.93.0] 최종 발사 방향을 어느 기준에서 얻었는지 표시할 디버그 문자열입니다.
+	// [v2.125.0] 최종 발사 방향을 어느 기준에서 얻었는지 표시할 디버그 문자열입니다.
 	FString DirectionSourceText = TEXT("MuzzleSocketX");
 
-	// [v2.93.0] Muzzle 소켓의 X축을 기준으로 계산한 월드 발사 방향입니다.
+	// [v2.125.0] 선택된 Muzzle 소켓의 X축을 기준으로 계산한 월드 발사 방향입니다.
 	FVector MuzzleSocketForwardDirection = MuzzleSocketWorldTransform.GetUnitAxis(EAxis::X).GetSafeNormal();
 	if (MuzzleSocketForwardDirection.ContainsNaN() || MuzzleSocketForwardDirection.IsNearlyZero())
 	{
-		// [v2.93.0] Muzzle 소켓 방향이 비정상일 때 사용할 현재 터렛 조준 방향입니다.
-		const FVector AimFallbackDirection = ResolveTurretAimWorldDirection().GetSafeNormal();
-		MuzzleSocketForwardDirection = AimFallbackDirection;
+		MuzzleSocketForwardDirection = ResolveTurretAimWorldDirection().GetSafeNormal();
 		DirectionSourceText = TEXT("TurretAimFallback");
 	}
 
 	if (MuzzleSocketForwardDirection.ContainsNaN() || MuzzleSocketForwardDirection.IsNearlyZero())
 	{
-		// [v2.93.0] 터렛 조준 방향도 비정상일 때 유지할 기존 하드포인트 FireOrigin 방향입니다.
-		const FVector ExistingFireOriginDirection = InOutFireOrigin.WorldFireDirection.GetSafeNormal();
-		MuzzleSocketForwardDirection = ExistingFireOriginDirection;
+		MuzzleSocketForwardDirection = InOutFireOrigin.WorldFireDirection.GetSafeNormal();
 		DirectionSourceText = TEXT("PreviousFireOriginFallback");
 	}
 
@@ -4456,12 +4869,26 @@ bool ACFVehiclePawn::TryBuildMuzzleFireOrigin(FCFVehicleFireOrigin& InOutFireOri
 	InOutFireOrigin.bResolved = true;
 	InOutFireOrigin.WorldFireLocation = MuzzleSocketWorldLocation;
 	InOutFireOrigin.WorldFireDirection = MuzzleSocketForwardDirection;
+	InOutFireOrigin.MuzzleSocketName = SelectedMuzzleSocketName;
+	InOutFireOrigin.MuzzleSocketIndex = SelectedMuzzleSocketIndex;
+	InOutFireOrigin.MuzzleSocketCount = MuzzleSocketCount;
+
+	if (VehicleWeaponComp)
+	{
+		VehicleWeaponComp->RecordResolvedMuzzleSelection(
+			SelectedMuzzleSocketName,
+			SelectedMuzzleSocketIndex,
+			MuzzleSocketCount);
+	}
 
 	OutFireOriginSummary = FString::Printf(
-		TEXT("VehicleWeaponFireOrigin: Resolved, Source=MuzzleSocket, Profile=%s, Slot=%s, Muzzle=%s, PitchMesh=%s, DirectionSource=%s, Location=(%.1f, %.1f, %.1f), Direction=(%.3f, %.3f, %.3f)"),
+		TEXT("VehicleWeaponFireOrigin: Resolved, Source=MuzzleSocket, Mode=%s, Profile=%s, Slot=%s, Muzzle=%s, MuzzleIndex=%d, MuzzleCount=%d, PitchMesh=%s, DirectionSource=%s, Location=(%.1f, %.1f, %.1f), Direction=(%.3f, %.3f, %.3f)"),
+		bUsingLegacySingleMuzzle ? TEXT("LegacySingle") : TEXT("ConfiguredArray"),
 		*InOutFireOrigin.MountProfileId.ToString(),
 		*InOutFireOrigin.LocationSlotId.ToString(),
-		*MuzzleSocketName.ToString(),
+		*SelectedMuzzleSocketName.ToString(),
+		SelectedMuzzleSocketIndex,
+		MuzzleSocketCount,
 		*TurretPitchMeshComp->GetStaticMesh()->GetName(),
 		*DirectionSourceText,
 		InOutFireOrigin.WorldFireLocation.X,
@@ -4475,7 +4902,11 @@ bool ACFVehiclePawn::TryBuildMuzzleFireOrigin(FCFVehicleFireOrigin& InOutFireOri
 }
 
 // [v2.114.0] 터렛 정책의 최종 발사 방향과 목표 깊이 기준 Weapon Preview World 데이터를 포함한 Weapon Aim Solution을 계산합니다.
-bool ACFVehiclePawn::BuildWeaponAimSolution(FCFVehicleWeaponAimSolution& OutWeaponAimSolution, FCFVehicleFireOrigin* OutFireOrigin, FString* OutFireOriginSummary) const
+bool ACFVehiclePawn::BuildWeaponAimSolution(
+	FCFVehicleWeaponAimSolution& OutWeaponAimSolution,
+	FCFVehicleFireOrigin* OutFireOrigin,
+	FString* OutFireOriginSummary,
+	const FVector* OverrideAimTargetLocation) const
 {
 	OutWeaponAimSolution = FCFVehicleWeaponAimSolution();
 
@@ -4502,17 +4933,21 @@ bool ACFVehiclePawn::BuildWeaponAimSolution(FCFVehicleWeaponAimSolution& OutWeap
 		? VehicleCameraComp->GetCameraRuntimeState()
 		: FCFVehicleCameraRuntimeState();
 
-	// [v2.109.0] Camera Runtime에서 확인한 표면 선택용 Aim Trace Hit 여부입니다.
-	const bool bAimTraceHasBlockingHit = VehicleCameraComp
-		? CameraRuntimeState.bAimTraceHasBlockingHit
-		: LocalAimState.bLocalAimTraceHasBlockingHit;
+		// [v2.126.0] 고정 Volley 목표에서는 현재 Camera Trace를 다른 목표의 표면 일치 근거로 사용하지 않습니다.
+	const bool bAimTraceHasBlockingHit = OverrideAimTargetLocation
+		? false
+		: (VehicleCameraComp ? CameraRuntimeState.bAimTraceHasBlockingHit : LocalAimState.bLocalAimTraceHasBlockingHit);
 	OutWeaponAimSolution.bAimTraceHasBlockingHit = bAimTraceHasBlockingHit;
 
-	// [v2.114.0] Camera Aim Trace가 현재 Command 목표 표면으로 선택한 Actor입니다.
-	AActor* AimTraceHitActor = VehicleCameraComp ? CameraRuntimeState.AimTraceHitActor.Get() : nullptr;
+	// [v2.126.0] 일반 조준에서만 Camera Aim Trace가 선택한 Actor를 Command 목표 표면으로 사용합니다.
+	AActor* AimTraceHitActor = OverrideAimTargetLocation
+		? nullptr
+		: (VehicleCameraComp ? CameraRuntimeState.AimTraceHitActor.Get() : nullptr);
 
-	// [v2.109.0] Reticle이 선택한 단일 월드 목표점입니다.
-	const FVector AimTargetLocation = LocalAimState.LocalAimTargetLocation;
+	// [v2.126.0] 일반 발사는 현재 Reticle 목표를, 후속 Ripple·Salvo는 첫 입력 순간 고정 목표를 사용합니다.
+	const FVector AimTargetLocation = OverrideAimTargetLocation
+		? *OverrideAimTargetLocation
+		: LocalAimState.LocalAimTargetLocation;
 	if (AimTargetLocation.ContainsNaN() || AimTargetLocation.IsNearlyZero())
 	{
 		return false;
@@ -4854,7 +5289,98 @@ bool ACFVehiclePawn::ShouldUseProjectileActorFire() const
 	return VehicleWeaponComp->IsActiveProjectileSpawnReady();
 }
 
-// [v2.82.0] 현재 활성 ProjectileData를 사용해 FireOrigin에서 Projectile Actor를 Pool로 확보합니다.
+// [v2.136.0] WeaponData Release 설정과 명시적 첫 발사 Guidance Target Actor Snapshot으로 Direct·Angled·Vertical Launch Context를 생성합니다.
+bool ACFVehiclePawn::BuildDirectProjectileLaunchContext(
+	const FCFVehicleFireRequest& FireCommand,
+	const UCFProjectileData& InProjectileData,
+	AActor* GuidanceTargetActorSnapshot,
+	FCFProjectileLaunchContext& OutLaunchContext) const
+{
+	OutLaunchContext = FCFProjectileLaunchContext();
+
+	// [v2.127.0] Direct 호환 방향과 Muzzle Transform fallback에 사용할 정규화 조준 방향입니다.
+	const FVector DirectAimDirection = FVector(FireCommand.AimDirection).GetSafeNormal();
+	if (DirectAimDirection.ContainsNaN() || DirectAimDirection.IsNearlyZero())
+	{
+		return false;
+	}
+
+	// [v2.127.0] 실제 선택 Muzzle의 월드 위치입니다.
+	const FVector LaunchLocation = FVector(FireCommand.AimOrigin);
+	if (LaunchLocation.ContainsNaN())
+	{
+		return false;
+	}
+
+	// [v2.127.0] 실제 Muzzle 소켓 Transform을 우선하고 없으면 Direct Aim 기준 Transform을 사용합니다.
+	FTransform MuzzleWorldTransform(DirectAimDirection.Rotation(), LaunchLocation);
+	if (TurretPitchMeshComp
+		&& !FireCommand.MuzzleSocketName.IsNone()
+		&& TurretPitchMeshComp->DoesSocketExist(FireCommand.MuzzleSocketName))
+	{
+		const FTransform ResolvedMuzzleTransform = TurretPitchMeshComp->GetSocketTransform(FireCommand.MuzzleSocketName, RTS_World);
+		if (!ResolvedMuzzleTransform.ContainsNaN())
+		{
+			MuzzleWorldTransform = ResolvedMuzzleTransform;
+			MuzzleWorldTransform.SetLocation(LaunchLocation);
+		}
+	}
+
+	// [v2.127.0] 활성 WeaponData가 없거나 호환되지 않을 때 Direct 기본값을 유지할 Release 설정입니다.
+	const FCFLauncherReleaseConfig ReleaseConfig = VehicleWeaponComp
+		? VehicleWeaponComp->GetActiveLauncherReleaseConfig()
+		: FCFLauncherReleaseConfig();
+
+	// [v2.127.0] Release Mode에 따라 조준 방향, Muzzle 로컬 방향 또는 Muzzle X축에서 계산한 초기 분리 방향입니다.
+	const FVector InitialLaunchDirection = ReleaseConfig.ResolveInitialLaunchDirection(MuzzleWorldTransform, DirectAimDirection);
+	if (InitialLaunchDirection.ContainsNaN() || InitialLaunchDirection.IsNearlyZero())
+	{
+		return false;
+	}
+
+	// [v2.127.0] 발사 순간 차량의 월드 Velocity 스냅샷입니다.
+	FVector CarrierWorldVelocity = GetVelocity();
+	if (CarrierWorldVelocity.ContainsNaN())
+	{
+		CarrierWorldVelocity = FVector::ZeroVector;
+	}
+
+	// [v2.127.0] Launch Context Debug와 후속 비행 계산에 별도로 보존할 차량 속도 상속 성분입니다.
+	const FVector InheritedCarrierVelocity = ReleaseConfig.ResolveInheritedCarrierVelocity(CarrierWorldVelocity);
+
+	// [v2.127.0] 사출 속도와 차량 속도 상속을 합친 실제 초기 월드 Velocity입니다.
+	const FVector InitialLaunchVelocity = ReleaseConfig.ResolveInitialLaunchVelocity(
+		InitialLaunchDirection,
+		InProjectileData.InitialSpeed,
+		CarrierWorldVelocity);
+	if (InitialLaunchVelocity.ContainsNaN() || InitialLaunchVelocity.IsNearlyZero())
+	{
+		return false;
+	}
+
+	// [v2.127.0] 발사 명령 목표가 NaN일 때 초기 방향 앞쪽으로 복구한 안전한 명령 목표입니다.
+	FVector SafeCommandTargetLocation = FVector(FireCommand.PredictedAimTargetLocation);
+	if (SafeCommandTargetLocation.ContainsNaN())
+	{
+		SafeCommandTargetLocation = LaunchLocation + InitialLaunchDirection * FMath::Max(InProjectileData.InitialSpeed, 1.0f);
+	}
+
+	OutLaunchContext.LaunchTransform = FTransform(InitialLaunchDirection.Rotation(), LaunchLocation);
+	OutLaunchContext.InitialLaunchDirection = InitialLaunchDirection;
+	OutLaunchContext.InitialLaunchVelocity = InitialLaunchVelocity;
+	OutLaunchContext.InheritedCarrierVelocity = InheritedCarrierVelocity;
+	OutLaunchContext.CommandTargetLocation = SafeCommandTargetLocation;
+	OutLaunchContext.GuidanceTargetActor = GuidanceTargetActorSnapshot;
+	OutLaunchContext.MuzzleSocketName = FireCommand.MuzzleSocketName;
+	OutLaunchContext.MuzzleSocketIndex = FireCommand.MuzzleSocketIndex;
+	OutLaunchContext.MuzzleSocketCount = FireCommand.MuzzleSocketCount;
+	OutLaunchContext.ReleaseMode = ReleaseConfig.ReleaseMode;
+	OutLaunchContext.FireRequestId = FireCommand.FireRequestId;
+	OutLaunchContext.WeaponGroupId = FireCommand.WeaponGroupId;
+	return true;
+}
+
+// [v2.136.0] 현재 활성 ProjectileData와 현재 선택 목표 Snapshot을 사용해 Projectile Actor를 Pool로 확보하는 호환 경로입니다.
 bool ACFVehiclePawn::TrySpawnProjectileActorFromFireCommand(const FCFVehicleFireRequest& FireCommand)
 {
 	if (!VehicleWeaponComp)
@@ -4874,61 +5400,249 @@ bool ACFVehiclePawn::TrySpawnProjectileActorFromFireCommand(const FCFVehicleFire
 		return false;
 	}
 
-	// [v2.81.0] Projectile Actor 발사에 사용할 방향입니다.
-	FVector LaunchDirection = FVector(FireCommand.AimDirection).GetSafeNormal();
-	if (LaunchDirection.ContainsNaN() || LaunchDirection.IsNearlyZero())
+	// [v2.136.0] 이 호환 단발 호출이 Launch Context에 전달할 현재 선택 목표 Actor Snapshot입니다.
+	AActor* GuidanceTargetActorSnapshot = TargetSelectComp
+		? TargetSelectComp->GetSelectedTargetActor()
+		: nullptr;
+
+	// [v2.136.0] 현재 Release 설정의 방향·속도·차량 속도와 목표 Actor Snapshot을 보존하는 Launch Context입니다.
+	FCFProjectileLaunchContext LaunchContext;
+	if (!BuildDirectProjectileLaunchContext(FireCommand, *ActiveProjectileData, GuidanceTargetActorSnapshot, LaunchContext))
 	{
 		return false;
 	}
 
-	// [v2.81.0] Projectile Actor를 스폰할 Transform입니다.
-	const FTransform ProjectileSpawnTransform(LaunchDirection.Rotation(), FVector(FireCommand.AimOrigin));
-
-	// [v2.82.0] Pool에서 재사용하거나 새로 확보한 공통 Projectile Actor입니다.
-	ACFProjectileActor* AcquiredProjectileActor = ProjectilePoolComp->AcquireProjectile(
+	// [v2.127.0] Pool에서 재사용하거나 새로 확보해 Release-aware Launch Context로 활성화한 공통 Projectile Actor입니다.
+	ACFProjectileActor* AcquiredProjectileActor = ProjectilePoolComp->AcquireProjectileWithContext(
 		ActiveProjectileData,
-		ProjectileSpawnTransform,
-		LaunchDirection,
+		LaunchContext,
 		this);
 
 	return AcquiredProjectileActor != nullptr;
 }
 
-// [v2.63.0] Fire 입력을 싱글플레이 로컬 발사 경로로 처리합니다.
+// [v2.136.0] 검증 승인된 명령을 명시적 목표 Actor Snapshot과 함께 Projectile 또는 HitScan 실행 경로로 처리합니다.
+bool ACFVehiclePawn::ExecuteAcceptedFireCommand(
+	const FCFVehicleFireRequest& FireCommand,
+	FCFVehicleFireResult& InOutFireResult,
+	AActor* GuidanceTargetActorSnapshot,
+	const bool bAllowProjectileFallback)
+{
+	if (!InOutFireResult.bAccepted)
+	{
+		return false;
+	}
+
+	if (!ShouldUseProjectileActorFire())
+	{
+		// HitScan은 ValidateFireCommandInternal 단계에서 이미 Trace와 Damage를 실행했습니다.
+		return true;
+	}
+
+	// [v2.127.0] 현재 발사 실행에 사용할 활성 ProjectileData입니다.
+	UCFProjectileData* ActiveProjectileData = VehicleWeaponComp
+		? VehicleWeaponComp->GetActiveProjectileData()
+		: nullptr;
+	if (!ActiveProjectileData || !ActiveProjectileData->ProjectileActorClass)
+	{
+		InOutFireResult.bAccepted = false;
+		InOutFireResult.RejectReason = ECFVehicleFireRejectReason::NoWeapon;
+		return false;
+	}
+
+	// [v2.136.0] Pool Acquire와 사출 안전 검사가 함께 사용할 위치·Actor 목표 Snapshot 포함 Launch Context입니다.
+	FCFProjectileLaunchContext LaunchContext;
+	if (!BuildDirectProjectileLaunchContext(FireCommand, *ActiveProjectileData, GuidanceTargetActorSnapshot, LaunchContext))
+	{
+		InOutFireResult.bAccepted = false;
+		InOutFireResult.RejectReason = ECFVehicleFireRejectReason::InvalidAimDirection;
+		return false;
+	}
+
+	// [v2.127.0] Angled·Vertical은 Command Target이 아니라 실제 InitialLaunchDirection 앞쪽의 즉시 장애물만 검사합니다.
+	const FCFLauncherReleaseConfig ReleaseConfig = VehicleWeaponComp->GetActiveLauncherReleaseConfig();
+	const float ClearanceTraceDistanceCm = ReleaseConfig.GetEffectiveLauncherClearanceTraceDistanceCm();
+	if (LaunchContext.ReleaseMode != ECFProjectileReleaseMode::Direct
+		&& ClearanceTraceDistanceCm > KINDA_SMALL_NUMBER)
+	{
+		// [v2.127.0] 비Direct 사출 안전 검사를 시작할 실제 Muzzle 위치입니다.
+		const FVector TraceStart = LaunchContext.LaunchTransform.GetLocation();
+
+		// [v2.127.0] 비Direct 사출 안전 검사가 사용할 정규화 초기 분리 방향입니다.
+		const FVector TraceDirection = LaunchContext.InitialLaunchDirection.GetSafeNormal();
+
+		// [v2.127.0] 사출 안전 Trace를 실행할 현재 World입니다.
+		UWorld* World = GetWorld();
+		if (World && !TraceStart.ContainsNaN() && !TraceDirection.ContainsNaN() && !TraceDirection.IsNearlyZero())
+		{
+			// [v2.127.0] 설정된 안전 검사 거리 앞쪽의 Trace 종료점입니다.
+			const FVector TraceEnd = TraceStart + TraceDirection * ClearanceTraceDistanceCm;
+
+			// [v2.127.0] 사출 경로의 첫 Blocking Hit 결과입니다.
+			FHitResult ReleaseHitResult;
+
+			// [v2.127.0] 발사 차량 자신을 제외한 사출 경로 Query 설정입니다.
+			FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(CarFightLauncherReleaseTrace), false);
+			QueryParams.AddIgnoredActor(this);
+
+			// [v2.127.0] 실제 초기 사출 방향 앞쪽이 Blocking Hit으로 막혔는지 여부입니다.
+			const bool bReleasePathBlocked = World->LineTraceSingleByChannel(
+				ReleaseHitResult,
+				TraceStart,
+				TraceEnd,
+				CFCollisionChannels::WeaponHit,
+				QueryParams);
+			if (bReleasePathBlocked)
+			{
+				// [v2.127.0] 사출 경로에서 처음 적중한 Actor입니다.
+				AActor* HitActor = ReleaseHitResult.GetActor();
+
+				// [v2.127.0] 적중 Actor가 기존 정책상 정상 타격 대상으로 허용할 피해 가능 차량인지 여부입니다.
+				const bool bHitDamageableVehicle = IsValid(HitActor)
+					&& IsValid(HitActor->FindComponentByClass<UCFVehicleHealthComp>());
+				if (!bHitDamageableVehicle)
+				{
+					InOutFireResult.bAccepted = false;
+					InOutFireResult.RejectReason = ECFVehicleFireRejectReason::MuzzleBlocked;
+					InOutFireResult.ValidationAimTargetLocation = ReleaseHitResult.ImpactPoint;
+					InOutFireResult.LocalHitLocation = ReleaseHitResult.ImpactPoint;
+					InOutFireResult.LocalHitNormal = ReleaseHitResult.ImpactNormal;
+					return false;
+				}
+			}
+		}
+	}
+
+	// [v2.127.0] 안전 검사에 사용한 같은 Launch Context 인스턴스를 Pool 활성화에 전달해 방향·목표·차량 속도 Snapshot 불일치를 방지합니다.
+	ACFProjectileActor* AcquiredProjectileActor = ProjectilePoolComp
+		? ProjectilePoolComp->AcquireProjectileWithContext(ActiveProjectileData, LaunchContext, this)
+		: nullptr;
+	if (AcquiredProjectileActor)
+	{
+		return true;
+	}
+
+	// [v2.127.0] 기존 Direct 첫 발만 Pool 실패 시 Dummy HitScan fallback을 유지하며 Ejection은 실패 정책으로 넘깁니다.
+	if (bAllowProjectileFallback && LaunchContext.ReleaseMode == ECFProjectileReleaseMode::Direct)
+	{
+		RunLocalDummyHitScan(FireCommand, InOutFireResult);
+		return true;
+	}
+
+	InOutFireResult.bAccepted = false;
+	InOutFireResult.RejectReason = ECFVehicleFireRejectReason::NoWeapon;
+	return false;
+}
+
+// [v2.136.0] LauncherComp가 예약한 후속 발사를 첫 발사 순간 위치·Actor Snapshot과 다음 Muzzle로 실행합니다.
+bool ACFVehiclePawn::ExecuteScheduledLauncherShot(
+	const int32 VolleyId,
+	const int32 SequenceShotIndex,
+	const FVector& CommandTargetLocation,
+	AActor* GuidanceTargetActorSnapshot)
+{
+	(void)VolleyId;
+	(void)SequenceShotIndex;
+
+	// [v2.126.0] 첫 발사 순간 Command Target 위치를 유지하면서 현재 Muzzle을 다시 해결한 후속 발사 요청입니다.
+	FCFVehicleFireRequest ScheduledFireRequest = BuildFireCommandForTarget(CommandTargetLocation, true);
+
+	// [v2.126.0] 후속 발사의 검증과 실행 결과입니다.
+	FCFVehicleFireResult ScheduledFireResult;
+
+	// [v2.126.0] 후속 발사에서는 입력 단위 Weapon 쿨다운만 우회하고 나머지 조건을 동일하게 검증한 결과입니다.
+	const bool bFireCommandAccepted = ValidateFireCommandInternal(ScheduledFireRequest, ScheduledFireResult, true);
+
+	// [v2.136.0] 첫 발사 순간 Guidance Target Actor Snapshot을 현재 TargetSelect 재조회 없이 Launch Context에 전달한 실행 결과입니다.
+	const bool bFireCommandExecuted = bFireCommandAccepted
+		&& ExecuteAcceptedFireCommand(ScheduledFireRequest, ScheduledFireResult, GuidanceTargetActorSnapshot, false);
+
+	ApplyFireResultInternal(ScheduledFireRequest, ScheduledFireResult, false);
+	return bFireCommandExecuted && ScheduledFireResult.bAccepted;
+}
+
+// [v2.63.0] 현재 후보 선택 입력을 처리합니다.
 void ACFVehiclePawn::HandleSelectTargetStarted(const FInputActionValue&)
 {
 	ConfirmCurrentTargetCandidate();
 }
 
+// [v2.120.0] 현재 선택 대상을 Manual 사유로 해제합니다.
 void ACFVehiclePawn::HandleClearTargetStarted(const FInputActionValue&)
 {
 	ClearSelectedTargetManually();
 }
 
+// [v2.136.0] Fire 입력 순간 위치·Actor 목표 Snapshot을 캡처해 첫 발과 모든 후속 발사에 같은 값으로 전달합니다.
 void ACFVehiclePawn::HandleFireStarted(const FInputActionValue&)
 {
 	LastFireRequest = BuildFireCommand();
 
-	// [v2.63.0] 로컬 발사 검증 결과를 담을 임시 결과입니다.
+	// [v2.126.0] 진행 중인 Ripple·Salvo 시퀀스가 새 입력으로 교체되지 않도록 사용할 발사 결과입니다.
 	FCFVehicleFireResult FireResult;
-
-	// [v2.81.0] 로컬 발사 검증이 승인되었는지 여부입니다.
-	const bool bFireCommandAccepted = ValidateFireCommand(LastFireRequest, FireResult);
-	if (bFireCommandAccepted && ShouldUseProjectileActorFire())
+	if (LauncherComp && LauncherComp->IsFireSequenceActive())
 	{
-		// [v2.81.0] Projectile Actor 스폰이 성공했는지 여부입니다.
-		const bool bProjectileActorSpawned = TrySpawnProjectileActorFromFireCommand(LastFireRequest);
-		if (!bProjectileActorSpawned)
-		{
-			RunLocalDummyHitScan(LastFireRequest, FireResult);
-		}
+		FireResult.FireRequestId = LastFireRequest.FireRequestId;
+		FireResult.ValidationAimTargetLocation = LastFireRequest.PredictedAimTargetLocation;
+		FireResult.LocalHitLocation = LastFireRequest.PredictedAimTargetLocation;
+		FireResult.bAccepted = false;
+		FireResult.RejectReason = ECFVehicleFireRejectReason::WeaponCooldown;
+		ApplyFireResultInternal(LastFireRequest, FireResult, false);
+		return;
 	}
 
-	ApplyFireResult(LastFireRequest, FireResult);
+	// [v2.136.0] 첫 Projectile과 같은 Volley의 모든 후속 Projectile이 공유할 발사 순간 선택 목표 Actor Snapshot입니다.
+	AActor* GuidanceTargetActorSnapshot = TargetSelectComp
+		? TargetSelectComp->GetSelectedTargetActor()
+		: nullptr;
+
+	// [v2.126.0] 첫 Projectile은 기존 쿨다운을 포함한 전체 검증과 기존 Projectile 실패 fallback을 유지합니다.
+	const bool bFireCommandAccepted = ValidateFireCommand(LastFireRequest, FireResult);
+	if (bFireCommandAccepted)
+	{
+		ExecuteAcceptedFireCommand(LastFireRequest, FireResult, GuidanceTargetActorSnapshot, true);
+	}
+
+	// [v2.126.0] 현재 WeaponData가 정의한 안전 보정된 발사 패턴 설정입니다.
+	const FCFLauncherFirePatternConfig FirePatternConfig = VehicleWeaponComp
+		? VehicleWeaponComp->GetActiveLauncherFirePatternConfig()
+		: FCFLauncherFirePatternConfig();
+
+	// [v2.126.0] 첫 승인 시점에 쿨다운을 시작하는 정책인지 여부입니다.
+	const bool bRecordCooldownOnFirstAcceptedProjectile = !LauncherComp
+		|| FirePatternConfig.CooldownStartPolicy == ECFLauncherCooldownStartPolicy::FirstAcceptedProjectile;
+	ApplyFireResultInternal(LastFireRequest, FireResult, bRecordCooldownOnFirstAcceptedProjectile);
+
+	if (FireResult.bAccepted && LauncherComp)
+	{
+		// [v2.136.0] 첫 발사 순간 위치·Actor 목표 Snapshot과 남은 Ripple·Salvo 시퀀스를 시작한 결과입니다.
+		const bool bSequenceStarted = LauncherComp->StartFireSequenceAfterFirstAcceptedShot(
+			FirePatternConfig,
+			FVector(LastFireRequest.PredictedAimTargetLocation),
+			GuidanceTargetActorSnapshot,
+			LastFireRequest.ClientFireTimeSeconds);
+
+		if (!bSequenceStarted
+			&& !bRecordCooldownOnFirstAcceptedProjectile
+			&& VehicleWeaponComp)
+		{
+			// 시퀀스 시작 실패에서도 첫 발의 쿨다운이 누락되어 반복 발사가 열리지 않게 보호합니다.
+			VehicleWeaponComp->RecordAcceptedFire(LastFireRequest.ClientFireTimeSeconds);
+		}
+	}
 }
 
-// [v2.63.0] 로컬 발사 결과를 Pawn과 AimComp 상태에 반영합니다.
+// [v2.63.0] 기존 단발 호출자는 승인 발사 시 쿨다운을 즉시 기록하는 호환 경로를 유지합니다.
 void ACFVehiclePawn::ApplyFireResult(const FCFVehicleFireRequest& FireCommand, const FCFVehicleFireResult& FireResult)
+{
+	ApplyFireResultInternal(FireCommand, FireResult, true);
+}
+
+// [v2.126.0] 승인 발사 결과의 Muzzle·FX·피드백은 유지하면서 쿨다운 기록 여부만 호출자가 선택하게 합니다.
+void ACFVehiclePawn::ApplyFireResultInternal(
+	const FCFVehicleFireRequest& FireCommand,
+	const FCFVehicleFireResult& FireResult,
+	const bool bRecordCooldown)
 {
 	LastFireRequest = FireCommand;
 	LastFireResult = FireResult;
@@ -4938,7 +5652,14 @@ void ACFVehiclePawn::ApplyFireResult(const FCFVehicleFireRequest& FireCommand, c
 
 	if (FireResult.bAccepted && VehicleWeaponComp)
 	{
-				VehicleWeaponComp->RecordAcceptedFire(FireCommand.ClientFireTimeSeconds);
+		if (bRecordCooldown)
+		{
+			VehicleWeaponComp->RecordAcceptedFire(FireCommand.ClientFireTimeSeconds);
+		}
+		VehicleWeaponComp->AdvanceMuzzleSequenceAfterAcceptedFire(
+			FireCommand.MuzzleSocketName,
+			FireCommand.MuzzleSocketIndex,
+			FireCommand.MuzzleSocketCount);
 
 		UCFWeaponData* ActiveWeaponData = VehicleWeaponComp->GetActiveWeaponData();
 		if (CombatFxComp && ActiveWeaponData)

@@ -1,304 +1,417 @@
 # CarFight Code Work Gate
 
-- 문서 버전: v1.1
+- 문서 버전: v2.2
 - 작성일: 2026-07-16
-- 최근 갱신일: 2026-07-16
+- 최근 갱신일: 2026-08-02
 - 문서 상태: Current
-- 적용 범위: 웹브라우저 AI가 지휘하는 CarFight, AssetDump, GoPyMCP의 실제 코드·설정·스크립트 작업 준비
+- 적용 범위: `main_game` CarFight 저장소의 실제 코드·설정·스크립트 작업
 
 ---
 
 ## 1. 최우선 원칙
 
-이 문서는 웹브라우저 AI의 코드 작업 준비 게이트다.
+이 문서는 CarFight 코드 작업의 최우선 실행 게이트다.
 루트 `AGENTS.md`의 일반 코드 작성 규칙, 구현 절차와 개별 Plan보다 먼저 적용한다.
 
 ```text
-웹브라우저 AI 세션
-= 분석, 설계, TaskSource 작성, Codex용 최종 작업지시서 생성과 전달 담당
+현재 AI 세션
+= 저장소 분석
++ 설계와 작업 범위 확정
++ 실제 코드·설정·스크립트 수정
++ 빌드와 자동 테스트
++ Git diff 검수
++ 관련 문서 동기화
 
-별도 Codex 세션 또는 사용자가 선택한 Codex 환경
-= 전달받은 최종 작업지시서에 따라 실제 코드 수정과 자동 검증 수행
-
-웹브라우저 AI의 후속 검수 세션
-= Codex 적용 후 실제 Git diff, 빌드, 테스트와 PIE 결과 검수 담당
+사용자
+= Unreal Editor에서 필요한 Blueprint·DataAsset·Niagara·바이너리 에셋 작업
++ 사용자 조작이 필요한 PIE 시각·감각 검증
 ```
 
-웹브라우저 AI는 C++, Go, Python, PowerShell, 배치 파일, 빌드 스크립트와 텍스트 설정을 기본적으로 직접 수정하지 않는다.
-작은 수정, 한 줄 수정, 컴파일 오류 수정과 후속 보정도 먼저 Codex용 작업지시서로 만든다.
+CarFight의 코드 작업은 현재 AI 세션이 승인된 저장소 도구를 사용해 직접 수행하는 것을 기본 경로로 한다.
+작은 수정, 한 줄 수정, 컴파일 오류 수정, 기능 구현과 후속 보정 모두 동일한 직접 구현 절차를 따른다.
 
-**웹브라우저 AI 세션에 Codex 실행 도구가 연결되어 있을 필요는 없다.**
-`plan.*` 기능은 Codex를 실행하는 기능이 아니라 Codex가 읽을 TaskSource와 최종 YAML 작업지시서를 생성하는 기능이다.
-Codex 실행기 미연결은 정상 상태이며 작업지시서 생성을 중단하는 사유가 아니다.
+TaskSource, WorkOrder와 Codex YAML은 복잡한 작업을 구조화하거나 외부 실행을 명시적으로 선택할 때 사용할 수 있는 보조 산출물이다.
+이 산출물이 없다는 이유만으로 직접 구현을 차단하지 않는다.
 
-이 규칙은 사용자가 세션 복원 문구를 사용했는지와 관계없이 모든 새 브라우저 세션의 코드 작업 요청에 적용한다.
+별도 Codex 위임은 기본 경로가 아니다.
+사용자가 특정 작업을 별도 Codex 환경으로 넘기라고 명시했을 때만 선택적으로 사용한다.
 
 ---
 
-## 2. 코드 작업으로 분류하는 범위
+## 2. 적용 범위
 
-다음 중 하나를 변경하도록 Codex에 지시해야 하는 작업은 코드 작업으로 분류한다.
+다음 경로 또는 형식의 변경은 코드 작업으로 분류한다.
 
 ```text
 UE/Source/**
 UE/Config/**
 Tools/**
-UE/Plugins/*/Source/**
-UE/Plugins/*/Scripts/**
-GoPyMCP/Workspace/core/**
-GoPyMCP/Workspace/adapters/**
-GoPyMCP/Config/**
 *.Build.cs
 *.Target.cs
 *.cpp
 *.h
-*.go
-*.py
-*.ps1
-*.bat
-*.cmd
 *.ini
 *.json
 *.yaml
 *.yml
+*.py
+*.ps1
+*.bat
+*.cmd
 ```
 
-문서 전용 수정, 읽기 전용 분석, 조사, 코드 리뷰와 사용자가 Unreal Editor에서 직접 수행하는 Blueprint·바이너리 에셋 작업은 이 게이트의 코드 수정 대상에서 제외한다.
-단, 문서 작업 중 실제 코드 파일 변경이 필요해지면 브라우저 AI는 직접 수정하지 않고 Codex용 작업지시서 생성 단계로 전환한다.
+`UE/Plugins/ue-assetdump`와 `GoPyMCP`는 독립 Git 저장소다.
+해당 저장소 내부 작업은 그 저장소의 가장 가까운 `AGENTS.md`, 문서 진입점과 자체 작업 방침을 따른다.
+CarFight 정책을 독립 저장소 내부에 자동 적용하지 않는다.
+
+문서 전용 수정, 읽기 전용 분석과 코드 리뷰는 코드 빌드가 필수는 아니다.
+Blueprint, DataAsset, Niagara, StaticMesh와 기타 바이너리 에셋은 사용자가 Unreal Editor에서 직접 편집할 수 있으며, AI는 정확한 적용 절차와 검증 기준을 제공한다.
 
 ---
 
-## 3. 새 세션 필수 진입
+## 3. 코드 작업 전 필수 확인
 
-CarFight 관련 코드 작업 요청을 받은 웹브라우저 AI는 사용자의 첫 문구가 무엇이든 다음 순서를 먼저 수행한다.
+코드·설정·스크립트를 수정하기 전에 다음 순서를 수행한다.
 
 ```text
-1. 작업 소유 저장소 판별
-2. 소유 저장소 Git 브랜치와 미커밋 변경 확인
+1. 작업 소유 저장소 확인
+2. Git 브랜치, upstream과 미커밋 변경 확인
 3. 루트 또는 가장 가까운 AGENTS.md 확인
 4. 이 CodeWorkGate 확인
-5. 해당 저장소 Document Entry 확인
-6. 관련 ProjectSSOT·Systems·대표 Plan과 실제 코드 확인
-7. 작업 범위, 보호 범위, 완료 조건과 검증 방법 확정
+5. Document/Document_Entry.md 확인
+6. ActiveWork와 관련 ProjectSSOT 확인
+7. 관련 Systems, 대표 Plan과 실제 코드 확인
+8. 이번 작업의 목표와 완료 조건 확정
+9. 변경 허용 파일과 보호 범위 확정
+10. 빌드·자동 테스트·PIE 검증 방법 확정
 ```
 
-위 확인 전에는 소스·설정·스크립트 쓰기 도구를 호출하지 않는다.
-사용자가 `이전 작업 이어서 진행해줘` 또는 특정 작업 재개 문구를 사용하지 않았다는 이유로 이 절차를 생략하지 않는다.
+위 확인 전에는 쓰기 도구를 호출하지 않는다.
+이전 대화나 AI 기억보다 현재 Git 상태, 실제 코드와 현재 문서를 우선한다.
 
 ---
 
-## 4. 브라우저 AI 세션의 필수 산출물
+## 4. 직접 구현 기본 절차
 
-브라우저 AI가 코드 작업 준비를 완료하려면 다음 산출물이 필요하다.
-
-```text
-대표 Plan
-→ 현재 구현, 남은 작업과 설계 의도 확인
-
-TaskSource
-→ 목적, 근거, 허용 경로, 보호 범위, 구현 요구사항, 완료·실패 조건과 검증 방법
-
-최종 Codex 작업지시서
-→ Codex가 직접 읽을 최종 YAML 입력
-→ 대상 파일, 금지사항, 구현 요구, 빌드·테스트와 결과 보고 형식 포함
-```
-
-TaskSource와 최종 Codex 작업지시서는 반드시 작업을 소유한 저장소의 Plan 폴더에 둔다.
-CarFight, AssetDump와 GoPyMCP의 내부 작업지시서를 다른 저장소 문서체계에 복사하지 않는다.
-
-### 4.1 Plan 기능의 역할
-
-상황에 따라 다음 기능을 사용한다.
-
-- 새 요청과 폴더 문맥으로 TaskSource·최종 계약을 만들 때: `plan.build_from_folder_request`
-- 기존 문서에서 TaskSource를 합성할 때: `plan.synthesize_task_source`
-- TaskSource의 부족 슬롯을 보완할 때: `plan.refine_task_source`
-- 큰 작업을 작은 작업 단위로 나눌 때: `plan.decompose_tasks`
-- TaskSource에서 Codex 계약들을 생성할 때: `plan.generate_task_contracts`
-- 단일 최종 Codex 입력을 만들 때: `plan.build_codex_task`
-- 사용자용 문서와 Codex용 YAML을 함께 컴파일할 때: `plan.compile_outputs`
-
-이 기능들은 **Codex 프로세스를 실행하지 않는다.**
-최종 YAML을 생성하고 품질·증거 게이트 결과를 반환한다.
-
-### 4.2 기본 생성 순서
+현재 AI 세션은 다음 순서로 작업한다.
 
 ```text
-1. plan.build_from_folder_request 또는 plan.synthesize_task_source
-2. quality_gate와 repair_plan 확인
-3. 필요한 경우 plan.refine_task_source 또는 plan.decompose_tasks
-4. plan.build_codex_task, plan.generate_task_contracts 또는 plan.compile_outputs
-5. final_output_ready == true 확인
-6. 최종 Codex YAML 실제 경로 확인
-7. 사용자에게 TaskSource와 최종 YAML 경로 전달
+1. 현재 구현과 호출 흐름 읽기
+2. 변경 영향도와 회귀 위험 분석
+3. 수정 파일과 구현 단위를 작게 고정
+4. 승인된 저장소 쓰기 도구로 직접 수정
+5. 수정 직후 Git diff 확인
+6. 필요한 빌드 또는 자동 테스트 실행
+7. 실패 시 로그 근거로 같은 범위 안에서 보정
+8. 성공 후 사용자 PIE 또는 Editor 작업 절차 제공
+9. 대표 Plan, ActiveWork, ProjectSSOT 또는 Systems 중 필요한 문서만 동기화
+10. 변경 파일, 검증 결과, 미검증 항목과 다음 단계를 보고
 ```
 
-`final_output_ready == false`이면 원인을 보고하고 repair_plan을 적용해 작업지시서를 보강한다.
-Codex 실행 도구가 없다는 이유로 `Blocked` 처리하지 않는다.
+구현과 검증은 가능한 한 같은 세션에서 끝낸다.
+빌드나 테스트가 가능한 작업을 코드 수정만 하고 완료 처리하지 않는다.
 
 ---
 
-## 5. 브라우저 AI 세션 완료 판정
+## 5. 기존 미커밋 변경 보호
 
-브라우저 AI의 **작업지시서 작성 단계**는 다음 조건을 모두 만족하면 완료다.
-
-- TaskSource가 실제 경로에 존재한다.
-- 최종 Codex YAML이 실제 경로에 존재한다.
-- `quality_gate.passed == true`다.
-- `evidence_gate.passed == true`다.
-- `final_output_ready == true`다.
-- 허용 변경 경로와 보호 범위가 명시되어 있다.
-- 완료 조건, 실패 조건과 검증 방법이 명시되어 있다.
-- 사용자의 명시적 요청 없는 commit·push·reset·checkout·stash 금지가 포함되어 있다.
-- 사용자에게 TaskSource와 최종 YAML 경로를 전달했다.
-
-이 단계의 완료 상태는 다음처럼 기록한다.
+미커밋 변경이 존재해도 자동으로 작업을 중단하지 않는다.
+다만 다음 원칙을 강제한다.
 
 ```text
-Codex Work Order: Ready for External Codex
+- 기존 dirty 파일을 작업 대상이라는 이유만으로 전체 교체하지 않는다.
+- 사용자가 만든 변경을 임의로 정리하거나 되돌리지 않는다.
+- 수정 전 해당 파일의 현재 내용을 읽고 필요한 최소 범위만 변경한다.
+- unrelated 파일과 중첩 저장소 변경을 건드리지 않는다.
+- 충돌 가능성이 높으면 작업 범위를 더 작게 분리한다.
+- 안전한 최소 변경 범위를 확정할 수 없을 때만 Blocked로 판정한다.
 ```
 
-이 상태는 실제 코드 수정 완료를 의미하지 않는다.
-별도 Codex 환경에서 작업지시서를 실행하기 전까지 코드 변경 상태는 `Not Started`다.
+기존 변경과 새 변경이 같은 파일에 공존하면 Git diff에서 이번 작업의 변경 범위를 구분해 보고한다.
 
 ---
 
-## 6. 별도 Codex 실행과 후속 검수
+### 5.1 공용 통합 파일 단일 소유 — 2026-08-02 추가
 
-실제 Codex 실행은 다음 중 하나에서 이루어진다.
-
-- 사용자가 여는 Codex 작업 세션
-- 별도로 연결된 Codex 환경
-- 향후 Codex 실행 도구가 제공되는 환경
-
-브라우저 AI 세션은 Codex 실행기가 없다는 이유로 작업지시서 생성을 거부하지 않는다.
-실행기가 현재 연결되어 있지 않으면 다음 상태로 종료한다.
+여러 기능이 동시에 진행될 때 다음 파일은 기능별 로컬 파일이 아니라 **교차 기능 조립 지점**으로 취급한다.
 
 ```text
-Codex Work Order: Ready for External Codex
-External Codex Execution: Not Run
-Source Changes: Not Applied by Browser AI
+CFVehiclePawn.h/.cpp
+CFVehicleWeaponComp.h/.cpp
+CFVehicleData.h/.cpp
+CFWeaponData.h/.cpp
+CFProjectileActor.h/.cpp
+CFPlayerController.h/.cpp
+Document/ActiveWork.md
+Document/ProjectSSOT/03_FeatureQueue.md
+Document/Plan/README.md
 ```
 
-별도 Codex 실행 후 사용자가 검수를 요청하면 브라우저 AI는 다음을 확인한다.
+동시 작업 규칙:
 
 ```text
-1. 실제 Git diff
-2. 작업지시서의 허용 변경 범위 준수
-3. 보호 범위 침범 여부
-4. Codex가 보고한 빌드·자동 테스트 결과
-5. 필요한 추가 빌드·테스트
-6. 사용자가 수행해야 하는 PIE 결과
-7. 대표 Plan, Systems와 ActiveWork 동기화 필요 여부
+1. 기능별 세션은 자기 기능의 로컬 타입·컴포넌트·테스트 파일을 우선 수정한다.
+2. 공용 통합 파일은 한 시점에 하나의 통합 작업만 수정 소유권을 가진다.
+3. 다른 기능 세션은 필요한 Hook, 입력·출력 계약과 보호 조건만 대표 Plan에 기록한다.
+4. 공용 조립 변경은 실제 연관 기능 상태를 모두 읽은 통합 작업에서 최소 패치로 반영한다.
+5. 공용 파일 변경 뒤에는 해당 파일을 공유하는 기능의 필수 회귀를 함께 실행한다.
+6. 안전한 최소 병합 범위를 확정할 수 없으면 `Blocked — Unsafe Dirty Overlap`로 중단한다.
 ```
-
-검수 미달 항목은 새 TaskSource 또는 보정 작업지시서로 만들어 다시 외부 Codex에 전달한다.
 
 ---
 
-## 7. 대표 Plan 실행 출처 기록
+## 6. 필수 구현 품질 기준
 
-대표 Plan 체크포인트에는 단계에 맞는 다음 필드를 기록한다.
+코드 변경에는 다음 기준을 적용한다.
 
 ```text
-- 준비 방식: Plan/Codex Work Order / Browser Direct Edit (User Approved Exception) / Policy Violation
-- TaskSource: <실제 경로 또는 Missing>
-- 최종 Codex 작업지시서: <실제 YAML 경로 또는 Missing>
-- 작업지시서 상태: Ready for External Codex / Quality Gate Failed / Missing
-- 외부 Codex 실행 상태: Not Run / In Progress / PASS / FAIL / Unknown
-- 브라우저 검수: Not Started / PASS / FAIL / Pending
-- 빌드 상태: PASS / FAIL / Not Run / Unknown
-- PIE 상태: PASS / FAIL / User Validation Pending / Not Applicable / Unknown
+- 변수와 함수 이름은 책임이 드러나도록 작성
+- 새 파일명과 클래스명은 32자 이하
+- 변수와 함수 바로 위에 역할 주석 작성
+- Blueprint 노출 필드와 함수에 한국어 DisplayName·ToolTip 제공
+- 기존 함수 시그니처, 경로와 Public/Private 구조를 이유 없이 변경하지 않음
+- 무분별한 리네이밍 금지
+- null, 비활성 데이터와 기존 에셋 호환 경로 유지
+- 기능 실패가 unrelated 핵심 로직을 취소하지 않도록 책임 분리
+- Tick에서 불필요한 검색, 할당과 자산 재설정 금지
 ```
 
-TaskSource와 최종 YAML 경로가 없으면 `Plan/Codex Work Order`로 기록하지 않는다.
-사후에 문서를 만들어 원래 직접 수정이 Codex 작업이었던 것처럼 기록하지 않는다.
+구조 변경이 크면 한 번에 완성형으로 바꾸지 않고 빌드 가능한 작은 단계로 나눈다.
 
 ---
 
-## 8. 작업지시서 생성 차단 기준
+## 7. 검증 기준
 
-다음은 브라우저 AI의 작업지시서 생성이 실제로 차단되는 경우다.
+작업 성격에 따라 다음 증거를 확보한다.
 
-- `plan.*` 기능 자체가 연결되어 있지 않거나 반복 실패한다.
-- TaskSource의 필수 범위·대상 파일·완료 조건·검증 방법을 확정할 근거가 없다.
-- 품질 게이트가 실패했고 repair_plan을 수행할 근거를 확보할 수 없다.
-- 기존 dirty 변경과 충돌하여 안전한 대상 범위를 확정할 수 없다.
-- 사용자 결정 없이는 구현 방향을 하나로 확정할 수 없다.
-
-차단 상태는 다음처럼 기록한다.
+### 7.1 C++ 또는 Build.cs 변경
 
 ```text
-Blocked — Plan Work-Order Generation Unavailable
+- Git diff 검수
+- 공식 CarFight Editor 빌드
+- 관련 Automation이 있으면 실행
+- 사용자 PIE가 필요한 항목 분리
 ```
 
-**Codex 실행기가 연결되어 있지 않은 상태는 차단 기준이 아니다.**
+공식 에디터 빌드는 루트 `AGENTS.md`에 지정된 다음 경로를 사용한다.
+
+```text
+D:\Work\CarFight_git\Tools\BuildEditor.bat
+```
+
+### 7.2 설정·스크립트 변경
+
+```text
+- 구문 또는 파서 검증
+- 가능한 최소 실행 테스트
+- Git diff 검수
+- 실패 시 원복이 아니라 수정 근거와 실패 범위 기록
+```
+
+### 7.3 문서 전용 변경
+
+```text
+- 링크와 경로 확인
+- 현재 상태와 역사 기록 구분
+- 관련 현재 문서 간 표현 충돌 확인
+```
+
+### 7.4 Unreal Editor 사용자 검증
+
+AI가 직접 확인할 수 없는 시각 품질, 조작감과 에셋 연결은 다음을 제공한다.
+
+```text
+- 정확한 에셋과 메뉴 경로
+- 한국어 UI명(English)
+- 입력할 값
+- PIE 절차
+- PASS 기준
+- 실패 결과별 점검 분기
+```
+
+### 7.5 검증 결과와 실행 경로 분리
+
+빌드, Automation, AssetDump, PIE와 기타 검증은 다음 항목을 서로 분리해서 기록한다.
+
+```text
+Validation
+= 실제 검증 결과
+
+Evidence
+= Job ID, 보고서, 로그, 결과 파일 또는 사용자 확인
+
+Execution Method
+= 고정 프리셋, 공용 도구, 작업 전용 임시 경로 또는 사용자 수동 절차
+
+Reusable Entry Point
+= 다음 세션에서 그대로 다시 사용할 수 있는 공용 진입점의 존재 여부
+
+Historical Scope
+= 현재 상태인지, 특정 날짜와 체크포인트의 당시 상태인지 구분
+```
+
+다음 판정 규칙을 적용한다.
+
+```text
+- 검증 방식은 작업 성격, 현재 제공되는 도구, 허용 범위와 보호 범위에 맞게 선택한다.
+- 작업 전용 단발성 스크립트나 임시 실행 경로는 해당 검증의 실행 수단일 뿐 공용 저장소 도구로 자동 승격하지 않는다.
+- 임시 스크립트가 Git 미추적 상태라는 사실만으로 등록·재사용·공용화가 필요하다고 판정하지 않는다.
+- 과거 체크포인트의 Runner Unavailable, Tool Unavailable 또는 Not Run 기록을 현재 저장소 전체의 영구적인 실행 불가 계약으로 해석하지 않는다.
+- 현재 실행 가능 여부를 판단할 때는 현재 도구 표면, 실제 저장소 상태, 작업 허용 범위와 최신 검증 증거를 다시 확인한다.
+- 최신 검증 증거가 있으면 Current 문서는 최신 결과를 반영하고, 과거 Not Run 기록은 날짜가 있는 Changelog나 체크포인트 이력으로만 보존한다.
+- 검증을 실행하지 못했으면 도구 부재, 작업 승인 경로 미확보, 환경 실패, 작업 범위 제외 또는 사용자 검증 필요를 구체적으로 구분한다.
+```
+
+권장 기록 형식:
+
+```text
+Validation: PASS / FAIL / Not Run / Not Applicable
+Evidence: <Job, Report, Log, Result File or User Result>
+Execution Method: <Preset / Shared Tool / Task-local Temporary Path / User Procedure>
+Reusable Entry Point: Available / Not Defined / Not Applicable
+Historical Scope: Current / <Date and Checkpoint>
+```
 
 ---
 
-## 9. 직접 수정 예외
+## 8. 완료 판정
 
-브라우저 AI의 직접 코드 수정은 기본 경로가 아니다.
-다음 순서를 모두 만족해야 예외가 열린다.
+직접 코드 작업은 다음 조건을 충족해야 완료로 기록한다.
 
 ```text
-1. 브라우저 AI가 plan.* 작업지시서 생성이 불가능한 원인과 차단 범위를 사용자에게 보고
-2. 직접 수정 시 위험, 대상 파일과 검증 방법을 설명
-3. 사용자가 그 보고 이후 웹브라우저 AI의 직접 수정을 명시적으로 승인
-4. 대표 Plan에 Browser Direct Edit (User Approved Exception)으로 실행 출처 기록
+- 요청한 구현 범위가 실제 파일에 반영됨
+- Git diff에서 변경 범위와 보호 범위 준수 확인
+- 필수 빌드 또는 자동 테스트 결과 확인
+- 실패한 검증과 실행하지 못한 검증을 구분
+- 사용자 PIE가 필요하면 User Validation Pending으로 분리
+- 관련 현재 상태 문서가 실제 코드와 일치
+- commit·push 등 요청되지 않은 Git 쓰기 작업을 수행하지 않음
 ```
 
-사용자의 일반적인 `수정해줘`, `구현해줘`, `계속해줘`는 직접 수정 승인으로 해석하지 않는다.
-Codex 실행기 미연결만으로 직접 수정 예외를 요청하지 않는다.
+권장 상태 표기는 다음과 같다.
+
+```text
+Implementation Source: Browser AI Direct
+Source Changes: Applied / Not Applied / Partial
+Diff Review: PASS / FAIL / Pending
+Build: PASS / FAIL / Not Run / Not Applicable
+Automation: PASS / FAIL / Not Run / Not Applicable
+PIE: PASS / FAIL / User Validation Pending / Not Applicable
+Evidence: <Job, Report, Log, Result File or User Result>
+Execution Method: <Preset / Shared Tool / Task-local Temporary Path / User Procedure>
+Reusable Entry Point: Available / Not Defined / Not Applicable
+Historical Scope: Current / <Date and Checkpoint>
+```
+
+TaskSource와 WorkOrder가 존재하면 구현 근거로 연결할 수 있지만, 존재하지 않아도 정책 위반이 아니다.
 
 ---
 
-## 10. 정책 위반 발견 시 처리
+## 9. 차단 기준
 
-최종 Codex 작업지시서 없이 웹브라우저 AI가 코드를 직접 수정한 사실을 발견하면 다음 순서로 처리한다.
+다음 상황에서만 직접 구현을 차단한다.
 
 ```text
-1. 추가 직접 수정을 즉시 중단
-2. 기존 변경을 임의로 되돌리거나 정리하지 않음
-3. 대표 Plan에 Policy Violation과 Missing 작업지시서를 사실대로 기록
-4. 실제 Git diff와 빌드·테스트·PIE 증거를 별도로 보존
-5. 필요한 경우 현재 구현 검토·보정용 TaskSource와 최종 Codex YAML 생성
-6. 새 작업지시서는 기존 직접 수정의 사후 출처가 아니라 별도 검토·보정 작업으로 기록
+- 작업 소유 저장소 또는 대상 브랜치를 확인할 수 없음
+- 기존 dirty 변경과 충돌해 안전한 최소 변경 범위를 확정할 수 없음
+- 사용자 결정 없이는 서로 배타적인 구현 방향을 선택할 수 없음
+- 필요한 쓰기·빌드·검증 도구가 반복 실패해 결과 신뢰성을 확보할 수 없음
+- 요구사항이 현재 프로젝트 결정 또는 보호 범위와 직접 충돌함
 ```
 
-기능이 빌드와 PIE를 통과했더라도 실행 출처 위반은 별도의 `Workflow Compliance FAIL`로 기록한다.
-기능 검증 PASS를 자동으로 취소하지 않는다.
+차단 상태는 원인에 맞게 구체적으로 기록한다.
+
+```text
+Blocked — Unsafe Dirty Overlap
+Blocked — User Decision Required
+Blocked — Required Tool Unavailable
+Blocked — Project Contract Conflict
+```
+
+`plan.*` 기능, 최종 Codex YAML 또는 외부 Codex 실행기가 없다는 사실은 차단 사유가 아니다.
 
 ---
 
-## 11. Changelog
+## 10. 별도 Codex 사용
+
+사용자가 별도 Codex 실행을 명시적으로 요청한 경우에만 다음 산출물을 만들 수 있다.
+
+```text
+- TaskSource
+- 사람이 읽을 수 있는 WorkOrder
+- Codex용 YAML 또는 프롬프트
+- 허용 경로와 보호 범위
+- 빌드·테스트와 결과 보고 형식
+```
+
+이 경우에도 현재 AI 세션은 실제 Git 상태와 코드 근거를 먼저 확인한다.
+외부 결과를 받은 뒤에는 Git diff, 빌드, 테스트와 PIE 증거를 다시 검수한다.
+
+---
+
+## 11. Git 보호 규칙
+
+사용자의 명시적 요청 없이는 다음을 수행하지 않는다.
+
+```text
+commit
+push
+reset
+checkout
+stash
+rebase
+merge
+clean
+```
+
+빌드 산출물, unrelated 파일과 기존 사용자 변경을 정리 목적으로 삭제하지 않는다.
+
+---
+
+## 12. Changelog
+
+### v2.2 - 2026-08-02
+
+- 검증 결과, 증거, 실행 수단, 재실행 가능한 공용 진입점과 역사 범위를 서로 분리하는 기록 기준을 추가했다.
+- 작업 전용 단발성 스크립트와 임시 실행 경로를 공용 저장소 도구로 자동 승격하지 않도록 명시했다.
+- Git 미추적 임시 스크립트의 존재만으로 등록이나 재사용이 필요하다고 판정하지 않도록 고정했다.
+- 과거 Runner Unavailable 또는 Not Run 기록을 현재의 영구적인 실행 불가 계약으로 해석하지 않고 현재 도구·저장소·범위·최신 증거를 다시 확인하도록 했다.
+- Current 문서는 최신 검증 결과를 반영하고 과거 상태는 날짜가 있는 체크포인트 이력으로 보존하도록 구분했다.
+
+### v2.1 - 2026-08-02
+
+- `CFVehiclePawn`, VehicleWeaponComp, VehicleData, WeaponData, ProjectileActor, PlayerController와 Current 상태 색인을 교차 기능 공용 통합 파일로 지정했다.
+- 기능별 로컬 구현과 공용 조립 변경을 분리하고 공용 통합 파일은 한 시점에 하나의 통합 작업만 수정하도록 고정했다.
+- 공용 파일 변경 뒤에는 해당 파일을 공유하는 기능의 필수 회귀를 함께 실행하도록 규정했다.
+- 안전한 최소 병합 범위를 확정할 수 없는 동시 dirty 작업은 `Blocked — Unsafe Dirty Overlap`로 중단하도록 명시했다.
+
+### v2.0 - 2026-07-27
+
+- CarFight 코드 작업의 기본 주체를 별도 Codex에서 현재 AI 세션의 직접 구현으로 변경했다.
+- TaskSource·최종 Codex YAML 품질 게이트를 필수 착수 조건에서 선택적 보조 산출물로 변경했다.
+- 분석, 직접 수정, diff 검수, 빌드·자동 테스트와 문서 동기화를 하나의 기본 작업 흐름으로 통합했다.
+- 기존 dirty 변경 보호, 직접 구현 완료 기준과 구체적인 차단 기준을 정의했다.
+- 별도 Codex는 사용자가 명시적으로 요청한 경우에만 사용하는 선택 경로로 변경했다.
+- 독립 저장소인 AssetDump와 GoPyMCP는 자체 정책을 따르도록 적용 범위를 CarFight `main_game`으로 명확히 했다.
 
 ### v1.1 - 2026-07-16
 
-- `plan.*` 기능을 Codex 실행기가 아니라 Codex용 TaskSource·최종 YAML 생성기로 명확히 정의.
-- 브라우저 세션 완료 조건을 실제 코드 수정에서 `Ready for External Codex` 작업지시서 생성으로 변경.
-- Codex 실행기 미연결을 정상 상태로 정의하고 차단 기준에서 제거.
-- 작업지시서 생성 단계, 별도 Codex 실행 단계와 브라우저 후속 검수 단계를 분리.
-- 대표 Plan 필드를 작업지시서 상태와 외부 Codex 실행 상태로 분리.
-- 실제 차단 기준을 `plan.*` 사용 불가, 품질 게이트 미해결과 범위 확정 불가로 한정.
-
-### v1.0 - 2026-07-16
-
-- 웹브라우저 AI 코드 작업의 최우선 실행 게이트 최초 정의.
-- 모든 새 세션에서 사용자 트리거 문구와 무관하게 적용하도록 명시.
-- TaskSource와 Codex 계약을 코드 변경 전 필수 산출물로 지정.
-- 대표 Plan에 실행 방식과 계약·검수 출처 필드 추가.
-- Plan/Codex 사용 불가를 자동 직접 수정 예외에서 제거.
-- 정책 위반 발견 시 중단, 사실 기록과 Codex 검토·보정 절차 추가.
+- 브라우저 AI가 TaskSource와 최종 Codex YAML을 생성하고 별도 Codex가 실제 코드를 수정하는 방식을 사용했다.
+- v2.0 적용 이후 이 방식은 역사 기록이며 현재 CarFight 기본 경로가 아니다.
 
 ---
 
-## 12. Migration
+## 13. Migration
 
-- 기존 문서의 `Codex 실행 계약`은 `최종 Codex 작업지시서` 또는 `Codex 입력 YAML`로 해석한다.
-- 기존 문서의 `Codex 실행`은 브라우저 세션 내부 필수 단계가 아니라 별도 Codex 환경의 후속 단계로 해석한다.
-- 브라우저 세션은 최종 YAML 생성과 경로 전달 후 `Ready for External Codex`로 종료할 수 있다.
-- Codex 실행기가 연결되지 않았다는 이유로 작업지시서 생성을 중단하지 않는다.
-- 기존 코드와 미커밋 변경은 자동으로 되돌리지 않는다.
-- 기존 구현 중 TaskSource와 최종 Codex 작업지시서가 없는 변경은 사후 위조하지 않고 `Policy Violation` 또는 `Provenance Missing`으로 기록한다.
-- 문서 전용 변경은 기존 방식으로 계속 수행할 수 있다.
+```text
+- 새 CarFight 코드 작업은 현재 AI 세션의 직접 구현 방식으로 시작한다.
+- 기존 TaskSource와 WorkOrder는 설계 참고 자료로 유지하며 삭제하거나 실행 출처를 바꾸지 않는다.
+- 기존 문서의 Ready for External Codex, Final YAML Missing과 Plan Work-Order Generation Blocked는 당시 상태 기록으로 보존할 수 있다.
+- 현재 활성 작업에 남은 동일 표현은 직접 구현 가능 상태로 갱신한다.
+- 과거 직접 구현을 Policy Violation으로 기록한 이력은 당시 정책 기준의 역사 기록으로 유지한다.
+- v2.0 이후 TaskSource 또는 Codex YAML 없이 직접 구현한 것은 정책 위반이 아니다.
+- 기존 미커밋 변경은 자동으로 되돌리거나 정리하지 않는다.
+- 기존 문서의 Runner Unavailable, Tool Unavailable과 Execution Not Run은 해당 날짜·체크포인트의 역사 기록으로 읽으며 현재 실행 가능 여부를 대신하지 않는다.
+- 새 검증 기록은 Validation, Evidence, Execution Method, Reusable Entry Point와 Historical Scope를 필요 범위에서 분리한다.
+- 작업 전용 임시 스크립트는 명시적인 공용화 결정 없이 Git 등록이나 표준 실행기로 승격하지 않는다.
+```

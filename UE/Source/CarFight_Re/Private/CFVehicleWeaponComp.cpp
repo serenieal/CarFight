@@ -1,10 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.18.1
-// Date: 2026-07-24
+// Version: 1.22.0
+// Date: 2026-07-29
 // Description: CarFight 차량 전투 장착 프로파일과 선택 대상 사용 평가 컴포넌트 구현
-// Scope: 장착 데이터, FireOrigin, 터렛 상태와 활성 무기의 선택 대상 사용 가능 캐시를 제공합니다.
+// Scope: 장착 데이터, FireOrigin, 터렛 상태, Muzzle 순서, 런처 발사 패턴·Release 설정과 활성 무기의 선택 대상 사용 가능 캐시를 제공합니다.
 // Changelog:
+// - v1.22.0: FIT-P0-04 Snapshot EquipmentPresetData Override와 Legacy 복원 초기화를 구현.
+// - v1.21.0: 활성 WeaponData의 안전한 런처 Release 설정과 요약 Getter를 구현.
+// - v1.20.0: 활성 WeaponData의 안전한 런처 발사 패턴 설정과 요약 Getter를 구현.
+// - v1.19.0: 활성 TurretMountData 캐시, 성공 발사 기반 Muzzle 순환, Reset과 Debug 요약을 구현.
 // - v1.18.1: 이동 중 사거리 진입·이탈을 반영하도록 저빈도 선택 대상 재평가 Tick을 추가.
 // - v1.18.0: TS-P0-07 TargetSelectComp 이벤트 구독과 활성 무기 대상 평가 요청·결과·변경 알림을 구현.
 // - v1.17.0: EquipmentPresetData 내부 참조만 WeaponData / TurretMountData로 해석하고 MountProfile legacy 직접 fallback을 제거.
@@ -26,6 +30,7 @@
 // - v1.1.0: 활성 MountProfile의 DefaultWeaponData를 캐시하고 장착 타입/크기 호환성을 디버그 요약에 포함.
 // - v1.0.0: P0 Top_01 터렛 발사 원점 계산을 위한 최소 WeaponComp 구현.
 // Migration:
+// - 활성 WeaponData가 없거나 호환되지 않으면 SingleCycle / 1발 기본 패턴을 반환하고 기존 발사 결과를 유지한다.
 // - DefaultEquipmentPresetData가 지정되면 TurretMountData / WeaponData의 단일 소스로 사용하고, 프리셋 내부 참조가 비면 해당 장비 데이터는 Missing 상태가 된다.
 // - 터렛이 조준 목표를 따라가는 중이어도 발사는 막지 않으며, 시각 회전값은 TurretMountData의 Min/Max Yaw/Pitch 안에 고정한다.
 // - EquipmentPresetData 내부 TurretMountData가 비어 있으면 터렛 조준 추적은 MissingTurretMountData로 건너뛰며, 발사 / Projectile / 쿨다운 흐름은 유지한다.
@@ -111,6 +116,64 @@ void UCFVehicleWeaponComp::TickComponent(
 
 	TargetUseRefreshElapsedSeconds = 0.0f;
 	RefreshActiveWeaponTargetUseResult();
+}
+
+// [v1.20.0] 활성 WeaponData의 안전하게 보정된 런처 발사 패턴 설정을 반환합니다.
+FCFLauncherFirePatternConfig UCFVehicleWeaponComp::GetActiveLauncherFirePatternConfig() const
+{
+	if (!ActiveWeaponData || !bActiveWeaponDataCompatible)
+	{
+		return FCFLauncherFirePatternConfig();
+	}
+
+	return ActiveWeaponData->GetEffectiveLauncherFirePatternConfig();
+}
+
+// [v1.20.0] 활성 WeaponData의 런처 발사 패턴 설정을 한 줄로 반환합니다.
+FString UCFVehicleWeaponComp::GetActiveLauncherFirePatternSummary() const
+{
+	if (!ActiveWeaponData)
+	{
+		return TEXT("LauncherFirePattern: WeaponData=Missing, Pattern=SingleCycle, Projectiles=1");
+	}
+
+	if (!bActiveWeaponDataCompatible)
+	{
+		return FString::Printf(
+			TEXT("LauncherFirePattern: WeaponData=%s, Compatible=No, Fallback=SingleCycle/1"),
+			*ActiveWeaponData->WeaponId.ToString());
+	}
+
+		return ActiveWeaponData->BuildLauncherFirePatternSummary();
+}
+
+// [v1.21.0] 활성 WeaponData의 안전하게 보정된 런처 Release 설정을 반환합니다.
+FCFLauncherReleaseConfig UCFVehicleWeaponComp::GetActiveLauncherReleaseConfig() const
+{
+	if (!ActiveWeaponData || !bActiveWeaponDataCompatible)
+	{
+		return FCFLauncherReleaseConfig();
+	}
+
+	return ActiveWeaponData->GetEffectiveLauncherReleaseConfig();
+}
+
+// [v1.21.0] 활성 WeaponData의 런처 Release 설정을 한 줄로 반환합니다.
+FString UCFVehicleWeaponComp::GetActiveLauncherReleaseSummary() const
+{
+	if (!ActiveWeaponData)
+	{
+		return TEXT("LauncherRelease: WeaponData=Missing, Mode=Direct, CarrierRatio=0");
+	}
+
+	if (!bActiveWeaponDataCompatible)
+	{
+		return FString::Printf(
+			TEXT("LauncherRelease: WeaponData=%s, Compatible=No, Fallback=Direct/Carrier0"),
+			*ActiveWeaponData->WeaponId.ToString());
+	}
+
+	return ActiveWeaponData->BuildLauncherReleaseSummary();
 }
 
 FCFTargetUseRequest UCFVehicleWeaponComp::BuildActiveWeaponTargetUseRequest() const
@@ -232,6 +295,30 @@ void UCFVehicleWeaponComp::HandleSelectedTargetTrackStateChangedForWeapon(AActor
 // [v1.0.0] Owner Pawn과 VehicleData 참조를 준비합니다.
 bool UCFVehicleWeaponComp::InitializeWeaponRuntime(ACFVehiclePawn* InOwnerVehiclePawn, UCFVehicleData* InVehicleData)
 {
+	return InitializeWeaponRuntimeForActiveProfile(InOwnerVehiclePawn, InVehicleData, ActiveMountProfileId);
+}
+
+// [v1.22.0] 지정 활성 프로파일에서 VehicleData 기본 장비를 사용하는 Legacy Runtime을 초기화합니다.
+bool UCFVehicleWeaponComp::InitializeWeaponRuntimeForActiveProfile(ACFVehiclePawn* InOwnerVehiclePawn, UCFVehicleData* InVehicleData, const FName InActiveMountProfileId)
+{
+	ActiveMountProfileId = InActiveMountProfileId;
+	bUseRuntimeEquipmentPresetOverride = false;
+	RuntimeEquipmentPresetOverride = nullptr;
+	return InitializeWeaponRuntimeInternal(InOwnerVehiclePawn, InVehicleData);
+}
+
+// [v1.22.0] 지정 활성 프로파일에 Snapshot 장비 또는 빈 장착을 적용합니다.
+bool UCFVehicleWeaponComp::InitializeWeaponRuntimeFromFitting(ACFVehiclePawn* InOwnerVehiclePawn, UCFVehicleData* InVehicleData, const FName InActiveMountProfileId, UCFEquipmentPresetData* InEquipmentPresetData)
+{
+	ActiveMountProfileId = InActiveMountProfileId;
+	bUseRuntimeEquipmentPresetOverride = true;
+	RuntimeEquipmentPresetOverride = InEquipmentPresetData;
+	return InitializeWeaponRuntimeInternal(InOwnerVehiclePawn, InVehicleData);
+}
+
+// [v1.22.0] Legacy 또는 Snapshot 설정을 유지한 채 공통 Runtime 초기화를 수행합니다.
+bool UCFVehicleWeaponComp::InitializeWeaponRuntimeInternal(ACFVehiclePawn* InOwnerVehiclePawn, UCFVehicleData* InVehicleData)
+{
 	UnbindTargetSelectEvents();
 	OwnerVehiclePawn = InOwnerVehiclePawn;
 	CachedVehicleData = InVehicleData;
@@ -240,7 +327,8 @@ bool UCFVehicleWeaponComp::InitializeWeaponRuntime(ACFVehiclePawn* InOwnerVehicl
 	TargetUseRefreshElapsedSeconds = 0.0f;
 	BindTargetSelectEvents();
 	bWeaponRuntimeReady = false;
-	ActiveEquipmentPresetData = nullptr;
+		ActiveEquipmentPresetData = nullptr;
+		CachedActiveTurretMountData = nullptr;
 	bActiveEquipmentPresetCompatible = false;
 	ActiveEquipmentPresetSummary = TEXT("EquipmentPresetData: MissingOptional");
 	ActiveWeaponData = nullptr;
@@ -254,7 +342,8 @@ bool UCFVehicleWeaponComp::InitializeWeaponRuntime(ACFVehiclePawn* InOwnerVehicl
 	ActiveDamageResolutionSummary = TEXT("DamageResolution: MissingOptional");
 	bActiveProjectileSpawnReady = false;
 	ActiveProjectileExecutionSummary = TEXT("ProjectileExecution: DummyHitScanFallback");
-	LastFireOrigin = FCFVehicleFireOrigin();
+		LastFireOrigin = FCFVehicleFireOrigin();
+	ResetMuzzleSequence();
 	ResetTurretState();
 
 	if (!OwnerVehiclePawn)
@@ -351,13 +440,11 @@ bool UCFVehicleWeaponComp::UpdateTurretState(
 		return false;
 	}
 
-	// [v1.17.0] 터렛 마운트 데이터가 EquipmentPresetData에서 해석됐는지 여부입니다.
-	const bool bUsingEquipmentPresetTurretMountData = ActiveMountProfile->DefaultEquipmentPresetData && ActiveMountProfile->DefaultEquipmentPresetData->DefaultTurretMountData;
+			// [v1.22.0] Legacy 또는 Snapshot 장비에서 캐시된 활성 TurretMountData입니다.
+	UCFTurretMountData* ActiveTurretMountData = CachedActiveTurretMountData;
 
-	// [v1.17.0] 활성 EquipmentPresetData에서 해석한 터렛 마운트 데이터입니다.
-	UCFTurretMountData* ActiveTurretMountData = bUsingEquipmentPresetTurretMountData
-		? ActiveMountProfile->DefaultEquipmentPresetData->DefaultTurretMountData.Get()
-		: nullptr;
+	// [v1.22.0] 최종 Runtime EquipmentPresetData에서 TurretMountData가 해석됐는지 여부입니다.
+	const bool bUsingEquipmentPresetTurretMountData = ActiveEquipmentPresetData && ActiveTurretMountData;
 	if (!ActiveTurretMountData)
 	{
 		ResetTurretState();
@@ -587,6 +674,67 @@ void UCFVehicleWeaponComp::RecordAcceptedFire(const float AcceptedFireTimeSecond
 	LastAcceptedFireTimeSeconds = FMath::Max(AcceptedFireTimeSeconds, 0.0f);
 }
 
+// [v1.19.0] Pawn이 실제 Pitch 메쉬에서 해결한 현재 Muzzle 선택을 Debug 상태로 기록합니다.
+void UCFVehicleWeaponComp::RecordResolvedMuzzleSelection(
+	const FName MuzzleSocketName,
+	const int32 MuzzleSocketIndex,
+	const int32 MuzzleSocketCount)
+{
+	if (MuzzleSocketName.IsNone()
+		|| MuzzleSocketCount <= 0
+		|| MuzzleSocketIndex < 0
+		|| MuzzleSocketIndex >= MuzzleSocketCount)
+	{
+		LastResolvedMuzzleSocketName = NAME_None;
+		LastResolvedMuzzleSocketIndex = INDEX_NONE;
+		return;
+	}
+
+	LastResolvedMuzzleSocketName = MuzzleSocketName;
+	LastResolvedMuzzleSocketIndex = MuzzleSocketIndex;
+}
+
+// [v1.19.0] 승인된 발사에 사용된 Muzzle 다음 인덱스로 SingleCycle 상태를 진행합니다.
+void UCFVehicleWeaponComp::AdvanceMuzzleSequenceAfterAcceptedFire(
+	const FName MuzzleSocketName,
+	const int32 MuzzleSocketIndex,
+	const int32 MuzzleSocketCount)
+{
+	if (MuzzleSocketName.IsNone()
+		|| MuzzleSocketCount <= 0
+		|| MuzzleSocketIndex < 0
+		|| MuzzleSocketIndex >= MuzzleSocketCount)
+	{
+		return;
+	}
+
+	LastFiredMuzzleSocketName = MuzzleSocketName;
+	NextMuzzleSocketIndex = (MuzzleSocketIndex + 1) % MuzzleSocketCount;
+	++MuzzleSequenceAdvanceCount;
+}
+
+// [v1.19.0] SingleCycle Muzzle 인덱스와 마지막 해결·발사 상태를 기본값으로 초기화합니다.
+void UCFVehicleWeaponComp::ResetMuzzleSequence()
+{
+	NextMuzzleSocketIndex = 0;
+	LastResolvedMuzzleSocketName = NAME_None;
+	LastResolvedMuzzleSocketIndex = INDEX_NONE;
+	LastFiredMuzzleSocketName = NAME_None;
+	MuzzleSequenceAdvanceCount = 0;
+}
+
+// [v1.19.0] 현재 SingleCycle Muzzle 순서와 마지막 해결·발사 결과를 한 줄로 반환합니다.
+FString UCFVehicleWeaponComp::BuildMuzzleSequenceSummary() const
+{
+	return FString::Printf(
+		TEXT("MuzzleSequence: NextIndex=%d, LastResolved=%s, LastResolvedIndex=%d, LastFired=%s, AdvanceCount=%d"),
+		NextMuzzleSocketIndex,
+		*LastResolvedMuzzleSocketName.ToString(),
+		LastResolvedMuzzleSocketIndex,
+		*LastFiredMuzzleSocketName.ToString(),
+		MuzzleSequenceAdvanceCount);
+}
+
 // [v1.0.0] 활성 장착 프로파일과 하드포인트 슬롯에서 실제 발사 원점을 계산합니다.
 bool UCFVehicleWeaponComp::BuildFireOrigin(const FVector& FallbackAimDirection, FCFVehicleFireOrigin& OutFireOrigin)
 {
@@ -740,10 +888,32 @@ const FCFVehicleHardpointSlot* UCFVehicleWeaponComp::FindHardpointSlot(const FNa
 	return nullptr;
 }
 
+// [v1.22.0] VehicleData 기본값 또는 Snapshot Override EquipmentPresetData를 해석합니다.
+UCFEquipmentPresetData* UCFVehicleWeaponComp::ResolveActiveEquipmentPresetData(const FCFVehicleMountProfile& ActiveMountProfile) const
+{
+	return bUseRuntimeEquipmentPresetOverride
+		? RuntimeEquipmentPresetOverride.Get()
+		: ActiveMountProfile.DefaultEquipmentPresetData.Get();
+}
+
 // [v1.17.0] 활성 장착 프로파일에 연결된 EquipmentPresetData / WeaponData / ProjectileData / DamageData와 Projectile 스폰 준비 상태를 캐시합니다.
 void UCFVehicleWeaponComp::CacheActiveWeaponData(const FCFVehicleMountProfile& ActiveMountProfile)
 {
-	ActiveEquipmentPresetData = ActiveMountProfile.DefaultEquipmentPresetData;
+	// [v1.22.0] VehicleData 기본값 또는 Snapshot Override에서 최종 해석한 장비 프리셋입니다.
+	UCFEquipmentPresetData* ResolvedEquipmentPresetData = ResolveActiveEquipmentPresetData(ActiveMountProfile);
+
+	// [v1.19.0] 현재 장비 프리셋에서 새로 해석한 TurretMountData입니다.
+	UCFTurretMountData* ResolvedTurretMountData = ResolvedEquipmentPresetData
+		? ResolvedEquipmentPresetData->DefaultTurretMountData.Get()
+		: nullptr;
+
+		if (CachedActiveTurretMountData != ResolvedTurretMountData)
+	{
+		CachedActiveTurretMountData = ResolvedTurretMountData;
+		ResetMuzzleSequence();
+	}
+
+		ActiveEquipmentPresetData = ResolvedEquipmentPresetData;
 	bActiveEquipmentPresetCompatible = false;
 	ActiveEquipmentPresetSummary = TEXT("EquipmentPresetData: MissingOptional");
 	ActiveWeaponData = ActiveEquipmentPresetData ? ActiveEquipmentPresetData->DefaultWeaponData.Get() : nullptr;

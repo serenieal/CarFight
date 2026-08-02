@@ -1,8 +1,8 @@
 # CombatPlan Decision Log
 
-- 문서 버전: v0.3
+- 문서 버전: v0.7
 - 작성일: 2026-06-02
-- 최근 갱신일: 2026-06-19
+- 최근 갱신일: 2026-07-31
 - 문서 상태: Current
 - 담당 범위: CarFight 전략 / 전투 시스템 확정 결정 기록
 
@@ -10,7 +10,7 @@
 
 ## 1. 목적
 
-이 문서는 `Document/Plan/CombatPlan/`에서 확정된 중요한 결정을 시간순으로 기록한다.
+이 문서는 `Document/ProjectSSOT/CombatPlan/`에서 확정된 중요한 결정을 시간순으로 기록한다.
 
 각 상세 문서는 개별 주제의 설명을 담당하고, 이 문서는 결정의 요약과 추적을 담당한다.
 
@@ -644,7 +644,318 @@ P0 체감 테스트 후 차량 기본 속도, 거리 구간, 무기 유효거리
 
 ---
 
+### CP-D020. 로켓/미사일 유도 기준과 Target Homing 발사 조건 채택
+
+- 날짜: 2026-07-21
+- 상태: Accepted
+- 관련 문서: `06_WeaponTypes.md`, `09_LockSensorEW.md`
+
+#### 결정
+
+- 로켓과 미사일은 자체 추진 여부가 아니라 발사 후 유도 정보로 진로를 수정하는지에 따라 구분한다.
+- Target Homing Missile은 유효한 목표 Lock-on 완료 전 발사를 금지한다.
+- Target Homing Missile은 Dumb Fire를 금지한다.
+- Laser Guided Missile은 Target Lock-on 대신 레이저 조사 지점을 유도 대상으로 사용한다.
+
+#### 이유
+
+- 자체 추진 여부만으로는 로켓과 미사일을 명확하게 구분할 수 없다.
+- `락온 로켓` 같은 모호한 용어를 제거해야 한다.
+- 직접 조준 무장과 유도 무장의 플레이 역할을 명확하게 분리해야 한다.
+
+#### 영향 범위
+
+- 무기 분류
+- 발사 가능 조건 검증
+- Lock-on과 센서 시스템
+- Projectile 유도 구조
+- 전투 UI와 피드백
+- 무기 및 Projectile DataAsset 분류
+
+#### 후속 작업
+
+- 발사 후 Lock 상실 동작
+- 레이저 유도 상실 동작
+- 유도 성능 파라미터
+- 유도 무기 대응 수단
+
+---
+
+### CP-D021. 인게임 UI 우선 구현과 확장 가능한 UI 프레임워크 채택
+
+- 날짜: 2026-07-30
+- 상태: Accepted
+- 관련 문서: `14_CombatUI.md`, `Document/Plan/InGameUIPlan.md`
+
+#### 결정
+
+현재 UI 구현 범위는 인게임 전투 UI로 제한한다. 인게임 HUD는 향후 타이틀, 차고, 피팅, 임무 선택, 로딩과 결과 화면을 추가할 수 있는 LocalPlayer 소유 UI Root와 레이어 구조 안에서 관리한다.
+
+싱글플레이 Pause는 입력뿐 아니라 게임플레이 시뮬레이션 전체를 멈춘다. 기본 카메라는 외부 3인칭이며 운전석 시점은 사용하지 않고, 포탑 시점은 후속 확장 가능성을 유지한다. 탐지 UI는 지형 미니맵이 아닌 센서 Contact 기반 전투 레이더를 사용한다.
+
+#### 이유
+
+현재 인게임 UI를 Pawn이 직접 생성하는 임시 HUD로 구현하면 Pawn 교체, Pause, 향후 화면 전환과 전체 게임플로우 확장 시 구조를 다시 만들어야 한다.
+
+#### 영향 범위
+
+- UI Framework
+- 싱글플레이 Game Flow와 Pause
+- 차량 카메라와 포탑 시점
+- 센서와 Radar
+- 입력 라우팅
+- 해상도와 울트라와이드 대응
+
+#### 후속 작업
+
+`CF-FQ-032`에서 `UI-P0-01A ACFPlayerController·입력 기반`부터 시작해 World별 UI Root, 완전 Pause, View Data와 기존 HUD 이전을 단계적으로 구현한다.
+
+---
+
+### CP-D022. Shield / Armor / Vehicle Integrity 방어 계층 채택
+
+- 날짜: 2026-07-30
+- 상태: Accepted
+- 관련 문서: `08_DefenseArmor.md`, `14_CombatUI.md`
+
+#### 결정
+
+차량의 주 방어 계층은 `Shield → Armor → Vehicle Integrity`로 둔다. 부품 상태는 네 번째 체력바가 아니라 별도의 기능 상태 계층으로 관리한다.
+
+```text
+Shield 피해 단계
+→ 부품 피해 없음
+
+Armor 피해 단계
+→ 제한적 또는 경미한 부품 피해 가능
+
+Vehicle Integrity 피해 단계
+→ 본격적인 부품 피해 가능
+```
+
+#### 이유
+
+쉴드, 장갑과 차량 구조 피해가 같은 체력으로 처리되면 탄종, 방어 장비, 부품 손상과 전투 피드백의 차이가 사라진다.
+
+#### 영향 범위
+
+- Damage Pipeline
+- Shield와 Armor Runtime
+- Component Damage
+- 탄종과 관통
+- 차량 HUD
+- AI 피해 판단
+
+#### 후속 작업
+
+방어 단계별 부품 피해 배율, 쉴드 흡수·재생, 장갑 관통과 실제 Damage Result 계약을 별도 구현 기능에서 확정한다.
+
+---
+
+### CP-D023. 선택·락온 분리와 가시 식별·센서 스캔 지식 모델 채택
+
+- 날짜: 2026-07-30
+- 상태: Accepted
+- 관련 문서: `09_LockSensorEW.md`, `14_CombatUI.md`, `Document/Design/TargetSelect.md`
+
+#### 결정
+
+타겟 선택과 장비 락온은 별도 상태로 관리한다. 별도 락온 입력을 필수로 두지 않으며, 기본 방식은 선택된 타겟을 유효 조준 영역에 유지하면 장비의 락온 진행도가 상승하는 구조로 한다. 무기와 장비별 다른 획득 방식을 지원한다.
+
+선택 타겟 정보 패널은 선택 대상이 있는 동안 항상 유지한다. 공개되지 않은 필드는 `???`로 표시한다. 가시 식별과 센서 스캔은 서로 다른 정보 획득 경로이며, 분야별 Knowledge 상태로 확장 가능해야 한다.
+
+#### 이유
+
+선택은 지속 정보 조회와 장비 평가의 기준이고, 락온은 특정 장비의 사용 조건이다. 둘을 같은 상태로 만들면 직접 조준 무기, 다중 장비, 스캔과 후속 다중 락온 확장이 막힌다.
+
+#### 영향 범위
+
+- TargetSelect
+- Lock-on과 Missile
+- Sensor Contact와 Radar
+- Target Knowledge
+- Target Panel
+- 전자전과 정보 품질
+
+#### 후속 작업
+
+TargetSelect는 선택 참조와 이벤트를 유지하고, 장비 Lock과 Target Knowledge는 별도 Provider와 Runtime으로 구현한다.
+
+---
+
+### CP-D024. 무기 자원 규칙 분리와 공통 UI 채널 채택
+
+- 날짜: 2026-07-30
+- 상태: Accepted
+- 관련 문서: `10_BattFuel.md`, `11_WeaponHeat.md`, `14_CombatUI.md`
+
+#### 결정
+
+탄약, 차량 배터리, 무기 내부 충전, 무기 열, 재사용 대기시간과 재장전 상태를 하나의 게임플레이 자원으로 통합하지 않는다.
+
+에너지 계열 무기라는 이유만으로 차량 배터리를 자동 소비하지 않는다. 차량 배터리 소비 여부와 내부 충전 사용 여부는 무기 데이터에서 명시적으로 결정한다.
+
+UI는 서로 다른 자원을 공통 `Resource View Data` 채널로 표시할 수 있다. 이 공통 채널은 표현 재사용을 위한 계약이며 게임플레이 규칙 통합이 아니다.
+
+#### 이유
+
+탄약, 배터리, 충전과 열은 소비·회복·피팅·발사 제한 규칙이 다르다. 반면 무기마다 전용 Widget을 만들면 UI 확장과 유지 비용이 지나치게 커진다.
+
+#### 영향 범위
+
+- Weapon Runtime
+- Ammo와 Reload
+- Battery와 Fitting
+- Weapon Charge
+- Weapon Heat
+- Weapon HUD
+
+#### 후속 작업
+
+`CF-FQ-031`은 실제 탄약 Runtime을 소유하고, `CF-FQ-032`는 독립 자원을 표시하는 공통 UI 채널을 구현한다.
+
+---
+
+### CP-D025. 인게임 UI 구현 소유권·수명·공개 정보 계약 채택
+
+- 날짜: 2026-07-31
+- 상태: Accepted
+- 관련 문서: `14_CombatUI.md`, `Document/Plan/InGameUIPlan.md`, `Document/Plan/InGameUIDesign.md`, `Document/Plan/InGameUIRoadmap.md`
+
+#### 결정
+
+현재 P0 UI는 `UMG + Enhanced Input`을 사용하며 CommonUI는 후속 전체 게임플로우 단계에서 재검토한다.
+
+구현 소유권은 다음과 같이 분리한다.
+
+```text
+ACFPlayerController
+→ Pawn과 독립된 Pause·UI 공통 입력
+→ Mapping Context 수명과 Possession 변경 통지
+
+UCFUISubsystem
+→ LocalPlayer별 UI 상태
+→ World별 UI Root와 레이어 수명
+
+Presenter / Provider
+→ 게임플레이 상태를 공개 가능한 View Data로 변환
+
+Widget
+→ 전달된 View Data 표시
+```
+
+추가 계약:
+
+- 기존 Pawn 소유 AimReticle과 TargetSelect HUD는 `LegacyPawnOwned → UISubsystemOwned` 전환 게이트와 회귀 검증을 거쳐 단계적으로 이전한다.
+- Subsystem과 Presenter는 Pawn·Actor를 약한 참조로 관리한다.
+- World 종료 시 이전 Root와 이벤트 구독을 제거한다.
+- 게임플레이 판정용 Target Data와 플레이어 공개용 Target Knowledge View를 분리한다.
+- `Unknown`, `Unavailable`과 실제 0을 구분한다.
+- 현재 VehicleHealth는 Vehicle Integrity로만 표시하고 실제 Runtime이 없는 Shield와 Armor는 `Unavailable`로 표시한다.
+- 의미 데이터는 이벤트 기반, 공간 투영은 프레임 기반, 속도·거리·Radar는 제한 주기로 갱신한다.
+- 화면 밖 마커는 카메라 View Space 기준으로 계산한다.
+- 시각 경고는 우선순위와 `AlertKey` 기반 중복 제거를 가진다.
+
+#### 이유
+
+현재 AimReticle과 TargetSelect HUD는 Pawn이 직접 생성하고 갱신한다. 이 구조를 그대로 확장하면 Pawn 교체, Possess 해제, 레벨 전환, Pause 입력과 향후 전체 게임플로우에서 Widget 중복, 입력 잔류, 이전 데이터 구독과 비공개 정보 노출이 발생할 수 있다.
+
+#### 영향 범위
+
+- PlayerController
+- Enhanced Input과 Mapping Context
+- LocalPlayer UI Subsystem
+- UI Root와 Widget 수명
+- AimReticle과 TargetSelect HUD 마이그레이션
+- Target Knowledge와 Radar
+- 차량 방어 View Data
+- 경고와 UI Style
+- Pause 통합 검증
+
+#### 후속 작업
+
+`CF-FQ-032`의 실제 착수점은 `UI-P0-01A ACFPlayerController·입력 기반`이다. 이후 World별 Root, 완전 Pause, View Data, AimReticle 이전과 TargetSelect HUD 이전 순서로 진행한다.
+
+---
+
+### CP-D026. 인게임 UI와 피팅 기능의 공유 기반·도메인 분리 채택
+
+- 날짜: 2026-07-31
+- 상태: Accepted
+- 관련 문서: `13_Fitting.md`, `14_CombatUI.md`, `Document/Plan/InGameUIPlan.md`, `Document/Plan/InGameUIDesign.md`, `Document/Plan/InGameUIRoadmap.md`
+
+#### 결정
+
+`CF-FQ-032`는 공통 UI 기반, 인게임 HUD와 Pause만 소유한다. 피팅은 별도 기능과 별도 Plan으로 기획한다.
+
+공유 범위:
+
+```text
+- UI Root의 Screen Layer
+- 전체 화면 전환과 Focus 정책
+- 공통 UI 입력
+- 공통 UI Style
+- ResourceType / StatType 같은 표현 타입
+- 차량·무기·장갑 Definition Data
+```
+
+분리 범위:
+
+```text
+- InGame HUD View Data / Fitting Preview View Data
+- Runtime 상태 / Saved Loadout과 Fitting Draft
+- Gameplay Pawn / Garage Preview Actor
+- UCFUISubsystem / Loadout 소유 시스템
+```
+
+후속 피팅 기능은 `Saved Loadout → Draft → Validate·Preview → Commit 또는 Cancel → 출격 Runtime Snapshot` 흐름을 소유한다. 피팅 Widget은 실제 Gameplay Pawn을 직접 수정하지 않으며 P0에서는 전투 중 피팅을 허용하지 않는다.
+
+#### 이유
+
+인게임 HUD와 피팅은 화면 기반, 입력, 스타일과 원본 Definition 데이터를 공유하지만 데이터 수명과 목적은 다르다. 두 기능을 같은 View Data나 같은 Subsystem에 넣으면 전투 중 상태가 저장 로드아웃을 오염시키고, 피팅 취소·비교·미리보기와 월드 전환 수명이 복잡해진다.
+
+#### 영향 범위
+
+- UI Root와 Screen Layer
+- UI 화면 전환과 Focus
+- 공통 Style과 표현 타입
+- Loadout과 저장 시스템
+- Fitting 계산과 Validation
+- Garage Preview Actor
+- 출격 Runtime Snapshot
+- InGame HUD View Data
+
+#### 후속 작업
+
+현재는 피팅 기능 ID와 Plan을 생성하지 않는다. 실제 피팅 기획 착수 시 `13_Fitting.md`와 현재 구현을 다시 검토하고 별도 기능 ID, 대표 Plan, Design과 Roadmap을 생성한다. CommonUI 도입 여부도 그 시점에 재검토한다.
+
+---
+
 ## 4. Changelog
+
+### v0.7 - 2026-07-31
+
+- CP-D026으로 인게임 UI와 피팅 기능이 공유할 UI 기반과 분리할 데이터·도메인 경계를 확정했다.
+- CF-FQ-032는 Screen Layer와 공통 입력·Style·표현 타입만 준비하고 피팅 구현은 별도 Plan이 소유하도록 기록했다.
+- Loadout, Draft·Validate·Commit, 피팅 계산, 저장, Garage Preview와 Runtime Snapshot을 후속 피팅 기능 범위로 분리했다.
+- 피팅 기능 ID와 CommonUI 도입 여부는 실제 피팅 기획 착수 시 결정하도록 남겼다.
+
+### v0.6 - 2026-07-31
+
+- CP-D025로 인게임 UI의 PlayerController, LocalPlayer Subsystem, World별 Root와 Presenter·Widget 소유권을 확정했다.
+- UMG 기반 P0, 기존 HUD 단계 이전, 공개 정보 분리, 갱신 주기와 Alert 중복 제거 계약을 기록했다.
+- CF-FQ-032의 실제 착수점을 `UI-P0-01A ACFPlayerController·입력 기반`으로 명확히 했다.
+
+### v0.5 - 2026-07-30
+
+- CP-D021~CP-D024로 인게임 UI 프레임워크, 3층 방어, 선택·락온·지식 모델과 무기 자원 UI 계약을 기록했다.
+
+### v0.4 - 2026-07-21
+
+- CP-D020으로 Rocket과 Missile의 발사 후 유도 정보 기반 분류 기준을 확정.
+- Target Homing Missile의 유효 Lock-on 완료 전 발사 금지와 Dumb Fire 금지를 기록.
+- Laser Guided Missile의 레이저 조사 지점 유도 원칙을 기록.
+- 모호한 `락온 로켓` 용어 제거와 직접 조준·유도 무장 역할 분리의 근거를 명시.
 
 ### v0.3
 

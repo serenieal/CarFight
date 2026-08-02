@@ -1,10 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.6.0
-// Date: 2026-07-24
-// Description: CarFight 차량 무기 DataAsset
-// Scope: EquipmentPresetData가 참조할 무기 데이터, 장착 호환성과 선택 대상 사용 정책을 제공합니다.
+// Version: 1.9.0
+// Date: 2026-08-01
+// Description: CarFight 차량 무기 DataAsset과 피팅 무기 질량
+// Scope: EquipmentPresetData가 참조할 무기 데이터, 장착 호환성, 피팅 질량, 런처 발사 패턴·Release 설정과 선택 대상 사용 정책을 제공합니다.
 // Changelog:
+// - v1.9.0: CF-FQ-034 FIT-P0-02 WeaponMassKg와 안전 Getter·요약 출력을 추가.
+// - v1.8.0: Direct·AngledEjection·VerticalEjection Release 설정과 유효값·요약 Getter를 추가.
+// - v1.7.0: SingleCycle·Ripple·Salvo 발사 패턴 설정과 유효값·요약 Getter를 추가.
 // - v1.6.0: TS-P0-07 장비별 대상 분류·관계·속성·추적 상태 정책을 추가.
 // - v1.5.0: MountProfile legacy 직접 WeaponData 슬롯 제거에 맞춰 연결 기준을 EquipmentPresetData.DefaultWeaponData로 갱신.
 // - v1.4.0: DamageData 직접 참조를 제거하고 피해 데이터 소유권을 ProjectileData 단일 경로로 정리.
@@ -13,6 +16,12 @@
 // - v1.1.0: 기본 ProjectileData 직접 참조를 추가하고 기존 ProjectileDataId는 마이그레이션용으로 유지.
 // - v1.0.0: WeaponData / ProjectileData / DamageData 분리의 첫 단계로 차량 무기 DataAsset 타입을 추가.
 // Migration:
+// - 기존 WeaponData는 WeaponMassKg=0 기본값으로 현재 발사와 차량 주행 결과를 유지한다.
+// - 피팅에 사용할 WeaponData만 실제 무기 질량을 명시하며 0은 미설정 질량으로 후속 피팅 검증에서 처리한다.
+// - 기존 WeaponData는 LauncherReleaseConfig 기본값 Direct / CarrierVelocityRatio 0으로 기존 Projectile 방향·속도를 유지한다.
+// - HitScan 무기는 비Direct Release 설정이 저장돼 있어도 런타임 유효값을 Direct / 차량 속도 상속 0으로 보정한다.
+// - 기존 WeaponData는 LauncherFirePatternConfig 기본값 SingleCycle / 1발을 사용해 기존 단발 발사와 쿨다운 결과를 유지한다.
+// - LM-P0-03 Ripple·Salvo Scheduler는 적용됐으며 LM-P0-04는 각 내부 Projectile의 Launch Context를 Release 설정으로 생성한다.
 // - EquipmentPresetData.DefaultWeaponData에 이 DataAsset을 연결한다.
 // - 기존 CooldownSeconds 저장값은 로드 시 FireRatePerMinute로 환산하고, 런타임 검증은 60 / FireRatePerMinute 발사 간격을 사용한다.
 // - DefaultProjectileData가 비어 있어도 기존 Dummy HitScan / FireOrigin / 발사 간격 검증 흐름은 유지한다.
@@ -24,6 +33,7 @@
 
 #include "CoreMinimal.h"
 #include "CFTargetUseTypes.h"
+#include "CFLauncherTypes.h"
 #include "CFVehicleWeaponTypes.h"
 #include "Engine/DataAsset.h"
 #include "CFWeaponData.generated.h"
@@ -64,9 +74,13 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData", meta=(DisplayName="무기 크기 지원 여부 (Supports Weapon Size)", ToolTip="이 무기의 크기가 장착 프로파일의 최대 크기 제한 안에 들어가는지 반환합니다."))
 	bool SupportsWeaponSize(ECFVehicleWeaponSize InMountSizeLimit) const;
 
-	// [v1.0.0] 지정한 장착 타입과 크기 제한에서 이 무기를 사용할 수 있는지 반환합니다.
+		// [v1.0.0] 지정한 장착 타입과 크기 제한에서 이 무기를 사용할 수 있는지 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData", meta=(DisplayName="장착 가능 여부 (Can Use On Mount)", ToolTip="장착 타입과 크기 제한을 함께 검사해 이 무기를 해당 장착 프로파일에서 사용할 수 있는지 반환합니다."))
 	bool CanUseOnMount(ECFVehicleMountType InMountType, ECFVehicleWeaponSize InMountSizeLimit) const;
+
+	// [v1.9.0] 음수나 비유한 값을 제거한 피팅용 유효 무기 질량을 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData|Mass", meta=(DisplayName="유효 무기 질량 반환 (Get Effective Weapon Mass)", ToolTip="피팅 질량 계산에서 사용할 0 이상의 유한한 무기 질량을 kg 단위로 반환합니다."))
+	float GetEffectiveWeaponMassKg() const;
 
 	// [v1.0.0] 디버그 패널에 표시할 무기 데이터 요약 문자열을 생성합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData", meta=(DisplayName="무기 요약 생성 (Build Weapon Summary)", ToolTip="디버그 패널과 로그에 표시할 핵심 무기 데이터 요약 문자열을 생성합니다."))
@@ -76,9 +90,25 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData", meta=(DisplayName="분당 발사속도 반환 (Get Effective Fire Rate Per Minute)", ToolTip="음수를 제거한 유효 분당 발사속도를 반환합니다. 60이면 1초마다 1발입니다."))
 	float GetEffectiveFireRatePerMinute() const;
 
-	// [v1.2.0] 분당 발사속도를 실제 발사 간격 초로 환산합니다.
+			// [v1.2.0] 분당 발사속도를 실제 발사 간격 초로 환산합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData", meta=(DisplayName="발사 간격 초 반환 (Get Fire Interval Seconds)", ToolTip="분당 발사속도를 실제 발사 제한에 사용할 초 단위 발사 간격으로 환산합니다. 60이면 1초입니다."))
 	float GetFireIntervalSeconds() const;
+
+	// [v1.7.0] 음수·0·패턴 비적용 값을 안전하게 보정한 런처 발사 패턴 설정을 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData|Launcher", meta=(DisplayName="유효 런처 발사 패턴 반환 (Get Effective Launcher Fire Pattern Config)", ToolTip="SingleCycle은 항상 1발, Ripple은 안전한 간격, Salvo는 실제 발사 수 이내의 동시 처리 한도로 보정한 설정을 반환합니다."))
+	FCFLauncherFirePatternConfig GetEffectiveLauncherFirePatternConfig() const;
+
+		// [v1.7.0] 현재 런처 발사 패턴의 유효 수량·간격·실패·쿨다운 정책을 한 줄로 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData|Launcher", meta=(DisplayName="런처 발사 패턴 요약 생성 (Build Launcher Fire Pattern Summary)", ToolTip="현재 WeaponData의 발사 패턴, 유효 발사 수, Ripple 간격, Salvo 동시 처리 한도와 정책을 문자열로 반환합니다."))
+	FString BuildLauncherFirePatternSummary() const;
+
+	// [v1.8.0] 현재 무기·ProjectileData 기준으로 안전하게 보정된 런처 Release 설정을 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData|Launcher", meta=(DisplayName="유효 런처 Release 설정 반환 (Get Effective Launcher Release Config)", ToolTip="Direct 호환, 사출 방향, 사출 속력, 차량 속도 상속 비율과 안전 검사 거리를 보정해 반환합니다. HitScan은 Direct로 강제합니다."))
+	FCFLauncherReleaseConfig GetEffectiveLauncherReleaseConfig() const;
+
+	// [v1.8.0] 현재 런처 Release 모드와 사출·차량 속도 상속 설정을 한 줄로 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData|Launcher", meta=(DisplayName="런처 Release 요약 생성 (Build Launcher Release Summary)", ToolTip="Release Mode, 로컬 사출 방향, 유효 사출 속력, 차량 속도 상속 비율과 안전 검사 거리를 문자열로 반환합니다."))
+	FString BuildLauncherReleaseSummary() const;
 
 	// [v1.0.0] 무기 데이터를 식별하는 안정적인 ID입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Identity", meta=(DisplayName="무기 ID (WeaponId)", ToolTip="전투 로그, 디버그, 저장 데이터에서 이 무기를 식별할 이름입니다. 예: Proto_TurretCannon"))
@@ -88,17 +118,29 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Mount", meta=(DisplayName="무기 크기 (WeaponSize)", ToolTip="이 무기가 요구하는 장착 크기입니다. 장착 프로파일의 SizeLimit보다 작거나 같아야 합니다."))
 	ECFVehicleWeaponSize WeaponSize = ECFVehicleWeaponSize::Large;
 
-	// [v1.0.0] 이 무기가 호환되는 장착 타입 목록입니다.
+		// [v1.0.0] 이 무기가 호환되는 장착 타입 목록입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Mount", meta=(DisplayName="호환 장착 타입 (CompatibleMountTypes)", ToolTip="이 무기를 사용할 수 있는 차량 장착 타입 목록입니다. 예: Turret"))
 	TArray<ECFVehicleMountType> CompatibleMountTypes;
+
+	// [v1.9.0] 이 무기 본체가 차량 피팅 총중량에 기여하는 질량입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Mass", meta=(ClampMin="0.0", Units="kg", DisplayName="무기 질량 kg (WeaponMassKg)", ToolTip="이 무기 본체가 차량 피팅 총중량에 더하는 질량입니다. 0은 미설정이며 기존 발사 동작에는 영향을 주지 않습니다."))
+	float WeaponMassKg = 0.0f;
 
 	// [v1.0.0] 이 무기의 기본 발사 처리 방식입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Fire", meta=(DisplayName="발사 모드 (FireMode)", ToolTip="현재 무기가 HitScan 방식인지 Projectile 방식인지 구분합니다."))
 	ECFWeaponFireMode FireMode = ECFWeaponFireMode::HitScan;
 
-	// [v1.2.0] 1분 동안 발사 가능한 탄 수입니다.
+			// [v1.2.0] 1분 동안 발사 가능한 탄 수입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Fire", meta=(ClampMin="0.0", UIMin="0.0", DisplayName="분당 발사속도 (FireRatePerMinute)", ToolTip="1분 동안 발사 가능한 탄 수입니다. 예: 60이면 1초마다 1발, 120이면 0.5초마다 1발입니다."))
 	float FireRatePerMinute = 75.0f;
+
+		// [v1.7.0] 플레이어 입력 한 번을 SingleCycle·Ripple·Salvo 중 어떤 발사 시퀀스로 처리할지 정의합니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Launcher", meta=(DisplayName="런처 발사 패턴 설정 (LauncherFirePatternConfig)", ToolTip="입력당 발사체 수, Ripple 간격, Salvo 동시 처리 한도와 실패·쿨다운 정책을 정의합니다. 기본값은 기존 동작과 같은 SingleCycle 1발입니다."))
+	FCFLauncherFirePatternConfig LauncherFirePatternConfig;
+
+	// [v1.8.0] 각 Projectile이 Muzzle에서 분리될 방향·속력과 차량 속도 상속을 정의합니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Launcher", meta=(DisplayName="런처 Release 설정 (LauncherReleaseConfig)", ToolTip="Direct는 기존 직사 결과를 유지하고, AngledEjection과 VerticalEjection은 사출 속력·차량 속도 상속·실제 사출 방향 안전 검사를 사용합니다."))
+	FCFLauncherReleaseConfig LauncherReleaseConfig;
 
 	// [v1.0.0] 이 무기의 기본 유효 사거리입니다.
 UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Fire", meta=(ClampMin="0.0", DisplayName="최대 사거리 (MaxRange)", ToolTip="HitScan Trace 또는 Projectile 기준으로 사용할 기본 최대 사거리입니다."))

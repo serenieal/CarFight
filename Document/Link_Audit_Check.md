@@ -1,7 +1,7 @@
 # Link Audit Checklist (Document)
 
-- 문서 버전: v2.8
-- 최근 갱신일: 2026-07-16
+- 문서 버전: v3.0
+- 최근 갱신일: 2026-07-30
 - 문서 상태: Current
 - 역할: `Document/`의 경로, 문서 역할, 색인 등록, 기본 읽기 범위를 점검하는 체크리스트
 
@@ -71,32 +71,28 @@
 - [ ] CarFight 문서에는 독립 도구의 공개 계약과 사용 위치만 기록하고 내부 Task, 릴리스 상태와 체크포인트를 복사하지 않는다.
 - [ ] 작업 복원 전에 CarFight, AssetDump, GoPyMCP 중 소유 저장소를 먼저 판별하도록 라우터에 명시되어 있다.
 
-### 2.1.4 Plan/Codex 작업지시서 생성
+### 2.1.4 AGENTS와 Browser 작업 대문
 
-- [ ] 루트 `AGENTS.md`가 브라우저 AI의 작업지시서 생성 단계와 별도 Codex 실행 단계를 구분한다.
-- [ ] `plan.*` 기능이 Codex 실행기가 아니라 TaskSource·최종 YAML 작업지시서 생성기라고 명시되어 있다.
-- [ ] 브라우저 세션에 Codex 실행 도구가 연결되지 않은 상태를 정상으로 정의한다.
-- [ ] Codex 실행 도구 미연결을 작업지시서 생성 차단 사유로 사용하지 않는다.
-- [ ] 브라우저 세션의 완료 조건이 TaskSource와 품질 게이트를 통과한 최종 Codex YAML 생성 및 경로 전달이다.
-- [ ] `quality_gate.passed`, `evidence_gate.passed`, `final_output_ready == true`를 최종 산출물 준비 조건으로 확인한다.
-- [ ] TaskSource와 최종 Codex YAML에 목적, 현재 근거, 허용 변경 경로, 보호 범위, 완료·실패 조건과 검증 방법이 포함된다.
-- [ ] 사용자의 명시적 요청 없는 commit·push·reset·checkout·stash 금지가 최종 작업지시서에 포함된다.
-- [ ] 대표 Plan이 `Ready for External Codex`와 외부 Codex 실행 `Not Run`을 동시에 표현할 수 있다.
-- [ ] 실제 코드 수정은 별도 Codex 세션 또는 사용자가 선택한 Codex 환경에서 수행하도록 명시되어 있다.
-- [ ] 외부 Codex 실행 후 브라우저 AI가 실제 Git diff, 빌드·테스트·PIE 증거를 검수한다.
-- [ ] 검수 미달 항목은 브라우저 AI가 직접 임시 패치하지 않고 보정 TaskSource·최종 YAML로 분리한다.
+- [ ] CarFight 루트 `AGENTS.md`가 저장소 전체의 기본 작업 대문으로 존재한다.
+- [ ] `Document/AGENTS.md`가 루트 규칙을 대체하지 않고 Document 전용 차이만 추가한다.
+- [ ] Browser MCP가 대상 경로에 적용 가능한 `AGENTS.md`를 configured repository 루트부터 가장 가까운 경로 순서로 `repository_instructions`에 제공한다.
+- [ ] 제공된 `AGENTS.md` 경로와 SHA-256이 동일 `client_request_id` 범위에서 기록된다.
+- [ ] `repository_instructions`가 정책 확인을 돕는 소프트 게이트로 운영되며 별도의 서버 측 쓰기 하드 게이트를 필수로 요구하지 않는다.
+- [ ] 세션 캐시 만료나 재시작만을 이유로 정상 작업을 영구 차단하는 문서 규칙이 없다.
+- [ ] 하위 `AGENTS.md`는 해당 경로에 실제 차별 규칙이 있을 때만 존재하고 상위 규칙을 반복 복사하지 않는다.
+- [ ] 더 가까운 하위 `AGENTS.md`가 존재하면 상위 규칙에 추가하거나 명시적으로 재정의하는 범위가 분명하다.
+- [ ] `Document/Plan/AGENTS.md`가 별도 configured repository인 `plan_repo`의 루트 대문으로 존재한다.
+- [ ] `Document/Plan/AGENTS.md`가 Plan의 논리적 CarFight 소유권과 별도 Git 저장소 경계를 구분한다.
+- [ ] Plan 작업이 현재 상태나 구현을 판단할 때 main_game의 ActiveWork, ProjectSSOT, Systems와 실제 코드·에셋을 교차검증하도록 안내한다.
 - [ ] `Document/CodeWorkGate.md`가 존재하고 문서 상태가 `Current`다.
-- [ ] 사용자 세션 복원 문구와 관계없이 모든 코드 작업 준비 요청이 CodeWorkGate로 진입한다.
-- [ ] 작업지시서 생성 차단은 `plan.*` 사용 불가, 품질 게이트 미해결 또는 안전한 범위 확정 불가로 한정된다.
-- [ ] 차단 상태가 `Blocked — Plan Work-Order Generation Unavailable`로 구분되어 있다.
-- [ ] 차단 사유와 위험 보고 이후 사용자가 직접 수정을 명시적으로 승인한 경우에만 직접 수정 예외가 열린다.
-- [ ] 일반적인 `수정해줘`, `구현해줘`, `계속해줘`가 직접 수정 승인으로 해석되지 않는다.
-- [ ] 대표 Plan에 준비 방식, TaskSource 경로, 최종 YAML 경로, 작업지시서 상태, 외부 Codex 실행 상태, 브라우저 검수, 빌드와 PIE 상태를 기록한다.
-- [ ] 코드 변경에 TaskSource 또는 최종 YAML이 없으면 `Workflow Compliance FAIL`, `Policy Violation` 또는 `Provenance Missing`으로 기록한다.
-- [ ] 사후 TaskSource나 YAML로 과거 직접 수정의 실행 출처를 Codex로 위조하지 않는다.
-- [ ] AssetDump 작업지시서가 commandlet, report, parser, closure와 콘텐츠 불변성 검증을 포함한다.
-- [ ] GoPyMCP 작업지시서가 MCP SSOT, contracts, 계층 경계와 feature flag 회귀 검증을 포함한다.
-- [ ] TaskSource와 최종 YAML이 해당 작업의 소유 저장소 Plan 폴더에 저장되고 독립 저장소 경계를 넘지 않는다.
+- [ ] CarFight 코드 작업의 기본 경로가 현재 AI 세션의 직접 구현, diff 검수와 가능한 빌드·테스트로 정의되어 있다.
+- [ ] TaskSource, WorkOrder와 Codex YAML이 선택 산출물이며 직접 구현의 필수 착수 조건으로 사용되지 않는다.
+- [ ] 별도 Codex 위임은 사용자가 명시적으로 요청한 경우에만 선택하도록 정의되어 있다.
+- [ ] 기존 dirty 변경 보호와 안전한 최소 수정 범위가 작업 시작 규칙에 포함되어 있다.
+- [ ] 사용자의 명시적 요청 없는 commit·push·reset·checkout·stash 금지가 유지된다.
+- [ ] 코드 적용 후 실제 Git diff, 빌드·자동 테스트와 사용자 PIE 증거를 구분해서 검수한다.
+- [ ] 과거 TaskSource, WorkOrder, Codex YAML과 실행 상태는 역사 기록으로 보존하고 사후에 실행 출처를 바꾸지 않는다.
+- [ ] AssetDump와 GoPyMCP가 각각 자체 저장소 루트 `AGENTS.md`와 독립 문서 진입점을 사용한다.
 
 ### 2.2 ProjectSSOT
 
@@ -211,18 +207,36 @@
 
 ## 8. 점검 결과 기록
 
-- 점검일: `YYYY-MM-DD`
-- 점검 범위: `진입점 / ProjectSSOT / Plan / Systems / Archive / 전체`
-- 확인한 문서 수: `N개`
-- 깨진 링크 수: `N건`
-- 역할 충돌 수: `N건`
-- 수정 완료 수: `N건`
-- 보류 수: `N건`
+- 점검일: `2026-07-22`
+- 점검 범위: `ActiveWork / ProjectSSOT / Plan / Systems 색인의 CF-FQ-025 완료 및 CF-FQ-024 활성 상태 정합성`
+- 확인한 문서 수: `13개`
+- 깨진 링크 수: `0건`
+- 역할·상태 불일치 수: `5건`
+- 수정 완료 수: `5건`
+- 보류 수: `0건`
 - 비고:
+  - 이번 기록은 전체 저장소 전수 감사가 아니라 이번 수정 대상과 직접 교차검증 문서에 한정한다.
+  - 기존 사용자 미커밋 CombatPlan 변경 2건과 미추적 DOCX는 점검·수정 범위에서 제외하고 보존했다.
+  - CF-FQ-025는 완료 Plan과 Current Systems로, CF-FQ-024는 현재 활성 Plan과 세션 복원 초점으로 정렬했다.
 
 ---
 
 ## 9. Changelog
+
+### v3.0 - 2026-07-30
+
+- Plan/Codex 강제 작업지시서 감사를 AGENTS 기반 Browser 작업 대문과 소프트 게이트 감사로 교체했다.
+- 루트에서 가장 가까운 `AGENTS.md`까지의 적용 순서, 경로·SHA-256 기록과 configured repository 경계를 점검하도록 변경했다.
+- `Document/Plan/AGENTS.md` 존재와 plan_repo의 논리적·Git 소유권 분리를 감사 항목에 추가했다.
+- 현재 AI 세션 직접 구현, 선택적 TaskSource·WorkOrder·Codex와 사용자 명시 외부 위임 기준을 `CodeWorkGate.md v2.0`에 맞췄다.
+- 기존 dirty 변경 보호, Git 쓰기 금지, diff·빌드·테스트·PIE 증거 분리 점검은 유지했다.
+
+### v2.9 - 2026-07-22
+
+- CF-FQ-025 완료와 CF-FQ-024 활성 상태의 ActiveWork, ProjectSSOT, Plan과 Systems 색인 정합성 점검 결과를 기록했다.
+- ActiveWork의 완료 작업 초점, ProjectSSOT와 SystemIndex의 완료 기준 누락을 정리했다.
+- FeatureQueue와 ProjectDecisions의 상단·내부 버전 불일치를 정정했다.
+- 이번 결과가 전체 저장소 전수 감사가 아니라 대상 문서 정합성 점검임을 명시했다.
 
 ### v2.8 - 2026-07-16
 
@@ -295,7 +309,17 @@
 
 ## 10. Migration
 
-### v2.8 적용 안내
+### v3.0 적용 안내
+
+- 새 문서 감사는 루트 `AGENTS.md`와 필요한 최소 하위 `AGENTS.md`가 작업 대문 역할을 하는지 우선 확인한다.
+- Browser MCP의 `repository_instructions`는 소프트 게이트로 감사하며 서버 측 pre-write 하드 차단의 존재를 요구하지 않는다.
+- `Document/Plan`은 별도 configured repository이므로 `Document/Plan/AGENTS.md`가 Plan 작업 규칙을 독립적으로 제공해야 한다.
+- CarFight 코드 작업은 현재 AI 직접 구현을 기본으로 감사하고 TaskSource, WorkOrder와 Codex YAML 부재를 정책 위반으로 판정하지 않는다.
+- 과거 외부 Codex 강제 정책과 당시 상태는 역사 기록으로 유지하되 현재 작업 판단에 사용하지 않는다.
+
+### v2.8 적용 안내 — 폐기됨, v3.0이 대체
+
+> 아래 내용은 당시 감사 기준 보존용이며 현재 작업 판단에는 사용하지 않는다.
 
 - 코드 작업 감사의 1차 대상은 브라우저 세션에서 생성한 TaskSource와 최종 Codex YAML 작업지시서다.
 - Codex 실행 도구 미연결은 오류나 차단 상태로 기록하지 않는다.

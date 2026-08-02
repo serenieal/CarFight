@@ -1,7 +1,7 @@
 # SystemIndex
 
-- Version: 1.12.0
-- Date: 2026-07-27
+- Version: 1.14.0
+- Date: 2026-07-30
 - Status: Active
 - Scope: `Document/Systems/` 하위 문서 위치 안내 색인
 
@@ -34,7 +34,7 @@
 | --- | --- |
 | `Document/Systems/Combat/WeaponFire.md` | 싱글플레이 로컬 차량 Pawn에서 Fire 입력을 발사 명령으로 만들고, Weapon Aim Solution을 기준으로 Projectile Actor 또는 Dummy HitScan 경로로 넘기며, 발사 결과와 거부 사유를 Aim / Debug / 후속 UI 피드백이 읽을 수 있게 남기는 현재 발사 기능 문서다. |
 | `Document/Systems/Combat/FireFeedback.md` | `WeaponFire`가 남긴 로컬 발사 성공·실패·쿨다운·NoWeapon·AimBlocked·TurretAligning·MuzzleBlocked 결과를 Reticle 텍스트와 색상으로 표시한다. P0 상태 전환과 피드백 만료를 사용자 PIE로 확인했다. |
-| `Document/Systems/Combat/Projectile.md` | `ProjectileData`, 공통 `CFProjectileActor`, `ProjectilePoolComp`를 통한 발사체 이동·충돌·첫 Impact 피해 요청과 Pool 반환을 기록한다. 일반 속도 `SM_Body`, P0 고속 연속 충돌과 피해 중복 방지를 사용자 PIE로 확인했다. |
+| `Document/Systems/Combat/Projectile.md` | `ProjectileData`, 공통 `CFProjectileActor`, `ProjectileMotorComp`와 `ProjectilePoolComp`를 통한 비추진 포탄·비유도 Rocket 이동, 점화·연소·BurnedOut 관성 비행, 지속형 Trail·Thruster 소켓/Fallback·독립 Scale, 종료 Reset·Pool 재사용·고속 Bounds, 고속 연속 충돌과 첫 Impact 피해를 기록한다. `CF-TC-020`, `CF-TC-023`, `CF-TC-024`를 사용자 PIE로 확인했다. |
 | `Document/Systems/Combat/DamageHitContext.md` | Dummy HitScan과 Projectile의 시각 차체 Hit 결과, `HitComponentName`, 위치/노멀/입사 방향을 같은 `FCFDamageHitContext` 형식으로 기록한다. 이 Context는 현재 `HitDamage`의 공용 피해 적용 입력으로 사용된다. |
 | `Document/Systems/Combat/HitDamage.md` | `DamageData.BaseDamage`, `FCFDamageHitContext`, `FCFDamageApplyResult`와 `UCFVehicleHealthComp`를 연결해 차량 체력 감소, 파괴 상태 1회 전환, 자기 피해 금지와 거부 사유를 처리하는 현재 최소 피해 시스템 문서다. |
 | `Document/Systems/Combat/CombatFx.md` | 승인된 발사, 첫 Impact와 최초 차량 파괴 결과를 DataAsset 기반 Niagara로 정확히 한 번 표현한다. `NS_BasicHit` Impact, 차량별 `SM_Body.FX_Destroyed` 소켓, 최대 수명 안전 퓨즈와 최종 사용자 PIE PASS를 기록한 현재 전투 FX 문서다. |
@@ -109,7 +109,7 @@
 | 현재 로컬 발사 명령, 무기 데이터 해석, 쿨다운, FireOrigin, 발사 결과 기록 | `Combat/WeaponFire.md` |
 | 발사 성공/실패/쿨다운/무기 없음 상태를 Reticle, HUD와 시각 VFX로 표시하는 기준 | `Combat/FireFeedback.md` |
 | 프로젝트 전역 게임 사운드 비지원 결정과 오디오 도입 금지 기준 | `Document/ProjectSSOT/04_ProjectDecisions.md` |
-| Projectile Actor 활성화, 일반 속도 시각 차체 충돌과 P0 고속 연속 충돌 검증 완료 상태 | `Combat/Projectile.md` |
+| Projectile Actor 활성화, 비유도 Rocket 추진 상태, Trail·Thruster 지속형 FX, 독립 FX Scale, 일반·고속 충돌, 첫 Impact 피해와 Pool Reset 기준 | `Combat/Projectile.md` |
 | Dummy HitScan / Projectile 시각 차체 HitContext와 HitComponent 기록 | `Combat/DamageHitContext.md` |
 | DamageData 기반 체력 감소, 피해 적용 결과와 파괴 상태 | `Combat/HitDamage.md` |
 | Muzzle·Impact·Destroyed Niagara의 데이터 연결, 발생 위치, 1회성, 중복 방지와 잔류 안전 계약 | `Combat/CombatFx.md` |
@@ -147,6 +147,23 @@
 ---
 
 ## 12. Changelog
+
+### v1.14.0 - 2026-07-30
+
+- `Document/Systems/Combat/Projectile.md`를 v1.5.0으로 갱신해 `CF-FQ-027 투사체 비행 FX` 완료 상태를 반영했다.
+- Trail-only, Thruster-only, Trail+Thruster, 유효 소켓·Missing Socket Fallback 사용자 PIE PASS를 색인에 추가했다.
+- Hit·LifeExpired Reset, Pool 20발 이상, Ribbon History 무잔류와 30 FPS 고속 Bounds PASS를 반영했다.
+- `CF-FQ-027 Done / CF-TC-023 PASS`를 Current System으로 등록했다.
+- Automation은 소스 컴파일 PASS / 실행 Not Run이며 Runner 미노출 상태를 유지했다.
+
+### v1.13.0 - 2026-07-28
+
+- `Document/Systems/Combat/Projectile.md`를 v1.4.0으로 갱신해 `CF-FQ-028 발사체 추진 시스템`을 기존 Projectile Current System에 통합했다.
+- `UCFProjectileMotorComp`, 점화 지연, Burning 고정 방향 가속, MaximumPropelledSpeed와 BurnedOut 관성 비행을 색인 설명에 추가했다.
+- Trail·Thruster Origin/Niagara, 메시 소켓/Fallback, Pool Reset과 `RelativeTransform.Scale` 독립 FX Scale 계약을 추가했다.
+- 최종 Build Job `e8b812bd479549299dd116f9bae8996f` Exit Code 0과 사용자 PIE Scale 0.2 정상 동작을 반영했다.
+- `CF-FQ-028 Done / CF-TC-024 PASS`를 등록하고 반복 전투 확장 회귀를 `CF-FQ-019`로 이관했다.
+- `CF-FQ-027` 별도 전체 체크리스트와 `CF-TC-023`은 자동 완료로 해석하지 않도록 유지했다.
 
 ### v1.12.0 - 2026-07-27
 
@@ -235,6 +252,21 @@
 ---
 
 ## 13. Migration
+
+### v1.14.0 적용 안내
+
+- `CF-FQ-027`의 현재 구현 판단은 `Document/Systems/Combat/Projectile.md v1.5.0`을 우선한다.
+- `Document/Plan/ProjectileFlightFxPlan.md v1.0.0`은 완료 당시 설계·빌드·사용자 PIE 기록으로 유지한다.
+- `CF-TC-023`은 PASS이며 CF-FQ-027을 Active 또는 Paused로 복원하지 않는다.
+- Automation 실행은 Runner 미노출로 Not Run 상태를 유지한다.
+
+### v1.13.0 적용 안내
+
+- `CF-FQ-028`의 현재 구현 판단은 `Document/Systems/Combat/Projectile.md`를 우선한다.
+- `Document/Plan/ProjectilePropulsionPlan.md`는 완료 당시 설계·빌드·PIE 체크포인트로 유지한다.
+- `CF-TC-024`는 PASS이며 비유도 Rocket 추진과 Burning 기반 Thruster는 Current System이다.
+- 반복 전투 확장 회귀는 `CF-FQ-019`가 소유하며 자동 착수하지 않는다.
+- `CF-FQ-027`과 `CF-TC-023`의 별도 전체 Trail·Fallback·Pool 검증은 Paused 상태를 유지한다.
 
 ### v1.12.0 적용 안내
 

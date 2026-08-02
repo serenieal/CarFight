@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.6.0
-// Date: 2026-07-21
+// Version: 1.7.0
+// Date: 2026-07-28
 // Description: CarFight 터렛 마운트 DataAsset
 // Scope: 무기를 얹고 회전시키는 거치대의 고정 Base / Yaw / Pitch 시각 메쉬, 피벗 소켓, 회전 한계, 회전 속도 값을 제공합니다.
 // Changelog:
+// - v1.7.0: 가변 MuzzleSocketNames 배열, 전체 소켓 필수 정책과 기존 단일 MuzzleSocketName fallback 계약을 추가.
 // - v1.6.0: 총구 바로 앞의 발사 안전 구간만 MuzzleBlocked로 검사하는 MuzzleClearanceDistanceCm을 추가.
 // - v1.5.0: 터렛별 정렬 중 발사 허용 정책 bAllowFireWhileAligning을 추가.
 // - v1.4.0: MountProfile legacy 직접 TurretMountData 슬롯 제거에 맞춰 연결 기준을 EquipmentPresetData.DefaultTurretMountData로 갱신.
@@ -13,6 +14,8 @@
 // - v1.1.0: 고정 Base 메쉬와 YawPivot 소켓을 추가해 Base -> Yaw -> Pitch 3단 소켓 장착 구조를 지원.
 // - v1.0.0: WeaponData와 분리된 최소 TurretMountData DataAsset 타입을 추가.
 // Migration:
+// - MuzzleSocketNames 배열이 비어 있으면 기존 MuzzleSocketName을 단일 총구 fallback으로 사용하므로 기존 DataAsset 재저장이 필요하지 않다.
+// - MuzzleSocketNames 배열 순서는 SingleCycle 실제 발사 순서이며 None 항목은 bRequireAllMuzzles=false일 때 건너뛴다.
 // - 기존 TurretMountData 인스턴스는 MuzzleClearanceDistanceCm=150cm 기본값을 사용하며, 0이면 총구 가림 사전 검사를 비활성화한다.
 // - 기존 TurretMountData 인스턴스는 bAllowFireWhileAligning=true 기본값을 사용하며, false로 설정하면 터렛과 총구 정렬 완료 전 발사를 거부한다.
 // - EquipmentPresetData.DefaultTurretMountData에 이 DataAsset을 연결한다.
@@ -85,8 +88,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|TurretMountData|Visual", meta=(DisplayName="터렛 Pitch 상대 Transform (TurretPitchRelativeTransform)", ToolTip="PitchPivot 기준 Pitch 메쉬의 상대 위치/회전/스케일 보정값입니다. 메쉬마다 포신 피벗이 다를 때 조정합니다."))
 	FTransform TurretPitchRelativeTransform = FTransform::Identity;
 
-	// [v1.2.0] Pitch 메쉬에서 최종 FireOrigin 위치와 방향을 찾을 총구 소켓 이름입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|TurretMountData|Sockets", meta=(DisplayName="Muzzle 소켓 이름 (MuzzleSocketName)", ToolTip="Pitch 메쉬에 만든 총구 소켓 이름입니다. 소켓이 있으면 FireOrigin 위치와 방향은 이 소켓을 우선 사용하며, 소켓의 X축이 발사 방향이어야 합니다."))
+		// [v1.7.0] Pitch 메쉬에서 SingleCycle이 순서대로 사용할 가변 총구 소켓 이름 배열입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|TurretMountData|Sockets", meta=(DisplayName="Muzzle 소켓 이름 배열 (MuzzleSocketNames)", ToolTip="다연장 런처가 순서대로 사용할 Pitch 메쉬 총구 소켓 이름 배열입니다. 배열 순서가 실제 발사 순서이며 각 소켓의 X축이 발사 방향이어야 합니다. 배열이 비어 있으면 기존 단일 MuzzleSocketName을 사용합니다."))
+	TArray<FName> MuzzleSocketNames;
+
+	// [v1.7.0] 배열에 지정한 모든 총구 소켓이 실제 Pitch 메쉬에 있어야 발사 준비로 인정할지 결정합니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|TurretMountData|Sockets", meta=(DisplayName="모든 Muzzle 소켓 필수 (Require All Muzzles)", ToolTip="True이면 MuzzleSocketNames 배열의 None 또는 누락 소켓이 하나라도 있을 때 다중 Muzzle 해결을 실패시킵니다. False이면 누락 항목을 건너뛰고 실제로 존재하는 소켓만 순환합니다."))
+	bool bRequireAllMuzzles = false;
+
+	// [v1.2.0] MuzzleSocketNames가 비어 있을 때 최종 FireOrigin에 사용할 기존 단일 총구 소켓 이름입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|TurretMountData|Sockets", meta=(DisplayName="기존 단일 Muzzle 소켓 이름 (MuzzleSocketName)", ToolTip="MuzzleSocketNames 배열이 비어 있을 때 사용할 기존 단일 총구 소켓입니다. 소켓의 X축이 발사 방향이어야 하며 기존 DataAsset 호환을 위해 유지됩니다."))
 	FName MuzzleSocketName = TEXT("Muzzle");
 
 	// [v1.0.0] 터렛 마운트 자체의 최소 좌우 조준각입니다.

@@ -1,9 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.7.2
-// Date: 2026-04-01
-// Description: CarFight 차량 Drive 상태/입력 해석 컴포넌트 (DriveComp 카테고리 루트 분리)
+// Version: 1.8.0
+// Date: 2026-08-01
+// Description: CarFight 차량 Drive 상태/입력 해석 컴포넌트 (Pause 입력 중립화 포함)
 // Scope: Throttle / Steering / Brake / Handbrake 입력을 Chaos Vehicle Movement에 전달하고, 현재 주행 상태와 상태 전이를 Native 기준으로 계산합니다.
+// Changelog:
+// - v1.8.0: UI-P0-02 Pause 진입 전 네 종류의 잔류 Drive 입력을 한 번에 중립화하는 ClearDriveInputs를 추가.
+// Migration:
+// - 기존 ApplyThrottleInput·ApplySteeringInput·ApplyBrakeInput·ApplyHandbrakeInput 호출 계약은 유지한다.
+// - ClearDriveInputs는 차량 속도나 물리 Velocity를 강제로 0으로 만들지 않고 입력값만 중립화한다.
 
 #pragma once
 
@@ -204,8 +209,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category="CarFight|VehicleDrive")
 	void ApplyBrakeInput(float InBrakeValue);
 
-	UFUNCTION(BlueprintCallable, Category="CarFight|VehicleDrive")
+		UFUNCTION(BlueprintCallable, Category="CarFight|VehicleDrive")
 	void ApplyHandbrakeInput(bool bInHandbrakePressed);
+
+	// [v1.8.0] Pause와 UI 전환 전에 현재 Drive 입력을 모두 안전한 중립값으로 초기화합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|VehicleDrive", meta=(DisplayName="Drive 입력 모두 초기화 (Clear All Drive Inputs)", ToolTip="Throttle, Steering, Brake와 Handbrake의 마지막 입력 상태와 Chaos Vehicle 전달값을 모두 중립으로 초기화합니다. 차량 속도와 물리 Velocity는 변경하지 않습니다."))
+	void ClearDriveInputs();
 
 private:
 	ECFVehicleDriveState EvaluateDriveState(const FCFVehicleDriveStateSnapshot& InDriveStateSnapshot) const;

@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.31.0
+// Version: 1.32.0
 // Date: 2026-07-21
 // Description: VehicleDebug Panel용 C++ 부모 위젯 클래스 구현입니다.
 // Changelog:
+// - v1.32.0: Weapon 섹션에 VehicleDefenseComp 준비·Fallback·현재 Shield·6방향 Armor 상태와 마지막 전체 피해 결과를 추가.
 // - v1.31.0: 탄종 독립 터렛 레티클 유효성, 월드 위치와 비교 거리를 표시하고 기존 Weapon Preview 행을 Legacy로 구분.
 // - v1.30.0: Weapon Aim Solution 하위 섹션에 Weapon Reticle Mode 표시 행을 추가.
 // - v1.29.0: Weapon Aim Solution 하위 섹션에 직선 Weapon Preview 유효성, Blocking Hit, 월드 위치와 거리를 추가.
@@ -2003,6 +2004,17 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildWeap
 		DamageHitContextSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeMultilineField(TEXT("damage_hit_context_summary"), TEXT("HitContext 요약"), InWeapon.LastDamageHitContextSummary));
 	DamageHitContextSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("damage_apply_recorded"), TEXT("피해 적용 기록"), InWeapon.bHasLastDamageApplyResult ? TEXT("있음") : TEXT("없음"), !InWeapon.bHasLastDamageApplyResult));
 	DamageHitContextSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeMultilineField(TEXT("damage_apply_summary"), TEXT("피해 적용 결과"), InWeapon.LastDamageApplyResultSummary.IsEmpty() ? TEXT("피해 적용 기록 없음") : InWeapon.LastDamageApplyResultSummary));
+		// [v1.32.0] VehicleDefenseComp의 현재 상태와 마지막 전체 피해 결과를 계산 없이 표시하는 방어 하위 섹션입니다.
+	TSharedRef<FCFVehicleDebugSectionViewData> VehicleDefenseSectionViewData =
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("VehicleDefense"), TEXT("차량 방어"), ECFVehicleDebugSectionKind::Subsection, true);
+	VehicleDefenseSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("vehicle_defense_component"), TEXT("방어 컴포넌트"), InWeapon.bHasVehicleDefenseComponent ? TEXT("있음") : TEXT("없음"), !InWeapon.bHasVehicleDefenseComponent));
+	VehicleDefenseSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("vehicle_defense_initialized"), TEXT("DefenseData 초기화"), InWeapon.bVehicleDefenseInitialized ? TEXT("예") : TEXT("아니오"), !InWeapon.bVehicleDefenseInitialized && !InWeapon.bUsingLegacyDefenseFallback));
+	VehicleDefenseSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("vehicle_defense_mode"), TEXT("피해 경로"), InWeapon.bUsingLegacyDefenseFallback ? TEXT("Legacy Integrity Fallback") : TEXT("Shield → Armor → Integrity"), InWeapon.bUsingLegacyDefenseFallback));
+	VehicleDefenseSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeMultilineField(TEXT("vehicle_defense_state_summary"), TEXT("현재 Shield·6방향 Armor 상태"), InWeapon.VehicleDefenseSummary));
+	VehicleDefenseSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("vehicle_defense_last_result_recorded"), TEXT("전체 피해 결과 기록"), InWeapon.bHasLastVehicleDamageResult ? TEXT("있음") : TEXT("없음"), !InWeapon.bHasLastVehicleDamageResult));
+	VehicleDefenseSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeMultilineField(TEXT("vehicle_defense_last_result_summary"), TEXT("마지막 방향·Shield·Armor·Integrity 결과"), InWeapon.LastVehicleDamageResultSummary.IsEmpty() ? TEXT("차량 방어 피해 기록 없음") : InWeapon.LastVehicleDamageResultSummary));
+	WeaponSectionViewData->AddChildSection(VehicleDefenseSectionViewData);
+
 	WeaponSectionViewData->AddChildSection(DamageHitContextSectionViewData);
 
 	// [v1.15.0] Projectile Pool 카운트 하위 섹션 ViewData입니다.

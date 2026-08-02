@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.3.0
-// Date: 2026-07-01
+// Version: 1.5.0
+// Date: 2026-07-30
 // Description: CarFight 발사체 Actor Pool 컴포넌트 구현
-// Scope: ProjectileData 기반 발사체 Actor를 클래스별 Pool에서 확보 / 반환 / 정리합니다.
+// Scope: ProjectileData 기반 발사체 Actor 재사용과 동일 발사 차량의 모든 탄종·Volley 충돌 격리를 관리합니다.
 // Changelog:
+// - v1.5.0: 모든 Actor Class 버킷의 동일 발사 차량 활성 Projectile을 양방향 Ignore로 등록하고 Hitscan Query 제외를 추가.
+// - v1.4.0: Launch Context 기반 Acquire 경로와 기존 SpawnTransform·LaunchDirection 호출용 Direct Adapter 구현.
 // - v1.3.0: Hit으로 반환된 Projectile Actor의 Damage HitContext Debug 기록을 소유 Pawn에 전달.
 // - v1.2.0: 마지막 Projectile 반환 사유 / 대상 / 비행 시간 디버그 요약 구현.
 // - v1.1.0: Pool Debug 표시용 활성 발사체 수 getter와 유효 Actor 기준 카운트 계산 구현.
@@ -14,6 +16,8 @@
 // - Pool 한도 초과 또는 Pool 확보 실패 시 기존 Dummy HitScan fallback을 유지한다.
 // - 마지막 반환 요약은 검증 표시 전용이며 발사 가능 여부를 판정하지 않는다.
 // - HitContext 기록은 Debug 전용이며 실제 Damage 적용은 하지 않는다.
+// - 기존 AcquireProjectile API는 Direct Launch Context를 만들어 신규 Context 경로로 전달한다.
+// - Context의 LaunchTransform은 Actor 생성·재사용 배치와 활성화에 같은 값으로 사용한다.
 
 #include "CFProjectilePoolComp.h"
 
@@ -46,11 +50,46 @@ UCFProjectilePoolComp::UCFProjectilePoolComp()
 	MaxPooledProjectileCountPerClass = 128;
 }
 
-// [v1.0.0] ProjectileData에 맞는 발사체 Actor를 Pool에서 확보하고 활성화합니다.
+// [v1.4.0] 기존 호출 호환을 위해 SpawnTransform과 발사 방향에서 Direct Context를 만들어 발사체를 확보합니다.
 ACFProjectileActor* UCFProjectilePoolComp::AcquireProjectile(
 	UCFProjectileData* InProjectileData,
 	const FTransform& InSpawnTransform,
 	const FVector& InLaunchDirection,
+	AActor* InInstigatorActor)
+{
+	// [v1.4.0] 기존 발사 방향에서 NaN과 0 벡터를 제거한 Direct 발사 방향입니다.
+	FVector SafeLaunchDirection = InLaunchDirection.GetSafeNormal();
+	if (SafeLaunchDirection.ContainsNaN() || SafeLaunchDirection.IsNearlyZero())
+	{
+		SafeLaunchDirection = InSpawnTransform.GetUnitAxis(EAxis::X).GetSafeNormal();
+	}
+	if (SafeLaunchDirection.ContainsNaN() || SafeLaunchDirection.IsNearlyZero())
+	{
+		SafeLaunchDirection = FVector::ForwardVector;
+	}
+
+	// [v1.4.0] 기존 ProjectileData InitialSpeed를 유지할 안전한 초기 속력입니다.
+	const float SafeInitialSpeed = InProjectileData
+		? FMath::Max(InProjectileData->InitialSpeed, 1.0f)
+		: 1.0f;
+
+	// [v1.4.0] 기존 Acquire 호출을 신규 Context 경로로 전달할 Direct 발사 데이터입니다.
+	FCFProjectileLaunchContext LegacyLaunchContext;
+	LegacyLaunchContext.LaunchTransform = InSpawnTransform.ContainsNaN()
+		? FTransform(SafeLaunchDirection.Rotation(), FVector::ZeroVector)
+		: InSpawnTransform;
+	LegacyLaunchContext.LaunchTransform.SetRotation(SafeLaunchDirection.Rotation().Quaternion());
+	LegacyLaunchContext.InitialLaunchDirection = SafeLaunchDirection;
+	LegacyLaunchContext.InitialLaunchVelocity = SafeLaunchDirection * SafeInitialSpeed;
+	LegacyLaunchContext.ReleaseMode = ECFProjectileReleaseMode::Direct;
+
+	return AcquireProjectileWithContext(InProjectileData, LegacyLaunchContext, InInstigatorActor);
+}
+
+// [v1.4.0] Launch Context의 Transform과 초기 월드 Velocity를 사용해 발사체를 Pool에서 확보하고 활성화합니다.
+ACFProjectileActor* UCFProjectilePoolComp::AcquireProjectileWithContext(
+	UCFProjectileData* InProjectileData,
+	const FCFProjectileLaunchContext& InLaunchContext,
 	AActor* InInstigatorActor)
 {
 	if (!InProjectileData || !InProjectileData->ProjectileActorClass)
@@ -65,6 +104,15 @@ ACFProjectileActor* UCFProjectilePoolComp::AcquireProjectile(
 		return nullptr;
 	}
 
+	// [v1.4.0] Spawn과 Actor 활성화에 공통으로 사용할 NaN 방지 Launch Transform입니다.
+	const FTransform SafeLaunchTransform = InLaunchContext.LaunchTransform.ContainsNaN()
+		? FTransform::Identity
+		: InLaunchContext.LaunchTransform;
+
+	// [v1.4.0] 안전한 Transform을 반영해 Actor에 전달할 Launch Context 복사본입니다.
+	FCFProjectileLaunchContext SafeLaunchContext = InLaunchContext;
+	SafeLaunchContext.LaunchTransform = SafeLaunchTransform;
+
 	// [v1.0.0] 이번 Projectile Actor 클래스에 대응하는 Pool 버킷입니다.
 	FCFProjectilePoolBucket& PoolBucket = FindOrAddPoolBucket(ProjectileActorClass);
 	CompactPoolBucket(PoolBucket);
@@ -78,7 +126,7 @@ ACFProjectileActor* UCFProjectilePoolComp::AcquireProjectile(
 			return nullptr;
 		}
 
-		ProjectileActor = SpawnProjectileForPool(ProjectileActorClass, InSpawnTransform, InInstigatorActor);
+		ProjectileActor = SpawnProjectileForPool(ProjectileActorClass, SafeLaunchTransform, InInstigatorActor);
 		if (!ProjectileActor)
 		{
 			return nullptr;
@@ -89,8 +137,8 @@ ACFProjectileActor* UCFProjectilePoolComp::AcquireProjectile(
 
 	ProjectileActor->SetProjectilePoolOwner(this);
 	ProjectileActor->SetDestroyWhenDeactivated(false);
-	ProjectileActor->SetActorTransform(InSpawnTransform, false, nullptr, ETeleportType::TeleportPhysics);
-	ProjectileActor->ActivateProjectile(InProjectileData, InLaunchDirection, InInstigatorActor);
+	ProjectileActor->SetActorTransform(SafeLaunchTransform, false, nullptr, ETeleportType::TeleportPhysics);
+	ProjectileActor->ActivateProjectileWithContext(InProjectileData, SafeLaunchContext, InInstigatorActor);
 
 	return ProjectileActor->IsProjectileActive() ? ProjectileActor : nullptr;
 }
@@ -120,7 +168,8 @@ void UCFProjectilePoolComp::ReleaseProjectile(ACFProjectileActor* InProjectileAc
 	LastReleaseHitActorName = InProjectileActor->GetLastHitActorName();
 	LastReleaseFlightDurationSeconds = InProjectileActor->GetLastFlightDurationSeconds();
 
-	if (LastReleaseReason == ECFProjectileDeactivateReason::Hit)
+		if (LastReleaseReason == ECFProjectileDeactivateReason::Hit
+		|| LastReleaseReason == ECFProjectileDeactivateReason::Intercepted)
 	{
 		// [v1.3.0] Projectile Pool을 소유한 차량 Pawn입니다.
 		ACFVehiclePawn* OwnerVehiclePawn = Cast<ACFVehiclePawn>(GetOwner());
@@ -138,6 +187,61 @@ void UCFProjectilePoolComp::ReleaseProjectile(ACFProjectileActor* InProjectileAc
 	if (!PoolBucket.InactiveProjectileArray.Contains(InProjectileActor))
 	{
 		PoolBucket.InactiveProjectileArray.Add(InProjectileActor);
+	}
+}
+
+// [v1.5.0] 새 Projectile을 같은 발사 차량의 모든 활성 탄종·Volley와 양방향 Ignore로 등록합니다.
+void UCFProjectilePoolComp::RegisterSameSourceProjectileIsolation(
+	ACFProjectileActor* InProjectileActor,
+	AActor* InSourceActor)
+{
+	if (!IsValid(InProjectileActor) || !IsValid(InSourceActor))
+	{
+		return;
+	}
+
+	for (FCFProjectilePoolBucket& PoolBucket : ProjectilePoolBuckets)
+	{
+		CompactPoolBucket(PoolBucket);
+		for (const TObjectPtr<ACFProjectileActor>& ExistingProjectileActorPtr : PoolBucket.SpawnedProjectileArray)
+		{
+			ACFProjectileActor* ExistingProjectileActor = ExistingProjectileActorPtr.Get();
+			if (!IsValid(ExistingProjectileActor)
+				|| ExistingProjectileActor == InProjectileActor
+				|| !ExistingProjectileActor->IsProjectileActive()
+				|| ExistingProjectileActor->GetActiveInstigatorActor() != InSourceActor)
+			{
+				continue;
+			}
+
+			InProjectileActor->AddSameSourceProjectileIgnore(ExistingProjectileActor);
+			ExistingProjectileActor->AddSameSourceProjectileIgnore(InProjectileActor);
+		}
+	}
+}
+
+// [v1.5.0] Hitscan Trace가 같은 발사 차량의 현재 활성 Projectile을 건너뛰도록 QueryParams에 추가합니다.
+void UCFProjectilePoolComp::AddActiveSourceProjectilesToQueryParams(
+	AActor* InSourceActor,
+	FCollisionQueryParams& InOutQueryParams) const
+{
+	if (!IsValid(InSourceActor))
+	{
+		return;
+	}
+
+	for (const FCFProjectilePoolBucket& PoolBucket : ProjectilePoolBuckets)
+	{
+		for (const TObjectPtr<ACFProjectileActor>& ProjectileActorPtr : PoolBucket.SpawnedProjectileArray)
+		{
+			ACFProjectileActor* ProjectileActor = ProjectileActorPtr.Get();
+			if (IsValid(ProjectileActor)
+				&& ProjectileActor->IsProjectileActive()
+				&& ProjectileActor->GetActiveInstigatorActor() == InSourceActor)
+			{
+				InOutQueryParams.AddIgnoredActor(ProjectileActor);
+			}
+		}
 	}
 }
 
