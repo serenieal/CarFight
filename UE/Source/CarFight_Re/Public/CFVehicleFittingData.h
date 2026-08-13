@@ -1,17 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.0
-// Date: 2026-08-01
+// Version: 1.2.0
+// Date: 2026-08-13
 // Description: CarFight 출격 전 차량 피팅 선택과 결정론적 Snapshot DataAsset
-// Scope: 기준 VehicleData, 장착 선택, 방어 선택, 누락 장착 정책, 데이터 계약 검증과 Pawn 없는 Snapshot 생성을 제공합니다.
+// Scope: 기준 VehicleData, 장착·출격 탄약·방어 선택, 누락 장착 정책, 데이터 계약 검증과 Pawn 없는 Snapshot 생성을 제공합니다.
 // Changelog:
+// - v1.2.0: CF-FQ-031 AMMO-P0-07 기존 FCFAmmoSortieLoad를 재사용하는 InitialSortieAmmoLoads를 추가해 실제 출격 탄약 수량을 명시.
 // - v1.1.0: CF-FQ-034 FIT-P0-03 Compatibility Validation과 결정론적 Mass Snapshot 생성을 추가.
 // - v1.0.0: CF-FQ-034 FIT-P0-02 VehicleFittingData Foundation과 DataValidation 계약을 최초 추가.
 // Migration:
 // - 기존 차량은 VehicleFittingData를 지정하지 않으므로 현재 VehicleData 기본 장비·방어 동작을 그대로 유지한다.
 // - BuildFittingSnapshot은 UObject 데이터만 읽는 순수 해석이며 VehiclePawn, VehicleMovement와 Chaos 상태를 수정하지 않는다.
-// - Ammo 선택 배열은 CF-FQ-031의 AmmoData 계약이 구현된 뒤 중복 타입 없이 추가한다.
-// - Snapshot의 차량 런타임 적용은 FIT-P0-04 이후 범위다.
+// - InitialSortieAmmoLoads는 CF-FQ-031의 FCFAmmoSortieLoad를 그대로 재사용하며 중복 탄약 선택 타입을 만들지 않는다.
+// - 비어 있는 기존 FittingData는 기존 무한탄 WeaponData와 호환되며 실제 finite WeaponData만 명시적 출격 탄약을 요구한다.
 
 #pragma once
 
@@ -65,9 +66,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|VehicleFittingData|Mount", meta=(DisplayName="장착 선택 목록 (MountSelections)", ToolTip="VehicleData.MountProfiles의 ID별로 적용할 EquipmentPresetData 또는 명시적 빈 장착을 저장합니다."))
 	TArray<FCFVehicleMountSelection> MountSelections;
 
-	// [v1.0.0] MountSelections에 없는 차량 장착 프로파일을 해석할 정책입니다.
+		// [v1.0.0] MountSelections에 없는 차량 장착 프로파일을 해석할 정책입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|VehicleFittingData|Mount", meta=(DisplayName="누락 장착 선택 정책 (MissingMountSelectionPolicy)", ToolTip="피팅에 선택이 없는 MountProfile을 차량 기본 장비, 빈 장착 또는 오류 중 어떻게 해석할지 결정합니다."))
 	ECFMissingMountPolicy MissingMountSelectionPolicy = ECFMissingMountPolicy::UseVehicleDefault;
+
+	// [v1.2.0] 이번 출격에 실제 싣는 탄종별 장전+예비 전체 탄약량 목록입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|VehicleFittingData|Ammo", meta=(DisplayName="출격 탄약 적재 목록 (InitialSortieAmmoLoads)", ToolTip="이번 출격 시작 시 실제 차량에 존재할 탄종별 장전+예비 전체 수량입니다. AmmoData.MaximumLoadableAmmoCount는 상한 검증에만 사용하며 현재 수량으로 자동 대입하지 않습니다."))
+	TArray<FCFAmmoSortieLoad> InitialSortieAmmoLoads;
 
 	// [v1.0.0] 차량 기본 방어, 방어 없음 또는 별도 방어 덮어쓰기 선택입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|VehicleFittingData|Defense", meta=(DisplayName="방어 선택 (DefenseSelection)", ToolTip="VehicleData 기본 방어 사용, 명시적 방어 없음 또는 별도 VehicleDefenseData Override를 선택합니다."))

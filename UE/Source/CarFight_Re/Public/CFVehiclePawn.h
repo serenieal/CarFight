@@ -1,9 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.136.0
-// Date: 2026-08-02
+// Version: 2.143.0
+// Date: 2026-08-13
 // Description: CarFight 싱글플레이 차량 Pawn 기준 클래스
 // Changelog:
+// - v2.143.0: CF-FQ-031 AMMO-P0-07 Applied Fitting Snapshot의 명시적 출격 탄약과 finite WeaponInstance를 VehicleAmmoComp로 초기화하는 Combat Runtime 연결을 추가.
+// - v2.142.0: CF-FQ-031 AMMO-P0-05 현재 활성 무기의 FullMagazine 재장전을 요청하는 BlueprintCallable 명령 진입점을 추가.
+// - v2.140.0: CF-FQ-031 AMMO-P0-03 SingleCycle 발사 Transaction 자동화가 실제 ExecuteAcceptedFireCommand를 검증할 수 있도록 전용 테스트 friend 경계를 추가.
+// - v2.139.0: CF-FQ-031 AMMO-P0-02 VehicleAmmoComp 기본 서브오브젝트와 공개 Getter·재초기화/EndPlay Reset 경계를 추가. 기존 Fire에는 아직 연결하지 않음.
+// - v2.138.0: VehicleDebug Snapshot에 현재 선택 대상의 표시 정보, 추적 상태, 방어·내구도 상태와 마지막 방어 피해 결과를 추가.
 // - v2.136.0: 첫 발과 Ripple·Salvo 후속 발사가 같은 Command Target 위치·Guidance Target Actor Snapshot을 Launch Context에 사용하도록 통합.
 // - v2.135.0: Launch Context에 발사 순간 선택 Target Actor Snapshot을 복사해 이미 발사된 미사일 목표를 차량 선택 상태와 분리.
 // - v2.134.0: 차량 코어 Runtime 준비와 전투 Runtime 준비 상태를 분리하고 기존 bVehicleRuntimeReady를 코어 호환 상태로 유지.
@@ -66,7 +71,10 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth 적용 전 기준선 정리를 위해 차량 NetDebug/OwnerVisual/OwnerBodyVisual 실험 플래그 기본값을 False로 통일.
 // Migration:
+// - 선택 대상 VehicleDebug는 TargetSelectComp와 대상 Actor의 방어·내구도 상태를 읽기만 하며 선택, 추적, 피해와 재생 계산을 변경하지 않는다. 기존 Blueprint와 WBP에는 추가 작업이 필요하지 않다.
 // - bVehicleRuntimeReady는 기존 Tick·Debug·Blueprint 호환을 위해 bVehicleCoreRuntimeReady와 같은 값을 유지한다. 전투 HUD와 전투 명령은 bVehicleCombatRuntimeReady를 별도로 확인한다.
+// - finite Ammo는 유효 Applied Fitting Snapshot의 InitialSortieAmmoLoads에서만 초기화하며 MaximumLoadableAmmoCount를 현재 탄약으로 자동 대입하지 않는다.
+// - 기존 무한탄 WeaponData 또는 Ammo 선택이 없는 Legacy Fitting은 InfiniteCompatibility로 유지하고 차량 CoreReady를 막지 않는다.
 // - 유효 피팅 Snapshot 질량은 PreRegisterAllComponents의 Super 호출 전에 Movement Mass에 1회 기록하고 BeginPlay에서 실제 VehicleMesh 질량을 검증한다.
 // - FittingData 미지정·초기 Invalid Snapshot은 기존 Chaos 질량과 VehicleData Weapon·Defense Legacy 경로를 유지한다.
 // - Physics State 생성 뒤 다른 Target Mass는 거부하며 SetMassOverrideInKg와 Hot Recreate를 호출하지 않는다.
@@ -127,6 +135,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "CFAmmoTypes.h"
 #include "CFVehicleDriveComp.h"
 #include "CFVehicleAimTypes.h"
 #include "CFVehicleCameraTypes.h"
@@ -144,6 +153,7 @@ class UCFVehicleData;
 class UCFVehicleCameraComp;
 class UCFVehicleAimComp;
 class UCFVehicleWeaponComp;
+class UCFVehicleAmmoComp;
 class UCFLauncherComp;
 class UCFProjectilePoolComp;
 class UCFCombatFxComp;
@@ -558,6 +568,92 @@ struct FCFVehicleDebugAim
 };
 
 /**
+ * VehicleDebug 선택 대상 상세 카테고리입니다.
+ * 선택된 Actor의 TargetSelect 표시 정보와 방어·내구도 컴포넌트 상태를 읽기 전용으로 보관합니다.
+ */
+USTRUCT(BlueprintType)
+struct FCFVehicleDebugTarget
+{
+	GENERATED_BODY()
+
+	// [v2.138.0] 현재 Pawn이 TargetSelectComp를 보유하는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Target", meta=(DisplayName="TargetSelectComp 보유 여부 (bHasTargetSelectComponent)", ToolTip="현재 Pawn이 선택 대상을 관리하는 TargetSelectComp를 보유하는지 표시합니다."))
+	bool bHasTargetSelectComponent = false;
+
+	// [v2.138.0] TargetSelectComp에 선택 대상 기록이 존재하는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Target", meta=(DisplayName="선택 대상 존재 여부 (bHasSelectedTarget)", ToolTip="현재 TargetSelectComp에 선택 대상 기록이 존재하는지 표시합니다."))
+	bool bHasSelectedTarget = false;
+
+	// [v2.138.0] 현재 선택 대상 Actor가 런타임에서 유효한지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Target", meta=(DisplayName="선택 대상 유효 여부 (bSelectedTargetValid)", ToolTip="현재 선택 대상 Actor가 제거되지 않았고 선택 가능한 유효 상태인지 표시합니다."))
+	bool bSelectedTargetValid = false;
+
+	// [v2.138.0] 현재 선택 대상 Actor의 런타임 이름입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Target", meta=(DisplayName="선택 대상 Actor 이름 (SelectedTargetActorName)", ToolTip="현재 선택 대상 Actor 인스턴스의 런타임 이름입니다."))
+	FString SelectedTargetActorName = TEXT("None");
+
+	// [v2.138.0] 현재 선택 대상의 안정 식별자입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Target", meta=(DisplayName="선택 대상 ID (SelectedTargetId)", ToolTip="TargetSelect 표시 정보에서 읽은 현재 선택 대상의 안정 식별자입니다."))
+	FName SelectedTargetId = NAME_None;
+
+	// [v2.138.0] 현재 선택 대상의 사용자 표시 이름입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Target", meta=(DisplayName="선택 대상 표시 이름 (SelectedTargetDisplayName)", ToolTip="TargetSelect 표시 정보에서 읽은 현재 선택 대상의 사용자 표시 이름입니다."))
+	FText SelectedTargetDisplayName;
+
+	// [v2.138.0] 현재 선택 대상의 추적 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Target", meta=(DisplayName="선택 대상 추적 상태 (SelectedTargetTrackState)", ToolTip="현재 선택 대상이 가시, 가림, 추정 추적 또는 신호 손실 중인지 표시합니다."))
+	ECFTargetTrackState SelectedTargetTrackState = ECFTargetTrackState::Invalid;
+
+	// [v2.138.0] 선택 대상이 VehicleDefenseComp를 보유하는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Target", meta=(DisplayName="대상 VehicleDefenseComp 보유 여부 (bHasSelectedTargetDefenseComponent)", ToolTip="현재 선택 대상 Actor가 Shield와 방향별 Armor를 관리하는 VehicleDefenseComp를 보유하는지 표시합니다."))
+	bool bHasSelectedTargetDefenseComponent = false;
+
+	// [v2.138.0] 선택 대상의 DefenseData 초기화 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Target", meta=(DisplayName="대상 방어 초기화 여부 (bSelectedTargetDefenseInitialized)", ToolTip="현재 선택 대상의 VehicleDefenseComp가 유효한 DefenseData로 초기화됐는지 표시합니다."))
+	bool bSelectedTargetDefenseInitialized = false;
+
+	// [v2.138.0] 선택 대상이 Legacy Integrity 직접 피해 경로를 사용하는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Target", meta=(DisplayName="대상 Legacy 방어 Fallback 여부 (bSelectedTargetUsingLegacyDefenseFallback)", ToolTip="True이면 선택 대상이 DefenseData 없이 기존 Integrity 직접 피해 경로를 사용합니다."))
+	bool bSelectedTargetUsingLegacyDefenseFallback = false;
+
+	// [v2.138.0] 선택 대상의 현재 Shield, 6방향 Armor와 재생 상태 요약입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Target", meta=(DisplayName="대상 방어 상태 요약 (SelectedTargetDefenseSummary)", ToolTip="선택 대상 VehicleDefenseComp의 현재 Shield, 방향별 Armor, 재생 여부와 남은 재생 지연을 읽기 전용으로 표시합니다."))
+	FString SelectedTargetDefenseSummary = TEXT("선택 대상 VehicleDefenseComp 없음");
+
+	// [v2.138.0] 선택 대상에 마지막 전체 방어 피해 결과가 존재하는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Target", meta=(DisplayName="대상 마지막 방어 결과 존재 여부 (bHasSelectedTargetLastDamageResult)", ToolTip="선택 대상 VehicleDefenseComp에 마지막 Shield, Armor, 관통과 Integrity 피해 결과가 기록됐는지 표시합니다."))
+	bool bHasSelectedTargetLastDamageResult = false;
+
+	// [v2.138.0] 선택 대상의 마지막 전체 방어 피해 결과 요약입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Target", meta=(DisplayName="대상 마지막 방어 결과 요약 (SelectedTargetLastDamageResultSummary)", ToolTip="선택 대상에 마지막으로 적용된 방향, Shield 흡수, Armor 흡수·관통과 Integrity 결과를 표시합니다."))
+	FString SelectedTargetLastDamageResultSummary = TEXT("선택 대상 방어 피해 기록 없음");
+
+	// [v2.138.0] 선택 대상이 VehicleHealthComp를 보유하는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Target", meta=(DisplayName="대상 VehicleHealthComp 보유 여부 (bHasSelectedTargetHealthComponent)", ToolTip="현재 선택 대상 Actor가 차량 내구도를 관리하는 VehicleHealthComp를 보유하는지 표시합니다."))
+	bool bHasSelectedTargetHealthComponent = false;
+
+	// [v2.138.0] 선택 대상의 VehicleHealthComp 초기화 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Target", meta=(DisplayName="대상 내구도 초기화 여부 (bSelectedTargetHealthInitialized)", ToolTip="현재 선택 대상의 최대·현재 Integrity가 초기화됐는지 표시합니다."))
+	bool bSelectedTargetHealthInitialized = false;
+
+	// [v2.138.0] 선택 대상의 현재 차량 내구도입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Target", meta=(DisplayName="대상 현재 Integrity (SelectedTargetCurrentIntegrity)", ToolTip="현재 선택 대상 VehicleHealthComp의 남은 Vehicle Integrity입니다."))
+	float SelectedTargetCurrentIntegrity = 0.0f;
+
+	// [v2.138.0] 선택 대상의 최대 차량 내구도입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Target", meta=(DisplayName="대상 최대 Integrity (SelectedTargetMaximumIntegrity)", ToolTip="현재 선택 대상 VehicleHealthComp의 최대 Vehicle Integrity입니다."))
+	float SelectedTargetMaximumIntegrity = 0.0f;
+
+	// [v2.138.0] 선택 대상이 파괴 상태인지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Target", meta=(DisplayName="대상 파괴 여부 (bSelectedTargetDestroyed)", ToolTip="현재 선택 대상 VehicleHealthComp가 파괴 상태로 전환됐는지 표시합니다."))
+	bool bSelectedTargetDestroyed = false;
+
+	// [v2.138.0] 선택 대상 약한 참조와 해제·추적 상태 수명 요약입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug|Target", meta=(DisplayName="대상 수명 요약 (SelectedTargetLifetimeSummary)", ToolTip="TargetSelectComp가 기록한 선택 대상 유효성, 추적 상태와 마지막 해제 사유 요약입니다."))
+	FString SelectedTargetLifetimeSummary = TEXT("SelectedTarget: None");
+};
+
+/**
  * VehicleDebug 무기 상세 카테고리입니다.
  */
 USTRUCT(BlueprintType)
@@ -819,7 +915,11 @@ struct FCFVehicleDebugSnapshot
 
 	// [v2.16.0] 조준 상세 카테고리입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="Aim 카테고리 (Aim)", ToolTip="AimComp의 로컬/검증/표시용 조준 상태를 담는 VehicleDebug Aim 카테고리입니다."))
-	FCFVehicleDebugAim Aim;
+		FCFVehicleDebugAim Aim;
+
+	// [v2.138.0] 선택 대상 상세 카테고리입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="Target 카테고리 (Target)", ToolTip="TargetSelectComp의 현재 선택 대상 표시 정보와 대상 Actor의 방어·내구도 상태를 담는 VehicleDebug Target 카테고리입니다."))
+	FCFVehicleDebugTarget Target;
 
 	// [v2.77.0] 무기 상세 카테고리입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="Weapon 카테고리 (Weapon)", ToolTip="WeaponComp의 런타임 준비 상태, WeaponData 상태, FireOrigin 결과를 담는 VehicleDebug Weapon 카테고리입니다."))
@@ -869,7 +969,8 @@ class CARFIGHT_RE_API ACFVehiclePawn : public AWheeledVehiclePawn, public ICFTar
 {
 	GENERATED_BODY()
 
-	friend class UCFLauncherComp;
+		friend class UCFLauncherComp;
+	friend class FCFAmmoFireTransactionTest;
 
 public:
 	// [v1.1.0] 기본 생성자
@@ -1058,9 +1159,13 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="VehicleWeapon 컴포넌트 (VehicleWeaponComp)", ToolTip="차량 하드포인트와 장착 프로파일을 읽어 실제 발사 원점을 계산하는 컴포넌트입니다."))
 		TObjectPtr<UCFVehicleWeaponComp> VehicleWeaponComp = nullptr;
 
-	// [v2.132.0] 출격 피팅 Snapshot 준비·Commit·Rollback과 AppliedFittingSnapshot을 소유하는 컴포넌트입니다.
+		// [v2.132.0] 출격 피팅 Snapshot 준비·Commit·Rollback과 AppliedFittingSnapshot을 소유하는 컴포넌트입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="차량 피팅 컴포넌트 (VehicleFittingComp)"))
 	TObjectPtr<UCFVehicleFittingComp> VehicleFittingComp = nullptr;
+
+	// [v2.139.0] 탄종별 공유 예비량과 WeaponInstanceId별 독립 장전 상태를 단일 소유하는 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="차량 탄약 컴포넌트 (VehicleAmmoComp)", ToolTip="현재 출격의 실제 장전 탄약, 차량 예비 탄약, Launcher 예약과 재장전 상태를 단일 소유합니다."))
+	TObjectPtr<UCFVehicleAmmoComp> VehicleAmmoComp = nullptr;
 
 		// [v2.126.0] Ripple·Salvo 예약 발사, 취소와 Volley 단위 쿨다운을 관리하는 런처 컴포넌트입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="런처 컴포넌트 (LauncherComp)", ToolTip="첫 승인 발사 이후 남은 Ripple·Salvo 발사를 예약하고 장비 변경·차량 파괴·실패 정책에 따라 시퀀스를 완료하거나 취소합니다."))
@@ -1315,9 +1420,17 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(ToolTip="차량 하드포인트와 장착 프로파일을 읽어 실제 발사 원점을 계산하는 Weapon 컴포넌트를 반환합니다."))
 		UCFVehicleWeaponComp* GetVehicleWeaponComp() const { return VehicleWeaponComp; }
 
-	// [v2.132.0] 출격 피팅 Runtime 상태와 Applied Snapshot을 관리하는 컴포넌트를 반환합니다.
+		// [v2.132.0] 출격 피팅 Runtime 상태와 Applied Snapshot을 관리하는 컴포넌트를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(DisplayName="차량 피팅 컴포넌트 반환"))
 	UCFVehicleFittingComp* GetVehicleFittingComp() const { return VehicleFittingComp; }
+
+		// [v2.139.0] 현재 출격 장전·예비·예약 탄약 상태를 관리하는 VehicleAmmoComp를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(DisplayName="차량 탄약 컴포넌트 반환", ToolTip="현재 출격의 실제 장전량, 차량 예비량, Launcher 예약과 재장전 상태를 소유하는 VehicleAmmoComp를 반환합니다."))
+	UCFVehicleAmmoComp* GetVehicleAmmoComp() const { return VehicleAmmoComp; }
+
+	// [v2.142.0] 현재 활성 WeaponInstance의 FullMagazine 재장전을 Gameplay 명령으로 요청합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Ammo", meta=(DisplayName="현재 무기 재장전 요청", ToolTip="현재 활성 MountProfileId의 유한탄 무기에 FullMagazine 재장전을 요청합니다. Launcher Sequence나 다른 Action Lock 중에는 거부되며 입력 에셋과는 독립된 Gameplay 명령입니다."))
+	ECFAmmoTransactionResult RequestReloadCurrentWeapon();
 
 		// [v2.126.0] 차량 Ripple·Salvo 발사 시퀀스를 관리하는 LauncherComp를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn", meta=(DisplayName="런처 컴포넌트 반환 (Get Launcher Component)", ToolTip="현재 차량의 Ripple·Salvo 예약 발사, 취소와 Volley Debug를 관리하는 LauncherComp를 반환합니다."))
@@ -1470,7 +1583,11 @@ public:
 
 	// [v2.16.0] 상세 패널 표시용 VehicleDebug Aim 카테고리를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="상세 패널 표시용 VehicleDebug Aim 카테고리를 반환합니다."))
-	FCFVehicleDebugAim GetVehicleDebugAim() const;
+		FCFVehicleDebugAim GetVehicleDebugAim() const;
+
+	// [v2.138.0] 상세 패널 표시용 VehicleDebug Target 카테고리를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="현재 선택 대상의 표시 정보, 추적 상태, 방어와 내구도 상태를 담은 VehicleDebug Target 카테고리를 반환합니다."))
+	FCFVehicleDebugTarget GetVehicleDebugTarget() const;
 
 	// [v2.76.0] 상세 패널 표시용 VehicleDebug Weapon 카테고리를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="상세 패널 표시용 VehicleDebug Weapon 카테고리를 반환합니다."))

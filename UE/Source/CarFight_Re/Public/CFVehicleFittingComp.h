@@ -1,16 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.0
-// Date: 2026-08-02
-// Description: CF-FQ-034 FIT-P0-05 초기 출격 피팅·질량 상태 컴포넌트
-// Scope: Legacy·Snapshot 입력 준비, Initial Mass Prepare·검증, Weapon·Defense 원자 Commit·Rollback과 Applied Snapshot 수명을 소유합니다.
+// Version: 1.2.0
+// Date: 2026-08-04
+// Description: CF-FQ-033~034 초기 출격 피팅·질량·Defense Commit 상태 컴포넌트
+// Scope: Legacy·Snapshot 입력 준비, Initial Mass 설정값·실제 질량 Coverage 검증, Weapon·Defense 원자 Commit·Rollback과 Applied Snapshot 수명을 소유합니다.
 // Changelog:
+// - v1.2.0: Movement 설정값은 Snapshot Target과 정확 비교하고 VehicleMesh 실제 질량은 PhysicsAsset 집계 질량을 허용하는 Target 하한 검증으로 분리.
 // - v1.1.0: PreRegister와 BeginPlay가 공유할 Initial Mass Target, Legacy fallback, Verify Only, 재적용 거부와 실제 질량 검증 계약을 추가.
 // - v1.0.0: Sortie Fitting Prepare·Commit·Rollback, Applied Snapshot, Legacy 경로와 Pawn 없는 Adapter 계약을 최초 추가.
 // Migration:
 // - VehicleFittingData가 없으면 기존 VehicleData 기반 Weapon·Defense와 기존 Chaos 질량을 그대로 사용한다.
 // - 초기 Invalid Snapshot은 Legacy 입력으로 fallback하며, 이미 다른 Snapshot 질량이 구성된 수명에서는 변경 요청을 거부한다.
 // - Initial Mass는 Pawn이 물리 등록 전에 Movement Mass에 기록하고 이 컴포넌트는 Target·상태·허용 오차만 관리한다.
+// - VehicleMesh 실제 질량이 Target보다 큰 경우는 PhysicsAsset의 집계 질량 증거로 허용하며, 허용 오차보다 크게 부족한 경우만 전파 실패로 거부한다.
 // - SetMassOverrideInKg, Physics State 재생성, Ammo, Inventory Adapter와 Field Equip·Unequip은 이 컴포넌트에서 처리하지 않는다.
 
 #pragma once
@@ -187,7 +189,7 @@ public:
 	// [v1.1.0] Pawn이 물리 생성 전에 기록한 이전·설정 Movement Mass를 상태에 등록합니다.
 	bool RecordInitialMassBeforePhysics(float PreviousMovementMassKg, float ConfiguredMovementMassKg);
 
-	// [v1.1.0] BeginPlay에서 Movement 설정값과 VehicleMesh 실제 질량·Physics 상태를 검증합니다.
+	// [v1.2.0] BeginPlay에서 Movement 설정값의 Target 일치, VehicleMesh 실제 질량의 Target Coverage와 Physics 상태를 검증합니다.
 	bool VerifyInitialMassAfterPhysics(float ConfiguredMovementMassKg, float ActualVehicleMeshMassKg, bool bHasPhysicsState, bool bSimulatesPhysics, bool bHasPhysicsAsset);
 
 	// [v1.1.0] 물리 생성 전 Snapshot Mass 적용 실패를 Legacy Runtime 입력으로 되돌립니다.
@@ -215,7 +217,7 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|Fitting|Runtime|Mass")
 	ECFInitialMassState GetInitialMassState() const { return InitialMassState; }
 
-	// [v1.1.0] 실제 VehicleMesh 질량 검증을 통과했는지 반환합니다.
+	// [v1.2.0] Movement 설정값 일치, VehicleMesh 질량 Coverage와 Physics 계약을 모두 통과했는지 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|Fitting|Runtime|Mass")
 	bool HasVerifiedInitialMass() const { return bInitialMassVerified; }
 
@@ -339,7 +341,7 @@ private:
 	UPROPERTY(Transient)
 	float ConfiguredInitialMassKg = 0.0f;
 
-	// [v1.1.0] BeginPlay 실제 VehicleMesh 질량 검증 통과 여부입니다.
+	// [v1.2.0] BeginPlay Movement 설정값·VehicleMesh 질량 Coverage·Physics 계약 검증 통과 여부입니다.
 	UPROPERTY(Transient)
 	bool bInitialMassVerified = false;
 

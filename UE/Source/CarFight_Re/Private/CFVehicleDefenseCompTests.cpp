@@ -1,14 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.2.0
-// Date: 2026-07-31
+// Version: 1.3.0
+// Date: 2026-08-06
 // Description: CF-FQ-033 차량 방어 런타임 자동화 테스트
 // Scope: VehicleHealth 호환, 6방향 독립 장갑, 쉴드, 관통, Legacy Fallback, 재생, DR-P0-03 통합과 DR-P0-04 Debug·Blueprint 계약을 검증합니다.
 // Changelog:
+// - v1.3.0: 비활성 VehicleDefenseComp를 유효 DefenseData로 재초기화하면 활성 상태가 복구되고 Shield 재생 Tick이 진행되는 실제 Pawn 회귀를 추가.
 // - v1.2.0: BlueprintAssignable 이벤트 7종, BlueprintPure Debug API, 정상·Legacy 결과 캐시와 Reset 수명 테스트 추가.
 // - v1.1.0: Pawn 기본 DefenseComp, 정식 정적 진입점, Integrity 호환 결과와 HitScan·Projectile 결과 동등성 테스트 추가.
 // - v1.0.0: DR-P0-02 HealthCompatibility, DirectionalArmor, ShieldArmorPenetration, OverflowLegacyFallback, ShieldRegeneration 테스트 추가.
 // Migration:
+// - ShieldRegeneration 자동화는 실제 Pawn에서 발생한 비활성 컴포넌트 조건을 재현해 InitializeFromVehicleData의 활성 복구 계약을 함께 검증한다.
 // - DR-P0-03부터 ACFVehiclePawn은 VehicleHealthComp와 VehicleDefenseComp 기본 서브오브젝트를 함께 소유한다.
 // - 실제 에셋 연결과 사용자 PIE는 DR-P0-05~07 범위로 남긴다.
 
@@ -505,6 +507,16 @@ bool FCFShieldRegenerationRuntimeTest::RunTest(const FString& Parameters)
 
 	// [v1.0.0] 쉴드 피해와 재생을 받을 대상 묶음입니다.
 	FCFDefenseTestFixture Fixture = CreateDefenseTestFixture(TestWorld, TEXT("ShieldRegenerationTarget"), DefenseData);
+	if (!TestNotNull(TEXT("쉴드 재생 방어 컴포넌트 생성"), Fixture.DefenseComponent))
+	{
+		return false;
+	}
+
+	// [v1.3.0] 실제 Pawn에서 관찰된 비활성 방어 컴포넌트 조건을 재현합니다.
+	Fixture.DefenseComponent->Deactivate();
+	TestFalse(TEXT("재초기화 전 방어 컴포넌트 비활성"), Fixture.DefenseComponent->IsActive());
+	TestTrue(TEXT("유효 DefenseData 재초기화 성공"), Fixture.DefenseComponent->InitializeFromVehicleData(Fixture.VehicleData));
+	TestTrue(TEXT("유효 DefenseData 초기화 후 방어 컴포넌트 활성 복구"), Fixture.DefenseComponent->IsActive());
 
 	// [v1.0.0] 공격 주체 역할을 하는 일반 Actor입니다.
 	AActor* InstigatorActor = TestWorld->SpawnActor<AActor>();

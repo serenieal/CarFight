@@ -1,21 +1,27 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.0
-// Date: 2026-08-02
+// Version: 1.4.0
+// Date: 2026-08-13
 // Description: CarFight 모듈형 런처 발사 시퀀스 컴포넌트 구현
-// Scope: 첫 승인 발사 이후 Ripple·Salvo Dispatch, Volley 명령 목표 Snapshot, 런타임 취소, Volley 단위 쿨다운과 Debug 집계를 구현합니다.
+// Scope: 첫 승인 발사 이후 Ripple·Salvo Dispatch, Volley 명령 목표 Snapshot, 유한탄 Sequence 예약 인계·정리, 런타임 취소, Volley 단위 쿨다운과 Debug 집계를 구현합니다.
 // Changelog:
+// - v1.4.0: CF-FQ-031 AMMO-P0-04 유한탄 Sequence 예약을 후속 발사 성공 시 Commit, 실패 시 한 발 Release, Terminal·Reset 시 전체 Release하도록 연결.
+// - v1.3.0: Completed/Cancelled terminal 상태는 SequenceCompleted Cooldown 적용 뒤에 한 번 Broadcast해 HUD Sequence→Cooldown 전이의 READY 순간 노출을 제거.
+// - v1.2.0: 시퀀스 Runtime 상태 변경 때 OnLauncherSequenceChanged를 즉시 Broadcast해 HUD가 10Hz Polling에만 의존하지 않도록 교정.
 // - v1.1.0: 첫 발사 순간 CommandTargetLocation과 GuidanceTargetActor를 원자적으로 보존하고 후속 Projectile에 같은 Snapshot을 전달.
 // - v1.0.0: LM-P0-03B Ripple·Salvo Runtime Scheduler 최초 구현.
 // Migration:
 // - 목표 Actor는 약한 참조로 보존하며 파괴된 목표의 수명을 연장하지 않습니다.
 // - 첫 Projectile의 검증·실행·FX·Muzzle 진행은 Pawn 기존 단발 경로가 수행하고 이 컴포넌트는 남은 Projectile만 Dispatch합니다.
 // - SequenceCompleted 쿨다운은 완료 또는 부분 발사 후 취소 시 한 번 기록하며 이미 발사된 Projectile을 되돌리지 않습니다.
+// - Completed/Cancelled 상태 이벤트는 해당 Cooldown 기록과 최종 요약 갱신이 끝난 뒤 전달합니다.
+// - 유한탄 Sequence는 첫 발 전 Pawn이 예약하고 첫 발 성공 Commit 뒤 이 컴포넌트가 남은 예약·Action Lock을 인수합니다.
 
 #include "CFLauncherComp.h"
 
 #include "CFTurretMountData.h"
 #include "CFVehicleHealthComp.h"
+#include "CFVehicleAmmoComp.h"
 #include "CFVehiclePawn.h"
 #include "CFVehicleWeaponComp.h"
 #include "CFWeaponData.h"
@@ -77,12 +83,13 @@ bool UCFLauncherComp::InitializeLauncherRuntime(
 	return bRuntimeReady;
 }
 
-// [v1.1.0] 첫 발이 이미 승인·실행된 발사 패턴의 위치·Actor 목표 Snapshot과 남은 Ripple·Salvo 시퀀스를 시작합니다.
+// [v1.4.0] 첫 발이 이미 승인·실행된 발사 패턴의 목표 Snapshot과 남은 Ripple·Salvo 및 선택적 유한탄 예약을 인수해 시퀀스를 시작합니다.
 bool UCFLauncherComp::StartFireSequenceAfterFirstAcceptedShot(
 	const FCFLauncherFirePatternConfig& InFirePatternConfig,
 	const FVector& InCommandTargetLocation,
 	AActor* InGuidanceTargetActor,
-	const float InFirstAcceptedFireTimeSeconds)
+	const float InFirstAcceptedFireTimeSeconds,
+	const FName InAmmoWeaponInstanceId)
 {
 	if (SequenceRuntime.IsActive()
 		|| !IsValid(OwnerVehiclePawn)
@@ -92,11 +99,27 @@ bool UCFLauncherComp::StartFireSequenceAfterFirstAcceptedShot(
 		return false;
 	}
 
+	if (!InAmmoWeaponInstanceId.IsNone())
+	{
+		// [v1.4.0] Pawn이 첫 발 전에 확보하고 첫 발 성공 뒤에도 Action Lock을 유지 중인 VehicleAmmoComp입니다.
+		const UCFVehicleAmmoComp* VehicleAmmoComp = OwnerVehiclePawn->GetVehicleAmmoComp();
+		if (!VehicleAmmoComp || !VehicleAmmoComp->HasActiveLauncherSequenceReservation(InAmmoWeaponInstanceId))
+		{
+			return false;
+		}
+	}
+
 	// [v1.0.0] 시퀀스 도중 장비 교체를 감지하기 위해 시작 순간 복사한 WeaponData입니다.
 	SequenceWeaponData = VehicleWeaponComp->GetActiveWeaponData();
 
 	// [v1.0.0] 시퀀스 도중 마운트 교체를 감지하기 위해 시작 순간 복사한 TurretMountData입니다.
 	SequenceTurretMountData = VehicleWeaponComp->GetActiveTurretMountData();
+
+	// [v1.4.0] 유한탄 Sequence가 사용할 Ammo Runtime WeaponInstanceId입니다. 무한탄 시퀀스는 None을 유지합니다.
+	SequenceAmmoWeaponInstanceId = InAmmoWeaponInstanceId;
+
+	// [v1.4.0] Terminal에서 남은 예약과 Action Lock을 정리해야 하는 유한탄 Sequence인지 여부입니다.
+	bSequenceAmmoReservationActive = !SequenceAmmoWeaponInstanceId.IsNone();
 
 	SequenceCommandTargetSnapshot.Capture(InCommandTargetLocation, InGuidanceTargetActor);
 	FirstAcceptedFireTimeSeconds = FMath::Max(InFirstAcceptedFireTimeSeconds, 0.0f);
@@ -110,11 +133,13 @@ bool UCFLauncherComp::StartFireSequenceAfterFirstAcceptedShot(
 
 	if (SequenceRuntime.IsActive())
 	{
-		// [v1.0.0] Salvo의 첫 발과 같은 처리 묶음에 들어갈 추가 발사를 즉시 Dispatch합니다.
+		// [v1.3.0] Active 시작 상태는 즉시 공개하고 이후 같은 처리 묶음의 후속 발사를 Dispatch합니다.
+		BroadcastLauncherSequenceChanged();
 		DispatchDueShots(0.0f);
 	}
 	else
 	{
+		// [v1.4.0] 부분 시퀀스가 첫 발 한 발로 끝난 경우도 Terminal 정리에서 Action Lock을 해제합니다.
 		FinalizeTerminalSequence(FirstAcceptedFireTimeSeconds);
 	}
 
@@ -135,13 +160,17 @@ void UCFLauncherComp::CancelFireSequence(const ECFLauncherSequenceCancelReason C
 	const float TerminalTimeSeconds = GetWorld()
 		? GetWorld()->GetTimeSeconds()
 		: FMath::Max(FirstAcceptedFireTimeSeconds, 0.0f);
+
+	// [v1.3.0] Cancelled 이벤트는 Cooldown 적용까지 끝난 terminal 스냅샷으로 한 번만 전달합니다.
 	FinalizeTerminalSequence(TerminalTimeSeconds);
 }
 
-// [v1.1.0] 시퀀스 상태와 위치·Actor 목표 Snapshot을 신규 입력 대기 상태로 초기화합니다.
+// [v1.4.0] 시퀀스 상태와 위치·Actor 목표 Snapshot 및 남은 탄약 예약을 신규 입력 대기 상태로 초기화합니다.
 void UCFLauncherComp::ResetLauncherRuntime()
 {
+	ReleaseActiveAmmoReservation();
 	SequenceRuntime.Reset();
+	BroadcastLauncherSequenceChanged();
 	SequenceWeaponData = nullptr;
 	SequenceTurretMountData = nullptr;
 	SequenceCommandTargetSnapshot.Reset();
@@ -206,14 +235,35 @@ void UCFLauncherComp::DispatchDueShots(const float DeltaSeconds)
 		// [v1.0.0] 첫 발을 0으로 하는 현재 Volley 내부 발사 순번입니다.
 		const int32 SequenceShotIndex = SequenceRuntime.AttemptedProjectileCount - 1;
 
-		// [v1.1.0] Pawn이 첫 발사 순간 위치·Actor Snapshot과 현재 Muzzle을 사용해 기존 Projectile·FX·Damage 경로를 재사용한 결과입니다.
-		const bool bShotAccepted = OwnerVehiclePawn->ExecuteScheduledLauncherShot(
+				// [v1.1.0] Pawn이 첫 발사 순간 위치·Actor Snapshot과 현재 Muzzle을 사용해 기존 Projectile·FX·Damage 경로를 재사용한 결과입니다.
+		const bool bShotExecuted = OwnerVehiclePawn->ExecuteScheduledLauncherShot(
 			SequenceRuntime.VolleyId,
 			SequenceShotIndex,
 			SequenceCommandTargetSnapshot.CommandTargetLocation,
 			SequenceCommandTargetSnapshot.GetGuidanceTargetActor());
 
+		// [v1.4.0] 유한탄 Sequence에서 이번 후속 발사의 성공은 예약 소비 Commit, 실패는 해당 한 발 예약 Release까지 성공해야 최종 승인됩니다.
+		bool bShotAccepted = bShotExecuted;
+		if (bSequenceAmmoReservationActive)
+		{
+			// [v1.4.0] 성공·실패 실행 결과를 예약 탄약 상태에 반영할 VehicleAmmoComp입니다.
+			UCFVehicleAmmoComp* VehicleAmmoComp = OwnerVehiclePawn->GetVehicleAmmoComp();
+
+			// [v1.4.0] 실행 결과에 따라 성공 탄약 소비 또는 실패 예약 반환을 수행한 결과입니다.
+			const ECFAmmoTransactionResult AmmoShotResult = !VehicleAmmoComp
+				? ECFAmmoTransactionResult::MissingWeaponRuntime
+				: (bShotExecuted
+					? VehicleAmmoComp->CommitReservedLauncherShot(SequenceAmmoWeaponInstanceId)
+					: VehicleAmmoComp->ReleaseReservedLauncherShot(SequenceAmmoWeaponInstanceId));
+			bShotAccepted = bShotExecuted && AmmoShotResult == ECFAmmoTransactionResult::Accepted;
+		}
+
 		SequenceRuntime.RecordShotResult(bShotAccepted);
+		if (SequenceRuntime.IsActive())
+		{
+			// [v1.3.0] 중간 진행 상태만 즉시 공개하고 Completed/Cancelled는 Finalize 이후 공개합니다.
+			BroadcastLauncherSequenceChanged();
+		}
 	}
 
 	if (!SequenceRuntime.IsActive())
@@ -230,7 +280,7 @@ void UCFLauncherComp::DispatchDueShots(const float DeltaSeconds)
 	}
 }
 
-// [v1.0.0] Completed 또는 Cancelled 상태에서 SequenceCompleted 쿨다운과 최종 요약을 한 번 적용합니다.
+// [v1.3.0] Completed 또는 Cancelled 상태에서 SequenceCompleted 쿨다운과 최종 요약을 적용한 뒤 terminal 상태를 한 번 Broadcast합니다.
 void UCFLauncherComp::FinalizeTerminalSequence(const float TerminalTimeSeconds)
 {
 	// [v1.0.0] 현재 시퀀스가 완료 또는 취소된 terminal 상태인지 여부입니다.
@@ -246,13 +296,44 @@ void UCFLauncherComp::FinalizeTerminalSequence(const float TerminalTimeSeconds)
 		&& SequenceRuntime.AcceptedProjectileCount > 0
 		&& SequenceRuntime.ActiveConfig.CooldownStartPolicy == ECFLauncherCooldownStartPolicy::SequenceCompleted
 		&& IsValid(VehicleWeaponComp);
-	if (bShouldApplyCompletionCooldown)
+		if (bShouldApplyCompletionCooldown)
 	{
 		VehicleWeaponComp->RecordAcceptedFire(FMath::Max(TerminalTimeSeconds, 0.0f));
 		bTerminalCooldownApplied = true;
 	}
 
+	// [v1.4.0] 완료·취소 이유와 무관하게 미실행 Launcher 예약을 반환하고 Action Lock을 먼저 해제합니다.
+	ReleaseActiveAmmoReservation();
 	RefreshLauncherSequenceSummary();
+	BroadcastLauncherSequenceChanged();
+}
+
+// [v1.4.0] 현재 Launcher Sequence가 인수한 남은 탄약 예약과 LauncherSequenceActive Action Lock을 안전하게 반환합니다.
+void UCFLauncherComp::ReleaseActiveAmmoReservation()
+{
+	if (!bSequenceAmmoReservationActive)
+	{
+		SequenceAmmoWeaponInstanceId = NAME_None;
+		return;
+	}
+
+	// [v1.4.0] 현재 유한탄 Sequence의 예약 전체 반환과 Action Lock 해제를 소유하는 VehicleAmmoComp입니다.
+	UCFVehicleAmmoComp* VehicleAmmoComp = IsValid(OwnerVehiclePawn)
+		? OwnerVehiclePawn->GetVehicleAmmoComp()
+		: nullptr;
+	if (VehicleAmmoComp && !SequenceAmmoWeaponInstanceId.IsNone())
+	{
+		VehicleAmmoComp->ReleaseLauncherSequenceReservation(SequenceAmmoWeaponInstanceId);
+	}
+
+	bSequenceAmmoReservationActive = false;
+	SequenceAmmoWeaponInstanceId = NAME_None;
+}
+
+// [v1.3.0] 현재 결정적 SequenceRuntime 스냅샷을 상태 변경 구독자에게 전달합니다. Terminal 상태는 Cooldown 적용 이후에만 호출합니다.
+void UCFLauncherComp::BroadcastLauncherSequenceChanged()
+{
+	OnLauncherSequenceChanged.Broadcast(SequenceRuntime);
 }
 
 // [v1.1.0] 현재 SequenceRuntime과 위치·Actor 목표 Snapshot을 읽기 쉬운 한 줄 문자열로 다시 만듭니다.

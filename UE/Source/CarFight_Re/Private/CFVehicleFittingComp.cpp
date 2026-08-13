@@ -1,16 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.0
-// Date: 2026-08-02
-// Description: CF-FQ-034 FIT-P0-05 초기 출격 피팅·질량 상태 구현
-// Scope: Legacy·Snapshot Prepare, Initial Mass Target·검증, Weapon·Defense 원자 Commit, 실패 Rollback과 Applied Snapshot 수명을 구현합니다.
+// Version: 1.2.0
+// Date: 2026-08-04
+// Description: CF-FQ-033~034 초기 출격 피팅·질량·Defense Commit 상태 구현
+// Scope: Legacy·Snapshot Prepare, Initial Mass Target 설정값·실제 질량 Coverage 검증, Weapon·Defense 원자 Commit, 실패 Rollback과 Applied Snapshot 수명을 구현합니다.
 // Changelog:
+// - v1.2.0: Movement 설정값의 Snapshot Target 일치는 유지하고 VehicleMesh 실제 질량은 Target 하한 Coverage로 검증해 PhysicsAsset 집계 질량의 양의 오버헤드를 허용.
 // - v1.1.0: Initial Mass Prepare, Legacy fallback, 물리 생성 전 기록, 실제 질량 검증, 같은 질량 Verify Only와 다른 질량 재적용 거부를 추가.
 // - v1.0.0: UCFVehicleFittingComp 상태 머신과 실제 차량 Adapter를 최초 구현.
 // Migration:
 // - 초기 Invalid Snapshot은 아직 Snapshot 질량이 구성되지 않은 수명에서만 Legacy 입력으로 fallback한다.
 // - 이미 구성된 Snapshot 질량과 다른 Target은 Physics State Hot Recreate 없이 거부한다.
 // - Commit 실패 시 직전 Applied 입력 또는 VehicleData Legacy 입력으로 Weapon·Defense를 복원하지만 물리 질량을 직접 재작성하지 않는다.
+// - VehicleMesh.GetMass가 Snapshot Target보다 큰 경우는 PhysicsAsset 집계 질량 증거로 허용하며, Target보다 허용 오차 이상 부족하면 전파 실패로 거부한다.
 // - SetMassOverrideInKg, Physics State 재생성과 Ammo 적용은 수행하지 않는다.
 
 #include "CFVehicleFittingComp.h"
@@ -345,7 +347,7 @@ bool UCFVehicleFittingComp::RecordInitialMassBeforePhysics(const float PreviousM
 	return true;
 }
 
-// [v1.1.0] BeginPlay에서 Movement 설정값과 VehicleMesh 실제 질량·Physics 상태를 검증합니다.
+// [v1.2.0] BeginPlay에서 Movement 설정값의 Target 일치, VehicleMesh 실제 질량의 Target Coverage와 Physics 상태를 검증합니다.
 bool UCFVehicleFittingComp::VerifyInitialMassAfterPhysics(const float ConfiguredMovementMassKg, const float ActualVehicleMeshMassKg, const bool bHasPhysicsState, const bool bSimulatesPhysics, const bool bHasPhysicsAsset)
 {
 	if (bPreparedInitialMassUsesLegacy)
@@ -364,27 +366,33 @@ bool UCFVehicleFittingComp::VerifyInitialMassAfterPhysics(const float Configured
 		return false;
 	}
 
-	// [v1.1.0] Configured·Actual 값을 Target과 비교할 공통 허용 오차입니다.
+	// [v1.2.0] Configured Target 일치와 실제 질량 Coverage에 사용할 공통 허용 오차입니다.
 	const float MassToleranceKg = CalculateInitialMassToleranceKg(PreparedInitialMassKg);
-	// [v1.1.0] Movement 설정값이 Target 허용 오차 안인지 여부입니다.
+	// [v1.2.0] Movement 설정값이 Snapshot Target 허용 오차 안인지 여부입니다.
 	const bool bConfiguredMassMatches = FMath::IsFinite(ConfiguredMovementMassKg)
 		&& ConfiguredMovementMassKg > 0.0f
 		&& FMath::IsNearlyEqual(ConfiguredMovementMassKg, PreparedInitialMassKg, MassToleranceKg);
-	// [v1.1.0] VehicleMesh 실제 질량이 Target 허용 오차 안인지 여부입니다.
-	const bool bActualMassMatches = FMath::IsFinite(ActualVehicleMeshMassKg)
+	// [v1.2.0] VehicleMesh 실제 집계 질량이 유효하고 Snapshot Target보다 허용 오차 이상 부족하지 않은지 여부입니다.
+	const bool bActualMassCoversTarget = FMath::IsFinite(ActualVehicleMeshMassKg)
 		&& ActualVehicleMeshMassKg > 0.0f
-		&& FMath::IsNearlyEqual(ActualVehicleMeshMassKg, PreparedInitialMassKg, MassToleranceKg);
-	// [v1.1.0] 실제 Chaos Body 검증에 필요한 모든 물리 상태가 유효한지 여부입니다.
+		&& ActualVehicleMeshMassKg + MassToleranceKg >= PreparedInitialMassKg;
+	// [v1.2.0] PhysicsAsset 보조 Body가 포함된 실제 집계 질량과 Snapshot Target의 차이입니다.
+	const float ActualMassOverheadKg = FMath::IsFinite(ActualVehicleMeshMassKg)
+		? ActualVehicleMeshMassKg - PreparedInitialMassKg
+		: 0.0f;
+	// [v1.2.0] 실제 Chaos Body 검증에 필요한 모든 물리 상태가 유효한지 여부입니다.
 	const bool bPhysicsContractValid = bHasPhysicsState && bSimulatesPhysics && bHasPhysicsAsset;
 
-	bInitialMassVerified = bConfiguredMassMatches && bActualMassMatches && bPhysicsContractValid;
+	bInitialMassVerified = bConfiguredMassMatches && bActualMassCoversTarget && bPhysicsContractValid;
 	InitialMassState = bInitialMassVerified ? ECFInitialMassState::Verified : ECFInitialMassState::VerificationFailed;
 	LastInitialMassSummary = FString::Printf(
-		TEXT("InitialMass: Verify=%s, Target=%.3f, Configured=%.3f, Actual=%.3f, Tolerance=%.3f, PhysicsState=%s, Simulate=%s, PhysicsAsset=%s"),
+		TEXT("InitialMass: Verify=%s, Target=%.3f, Configured=%.3f, Actual=%.3f, ActualCoverage=%s, ActualOverhead=%.3f, Tolerance=%.3f, PhysicsState=%s, Simulate=%s, PhysicsAsset=%s"),
 		bInitialMassVerified ? TEXT("Passed") : TEXT("Failed"),
 		PreparedInitialMassKg,
 		ConfiguredMovementMassKg,
 		ActualVehicleMeshMassKg,
+		bActualMassCoversTarget ? TEXT("Passed") : TEXT("Failed"),
+		ActualMassOverheadKg,
 		MassToleranceKg,
 		bHasPhysicsState ? TEXT("Yes") : TEXT("No"),
 		bSimulatesPhysics ? TEXT("Yes") : TEXT("No"),

@@ -1,9 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.136.0
-// Date: 2026-08-02
+// Version: 2.143.0
+// Date: 2026-08-13
 // Description: CarFight 싱글플레이 차량 Pawn 구현
 // Changelog:
+// - v2.143.0: CF-FQ-031 AMMO-P0-07 Applied Fitting Snapshot의 InitialSortieAmmoLoads와 finite ResolvedMounts로 VehicleAmmoComp를 초기화하고 Ammo Ready를 CombatReady에 포함.
+// - v2.142.0: CF-FQ-031 AMMO-P0-05 현재 활성 WeaponInstance를 VehicleAmmoComp 수동 Reload API로 전달하는 Gameplay 명령을 추가.
+// - v2.141.0: CF-FQ-031 AMMO-P0-04 유한탄 Ripple·Salvo 전체 유효 발수를 첫 발 실행 전에 예약하고 첫 발 Commit·실패/시작 실패 Release 및 Launcher Action Lock 거부를 연결.
+// - v2.140.0: CF-FQ-031 AMMO-P0-03 SingleCycle을 Validate→Ammo Reserve→실행→Commit/Rollback으로 연결하고 HitScan 실제 실행을 검증 단계에서 Execute 단계로 이동.
+// - v2.139.0: CF-FQ-031 AMMO-P0-02 VehicleAmmoComp 기본 서브오브젝트를 만들고 재초기화와 EndPlay에서 출격 탄약 상태를 Reset. 기존 Fire에는 미연결.
+// - v2.138.0: VehicleDebug Snapshot이 현재 선택 대상 Actor의 TargetSelect 표시 정보와 방어·내구도 런타임 상태를 읽기 전용으로 수집하도록 연결.
+// - v2.137.0: WITH_EDITOR PIE에서 PreRegister·BeginPlay·다음 Tick·1초 후·EndPlay의 피팅·방어 컴포넌트 인스턴스와 런타임 상태를 기록하는 CF-FQ-033 수명 Probe를 추가.
 // - v2.136.0: 첫 발사 순간 위치·Actor를 함께 캡처하고 Ripple·Salvo 후속 Launch Context가 현재 TargetSelect를 재조회하지 않도록 수정.
 // - v2.135.0: Projectile Launch Context에 발사 순간 선택 Target Actor를 Snapshot으로 복사해 Direct 미사일의 독립 목표 수명을 연결.
 // - v2.134.0: 차량 코어 Runtime과 전투 Runtime 준비 상태를 분리하고 기존 bVehicleRuntimeReady를 코어 호환 상태로 유지.
@@ -166,8 +173,10 @@
 #include "CFCombatFxComp.h"
 #include "CFVehicleHealthComp.h"
 #include "CFVehicleDefenseComp.h"
+#include "CFVehicleDefenseData.h"
 #include "CFVehicleFittingComp.h"
 #include "CFVehicleFittingData.h"
+#include "CFVehicleAmmoComp.h"
 #include "CFTargetSelectComp.h"
 #include "CFWeaponData.h"
 #include "CFVehicleWeaponComp.h"
@@ -196,6 +205,7 @@
 #include "InputActionValue.h"
 #include "InputCoreTypes.h"
 #include "InputMappingContext.h"
+#include "TimerManager.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Widgets/Notifications/SNotificationList.h"
 
@@ -809,6 +819,198 @@ namespace
 			: RuntimeSummary;
 	}
 
+#if WITH_EDITOR
+	// [v2.137.0] 한 차량이 실제로 보유한 모든 Fitting 컴포넌트의 인스턴스와 상태를 로그 문자열로 만듭니다.
+	FString BuildVehicleFittingComponentProbeSummary(const ACFVehiclePawn* VehiclePawn, int32& OutComponentCount)
+	{
+		OutComponentCount = 0;
+		if (!IsValid(VehiclePawn))
+		{
+			return TEXT("VehiclePawn=Invalid");
+		}
+
+		// [v2.137.0] Actor에 실제로 연결된 모든 VehicleFittingComp 인스턴스입니다.
+		TArray<UCFVehicleFittingComp*> VehicleFittingComponents;
+		VehiclePawn->GetComponents<UCFVehicleFittingComp>(VehicleFittingComponents);
+		OutComponentCount = VehicleFittingComponents.Num();
+
+		// [v2.137.0] 컴포넌트 이름·주소·상태를 순서대로 누적할 최종 문자열입니다.
+		FString ComponentProbeSummary;
+		for (int32 ComponentIndex = 0; ComponentIndex < VehicleFittingComponents.Num(); ++ComponentIndex)
+		{
+			// [v2.137.0] 현재 순회 중인 피팅 컴포넌트 인스턴스입니다.
+			const UCFVehicleFittingComp* VehicleFittingComponent = VehicleFittingComponents[ComponentIndex];
+			if (ComponentIndex > 0)
+			{
+				ComponentProbeSummary += TEXT("; ");
+			}
+
+			if (!IsValid(VehicleFittingComponent))
+			{
+				ComponentProbeSummary += TEXT("Invalid");
+				continue;
+			}
+
+			ComponentProbeSummary += FString::Printf(
+				TEXT("%s@%p{Initial=%s,Apply=%s,MassSummary=%s,RuntimeSummary=%s}"),
+				*VehicleFittingComponent->GetPathName(),
+				static_cast<const void*>(VehicleFittingComponent),
+				*UEnum::GetValueAsString(VehicleFittingComponent->GetInitialMassState()),
+				*UEnum::GetValueAsString(VehicleFittingComponent->GetRuntimeApplyState()),
+				*VehicleFittingComponent->GetLastInitialMassSummary(),
+				*VehicleFittingComponent->GetLastFittingRuntimeSummary());
+		}
+
+		return ComponentProbeSummary.IsEmpty() ? TEXT("None") : ComponentProbeSummary;
+	}
+
+	// [v2.137.0] 한 차량이 실제로 보유한 모든 Defense 컴포넌트의 인스턴스와 상태를 로그 문자열로 만듭니다.
+	FString BuildVehicleDefenseComponentProbeSummary(const ACFVehiclePawn* VehiclePawn, int32& OutComponentCount)
+	{
+		OutComponentCount = 0;
+		if (!IsValid(VehiclePawn))
+		{
+			return TEXT("VehiclePawn=Invalid");
+		}
+
+		// [v2.137.0] Actor에 실제로 연결된 모든 VehicleDefenseComp 인스턴스입니다.
+		TArray<UCFVehicleDefenseComp*> VehicleDefenseComponents;
+		VehiclePawn->GetComponents<UCFVehicleDefenseComp>(VehicleDefenseComponents);
+		OutComponentCount = VehicleDefenseComponents.Num();
+
+		// [v2.137.0] 컴포넌트 이름·주소·상태를 순서대로 누적할 최종 문자열입니다.
+		FString ComponentProbeSummary;
+		for (int32 ComponentIndex = 0; ComponentIndex < VehicleDefenseComponents.Num(); ++ComponentIndex)
+		{
+			// [v2.137.0] 현재 순회 중인 방어 컴포넌트 인스턴스입니다.
+			const UCFVehicleDefenseComp* VehicleDefenseComponent = VehicleDefenseComponents[ComponentIndex];
+			if (ComponentIndex > 0)
+			{
+				ComponentProbeSummary += TEXT("; ");
+			}
+
+			if (!IsValid(VehicleDefenseComponent))
+			{
+				ComponentProbeSummary += TEXT("Invalid");
+				continue;
+			}
+
+			ComponentProbeSummary += FString::Printf(
+				TEXT("%s@%p{Ready=%s,Active=%s,Shield=%.3f/%.3f,Armor=%.3f/%.3f/%.3f/%.3f/%.3f/%.3f}"),
+				*VehicleDefenseComponent->GetPathName(),
+				static_cast<const void*>(VehicleDefenseComponent),
+				VehicleDefenseComponent->IsDefenseInitialized() ? TEXT("Yes") : TEXT("No"),
+				*GetPathNameSafe(VehicleDefenseComponent->GetActiveDefenseData()),
+				VehicleDefenseComponent->GetCurrentShield(),
+				VehicleDefenseComponent->GetMaximumShield(),
+				VehicleDefenseComponent->GetCurrentArmor(ECFArmorDirection::Front),
+				VehicleDefenseComponent->GetCurrentArmor(ECFArmorDirection::Left),
+				VehicleDefenseComponent->GetCurrentArmor(ECFArmorDirection::Right),
+				VehicleDefenseComponent->GetCurrentArmor(ECFArmorDirection::Rear),
+				VehicleDefenseComponent->GetCurrentArmor(ECFArmorDirection::Top),
+				VehicleDefenseComponent->GetCurrentArmor(ECFArmorDirection::Bottom));
+		}
+
+		return ComponentProbeSummary.IsEmpty() ? TEXT("None") : ComponentProbeSummary;
+	}
+
+	// [v2.137.0] 수동 PIE에서 차량별 컴포넌트 인스턴스와 초기화 상태를 한 줄로 기록합니다.
+	void LogEditorPIEVehicleRuntimeProbe(const ACFVehiclePawn* VehiclePawn, const TCHAR* ProbePhase)
+	{
+		if (!IsValid(VehiclePawn))
+		{
+			return;
+		}
+
+		// [v2.137.0] PIE 여부와 World 경로를 판정할 현재 차량 World입니다.
+		const UWorld* VehicleWorld = VehiclePawn->GetWorld();
+		if (!VehicleWorld || VehicleWorld->WorldType != EWorldType::PIE)
+		{
+			return;
+		}
+
+		// [v2.137.0] Pawn의 C++ 소유 포인터가 가리키는 피팅 컴포넌트입니다.
+		const UCFVehicleFittingComp* GetterFittingComponent = VehiclePawn->GetVehicleFittingComp();
+		// [v2.137.0] Pawn의 C++ 소유 포인터가 가리키는 방어 컴포넌트입니다.
+		const UCFVehicleDefenseComp* GetterDefenseComponent = VehiclePawn->GetVehicleDefenseComp();
+		// [v2.137.0] 현재 차량의 Integrity를 제공하는 내구도 컴포넌트입니다.
+		const UCFVehicleHealthComp* VehicleHealthComponent = VehiclePawn->GetVehicleHealthComp();
+		// [v2.137.0] Actor에 연결된 전체 피팅 컴포넌트 수입니다.
+		int32 FittingComponentCount = 0;
+		// [v2.137.0] Actor에 연결된 전체 피팅 컴포넌트 인스턴스 상태입니다.
+		const FString FittingComponentSummary = BuildVehicleFittingComponentProbeSummary(VehiclePawn, FittingComponentCount);
+		// [v2.137.0] Actor에 연결된 전체 방어 컴포넌트 수입니다.
+		int32 DefenseComponentCount = 0;
+		// [v2.137.0] Actor에 연결된 전체 방어 컴포넌트 인스턴스 상태입니다.
+		const FString DefenseComponentSummary = BuildVehicleDefenseComponentProbeSummary(VehiclePawn, DefenseComponentCount);
+
+		UE_LOG(
+			LogTemp,
+			Display,
+			TEXT("CF-FQ-033 ManualPIEProbe | Phase=%s | World=%s | Actor=%s@%p | BegunPlay=%s | Local=%s | Controller=%s | VehicleData=%s | FittingData=%s | FittingGetter=%s@%p | FittingCount=%d | FittingInstances=%s | DefenseGetter=%s@%p | DefenseCount=%d | DefenseInstances=%s | Integrity=%.3f | VehicleSummary=%s"),
+			ProbePhase ? ProbePhase : TEXT("Unknown"),
+			*VehicleWorld->GetPathName(),
+			*VehiclePawn->GetPathName(),
+			static_cast<const void*>(VehiclePawn),
+			VehiclePawn->HasActorBegunPlay() ? TEXT("Yes") : TEXT("No"),
+			VehiclePawn->IsLocallyControlled() ? TEXT("Yes") : TEXT("No"),
+			*GetPathNameSafe(VehiclePawn->GetController()),
+			*GetPathNameSafe(VehiclePawn->VehicleData.Get()),
+			*GetPathNameSafe(VehiclePawn->VehicleFittingData.Get()),
+			*GetPathNameSafe(GetterFittingComponent),
+			static_cast<const void*>(GetterFittingComponent),
+			FittingComponentCount,
+			*FittingComponentSummary,
+			*GetPathNameSafe(GetterDefenseComponent),
+			static_cast<const void*>(GetterDefenseComponent),
+			DefenseComponentCount,
+			*DefenseComponentSummary,
+			VehicleHealthComponent ? VehicleHealthComponent->GetCurrentIntegrity() : 0.0f,
+			*VehiclePawn->LastVehicleRuntimeSummary);
+	}
+
+	// [v2.137.0] BeginPlay 직후와 1초 뒤 차량 상태를 다시 기록해 초기화 후 상태 교체 여부를 판정합니다.
+	void ScheduleEditorPIEVehicleRuntimeProbes(ACFVehiclePawn* VehiclePawn)
+	{
+		if (!IsValid(VehiclePawn))
+		{
+			return;
+		}
+
+		// [v2.137.0] 지연 Probe 타이머를 소유할 현재 PIE World입니다.
+		UWorld* VehicleWorld = VehiclePawn->GetWorld();
+		if (!VehicleWorld || VehicleWorld->WorldType != EWorldType::PIE)
+		{
+			return;
+		}
+
+		// [v2.137.0] 타이머 실행 전에 Pawn이 종료될 수 있으므로 사용할 약한 참조입니다.
+		const TWeakObjectPtr<ACFVehiclePawn> WeakVehiclePawn(VehiclePawn);
+		VehicleWorld->GetTimerManager().SetTimerForNextTick(
+			FTimerDelegate::CreateLambda([WeakVehiclePawn]()
+			{
+				if (WeakVehiclePawn.IsValid())
+				{
+					LogEditorPIEVehicleRuntimeProbe(WeakVehiclePawn.Get(), TEXT("NextTick"));
+				}
+			}));
+
+		// [v2.137.0] 초기화 직후와 1초 후 상태를 비교할 일회성 타이머 핸들입니다.
+		FTimerHandle OneSecondProbeTimerHandle;
+		VehicleWorld->GetTimerManager().SetTimer(
+			OneSecondProbeTimerHandle,
+			FTimerDelegate::CreateLambda([WeakVehiclePawn]()
+			{
+				if (WeakVehiclePawn.IsValid())
+				{
+					LogEditorPIEVehicleRuntimeProbe(WeakVehiclePawn.Get(), TEXT("AfterOneSecond"));
+				}
+			}),
+			1.0f,
+			false);
+	}
+#endif
+
 }
 
 ACFVehiclePawn::ACFVehiclePawn()
@@ -820,8 +1022,11 @@ ACFVehiclePawn::ACFVehiclePawn()
 		VehicleAimComp = CreateDefaultSubobject<UCFVehicleAimComp>(TEXT("VehicleAimComp"));
 		VehicleWeaponComp = CreateDefaultSubobject<UCFVehicleWeaponComp>(TEXT("VehicleWeaponComp"));
 
-	// [v2.132.0] 출격 피팅 Snapshot과 Weapon·Defense 원자 적용 경계를 소유할 기본 서브오브젝트입니다.
+		// [v2.132.0] 출격 피팅 Snapshot과 Weapon·Defense 원자 적용 경계를 소유할 기본 서브오브젝트입니다.
 	VehicleFittingComp = CreateDefaultSubobject<UCFVehicleFittingComp>(TEXT("VehicleFittingComp"));
+
+	// [v2.139.0] 이번 출격의 실제 장전·예비·예약 탄약 상태를 단일 소유할 기본 서브오브젝트입니다.
+	VehicleAmmoComp = CreateDefaultSubobject<UCFVehicleAmmoComp>(TEXT("VehicleAmmoComp"));
 	LauncherComp = CreateDefaultSubobject<UCFLauncherComp>(TEXT("LauncherComp"));
 	ProjectilePoolComp = CreateDefaultSubobject<UCFProjectilePoolComp>(TEXT("ProjectilePoolComp"));
 
@@ -1139,6 +1344,10 @@ void ACFVehiclePawn::OnConstruction(const FTransform& Transform)
 // [v2.133.0] 게임 World의 물리 컴포넌트 등록 전에 초기 피팅 Snapshot 질량을 Movement Mass에 1회 기록합니다.
 void ACFVehiclePawn::PreRegisterAllComponents()
 {
+#if WITH_EDITOR
+	LogEditorPIEVehicleRuntimeProbe(this, TEXT("PreRegister.BeforePrepare"));
+#endif
+
 	// [v2.133.0] CDO·Editor Preview·수동 초기화 Pawn에서 초기 출격 질량을 기록하지 않을지 여부입니다.
 	const bool bCanPrepareInitialSortieMass = !HasAnyFlags(RF_ClassDefaultObject)
 		&& bAutoInitializeOnBeginPlay
@@ -1149,12 +1358,24 @@ void ACFVehiclePawn::PreRegisterAllComponents()
 		PrepareInitialSortieRuntimeMass();
 	}
 
+#if WITH_EDITOR
+	LogEditorPIEVehicleRuntimeProbe(this, TEXT("PreRegister.AfterPrepareBeforeSuper"));
+#endif
+
 	Super::PreRegisterAllComponents();
+
+#if WITH_EDITOR
+	LogEditorPIEVehicleRuntimeProbe(this, TEXT("PreRegister.AfterSuper"));
+#endif
 }
 
 void ACFVehiclePawn::BeginPlay()
 {
 	Super::BeginPlay();
+
+#if WITH_EDITOR
+	LogEditorPIEVehicleRuntimeProbe(this, TEXT("BeginPlay.AfterSuperBeforeInitialize"));
+#endif
 
 	// [v2.61.0] BP 저장값이 이전 네트워크 테스트 기준으로 남아 있어도 런타임 싱글플레이 기준선을 보장합니다.
 	ApplyVehicleSinglePlayerBaseline();
@@ -1170,7 +1391,12 @@ void ACFVehiclePawn::BeginPlay()
 		InitializeVehicleRuntime();
 	}
 
-			if (bCanRunLocalPresentation)
+#if WITH_EDITOR
+	LogEditorPIEVehicleRuntimeProbe(this, TEXT("BeginPlay.AfterInitialize"));
+	ScheduleEditorPIEVehicleRuntimeProbes(this);
+#endif
+
+	if (bCanRunLocalPresentation)
 	{
 		CreateAimReticleWidget();
 		CreateTargetSelectWidget();
@@ -1179,11 +1405,25 @@ void ACFVehiclePawn::BeginPlay()
 
 void ACFVehiclePawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// [v2.132.0] 이전 출격의 Prepared·Applied Snapshot이 다음 수명으로 남지 않게 정리합니다.
+#if WITH_EDITOR
+	LogEditorPIEVehicleRuntimeProbe(this, TEXT("EndPlay.BeforeReset"));
+#endif
+
+		// [v2.132.0] 이전 출격의 Prepared·Applied Snapshot이 다음 수명으로 남지 않게 정리합니다.
 	if (VehicleFittingComp)
 	{
 		VehicleFittingComp->ResetFittingRuntimeState();
 	}
+
+	// [v2.139.0] 이전 출격의 장전·예비·예약 탄약과 통계가 다음 Pawn 수명으로 남지 않게 정리합니다.
+	if (VehicleAmmoComp)
+	{
+		VehicleAmmoComp->ResetAmmoRuntime();
+	}
+
+#if WITH_EDITOR
+	LogEditorPIEVehicleRuntimeProbe(this, TEXT("EndPlay.AfterReset"));
+#endif
 
 	DestroyTargetSelectWidget();
 	DestroyAimReticleWidget();
@@ -1304,6 +1544,17 @@ void ACFVehiclePawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 	CreateTargetSelectWidget();
 }
 
+// [v2.142.0] 현재 활성 WeaponInstance의 FullMagazine 재장전을 Gameplay 명령으로 요청합니다.
+ECFAmmoTransactionResult ACFVehiclePawn::RequestReloadCurrentWeapon()
+{
+	if (!VehicleAmmoComp || !VehicleWeaponComp)
+	{
+		return ECFAmmoTransactionResult::MissingWeaponRuntime;
+	}
+
+	return VehicleAmmoComp->RequestActiveWeaponReload(VehicleWeaponComp);
+}
+
 bool ACFVehiclePawn::RegisterDefaultInputMappingContext()
 {
 	if ((GetNetMode() == NM_DedicatedServer) || !IsLocallyControlled())
@@ -1343,8 +1594,14 @@ bool ACFVehiclePawn::InitializeVehicleRuntime()
 	bVehicleCombatRuntimeReady = false;
 
 	// [v2.134.0] 기존 호환 준비 상태도 차량 코어 상태와 함께 초기화합니다.
-	bVehicleRuntimeReady = false;
+		bVehicleRuntimeReady = false;
 	LastVehicleRuntimeSummary = TEXT("VehicleRuntime: InitializeStarted");
+
+	// [v2.139.0] 명시 재초기화에서 이전 출격 탄약 상태가 재사용되지 않도록 P0-02 Runtime을 먼저 비웁니다.
+	if (VehicleAmmoComp)
+	{
+		VehicleAmmoComp->ResetAmmoRuntime();
+	}
 	ApplyVehicleDataConfig();
 
 	// [v2.68.0] VehicleData 기반 공통 설정 적용 직후의 요약 문자열입니다.
@@ -1397,8 +1654,61 @@ bool ACFVehiclePawn::InitializeVehicleRuntime()
 		? VehicleFittingComp->CommitPreparedSortieFittingToVehicle(this, VehicleWeaponComp, VehicleDefenseComp)
 		: false;
 
-	// [v2.132.0] Commit 후 실제 Weapon Runtime 준비 상태입니다.
+		// [v2.132.0] Commit 후 실제 Weapon Runtime 준비 상태입니다.
 	const bool bWeaponReady = VehicleWeaponComp && VehicleWeaponComp->IsWeaponRuntimeReady();
+
+	// [v2.143.0] Ammo 기본 서브오브젝트 존재와 finite Snapshot 초기화 결과를 합친 전투 탄약 준비 상태입니다.
+	bool bAmmoReady = VehicleAmmoComp != nullptr;
+
+	// [v2.143.0] 이번 Applied Snapshot에서 실제 finite Ammo Runtime 초기화가 필요한 무기가 하나라도 있는지 여부입니다.
+	bool bFiniteAmmoRuntimeRequired = false;
+
+	if (bFittingApplied && VehicleFittingComp && VehicleFittingComp->HasAppliedFittingSnapshot())
+	{
+		// [v2.143.0] Initial Mass와 Weapon·Defense Commit에 사용한 바로 그 Applied Fitting Snapshot 복사본입니다.
+		const FCFVehicleFittingSnapshot AppliedFittingSnapshot = VehicleFittingComp->GetAppliedFittingSnapshot();
+
+		// [v2.143.0] WeaponInstanceId별 독립 장전 상태를 만들 finite 무기 초기화 입력 목록입니다.
+		TArray<FCFWeaponAmmoInitialization> WeaponAmmoInitializations;
+		for (const FCFResolvedFittingMount& ResolvedMount : AppliedFittingSnapshot.ResolvedMounts)
+		{
+			UCFWeaponData* ResolvedWeaponData = ResolvedMount.WeaponData;
+			if (!IsValid(ResolvedWeaponData) || ResolvedWeaponData->bUseInfiniteAmmoForDebug)
+			{
+				continue;
+			}
+
+			bFiniteAmmoRuntimeRequired = true;
+			if (!ResolvedWeaponData->UsesFiniteAmmoRuntime() || ResolvedMount.MountProfileId.IsNone())
+			{
+				bAmmoReady = false;
+				continue;
+			}
+
+			// [v2.143.0] 같은 WeaponData를 여러 Mount에 장착해도 Loaded를 독립 소유하게 할 WeaponInstance 초기화 입력입니다.
+			FCFWeaponAmmoInitialization WeaponAmmoInitialization;
+			WeaponAmmoInitialization.WeaponInstanceId = ResolvedMount.MountProfileId;
+			WeaponAmmoInitialization.WeaponData = ResolvedWeaponData;
+			WeaponAmmoInitialization.InitialLoadedAmmoCountOverride = INDEX_NONE;
+			WeaponAmmoInitializations.Add(WeaponAmmoInitialization);
+		}
+
+		// [v2.143.0] 명시적 출격 탄약 또는 finite WeaponInstance가 있으면 VehicleAmmoComp에 실제 Runtime을 구성해야 하는지 여부입니다.
+		const bool bShouldInitializeAmmoRuntime = !AppliedFittingSnapshot.InitialSortieAmmoLoads.IsEmpty()
+			|| !WeaponAmmoInitializations.IsEmpty();
+		if (bAmmoReady && bShouldInitializeAmmoRuntime)
+		{
+			bAmmoReady = VehicleAmmoComp
+				&& VehicleAmmoComp->InitializeAmmoRuntime(
+					this,
+					AppliedFittingSnapshot.InitialSortieAmmoLoads,
+					WeaponAmmoInitializations);
+		}
+		else if (bFiniteAmmoRuntimeRequired)
+		{
+			bAmmoReady = false;
+		}
+	}
 
 	// [v2.132.0] Snapshot 장비가 반영된 최종 Weapon 캐시로 터렛 시각화를 다시 적용합니다.
 	if (bFittingApplied)
@@ -1430,15 +1740,23 @@ bool ACFVehiclePawn::InitializeVehicleRuntime()
 	// [v2.134.0] 전투 Runtime 준비 판정에 포함할 TargetSelectComp 존재 여부입니다.
 	const bool bTargetSelectReady = TargetSelectComp != nullptr;
 
-	// [v2.134.0] 차량 코어에 Aim·Weapon·Launcher·TargetSelect가 모두 연결된 전투 Runtime 준비 상태입니다.
+		// [v2.143.0] 차량 코어에 Aim·Weapon·Ammo·Launcher·TargetSelect가 모두 연결된 전투 Runtime 준비 상태입니다.
 	bVehicleCombatRuntimeReady = bVehicleCoreRuntimeReady
 		&& bAimReady
 		&& bWeaponReady
+		&& bAmmoReady
 		&& bLauncherReady
 		&& bTargetSelectReady;
 
 	// [v2.134.0] 기존 Tick·Debug·Blueprint 호환 값은 차량 코어 Runtime 준비 상태와 동일하게 유지합니다.
 	bVehicleRuntimeReady = bVehicleCoreRuntimeReady;
+
+		// [v2.143.0] 실제 finite Ammo Runtime, 기존 무한탄 호환 또는 초기화 실패를 구분해 표시할 탄약 런타임 상태입니다.
+	const TCHAR* AmmoRuntimeState = !VehicleAmmoComp
+		? TEXT("Missing")
+		: (!bAmmoReady
+			? TEXT("Failed")
+			: (VehicleAmmoComp->IsAmmoRuntimeInitialized() ? TEXT("Ready") : TEXT("InfiniteCompatibility")));
 
 	// [v2.129.0] 실제 DefenseData 초기화 또는 Legacy Fallback 상태를 구분해 표시할 방어 런타임 상태입니다.
 	const TCHAR* DefenseRuntimeState = !bDefenseComponentReady
@@ -1455,7 +1773,7 @@ bool ACFVehiclePawn::InitializeVehicleRuntime()
 		? VehicleFittingComp->GetLastInitialMassSummary()
 		: TEXT("InitialMass: ComponentMissing");
 
-		LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: Data=%s, Fitting=%s, Mass=%s, Drive=%s, WheelSync=%s, Aim=%s, Weapon=%s, Launcher=%s, Health=%s, Defense=%s, TargetSelect=%s, OwnerVisual=%s, CoreReady=%s, CombatReady=%s | %s | %s | %s | %s | %s"), VehicleData ? TEXT("Present") : TEXT("Missing"), bFittingApplied ? TEXT("Applied") : TEXT("Failed"), bInitialMassReady ? TEXT("Ready") : TEXT("Failed"), bDriveReady ? TEXT("Ready") : TEXT("Missing"), bWheelSyncReady ? TEXT("Ready") : TEXT("Missing"), bAimReady ? TEXT("Ready") : TEXT("Missing"), bWeaponReady ? TEXT("Ready") : TEXT("Missing"), bLauncherReady ? TEXT("Ready") : TEXT("Missing"), bHealthReady ? TEXT("Ready") : TEXT("Missing"), DefenseRuntimeState, bTargetSelectReady ? TEXT("Ready") : TEXT("Missing"), bOwnerVisualReady ? TEXT("Ready") : TEXT("Skipped"), bVehicleCoreRuntimeReady ? TEXT("True") : TEXT("False"), bVehicleCombatRuntimeReady ? TEXT("True") : TEXT("False"), *FittingRuntimeSummary, *InitialMassSummary, *DataConfigSummary, *LayoutConfigSummary, *LastTurretVisualSummary);
+			LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: Data=%s, Fitting=%s, Mass=%s, Drive=%s, WheelSync=%s, Aim=%s, Weapon=%s, Ammo=%s, Launcher=%s, Health=%s, Defense=%s, TargetSelect=%s, OwnerVisual=%s, CoreReady=%s, CombatReady=%s | %s | %s | %s | %s | %s"), VehicleData ? TEXT("Present") : TEXT("Missing"), bFittingApplied ? TEXT("Applied") : TEXT("Failed"), bInitialMassReady ? TEXT("Ready") : TEXT("Failed"), bDriveReady ? TEXT("Ready") : TEXT("Missing"), bWheelSyncReady ? TEXT("Ready") : TEXT("Missing"), bAimReady ? TEXT("Ready") : TEXT("Missing"), bWeaponReady ? TEXT("Ready") : TEXT("Missing"), AmmoRuntimeState, bLauncherReady ? TEXT("Ready") : TEXT("Missing"), bHealthReady ? TEXT("Ready") : TEXT("Missing"), DefenseRuntimeState, bTargetSelectReady ? TEXT("Ready") : TEXT("Missing"), bOwnerVisualReady ? TEXT("Ready") : TEXT("Skipped"), bVehicleCoreRuntimeReady ? TEXT("True") : TEXT("False"), bVehicleCombatRuntimeReady ? TEXT("True") : TEXT("False"), *FittingRuntimeSummary, *InitialMassSummary, *DataConfigSummary, *LayoutConfigSummary, *LastTurretVisualSummary);
 	return bVehicleRuntimeReady;
 }
 
@@ -3289,6 +3607,52 @@ FCFVehicleDebugSnapshot ACFVehiclePawn::GetVehicleDebugSnapshot() const
 		DebugSnapshot.Aim.AimRuntimeSummary = VehicleAimComp->GetLastAimRuntimeSummary();
 		DebugSnapshot.Aim.LastFireRequest = LastFireRequest;
 		DebugSnapshot.Aim.LastFireResult = LastFireResult;
+		}
+
+	// [v2.138.0] Target 카테고리는 현재 TargetSelect 선택 기록과 선택 Actor의 컴포넌트 상태만 읽으며 선택·피해 계산은 수행하지 않습니다.
+	DebugSnapshot.Target.bHasTargetSelectComponent = (TargetSelectComp != nullptr);
+	if (TargetSelectComp)
+	{
+		DebugSnapshot.Target.bHasSelectedTarget = TargetSelectComp->HasSelectedTarget();
+		DebugSnapshot.Target.bSelectedTargetValid = TargetSelectComp->IsSelectedTargetValid();
+		DebugSnapshot.Target.SelectedTargetTrackState = TargetSelectComp->GetSelectedTargetTrackState();
+		DebugSnapshot.Target.SelectedTargetLifetimeSummary = TargetSelectComp->BuildSelectedTargetLifetimeDebugSummary();
+
+		// [v2.138.0] TargetSelect가 선택 시점에 캐시한 표시 정보입니다.
+		const FCFTargetDisplayInfo SelectedTargetDisplayInfo = TargetSelectComp->GetSelectedTargetDisplayInfo();
+		DebugSnapshot.Target.SelectedTargetId = SelectedTargetDisplayInfo.TargetId;
+		DebugSnapshot.Target.SelectedTargetDisplayName = SelectedTargetDisplayInfo.DisplayName;
+
+		// [v2.138.0] 방어와 내구도 상태를 읽어올 현재 선택 대상 Actor입니다.
+		AActor* SelectedTargetActor = TargetSelectComp->GetSelectedTargetActor();
+		if (IsValid(SelectedTargetActor))
+		{
+			DebugSnapshot.Target.SelectedTargetActorName = SelectedTargetActor->GetName();
+
+			// [v2.138.0] 선택 대상의 Shield, 방향별 Armor와 재생 상태를 제공하는 컴포넌트입니다.
+			UCFVehicleDefenseComp* SelectedTargetDefenseComp = SelectedTargetActor->FindComponentByClass<UCFVehicleDefenseComp>();
+			DebugSnapshot.Target.bHasSelectedTargetDefenseComponent = (SelectedTargetDefenseComp != nullptr);
+			if (SelectedTargetDefenseComp)
+			{
+				DebugSnapshot.Target.bSelectedTargetDefenseInitialized = SelectedTargetDefenseComp->IsDefenseInitialized();
+				DebugSnapshot.Target.bSelectedTargetUsingLegacyDefenseFallback = !SelectedTargetDefenseComp->IsDefenseInitialized()
+					|| SelectedTargetDefenseComp->GetActiveDefenseData() == nullptr;
+				DebugSnapshot.Target.SelectedTargetDefenseSummary = SelectedTargetDefenseComp->BuildVehicleDefenseSummary();
+				DebugSnapshot.Target.bHasSelectedTargetLastDamageResult = SelectedTargetDefenseComp->HasLastVehicleDamageResult();
+				DebugSnapshot.Target.SelectedTargetLastDamageResultSummary = SelectedTargetDefenseComp->GetLastVehicleDamageResultSummary();
+			}
+
+			// [v2.138.0] 선택 대상의 현재·최대 Integrity와 파괴 상태를 제공하는 컴포넌트입니다.
+			UCFVehicleHealthComp* SelectedTargetHealthComp = SelectedTargetActor->FindComponentByClass<UCFVehicleHealthComp>();
+			DebugSnapshot.Target.bHasSelectedTargetHealthComponent = (SelectedTargetHealthComp != nullptr);
+			if (SelectedTargetHealthComp)
+			{
+				DebugSnapshot.Target.bSelectedTargetHealthInitialized = SelectedTargetHealthComp->IsHealthInitialized();
+				DebugSnapshot.Target.SelectedTargetCurrentIntegrity = SelectedTargetHealthComp->GetCurrentIntegrity();
+				DebugSnapshot.Target.SelectedTargetMaximumIntegrity = SelectedTargetHealthComp->GetMaximumIntegrity();
+				DebugSnapshot.Target.bSelectedTargetDestroyed = SelectedTargetHealthComp->IsDestroyed();
+			}
+		}
 	}
 
 	// [v2.76.0] Weapon 카테고리는 VehicleWeaponComp가 제공하는 런타임과 FireOrigin 상태를 표시용으로만 읽습니다.
@@ -3453,6 +3817,12 @@ FCFVehicleDebugAim ACFVehiclePawn::GetVehicleDebugAim() const
 {
 	// [v2.16.0] 상세 패널이 필요한 Aim 카테고리만 직접 읽을 수 있도록 반환합니다.
 	return GetVehicleDebugSnapshot().Aim;
+}
+
+// [v2.138.0] 상세 패널이 필요한 현재 선택 대상 카테고리만 직접 읽을 수 있도록 반환합니다.
+FCFVehicleDebugTarget ACFVehiclePawn::GetVehicleDebugTarget() const
+{
+	return GetVehicleDebugSnapshot().Target;
 }
 
 // [v2.76.0] 상세 패널이 필요한 Weapon 카테고리만 직접 읽을 수 있도록 반환합니다.
@@ -4366,6 +4736,98 @@ FCFVehicleFireRequest ACFVehiclePawn::BuildFireCommandForTarget(
 	return FireRequest;
 }
 
+// [v2.140.0] 현재 활성 무기가 AMMO-P0-03 SingleCycle 유한탄 Transaction 대상인지 반환합니다.
+static bool ShouldUseSingleFireAmmoTransaction(const ACFVehiclePawn* VehiclePawn)
+{
+	if (!VehiclePawn)
+	{
+		return false;
+	}
+
+	// [v2.140.0] 현재 활성 WeaponData와 Launcher Pattern을 제공하는 Weapon 컴포넌트입니다.
+	const UCFVehicleWeaponComp* VehicleWeaponComp = VehiclePawn->GetVehicleWeaponComp();
+	if (!VehicleWeaponComp)
+	{
+		return false;
+	}
+
+	// [v2.140.0] 유한탄 사용 여부를 판정할 현재 활성 WeaponData입니다.
+	const UCFWeaponData* ActiveWeaponData = VehicleWeaponComp->GetActiveWeaponData();
+	if (!ActiveWeaponData || !ActiveWeaponData->UsesFiniteAmmoRuntime())
+	{
+		return false;
+	}
+
+	// [v2.140.0] AMMO-P0-03과 AMMO-P0-04의 책임 경계를 구분할 현재 발사 패턴입니다.
+	const FCFLauncherFirePatternConfig FirePatternConfig = VehicleWeaponComp->GetActiveLauncherFirePatternConfig();
+	return FirePatternConfig.FirePattern == ECFLauncherFirePattern::SingleCycle;
+}
+
+// [v2.140.0] 현재 활성 MountProfileId를 Ammo Runtime의 WeaponInstanceId로 반환합니다.
+static FName ResolveActiveAmmoWeaponInstanceId(const ACFVehiclePawn* VehiclePawn)
+{
+	// [v2.140.0] WeaponInstanceId 원본을 제공하는 현재 Weapon 컴포넌트입니다.
+	const UCFVehicleWeaponComp* VehicleWeaponComp = VehiclePawn ? VehiclePawn->GetVehicleWeaponComp() : nullptr;
+	return VehicleWeaponComp ? VehicleWeaponComp->GetActiveMountProfileId() : NAME_None;
+}
+
+// [v2.140.0] Ammo Transaction 결과를 플레이어 발사 결과의 기존 거부 사유로 변환합니다.
+static ECFVehicleFireRejectReason ResolveAmmoTransactionFireRejectReason(const ECFAmmoTransactionResult AmmoTransactionResult)
+{
+	switch (AmmoTransactionResult)
+	{
+	case ECFAmmoTransactionResult::Accepted:
+		return ECFVehicleFireRejectReason::None;
+	case ECFAmmoTransactionResult::Reloading:
+		return ECFVehicleFireRejectReason::Reloading;
+	case ECFAmmoTransactionResult::SequenceAlreadyActive:
+	case ECFAmmoTransactionResult::ActionLocked:
+		return ECFVehicleFireRejectReason::WeaponActionLocked;
+	case ECFAmmoTransactionResult::ExecutionFailed:
+		return ECFVehicleFireRejectReason::InvalidLocalState;
+	case ECFAmmoTransactionResult::MissingAmmoData:
+	case ECFAmmoTransactionResult::MissingWeaponRuntime:
+	case ECFAmmoTransactionResult::InvalidAmmoAmount:
+	case ECFAmmoTransactionResult::NotEnoughLoadedAmmo:
+	default:
+		return ECFVehicleFireRejectReason::NoAmmo;
+	}
+}
+
+// [v2.140.0] 실패한 SingleCycle 실행의 Ammo 예약을 안전하게 반환합니다.
+static void RollbackSingleFireAmmoReservation(ACFVehiclePawn* VehiclePawn, const FName WeaponInstanceId, const bool bAmmoReservationActive)
+{
+	if (!bAmmoReservationActive || !VehiclePawn)
+	{
+		return;
+	}
+
+	// [v2.140.0] 현재 SingleCycle 예약을 소유하는 VehicleAmmoComp입니다.
+	UCFVehicleAmmoComp* VehicleAmmoComp = VehiclePawn->GetVehicleAmmoComp();
+	if (VehicleAmmoComp)
+	{
+		VehicleAmmoComp->RollbackSingleFireAmmo(WeaponInstanceId);
+	}
+}
+
+// [v2.140.0] 성공한 SingleCycle 실행의 Ammo 예약을 실제 소비로 확정합니다.
+static bool CommitSingleFireAmmoReservation(ACFVehiclePawn* VehiclePawn, const FName WeaponInstanceId, const bool bAmmoReservationActive)
+{
+	if (!bAmmoReservationActive)
+	{
+		return true;
+	}
+	if (!VehiclePawn)
+	{
+		return false;
+	}
+
+	// [v2.140.0] 현재 SingleCycle 예약을 실제 소비로 확정할 VehicleAmmoComp입니다.
+	UCFVehicleAmmoComp* VehicleAmmoComp = VehiclePawn->GetVehicleAmmoComp();
+	return VehicleAmmoComp
+		&& VehicleAmmoComp->CommitSingleFireAmmo(WeaponInstanceId) == ECFAmmoTransactionResult::Accepted;
+}
+
 // [v2.126.0] 플레이어 입력 발사는 기존 쿨다운을 포함한 전체 검증을 수행합니다.
 bool ACFVehiclePawn::ValidateFireCommand(
 	const FCFVehicleFireRequest& FireCommand,
@@ -4495,9 +4957,29 @@ bool ACFVehiclePawn::ValidateFireCommandInternal(
 		// [v2.78.0] 현재 활성 무기가 아직 쿨다운 중인지 여부입니다.
 				const bool bActiveWeaponOnCooldown = !bIgnoreWeaponCooldown
 			&& VehicleWeaponComp->IsActiveWeaponOnCooldown(CurrentFireTimeSeconds);
-		if (bActiveWeaponOnCooldown)
+				if (bActiveWeaponOnCooldown)
 		{
 			OutFireResult.RejectReason = ECFVehicleFireRejectReason::WeaponCooldown;
+			return false;
+		}
+	}
+
+	if (ShouldUseSingleFireAmmoTransaction(this))
+	{
+		if (!VehicleAmmoComp)
+		{
+			OutFireResult.RejectReason = ECFVehicleFireRejectReason::NoAmmo;
+			return false;
+		}
+
+		// [v2.140.0] 현재 MountProfile에 대응하는 Ammo Runtime WeaponInstanceId입니다.
+		const FName AmmoWeaponInstanceId = ResolveActiveAmmoWeaponInstanceId(this);
+
+		// [v2.140.0] 실제 발사 실행 전에 장전량·Reload·Action Lock을 확인한 결과입니다.
+		const ECFAmmoTransactionResult AmmoValidationResult = VehicleAmmoComp->ValidateSingleFireAmmo(AmmoWeaponInstanceId);
+		if (AmmoValidationResult != ECFAmmoTransactionResult::Accepted)
+		{
+			OutFireResult.RejectReason = ResolveAmmoTransactionFireRejectReason(AmmoValidationResult);
 			return false;
 		}
 	}
@@ -4518,7 +5000,7 @@ bool ACFVehiclePawn::ValidateFireCommandInternal(
 		return true;
 	}
 
-	RunLocalDummyHitScan(FireCommand, OutFireResult);
+		// [v2.140.0] HitScan도 검증 단계에서는 실제 Trace·Damage를 실행하지 않고 ExecuteAcceptedFireCommand에서만 실행합니다.
 	return true;
 }
 
@@ -5421,7 +5903,7 @@ bool ACFVehiclePawn::TrySpawnProjectileActorFromFireCommand(const FCFVehicleFire
 	return AcquiredProjectileActor != nullptr;
 }
 
-// [v2.136.0] 검증 승인된 명령을 명시적 목표 Actor Snapshot과 함께 Projectile 또는 HitScan 실행 경로로 처리합니다.
+// [v2.140.0] 검증 승인된 명령을 SingleCycle Ammo Transaction과 함께 Projectile 또는 HitScan 실행 경로로 처리합니다.
 bool ACFVehiclePawn::ExecuteAcceptedFireCommand(
 	const FCFVehicleFireRequest& FireCommand,
 	FCFVehicleFireResult& InOutFireResult,
@@ -5433,9 +5915,47 @@ bool ACFVehiclePawn::ExecuteAcceptedFireCommand(
 		return false;
 	}
 
+	// [v2.140.0] 이번 실행이 AMMO-P0-03 SingleCycle 유한탄 Transaction을 사용할지 여부입니다.
+	const bool bUseSingleFireAmmoTransaction = ShouldUseSingleFireAmmoTransaction(this);
+
+	// [v2.140.0] Ammo Runtime에서 이번 발사 무기를 식별할 현재 MountProfileId입니다.
+	const FName AmmoWeaponInstanceId = ResolveActiveAmmoWeaponInstanceId(this);
+
+	// [v2.140.0] 실제 실행 직전 탄약 예약이 성공해 Commit 또는 Rollback이 필요한지 여부입니다.
+	bool bAmmoReservationActive = false;
+	if (bUseSingleFireAmmoTransaction)
+	{
+		if (!VehicleAmmoComp)
+		{
+			InOutFireResult.bAccepted = false;
+			InOutFireResult.RejectReason = ECFVehicleFireRejectReason::NoAmmo;
+			return false;
+		}
+
+		// [v2.140.0] 검증 이후 실행 직전에 다시 원자적으로 확보한 SingleCycle 탄약 예약 결과입니다.
+		const ECFAmmoTransactionResult AmmoReservationResult = VehicleAmmoComp->ReserveSingleFireAmmo(AmmoWeaponInstanceId);
+		if (AmmoReservationResult != ECFAmmoTransactionResult::Accepted)
+		{
+			InOutFireResult.bAccepted = false;
+			InOutFireResult.RejectReason = ResolveAmmoTransactionFireRejectReason(AmmoReservationResult);
+			return false;
+		}
+		bAmmoReservationActive = true;
+	}
+
 	if (!ShouldUseProjectileActorFire())
 	{
-		// HitScan은 ValidateFireCommandInternal 단계에서 이미 Trace와 Damage를 실행했습니다.
+		// [v2.140.0] HitScan의 실제 Trace·Damage는 검증 이후 정확히 이 실행 단계에서 한 번만 수행합니다.
+		RunLocalDummyHitScan(FireCommand, InOutFireResult);
+
+		// [v2.140.0] HitScan은 Blocking Hit 여부와 무관하게 실제 한 발을 발사했으므로 Trace Miss도 탄약을 소비합니다.
+		const bool bAmmoCommitted = CommitSingleFireAmmoReservation(this, AmmoWeaponInstanceId, bAmmoReservationActive);
+		if (!bAmmoCommitted)
+		{
+			InOutFireResult.bAccepted = false;
+			InOutFireResult.RejectReason = ECFVehicleFireRejectReason::InvalidLocalState;
+			return false;
+		}
 		return true;
 	}
 
@@ -5445,6 +5965,7 @@ bool ACFVehiclePawn::ExecuteAcceptedFireCommand(
 		: nullptr;
 	if (!ActiveProjectileData || !ActiveProjectileData->ProjectileActorClass)
 	{
+		RollbackSingleFireAmmoReservation(this, AmmoWeaponInstanceId, bAmmoReservationActive);
 		InOutFireResult.bAccepted = false;
 		InOutFireResult.RejectReason = ECFVehicleFireRejectReason::NoWeapon;
 		return false;
@@ -5454,6 +5975,7 @@ bool ACFVehiclePawn::ExecuteAcceptedFireCommand(
 	FCFProjectileLaunchContext LaunchContext;
 	if (!BuildDirectProjectileLaunchContext(FireCommand, *ActiveProjectileData, GuidanceTargetActorSnapshot, LaunchContext))
 	{
+		RollbackSingleFireAmmoReservation(this, AmmoWeaponInstanceId, bAmmoReservationActive);
 		InOutFireResult.bAccepted = false;
 		InOutFireResult.RejectReason = ECFVehicleFireRejectReason::InvalidAimDirection;
 		return false;
@@ -5461,6 +5983,8 @@ bool ACFVehiclePawn::ExecuteAcceptedFireCommand(
 
 	// [v2.127.0] Angled·Vertical은 Command Target이 아니라 실제 InitialLaunchDirection 앞쪽의 즉시 장애물만 검사합니다.
 	const FCFLauncherReleaseConfig ReleaseConfig = VehicleWeaponComp->GetActiveLauncherReleaseConfig();
+
+	// [v2.127.0] 비Direct 실제 사출 방향의 안전 검사 거리입니다.
 	const float ClearanceTraceDistanceCm = ReleaseConfig.GetEffectiveLauncherClearanceTraceDistanceCm();
 	if (LaunchContext.ReleaseMode != ECFProjectileReleaseMode::Direct
 		&& ClearanceTraceDistanceCm > KINDA_SMALL_NUMBER)
@@ -5502,6 +6026,7 @@ bool ACFVehiclePawn::ExecuteAcceptedFireCommand(
 					&& IsValid(HitActor->FindComponentByClass<UCFVehicleHealthComp>());
 				if (!bHitDamageableVehicle)
 				{
+					RollbackSingleFireAmmoReservation(this, AmmoWeaponInstanceId, bAmmoReservationActive);
 					InOutFireResult.bAccepted = false;
 					InOutFireResult.RejectReason = ECFVehicleFireRejectReason::MuzzleBlocked;
 					InOutFireResult.ValidationAimTargetLocation = ReleaseHitResult.ImpactPoint;
@@ -5519,16 +6044,34 @@ bool ACFVehiclePawn::ExecuteAcceptedFireCommand(
 		: nullptr;
 	if (AcquiredProjectileActor)
 	{
+		// [v2.140.0] Pool에서 실제 Projectile을 확보한 경우에만 예약 탄약을 소비로 확정합니다.
+		const bool bAmmoCommitted = CommitSingleFireAmmoReservation(this, AmmoWeaponInstanceId, bAmmoReservationActive);
+		if (!bAmmoCommitted)
+		{
+			InOutFireResult.bAccepted = false;
+			InOutFireResult.RejectReason = ECFVehicleFireRejectReason::InvalidLocalState;
+			return false;
+		}
 		return true;
 	}
 
-	// [v2.127.0] 기존 Direct 첫 발만 Pool 실패 시 Dummy HitScan fallback을 유지하며 Ejection은 실패 정책으로 넘깁니다.
+	// [v2.140.0] 기존 Direct 첫 발 Pool 실패 fallback은 실제 HitScan 한 발로 성립하므로 성공 시 예약 탄약을 소비합니다.
 	if (bAllowProjectileFallback && LaunchContext.ReleaseMode == ECFProjectileReleaseMode::Direct)
 	{
 		RunLocalDummyHitScan(FireCommand, InOutFireResult);
+
+		// [v2.140.0] Direct fallback HitScan의 실제 발사 성공을 탄약 소비로 확정한 결과입니다.
+		const bool bAmmoCommitted = CommitSingleFireAmmoReservation(this, AmmoWeaponInstanceId, bAmmoReservationActive);
+		if (!bAmmoCommitted)
+		{
+			InOutFireResult.bAccepted = false;
+			InOutFireResult.RejectReason = ECFVehicleFireRejectReason::InvalidLocalState;
+			return false;
+		}
 		return true;
 	}
 
+	RollbackSingleFireAmmoReservation(this, AmmoWeaponInstanceId, bAmmoReservationActive);
 	InOutFireResult.bAccepted = false;
 	InOutFireResult.RejectReason = ECFVehicleFireRejectReason::NoWeapon;
 	return false;
@@ -5573,7 +6116,7 @@ void ACFVehiclePawn::HandleClearTargetStarted(const FInputActionValue&)
 	ClearSelectedTargetManually();
 }
 
-// [v2.136.0] Fire 입력 순간 위치·Actor 목표 Snapshot을 캡처해 첫 발과 모든 후속 발사에 같은 값으로 전달합니다.
+// [v2.141.0] Fire 입력 순간 위치·Actor 목표 Snapshot을 캡처하고 유한탄 Ripple·Salvo는 첫 발 전에 전체 유효 발수를 예약합니다.
 void ACFVehiclePawn::HandleFireStarted(const FInputActionValue&)
 {
 	LastFireRequest = BuildFireCommand();
@@ -5586,7 +6129,13 @@ void ACFVehiclePawn::HandleFireStarted(const FInputActionValue&)
 		FireResult.ValidationAimTargetLocation = LastFireRequest.PredictedAimTargetLocation;
 		FireResult.LocalHitLocation = LastFireRequest.PredictedAimTargetLocation;
 		FireResult.bAccepted = false;
-		FireResult.RejectReason = ECFVehicleFireRejectReason::WeaponCooldown;
+
+		// [v2.141.0] 유한탄 Sequence Action Lock이 실제로 활성 상태인지 확인할 현재 Ammo WeaponInstanceId입니다.
+		const FName ActiveAmmoWeaponInstanceId = ResolveActiveAmmoWeaponInstanceId(this);
+		FireResult.RejectReason = VehicleAmmoComp
+			&& VehicleAmmoComp->HasActiveLauncherSequenceReservation(ActiveAmmoWeaponInstanceId)
+			? ECFVehicleFireRejectReason::WeaponActionLocked
+			: ECFVehicleFireRejectReason::WeaponCooldown;
 		ApplyFireResultInternal(LastFireRequest, FireResult, false);
 		return;
 	}
@@ -5596,17 +6145,88 @@ void ACFVehiclePawn::HandleFireStarted(const FInputActionValue&)
 		? TargetSelectComp->GetSelectedTargetActor()
 		: nullptr;
 
-	// [v2.126.0] 첫 Projectile은 기존 쿨다운을 포함한 전체 검증과 기존 Projectile 실패 fallback을 유지합니다.
+	// [v2.141.0] 첫 발 실행 전에 유한탄 예약 수량에 맞게 축소될 수 있는 현재 Launcher 발사 패턴 설정입니다.
+	FCFLauncherFirePatternConfig FirePatternConfig = VehicleWeaponComp
+		? VehicleWeaponComp->GetActiveLauncherFirePatternConfig()
+		: FCFLauncherFirePatternConfig();
+
+	// [v2.141.0] 이번 입력의 유한탄 여부와 부분 시퀀스 정책을 제공할 현재 활성 WeaponData입니다.
+	UCFWeaponData* ActiveWeaponData = VehicleWeaponComp
+		? VehicleWeaponComp->GetActiveWeaponData()
+		: nullptr;
+
+	// [v2.141.0] SingleCycle이 아닌 Ripple·Salvo에서 전체 발수 예약을 사용해야 하는지 여부입니다.
+	const bool bUseLauncherAmmoReservation = ActiveWeaponData
+		&& ActiveWeaponData->UsesFiniteAmmoRuntime()
+		&& FirePatternConfig.FirePattern != ECFLauncherFirePattern::SingleCycle;
+
+	// [v2.141.0] Launcher 예약이 활성화되면 Ammo Runtime에서 현재 무기를 식별할 WeaponInstanceId입니다.
+	const FName LauncherAmmoWeaponInstanceId = bUseLauncherAmmoReservation
+		? ResolveActiveAmmoWeaponInstanceId(this)
+		: NAME_None;
+
+	// [v2.141.0] 첫 발 실행 전에 전체 시퀀스 예약이 성공해 이후 Commit·Release가 필요한지 여부입니다.
+	bool bLauncherAmmoReservationActive = false;
+
+	// [v2.126.0] 첫 Projectile은 기존 쿨다운을 포함한 전체 조준·Muzzle·장비 검증을 먼저 수행합니다.
 	const bool bFireCommandAccepted = ValidateFireCommand(LastFireRequest, FireResult);
-	if (bFireCommandAccepted)
+	if (bFireCommandAccepted && bUseLauncherAmmoReservation)
+	{
+		if (!LauncherComp || !VehicleAmmoComp)
+		{
+			FireResult.bAccepted = false;
+			FireResult.RejectReason = ECFVehicleFireRejectReason::InvalidLocalState;
+		}
+		else
+		{
+			// [v2.141.0] 현재 장전량과 부분 시퀀스 정책으로 실제 실행할 수 있도록 예약된 Launcher 총 발수입니다.
+			int32 ReservedLauncherShotCount = 0;
+
+			// [v2.141.0] 첫 발을 포함한 전체 유효 발수의 사전 예약 결과입니다.
+			const ECFAmmoTransactionResult LauncherReservationResult = VehicleAmmoComp->ReserveLauncherSequenceAmmo(
+				LauncherAmmoWeaponInstanceId,
+				FirePatternConfig.GetEffectiveProjectileCount(),
+				ActiveWeaponData->bAllowPartialSequence,
+				ReservedLauncherShotCount);
+			if (LauncherReservationResult == ECFAmmoTransactionResult::Accepted && ReservedLauncherShotCount > 0)
+			{
+				FirePatternConfig.ProjectileCountPerTrigger = ReservedLauncherShotCount;
+				bLauncherAmmoReservationActive = true;
+			}
+			else
+			{
+				FireResult.bAccepted = false;
+				FireResult.RejectReason = ResolveAmmoTransactionFireRejectReason(LauncherReservationResult);
+			}
+		}
+	}
+
+	if (FireResult.bAccepted)
 	{
 		ExecuteAcceptedFireCommand(LastFireRequest, FireResult, GuidanceTargetActorSnapshot, true);
 	}
 
-	// [v2.126.0] 현재 WeaponData가 정의한 안전 보정된 발사 패턴 설정입니다.
-	const FCFLauncherFirePatternConfig FirePatternConfig = VehicleWeaponComp
-		? VehicleWeaponComp->GetActiveLauncherFirePatternConfig()
-		: FCFLauncherFirePatternConfig();
+	if (bLauncherAmmoReservationActive)
+	{
+		if (FireResult.bAccepted)
+		{
+			// [v2.141.0] 실제 성공한 첫 Launcher 발사를 사전 예약량에서 정확히 한 발 소비로 확정한 결과입니다.
+			const ECFAmmoTransactionResult FirstShotCommitResult = VehicleAmmoComp->CommitReservedLauncherShot(LauncherAmmoWeaponInstanceId);
+			if (FirstShotCommitResult != ECFAmmoTransactionResult::Accepted)
+			{
+				VehicleAmmoComp->ReleaseLauncherSequenceReservation(LauncherAmmoWeaponInstanceId);
+				bLauncherAmmoReservationActive = false;
+				FireResult.bAccepted = false;
+				FireResult.RejectReason = ECFVehicleFireRejectReason::InvalidLocalState;
+			}
+		}
+		else
+		{
+			// [v2.141.0] 첫 발이 실제 실행되지 못했으므로 첫 발 포함 전체 Sequence 예약을 소비 없이 반환합니다.
+			VehicleAmmoComp->ReleaseLauncherSequenceReservation(LauncherAmmoWeaponInstanceId);
+			bLauncherAmmoReservationActive = false;
+		}
+	}
 
 	// [v2.126.0] 첫 승인 시점에 쿨다운을 시작하는 정책인지 여부입니다.
 	const bool bRecordCooldownOnFirstAcceptedProjectile = !LauncherComp
@@ -5615,12 +6235,20 @@ void ACFVehiclePawn::HandleFireStarted(const FInputActionValue&)
 
 	if (FireResult.bAccepted && LauncherComp)
 	{
-		// [v2.136.0] 첫 발사 순간 위치·Actor 목표 Snapshot과 남은 Ripple·Salvo 시퀀스를 시작한 결과입니다.
+		// [v2.141.0] 첫 발사 순간 목표 Snapshot과 남은 발사 및 선택적 유한탄 예약을 LauncherComp에 인계한 결과입니다.
 		const bool bSequenceStarted = LauncherComp->StartFireSequenceAfterFirstAcceptedShot(
 			FirePatternConfig,
 			FVector(LastFireRequest.PredictedAimTargetLocation),
 			GuidanceTargetActorSnapshot,
-			LastFireRequest.ClientFireTimeSeconds);
+			LastFireRequest.ClientFireTimeSeconds,
+			bLauncherAmmoReservationActive ? LauncherAmmoWeaponInstanceId : NAME_None);
+
+		if (!bSequenceStarted && bLauncherAmmoReservationActive && VehicleAmmoComp)
+		{
+			// [v2.141.0] 첫 발은 이미 소비됐지만 Scheduler가 시작되지 못한 경우 남은 미실행 예약과 Action Lock만 반환합니다.
+			VehicleAmmoComp->ReleaseLauncherSequenceReservation(LauncherAmmoWeaponInstanceId);
+			bLauncherAmmoReservationActive = false;
+		}
 
 		if (!bSequenceStarted
 			&& !bRecordCooldownOnFirstAcceptedProjectile

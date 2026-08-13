@@ -1,21 +1,24 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.0
-// Date: 2026-08-01
+// Version: 1.2.0
+// Date: 2026-08-13
 // Description: CarFight 출격 전 차량 피팅 선택과 결정론적 Snapshot 구현
-// Scope: 피팅 기본값, 데이터 계약, MountProfile·Hardpoint·장비·방어 호환 검증과 Pawn 없는 질량 Snapshot 생성을 구현합니다.
+// Scope: 피팅 기본값, 데이터 계약, MountProfile·Hardpoint·장비·출격 탄약·방어 호환 검증과 Pawn 없는 질량 Snapshot 생성을 구현합니다.
 // Changelog:
+// - v1.2.0: CF-FQ-031 AMMO-P0-07 명시적 출격 탄약 검증, 결정론적 Snapshot 복사, finite 무기 초기 장전 충족 검사와 AmmoMassKg 합산을 추가.
 // - v1.1.0: CF-FQ-034 FIT-P0-03 결정론적 Compatibility Validation, 방어 3상태 해석, 질량 합산과 GrossMass 검증을 추가.
 // - v1.0.0: CF-FQ-034 FIT-P0-02 VehicleFittingData 계약 검증과 요약을 최초 구현.
 // Migration:
-// - BuildFittingSnapshot은 VehicleData.MountProfiles 순서로 결과를 생성하므로 MountSelections 배열 순서가 결과 순서를 바꾸지 않는다.
+// - BuildFittingSnapshot은 VehicleData.MountProfiles 순서와 AmmoId 이름 순서로 결과를 생성하므로 편집 배열 순서가 결정론적 결과를 바꾸지 않는다.
 // - 기존 VehicleData와 차량 런타임은 VehicleFittingData를 자동 참조하지 않으므로 동작이 변경되지 않는다.
 // - BaseVehicleMassKg와 MaximumGrossMassKg가 0인 기존 VehicleData는 피팅에 명시적으로 연결할 때만 계약 오류가 된다.
-// - AmmoMassKg는 CF-FQ-031 연동 전까지 0으로 유지하며 임시 Ammo 타입을 만들지 않는다.
-// - VehiclePawn, VehicleMovement와 Chaos 질량 적용은 FIT-P0-04~05 범위로 유지한다.
+// - AmmoMassKg는 InitialSortieAmmoLoads의 실제 출격 수량만 사용하며 MaximumLoadableAmmoCount를 현재 수량으로 대입하지 않는다.
+// - finite WeaponData는 자신의 AmmoId가 출격 목록에 명시되고 같은 탄종 무기들의 초기 장전량 합계를 충족해야 한다.
+// - 기존 VehiclePawn 초기 질량 적용 순서는 유지하고 Snapshot의 AmmoMassKg만 같은 질량 계산에 포함한다.
 
 #include "CFVehicleFittingData.h"
 
+#include "CFAmmoData.h"
 #include "CFEquipmentPresetData.h"
 #include "CFTurretMountData.h"
 #include "CFVehicleData.h"
@@ -231,6 +234,52 @@ bool UCFVehicleFittingData::ValidateFittingDataContract(TArray<FText>& OutValida
 			OutValidationErrors.Add(FText::Format(
 				LOCTEXT("IncompleteEquipmentPreset", "MountProfileId '{0}'의 EquipmentPresetData에 TurretMountData와 WeaponData가 모두 필요합니다."),
 				FText::FromName(MountSelection.MountProfileId)));
+		}
+	}
+
+		// [v1.2.0] 출격 탄약 목록에서 같은 AmmoId 중복을 검출할 집합입니다.
+	TSet<FName> SeenAmmoIds;
+	for (const FCFAmmoSortieLoad& AmmoLoad : InitialSortieAmmoLoads)
+	{
+		UCFAmmoData* AmmoData = AmmoLoad.AmmoData;
+		if (!IsValid(AmmoData) || !AmmoData->IsAmmoDataValid())
+		{
+			OutValidationErrors.Add(LOCTEXT("InvalidSortieAmmoData", "InitialSortieAmmoLoads의 AmmoData와 AmmoId는 유효해야 합니다."));
+			continue;
+		}
+
+		if (AmmoLoad.InitialSortieAmmoCount < 0)
+		{
+			OutValidationErrors.Add(FText::Format(
+				LOCTEXT("NegativeSortieAmmoCount", "AmmoId '{0}'의 InitialSortieAmmoCount는 0 이상이어야 합니다."),
+				FText::FromName(AmmoData->AmmoId)));
+		}
+
+		if (SeenAmmoIds.Contains(AmmoData->AmmoId))
+		{
+			OutValidationErrors.Add(FText::Format(
+				LOCTEXT("DuplicateSortieAmmoId", "AmmoId '{0}'가 InitialSortieAmmoLoads에 중복되어 있습니다."),
+				FText::FromName(AmmoData->AmmoId)));
+		}
+		else
+		{
+			SeenAmmoIds.Add(AmmoData->AmmoId);
+		}
+
+		if (AmmoLoad.InitialSortieAmmoCount > AmmoData->GetEffectiveMaximumLoadableAmmoCount())
+		{
+			OutValidationErrors.Add(FText::Format(
+				LOCTEXT("SortieAmmoCountExceeded", "AmmoId '{0}'의 출격 수량 {1}이 최대 적재 가능 수량 {2}를 초과합니다."),
+				FText::FromName(AmmoData->AmmoId),
+				FText::AsNumber(AmmoLoad.InitialSortieAmmoCount),
+				FText::AsNumber(AmmoData->GetEffectiveMaximumLoadableAmmoCount())));
+		}
+
+		if (AmmoLoad.InitialSortieAmmoCount > 0 && AmmoData->GetEffectiveUnitMassKg() <= 0.0f)
+		{
+			OutValidationErrors.Add(FText::Format(
+				LOCTEXT("MissingSortieAmmoMass", "AmmoId '{0}'를 1발 이상 적재하려면 UnitMassKg가 유한한 0보다 큰 값이어야 합니다."),
+				FText::FromName(AmmoData->AmmoId)));
 		}
 	}
 
@@ -584,8 +633,175 @@ FCFVehicleFittingSnapshot UCFVehicleFittingData::BuildFittingSnapshot() const
 				MountProfile.MountProfileId);
 		}
 
-		Snapshot.EquipmentMassKg += ResolvedMount.TurretMountMassKg + ResolvedMount.WeaponMassKg;
+				Snapshot.EquipmentMassKg += ResolvedMount.TurretMountMassKg + ResolvedMount.WeaponMassKg;
 		Snapshot.ResolvedMounts.Add(ResolvedMount);
+	}
+
+	// [v1.2.0] 편집 배열 순서와 무관하게 AmmoId 이름 순서로 Snapshot에 복사할 출격 탄약 목록입니다.
+	TArray<FCFAmmoSortieLoad> SortedSortieAmmoLoads = InitialSortieAmmoLoads;
+	SortedSortieAmmoLoads.Sort([](const FCFAmmoSortieLoad& LeftLoad, const FCFAmmoSortieLoad& RightLoad)
+	{
+		// [v1.2.0] 정렬에 사용할 왼쪽 탄종의 안정 ID 문자열입니다.
+		const FString LeftAmmoIdText = IsValid(LeftLoad.AmmoData) ? LeftLoad.AmmoData->AmmoId.ToString() : FString();
+
+		// [v1.2.0] 정렬에 사용할 오른쪽 탄종의 안정 ID 문자열입니다.
+		const FString RightAmmoIdText = IsValid(RightLoad.AmmoData) ? RightLoad.AmmoData->AmmoId.ToString() : FString();
+		return LeftAmmoIdText < RightAmmoIdText;
+	});
+
+	// [v1.2.0] 검증된 AmmoId별 실제 출격 총수량을 finite 무기 초기 장전 요구와 비교할 맵입니다.
+	TMap<FName, int32> SortieAmmoCountByAmmoId;
+
+	// [v1.2.0] 같은 AmmoId가 중복돼 질량과 수량을 이중 계산하지 않도록 추적할 집합입니다.
+	TSet<FName> ProcessedAmmoIds;
+	for (const FCFAmmoSortieLoad& AmmoLoad : SortedSortieAmmoLoads)
+	{
+		UCFAmmoData* AmmoData = AmmoLoad.AmmoData;
+		if (!IsValid(AmmoData) || !AmmoData->IsAmmoDataValid())
+		{
+			AddFittingValidationIssue(
+				Snapshot,
+				ECFFittingIssueSeverity::Error,
+				ECFFittingIssueCode::InvalidAmmoSelection,
+				LOCTEXT("InvalidAmmoSelectionData", "출격 탄약 선택의 AmmoData와 AmmoId는 유효해야 합니다."));
+			continue;
+		}
+
+		if (ProcessedAmmoIds.Contains(AmmoData->AmmoId))
+		{
+			AddFittingValidationIssue(
+				Snapshot,
+				ECFFittingIssueSeverity::Error,
+				ECFFittingIssueCode::InvalidAmmoSelection,
+				FText::Format(
+					LOCTEXT("DuplicateAmmoSelectionIssue", "AmmoId '{0}'가 출격 탄약 목록에 중복되어 있어 이중 계산하지 않습니다."),
+					FText::FromName(AmmoData->AmmoId)));
+			continue;
+		}
+		ProcessedAmmoIds.Add(AmmoData->AmmoId);
+
+		if (AmmoLoad.InitialSortieAmmoCount < 0)
+		{
+			AddFittingValidationIssue(
+				Snapshot,
+				ECFFittingIssueSeverity::Error,
+				ECFFittingIssueCode::InvalidAmmoSelection,
+				FText::Format(
+					LOCTEXT("NegativeAmmoSelectionIssue", "AmmoId '{0}'의 출격 수량은 0 이상이어야 합니다."),
+					FText::FromName(AmmoData->AmmoId)));
+			continue;
+		}
+
+		// [v1.2.0] 피팅에서 허용하는 해당 탄종의 최대 적재 수량입니다. 현재 출격 수량을 생성하는 값이 아닙니다.
+		const int32 MaximumLoadableAmmoCount = AmmoData->GetEffectiveMaximumLoadableAmmoCount();
+		if (AmmoLoad.InitialSortieAmmoCount > MaximumLoadableAmmoCount)
+		{
+			AddFittingValidationIssue(
+				Snapshot,
+				ECFFittingIssueSeverity::Error,
+				ECFFittingIssueCode::AmmoCountExceeded,
+				FText::Format(
+					LOCTEXT("AmmoCountExceededIssue", "AmmoId '{0}'의 출격 수량 {1}이 최대 적재 가능 수량 {2}를 초과합니다."),
+					FText::FromName(AmmoData->AmmoId),
+					FText::AsNumber(AmmoLoad.InitialSortieAmmoCount),
+					FText::AsNumber(MaximumLoadableAmmoCount)));
+		}
+
+		// [v1.2.0] 실제 적재 수량이 있을 때만 질량 소스로 요구되는 탄약 한 단위 질량입니다.
+		const float UnitMassKg = AmmoData->GetEffectiveUnitMassKg();
+		if (AmmoLoad.InitialSortieAmmoCount > 0 && UnitMassKg <= 0.0f)
+		{
+			AddFittingValidationIssue(
+				Snapshot,
+				ECFFittingIssueSeverity::Error,
+				ECFFittingIssueCode::InvalidAmmoSelection,
+				FText::Format(
+					LOCTEXT("InvalidAmmoUnitMassIssue", "AmmoId '{0}'를 1발 이상 적재하려면 UnitMassKg가 유한한 0보다 큰 값이어야 합니다."),
+					FText::FromName(AmmoData->AmmoId)));
+		}
+
+		Snapshot.InitialSortieAmmoLoads.Add(AmmoLoad);
+		SortieAmmoCountByAmmoId.Add(AmmoData->AmmoId, AmmoLoad.InitialSortieAmmoCount);
+
+		// [v1.2.0] 실제 출격 수량만 질량에 반영한 현재 탄종의 총질량입니다.
+		const float AmmoLoadMassKg = static_cast<float>(AmmoLoad.InitialSortieAmmoCount) * UnitMassKg;
+		if (!FMath::IsFinite(AmmoLoadMassKg) || AmmoLoadMassKg < 0.0f)
+		{
+			AddFittingValidationIssue(
+				Snapshot,
+				ECFFittingIssueSeverity::Error,
+				ECFFittingIssueCode::InvalidMassValue,
+				FText::Format(
+					LOCTEXT("InvalidAmmoLoadMassIssue", "AmmoId '{0}'의 출격 탄약 총질량이 유효하지 않습니다."),
+					FText::FromName(AmmoData->AmmoId)));
+		}
+		else
+		{
+			Snapshot.AmmoMassKg += AmmoLoadMassKg;
+		}
+	}
+
+	// [v1.2.0] 같은 탄종을 사용하는 모든 finite WeaponInstance의 출격 초기 장전량 합계입니다.
+	TMap<FName, int32> RequiredInitialLoadedAmmoByAmmoId;
+	for (const FCFResolvedFittingMount& ResolvedMount : Snapshot.ResolvedMounts)
+	{
+		UCFWeaponData* WeaponData = ResolvedMount.WeaponData;
+		if (!IsValid(WeaponData) || WeaponData->bUseInfiniteAmmoForDebug)
+		{
+			continue;
+		}
+
+		if (!WeaponData->UsesFiniteAmmoRuntime() || !IsValid(WeaponData->DefaultAmmoData))
+		{
+			AddFittingValidationIssue(
+				Snapshot,
+				ECFFittingIssueSeverity::Error,
+				ECFFittingIssueCode::InvalidAmmoSelection,
+				FText::Format(
+					LOCTEXT("IncompleteFiniteWeaponAmmoIssue", "MountProfileId '{0}'의 WeaponData가 finite 탄약을 요구하지만 AmmoData 또는 탄창 설정이 불완전합니다."),
+					FText::FromName(ResolvedMount.MountProfileId)),
+				ResolvedMount.MountProfileId);
+			continue;
+		}
+
+		// [v1.2.0] 현재 finite WeaponData가 사용하는 안정 AmmoId입니다.
+		const FName RequiredAmmoId = WeaponData->DefaultAmmoData->AmmoId;
+		RequiredInitialLoadedAmmoByAmmoId.FindOrAdd(RequiredAmmoId) += WeaponData->GetEffectiveInitialLoadedAmmoCount();
+
+		if (!SortieAmmoCountByAmmoId.Contains(RequiredAmmoId))
+		{
+			AddFittingValidationIssue(
+				Snapshot,
+				ECFFittingIssueSeverity::Error,
+				ECFFittingIssueCode::InvalidAmmoSelection,
+				FText::Format(
+					LOCTEXT("MissingFiniteWeaponAmmoLoadIssue", "MountProfileId '{0}'의 finite WeaponData가 요구하는 AmmoId '{1}'가 출격 탄약 목록에 명시되지 않았습니다."),
+					FText::FromName(ResolvedMount.MountProfileId),
+					FText::FromName(RequiredAmmoId)),
+				ResolvedMount.MountProfileId);
+		}
+	}
+
+	for (const TPair<FName, int32>& RequiredInitialLoadedAmmoPair : RequiredInitialLoadedAmmoByAmmoId)
+	{
+		// [v1.2.0] 같은 탄종 finite 무기들의 초기 장전에 필요한 전체 탄약 수입니다.
+		const int32 RequiredInitialLoadedAmmoCount = FMath::Max(RequiredInitialLoadedAmmoPair.Value, 0);
+
+		// [v1.2.0] 이번 출격에 명시적으로 선택된 해당 탄종의 실제 전체 수량입니다.
+		const int32 SelectedSortieAmmoCount = SortieAmmoCountByAmmoId.FindRef(RequiredInitialLoadedAmmoPair.Key);
+		if (!SortieAmmoCountByAmmoId.Contains(RequiredInitialLoadedAmmoPair.Key)
+			|| SelectedSortieAmmoCount < RequiredInitialLoadedAmmoCount)
+		{
+			AddFittingValidationIssue(
+				Snapshot,
+				ECFFittingIssueSeverity::Error,
+				ECFFittingIssueCode::InvalidAmmoSelection,
+				FText::Format(
+					LOCTEXT("InitialLoadedAmmoExceedsSortieIssue", "AmmoId '{0}'의 출격 수량 {1}이 finite 무기 초기 장전 필요량 {2}보다 적습니다."),
+					FText::FromName(RequiredInitialLoadedAmmoPair.Key),
+					FText::AsNumber(SelectedSortieAmmoCount),
+					FText::AsNumber(RequiredInitialLoadedAmmoCount)));
+		}
 	}
 
 	switch (DefenseSelection.SelectionMode)
@@ -674,12 +890,13 @@ FString UCFVehicleFittingData::BuildVehicleFittingSummary() const
 		? DefenseSelection.DefenseData->GetName()
 		: TEXT("None");
 
-	return FString::Printf(
-		TEXT("VehicleFittingData: Id=%s, Name=%s, Vehicle=%s, MountSelections=%d, MissingMountPolicy=%s, DefenseMode=%s, DefenseData=%s, Tags=%d"),
+		return FString::Printf(
+		TEXT("VehicleFittingData: Id=%s, Name=%s, Vehicle=%s, MountSelections=%d, AmmoLoads=%d, MissingMountPolicy=%s, DefenseMode=%s, DefenseData=%s, Tags=%d"),
 		*FittingId.ToString(),
 		*DisplayName.ToString(),
 		*VehicleDataText,
 		MountSelections.Num(),
+		InitialSortieAmmoLoads.Num(),
 		*MissingMountPolicyText,
 		*DefenseSelectionModeText,
 		*DefenseDataText,

@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.9.0
-// Date: 2026-08-01
+// Version: 1.10.0
+// Date: 2026-08-13
 // Description: CarFight 차량 무기 DataAsset과 피팅 무기 질량
-// Scope: EquipmentPresetData가 참조할 무기 데이터, 장착 호환성, 피팅 질량, 런처 발사 패턴·Release 설정과 선택 대상 사용 정책을 제공합니다.
+// Scope: EquipmentPresetData가 참조할 무기 데이터, 장착 호환성, 피팅 질량, 런처 발사 패턴·Release 설정, 탄약 정적 설정과 선택 대상 사용 정책을 제공합니다.
 // Changelog:
+// - v1.10.0: CF-FQ-031 AMMO-P0-01 DefaultAmmoData, 초기 장전량, 발사당 탄약량, Reload·부분 처리 정책과 기존 무한탄 호환 Getter를 추가.
 // - v1.9.0: CF-FQ-034 FIT-P0-02 WeaponMassKg와 안전 Getter·요약 출력을 추가.
 // - v1.8.0: Direct·AngledEjection·VerticalEjection Release 설정과 유효값·요약 Getter를 추가.
 // - v1.7.0: SingleCycle·Ripple·Salvo 발사 패턴 설정과 유효값·요약 Getter를 추가.
@@ -16,6 +17,8 @@
 // - v1.1.0: 기본 ProjectileData 직접 참조를 추가하고 기존 ProjectileDataId는 마이그레이션용으로 유지.
 // - v1.0.0: WeaponData / ProjectileData / DamageData 분리의 첫 단계로 차량 무기 DataAsset 타입을 추가.
 // Migration:
+// - 기존 WeaponData는 bUseInfiniteAmmoForDebug=true와 DefaultAmmoData=None 기본값으로 현재 무한탄 발사 결과를 유지한다.
+// - MagazineSize·ReloadTimeSeconds·AmmoTypeId는 삭제하거나 리네이밍하지 않고 신규 Ammo Runtime의 호환 입력으로 유지한다.
 // - 기존 WeaponData는 WeaponMassKg=0 기본값으로 현재 발사와 차량 주행 결과를 유지한다.
 // - 피팅에 사용할 WeaponData만 실제 무기 질량을 명시하며 0은 미설정 질량으로 후속 피팅 검증에서 처리한다.
 // - 기존 WeaponData는 LauncherReleaseConfig 기본값 Direct / CarrierVelocityRatio 0으로 기존 Projectile 방향·속도를 유지한다.
@@ -32,12 +35,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "CFAmmoTypes.h"
 #include "CFTargetUseTypes.h"
 #include "CFLauncherTypes.h"
 #include "CFVehicleWeaponTypes.h"
 #include "Engine/DataAsset.h"
 #include "CFWeaponData.generated.h"
 
+class UCFAmmoData;
 class UCFCombatFxData;
 class UCFProjectileData;
 
@@ -78,9 +83,33 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData", meta=(DisplayName="장착 가능 여부 (Can Use On Mount)", ToolTip="장착 타입과 크기 제한을 함께 검사해 이 무기를 해당 장착 프로파일에서 사용할 수 있는지 반환합니다."))
 	bool CanUseOnMount(ECFVehicleMountType InMountType, ECFVehicleWeaponSize InMountSizeLimit) const;
 
-	// [v1.9.0] 음수나 비유한 값을 제거한 피팅용 유효 무기 질량을 반환합니다.
+		// [v1.9.0] 음수나 비유한 값을 제거한 피팅용 유효 무기 질량을 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData|Mass", meta=(DisplayName="유효 무기 질량 반환 (Get Effective Weapon Mass)", ToolTip="피팅 질량 계산에서 사용할 0 이상의 유한한 무기 질량을 kg 단위로 반환합니다."))
 	float GetEffectiveWeaponMassKg() const;
+
+	// [v1.10.0] 기존 MagazineSize를 신규 Runtime의 MagazineCapacity 의미로 안전하게 보정해 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData|Ammo", meta=(DisplayName="유효 탄창 용량 반환", ToolTip="기존 MagazineSize 저장값을 0 이상의 신규 Ammo Runtime 탄창 용량으로 반환합니다."))
+	int32 GetEffectiveMagazineCapacity() const;
+
+	// [v1.10.0] 출격 초기 장전량을 유효 탄창 용량 범위로 보정해 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData|Ammo", meta=(DisplayName="유효 초기 장전량 반환", ToolTip="InitialLoadedAmmoCount를 0부터 유효 탄창 용량 사이로 보정해 반환합니다."))
+	int32 GetEffectiveInitialLoadedAmmoCount() const;
+
+	// [v1.10.0] 한 번의 정상 발사에 필요한 탄약 단위를 최소 1로 보정해 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData|Ammo", meta=(DisplayName="유효 발사당 탄약량 반환", ToolTip="AmmoUnitsPerShot를 최소 1로 보정해 한 번의 정상 발사가 소비할 탄약 단위를 반환합니다."))
+	int32 GetEffectiveAmmoUnitsPerShot() const;
+
+	// [v1.10.0] 기존 ReloadTimeSeconds를 0 이상의 유한한 재장전 시간으로 보정해 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData|Ammo", meta=(DisplayName="유효 재장전 시간 반환", ToolTip="ReloadTimeSeconds를 0 이상의 유한한 값으로 보정해 반환합니다."))
+	float GetEffectiveReloadTimeSeconds() const;
+
+	// [v1.10.0] 이 WeaponData가 명시적인 유한 탄약 Runtime을 사용하도록 설정됐는지 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData|Ammo", meta=(DisplayName="유한 탄약 Runtime 사용 여부", ToolTip="무한탄 Debug 호환이 꺼지고 DefaultAmmoData와 유효 탄창 용량이 있을 때만 True입니다."))
+	bool UsesFiniteAmmoRuntime() const;
+
+	// [v1.10.0] 로그와 Debug에서 사용할 탄약 정적 설정 요약을 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData|Ammo", meta=(DisplayName="탄약 설정 요약 생성", ToolTip="유한탄 사용 여부, AmmoData, 탄창 용량, 초기 장전량, 발사당 소비량과 Reload 정책을 한 줄로 반환합니다."))
+	FString BuildAmmoConfigSummary() const;
 
 	// [v1.0.0] 디버그 패널에 표시할 무기 데이터 요약 문자열을 생성합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData", meta=(DisplayName="무기 요약 생성 (Build Weapon Summary)", ToolTip="디버그 패널과 로그에 표시할 핵심 무기 데이터 요약 문자열을 생성합니다."))
@@ -162,9 +191,41 @@ FCFTargetUsePolicy TargetUsePolicy;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Ammo", meta=(ClampMin="0", DisplayName="탄창 크기 (MagazineSize)", ToolTip="탄창 시스템을 사용할 때 한 탄창에 들어가는 발수입니다. 0이면 현재 P0 단계에서 사용하지 않습니다."))
 	int32 MagazineSize = 0;
 
-	// [v1.0.0] 탄창 재장전에 필요한 시간입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Ammo", meta=(ClampMin="0.0", DisplayName="재장전 시간 초 (ReloadTimeSeconds)", ToolTip="탄창 재장전에 필요한 시간입니다. MagazineSize가 0이면 현재 P0 단계에서 사용하지 않습니다."))
+		// [v1.0.0] 탄창 재장전에 필요한 시간입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Ammo", meta=(ClampMin="0.0", DisplayName="재장전 시간 초 (ReloadTimeSeconds)", ToolTip="탄창 재장전에 필요한 시간입니다. 신규 Ammo Runtime에서도 같은 저장 필드를 사용합니다."))
 	float ReloadTimeSeconds = 0.0f;
+
+	// [v1.10.0] 이 무기가 기본으로 사용하는 탄종의 정적 DataAsset입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Ammo", meta=(DisplayName="기본 탄약 데이터 (DefaultAmmoData)", ToolTip="유한 탄약 Runtime에서 이 무기가 기본으로 사용할 탄종입니다. 비어 있으면 기존 무한탄 호환 경로를 유지합니다."))
+	TObjectPtr<UCFAmmoData> DefaultAmmoData = nullptr;
+
+	// [v1.10.0] 출격 시작 시 이 WeaponInstance 탄창에 우선 장전할 탄약 수입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Ammo", meta=(ClampMin="0", DisplayName="출격 초기 장전량 (InitialLoadedAmmoCount)", ToolTip="출격 시작 시 이 무기 탄창에 장전할 수량입니다. 유효값은 MagazineSize를 넘지 않게 보정됩니다."))
+	int32 InitialLoadedAmmoCount = 0;
+
+	// [v1.10.0] 정상 발사 한 번이 소비하는 탄약 단위 수입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Ammo", meta=(ClampMin="1", DisplayName="발사당 탄약량 (AmmoUnitsPerShot)", ToolTip="정상 발사 한 번이 소비하는 탄약 단위 수입니다. P0 기본값은 1입니다."))
+	int32 AmmoUnitsPerShot = 1;
+
+	// [v1.10.0] 이 무기의 재장전 방식입니다. P0 Runtime은 FullMagazine만 실제 실행합니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Ammo", meta=(DisplayName="재장전 방식 (ReloadMode)", ToolTip="P0 실제 Runtime은 FullMagazine을 사용하고 PerRound는 후속 확장 계약으로 보존합니다."))
+	ECFWeaponReloadMode ReloadMode = ECFWeaponReloadMode::FullMagazine;
+
+	// [v1.10.0] 탄창이 발사 최소 요구량보다 부족해졌을 때 자동 재장전을 시도할지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Ammo", meta=(DisplayName="빈 탄창 자동 재장전", ToolTip="Launcher Sequence가 끝나고 탄창이 발사 최소 요구량보다 부족하며 예비 탄약이 있으면 자동 재장전을 시작할 수 있게 합니다."))
+	bool bAutoReloadWhenEmpty = true;
+
+	// [v1.10.0] 예비 탄약이 탄창 전체 요구량보다 적어도 가능한 만큼 부분 재장전을 허용할지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Ammo", meta=(DisplayName="부분 재장전 허용", ToolTip="예비 탄약이 부족할 때 탄창을 완전히 채우지 못해도 남은 예비량만큼 재장전할 수 있으면 True입니다."))
+	bool bAllowPartialReload = true;
+
+	// [v1.10.0] 요청한 Ripple·Salvo 전체 발수를 충족하지 못해도 가능한 발수만 예약해 시퀀스를 시작할지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Ammo", meta=(DisplayName="부분 시퀀스 허용", ToolTip="요청 발수보다 즉시 사용 가능한 탄약이 적을 때 가능한 발수만으로 Ripple·Salvo를 시작할 수 있으면 True입니다."))
+	bool bAllowPartialSequence = true;
+
+	// [v1.10.0] 기존 에셋과 Debug 환경에서 탄약 수량 검증 없이 현재 발사 동작을 유지할 호환 플래그입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Ammo", meta=(DisplayName="무한 탄약 Debug 호환", ToolTip="True이면 신규 Ammo Runtime이 이 WeaponData의 발사를 제한하지 않습니다. 기존 WeaponData 호환을 위해 기본값은 True입니다."))
+	bool bUseInfiniteAmmoForDebug = true;
 
 	// [v1.0.0] 한 발 발사 시 누적할 열량입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Heat", meta=(ClampMin="0.0", DisplayName="발사 열량 (HeatPerShot)", ToolTip="과열 시스템을 사용할 때 한 발 발사마다 누적할 열량입니다. 0이면 현재 P0 단계에서 사용하지 않습니다."))

@@ -1,14 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.2.0
-// Date: 2026-07-31
+// Version: 1.3.0
+// Date: 2026-08-06
 // Description: CarFight 차량 쉴드·6방향 장갑 런타임 컴포넌트
 // Scope: VehicleDefenseData 초기화, 피해 입력 검증, 쉴드·방향 장갑·관통·내구도 분배, 재생과 기존 Health 결과 호환을 제공합니다.
 // Changelog:
+// - v1.3.0: 유효 DefenseData 초기화가 방어 컴포넌트 활성 상태를 명시적으로 복구해 실제 Pawn의 Shield 재생 Tick이 진행되도록 보강.
 // - v1.2.0: 마지막 전체 차량 방어 피해 결과 캐시와 Blueprint Debug 조회 API를 추가하고 기존 방어 이벤트 노출 계약을 고정.
 // - v1.1.0: DR-P0-03 HitScan·Projectile 통합용 Integrity 호환 결과 변환 함수를 추가.
 // - v1.0.0: CF-FQ-033 DR-P0-02 VehicleDefenseComp와 Legacy Health Fallback을 추가.
 // Migration:
+// - 유효 DefenseData 초기화는 VehicleDefenseComp를 활성화하며 초기화 직후 Tick은 계속 꺼진 상태로 유지된다. 실제 피해가 적용된 뒤에만 재생 지연 Tick이 켜진다.
 // - ACFVehiclePawn, HitScan과 Projectile은 DR-P0-03부터 TryApplyDamageToActor를 정식 피해 진입점으로 사용한다.
 // - VehicleData.DefaultDefenseData가 None이거나 DefenseComp가 없으면 기존 VehicleHealthComp 직접 피해 결과를 유지한다.
 // - 기존 Debug와 Pool은 BuildIntegrityCompatibilityResult가 반환하는 FCFDamageApplyResult를 계속 사용할 수 있다.

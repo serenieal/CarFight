@@ -1,10 +1,20 @@
 # Copyright (c) CarFight. All Rights Reserved.
 #
-# Version: 1.5.0
-# Date: 2026-08-02
-# Description: CarFight 전투·피팅 런타임 회귀 Automation 실행기
-# Scope: 공식 CarFight 엔진에서 Damage, Fitting, Launcher, Projectile Launch·Pool 격리·요격·추진과 Direct Missile 회귀를 실행하고 필수 테스트 결과를 검증합니다.
+# Version: 1.15.0
+# Date: 2026-08-13
+# Description: CarFight 전투·피팅·탄약·HUD 런타임 회귀 Automation 실행기
+# Scope: 공식 CarFight 엔진에서 Ammo HUD·Fitting Mass·저장 AssetChain, Damage, 실제 BP/DataAsset·저장 맵 1-Pawn·2-Pawn PIE Fitting·Defense Commit, Launcher, Projectile Launch·Pool 격리·요격·추진과 Direct Missile 회귀를 실행하고 필수 테스트 결과를 검증합니다.
 # Changelog:
+# - v1.15.0: CF-FQ-031 AMMO-P0-08 AssetChain을 필수 목록에 추가해 총 32개 회귀를 검증.
+# - v1.14.0: CF-FQ-031 AMMO-P0-07 FittingMass를 필수 목록에 추가해 총 31개 회귀를 검증.
+# - v1.13.0: CF-FQ-031 AMMO-P0-06 HUD를 필수 목록에 추가해 총 30개 회귀를 검증.
+# - v1.12.0: CF-FQ-031 AMMO-P0-05 Reload를 필수 목록에 추가해 총 29개 회귀를 검증.
+# - v1.11.0: CF-FQ-031 AMMO-P0-04 LauncherLock을 필수 목록에 추가해 총 28개 회귀를 검증.
+# - v1.10.0: CF-FQ-031 AMMO-P0-03 FireTransaction을 필수 목록에 추가해 총 27개 회귀를 검증.
+# - v1.9.0: CF-FQ-031 AMMO-P0-01 Contract와 AMMO-P0-02 Runtime을 필수 목록에 추가해 총 26개 회귀를 검증.
+# - v1.8.0: CF-FQ-033 FIT-P0-05 DefenseMapTwoPawnPIE를 필수 목록에 추가해 플레이어 차량 + 대상 SUV를 포함한 총 24개 회귀를 검증.
+# - v1.7.0: CF-FQ-033 FIT-P0-05 DefenseMapPIE를 필수 목록에 추가해 실제 M_VehicleDefensePIE 복제 Actor를 포함한 총 23개 회귀를 검증.
+# - v1.6.0: CF-FQ-033 FIT-P0-05 DefensePIEPipeline을 필수 목록에 추가해 총 22개 회귀를 검증.
 # - v1.5.0: CF-FQ-030 MG-P0-01~04 DirectRuntimeContract를 필수 목록에 추가해 총 21개 회귀를 검증.
 # - v1.4.0: CF-FQ-034 FIT-P0-05 InitialMass를 필수 목록에 추가해 총 20개 회귀를 검증.
 # - v1.3.0: CF-FQ-034 FIT-P0-04 RuntimeApply와 AtomicBoundary를 필수 목록에 추가해 총 19개 회귀를 검증.
@@ -47,25 +57,36 @@ $AutomationTestFilter = 'CarFight'
 
 # DR-P0-04와 CF-FQ-029 보호 회귀에서 반드시 존재하고 Success여야 하는 테스트 목록입니다.
 $RequiredTestPaths = @(
+        'CarFight.Ammo.AMMO_P0_01.Contract',
+    'CarFight.Ammo.AMMO_P0_02.Runtime',
+        'CarFight.Ammo.AMMO_P0_03.FireTransaction',
+        'CarFight.Ammo.AMMO_P0_04.LauncherLock',
+        'CarFight.Ammo.AMMO_P0_05.Reload',
+        'CarFight.Ammo.AMMO_P0_06.HUD',
+        'CarFight.Ammo.AMMO_P0_07.FittingMass',
+    'CarFight.Ammo.AMMO_P0_08.AssetChain',
     'CarFight.Damage.DR_P0_01.DataContract',
     'CarFight.Damage.DR_P0_02.HealthCompatibility',
     'CarFight.Damage.DR_P0_02.DirectionalArmor',
     'CarFight.Damage.DR_P0_02.ShieldArmorPenetration',
     'CarFight.Damage.DR_P0_02.OverflowLegacyFallback',
     'CarFight.Damage.DR_P0_02.ShieldRegeneration',
-        'CarFight.Damage.DR_P0_03.RuntimeIntegration',
-        'CarFight.Damage.DR_P0_04.DebugBlueprintContract',
+    'CarFight.Damage.DR_P0_03.RuntimeIntegration',
+    'CarFight.Damage.DR_P0_04.DebugBlueprintContract',
     'CarFight.Fitting.FIT_P0_03.Compatibility',
-        'CarFight.Fitting.FIT_P0_03.MassSnapshot',
-        'CarFight.Fitting.FIT_P0_04.RuntimeApply',
+    'CarFight.Fitting.FIT_P0_03.MassSnapshot',
+    'CarFight.Fitting.FIT_P0_04.RuntimeApply',
     'CarFight.Fitting.FIT_P0_04.AtomicBoundary',
     'CarFight.Fitting.FIT_P0_05.InitialMass',
+    'CarFight.Fitting.FIT_P0_05.DefensePIEPipeline',
+    'CarFight.Fitting.FIT_P0_05.DefenseMapPIE',
+    'CarFight.Fitting.FIT_P0_05.DefenseMapTwoPawnPIE',
     'CarFight.Launcher.LM_P0_02.MuzzleSequence',
     'CarFight.Launcher.LM_P0_03.FirePatternContract',
     'CarFight.Launcher.LM_P0_03B.SchedulerContract',
     'CarFight.Launcher.LM_P0_04.ReleaseContract',
     'CarFight.ProjectileLaunch.LM_P0_01.RuntimeContract',
-        'CarFight.Projectile.LM_P0_06.SourceIsolation',
+    'CarFight.Projectile.LM_P0_06.SourceIsolation',
     'CarFight.ProjectilePropulsion.PP_P0_01.RuntimeContract',
     'CarFight.Missile.MG_P0_01_04.DirectRuntimeContract'
 )

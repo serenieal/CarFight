@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.11.0
-// Date: 2026-07-28
+// Version: 1.12.0
+// Date: 2026-08-13
 // Description: CarFight 싱글플레이 차량 Aim 시스템의 공용 타입 정의
 // Changelog:
+// - v1.12.0: CF-FQ-031 Ammo Runtime 발사 거부를 정확히 구분하도록 Reloading과 WeaponActionLocked를 enum 끝에 추가.
 // - v1.11.0: FireRequest에 발사 순간 선택 Muzzle 이름·인덱스·설정 슬롯 수 스냅샷을 추가.
 // - v1.10.0: 탄종과 착탄 결과에 독립적인 CurrentMuzzleDirection 기반 터렛 레티클 월드 지점을 Weapon Aim Solution에 추가.
 // - v1.9.0: Weapon Reticle 표시 모드를 Hidden / DirectImpact / LaunchDirection으로 구분.
@@ -77,8 +78,10 @@ enum class ECFVehicleFireRejectReason : uint8
 	InvalidAimDirection UMETA(DisplayName="InvalidAimDirection"),
 	TraceMiss UMETA(DisplayName="TraceMiss"),
 	TurretAligning UMETA(DisplayName="TurretAligning"),
-	WeaponNotAligned UMETA(DisplayName="WeaponNotAligned"),
-	MuzzleBlocked UMETA(DisplayName="MuzzleBlocked")
+		WeaponNotAligned UMETA(DisplayName="WeaponNotAligned"),
+	MuzzleBlocked UMETA(DisplayName="MuzzleBlocked"),
+	Reloading UMETA(DisplayName="Reloading"),
+	WeaponActionLocked UMETA(DisplayName="WeaponActionLocked")
 };
 
 /**

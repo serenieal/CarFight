@@ -1,20 +1,23 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.0
-// Date: 2026-08-01
+// Version: 1.2.0
+// Date: 2026-08-13
 // Description: CarFight 차량 피팅 선택·검증·결정론적 Snapshot 공용 타입
-// Scope: 출격 전 장착 선택, 방어 선택, 검증 상태·오류와 결정론적 질량 Snapshot의 데이터 계약을 제공합니다.
+// Scope: 출격 전 장착·탄약·방어 선택, 검증 상태·오류와 결정론적 질량 Snapshot의 데이터 계약을 제공합니다.
 // Changelog:
+// - v1.2.0: CF-FQ-031 AMMO-P0-07 FCFAmmoSortieLoad를 Snapshot에 보존하고 실제 AmmoMassKg 계산·Runtime 초기화 원본으로 사용하도록 계약 확장.
 // - v1.1.0: CF-FQ-034 FIT-P0-03 누락 선택 문제 코드, 정책 빈 장착 소스와 해석된 방어 선택 방식을 추가.
 // - v1.0.0: CF-FQ-034 FIT-P0-02 공용 피팅 enum과 구조체를 최초 추가.
 // Migration:
 // - FIT-P0-03 Snapshot 해석은 Pawn 없이 수행하며 기존 VehicleData, WeaponData, DefenseData와 차량 런타임 동작을 변경하지 않는다.
-// - Ammo 선택과 실제 탄약 질량 해석은 CF-FQ-031 연동 이후 확장한다.
-// - Chaos Vehicle 질량 적용과 PhysicsAsset 검증은 FIT-P0-05 이전 Gate에서 처리한다.
+// - AMMO-P0-07부터 Snapshot의 InitialSortieAmmoLoads가 실제 출격 탄약 수량·질량·VehicleAmmoComp 초기화의 단일 원본이다.
+// - MaximumLoadableAmmoCount는 검증 상한일 뿐 현재 출격 수량으로 자동 대입하지 않는다.
+// - Chaos Vehicle 질량 적용과 PhysicsAsset 검증은 기존 FIT-P0-05 경로를 유지한다.
 
 #pragma once
 
 #include "CoreMinimal.h"
+#include "CFAmmoTypes.h"
 #include "CFVehicleWeaponTypes.h"
 #include "CFFittingTypes.generated.h"
 
@@ -247,11 +250,15 @@ struct FCFVehicleFittingSnapshot
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Snapshot", meta=(DisplayName="검증 문제 목록 (ValidationIssues)", ToolTip="피팅 해석 중 수집한 정보, 경고와 오류 목록입니다."))
 	TArray<FCFFittingValidationIssue> ValidationIssues;
 
-	// [v1.0.0] 각 장착 프로파일에서 최종 해석된 장비 목록입니다.
+		// [v1.0.0] 각 장착 프로파일에서 최종 해석된 장비 목록입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Snapshot", meta=(DisplayName="해석된 장착 목록 (ResolvedMounts)", ToolTip="차량 기본값과 피팅 선택을 모두 해석한 최종 장착 결과입니다."))
 	TArray<FCFResolvedFittingMount> ResolvedMounts;
 
-		// [v1.1.0] 최종 Snapshot이 사용한 방어 선택 방식입니다.
+	// [v1.2.0] 실제 이번 출격에 싣는 탄종별 장전+예비 전체 탄약량 목록입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Snapshot", meta=(DisplayName="출격 탄약 적재 목록 (InitialSortieAmmoLoads)", ToolTip="VehicleFittingData에서 검증된 실제 출격 탄약 목록입니다. VehicleAmmoComp 초기화와 AmmoMassKg 계산의 원본이며 피팅 최대 적재량을 현재 수량으로 대체하지 않습니다."))
+	TArray<FCFAmmoSortieLoad> InitialSortieAmmoLoads;
+
+	// [v1.1.0] 최종 Snapshot이 사용한 방어 선택 방식입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Snapshot", meta=(DisplayName="해석된 방어 선택 방식 (ResolvedDefenseSelectionMode)", ToolTip="차량 기본 방어, 명시적 방어 없음 또는 피팅 방어 덮어쓰기 중 최종 Snapshot이 해석한 방식을 보존합니다."))
 	ECFDefenseSelectionMode ResolvedDefenseSelectionMode = ECFDefenseSelectionMode::UseVehicleDefault;
 
@@ -267,8 +274,8 @@ struct FCFVehicleFittingSnapshot
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Snapshot|Mass", meta=(Units="kg", DisplayName="장비 질량 kg (EquipmentMassKg)", ToolTip="해석된 모든 터렛 마운트와 무기 질량을 합산한 값입니다."))
 	float EquipmentMassKg = 0.0f;
 
-	// [v1.0.0] 출격 탄약이 기여하는 총질량입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Snapshot|Mass", meta=(Units="kg", DisplayName="탄약 질량 kg (AmmoMassKg)", ToolTip="출격 탄약 전체의 질량입니다. CF-FQ-031 연동 전에는 0 또는 미지원 상태로 유지합니다."))
+		// [v1.2.0] 명시적 출격 탄약 전체가 기여하는 실제 총질량입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Snapshot|Mass", meta=(Units="kg", DisplayName="탄약 질량 kg (AmmoMassKg)", ToolTip="InitialSortieAmmoLoads의 실제 출격 수량 × AmmoData.UnitMassKg를 합산한 질량입니다. MaximumLoadableAmmoCount는 질량 계산에 사용하지 않습니다."))
 	float AmmoMassKg = 0.0f;
 
 	// [v1.0.0] 최종 방어 패키지가 기여하는 질량입니다.

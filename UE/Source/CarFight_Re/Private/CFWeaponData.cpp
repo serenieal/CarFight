@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.8.0
-// Date: 2026-08-01
+// Version: 1.10.0
+// Date: 2026-08-13
 // Description: CarFight 차량 무기 DataAsset과 피팅 무기 질량 구현
-// Scope: 차량 장착 프로파일 호환성, 피팅 질량, 런처 발사 패턴·Release 설정과 선택 대상 사용 정책 요약을 제공합니다.
+// Scope: 차량 장착 프로파일 호환성, 피팅 질량, 런처 발사 패턴·Release 설정, 탄약 정적 설정과 선택 대상 사용 정책 요약을 제공합니다.
 // Changelog:
+// - v1.10.0: CF-FQ-031 AMMO-P0-01 탄창·초기 장전·발사당 탄약·Reload 유효값과 유한탄 호환 판정·요약을 추가.
 // - v1.8.0: CF-FQ-034 FIT-P0-02 유효 무기 질량 Getter와 통합 요약 출력을 추가.
 // - v1.7.0: 런처 Release 유효값 보정, 전용 요약과 WeaponData 통합 요약을 추가.
 // - v1.6.0: 런처 발사 패턴 유효값 보정, 전용 요약과 WeaponData 통합 요약을 추가.
@@ -15,6 +16,7 @@
 // - v1.1.0: DefaultProjectileData 직접 참조를 디버그 요약에 포함.
 // - v1.0.0: WeaponData 최소 필드, 장착 타입/크기 호환성 검사, 디버그 요약 생성을 추가.
 // Migration:
+// - 기존 WeaponData는 bUseInfiniteAmmoForDebug=true와 DefaultAmmoData=None 기본값으로 신규 탄약 Runtime이 발사를 제한하지 않는다.
 // - 기존 WeaponData는 WeaponMassKg=0 기본값으로 기존 발사와 차량 주행 결과를 유지한다.
 // - 기존 WeaponData는 SingleCycle / 1발 기본값으로 기존 발사 결과를 유지하며 Ripple·Salvo 실행은 아직 시작하지 않는다.
 // - 기존 에셋의 CooldownSeconds 값은 로드 시 FireRatePerMinute로 환산한다.
@@ -23,7 +25,58 @@
 
 #include "CFWeaponData.h"
 
+#include "CFAmmoData.h"
 #include "CFProjectileData.h"
+
+// [v1.10.0] 기존 MagazineSize를 신규 Runtime의 MagazineCapacity 의미로 안전하게 보정해 반환합니다.
+int32 UCFWeaponData::GetEffectiveMagazineCapacity() const
+{
+	return FMath::Max(MagazineSize, 0);
+}
+
+// [v1.10.0] 출격 초기 장전량을 유효 탄창 용량 범위로 보정해 반환합니다.
+int32 UCFWeaponData::GetEffectiveInitialLoadedAmmoCount() const
+{
+	return FMath::Clamp(InitialLoadedAmmoCount, 0, GetEffectiveMagazineCapacity());
+}
+
+// [v1.10.0] 한 번의 정상 발사에 필요한 탄약 단위를 최소 1로 보정해 반환합니다.
+int32 UCFWeaponData::GetEffectiveAmmoUnitsPerShot() const
+{
+	return FMath::Max(AmmoUnitsPerShot, 1);
+}
+
+// [v1.10.0] 기존 ReloadTimeSeconds를 0 이상의 유한한 재장전 시간으로 보정해 반환합니다.
+float UCFWeaponData::GetEffectiveReloadTimeSeconds() const
+{
+	return FMath::IsFinite(ReloadTimeSeconds) ? FMath::Max(ReloadTimeSeconds, 0.0f) : 0.0f;
+}
+
+// [v1.10.0] 이 WeaponData가 명시적인 유한 탄약 Runtime을 사용하도록 설정됐는지 반환합니다.
+bool UCFWeaponData::UsesFiniteAmmoRuntime() const
+{
+	return !bUseInfiniteAmmoForDebug
+		&& IsValid(DefaultAmmoData)
+		&& DefaultAmmoData->IsAmmoDataValid()
+		&& GetEffectiveMagazineCapacity() > 0;
+}
+
+// [v1.10.0] 로그와 Debug에서 사용할 탄약 정적 설정 요약을 반환합니다.
+FString UCFWeaponData::BuildAmmoConfigSummary() const
+{
+	return FString::Printf(
+		TEXT("WeaponAmmoConfig: Mode=%s, Ammo=%s, Magazine=%d, InitialLoaded=%d, UnitsPerShot=%d, Reload=%.2fs, ReloadMode=%s, AutoReload=%s, PartialReload=%s, PartialSequence=%s"),
+		UsesFiniteAmmoRuntime() ? TEXT("Finite") : TEXT("InfiniteCompatibility"),
+		DefaultAmmoData ? *DefaultAmmoData->AmmoId.ToString() : TEXT("None"),
+		GetEffectiveMagazineCapacity(),
+		GetEffectiveInitialLoadedAmmoCount(),
+		GetEffectiveAmmoUnitsPerShot(),
+		GetEffectiveReloadTimeSeconds(),
+		*UEnum::GetValueAsString(ReloadMode),
+		bAutoReloadWhenEmpty ? TEXT("Yes") : TEXT("No"),
+		bAllowPartialReload ? TEXT("Yes") : TEXT("No"),
+		bAllowPartialSequence ? TEXT("Yes") : TEXT("No"));
+}
 
 // [v1.0.0] 기본 무기 데이터 값을 초기화합니다.
 UCFWeaponData::UCFWeaponData()

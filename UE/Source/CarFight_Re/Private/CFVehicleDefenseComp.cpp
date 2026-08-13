@@ -1,14 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.2.0
-// Date: 2026-07-31
+// Version: 1.3.0
+// Date: 2026-08-06
 // Description: CarFight 차량 쉴드·6방향 장갑 런타임 컴포넌트 구현
 // Scope: 방어 데이터 초기화, 방향 판정, 쉴드·장갑·관통·내구도 피해 분배, Legacy Fallback, 재생과 기존 결과 호환을 구현합니다.
 // Changelog:
+// - v1.3.0: 유효 DefenseData 초기화 시 VehicleDefenseComp 활성 상태를 복구해 실제 Pawn에서 재생 지연·Shield 재생 Tick이 중단되지 않도록 수정.
 // - v1.2.0: 실제 방어층 피해의 마지막 전체 결과를 캐시하고 초기화·Reset 수명과 Blueprint Debug 조회 계약을 구현.
 // - v1.1.0: DR-P0-03 HitScan·Projectile 통합용 Integrity 호환 결과 변환을 구현.
 // - v1.0.0: CF-FQ-033 DR-P0-02 VehicleDefenseComp 전체 Foundation 구현.
 // Migration:
+// - 유효 DefenseData 초기화는 컴포넌트를 활성화한 뒤 재생 Tick을 정지 상태로 초기화하며, 실제 피해가 적용된 경우에만 RestartShieldRegenerationAfterDamage가 Tick을 켠다.
 // - Projectile·HitScan은 TryApplyDamageToActor의 FCFVehicleDamageResult를 정식 결과로 사용한다.
 // - DefenseComp가 없거나 ActiveDefenseData가 None이면 기존 VehicleHealthComp BaseDamage 적용을 유지한다.
 // - 기존 Debug와 Pool에는 BuildIntegrityCompatibilityResult 결과를 전달한다.
@@ -114,6 +116,9 @@ UCFVehicleDefenseComp::UCFVehicleDefenseComp()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.bStartWithTickEnabled = false;
+
+	// [v1.3.0] 방어 런타임은 Pawn 기본 서브오브젝트와 동적 테스트 컴포넌트 모두 등록 시 활성 상태를 기본으로 사용합니다.
+	bAutoActivate = true;
 }
 
 // [v1.0.0] 재생 지연과 실제 쉴드 재생을 진행합니다.
@@ -210,6 +215,9 @@ bool UCFVehicleDefenseComp::InitializeFromDefenseData(UCFVehicleDefenseData* InD
 	}
 
 	bDefenseInitialized = true;
+
+	// [v1.3.0] Blueprint 인스턴스 또는 외부 수명에서 비활성화된 컴포넌트도 유효 방어 초기화 시 런타임 활성 상태를 복구합니다.
+	Activate(true);
 	StopShieldRegeneration();
 	return true;
 }
