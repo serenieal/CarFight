@@ -1,7 +1,7 @@
 # CarFight — 03_FeatureQueue
 
-> 문서 버전: v1.48.0
-> 작성일(Asia/Seoul): 2026-08-02
+> 문서 버전: v1.52.0
+> 작성일(Asia/Seoul): 2026-08-13
 > 문서 상태: Active
 > 역할: CarFight의 **기능 후보 / 착수 판단 / 클라이언트·서버·관리툴 필요성**을 한 곳에서 관리한다.
 
@@ -99,9 +99,9 @@ CarFight 문서 흐름은 아래 기준으로 본다.
 | `CF-FQ-028` | 발사체 추진 시스템 | 비유도 Rocket이 InitialSpeed로 분리된 뒤 점화 지연·고정 방향 가속·연소 종료 후 관성 비행하고 실제 Burning 상태에서만 Thruster FX를 재생하게 만들기 | `P1` | `Done` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/Projectile.md` |
 | `CF-FQ-029` | 모듈형 런처 및 발사 인계 | 가변 Muzzle, Single·Ripple·Salvo와 Direct·Angled·Vertical 사출을 공통 Launch Context로 연결하고 기존 직사 Projectile을 호환 유지하기 | `P1` | `Paused` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/Launcher.md`, `Document/Systems/Combat/WeaponFire.md`, `Document/Systems/Combat/Projectile.md` 갱신 |
 | `CF-FQ-030` | 물리 제한형 미사일 비행·유도 | 런처에서 분리된 미사일이 자체 추진·비행 전환과 제한된 선회율·횡가속도 유도로 목표 추적을 시도하되 명중을 보장하지 않게 만들기 | `P1` | `Ready` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/Missile.md`, `Document/Systems/Combat/Projectile.md` 갱신 |
-| `CF-FQ-031` | 차량 탄약·재장전 런타임 | 현재 출전 차량의 실제 사용 가능 탄약을 무기별 장전량과 탄종별 예비량으로 관리하고, 발사 소비·런처 예약·행동 잠금·재장전·HUD·피팅 중량을 하나의 Runtime 계약으로 연결하기 | `P1` | `Ready` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/Ammo.md`, `Document/Systems/Combat/WeaponFire.md`, `Document/Systems/Combat/Launcher.md`, 관련 UI·Vehicle Systems 갱신 |
+| `CF-FQ-031` | 차량 탄약·재장전 런타임 | 현재 출전 차량의 실제 사용 가능 탄약을 무기별 장전량과 탄종별 예비량으로 관리하고, 발사 소비·런처 예약·행동 잠금·재장전·HUD·피팅 중량을 하나의 Runtime 계약으로 연결하기 | `P1` | `Done` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/Ammo.md v1.0.0` Current / 관련 WeaponFire·Launcher·UI·Vehicle Systems는 후속 실제 변경 시 연계 |
 | `CF-FQ-032` | 인게임 전투 HUD 및 UI 프레임워크 | 인게임 UI를 LocalPlayer 소유 Root와 레이어로 관리하고 완전 Pause, 외부 3인칭 HUD, Radar, 차량 방어·무기 자원·타겟 지식 표시를 구현하면서 향후 전체 게임플로우 확장을 열어두기 | `P1` | `Active` | 필요 | 불필요 | 불필요 | `Document/Systems/UI/InGameHUD.md`, `Document/Systems/UI/UIFlow.md`, 관련 Combat·Targeting·Vehicle Systems 갱신 |
-| `CF-FQ-033` | 차량 방어·손상 런타임 | 기존 최소 HitDamage 앞에 쉴드, 6방향 독립 장갑, 관통과 차량 내구도 피해 분배를 추가하고 기존 에셋·Health 이벤트 호환을 유지하는 P0 방어 본체 구축 | `P0` | `Ready` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/VehicleDefense.md`, `Document/Systems/Combat/HitDamage.md` 갱신 |
+| `CF-FQ-033` | 차량 방어·손상 런타임 | 기존 최소 HitDamage 앞에 쉴드, 6방향 독립 장갑, 관통과 차량 내구도 피해 분배를 추가하고 기존 에셋·Health 이벤트 호환을 유지하는 P0 방어 본체 구축 | `P0` | `Done` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/VehicleDefense.md`, `Document/Systems/Combat/HitDamage.md` |
 | `CF-FQ-034` | 차량 피팅·질량 런타임 | VehicleData의 하드포인트·MountProfile과 소유 장비·Ammo·VehicleDefenseData를 검증 Snapshot으로 조합하고, 출격 적용과 비전투·정지·쿨타임 완료 조건의 시간 소모 필드 장착·해제를 원자적으로 연결하기 | `P1` | `Ready` | 필요 | 불필요 | 불필요 | `Document/Systems/Vehicles/VehicleFitting.md`, `Document/Systems/Vehicles/VehicleData.md`, `Document/Systems/Vehicles/VehicleRuntime.md`, 관련 Combat·Inventory·UI Systems 갱신 |
 | `CF-FQ-035` | 인벤토리 Foundation | 실제 소유 Item Instance, VehicleCargo·Mounted 소유 상태, 접근 조회, Reservation과 Atomic Transfer를 제공해 필드 피팅과 향후 탄약·루팅·보상·저장의 공용 소유권 기반 만들기 | `P1` | `Ready` | 필요 | 불필요 | 불필요 | `Document/Systems/Inventory/InventoryFoundation.md`, 관련 Vehicle·Combat·UI Systems 갱신 |
 | `CF-FQ-019` | 주행/전투 반복 테스트 | 주행 중 조준/발사/피격/피해와 시각 FX가 반복되는지 PIE 기준으로 검증하되, 런처·미사일 구현 범위가 확정된 뒤 통합 회귀 범위를 다시 설계 | `P1` | `Deferred` | 필요 | 불필요 | 불필요 | `Document/ProjectSSOT/05_TestChecklist.md`, `Document/Systems/Combat/CoreLoop.md` 갱신 |
@@ -122,16 +122,16 @@ CarFight 문서 흐름은 아래 기준으로 본다.
 
 ## 6. 현재 최우선 착수 후보
 
-현재 단일 Active 기능은 사용자가 명시적으로 전환한 `CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크`다.
+현재 단일 Active 기능은 `CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크`다.
 
 ```text
-1. CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크: Active / UI-P0-01A~02 Code Complete·Build·Automation PASS / User PIE Pending / UI-P0-03 Not Started
+1. CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크: Active / UI-P0-02 USER PASS / UI-P0-03 Source·Build·Automation PASS / Production Runtime PIE Partial USER PASS / Launcher 전체 Presentation·Defense·Pawn Rebind Pending
 2. CF-FQ-029 모듈형 런처 및 발사 인계: Paused / LM-P0-01~05 완료 유지 / LM-P0-06 사용자 PIE 체크포인트 보존
-3. CF-FQ-030 물리 제한형 미사일 비행·유도: Ready for Manual PIE / MG-P0-01~04 Direct Runtime·Test Assets Applied / Build·Automation PASS / Manual PIE Pending
-4. CF-FQ-031 차량 탄약·재장전 런타임: Ready / AMMO-P0-00 Documentation Done / AMMO-P0-01 Code Entry Ready
-5. CF-FQ-033 차량 방어·손상 런타임: Ready / DR-P0-00~06 Done / DR-P0-07 User Result Pending
-6. CF-FQ-034 차량 피팅·질량 런타임: Ready / FIT-P0-05 Initial Sortie Adapter Code Complete·Build·Automation PASS / Physics PIE·Mobility Pending / FFIT-P0-00 Field Action Contract Done
-7. CF-FQ-035 인벤토리 Foundation: Ready / INV-P0-00~04 Done / Adapter Code·Automation·Build PASS / Field Fitting Coordinator Not Started
+3. CF-FQ-030 물리 제한형 미사일 비행·유도: Ready for Manual PIE / MG-P0-01~04 Direct Runtime·Test Assets Applied / Build·Automation PASS
+4. CF-FQ-031 차량 탄약·재장전 런타임: Done / AMMO-P0-00~08 Done / Heavy·Ripple USER PIE PASS / Ammo Systems Current
+5. CF-FQ-034 차량 피팅·질량 런타임: Ready / FIT-P0-05 Code·Build·Automation PASS / Physics PIE·Mobility Pending
+6. CF-FQ-035 인벤토리 Foundation: Ready / INV-P0-00~04 Done / Field Fitting Coordinator Not Started
+7. CF-FQ-033 차량 방어·손상 런타임: Done / DR-P0-00~07 Done / DR-PIE-00~06 USER PASS / Systems Current
 8. CF-FQ-028 발사체 추진 시스템: Done / User PIE PASS / CF-TC-024 PASS / Systems Current
 9. CF-FQ-027 투사체 비행 FX: Done / User PIE PASS / CF-TC-023 PASS / Systems Current
 10. CF-FQ-026 타겟 선택 시스템: Paused / TS-P0-08 재개 가능
@@ -140,7 +140,7 @@ CarFight 문서 흐름은 아래 기준으로 본다.
 13. CF-FQ-019 주행/전투 반복 테스트: Deferred / 런처·미사일 이후 통합 회귀로 재설계
 ```
 
-`CF-FQ-029`는 Launch Handoff, 가변 Muzzle·SingleCycle, Pattern Data, Ripple·Salvo Scheduler와 Direct·Angled·Vertical Release의 C++ 적용·공식 Editor 빌드, `LM-P0-05 Launcher Editor Assets` 적용과 독립 AssetDump 검증을 완료했다. 현재 단계는 `LM-P0-06 Launcher Integration PIE`이며 `CF-TC-025·026`은 TODO다. `CF-FQ-030`은 Ready 상태에서 `MG-P0-01~04` Direct Release·단일 Muzzle Runtime과 격리 테스트 자산을 적용했고, TargetActor 제한형 유도·목표 소실·오버슈트·Pool Reset을 자동 검증했다. Launcher Ripple·Salvo는 첫 발사 순간 Command Target 위치와 약한 Guidance Target Actor를 함께 Snapshot하므로 이후 TargetSelect 변경이 같은 Volley의 후속 미사일 목표를 바꾸지 않는다. 정지·측면 이동·선택 변경·목표 파괴·오버슈트·Pool 재사용 사용자 PIE 전에는 Done 또는 Systems Current로 승격하지 않는다. `CF-FQ-031`은 현재 출격 차량의 사용 가능 탄약, 무기별 장전량, 탄종별 차량 예비량, 런처 시퀀스 예약과 재장전·교환 행동 잠금을 다루는 문서 준비 완료 Ready 기능이며, 사용자가 실제 착수를 선택하기 전에는 Source Not Modified 상태를 유지한다. `CF-FQ-033`은 `VehicleDefenseDamageDesign.md v0.9.0`에서 `DR-P0-00~06`을 완료하고 `DR-P0-07` 보호형 사용자 PIE 절차를 준비했다. `DA_VehicleDefense_Test`에 Shield·재생·ArmorResistance·6방향 장갑 기준값을 저장하고, 원본 `DA_TestSUV`를 직접 수정하지 않는 별도 `DA_VehicleDefense_TestSUV`에 `DefaultDefenseData`를 연결했다. 또한 `DA_DamageArmorPenTest`를 BaseDamage 25·ArmorPenetration 50으로 생성해 기존 `DA_DamageAsset`의 BaseDamage 25·ArmorPenetration 0과 비교 가능한 관통 테스트 기준을 준비했다. 원본 `DA_TestSUV`와 `DA_TestSedan`은 `DefaultDefenseData=None`, Launcher·하드포인트·내구도·메시 참조와 SHA-256을 유지했다. DR-P0-06 Defense Automation Job `7b5dce50680f47a99a29b26b02a577d7`은 8/8 Success, Combat Runtime Job `54340630094a461ea3f7a1056622fd3c`은 필수 15/15·전체 24/24 Success와 Editor Exit Code 0으로 PASS했다. 이전 `WBP_TargetSelect.uasset` 파일 잠금과 `TS_P0_06.TargetHud` 실패는 해소됐다. 독립 AssetDump `ADumpEntityQuery.cpp`의 이전 실패 호출부가 정리된 상태를 확인한 뒤 공식 Build Job `0697e0552a0f4911a93384c5d3a8a928`을 실행했고, `CarFight_ReEditor Win64 Development`가 Exit Code 0과 `Result: Succeeded`로 PASS했다. 따라서 DR-P0-06은 Done이다. DR-P0-07은 원본 TestMap·CF-FQ-029 전투 에셋 비저장, `DA_VehicleDefense_TestSUV` 수동 배치, AP 0 발별 수치와 AP 50 PIE 전용 복제 체인을 포함하는 Procedure Ready / User Result Pending 상태다. 실제 사용자 결과 전에는 PASS 처리하지 않는다. 현재 단일 Active는 `CF-FQ-032`이며 `CF-FQ-029`는 LM-P0-06 체크포인트를 보존한 Paused 상태, `CF-FQ-019`는 Deferred다.
+`CF-FQ-032`는 UI-P0-02 전체 USER PASS 후 UI-P0-03의 Source·Build·Automation과 일부 Production Runtime PIE까지 진행됐다. Speed, Weapon Cooldown, Target 선택·해제는 USER PASS이며 CF-FQ-031 완료로 finite Ammo·Reload Snapshot도 WeaponPanel에 실제 연결됐다. TestMap_AmmoRipple의 3-shot Partial Ripple, Auto Reload, 두 번째 4-shot Ripple과 정상 Sequence AlertFeed 비노출도 USER PASS다. 남은 UI-P0-03 Gate는 Launcher Presentation 전체 회귀(Salvo·terminal Cooldown→READY), Defense 실제 변화와 Pawn Rebind다. `CF-FQ-029`와 `CF-FQ-026`은 Paused, `CF-FQ-030·034·035`는 Ready, `CF-FQ-031`은 Done, `CF-FQ-019`는 Deferred다.
 
 `CF-FQ-034`는 VehicleData의 HardpointSlots·MountProfiles, EquipmentPresetData, WeaponData, CF-FQ-031 Ammo와 CF-FQ-033 Defense를 하나의 검증·질량 Snapshot으로 해석한다. `FIT-P0-04`에서 Legacy·Snapshot Prepare, Weapon·Defense 원자 Commit, 실패 Rollback과 `AppliedFittingSnapshot` 소유를 구현했다. `FIT-P0-05`에서는 PreRegister 초기 질량 기록, BeginPlay 실제 VehicleMesh 질량 검증과 같은 Snapshot의 Weapon·Defense Commit을 구현했고 공식 Build와 전체 Automation을 통과했다. 남은 범위는 실제 Physics PIE, Light·Default·Heavy Mobility 측정, Ammo 질량과 Physics State 생성 뒤 다른 질량의 Field Runtime 재적용이다. `FFIT-P0-00`의 비전투·쿨타임 종료·차량 정지·Inventory 예약 성공 계약과 빈 슬롯 전용 Equip·분리된 Unequip/Equip 규칙은 유지한다.
 
@@ -591,7 +591,7 @@ Document/Plan/<기능명>/DecisionLog.md
 
 ## 10. 문서 버전 관리
 
-- 현재 문서 버전: `v1.48.0`
+- 현재 문서 버전: `v1.52.0`
 - 문서 상태: `Active`
 
 ### 버전 증가 기준
@@ -605,6 +605,38 @@ Document/Plan/<기능명>/DecisionLog.md
 ---
 
 ## 11. 체인지로그
+
+### v1.52.0 - 2026-08-13
+
+- TestMap_AmmoRipple의 시작 3/4+Reserve4, 실제 3발 Partial Ripple, Auto Reload, 두 번째 4발 Ripple과 최종 NO AMMO를 사용자 전 항목 PASS로 반영했다.
+- `CF-FQ-031`을 Ready에서 Done으로 전환하고 `Document/Systems/Combat/Ammo.md v1.0.0`을 Current System 완료 위치로 등록했다.
+- 현재 단일 Active는 `CF-FQ-032`이며 UI-P0-03의 남은 Launcher 전체 Presentation, Defense 실제 변화와 Pawn Rebind를 다음 검증으로 고정했다.
+- finite Ammo는 실제 UI Runtime 연결이 완료됐으므로 더 이상 미구현 HUD Provider 항목으로 취급하지 않는다.
+- CF-FQ-029 Launcher 전체 기능은 Paused 상태를 유지하며 Ammo 완료로 자동 Done 처리하지 않는다.
+
+### v1.51.0 - 2026-08-06
+
+- CF-FQ-032 UI-P0-02의 Pause UI 상호작용 범위를 사용자 Standalone PASS로 기록했다.
+- `AddToViewport(100)`, 계속하기 마우스 클릭과 Enter·Escape 해제 경로를 현재 구현 기준으로 반영했다.
+- 사용자 직접 Editor 빌드와 Combat Automation `595e0c1ca0f640b69f63964bdfd22277` 전체 46/46·필수 24/24 Success를 기록했다.
+- 남은 Gamepad·입력 유지 잔류·Launcher·Projectile·Timer·Root 수명 검증 때문에 CF-FQ-032는 Active / UI-P0-02 Partial USER PASS로 유지하고 UI-P0-03은 시작하지 않았다.
+
+### v1.50.0 - 2026-08-06
+
+- 사용자 DR-PIE-06의 Salvo·Ripple·Pool·FX·충돌 PASS와 DR-P0-07 완료를 반영했다.
+- `CF-FQ-033 차량 방어·손상 런타임`을 Active에서 Done으로 전환하고 VehicleDefense·HitDamage Current System을 완료 위치로 등록했다.
+- 데미지 시스템 완료 후 UI 재개 우선순위에 따라 `CF-FQ-032`를 Paused에서 Active로 전환했다.
+- 현재 실행을 UI-P0-02 실제 Pause·Focus·Launcher·Projectile·Timer 사용자 PIE로 고정하고 PASS 뒤 UI-P0-03으로 진행하도록 했다.
+- CF-FQ-029·026 Paused, CF-FQ-030·031·034·035 Ready와 CF-FQ-019 Deferred 상태를 유지했다.
+- 코드·에셋·빌드·Automation은 재실행하지 않았고 기존 미커밋 변경을 보호했다.
+
+### v1.49.0 - 2026-08-03
+
+- 사용자 결정에 따라 작업 완료 최우선 기능을 `CF-FQ-033 차량 방어·손상 런타임`, 즉 데미지 시스템으로 재정렬했다.
+- `CF-FQ-033`을 Ready에서 Active로, `CF-FQ-032`를 Active에서 Paused로 전환했다.
+- 현재 실행 순서를 DR-P0-07 사용자 PIE, 실패 데미지 결함 우선 수정, 공식 Build·전체 Automation, 영향 PIE 재검증, Systems 승격과 Done으로 고정했다.
+- DR-P0-07을 직접 차단하는 문제만 예외 선행으로 허용하고 해소 즉시 데미지 시스템으로 복귀하도록 했다.
+- 런처·미사일·TargetSelect·피팅·인벤토리의 기존 상태와 검증 결과는 변경하지 않았다.
 
 ### v1.48.0 - 2026-08-02
 

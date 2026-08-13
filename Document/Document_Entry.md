@@ -1,8 +1,8 @@
 # Document Entry (CarFight)
 
-- 문서 버전: v2.9
+- 문서 버전: v2.10
 - 작성일: 2026-06-19
-- 최근 갱신일: 2026-07-27
+- 최근 갱신일: 2026-08-13
 - 문서 상태: Current
 - 역할: `Document/` 전체의 작업별 진입 라우터
 
@@ -36,7 +36,7 @@
 | `Document/ProjectSSOT/` | CarFight의 현재 상태, 우선순위, 확정 결정, 검증 기준 | 프로젝트 판단 기준 |
 | `Document/Systems/` | 구현 완료된 기능의 현재 구조와 책임 | 현재 구현 기준 |
 | `Document/Plan/` | 앞으로 개발하거나 검증할 기능의 상세 계획 | 진행 중 계획 기준 |
-| `Document/Plan/Archive/` | 완료·보류·대체된 과거 Plan | 현재 착수 기준 아님 |
+| `Document/Plan/Archive/` | 현재 착수 기준에서 내려온 Historical Plan의 logical 색인과 물리 Archive | 현재 착수 기준 아님 |
 | `Document/SSOT/` | 여러 프로젝트에 공통 적용되는 규칙과 UE 협업 원칙 | 공용 기준 |
 
 핵심 구분:
@@ -116,6 +116,8 @@ ActiveWork
 ```
 
 `ActiveWork.md`에는 대표 Plan의 상세 내용을 복사하지 않는다.
+대표 Plan이 detailed work status owner이고 `ActiveWork.md`와 `Plan/README.md`는 현재 상태를 짧게 보여주는 projection이다.
+projection과 대표 Plan이 충돌하면 FeatureQueue·실제 저장소·대표 Plan을 다시 확인하고 projection을 stale로 판정해 교정한다. 최신 수정 시각만으로 projection을 authoritative 상태로 취급하지 않는다.
 사용자가 특정 작업명이나 작업 ID를 지정하면 마지막 작업 초점보다 해당 작업을 우선한다.
 새 세션은 대표 Plan을 읽은 뒤 관련 Systems, ProjectSSOT와 실제 코드·에셋을 교차검증해야 한다.
 
@@ -167,26 +169,63 @@ CombatPlan에 존재하는 아이디어는 자동으로 현재 구현 대상이 
 
 과거 Archive가 현재 문서와 충돌하면 현재 ProjectSSOT, Systems와 실제 저장소를 우선한다.
 
-### 2.6 공식 문서 상태 모델
+### 2.6 공식 상태와 lifecycle 모델
 
-| 상태 | 의미 | 공식 등록 위치 |
-| --- | --- | --- |
-| Draft | 구조와 결론이 확정되지 않은 초안 | 상위 색인 등록 없음 |
-| Working | 현재 작업 지시, 조사 또는 임시 기록 | 상위 색인 등록 없음 |
-| Notes | 참고 자료와 실험 기록 | 상위 색인 등록 없음 |
-| Candidate | 아직 착수하지 않은 기능 후보 | `ProjectSSOT/03_FeatureQueue.md` |
-| Active Plan | 실제 착수 또는 검증 중인 기능 | `Plan/README.md`와 해당 대표 Plan |
-| Current System | 구현과 필요한 검증을 통과한 현재 기준 | `Systems/SystemIndex.md`와 해당 Systems 문서 |
-| Deferred | 현재 일정에서 보류된 기능 또는 계획 | FeatureQueue 또는 Archive 색인 |
-| Done | 정의된 완료 조건을 통과한 기능 상태 | Systems 반영 후 필요 시 Plan Archive |
-| Archived | 현재 판단이나 착수 기준에서 내려온 기록 | 해당 Archive 색인 |
+FeatureQueue의 기능 상태와 Plan 문서 lifecycle을 구분한다.
 
-핵심 원칙은 다음과 같다.
+#### Feature 상태
+
+| 상태 | 의미 |
+| --- | --- |
+| Candidate | 아직 착수하지 않은 기능 후보 |
+| Ready | 설계·선행조건이 준비됐지만 현재 Active는 아님 |
+| Active | 현재 대표 Plan에서 진행 중 |
+| Paused | 체크포인트를 보존한 채 일시중지 |
+| Blocked | 선행 조건 때문에 진행 불가 |
+| Done | 정의된 완료 조건 통과 + Current Knowledge 승격 완료 |
+| Deferred | 현재 일정에서 보류 |
+| Rejected | 기각 |
+
+#### Plan 문서 lifecycle
+
+```text
+Active / In Progress
+→ Closed
+→ Historical
+```
+
+`Done` 기능의 Plan을 Historical로 내릴 때는 다음 순서를 사용한다.
+
+```text
+실제 구현 + 필요한 Build/Automation/USER PIE
+→ Current Knowledge를 Systems와 필요한 ProjectSSOT로 승격
+→ ActiveWork / Plan Index의 stale current route 제거
+→ 대표 Plan/Result 탐색 경로 보존
+→ semantic Historical
+→ 필요할 때만 optional physical move
+```
+
+Historical과 물리 위치는 별도다.
+
+```text
+Historical + Retained Path
+Historical + Move Candidate
+Historical + Archived Path
+```
+
+따라서 파일이 `Document/Plan/` 기존 경로에 남아 있어도 현재 착수 기준에서 내려왔다면 Historical일 수 있다. 반대로 Archive 폴더에 있다는 이유만으로 현재 구현이나 완료 증거가 자동 확정되는 것도 아니다.
+
+핵심 원칙:
 
 ```text
 파일이 존재한다
-≠
-공식 기준 문서로 승격되었다
+≠ 공식 Current 기준
+
+파일이 Archive 경로에 있다
+≠ 완료 증거
+
+Historical이다
+≠ 반드시 물리 이동 완료
 ```
 
 ### 2.7 독립 저장소와 문서 소유권 경계
@@ -468,6 +507,13 @@ Document/
 
 ## 11. Changelog
 
+### v2.10 - 2026-08-13
+
+- 대표 Plan을 detailed work status owner, ActiveWork와 Plan Index를 Current projection으로 명확히 했다.
+- Feature 상태와 Plan 문서 lifecycle을 분리하고 `Active/In Progress → Closed → Historical` semantics를 추가했다.
+- 완료 Plan의 Historical 전환에 Current Knowledge Promotion과 Current Route Cleanup을 필수 Gate로 추가했다.
+- semantic Historical과 physical placement를 분리해 `Historical + Retained Path`를 정식 허용했다.
+
 ### v2.9 - 2026-07-27
 
 - CarFight 코드 작업 기본 경로를 별도 Codex 위임에서 현재 AI 세션의 직접 구현으로 변경했다.
@@ -547,6 +593,13 @@ Document/
 ---
 
 ## 12. Migration
+
+### v2.10 적용 안내
+
+- `Document/ActiveWork.md`와 `Document/Plan/README.md`는 대표 Plan의 상세 상태를 복제하지 않고 현재 작업 선택에 필요한 projection만 유지한다.
+- Feature `Done` 후 현재 구현은 Systems와 필요한 ProjectSSOT가 소유하며 완료 Plan은 `Document/Plan/Archive/README.md`에서 Historical로 찾는다.
+- 완료 Plan의 물리 move/rename은 closure 필수조건이 아니다. 링크·dirty work·rollback 안전성이 별도 확인될 때만 maintenance로 수행한다.
+- Historical 문서의 과거 Pending/Blocked/next-action을 현재 작업으로 자동 복원하지 않는다.
 
 ### v2.9 적용 안내
 

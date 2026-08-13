@@ -2,8 +2,8 @@
 
 > 역할: CarFight 프로젝트의 **현재 실제 기준선 / 임시 운영 편차 / 현재 리스크**를 고정한다.
 > 공통 규칙 원본: `Document/SSOT/`
-> 문서 버전: v2.35.0
-> 마지막 정리(Asia/Seoul): 2026-08-02
+> 문서 버전: v2.42.1
+> 마지막 정리(Asia/Seoul): 2026-08-13
 
 
 ---
@@ -12,37 +12,76 @@
 - 최종 방향은 `00_Vision.md`를 기준으로 본다.
 - 이 문서는 그 방향 아래에서 **지금 실제로 굴러가는 상태만** 적는다.
 
+### 현재 공식 Unreal Engine 기준선
+
+```text
+Engine Version: Unreal Engine 5.8
+Engine Distribution: Source Build
+Engine Root: D:\UnrealEngine_Source
+Editor Build Entry: D:\Work\CarFight_git\Tools\BuildEditor.bat
+Editor Run Entry: D:\Work\CarFight_git\Tools\RunEditor.bat
+```
+
+- CarFight의 엔진 호환성, API, 플러그인 지원 여부와 구현 판단은 별도 업그레이드 결정 전까지 **UE 5.8 Source Build**를 기준으로 한다.
+- Launcher 설치형 엔진이나 과거 `D:\UE_5.7`, `D:\UE_5.7_Source` 경로는 현재 공식 엔진이 아니다.
+- 과거 문서·대화에 남은 UE 5.7 표기는 Historical/폐기 기준이며 현재 엔진 버전이나 구현 근거로 승격하지 않는다.
+- 실제 엔진 소스 수준 판단이 필요하면 `D:\UnrealEngine_Source`의 UE 5.8 소스를 최우선 근거로 사용한다.
+- `Document/SSOT/UE_SSOT/`는 **UE 5.x 공통 원칙**만 제공하며, 정확한 엔진 버전·배포 형태·엔진 경로·버전 민감 API 판단에서는 이 ProjectSSOT의 **프로젝트별 Engine Baseline**이 우선한다.
+
+### Engine Authority 구조
+
+```text
+현재
+──────────────────────────────
+ProjectSSOT
+UE 5.8 Source Build
+D:\UnrealEngine_Source
+          ↑
+          │ Current Authority
+          │
+
+과거
+──────────────────────────────
+EngineSourceBuild/
+UE 5.7 Launcher → Source 전환
+          ↓
+Historical / Superseded
+          ↓
+Archive
+```
+
+- `Document/Plan/EngineSourceBuild/`는 UE 5.7 Launcher → Source Build 전환 당시의 기록이며 현재 Engine Baseline이 아니다.
+- 해당 Plan의 과거 경로·명령·판정은 Historical evidence로만 보존하고, 현재 엔진 설정·빌드·플러그인 호환성·API 판단에 사용하지 않는다.
+- 향후 엔진 버전이 변경되면 ProjectSSOT의 Engine Baseline을 먼저 갱신하고, 공용 UE SSOT는 특정 프로젝트의 마이너 버전을 자체적으로 고정하지 않는다.
+
 ---
 
-## 2026-08-02 현재 프로젝트 상태
+## 2026-08-13 현재 프로젝트 상태
 
 ### 1. 현재 활성 작업
 
-현재 단일 CarFight 활성 작업은 사용자가 명시적으로 전환한 `CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크`다.
+`CF-FQ-031 차량 탄약·재장전 런타임`은 AMMO-P0-00~08, 공식 Build·Automation과 Heavy·Ripple USER PIE를 완료하고 Current System으로 승격됐다. 현재 단일 CarFight 활성 작업은 다시 `CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크`다.
 
 ```text
 현재 Active: CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크
-현재 단계: UI-P0-01A~02 Code Complete / Official Build·Automation PASS / User PIE Pending / UI-P0-03 Not Started
-대표 Plan: Document/Plan/InGameUIPlan.md v0.6.0
-Source Changes: Applied — PlayerController·LocalPlayer UI Subsystem·World별 C++ Root·8개 레이어·C++ Pause Menu·차량 입력 중립화·Runtime Ready 분리·Input Context 소유권 명시·Automation·GameMode 연결
-Asset Changes: None
-Official Editor Build: 4f2daa07187a41aea7c400386010b2a0 / Exit Code 0
-Automation: 6f0a9a5ebde5472b8b784a9103ce484d / 전체 32 Success·0 Failed / 필수 17/17 Success
-Pause Runtime: 실제 World Pause / Continue·Back / Drive·Look·Pressed Key 중립화 / Launcher·Projectile·Timer 상태 보존
-Legacy Preservation: 기존 AimReticle·TargetSelect 변경 없음
-PIE: Not Run / 실제 Pause·Focus·입력 잔류·진행 재개 User Pending
-다음 단계: UI-P0-03 HUD 데이터 계약 Not Started
-이전 Active: CF-FQ-029 LM-P0-06 / Paused Checkpoint Preserved
-피팅·인벤토리 보호: CF-FQ-034 FIT-P0-05 Initial Sortie Adapter Code Complete·Build·Automation PASS / Physics PIE·Mobility Pending, CF-FQ-035 INV-P0-04 Done / Field Fitting Coordinator Not Started
-Runtime Ready: bVehicleRuntimeReady=Vehicle Core 호환 / bVehicleCombatRuntimeReady=Aim·Weapon·Launcher·TargetSelect 포함
-Input Context: 차량 Gameplay=Pawn DefaultInputMappingContext 소유 / Controller GameplayInputMappingContext=None 유지
-일시중지 유지: CF-FQ-026 TargetSelect TS-P0-08
+현재 단계: UI-P0-02 USER PASS / UI-P0-03 Common Launcher Technical PASS / Production Runtime PIE Partial USER PASS / TestMap_DRSalvo USER PIE Pending / 이후 Defense·Pawn Rebind Pending
+대표 Plan: Document/Plan/InGameUIPlan.md v0.58.1
+완료 유지: UI-P0-01A~02 Code Complete / UI-P0-02 USER PASS / Speed·Cooldown·Target 부분 USER PASS / finite Ammo·Reload Runtime 연결 / Ripple USER 경로 PASS
+다음 검증: `/Game/Maps/TestMap_DRSalvo` Launcher Presentation USER PIE (`SALVO 진행 → SALVO 4 / 4 → Cooldown → READY`) → Defense 실제 변화 표시 → Pawn Rebind
+정적 감사: UI-P0-03 Provider/Presenter 공통 Launcher 구조에서 Blocking 결함 없음 / UI-P0-04 AimReticle UISubsystem 소유권 이전 사전 설계 Ready·실제 구현 Not Started
+완료된 직전 기능: CF-FQ-031 Done / AMMO-P0-00~08 Done / Heavy·Ripple USER PIE PASS
+현재 Ammo System: Document/Systems/Combat/Ammo.md v1.0.0
+현재 Defense Systems: Document/Systems/Combat/VehicleDefense.md v1.0.0 / HitDamage.md v1.1.0
+Ammo 최종 제품 Build: 2230e755e05844d1b1f7c0729e226d3 / Exit 0
+Ammo 최종 Full Regression: 4c68c30619554fd8985a83bfe06c5e04 / CarFight 64 / Required 32/32 Success / Failed 0
+보호 상태: CF-FQ-029·026 Paused / CF-FQ-030·034·035 Ready / CF-FQ-031 Done
 ```
 
-`UI-P0-01A`는 Pawn과 독립된 Pause·Back 요청, Controller 소유 System·UI Context, Pawn 소유 Vehicle Gameplay Context, Possession 통지와 Input Mode·Cursor·Focus 기반을 제공한다.
-`UI-P0-01B`는 `UCFUISubsystem`과 World별 `UCFUIRootWidget`을 통해 Game·HUD·Screen·Panel·Menu·Modal·System·Debug 레이어를 제공한다.
-`UI-P0-02`는 실제 World Pause, 차량 입력 잔류 제거, C++ Pause Menu와 Launcher·Projectile·Timer 진행 정지 구조를 제공한다.
-다만 실제 입력 장치, Focus, 물리·시퀀스 재개 사용자 PIE가 남아 있으므로 Current System 또는 `CF-FQ-032 Done`으로 판정하지 않는다.
+`CF-FQ-033`은 Shield, 6방향 독립 Armor, ArmorPenetration, Vehicle Integrity, Shield 재생, Legacy Fallback과 Fitting Defense Commit을 구현하고 DR-P0-00~07, 공식 Editor Build, 전체 Automation과 DR-PIE-00~06 사용자 검증을 완료했다. 현재 구현은 `Document/Systems/Combat/VehicleDefense.md v1.0.0`과 `HitDamage.md v1.1.0`이 소유하며 `CF-FQ-033`은 Done이다.
+
+`CF-FQ-032`는 현재 Active다. UI-P0-02의 Gamepad Pause·Back, 입력 유지 잔류 없음, Ripple·Salvo·Projectile·추진·World Timer 정지·재개와 반복 Pause·레벨 재진입 Root/Menu 수명을 모두 USER PASS했다. UI-P0-03은 Gameplay Runtime → Provider/Presenter → ViewData → Production Widget 구조, 공식 Build·Automation과 일부 Production PIE까지 진행됐다. Speed 실제 증가, Weapon Cooldown과 Target 선택·해제는 USER PASS이고, CF-FQ-031 완료로 finite Ammo·Reload도 실제 Snapshot을 통해 WeaponPanel에 연결됐다. TestMap_AmmoRipple에서는 `3 / 4` + Reserve 4, 실제 3발 Partial Ripple, Auto Reload, 두 번째 4발 Ripple과 정상 Sequence AlertFeed 비노출을 USER PASS했다. 다만 UI-P0-03 전체 완료 기준에는 Salvo와 terminal Cooldown→READY를 포함한 Launcher Presentation 전체 회귀, Defense 실제 변화와 Pawn Rebind가 남아 있으므로 아직 Done으로 판정하지 않는다.
+
+`CF-FQ-031`은 Done이다. WeaponInstanceId별 Loaded, AmmoId별 Reserve, SingleCycle Commit·Rollback, Ripple·Salvo 전체 유효 발수 예약, FullMagazine Reload, Pause-safe Reload, WeaponPanel `Loaded / MagazineCapacity + label-less Reserve`, Fitting `InitialSortieAmmoLoads`·AmmoMassKg를 구현했고 Heavy·Ripple USER PIE를 완료했다. 현재 구현은 `Document/Systems/Combat/Ammo.md v1.0.0`이 소유하며 완료 Plan은 `Document/Plan/AmmoSystemPlan.md v0.7.0`이다.
 
 `CF-FQ-029`는 Launch Handoff, 가변 Muzzle, SingleCycle, Ripple·Salvo Scheduler, Direct·Angled·Vertical Release와 `LM-P0-05 Launcher Editor Assets` 적용·독립 AssetDump 검증을 완료했으며 현재 단계는 `LM-P0-06 Launcher Integration PIE`다.
 `CF-FQ-030`은 `Ready for Manual PIE` 상태다. `MG-P0-01~04` Direct Release·단일 Muzzle Runtime, Missile Flight·Guidance 컴포넌트, TargetActor 제한형 유도, 목표 소실·오버슈트·Pool Reset과 전용 테스트 자산이 적용됐다. Launcher Ripple·Salvo는 첫 발사 순간 `CommandTargetLocation`과 약한 `GuidanceTargetActor`를 함께 Snapshot해 차량의 이후 선택 변경과 같은 Volley의 미사일 목표를 분리한다. 공식 Editor Build `ce88150dfbbc495d91d1e2b8cd7c5225`가 Exit Code 0으로 통과했고 전체 CarFight Automation `85c1e7285a7946fa8f55182b6247f0f4`는 43/43, 필수 회귀는 21/21 Success였다. 정지·측면 이동·선택 변경·목표 파괴·오버슈트·Pool 재사용 사용자 PIE가 남아 있으므로 Done 또는 Systems Current로 판정하지 않는다.
@@ -243,23 +282,33 @@ Completed Plan: Document/Plan/ProjectilePropulsionPlan.md v1.2.0
 
 ### 4. 다음 작업 선택 기준
 
-현재 단일 Active 작업은 `CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크`다.
+현재 단일 Active 작업과 우선순위 1위는 `CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크`다.
 
 ```text
-현재 Active: CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크
-- 완료 유지: UI-P0-01A~02 Code Complete / Official Build·Automation PASS
-- 사용자 검증: 실제 Pause·Focus·입력 잔류·Launcher·Projectile·Timer 재개 PIE Pending
-- 다음 코드 단계: UI-P0-03 HUD 데이터 계약 Not Started
-- Runtime Ready: bVehicleCoreRuntimeReady와 bVehicleCombatRuntimeReady 분리
-- 입력 소유권: Pawn Vehicle Gameplay Context / Controller System·UI Context
+1. CF-FQ-032 UI-P0-03 TestMap_DRSalvo USER PIE
+   - WeaponPanel에서 SALVO 진행 상태가 보인다.
+   - terminal Snapshot `SALVO 4 / 4`가 확인된다.
+   - Sequence 표시 중 Cooldown·READY가 중복 노출되지 않는다.
+   - terminal 이후 READY 순간 깜빡임 없이 실제 Cooldown → READY로 전환한다.
+   - 정상 Launcher Sequence가 상단 AlertFeed에 중복 노출되지 않는다.
 
-보호된 Ready·Paused 작업
-- CF-FQ-034: FIT-P0-05 Initial Sortie Adapter Code·Build·Automation PASS / Physics PIE·Mobility Pending
-- CF-FQ-035: INV-P0-00~04 Done / Field Fitting Coordinator Not Started
-- CF-FQ-029: LM-P0-06 체크포인트 보존 / Paused
-- CF-FQ-026: TS-P0-08 체크포인트 보존 / Paused
-- CF-FQ-030·031·033: 기존 Ready 상태 유지
-- CF-FQ-019: Deferred / 런처·미사일 이후 통합 회귀 재설계
+2. Launcher USER PASS 뒤 남은 UI-P0-03 USER Gate
+   - Defense 실제 Shield·Armor·Integrity 변화 표시
+   - Pawn 교체 시 OnCurrentPawnChanged 기반 Provider·Presenter Rebind와 이전 Pawn 구독 해제
+
+3. 보호된 Ready·Paused 체크포인트
+   - CF-FQ-029 Launcher LM-P0-06
+   - CF-FQ-030 Missile Manual PIE
+   - CF-FQ-034 Fitting Physics PIE
+   - CF-FQ-035 Field Fitting Coordinator
+   - CF-FQ-026 TargetSelect TS-P0-08
+   - CF-FQ-031 Ammo Done / Heavy·Ripple USER PIE 반복 금지
+
+완료 기준선
+- 공통 Weapon/Launcher Presentation lifecycle Source·공식 Build·전체 Automation 64/64 PASS는 완료됐으므로 반복하지 않는다.
+- CF-FQ-033은 Done이며 VehicleDefense·HitDamage Systems를 현재 구현 기준으로 사용한다.
+- UI에서 Shield·Armor·관통·Integrity 계산을 재구현하거나 변경하지 않는다.
+- Launcher·Defense·Pawn Rebind USER Gate 전체 PASS 전에는 UI-P0-03 또는 CF-FQ-032를 완료 처리하지 않는다.
 ```
 
 `CF-FQ-024`, `CF-FQ-027`과 `CF-FQ-028`은 Done 상태를 유지하며 완료된 전투 FX·비행 FX·추진을 새 기능 안에서 재구현하지 않는다.
@@ -804,6 +853,44 @@ DA_PoliceCar
 ---
 
 ## 변경 이력
+- v2.42.0 (2026-08-13)
+  - `CF-FQ-032` 현재 projection을 대표 `InGameUIPlan.md v0.58.0`과 동기화했다.
+  - Salvo 전용 Hold v1.5.0·v1.6.0 폐기와 HeavyCannon·Ripple·Salvo 공통 Weapon/Launcher Presentation lifecycle 교정 완료를 반영했다.
+  - 공식 Editor Build `6978e029bfaa48c7addfc9acd87484b1` PASS와 전체 Automation `00ee23a01aa7480cabc557f312780ae8` 64/64 PASS·필수 32/32 Success를 현재 기술 검증 기준으로 반영했다.
+  - 현재 next gate를 `/Game/Maps/TestMap_DRSalvo` USER PIE로 고정하고 Launcher USER PASS 후 Defense 실제 변화 → Pawn Rebind 순서를 유지했다.
+
+- v2.41.0 (2026-08-13)
+  - TestMap_AmmoRipple의 시작 3/4+Reserve4, 실제 3발 Partial Ripple, Loaded 감소, 2초 Auto Reload, 두 번째 4발 Ripple과 최종 NO AMMO를 사용자 전 항목 PASS로 반영했다.
+  - `AMMO-P0-08`과 `CF-FQ-031`을 Done으로 전환하고 `Document/Systems/Combat/Ammo.md v1.0.0`을 Current System으로 등록했다.
+  - 현재 단일 Active를 `CF-FQ-032`로 복귀시키고 UI-P0-03의 다음 Gate를 Launcher 전체 Presentation(Salvo·terminal Cooldown→READY), Defense 실제 변화, Pawn Rebind로 고정했다.
+  - finite Ammo는 더 이상 UI Provider 부재 항목이 아니며 실제 VehicleAmmoComp Snapshot을 WeaponPanel이 소비한다고 현재 기준선을 교정했다.
+
+- v2.40.0 (2026-08-08)
+  - Engine Authority를 `ProjectSSOT → UE 5.8 Source Build → D:\UnrealEngine_Source`로 명시했다.
+  - `EngineSourceBuild/`의 UE 5.7 Launcher → Source 전환 기록을 Historical / Superseded → Archive 경계로 분리했다.
+  - 공용 `Document/SSOT/UE_SSOT/`는 UE 5.x 공통 원칙만 소유하고, 정확한 버전·배포 형태·경로·버전 민감 API는 프로젝트별 Engine Baseline을 우선하도록 고정했다.
+
+- v2.39.0 (2026-08-08)
+  - CarFight의 현재 공식 엔진을 **Unreal Engine 5.8 Source Build**로 명시했다.
+  - 공식 엔진 루트를 `D:\UnrealEngine_Source`, 빌드·실행 진입점을 `Tools\BuildEditor.bat` / `Tools\RunEditor.bat`로 고정했다.
+  - 과거 UE 5.7 표기는 Historical/폐기 기준이며 현재 호환성·API·구현 판단에 사용하지 않도록 명시했다.
+  - 엔진 소스 수준 판단에서는 실제 `D:\UnrealEngine_Source` UE 5.8 소스를 최우선 근거로 사용하도록 고정했다.
+
+- v2.37.0 (2026-08-06)
+  - 사용자 DR-PIE-06에서 Salvo·Ripple, Muzzle 순서, Sequence 4/4, 각 5 Volley, 중복 입력 방지, 추진·Trail·Thruster·Impact FX와 충돌 격리를 모두 PASS했다.
+  - DR-PIE-00~06 전체 USER PASS와 DR-P0-07 완료에 따라 `CF-FQ-033 차량 방어·손상 런타임`을 Done으로 전환했다.
+  - `Document/Systems/Combat/VehicleDefense.md v1.0.0`을 신규 Current System으로 등록하고 `HitDamage.md v1.1.0`과 `SystemIndex.md v1.15.0`을 통합 기준으로 갱신했다.
+  - 데미지 시스템 완료 후 UI로 복귀한다는 기존 우선순위에 따라 `CF-FQ-032`를 현재 단일 Active로 복원했다.
+  - 다음 실행을 UI-P0-02 Pause·Focus·Launcher·Projectile·Timer 사용자 PIE로 고정하고 PASS 뒤 UI-P0-03 HUD 데이터 계약으로 진행하도록 했다.
+  - 코드·에셋·빌드·Automation은 다시 변경하거나 실행하지 않았고 기존 미커밋 변경과 체크포인트를 보호했다.
+
+- v2.36.0 (2026-08-03)
+  - 사용자 결정에 따라 작업 완료 최우선 사항을 `CF-FQ-033 차량 방어·손상 런타임`, 즉 데미지 시스템으로 재정렬했다.
+  - `CF-FQ-033`을 Active로 전환하고 `DR-P0-07 사용자 PIE → 실패 결함 우선 수정 → 전체 PASS → Systems 승격 → Done` 완료 경로를 고정했다.
+  - 데미지 검증을 직접 차단하는 문제만 예외적으로 선행 처리하고 해소 즉시 CF-FQ-033으로 복귀하도록 했다.
+  - `CF-FQ-032`는 UI-P0-01A~02 완료 상태와 User PIE·UI-P0-03 체크포인트를 보존한 Paused 상태로 전환했다.
+  - 런처·미사일·TargetSelect·피팅·인벤토리의 기존 구현 상태와 검증 결과는 변경하지 않았다.
+
 - v2.35.0 (2026-08-02)
   - `CF-FQ-030 MG-P0-01~04` Direct Missile Runtime과 격리 테스트 자산 적용 상태를 현재 기준선에 동기화했다.
   - Launcher Volley의 위치·Actor 목표를 첫 발사 순간 함께 보존하도록 수정하고 이후 TargetSelect 변경과 후속 미사일 목표를 분리했다.
@@ -1014,6 +1101,60 @@ DA_PoliceCar
 ---
 
 ## Migration
+
+### v2.42.0 적용 안내
+
+```text
+- CF-FQ-032 상세 작업 상태 owner는 Document/Plan/InGameUIPlan.md v0.58.0이다.
+- 공통 Weapon/Launcher Presentation lifecycle 교정, 공식 Editor Build와 전체 Automation 64/64 PASS는 완료됐으므로 반복하지 않는다.
+- 다음 Gate는 /Game/Maps/TestMap_DRSalvo USER PIE이며 SALVO 진행 → SALVO 4 / 4 → Cooldown → READY를 사용자 확인한다.
+- Launcher USER PASS 전에는 Defense 실제 변화와 Pawn Rebind로 넘어가지 않는다.
+- CF-FQ-031은 Done이며 Heavy·Ripple Ammo USER PIE를 반복하지 않는다.
+- UI-P0-03 또는 CF-FQ-032 전체 완료는 Defense 실제 변화와 Pawn Rebind까지 USER PASS한 뒤에만 판정한다.
+```
+
+### v2.41.0 적용 안내
+
+```text
+- CF-FQ-031은 Done이며 AMMO-P0-00~08과 Heavy·Ripple USER PIE를 반복하지 않는다.
+- Ammo 현재 구현은 Document/Systems/Combat/Ammo.md v1.0.0을 우선한다.
+- 현재 Active는 CF-FQ-032 UI-P0-03이다.
+- 다음 사용자 검증은 Launcher 전체 Presentation(Salvo·terminal Cooldown→READY) → Defense 실제 변화 → Pawn Rebind 순서다.
+- 위 범위 전체 USER PASS 전에는 UI-P0-03 또는 CF-FQ-032를 Done 처리하지 않는다.
+- CF-FQ-029 Launcher 전체 기능은 별도 Paused 체크포인트를 유지하며 Ammo 완료로 자동 Done 처리하지 않는다.
+```
+
+### v2.40.0 적용 안내
+
+- CarFight의 현재 Engine Authority는 `ProjectSSOT → UE 5.8 Source Build → D:\UnrealEngine_Source` 순서로 해석한다.
+- `Document/Plan/EngineSourceBuild/`는 현재 Plan이나 Engine Baseline으로 복원하지 않고 Historical / Superseded 기록으로만 읽는다.
+- 공용 UE SSOT에서 특정 마이너 버전이 언급되더라도 CarFight의 실제 버전 판단에는 ProjectSSOT Engine Baseline을 우선한다.
+- 버전 민감 API·플러그인·엔진 동작은 가능하면 실제 `D:\UnrealEngine_Source` 소스를 최종 근거로 검증한다.
+
+### v2.39.0 적용 안내
+
+- CarFight 관련 새 세션과 도구 작업은 `UE 5.8 + Source Build + D:\UnrealEngine_Source`를 하나의 공식 엔진 기준으로 사용한다.
+- 과거 UE 5.7 문구는 현재 버전 확인 근거로 사용하지 않으며, 명시적 엔진 업그레이드 결정 없이 다른 버전으로 자동 전환하지 않는다.
+- 빌드와 에디터 실행 진입점은 기존 `Tools\BuildEditor.bat`, `Tools\RunEditor.bat`를 그대로 유지하므로 코드·에셋 마이그레이션은 없다.
+
+### v2.38.0 적용 안내
+
+- UI-P0-02의 Pause UI 상호작용 범위는 사용자 Standalone PASS다.
+- UI Root는 Legacy Pawn HUD와 같은 `AddToViewport` 계층의 ZOrder 100을 사용한다.
+- 최신 사용자 직접 Editor 빌드와 Combat Automation `595e0c1ca0f640b69f63964bdfd22277` 전체 46/46·필수 24/24 Success를 기준으로 한다.
+- Gamepad, 입력 유지 잔류, Ripple·Salvo, Projectile·추진·World Timer와 Root 수명 사용자 PIE가 남아 있으므로 UI-P0-02 전체 완료나 UI-P0-03 착수로 판정하지 않는다.
+
+### v2.37.0 적용 안내
+
+```text
+- 현재 Active 작업은 CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크다.
+- 대표 Plan은 Document/Plan/InGameUIPlan.md v0.7.0이다.
+- UI-P0-01A~02 코드·Build·Automation은 완료됐으므로 UI-P0-02 사용자 PIE부터 재개한다.
+- UI-P0-02 PASS 뒤 UI-P0-03 Vehicle·Weapon·Defense·Target·Radar·Alert HUD 데이터 계약으로 진행한다.
+- CF-FQ-033은 Done이며 현재 구현은 VehicleDefense.md와 HitDamage.md를 우선한다.
+- UI는 Shield·Armor·관통·Integrity 계산을 읽기 전용으로 소비하고 재구현하지 않는다.
+- CF-FQ-029·026 Paused와 CF-FQ-030·031·034·035 Ready 체크포인트를 유지한다.
+```
 
 ### v2.20.0 적용 안내
 

@@ -1,7 +1,8 @@
 # CarFight — 04_ProjectDecisions
 
-> 문서 버전: v1.7.0
+> 문서 버전: v1.8.0
 > 작성일(Asia/Seoul): 2026-07-24
+> 최근 갱신일(Asia/Seoul): 2026-08-08
 > 문서 상태: Active
 > 역할: CarFight 프로젝트 전체의 **구조 / 서버 / 관리툴 / 운영 / 데이터 흐름 결정**을 기록한다.
 
@@ -121,6 +122,82 @@
 ```text
 전담 FX 인력이 추가되거나, 현재 FAB 자산으로 제품 품질 목표를 달성할 수 없다는 반복 검증 결과가 있을 때 제작 정책을 재검토한다.
 멀티플레이 원격 FX, 대규모 동시 전투 또는 자연 소멸 Trail이 실제 플레이 가독성에 필수라고 확인되기 전에는 P0 생명주기 규칙을 확장하지 않는다.
+```
+
+---
+
+## 0-3. CF-PDL-0011 — 싱글 우선을 유지하며 멀티·오픈월드 확장성 경계를 강제한다
+
+- 상태: `Accepted`
+- 결정일: 2026-08-08
+- 관계: `CF-PDL-0006`, `CF-PDL-0007`의 싱글플레이 우선순위를 유지하며 장기 구조 제약만 추가한다.
+
+### 결정
+
+```text
+- 현재 개발 일정은 계속 싱글플레이와 현재 FeatureQueue 우선순위를 따른다.
+- 멀티플레이, Dedicated Server, 2클라 검증, Replication 고도화와 World Partition을 현재 Active로 재활성화하지 않는다.
+- 대신 앞으로 추가·수정하는 기능은 Static Definition / Runtime State / Persistent State / View Data 책임을 구분한다.
+- 현재 싱글의 Local Runtime은 Authority 역할을 수행할 수 있지만 상태 변경 경로는 Request → Validate → Apply → Result → Presentation으로 이동 가능하게 유지한다.
+- UDataAsset / UPrimaryDataAsset은 정적 Definition으로 취급하고 플레이어별·차량 인스턴스별 변경 상태를 직접 저장하지 않는다.
+- 네트워크·저장·소유권 식별은 UObject·Actor 포인터가 아니라 직렬화 가능한 안정적 ID를 우선한다.
+- 정적 Definition은 FPrimaryAssetId 또는 도메인별 안정적 Definition ID, 실제 소유 인스턴스는 FGuid 기반 Instance ID를 기본 방향으로 한다.
+- ACFVehiclePawn은 차량 Actor 조립과 차량 내부 컴포넌트 조율을 담당하며 플레이어·월드 전역 Persistent State 저장소로 확장하지 않는다.
+- Actor는 Persistent Entity의 영구 저장 형태가 아니며 Streaming·Relevancy·레벨 수명으로 제거·재생성될 수 있다고 가정한다.
+- World Partition과 Persistence를 같은 책임으로 묶지 않는다.
+- 전투 결과, Fitting 확정, Inventory Transfer Commit과 소유권 변경은 장기적으로 Server Authority로 이동 가능한 도메인 결과로 유지한다.
+- Camera, HUD, Reticle, Debug, Niagara와 기타 Presentation은 Dedicated Server에서 생략 가능해야 하며 게임 결과를 권한 있게 결정하지 않는다.
+- UI는 View Data를 소비하고 Shield·Armor·관통·Cooldown·Fitting 호환성 같은 도메인 규칙을 재계산하지 않는다.
+- Actor와 World 없이 계산 가능한 Inventory, Fitting, Capacity, Transfer, 피해 분배 규칙은 순수 Struct·Utility·Adapter 우선 원칙을 유지한다.
+- 현재 싱글 단계에서 모든 Component Replication, RPC, SaveGame, World Partition과 DB 계층을 미래 대비만으로 선구축하지 않는다.
+- 실제 멀티플레이 재개 시 하나의 Gameplay Vertical Slice를 기준으로 필요한 Authority·Replication·Prediction만 단계적으로 추가한다.
+```
+
+### 이유
+
+```text
+- 현재 Gameplay 코어는 VehicleData, Fitting Snapshot, Weapon·Defense Component, Inventory의 안정적 Item/Owner ID처럼 향후 확장에 유리한 기반이 이미 존재한다.
+- 반대로 현재 ACFVehiclePawn은 싱글플레이 기준으로 많은 도메인 연결을 조율하고 있으며 Replication·Server RPC는 의도적으로 제거된 상태다.
+- 지금 전체 네트워크 계층을 다시 도입하면 1인 개발에서 빌드·2클라·지연·Prediction·Relevancy 검증 비용이 모든 기능에 즉시 추가된다.
+- 그러나 Authority 경계와 상태 종류를 구분하지 않고 싱글 기능을 계속 누적하면 나중에 서버 전환 때 도메인 로직과 UI·Actor 수명을 함께 뜯어내야 한다.
+- 따라서 지금은 네트워크 기능 자체보다 데이터·상태·식별자·수명·Presentation 경계를 보존하는 것이 비용 대비 효과가 가장 높다.
+```
+
+### 현재 코드에 대한 해석
+
+```text
+좋은 선행 기반
+- FCFVehicleFittingSnapshot과 원자 Commit / Rollback 경계
+- CF-FQ-035의 FGuid 기반 ItemInstanceId / OwnerId / ContainerId
+- FPrimaryAssetId 기반 Inventory Definition 식별
+- Pawn·World 없이 검증 가능한 Inventory Access / Transfer / Fitting Adapter
+- VehicleDefenseComp / VehicleHealthComp / VehicleWeaponComp의 도메인별 Runtime State 분리
+- NM_DedicatedServer와 IsLocallyControlled 기반 Presentation Gate
+
+현재 의도적 싱글 기준
+- ACFVehiclePawn::ApplyVehicleSinglePlayerBaseline에서 bReplicates=false
+- SetReplicateMovement(false)
+- GetLifetimeReplicatedProps 없음
+- Server / Client / NetMulticast RPC 없음
+- Fire는 BuildFireCommand → ValidateFireCommand → 로컬 적용 경로
+```
+
+### 영향
+
+```text
+- 새 Feature Plan은 구현 방식보다 먼저 Authority 후보, 상태 종류, 안정적 ID 필요성, Actor 수명 의존 여부와 Presentation 경계를 검토한다.
+- UI-P0-03 HUD 데이터 계약은 Replicated State 여부와 무관하게 View Data Provider 경계를 유지한다.
+- CF-FQ-031 Ammo, CF-FQ-035 Inventory 후속, Fitting Field Runtime과 향후 AI·월드 기능은 이 결정의 상태 소유권 분류를 따른다.
+- 기존 싱글 기능에 단지 미래 대비를 이유로 Replicated UPROPERTY나 RPC를 일괄 추가하지 않는다.
+- 멀티플레이를 실제 재개하는 Feature에서 첫 Server Authority Vertical Slice와 최소 Replication Plan을 별도로 작성한다.
+```
+
+### 변경 조건
+
+```text
+- 제품 방향에서 멀티플레이가 다시 실제 개발 우선순위로 승인된 경우 Authority·Replication 구현 범위를 구체화한다.
+- Persistent Open World가 실제 제품 범위로 승인된 경우 Entity Persistence, Streaming Hydration과 Save/DB 계층을 별도 Feature로 연다.
+- 팀 규모 또는 운영 요구가 바뀌어 선행 서버 인프라 투자 비용보다 반복 기능 전환 비용이 더 커진 경우 선구축 제한을 재검토한다.
 ```
 
 ---
@@ -544,7 +621,7 @@ DataAsset 기반 참조를 사용하면 1인 개발 환경에서 C++ 재빌드 �
 
 ## 7. 문서 버전 관리
 
-- 현재 문서 버전: `v1.7.0`
+- 현재 문서 버전: `v1.8.0`
 - 문서 상태: `Active`
 
 ### 버전 증가 기준
@@ -558,6 +635,18 @@ DataAsset 기반 참조를 사용하면 1인 개발 환경에서 C++ 재빌드 �
 ---
 
 ## 8. 체인지로그
+
+### v1.8.0 - 2026-08-08
+
+```text
+- CF-PDL-0011 싱글 우선 유지 + 멀티·오픈월드 확장성 아키텍처 경계를 Accepted로 추가했다.
+- Static Definition / Runtime State / Persistent State / View Data 분리를 프로젝트 전역 설계 제약으로 고정했다.
+- Request → Validate → Apply → Result → Presentation 경계를 향후 Server Authority 이동 지점으로 정의했다.
+- 안정적 Definition / Instance / Owner ID와 Actor 수명·Persistent Entity 수명 분리를 확정했다.
+- VehiclePawn 비대화 방지, Dedicated Server Presentation 생략 가능성, View Data 읽기 전용 원칙을 추가했다.
+- 현재 싱글 단계에서는 Replication·RPC·SaveGame·World Partition을 선구축하지 않고 실제 멀티 Vertical Slice 승인 시 최소 범위로 추가하도록 결정했다.
+```
+
 
 ### v1.7.0 - 2026-07-24
 
@@ -636,6 +725,19 @@ DataAsset 기반 참조를 사용하면 1인 개발 환경에서 C++ 재빌드 �
 ---
 
 ## 9. Migration
+
+### v1.8.0 적용 안내
+
+```text
+- CF-PDL-0011은 CF-PDL-0006·0007을 대체하지 않는다. 현재 싱글 우선 개발 일정은 그대로 유지한다.
+- 새 기능은 구현 전에 Authority 후보, Static/Runtime/Persistent/View 상태 분류와 안정적 ID 필요성을 확인한다.
+- 현재 싱글 로직은 Local Authority로 유지할 수 있으나 도메인 상태 변경과 Presentation을 새 코드에서 다시 결합하지 않는다.
+- 기존 Inventory ID·Fitting Snapshot·순수 Adapter는 확장성 기반으로 보호한다.
+- ACFVehiclePawn에 계정·월드·영구 Inventory 같은 전역 상태를 추가하지 않는다.
+- 단지 미래 멀티 가능성 때문에 기존 컴포넌트 전체를 Replicated로 바꾸지 않는다.
+- 첫 실제 멀티 Feature가 승인되면 그 Feature의 Request/Validation/State Mutation을 Server Authority로 옮기는 Vertical Slice부터 시작한다.
+```
+
 
 ### v1.7.0 적용 안내
 

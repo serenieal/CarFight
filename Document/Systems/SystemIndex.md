@@ -1,7 +1,7 @@
 # SystemIndex
 
-- Version: 1.14.0
-- Date: 2026-07-30
+- Version: 1.16.0
+- Date: 2026-08-13
 - Status: Active
 - Scope: `Document/Systems/` 하위 문서 위치 안내 색인
 
@@ -28,15 +28,17 @@
 ## 3. Combat 폴더
 
 현재 Combat 폴더 문서는 **현재 구현된 전투 런타임과 싱글플레이 로컬 전투 피드백 기준**을 기록한다.
-최소 직접 피해, 차량 체력 감소와 파괴 상태는 현재 Systems 범위에 포함한다. 장갑/모듈 피해, 완성형 파괴 연출과 서버 권한 전투는 아직 후속 범위다.
+직접 피해, Shield, 6방향 독립 Armor, ArmorPenetration, Vehicle Integrity, 최초 파괴 상태와 차량 finite Ammo·Reload는 현재 Systems 범위에 포함한다. 실제 부품별 손상, 도탄, 범위 피해, 완성형 파괴 물리와 서버 권한 전투는 후속 범위다.
 
 | 경로 | 문서 내용 |
 | --- | --- |
 | `Document/Systems/Combat/WeaponFire.md` | 싱글플레이 로컬 차량 Pawn에서 Fire 입력을 발사 명령으로 만들고, Weapon Aim Solution을 기준으로 Projectile Actor 또는 Dummy HitScan 경로로 넘기며, 발사 결과와 거부 사유를 Aim / Debug / 후속 UI 피드백이 읽을 수 있게 남기는 현재 발사 기능 문서다. |
+| `Document/Systems/Combat/Ammo.md` | `CF-FQ-031`에서 완료한 차량 finite Ammo Current System이다. WeaponInstanceId별 Loaded, AmmoId별 Reserve, SingleCycle Commit·Rollback, Ripple·Salvo 전체 예약, FullMagazine Reload, WeaponPanel `Loaded / MagazineCapacity + Reserve`와 출격 Ammo 질량 계약을 기록한다. Heavy·Ripple USER PIE를 완료했다. |
 | `Document/Systems/Combat/FireFeedback.md` | `WeaponFire`가 남긴 로컬 발사 성공·실패·쿨다운·NoWeapon·AimBlocked·TurretAligning·MuzzleBlocked 결과를 Reticle 텍스트와 색상으로 표시한다. P0 상태 전환과 피드백 만료를 사용자 PIE로 확인했다. |
 | `Document/Systems/Combat/Projectile.md` | `ProjectileData`, 공통 `CFProjectileActor`, `ProjectileMotorComp`와 `ProjectilePoolComp`를 통한 비추진 포탄·비유도 Rocket 이동, 점화·연소·BurnedOut 관성 비행, 지속형 Trail·Thruster 소켓/Fallback·독립 Scale, 종료 Reset·Pool 재사용·고속 Bounds, 고속 연속 충돌과 첫 Impact 피해를 기록한다. `CF-TC-020`, `CF-TC-023`, `CF-TC-024`를 사용자 PIE로 확인했다. |
 | `Document/Systems/Combat/DamageHitContext.md` | Dummy HitScan과 Projectile의 시각 차체 Hit 결과, `HitComponentName`, 위치/노멀/입사 방향을 같은 `FCFDamageHitContext` 형식으로 기록한다. 이 Context는 현재 `HitDamage`의 공용 피해 적용 입력으로 사용된다. |
-| `Document/Systems/Combat/HitDamage.md` | `DamageData.BaseDamage`, `FCFDamageHitContext`, `FCFDamageApplyResult`와 `UCFVehicleHealthComp`를 연결해 차량 체력 감소, 파괴 상태 1회 전환, 자기 피해 금지와 거부 사유를 처리하는 현재 최소 피해 시스템 문서다. |
+| `Document/Systems/Combat/HitDamage.md` | HitScan·Projectile의 `FCFDamageHitContext`를 정식 `VehicleDefenseComp` 진입점으로 연결하고, Shield·Armor 이후 Vehicle Integrity 적용, Legacy Fallback, 최초 파괴와 기존 `FCFDamageApplyResult` 호환을 기록한다. |
+| `Document/Systems/Combat/VehicleDefense.md` | `VehicleDefenseData`와 `VehicleDefenseComp`가 소유하는 Shield, 재생, Front·Left·Right·Rear·Top·Bottom 독립 Armor, 방향 배율, ArmorPenetration, Armor Overflow, Vehicle Integrity 전달과 Fitting Defense Commit을 기록한다. |
 | `Document/Systems/Combat/CombatFx.md` | 승인된 발사, 첫 Impact와 최초 차량 파괴 결과를 DataAsset 기반 Niagara로 정확히 한 번 표현한다. `NS_BasicHit` Impact, 차량별 `SM_Body.FX_Destroyed` 소켓, 최대 수명 안전 퓨즈와 최종 사용자 PIE PASS를 기록한 현재 전투 FX 문서다. |
 
 ---
@@ -107,11 +109,13 @@
 | 찾고 싶은 내용 | 확인할 문서 |
 | --- | --- |
 | 현재 로컬 발사 명령, 무기 데이터 해석, 쿨다운, FireOrigin, 발사 결과 기록 | `Combat/WeaponFire.md` |
+| 차량 finite Ammo, 무기별 장전량·탄종별 Reserve, Launcher 예약, FullMagazine Reload, WeaponPanel 탄약 표시와 출격 탄약 질량 | `Combat/Ammo.md` |
 | 발사 성공/실패/쿨다운/무기 없음 상태를 Reticle, HUD와 시각 VFX로 표시하는 기준 | `Combat/FireFeedback.md` |
 | 프로젝트 전역 게임 사운드 비지원 결정과 오디오 도입 금지 기준 | `Document/ProjectSSOT/04_ProjectDecisions.md` |
 | Projectile Actor 활성화, 비유도 Rocket 추진 상태, Trail·Thruster 지속형 FX, 독립 FX Scale, 일반·고속 충돌, 첫 Impact 피해와 Pool Reset 기준 | `Combat/Projectile.md` |
 | Dummy HitScan / Projectile 시각 차체 HitContext와 HitComponent 기록 | `Combat/DamageHitContext.md` |
-| DamageData 기반 체력 감소, 피해 적용 결과와 파괴 상태 | `Combat/HitDamage.md` |
+| HitScan·Projectile 공용 피해 진입점, Vehicle Integrity 적용, Legacy Fallback과 최초 파괴 상태 | `Combat/HitDamage.md` |
+| Shield, 6방향 Armor, 관통·Overflow, 재생과 방어층별 전체 결과 | `Combat/VehicleDefense.md` |
 | Muzzle·Impact·Destroyed Niagara의 데이터 연결, 발생 위치, 1회성, 중복 방지와 잔류 안전 계약 | `Combat/CombatFx.md` |
 | Reticle 목표점, 터렛 추적, Muzzle 방향을 하나의 Aim Solution으로 통합하는 설계 | `Document/Plan/AimFireAlignment/ImplementationDesign.md` |
 | Sweep/Sub-stepping/보조 Sphere Sweep을 통한 고속 Projectile 연속 충돌 설계 | `Document/Plan/ProjectileContinuousCollision/ImplementationDesign.md` |
@@ -147,6 +151,20 @@
 ---
 
 ## 12. Changelog
+
+### v1.16.0 - 2026-08-13
+
+- `Document/Systems/Combat/Ammo.md v1.0.0`을 Current System으로 신규 등록했다.
+- `CF-FQ-031`의 AMMO-P0-00~08, 공식 Build·Automation과 Heavy·Ripple USER PIE PASS를 완료 근거로 반영했다.
+- Vehicle finite Ammo의 WeaponInstanceId별 Loaded, AmmoId별 Reserve, Launcher Sequence 예약, FullMagazine Reload, WeaponPanel 표시와 Fitting Ammo 질량을 Combat 현재 범위에 추가했다.
+- Launcher 전체 완료 여부는 별도 `CF-FQ-029`가 소유하므로 Ammo 승격과 함께 Launcher를 자동 완료 처리하지 않는다.
+
+### v1.15.0 - 2026-08-06
+
+- `Document/Systems/Combat/VehicleDefense.md v1.0.0`을 Current System으로 신규 등록했다.
+- Combat 현재 범위를 Shield, 6방향 독립 Armor, ArmorPenetration과 Vehicle Integrity까지 확장해 실제 구현과 일치시켰다.
+- `HitDamage.md v1.1.0`의 정식 VehicleDefense 진입점, Legacy Fallback과 기존 Health·Pool 호환 관계를 색인에 반영했다.
+- 공식 Build `48c0a81e19af4b20a17f628bcc7b723b`, Combat Automation 46/46과 DR-PIE-00~06 USER PASS를 `CF-FQ-033 Done` 근거로 등록했다.
 
 ### v1.14.0 - 2026-07-30
 
@@ -252,6 +270,13 @@
 ---
 
 ## 13. Migration
+
+### v1.15.0 적용 안내
+
+- 차량 방어·손상 현재 구현은 `Combat/VehicleDefense.md`와 `Combat/HitDamage.md`를 함께 우선한다.
+- `VehicleDefenseDamageDesign.md`는 완료 당시 설계·검증 기록이며 Current System을 대체하지 않는다.
+- `VehicleData.DefaultDefenseData=None`은 오류가 아니라 기존 차량을 위한 정식 Legacy Fallback으로 읽는다.
+- 실제 부품 손상, 도탄, 범위 피해와 서버 권한 피해는 Current System으로 간주하지 않는다.
 
 ### v1.14.0 적용 안내
 

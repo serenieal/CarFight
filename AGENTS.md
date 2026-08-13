@@ -27,7 +27,9 @@
 - 새로 제안하는 파일명과 클래스명은 32자를 넘기지 않게 해줘.
 
 언리얼 엔진 관련 설명에서는 다음 규칙을 지켜줘.
-- 항상 언리얼 엔진 최신버전을 기준으로 설명해줘.
+- CarFight의 현재 공식 엔진 기준은 **Unreal Engine 5.8 Source Build**이며 물리 경로는 `D:\UnrealEngine_Source`다.
+- CarFight 관련 설명·설계·코드·플러그인 호환성 판단은 별도 엔진 업그레이드 결정이 있기 전까지 UE 5.8을 기준으로 한다.
+- 과거 문서, 대화, 설치 경로에 남은 UE 5.7 표기는 Historical/폐기 기준이며 현재 엔진 버전으로 재해석하지 않는다.
 - 메뉴 경로, 옵션명, 설정명은 한국어(English) 형식으로 함께 표기해줘.
 - 실제로 존재하는 블루프린트 노드 이름만 사용해줘.
 - 개념적인 표현을 실제 블루프린트 노드처럼 설명하지 말아줘.
@@ -104,11 +106,11 @@ Windows PowerShell에서 한글/비ASCII가 포함된 파일을 읽을 때는 �
 
 # CarFight 빌드/실행 강제 규칙
 
-- 기준 엔진은 `D:\UnrealEngine_Source`이다.
+- 현재 공식 엔진은 **Unreal Engine 5.8 Source Build**이며 기준 루트는 `D:\UnrealEngine_Source`이다.
 - 에디터 빌드는 반드시 `D:\Work\CarFight_git\Tools\BuildEditor.bat`를 실행한다.
 - 에디터 실행은 반드시 `D:\Work\CarFight_git\Tools\RunEditor.bat`를 실행한다.
-- 빌드/실행/테스트에서 `D:\UE_5.7` 또는 `D:\UE_5.7_Source`를 사용하지 않는다.
-- 오래된 문서의 `D:\UE_5.7` 예시는 폐기된 기록으로 보고 새 명령에 사용하지 않는다.
+- 빌드/실행/테스트에서 `D:\UE_5.7` 또는 `D:\UE_5.7_Source`를 사용하지 않는다. 이 경로명은 과거 금지 대상일 뿐 현재 엔진 버전을 뜻하지 않는다.
+- 오래된 문서의 UE 5.7 및 `D:\UE_5.7` 예시는 Historical/폐기 기록으로 보고 현재 판단이나 새 명령에 사용하지 않는다.
 - 직접 명령을 작성해야 하면 먼저 `Tools\CarFightEnv.bat`를 확인하고, 반드시 `D:\UnrealEngine_Source\Engine\Build\BatchFiles\Build.bat`와 `D:\UnrealEngine_Source\Engine\Binaries\Win64\UnrealEditor.exe`를 사용한다.
 
 # 이성수준 규칙

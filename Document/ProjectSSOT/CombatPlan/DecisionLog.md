@@ -1,8 +1,8 @@
 # CombatPlan Decision Log
 
-- 문서 버전: v0.7
+- 문서 버전: v0.10
 - 작성일: 2026-06-02
-- 최근 갱신일: 2026-07-31
+- 최근 갱신일: 2026-08-07
 - 문서 상태: Current
 - 담당 범위: CarFight 전략 / 전투 시스템 확정 결정 기록
 
@@ -931,7 +931,161 @@ Widget
 
 ---
 
+### CP-D027. 차량 탑재형 전술 UI 시각 방향 채택
+
+- 날짜: 2026-08-06
+- 상태: Accepted
+- 관련 문서: `14_CombatUI.md`, `Document/Plan/InGameUIVisualConcept.md`, `Document/Plan/InGameUIPlan.md`
+
+#### 결정
+
+CarFight의 인게임 UI 시각 콘셉트를 `차량 탑재형 전술 인터페이스`로 정한다.
+
+```text
+70% 실용적 전투 정보
+20% 차량 디지털 계기판 정체성
+10% 세계관 장식과 스타일
+```
+
+스타일라이즈드 카툰 렌더링과 어울리는 평면 UI를 사용한다. 기본 Accent는 Cyan, 진행·주의는 Amber, 위험·치명 상태는 Orange Red·Red 계열을 사용한다.
+
+조준·락온·Radar에는 군용 전술성을 국소적으로 강화할 수 있지만 전체 HUD는 차량 중심의 정돈된 정보 구조를 유지한다. 과도한 네온, 지속 Glitch·Scanline, 의미 없는 원형 장식, 강한 Glass·Blur와 항공기 MFD 복제를 기본 스타일로 사용하지 않는다.
+
+시각 디자인 품질과 CommonUI 도입 여부는 별도 결정으로 유지한다. 이 결정은 Visual Direction Accepted이며 Style Data·Base Widget·Font·Icon·Wireframe과 해상도별 검토를 완료했다는 의미가 아니다.
+
+#### 이유
+
+CarFight는 자동차 전투 게임이므로 일반 FPS, 우주선이나 항공기 HUD를 그대로 사용하면 차량 정체성이 약해진다. 반대로 계기판 표현만 강조하면 조준·락온·센서·방어 판단에 필요한 전술 정보가 약해진다. 70:20:10 균형은 빠른 전투 판독을 우선하면서 차량 정체성과 세계관 표현을 보존한다.
+
+#### 영향 범위
+
+- 인게임 HUD와 Pause Menu
+- Reticle과 Lock Indicator
+- Vehicle Defense·Speed Cluster·Weapon Panel
+- Target Panel·Radar·Alert
+- 공통 UI Style Data와 Base Widget
+- 16:9·21:9·32:9 화면 설계
+- 후속 차고·피팅·전체 화면 메뉴의 공통 시각 언어
+
+#### 후속 작업
+
+`UI-DESIGN-GATE`에서 `DA_CFUIStyle`, 공통 Base Widget, Font·Icon, HUD Wireframe 또는 Style Board와 해상도별 검토를 완료한다. CommonUI 도입 여부는 별도 `UI-COMMONUI-GATE`에서 판단한다.
+
+---
+
+### CP-D028. 외부 3인칭 16:9 HUD 기본 배치 채택
+
+- 날짜: 2026-08-07
+- 상태: Accepted
+- 관련 문서: `14_CombatUI.md`, `Document/Plan/InGameUIVisualConcept.md`, `Document/Plan/InGameUIStyleSpec.md`, `Document/Plan/InGameUIRoadmap.md`
+
+#### 결정
+
+CarFight 인게임 HUD의 기본 배치는 외부 3인칭 차량 TPS와 16:9 화면을 기준으로 한다.
+
+```text
+좌상단      Mission Summary
+상단 중앙   Alert Feed
+우상단      Target Panel
+좌하단      Vehicle Panel
+하단 중앙   Radar Panel
+우하단      Weapon Panel
+중앙        Reticle·Target Marker 보호영역
+```
+
+Radar는 하단 중앙에 배치한다. Vehicle Panel과 Weapon Panel은 이 결정에서 위치만 확정하며 내부 구성은 각 상세 Plan에서 별도 검토한다. Target Panel은 차량 이미지를 기본 사용하지 않고 Scan 진척에 따라 정보를 점진 공개한다. 중앙 영역은 차량 TPS 시야와 조준·Target Marker를 위해 비워 둔다.
+
+P0에서는 기본 배치를 고정 사용한다. 후속 사용자 HUD 배치 커스터마이징에 대비해 주요 HUD 모듈은 안정적인 Slot ID와 Layout Profile을 사용할 수 있게 설계한다. 현재 결정은 배치 편집 UI나 저장 기능 구현을 의미하지 않는다.
+
+#### 이유
+
+기존 초안은 FPS에 가까운 시점과 과도한 정보 밀도로 차량 TPS의 주행 시야를 방해했다. Radar를 하단 중앙에 두고 차량·무기 정보를 좌우 하단으로 분리하면 중앙 전장을 확보하면서도 시선 이동을 제한할 수 있다. 또한 Panel 위치와 내부 정보 설계를 분리해야 방향별 장갑과 다양한 무기 자원 요구를 억지로 단일 Wireframe에 고정하지 않을 수 있다.
+
+#### 영향 범위
+
+- 2560×1440 HUD Wireframe
+- WBP_CFInGameHUD Slot 구조
+- Vehicle·Weapon·Target·Radar Panel
+- 16:9·21:9·32:9 Safe Zone
+- 후속 HUD Layout Profile과 사용자 커스터마이징 확장
+
+#### 후속 작업
+
+`D1-VEHICLE-PANEL`과 `D1-WEAPON-PANEL`에서 각 Panel 내부 구성을 별도 검토한다. 이후 Style Token·Base Widget과 실제 해상도 검토를 진행한다.
+
+---
+
+### CP-D029. 좌하단 VehiclePanel 시각 구조 채택
+
+- 날짜: 2026-08-07
+- 상태: Accepted
+- 관련 문서: `14_CombatUI.md`, `Document/Plan/InGameUIVehiclePanelSpec.md`, `Document/Plan/InGameUIStyleSpec.md`
+
+#### 결정
+
+좌하단 내 차량 상태 패널은 `896×416` 가로형으로 고정한다.
+
+```text
+상단 좌측  원호형 디지털 속도계 + 큰 숫자 속도 + 세로 D/N/R
+상단 우측  왼쪽을 차량 전방으로 둔 6방향 Armor 상태창
+중간       Shield 전체 폭 Bar
+최하단     Vehicle Integrity 전체 폭 Bar
+```
+
+Armor 상태창은 전면·후면·좌측·우측 텍스트를 표시하지 않고 위치와 차량 실루엣으로 방향을 전달한다.
+
+```text
+실루엣 왼쪽   = FrontArmor
+실루엣 위     = RightArmor
+실루엣 오른쪽 = RearArmor
+실루엣 아래   = LeftArmor
+상부 Badge     = 좌상단
+하부 Badge     = 우하단
+```
+
+계기판은 자동차 디지털 속도계 형태를 사용하되 실제 Runtime이 없는 RPM·Tachometer 값을 표시하지 않는다. 부품 손상 목록은 고정 VehiclePanel에서 제외하고 후속 Alert·Compact Chip·차량 상세 Panel 중 하나로 별도 설계한다.
+
+#### 이유
+
+좌측 계기판과 우측 Armor Map을 같은 가로형 패널에 배치하면 운전 정보와 생존 정보를 한 번의 좌하단 시선 이동으로 확인할 수 있다. 왼쪽을 차량 전방으로 고정한 실루엣은 방향별 Armor 위치를 일관되게 유지한다. Shield와 Integrity를 전체 폭 Bar로 분리하면 방어 계층 순서를 빠르게 읽을 수 있으며, 부품 목록을 제거하면 전투 화면의 밀도를 낮출 수 있다.
+
+#### 영향 범위
+
+- `WBP_CFVehicleHUD`
+- 원호형 Speed Gauge
+- 6방향 Armor View Data 바인딩
+- Shield·Integrity Status Bar
+- 1080p·1440p와 울트라와이드 Safe Zone
+- 후속 부품 손상 UI
+
+#### 후속 작업
+
+다음 UI 디자인 상세 작업은 `D1-WEAPON-PANEL`이다. VehiclePanel은 실제 C++ View Data, UMG Asset, 애니메이션과 해상도 검증을 별도 구현 단계에서 수행한다.
+
+---
+
 ## 4. Changelog
+
+### v0.10 - 2026-08-07
+
+- CP-D029로 좌하단 VehiclePanel의 896×416 가로형 시각 구조를 Accepted로 기록했다.
+- 원호형 속도계, 세로 D/N/R, 왼쪽 전방 Armor 실루엣과 6방향 바인딩을 확정했다.
+- 상부 좌상단·하부 우하단 Badge, Shield 중간 Bar와 Integrity 최하단 Bar를 채택했다.
+- 부품 손상 목록을 고정 VehiclePanel에서 제외하고 다음 상세 단계를 D1-WEAPON-PANEL로 이동했다.
+
+### v0.9 - 2026-08-07
+
+- CP-D028로 외부 3인칭 차량 TPS와 16:9 HUD 기본 배치를 Accepted로 기록했다.
+- Mission TL, Alert TC, Target TR, Vehicle BL, Radar BC, Weapon BR 위치를 확정했다.
+- Vehicle·Weapon 내부 상세를 배치 결정에서 분리하고 후속 별도 설계로 남겼다.
+- 후속 사용자 배치 커스터마이징을 위한 Slot ID·Layout Profile 확장 경계를 기록했다.
+
+### v0.8 - 2026-08-06
+
+- CP-D027로 차량 탑재형 전술 인터페이스 시각 콘셉트를 Accepted로 기록했다.
+- 스타일라이즈드 평면 UI, Cyan·Amber·Red Palette와 C형 70:20:10 디자인 균형을 확정했다.
+- 시각 방향 Accepted와 Style Asset·Wireframe·해상도 검토 완료를 분리했다.
+- 디자인 품질 Gate와 CommonUI 도입 Gate를 독립적으로 유지했다.
 
 ### v0.7 - 2026-07-31
 

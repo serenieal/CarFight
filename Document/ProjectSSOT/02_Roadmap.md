@@ -3,8 +3,8 @@
 > 역할: CarFight 프로젝트의 **현재 해야 할 일 / 우선순위 / 완료 조건 / 진행 순서**를 고정한다.
 > 기준 상태 문서: `01_ProjectState.md`
 > 상위 방향 문서: `00_Vision.md`
-> 문서 버전: v2.19.0
-> 마지막 정리(Asia/Seoul): 2026-07-30
+> 문서 버전: v2.23.0
+> 마지막 정리(Asia/Seoul): 2026-08-13
 
 
 ---
@@ -30,25 +30,27 @@
 
 ---
 
-## 현재 우선순위 상태 (2026-07-30)
+## 현재 우선순위 상태 (2026-08-13)
 
-`CF-FQ-029 모듈형 런처 및 발사 인계`는 `LM-P0-01~04` C++ 적용·공식 Editor 빌드와 `LM-P0-05 Launcher Editor Assets` 적용·독립 AssetDump 검증을 완료했다. 현재 단계는 `LM-P0-06 Launcher Integration PIE`이며 `CF-TC-025·026`은 사용자 확인 전 TODO다. `CF-FQ-030 물리 제한형 미사일 비행·유도`는 Ready 상태 안에서 `MG-P0-00` 비활성 타입·Config·Guidance 수학과 Editor 빌드를 완료했지만 런타임에는 연결하지 않았다. `MG-P0-01`은 이 통합 검증과 CF-FQ-029 완료 판정을 기다린다.
+`CF-FQ-031 차량 탄약·재장전 런타임`은 AMMO-P0-00~08, Heavy·Ripple USER PIE와 Ammo Current System 승격까지 완료해 Done이다. 현재 단일 Active는 다시 `CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크`이며 UI-P0-03 Production Runtime PIE의 남은 Launcher 전체 Presentation·Defense·Pawn Rebind 검증을 계속한다.
 
 ```text
-1. CF-FQ-029 모듈형 런처 및 발사 인계: Active / LM-P0-01~04 Code Applied / LM-P0-05 Assets Applied·AssetDump PASS / LM-P0-06 CF-TC-025·026 User PIE Active
-2. CF-FQ-030 물리 제한형 미사일 비행·유도: Ready / MG-P0-00 Inactive Foundation Code Applied·Build PASS / MG-P0-01은 CF-FQ-029 LM-P0-06·완료 판정 선행
-3. CF-FQ-031 차량 탄약·재장전 런타임: Ready / Documentation Done / Source Not Modified
-4. CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크: Ready / UI-P0-00 Documentation Done / Source·Asset Not Modified
-5. CF-FQ-028 발사체 추진 시스템: Done / User PIE PASS / CF-TC-024 PASS / Systems Current
-6. CF-FQ-027 투사체 비행 FX: Done / User PIE PASS / CF-TC-023 PASS / Systems Current
-7. CF-FQ-026 타겟 선택 시스템: Paused / TS-P0-08 체크포인트 보존
-8. CF-FQ-024 전투 FX: Done / User PIE PASS / CF-TC-021 PASS
-9. CF-FQ-020 조작감, 전투 템포, 피드백 개선: Candidate
-10. CF-FQ-021 핵심 게임 루프 검증: Candidate
-11. CF-FQ-019 주행과 전투 흐름 반복 테스트: Deferred / 런처·미사일 구현 범위 확정 후 재설계
+1. CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크: Active / UI-P0-02 USER PASS / UI-P0-03 Source·Build·Automation PASS / Production Runtime PIE Partial USER PASS / Launcher 전체 Presentation·Defense·Pawn Rebind Pending
+2. CF-FQ-029 모듈형 런처 및 발사 인계: Paused / LM-P0-06 체크포인트 보존
+3. CF-FQ-030 물리 제한형 미사일 비행·유도: Ready for Manual PIE / MG-P0-01~04 Runtime Applied
+4. CF-FQ-031 차량 탄약·재장전 런타임: Done / AMMO-P0-00~08 Done / Heavy·Ripple USER PIE PASS / Ammo Systems Current
+5. CF-FQ-034 차량 피팅·질량 런타임: Ready / FIT-P0-05 Code·Build·Automation PASS / Physics PIE Pending
+6. CF-FQ-035 인벤토리 Foundation: Ready / INV-P0-00~04 Done / Field Fitting Coordinator Pending
+7. CF-FQ-033 차량 방어·손상 런타임: Done / DR-P0-00~07 Done / DR-PIE-00~06 USER PASS / Systems Current
+8. CF-FQ-028 발사체 추진 시스템: Done / User PIE PASS / CF-TC-024 PASS / Systems Current
+9. CF-FQ-027 투사체 비행 FX: Done / User PIE PASS / CF-TC-023 PASS / Systems Current
+10. CF-FQ-026 타겟 선택 시스템: Paused / TS-P0-08 체크포인트 보존
+11. CF-FQ-020 조작감, 전투 템포, 피드백 개선: Candidate
+12. CF-FQ-021 핵심 게임 루프 검증: Candidate
+13. CF-FQ-019 주행과 전투 흐름 반복 테스트: Deferred / 런처·미사일 이후 재설계
 ```
 
-현재 작업은 `CF-FQ-029`다. `CF-FQ-030`, `CF-FQ-031`과 `CF-FQ-032`는 Ready 상태이며 사용자가 실제 착수를 선택하기 전에는 현재 Active 작업을 변경하지 않는다. `CF-FQ-019`는 현재 착수 순서에서 제외한 Deferred 작업이다.
+현재 작업은 `CF-FQ-032`다. UI-P0-02는 전체 USER PASS했고 UI-P0-03의 Source·Build·Automation과 일부 Production Runtime PIE도 PASS했다. CF-FQ-031 완료로 finite Ammo·Reload 실제 Snapshot까지 WeaponPanel에 연결됐다. 다음 순서는 `Launcher Presentation 전체 회귀(Salvo + terminal Cooldown→READY) → Defense 실제 변화 표시 → Pawn Rebind → 전체 USER PASS 후 UI-P0-03 완료 판정`으로 고정한다. 완료된 Ammo·Defense 계산은 UI에서 읽기 전용으로 소비하고 재구현하지 않는다.
 
 발사체 추진 완료 체크포인트:
 
@@ -135,21 +137,25 @@
 
 ```text
 완료: C2-B / CF-FQ-024 전투 FX
+완료: PFX / CF-FQ-027 투사체 비행 FX
 완료: PROP / CF-FQ-028 발사체 추진 시스템
-- PP-P0-00~09 구현·빌드·사용자 PIE Done
-- PP-P0-10A Systems 승격 Done
-- CF-TC-024 PASS
-- Current System: Document/Systems/Combat/Projectile.md
-현재 Active: LCH / CF-FQ-029 모듈형 런처 및 발사 인계
-현재 단계: LM-P0-01~04 Code Applied / LM-P0-05 Assets Applied·AssetDump PASS / LM-P0-06 Launcher Integration PIE Active
-선행 대기: MSL / CF-FQ-030 물리 제한형 미사일 비행·유도 / Ready / MG-P0-00 Inactive Foundation Build PASS / Runtime Not Connected / MG-P0-01은 CF-TC-025·026 선행
+완료: DMG / CF-FQ-033 차량 방어·손상 런타임 / DR-P0-00~07 / DR-PIE-00~06 / Systems Current
+현재 Active: UI / CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크
+현재 단계: UI-P0-03 Production Runtime PIE Partial USER PASS
+다음 경로: Launcher 전체 Presentation(Salvo·terminal Cooldown→READY) → Defense 실제 변화 → Pawn Rebind → 전체 USER PASS 후 UI-P0-03 완료 판정
+완료 Current: AMMO / CF-FQ-031 / AMMO-P0-00~08 / Heavy·Ripple USER PIE / Systems/Combat/Ammo.md v1.0.0
+실패 경로: 남은 UI Runtime 검증의 실제 결함만 최소 수정 → 공식 Build·전체 Automation → 해당 영향 PIE 재실행
+보호 Paused: LCH / CF-FQ-029 / LM-P0-06
+보호 Paused: TGT / CF-FQ-026 / TS-P0-08
+보호 Ready: MSL / CF-FQ-030 / Manual PIE
+보호 Ready: FIT / CF-FQ-034 / Physics PIE
+보호 Ready: INV / CF-FQ-035 / Field Fitting Coordinator
 후속 Candidate: C5 / CF-FQ-020 조작감, 전투 템포, 피드백 개선
 후속 Candidate: C6 / CF-FQ-021 핵심 게임 루프 검증
-후순위 Deferred: C4 / CF-FQ-019 주행과 전투 흐름 반복 테스트 / 런처·미사일 이후 재설계
-장기 후속: CF-FQ-012 1대 차량 주행감 고도화
+후순위 Deferred: C4 / CF-FQ-019 주행과 전투 흐름 반복 테스트
 ```
 
-`CF-FQ-028`은 현재 구현 기준으로 승격됐으며 Plan은 완료 이력으로 전환했다. `CF-FQ-019`는 Deferred이며 현재 후보 순서에서 자동 또는 수동 착수 대상으로 해석하지 않는다.
+완료된 발사체·FX·데미지 기준과 현재 런처·미사일·피팅 체크포인트는 UI-P0-02 검증의 회귀 보호 대상으로 유지한다. `CF-FQ-019`는 Deferred이며 현재 후보 순서에서 착수 대상으로 해석하지 않는다.
 
 ### 이번 사이클에서 하지 않을 것
 
@@ -219,13 +225,17 @@
 7. **C2-B — 전투 FX 구현**: 완료 / User PIE PASS / CF-TC-021 PASS
 8. **PFX — CF-FQ-027 투사체 비행 FX**: 완료 / User PIE PASS / CF-TC-023 PASS / Systems Current
 9. **PROP — CF-FQ-028 발사체 추진 시스템**: 완료 / User PIE PASS / CF-TC-024 PASS / Systems Current
-10. **LCH — CF-FQ-029 모듈형 런처 및 발사 인계**: Active / LM-P0-01~04 Code Applied·Build PASS / LM-P0-05 Assets Applied·AssetDump PASS / LM-P0-06 CF-TC-025·026 User PIE Active
-11. **MSL — CF-FQ-030 물리 제한형 미사일 비행·유도**: Ready / MG-P0-00 Inactive Foundation Applied·Build PASS / MG-P0-01은 LCH CF-TC-025·026 사용자 PIE와 완료 판정 선행
-12. **C5 — 조작감 / 전투 템포 / 피드백 개선**: Candidate
-13. **C6 — 핵심 게임 루프 검증**: Candidate
-14. **C4 — 주행과 전투 흐름 반복 테스트**: Deferred / 런처·미사일 구현 범위 확정 후 재설계
+10. **DMG — CF-FQ-033 차량 방어·손상 런타임**: Active / 작업 완료 최우선 / DR-P0-00~06 Done / DR-P0-07 User PIE
+11. **UI — CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크**: Paused / UI-P0-01A~02 Code Complete / User PIE·UI-P0-03 Pending
+12. **LCH — CF-FQ-029 모듈형 런처 및 발사 인계**: Paused / LM-P0-06 Checkpoint
+13. **MSL — CF-FQ-030 물리 제한형 미사일 비행·유도**: Ready for Manual PIE / MG-P0-01~04 Runtime Applied
+14. **FIT — CF-FQ-034 차량 피팅·질량 런타임**: Ready / Physics PIE Pending
+15. **INV — CF-FQ-035 인벤토리 Foundation**: Ready / Field Fitting Coordinator Pending
+16. **C5 — 조작감 / 전투 템포 / 피드백 개선**: Candidate
+17. **C6 — 핵심 게임 루프 검증**: Candidate
+18. **C4 — 주행과 전투 흐름 반복 테스트**: Deferred / 런처·미사일 이후 재설계
 
-현재 Active 단계는 LCH / CF-FQ-029다. Launch Handoff, Multi-Muzzle, SingleCycle, Pattern Data, Ripple·Salvo Scheduler와 Angled·Vertical Ejection의 C++·공식 빌드, LM-P0-05 Launcher Editor Assets와 독립 AssetDump 검증은 완료했다. 현재 작업은 LM-P0-06 CF-TC-025·026 사용자 PIE다. MSL / CF-FQ-030은 MG-P0-00 비활성 Foundation만 준비됐으며 MG-P0-01 런타임은 이 검증과 CF-FQ-029 완료 판정 뒤 착수한다.
+현재 Active 단계는 DMG / CF-FQ-033이다. 먼저 DR-P0-07을 완료하고, 실패가 있으면 해당 데미지 결함을 최우선 수정한다. DR-PIE-01~06 전체 PASS 뒤 VehicleDefense·HitDamage Systems를 동기화하고 CF-FQ-033을 Done으로 전환한 다음 UI / CF-FQ-032 체크포인트로 복귀한다.
 
 ---
 
@@ -626,6 +636,40 @@ CF-TC-015 / CF-TC-016 / CF-TC-020 PASS
 
 ## 변경 이력
 
+### v2.23.0 - 2026-08-13
+
+- `CF-FQ-031`의 AMMO-P0-00~08, Heavy·Ripple USER PIE를 완료하고 `Document/Systems/Combat/Ammo.md v1.0.0`을 Current System으로 승격했다.
+- CF-FQ-031을 Ready에서 Done으로 이동하고 현재 단일 Active를 `CF-FQ-032`로 복귀시켰다.
+- UI-P0-02 전체 USER PASS와 UI-P0-03 Source·Build·Automation·부분 Production PIE 상태를 반영했다.
+- CF-FQ-032의 다음 순서를 Launcher 전체 Presentation(Salvo·terminal Cooldown→READY) → Defense 실제 변화 → Pawn Rebind로 고정했다.
+- Ammo USER PIE는 완료 증거로 보존하고 다음 UI 검증에서 반복하지 않는다.
+
+### v2.22.0 - 2026-08-06
+
+- UI-P0-02 사용자 Standalone에서 Pause UI 상호작용 범위를 PASS했다.
+- Root 계층·마우스·Enter 결함을 `AddToViewport(100)`과 Controller 확인 Fallback으로 최소 수정했다.
+- 사용자 직접 Editor 빌드와 Combat Automation `595e0c1ca0f640b69f63964bdfd22277` 전체 46/46·필수 24/24 Success를 반영했다.
+- 남은 Gamepad·입력 유지 잔류·Launcher·Projectile·Timer·Root 수명 사용자 PIE 뒤에만 UI-P0-03으로 진행하도록 순서를 유지했다.
+
+### v2.21.0 - 2026-08-06
+
+- `CF-FQ-033`의 DR-PIE-06 Salvo·Ripple·Pool·FX·충돌 사용자 PASS와 DR-P0-07 전체 완료를 반영했다.
+- `CF-FQ-033`을 Done으로 전환하고 VehicleDefense·HitDamage를 Current System 기준으로 등록했다.
+- 데미지 시스템 완료 뒤 UI로 복귀한다는 기존 우선순위에 따라 `CF-FQ-032`를 현재 단일 Active로 복원했다.
+- 다음 순서를 UI-P0-02 실제 Pause·Focus·Launcher·Projectile·Timer 사용자 PIE와 PASS 뒤 UI-P0-03 HUD 데이터 계약으로 고정했다.
+- CF-FQ-029·026 Paused와 CF-FQ-030·031·034·035 Ready 체크포인트를 유지했다.
+- 코드·에셋·빌드·Automation은 재실행하지 않았고 기존 미커밋 변경을 보호했다.
+
+### v2.20.0 - 2026-08-03
+
+```text
+- 사용자 결정에 따라 작업 완료 최우선 사항을 데미지 시스템으로 재정렬했다.
+- CF-FQ-033 차량 방어·손상 런타임을 단일 Active로 전환하고 DR-P0-07 사용자 PIE를 현재 단계로 고정했다.
+- 실패한 데미지 결함 우선 수정, 공식 Build·전체 Automation, 영향 PIE 재검증과 Systems 승격까지를 하나의 완료 경로로 묶었다.
+- 데미지 검증을 직접 차단하는 문제만 예외 선행으로 허용하고 차단 해소 즉시 CF-FQ-033으로 복귀하도록 했다.
+- CF-FQ-032는 완료된 UI Foundation을 보존한 Paused 상태로 전환하고 런처·미사일·피팅·인벤토리 체크포인트를 후순위 보호했다.
+```
+
 ### v2.19.0 - 2026-07-30
 
 ```text
@@ -762,6 +806,38 @@ CF-TC-015 / CF-TC-016 / CF-TC-020 PASS
 ---
 
 ## Migration
+
+### v2.23.0 적용 안내
+
+```text
+- CF-FQ-031은 Done이며 Document/Systems/Combat/Ammo.md v1.0.0이 현재 구현을 소유한다.
+- 현재 Active는 CF-FQ-032 UI-P0-03이다.
+- Ammo Heavy·Ripple USER PIE는 반복하지 않는다.
+- 다음 검증은 Launcher 전체 Presentation(Salvo·terminal Cooldown→READY) → Defense 실제 변화 → Pawn Rebind다.
+- 이 범위 전체 USER PASS 전에는 UI-P0-03 또는 CF-FQ-032를 Done 처리하지 않는다.
+- CF-FQ-029·026 Paused, CF-FQ-030·034·035 Ready 체크포인트는 유지한다.
+```
+
+### v2.21.0 적용 안내
+
+```text
+- 현재 Active는 CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크다.
+- UI-P0-01A~02는 Code Complete·Build·Automation PASS이므로 UI-P0-02 사용자 PIE부터 시작한다.
+- UI-P0-02 PASS 뒤 UI-P0-03 Vehicle·Weapon·Defense·Target·Radar·Alert HUD 데이터 계약으로 진행한다.
+- CF-FQ-033은 Done이며 VehicleDefense.md와 HitDamage.md가 현재 구현을 소유한다.
+- Defense HUD는 실제 Runtime을 읽기만 하고 피해 계산을 UI에서 재작성하지 않는다.
+- 기존 Launcher·Missile·Fitting·Inventory·TargetSelect 체크포인트는 보호한다.
+```
+
+### v2.20.0 적용 안내
+
+```text
+- 새 세션의 현재 Active는 CF-FQ-033 차량 방어·손상 런타임이다.
+- 대표 Plan은 Document/Plan/VehicleDefenseDamageDesign.md v0.10.0이다.
+- DR-P0-00~06은 완료 상태이므로 반복 구현하지 않고 DR-P0-07 DR-PIE-00 시작 Gate부터 진행한다.
+- 데미지 PIE 실패는 다른 신규 기능보다 먼저 수정하며 전체 PASS 후 VehicleDefense·HitDamage Systems 승격과 CF-FQ-033 Done을 수행한다.
+- CF-FQ-032, CF-FQ-029와 CF-FQ-026은 Paused 체크포인트를 유지한다.
+```
 
 ### v2.19.0 적용 안내
 

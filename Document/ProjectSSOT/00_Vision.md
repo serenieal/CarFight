@@ -1,8 +1,8 @@
 # CarFight — 00_Vision
 
 > 역할: CarFight의 **최종 방향 / 현재 기준선 / 현재 구조 갭 / 전환 원칙**을 한 문서에서 고정한다.
-> 문서 버전: v2.3.0
-> 마지막 정리(Asia/Seoul): 2026-07-24
+> 문서 버전: v2.4.0
+> 마지막 정리(Asia/Seoul): 2026-08-08
 
 ---
 
@@ -85,6 +85,161 @@ CarFight의 전략적 교전 구성은 `EVE Online`에 가깝고, 직접 전투 
 ### 3. 최종 차량 구조 목표
 - 최종 차량 구조 목표는 `CMVS / Cluster Union / Geometry Collection` 기반이다.
 - 장기적으로는 부품 조립, 파괴, 분리, 무게 중심 변화까지 구조적으로 열어야 한다.
+
+---
+
+### 4. 멀티플레이·오픈월드 확장성 아키텍처 원칙
+
+현재 개발 일정은 계속 싱글플레이를 우선한다.
+아래 원칙은 멀티플레이나 오픈월드를 지금 구현하라는 뜻이 아니라, 앞으로 추가하는 기능이 장기 확장 경로를 불필요하게 닫지 않도록 하는 **프로젝트 전역 설계 제약**이다.
+
+#### 4.1 싱글플레이의 Local은 현재 Authority로 취급한다
+
+현재 싱글 실행에서는 로컬 프로세스가 게임 결과를 결정해도 된다.
+다만 새 기능의 상태 변경 경로는 가능하면 아래 책임을 구분한다.
+
+```text
+Intent / Request
+→ Validation
+→ Authoritative State Mutation
+→ Result
+→ Presentation
+```
+
+현재는 위 단계가 같은 프로세스와 같은 Actor 안에서 실행될 수 있다.
+멀티플레이를 재개하면 `Authoritative State Mutation` 위치를 서버로 이동할 수 있어야 한다.
+이를 위해 지금부터 실제 상태 변경 함수와 UI·FX·입력 함수를 무분별하게 하나로 합치지 않는다.
+
+#### 4.2 데이터는 Static Definition / Runtime State / Persistent State / View Data로 분리한다
+
+```text
+Static Definition
+= 차량·무기·발사체·방어·아이템의 변하지 않는 규칙과 자산 정의
+
+Runtime State
+= 현재 위치, 속도, Shield, Armor, Integrity, Cooldown, 발사 순서처럼 플레이 중 변하는 상태
+
+Persistent State
+= Actor가 사라져도 보존해야 하는 소유권, Item Instance, 차량 인스턴스, 피팅, 장기 손상과 월드 상태
+
+View Data
+= HUD와 Presentation이 계산을 재구현하지 않고 읽는 표시 전용 상태
+```
+
+`UDataAsset / UPrimaryDataAsset`은 기본적으로 Static Definition으로 취급한다.
+플레이어별·차량 인스턴스별 변경 상태를 DataAsset 자체에 저장하지 않는다.
+
+#### 4.3 네트워크와 저장의 식별자는 UObject 포인터가 아니라 안정적인 ID를 사용한다
+
+장기 저장, 서버 상태와 네트워크 계약에서 `AActor*`, `UObject*`, DataAsset 포인터 자체를 영구 식별자로 사용하지 않는다.
+
+기본 방향은 아래와 같다.
+
+```text
+정적 Definition 식별
+→ FPrimaryAssetId 또는 도메인별 안정적 Definition ID
+
+실제 소유 인스턴스 식별
+→ FGuid 기반 Instance ID
+
+월드·차량·Container 소유 주체 식별
+→ 직렬화 가능한 안정적 Owner / Entity ID
+```
+
+현재 `CF-FQ-035`의 `FCFItemInstanceId`, `FCFInventoryOwnerId`, `FCFInventoryContainerId`와 `FPrimaryAssetId` 기반 Inventory Definition 계약은 이 원칙에 맞는 선행 기반으로 본다.
+
+#### 4.4 Snapshot은 확정된 조합 결과이며 DataAsset 조합 전체를 네트워크로 보내는 용도가 아니다
+
+Vehicle Fitting과 같은 조합 시스템은 정적 Definition을 조합해 결정론적인 Snapshot 또는 Record를 만든다.
+멀티플레이에서는 클라이언트가 임의의 최종 Snapshot을 권한 결과로 확정하지 않고, 서버가 소유권·호환성·질량·슬롯 같은 규칙을 검증한 뒤 권한 Snapshot을 만든다.
+
+네트워크에서 DataAsset 전체를 복제하는 방향은 사용하지 않는다.
+필요한 경우 안정적인 Definition ID와 실제로 변하는 Runtime State만 전달한다.
+
+#### 4.5 VehiclePawn은 차량 Actor 조립자이며 전역 도메인 저장소가 아니다
+
+`ACFVehiclePawn`은 차량 Actor의 컴포넌트 구성, Actor 수명, 입력 연결과 차량 내부 시스템 조율을 담당할 수 있다.
+그러나 앞으로 아래 상태를 Pawn에 계속 누적하지 않는다.
+
+```text
+- 플레이어 계정·프로필 영구 상태
+- 월드 전체 Persistent State
+- 전역 인벤토리 저장소
+- 세션·매치 상태
+- 서버 운영 상태
+- 지역·Zone 전역 상태
+```
+
+새로운 독립 도메인 규칙은 가능한 한 전용 Component, 순수 Struct/Utility, 적절한 Subsystem 또는 서버/월드 계층으로 분리한다.
+Pawn은 각 도메인의 결과를 조립하고 연결하는 역할을 우선한다.
+
+#### 4.6 Actor는 Persistent Entity의 영구 저장 형태가 아니다
+
+오픈월드에서는 Actor가 Streaming, 거리, 서버 Relevancy 또는 레벨 수명 때문에 생성·제거될 수 있다고 가정한다.
+
+장기 방향은 아래와 같다.
+
+```text
+Persistent Record / Entity State
+→ Spawn 또는 Streaming 진입
+→ Runtime Actor 생성
+→ Runtime State 적용
+→ 플레이
+→ 저장 가능한 Snapshot 생성
+→ Actor 제거 가능
+```
+
+Actor 포인터와 컴포넌트 포인터를 그대로 SaveGame·DB의 영구 상태로 간주하지 않는다.
+`World Partition`은 월드 Streaming 도구이며 Persistent State 저장 시스템과 같은 책임으로 취급하지 않는다.
+
+#### 4.7 전투 결과와 소유권 변경은 Authority 경계로 이동 가능해야 한다
+
+장기 멀티플레이에서 다음 결과는 서버 권한 후보로 본다.
+
+```text
+- Spawn / Despawn의 권한 결과
+- Fitting 확정과 장비 소유권 변경
+- Inventory Transfer Commit
+- 발사 승인과 Ammo 소비
+- Projectile / Hit 결과
+- Shield / Armor / Integrity 변경
+- 파괴 상태
+- 보상과 Persistent World 상태 변경
+```
+
+현재 싱글에서는 로컬 코드가 이 역할을 수행해도 되지만, Presentation 계층이 위 결과를 직접 만들어내지 않는다.
+
+#### 4.8 Presentation은 Dedicated Server에서 제거 가능해야 한다
+
+Camera, HUD, Reticle, Debug 화면 표시와 Niagara 같은 Presentation은 게임 결과의 필수 전제조건이 아니다.
+Dedicated Server에서는 실행하지 않거나 안전하게 생략할 수 있어야 한다.
+현재 코드에 존재하는 `NM_DedicatedServer`, `IsLocallyControlled()` 기반 Presentation Gate는 이 원칙에 맞는 기반으로 유지한다.
+
+#### 4.9 UI는 View Data를 소비하고 게임 규칙을 재계산하지 않는다
+
+HUD는 Vehicle, Weapon, Defense, Target, Radar, Alert 등의 View Data를 읽는 Presentation 계층으로 유지한다.
+Shield·Armor·관통·Cooldown·Fitting 호환성 같은 도메인 계산을 Widget에서 다시 구현하지 않는다.
+Pawn 교체, 원격 관전 또는 향후 Replicated State 전환 시 Provider 입력만 바꿀 수 있는 구조를 우선한다.
+
+#### 4.10 World와 Pawn 없이 검증 가능한 순수 규칙을 우선한다
+
+소유권, Inventory Transfer, Fitting Snapshot, Capacity, 호환성, 피해 분배처럼 Actor가 없어도 계산할 수 있는 규칙은 가능한 한 순수 Struct, Utility 또는 Adapter로 유지한다.
+이는 자동 테스트 비용을 낮추고, 향후 서버·월드 Streaming 수명과 게임 규칙을 분리하는 기준이 된다.
+
+#### 4.11 Replication은 필요해질 때 추가하되 Authority 경계는 지금부터 보존한다
+
+현재 싱글 개발 중에는 다음을 억지로 구현하지 않는다.
+
+```text
+- 모든 Component의 Replication 활성화
+- 모든 Runtime 변수의 Replicated UPROPERTY 전환
+- Server / Client / NetMulticast RPC 선구축
+- 이동 Prediction·보간 선구축
+- World Partition·DB·SaveGame 선구축
+```
+
+멀티플레이 재개 Feature가 승인되면 실제 Gameplay Vertical Slice 하나를 기준으로 필요한 Replication만 추가한다.
+그 전까지는 `Request → Validate → Apply → Result` 경계, 안정적 ID, Snapshot, Presentation 분리를 보존하는 것을 최소 비용의 확장성 투자로 본다.
 
 ---
 
@@ -208,6 +363,19 @@ CarFight는 게임 사운드를 지원하지 않는다.
 
 ## 변경 이력
 
+### v2.4.0 - 2026-08-08
+
+```text
+- 멀티플레이·오픈월드를 즉시 활성화하지 않으면서 향후 확장 비용을 낮추는 프로젝트 전역 아키텍처 원칙을 추가했다.
+- Static Definition / Runtime State / Persistent State / View Data의 책임 경계를 고정했다.
+- 안정적 Definition ID와 FGuid 기반 Instance / Owner ID를 네트워크·저장 식별 기본 방향으로 확정했다.
+- VehiclePawn을 차량 Actor 조립자로 제한하고 플레이어·월드 영구 상태를 계속 누적하지 않는 원칙을 추가했다.
+- Actor 수명과 Persistent Entity 수명, World Partition과 Persistence 책임을 분리했다.
+- 현재 싱글에서는 Local Authority를 허용하되 Request → Validate → Apply → Result 경계를 보존하도록 했다.
+- 모든 Replication·RPC·SaveGame·World Partition을 미리 구현하지 않고 실제 멀티 Feature 승인 시 Vertical Slice 기준으로 추가하도록 제한했다.
+```
+
+
 ### v2.3.0 - 2026-07-24
 
 ```text
@@ -244,6 +412,19 @@ CarFight는 게임 사운드를 지원하지 않는다.
 ---
 
 ## Migration
+
+### v2.4.0 적용 안내
+
+```text
+- 현재 Roadmap의 싱글플레이 우선순위와 멀티플레이 Deferred 상태는 변경하지 않는다.
+- 새 기능 설계 시 Static Definition / Runtime State / Persistent State / View Data 중 어떤 상태를 소유하는지 먼저 구분한다.
+- 새 영구 식별자가 필요하면 Actor·UObject 포인터 대신 직렬화 가능한 안정적 ID를 우선한다.
+- 새 게임 결과 변경 경로는 가능하면 Request → Validate → Apply → Result 구조로 분리해 향후 Server Authority 이동 지점을 남긴다.
+- UI와 FX는 도메인 결과를 소비하며 결과를 권한 있게 생성하지 않는다.
+- ACFVehiclePawn에 플레이어·월드 전역 영구 상태를 추가하지 않는다.
+- 현재 싱글 기능에 Replication, RPC, SaveGame 또는 World Partition을 단지 미래 대비 목적으로 선구축하지 않는다.
+```
+
 
 ### v2.3.0 적용 안내
 
