@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.32.0
-// Date: 2026-07-21
+// Version: 1.33.0
+// Date: 2026-08-05
 // Description: VehicleDebug Panel용 C++ 부모 위젯 클래스 구현입니다.
 // Changelog:
+// - v1.33.0: 동적 Navigation에 선택 대상 전용 섹션을 추가해 TargetSelect 표시 정보와 대상 방어·내구도 상태를 매 프레임 갱신.
 // - v1.32.0: Weapon 섹션에 VehicleDefenseComp 준비·Fallback·현재 Shield·6방향 Armor 상태와 마지막 전체 피해 결과를 추가.
 // - v1.31.0: 탄종 독립 터렛 레티클 유효성, 월드 위치와 비교 거리를 표시하고 기존 Weapon Preview 행을 Legacy로 구분.
 // - v1.30.0: Weapon Aim Solution 하위 섹션에 Weapon Reticle Mode 표시 행을 추가.
@@ -34,6 +35,7 @@
 // - v1.8.2: Aim 검증 하위 섹션 표시명을 서버 조준에서 로컬 발사 검증 기준으로 변경.
 // - v1.8.1: 싱글플레이 기준에 맞춰 Aim 디버그 패널의 복제 시각 표시 문구를 Aim 시각 표시로 변경.
 // Migration:
+// - Target 섹션은 기존 동적 Section 렌더링 경로를 사용하므로 WBP 에셋 수정 없이 새 Navigation 항목과 하위 방어·내구도 정보를 표시한다.
 // - 터렛 레티클 검증은 신규 Turret Reticle 세 행을 사용하며 기존 Weapon Preview 행은 과거 구현 확인용 Legacy Debug로만 해석한다.
 // - Weapon Reticle Mode 표시는 Aim Solution 결과만 읽으며 Debug Panel에서 무기 모드 판정이나 Trace를 다시 수행하지 않는다.
 // - Weapon Preview 표시는 AimComp에 캐시된 Weapon Aim Solution 값을 읽는 Debug 전용 표시이며 Trace를 다시 계산하지 않는다.
@@ -55,7 +57,7 @@
 // - 기존 Weapon 섹션 ID와 FireOrigin 하위 섹션은 유지하고 WeaponData 하위 섹션만 추가한다.
 // - 기존 Overview / Drive / Input / Camera / Aim / Runtime 섹션은 유지하고 Weapon 섹션만 Navigation에 추가한다.
 // - Aim 검증/시각 상태 FieldId는 aim_validation / aim_visual 접두어를 기준으로 사용한다.
-// Scope: VehicleDebug Overview / Drive / Input / Camera / Aim / Weapon / Runtime 카테고리를 읽어 Navigation + Selected Section 기반 표시와 기존 fallback 표시를 안정적으로 지원합니다.
+// Scope: VehicleDebug Overview / Drive / Input / Camera / Aim / Target / Weapon / Runtime 카테고리를 읽어 Navigation + Selected Section 기반 표시와 기존 fallback 표시를 안정적으로 지원합니다.
 
 #include "UI/CFVehicleDebugPanelWidget.h"
 
@@ -177,43 +179,18 @@ void UCFVehicleDebugPanelWidget::RefreshFromPawn()
 		return;
 	}
 
-	// [v1.0.0] 현재 Pawn 기준 최신 Overview 카테고리를 가져옵니다.
-	const FCFVehicleDebugOverview LatestOverview = VehiclePawnRef->GetVehicleDebugOverview();
+	// [v1.33.0] 같은 프레임의 모든 카테고리를 일관되게 표시하고 대상 컴포넌트 검색을 반복하지 않도록 전체 Snapshot을 한 번만 읽습니다.
+	const FCFVehicleDebugSnapshot LatestDebugSnapshot = VehiclePawnRef->GetVehicleDebugSnapshot();
 
-	// [v1.0.0] 현재 Pawn 기준 최신 Drive 카테고리를 가져옵니다.
-	const FCFVehicleDebugDrive LatestDrive = VehiclePawnRef->GetVehicleDebugDrive();
-
-	// [v1.0.0] 현재 Pawn 기준 최신 Input 카테고리를 가져옵니다.
-					const FCFVehicleDebugInput LatestInput = VehiclePawnRef->GetVehicleDebugInput();
-	const FCFVehicleDebugCamera LatestCamera = VehiclePawnRef->GetVehicleDebugCamera();
-
-	// [v1.8.0] 현재 Pawn 기준 최신 Aim 카테고리를 가져옵니다.
-	const FCFVehicleDebugAim LatestAim = VehiclePawnRef->GetVehicleDebugAim();
-
-	// [v1.9.0] 현재 Pawn 기준 최신 Weapon 카테고리를 가져옵니다.
-	const FCFVehicleDebugWeapon LatestWeapon = VehiclePawnRef->GetVehicleDebugWeapon();
-
-	// [v1.0.0] 현재 Pawn 기준 최신 Runtime 카테고리를 가져옵니다.
-	const FCFVehicleDebugRuntime LatestRuntime = VehiclePawnRef->GetVehicleDebugRuntime();
-
-	// [v1.0.0] 현재 Panel 캐시에 최신 Overview를 저장합니다.
-	CachedOverview = LatestOverview;
-
-	// [v1.0.0] 현재 Panel 캐시에 최신 Drive를 저장합니다.
-	CachedDrive = LatestDrive;
-
-	// [v1.0.0] 현재 Panel 캐시에 최신 Input을 저장합니다.
-					CachedInput = LatestInput;
-	CachedCamera = LatestCamera;
-
-	// [v1.8.0] 현재 Panel 캐시에 최신 Aim을 저장합니다.
-	CachedAim = LatestAim;
-
-	// [v1.9.0] 현재 Panel 캐시에 최신 Weapon을 저장합니다.
-	CachedWeapon = LatestWeapon;
-
-	// [v1.0.0] 현재 Panel 캐시에 최신 Runtime을 저장합니다.
-	CachedRuntime = LatestRuntime;
+	// [v1.33.0] 한 번 읽은 Snapshot의 각 카테고리를 현재 Panel 캐시에 저장합니다.
+	CachedOverview = LatestDebugSnapshot.Overview;
+	CachedDrive = LatestDebugSnapshot.Drive;
+	CachedInput = LatestDebugSnapshot.Input;
+	CachedCamera = LatestDebugSnapshot.Camera;
+	CachedAim = LatestDebugSnapshot.Aim;
+	CachedTarget = LatestDebugSnapshot.Target;
+	CachedWeapon = LatestDebugSnapshot.Weapon;
+	CachedRuntime = LatestDebugSnapshot.Runtime;
 
 	// [v1.5.0] 현재 Snapshot 기준 최신 Panel ViewData를 생성해 캐시에 저장합니다.
 	CachedPanelViewData = BuildVehicleDebugPanelViewData();
@@ -1507,9 +1484,10 @@ FCFVehicleDebugPanelViewData UCFVehicleDebugPanelWidget::BuildVehicleDebugPanelV
 	PanelViewData.GeneratedTimeSeconds = FPlatformTime::Seconds();
 	PanelViewData.AddTopLevelSection(BuildOverviewSectionViewData(CachedOverview));
 	PanelViewData.AddTopLevelSection(BuildDriveSectionViewData(CachedDrive));
-					PanelViewData.AddTopLevelSection(BuildInputSectionViewData(CachedInput));
+	PanelViewData.AddTopLevelSection(BuildInputSectionViewData(CachedInput));
 	PanelViewData.AddTopLevelSection(BuildCameraSectionViewData(CachedCamera));
 	PanelViewData.AddTopLevelSection(BuildAimSectionViewData(CachedAim));
+	PanelViewData.AddTopLevelSection(BuildTargetSectionViewData(CachedTarget));
 	PanelViewData.AddTopLevelSection(BuildWeaponSectionViewData(CachedWeapon));
 	PanelViewData.AddTopLevelSection(BuildRuntimeSectionViewData(CachedRuntime));
 	return PanelViewData;
@@ -1754,6 +1732,98 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildAimS
 	AimSectionViewData->AddChildSection(AimVisualSectionViewData);
 
 	return AimSectionViewData;
+}
+
+// [v1.33.0] 현재 선택 대상 카테고리용 Section ViewData를 생성합니다.
+TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildTargetSectionViewData(const FCFVehicleDebugTarget& InTarget) const
+{
+	// [v1.33.0] 선택 대상 상태를 Navigation과 주요 필드에 표시할 요약 문자열입니다.
+	FString TargetStatusText = TEXT("선택 대상 없음");
+	if (!InTarget.bHasTargetSelectComponent)
+	{
+		TargetStatusText = TEXT("TargetSelectComp 없음");
+	}
+	else if (InTarget.bHasSelectedTarget && !InTarget.bSelectedTargetValid)
+	{
+		TargetStatusText = TEXT("선택 대상 무효");
+	}
+	else if (InTarget.bSelectedTargetDestroyed)
+	{
+		TargetStatusText = TEXT("선택 대상 파괴");
+	}
+	else if (InTarget.bSelectedTargetValid)
+	{
+		TargetStatusText = TEXT("선택 대상 유효");
+	}
+
+	// [v1.33.0] Navigation에 표시할 선택 대상의 짧은 상태 배지입니다.
+	const FString TargetBadgeText = !InTarget.bHasTargetSelectComponent
+		? TEXT("컴포넌트없음")
+		: (!InTarget.bHasSelectedTarget
+			? TEXT("없음")
+			: (!InTarget.bSelectedTargetValid
+				? TEXT("무효")
+				: (InTarget.bSelectedTargetDestroyed ? TEXT("파괴") : TEXT("선택됨"))));
+
+	// [v1.33.0] 선택 대상 표시 이름이 비어 있을 때 사용할 안전한 표시 문자열입니다.
+	const FString TargetDisplayNameText = InTarget.SelectedTargetDisplayName.IsEmpty()
+		? TEXT("None")
+		: InTarget.SelectedTargetDisplayName.ToString();
+
+	// [v1.33.0] 선택 대상의 추적 enum을 Panel 표시 문자열로 변환한 값입니다.
+	const FString TargetTrackStateText = ConvertEnumValueToDisplayString(*UEnum::GetValueAsString(InTarget.SelectedTargetTrackState));
+
+	// [v1.33.0] 선택 대상 방어 경로를 표시할 문자열입니다.
+	const FString TargetDefenseModeText = !InTarget.bHasSelectedTargetDefenseComponent
+		? TEXT("방어 컴포넌트 없음")
+		: (InTarget.bSelectedTargetUsingLegacyDefenseFallback ? TEXT("Legacy Integrity Fallback") : TEXT("Shield → Armor → Integrity"));
+
+	// [v1.33.0] 생성할 선택 대상 최상위 섹션 ViewData입니다.
+	TSharedRef<FCFVehicleDebugSectionViewData> TargetSectionViewData =
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("Target"), TEXT("선택 대상"), ECFVehicleDebugSectionKind::Category, true);
+	TargetSectionViewData->NavigationGroup = ECFVehicleDebugNavGroup::Vehicle;
+	TargetSectionViewData->NavigationOrder = 47;
+	TargetSectionViewData->BadgeText = TargetBadgeText;
+	TargetSectionViewData->bShowInNavigation = true;
+
+	TargetSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("target_status_summary"), TEXT("상태 요약"), TargetStatusText, !InTarget.bSelectedTargetValid));
+	TargetSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("target_has_select_comp"), TEXT("TargetSelect 컴포넌트"), InTarget.bHasTargetSelectComponent ? TEXT("있음") : TEXT("없음"), !InTarget.bHasTargetSelectComponent));
+	TargetSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("target_has_selected_record"), TEXT("선택 기록"), InTarget.bHasSelectedTarget ? TEXT("있음") : TEXT("없음"), !InTarget.bHasSelectedTarget));
+	TargetSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("target_valid"), TEXT("대상 유효"), InTarget.bSelectedTargetValid ? TEXT("예") : TEXT("아니오"), InTarget.bHasSelectedTarget && !InTarget.bSelectedTargetValid));
+	TargetSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("target_display_name"), TEXT("표시 이름"), TargetDisplayNameText, InTarget.bHasSelectedTarget && TargetDisplayNameText == TEXT("None")));
+	TargetSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("target_id"), TEXT("대상 ID"), InTarget.SelectedTargetId.ToString(), InTarget.bHasSelectedTarget && InTarget.SelectedTargetId.IsNone()));
+	TargetSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("target_actor_name"), TEXT("Actor"), InTarget.SelectedTargetActorName, InTarget.bHasSelectedTarget && InTarget.SelectedTargetActorName == TEXT("None")));
+	TargetSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("target_track_state"), TEXT("추적 상태"), TargetTrackStateText, InTarget.bHasSelectedTarget && InTarget.SelectedTargetTrackState == ECFTargetTrackState::Invalid));
+	TargetSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("target_destroyed"), TEXT("파괴 상태"), InTarget.bSelectedTargetDestroyed ? TEXT("파괴됨") : TEXT("정상"), InTarget.bSelectedTargetDestroyed));
+
+	// [v1.33.0] 선택 대상의 현재 Shield, 방향별 Armor와 재생 상태를 표시하는 하위 섹션입니다.
+	TSharedRef<FCFVehicleDebugSectionViewData> TargetDefenseSectionViewData =
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("TargetDefense"), TEXT("대상 방어"), ECFVehicleDebugSectionKind::Subsection, true);
+	TargetDefenseSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("target_defense_component"), TEXT("방어 컴포넌트"), InTarget.bHasSelectedTargetDefenseComponent ? TEXT("있음") : TEXT("없음"), InTarget.bSelectedTargetValid && !InTarget.bHasSelectedTargetDefenseComponent));
+	TargetDefenseSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("target_defense_initialized"), TEXT("DefenseData 초기화"), InTarget.bSelectedTargetDefenseInitialized ? TEXT("예") : TEXT("아니오"), InTarget.bHasSelectedTargetDefenseComponent && !InTarget.bSelectedTargetDefenseInitialized && !InTarget.bSelectedTargetUsingLegacyDefenseFallback));
+	TargetDefenseSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("target_defense_mode"), TEXT("피해 경로"), TargetDefenseModeText, InTarget.bSelectedTargetUsingLegacyDefenseFallback));
+	TargetDefenseSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeMultilineField(TEXT("target_defense_summary"), TEXT("현재 Shield·6방향 Armor·재생 상태"), InTarget.SelectedTargetDefenseSummary));
+	TargetDefenseSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("target_defense_last_result_recorded"), TEXT("전체 피해 결과 기록"), InTarget.bHasSelectedTargetLastDamageResult ? TEXT("있음") : TEXT("없음"), InTarget.bHasSelectedTargetDefenseComponent && !InTarget.bHasSelectedTargetLastDamageResult));
+	TargetDefenseSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeMultilineField(TEXT("target_defense_last_result"), TEXT("마지막 방향·Shield·Armor·Integrity 결과"), InTarget.SelectedTargetLastDamageResultSummary));
+	TargetSectionViewData->AddChildSection(TargetDefenseSectionViewData);
+
+	// [v1.33.0] 선택 대상의 현재·최대 Integrity와 파괴 상태를 표시하는 하위 섹션입니다.
+	TSharedRef<FCFVehicleDebugSectionViewData> TargetIntegritySectionViewData =
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("TargetIntegrity"), TEXT("대상 내구도"), ECFVehicleDebugSectionKind::Subsection, true);
+	TargetIntegritySectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("target_health_component"), TEXT("내구도 컴포넌트"), InTarget.bHasSelectedTargetHealthComponent ? TEXT("있음") : TEXT("없음"), InTarget.bSelectedTargetValid && !InTarget.bHasSelectedTargetHealthComponent));
+	TargetIntegritySectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("target_health_initialized"), TEXT("Integrity 초기화"), InTarget.bSelectedTargetHealthInitialized ? TEXT("예") : TEXT("아니오"), InTarget.bHasSelectedTargetHealthComponent && !InTarget.bSelectedTargetHealthInitialized));
+	TargetIntegritySectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("target_integrity_current"), TEXT("현재 Integrity"), FString::Printf(TEXT("%.1f"), InTarget.SelectedTargetCurrentIntegrity), InTarget.bHasSelectedTargetHealthComponent && InTarget.SelectedTargetCurrentIntegrity <= 0.0f));
+	TargetIntegritySectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("target_integrity_maximum"), TEXT("최대 Integrity"), FString::Printf(TEXT("%.1f"), InTarget.SelectedTargetMaximumIntegrity), InTarget.bHasSelectedTargetHealthComponent && InTarget.SelectedTargetMaximumIntegrity <= 0.0f));
+	TargetIntegritySectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeLabelValueField(TEXT("target_integrity_destroyed"), TEXT("파괴 여부"), InTarget.bSelectedTargetDestroyed ? TEXT("예") : TEXT("아니오"), InTarget.bSelectedTargetDestroyed));
+	TargetSectionViewData->AddChildSection(TargetIntegritySectionViewData);
+
+	// [v1.33.0] TargetSelect 약한 참조와 추적 수명 상태를 표시하는 하위 섹션입니다.
+	TSharedRef<FCFVehicleDebugSectionViewData> TargetLifetimeSectionViewData =
+		FCFVehicleDebugSectionViewData::MakeSection(TEXT("TargetLifetime"), TEXT("대상 추적 수명"), ECFVehicleDebugSectionKind::Subsection, false);
+	TargetLifetimeSectionViewData->AddField(FCFVehicleDebugFieldViewData::MakeMultilineField(TEXT("target_lifetime_summary"), TEXT("수명 요약"), InTarget.SelectedTargetLifetimeSummary));
+	TargetSectionViewData->AddChildSection(TargetLifetimeSectionViewData);
+
+	return TargetSectionViewData;
 }
 
 // [v1.9.0] Weapon 카테고리용 Section ViewData를 생성합니다.

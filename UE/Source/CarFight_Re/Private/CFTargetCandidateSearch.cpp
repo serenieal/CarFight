@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.2.0
-// Date: 2026-07-27
+// Version: 1.2.1
+// Date: 2026-08-13
 // Description: TS-P0-03 후보 탐색과 TS-P0-04 선택 수명 Tick 연결 구현
 // Changelog:
+// - v1.2.1: 기존 v1.2.0 의도와 달리 남아 있던 익명 네임스페이스 IsFiniteVector를 IsFiniteTargetCandidateVector로 실제 교정해 Unity Build 충돌을 제거.
 // - v1.2.0: Unity 빌드에서 다른 구현 파일의 익명 네임스페이스 심볼과 충돌하지 않도록 후보 탐색 전용 이름으로 분리.
 // Migration:
 // - 후보 평가는 TargetSelect 전용 Trace와 ICFTargetSelectable 대표 위치를 사용한다.
@@ -30,7 +31,7 @@ namespace
 		const FName CandidateGetTargetDisplayInfoFunctionName(TEXT("GetTargetDisplayInfo"));
 	constexpr float CandidateFloatTolerance = 0.0001f;
 
-	bool IsFiniteVector(const FVector& Value)
+	bool IsFiniteTargetCandidateVector(const FVector& Value)
 	{
 		return FMath::IsFinite(Value.X)
 			&& FMath::IsFinite(Value.Y)
@@ -164,10 +165,10 @@ void UCFTargetSelectComp::TickComponent(float DeltaTime, ELevelTick TickType, FA
 
 float UCFTargetSelectComp::CalculateNormalizedScreenDistance(const FCFTargetSearchView& SearchView, const FVector& TargetWorldLocation)
 {
-	if (!IsFiniteVector(SearchView.ViewOrigin)
-		|| !IsFiniteVector(SearchView.ViewDirection)
-		|| !IsFiniteVector(SearchView.ViewUpDirection)
-		|| !IsFiniteVector(TargetWorldLocation)
+	if (!IsFiniteTargetCandidateVector(SearchView.ViewOrigin)
+		|| !IsFiniteTargetCandidateVector(SearchView.ViewDirection)
+		|| !IsFiniteTargetCandidateVector(SearchView.ViewUpDirection)
+		|| !IsFiniteTargetCandidateVector(TargetWorldLocation)
 		|| !FMath::IsFinite(SearchView.VerticalFOVDeg)
 		|| !FMath::IsFinite(SearchView.ViewportAspectRatio))
 	{
@@ -228,7 +229,7 @@ FCFTargetSearchResult UCFTargetSelectComp::EvaluateCandidateActors(const TArray<
 
 	const FCFTargetSelectConfig Config = GetResolvedTargetSelectConfig();
 	const FVector ViewDirection = SearchView.ViewDirection.GetSafeNormal();
-	if (ViewDirection.IsNearlyZero() || !IsFiniteVector(SearchView.ViewOrigin))
+	if (ViewDirection.IsNearlyZero() || !IsFiniteTargetCandidateVector(SearchView.ViewOrigin))
 	{
 		return SearchResult;
 	}
@@ -241,7 +242,7 @@ FCFTargetSearchResult UCFTargetSelectComp::EvaluateCandidateActors(const TArray<
 		}
 
 		const FVector TargetWorldLocation = ResolveTargetSelectionLocation(CandidateActor);
-		if (!IsFiniteVector(TargetWorldLocation))
+		if (!IsFiniteTargetCandidateVector(TargetWorldLocation))
 		{
 			continue;
 		}
@@ -428,7 +429,7 @@ bool UCFTargetSelectComp::BuildRuntimeSearchView(FCFTargetSearchView& OutSearchV
 		}
 	}
 
-	return IsFiniteVector(OutSearchView.ViewOrigin) && !OutSearchView.ViewDirection.IsNearlyZero();
+	return IsFiniteTargetCandidateVector(OutSearchView.ViewOrigin) && !OutSearchView.ViewDirection.IsNearlyZero();
 }
 
 bool UCFTargetSelectComp::RefreshCurrentCandidate()

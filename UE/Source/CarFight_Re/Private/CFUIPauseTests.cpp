@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-08-01
+// Version: 1.1.0
+// Date: 2026-08-06
 // Description: CF-FQ-032 UI-P0-02 싱글플레이 Pause 자동화 테스트
-// Scope: C++ Pause Menu, 차량 입력 중립화와 Launcher·Projectile·Timer 게임 시간 정지 전제 계약을 검증합니다.
+// Scope: C++ Pause Menu 상호작용, 차량 입력 중립화와 Launcher·Projectile·Timer 게임 시간 정지 전제 계약을 검증합니다.
 // Changelog:
+// - v1.1.0: Continue 버튼의 활성·표시·콘텐츠 계약을 추가.
 // - v1.0.0: PauseMenuContract, InputNeutralContract와 ProgressFreezeContract를 최초 추가.
 // Migration:
 // - 테스트는 Transient Widget·Component·Automation World만 사용하며 Unreal Asset과 피팅 데이터를 생성하거나 수정하지 않는다.
@@ -42,9 +43,18 @@ bool FCFUIPauseMenuContractTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
-	TestTrue(TEXT("Pause Menu 초기화"), PauseMenuWidget->Initialize());
+		TestTrue(TEXT("Pause Menu 초기화"), PauseMenuWidget->Initialize());
 	TestTrue(TEXT("Pause Menu 트리 보장"), PauseMenuWidget->EnsurePauseMenuTree());
-	TestNotNull(TEXT("Continue 버튼 생성"), PauseMenuWidget->GetContinueButton());
+
+	// [v1.1.0] 실제 Pause 해제 상호작용 계약을 검증할 Continue 버튼입니다.
+	UButton* ContinueButton = PauseMenuWidget->GetContinueButton();
+	if (!TestNotNull(TEXT("Continue 버튼 생성"), ContinueButton))
+	{
+		return false;
+	}
+	TestTrue(TEXT("Continue 버튼 활성"), ContinueButton->GetIsEnabled());
+	TestEqual(TEXT("Continue 버튼 표시 상태"), ContinueButton->GetVisibility(), ESlateVisibility::Visible);
+	TestNotNull(TEXT("Continue 버튼 콘텐츠 생성"), ContinueButton->GetContent());
 	return true;
 }
 

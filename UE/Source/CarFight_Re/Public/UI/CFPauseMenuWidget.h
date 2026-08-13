@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-08-01
+// Version: 1.1.0
+// Date: 2026-08-06
 // Description: CarFight 싱글플레이 Pause Menu C++ Widget
 // Scope: Unreal Asset 없이 Menu 레이어에 표시할 최소 Pause 화면과 Continue 요청을 제공합니다.
 // Changelog:
+// - v1.1.0: Continue 버튼의 명확한 크기·안내 문구와 직접 Focus 계약을 추가.
 // - v1.0.0: UI-P0-02 Pause 제목, Continue 버튼, 기본 Focus와 Continue 이벤트를 최초 추가.
 // Migration:
 // - 향후 WBP_CFPauseMenu를 추가해도 Continue 요청과 Menu 레이어 수명 계약은 유지한다.
@@ -18,6 +19,7 @@
 
 class UButton;
 class UCanvasPanel;
+class USizeBox;
 class UTextBlock;
 class UVerticalBox;
 
@@ -74,6 +76,10 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UTextBlock> PauseTitleText = nullptr;
 
+		// [v1.1.0] Continue 버튼의 최소 클릭 영역을 보장하는 SizeBox입니다.
+	UPROPERTY(Transient)
+	TObjectPtr<USizeBox> ContinueButtonSizeBox = nullptr;
+
 	// [v1.0.0] Pause를 해제하고 게임으로 돌아가는 기본 버튼입니다.
 	UPROPERTY(Transient)
 	TObjectPtr<UButton> ContinueButton = nullptr;
@@ -81,4 +87,8 @@ private:
 	// [v1.0.0] Continue 버튼 안에 표시하는 Text입니다.
 	UPROPERTY(Transient)
 	TObjectPtr<UTextBlock> ContinueButtonText = nullptr;
+
+	// [v1.1.0] 마우스와 키보드로 Continue 버튼을 사용할 수 있음을 안내하는 Text입니다.
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> ContinueHintText = nullptr;
 };

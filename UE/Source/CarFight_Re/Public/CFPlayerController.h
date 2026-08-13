@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.2.0
-// Date: 2026-08-02
+// Version: 1.3.0
+// Date: 2026-08-06
 // Description: CarFight UI 공통 입력·Mapping Context·싱글플레이 Pause PlayerController
 // Scope: Pawn 독립 Pause·Back 입력, Controller 소유 Context, 입력 중립화와 실제 World Pause를 제공합니다.
 // Changelog:
+// - v1.3.0: Pause 중 Enter·게임패드 확인 버튼으로 Continue를 실행하는 Controller Fallback 입력을 추가.
 // - v1.2.0: 차량 Gameplay 입력 소유권을 Pawn DefaultInputMappingContext로 잠그고 Controller Gameplay Context의 원자 이전 조건을 명시.
 // - v1.1.0: UI-P0-02 차량 Gameplay 입력 중립화, 키 상태 Flush와 실제 싱글플레이 Pause 적용·해제 API를 추가.
 // - v1.0.0: UI-P0-01A 최소 PlayerController와 System·Gameplay·UI Context 수명 계약을 최초 추가.
@@ -167,8 +168,11 @@ private:
 	// [v1.0.0] C++ Fallback Pause Key 입력을 공통 요청으로 변환합니다.
 	void HandlePauseFallbackKey();
 
-	// [v1.0.0] C++ Fallback Back Key 입력을 공통 요청으로 변환합니다.
+		// [v1.0.0] C++ Fallback Back Key 입력을 공통 요청으로 변환합니다.
 	void HandleBackFallbackKey();
+
+	// [v1.3.0] Pause 중 Enter·게임패드 확인 입력을 Continue 요청으로 변환합니다.
+	void HandlePauseConfirmFallbackKey();
 
 	// [v1.0.0] Pause 요청을 Controller와 UI Subsystem에 한 번씩 전달합니다.
 	void BroadcastPauseInputRequest();

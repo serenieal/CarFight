@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-08-01
-// Description: CF-FQ-032 UI-P0-01A~01B 기반 Automation 테스트
-// Scope: PlayerController 기본 소유 상태와 C++ UI Root 표준 레이어·추가·정리 계약을 검증합니다.
+// Version: 1.1.0
+// Date: 2026-08-06
+// Description: CF-FQ-032 UI-P0-01A~02 기반 Automation 테스트
+// Scope: PlayerController 기본 소유 상태와 C++ UI Root 표준 레이어·추가·정리·Viewport 우선순위 계약을 검증합니다.
 // Changelog:
+// - v1.1.0: UI Root가 Legacy Aim·Target HUD보다 높은 Viewport ZOrder를 사용하는 계약을 추가.
 // - v1.0.0: ControllerContract와 RootLayerContract 테스트를 최초 추가.
 // Migration:
 // - 테스트는 Transient UObject만 사용하며 Blueprint, Map, DataAsset과 피팅 파일을 생성하거나 수정하지 않는다.
@@ -13,6 +14,7 @@
 
 #include "CFPlayerController.h"
 #include "UI/CFUIRootWidget.h"
+#include "UI/CFUISubsystem.h"
 #include "UI/CFUITypes.h"
 
 #include "Components/CanvasPanel.h"
@@ -36,8 +38,17 @@ bool FCFUIControllerContractTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
-	TestFalse(TEXT("기본 상태는 UI 입력 비활성"), PlayerControllerDefaults->IsUIInputEnabled());
+		TestFalse(TEXT("기본 상태는 UI 입력 비활성"), PlayerControllerDefaults->IsUIInputEnabled());
 	TestEqual(TEXT("CDO는 런타임 Mapping Context 무소유"), PlayerControllerDefaults->GetOwnedMappingContextCount(), 0);
+
+	// [v1.1.0] Legacy Pawn HUD보다 높은 Viewport 우선순위를 검증할 UI Subsystem CDO입니다.
+	const UCFUISubsystem* UISubsystemDefaults = GetDefault<UCFUISubsystem>();
+	if (!TestNotNull(TEXT("CFUISubsystem CDO"), UISubsystemDefaults))
+	{
+		return false;
+	}
+	TestTrue(TEXT("UI Root ZOrder는 Legacy TargetSelect HUD 20보다 높음"), UISubsystemDefaults->GetRootViewportZOrder() > 20);
+
 	TestEqual(TEXT("Game 레이어 enum 순서"), static_cast<uint8>(ECFUILayer::Game), static_cast<uint8>(0));
 	TestEqual(TEXT("Debug 레이어 enum 순서"), static_cast<uint8>(ECFUILayer::Debug), static_cast<uint8>(7));
 	return true;

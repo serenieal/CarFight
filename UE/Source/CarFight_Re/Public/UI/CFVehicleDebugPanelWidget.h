@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.25.0
-// Date: 2026-07-03
+// Version: 1.33.0
+// Date: 2026-08-05
 // Description: VehicleDebug Panel용 C++ 부모 위젯 클래스입니다.
 // Changelog:
+// - v1.33.0: 현재 선택 대상의 표시 정보, 추적 상태, Shield·6방향 Armor·재생 상태와 Integrity를 보여주는 Target Navigation 섹션을 추가.
 // - v1.25.0: Weapon 섹션에 EquipmentPresetData 지정 여부 / ID / 호환성 / 요약 표시를 추가.
 // - v1.24.0: Weapon 섹션에 마지막 Damage HitContext Debug 표시를 추가.
 // - v1.23.0: DamageData 표시 설명을 ProjectileData 단일 소유 정책에 맞게 정리.
@@ -22,6 +23,7 @@
 // - v1.10.0: Weapon 섹션에 활성 WeaponData ID, 호환성, 요약 표시를 추가.
 // - v1.9.0: VehicleDebug Weapon 카테고리를 Navigation 섹션으로 추가해 WeaponComp 런타임과 FireOrigin 상태를 표시.
 // Migration:
+// - Target 섹션은 기존 동적 Section 레이아웃에 C++ ViewData로 추가되므로 WBP_VehicleDebugPanel의 위젯 트리나 Blueprint 그래프를 수정할 필요가 없다.
 // - EquipmentPresetData 표시는 Debug 전용이며 FireOrigin / Projectile / Damage 판정을 변경하지 않는다.
 // - Base 메쉬 표시는 Debug 전용이며 FireOrigin / Projectile / Damage 판정을 변경하지 않는다.
 // - TurretMountData 표시는 Debug 전용이며 FireOrigin / Projectile / Damage 판정을 변경하지 않는다.
@@ -37,7 +39,7 @@
 // - 기존 WeaponData 표시 구조는 유지하고 발사 제한 원본값은 분당 발사속도로 표시한다.
 // - 기존 Weapon 섹션 ID와 필드는 유지하고 WeaponData 하위 섹션만 추가한다.
 // - 기존 WBP 바인딩 위젯은 유지하고, 동적 Section 레이아웃에서 Weapon 섹션을 추가로 표시한다.
-// Scope: VehicleDebug Overview / Drive / Input / Camera / Aim / Weapon / Runtime 카테고리를 읽어 Navigation + Selected Section 기반 표시와 기존 fallback 표시를 안정적으로 지원합니다.
+// Scope: VehicleDebug Overview / Drive / Input / Camera / Aim / Target / Weapon / Runtime 카테고리를 읽어 Navigation + Selected Section 기반 표시와 기존 fallback 표시를 안정적으로 지원합니다.
 
 #pragma once
 
@@ -304,7 +306,11 @@ protected:
 
 	// [v1.8.0] 현재 Panel에 적용 중인 최신 Aim 캐시입니다.
 	UPROPERTY(BlueprintReadOnly, Category="CarFight|VehicleDebug|Panel", meta=(DisplayName="Aim 캐시 (CachedAim)", ToolTip="현재 Panel에 표시 중인 최신 VehicleDebug Aim 캐시입니다."))
-	FCFVehicleDebugAim CachedAim;
+		FCFVehicleDebugAim CachedAim;
+
+	// [v1.33.0] 현재 Panel에 적용 중인 최신 선택 대상 캐시입니다.
+	UPROPERTY(BlueprintReadOnly, Category="CarFight|VehicleDebug|Panel", meta=(DisplayName="Target 캐시 (CachedTarget)", ToolTip="현재 Panel에 표시 중인 선택 대상의 표시 정보, 추적 상태, 방어와 내구도 캐시입니다."))
+	FCFVehicleDebugTarget CachedTarget;
 
 	// [v1.9.0] 현재 Panel에 적용 중인 최신 Weapon 캐시입니다.
 	UPROPERTY(BlueprintReadOnly, Category="CarFight|VehicleDebug|Panel", meta=(DisplayName="Weapon 캐시 (CachedWeapon)", ToolTip="현재 Panel에 표시 중인 최신 VehicleDebug Weapon 캐시입니다."))
@@ -487,7 +493,10 @@ private:
 	TSharedRef<FCFVehicleDebugSectionViewData> BuildCameraSectionViewData(const FCFVehicleDebugCamera& InCamera) const;
 
 	// [v1.8.0] Aim 카테고리용 Section ViewData를 생성합니다.
-	TSharedRef<FCFVehicleDebugSectionViewData> BuildAimSectionViewData(const FCFVehicleDebugAim& InAim) const;
+		TSharedRef<FCFVehicleDebugSectionViewData> BuildAimSectionViewData(const FCFVehicleDebugAim& InAim) const;
+
+	// [v1.33.0] 현재 선택 대상 카테고리용 Section ViewData를 생성합니다.
+	TSharedRef<FCFVehicleDebugSectionViewData> BuildTargetSectionViewData(const FCFVehicleDebugTarget& InTarget) const;
 
 	// [v1.9.0] Weapon 카테고리용 Section ViewData를 생성합니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> BuildWeaponSectionViewData(const FCFVehicleDebugWeapon& InWeapon) const;

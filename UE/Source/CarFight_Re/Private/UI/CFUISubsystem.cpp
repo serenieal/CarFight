@@ -1,33 +1,60 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.1
-// Date: 2026-08-01
-// Description: CarFight LocalPlayer UI 수명·레이어·싱글플레이 Pause Subsystem 구현
-// Scope: PlayerController 등록, World별 C++ Root, 화면·Modal, Pause Menu와 World Cleanup을 구현합니다.
+// Version: 1.5.0
+// Date: 2026-08-13
+// Description: CarFight LocalPlayer UI 수명·레이어·Pause·Production HUD Runtime 연결 Subsystem 구현
+// Scope: 기존 Pause·Root 동작을 보존하면서 UI-P0-03 Provider/Presenter와 Production HUD를 World HUD Layer에 연결합니다.
 // Changelog:
+// - v1.5.0: HUDDataProvider/HUDPresenter 생성, Production WBP_CFInGameHUD Config Class 해석과 HUD Layer 수명을 추가.
+// - v1.4.0: D1-09A Config Soft Reference 해석, 검증 실패 Fallback과 Style·Density·Layout Getter를 추가.
+// - v1.3.0: UI Root를 AddToPlayerScreen에서 AddToViewport로 전환해 Legacy HUD 위 표시와 Pause 마우스 Hit Test를 복구.
+// - v1.2.0: Pause 입력 모드의 Focus 대상을 Pause Menu 전체가 아니라 실제 Continue 버튼으로 고정.
 // - v1.1.1: Pause 중 Pawn 입력 억제를 유지하면서 PlayerController Pause·Back 입력을 받도록 GameAndUI 모드로 보정.
 // - v1.1.0: UI-P0-02 실제 World Pause, C++ Pause Menu, Continue·Pause·Back 전환과 해제 수명을 구현.
 // - v1.0.0: UI-P0-01B Root 1개 보장, 약한 Pawn 참조와 입력 모드 연동을 최초 구현.
 // Migration:
 // - Pause 진입은 차량 입력을 중립화하지만 Launcher·Projectile·Timer Runtime을 취소하거나 초기화하지 않는다.
 // - Pause 해제 뒤 Primary Screen이 남아 있으면 UIOnly, 없으면 GameOnly 입력으로 복귀한다.
+// - UI Data Config가 비었거나 유효하지 않으면 각 타입의 Native CDO Fallback을 사용하며 Pause·Gameplay 수명에는 영향을 주지 않는다.
+// - Production HUD Asset은 재부모화하지 않으며 CFStyledWidgetBase를 유지하고 Provider/Presenter가 Runtime ViewData만 주입합니다.
 
 #include "UI/CFUISubsystem.h"
 
 #include "CFPlayerController.h"
 #include "Blueprint/UserWidget.h"
+#include "Components/Button.h"
 #include "Components/CanvasPanel.h"
 #include "Components/Widget.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
+#include "UI/CFHUDDataProvider.h"
+#include "UI/CFHUDLayoutData.h"
+#include "UI/CFHUDPresenter.h"
 #include "UI/CFPauseMenuWidget.h"
+#include "UI/CFStyledWidgetBase.h"
+#include "UI/CFUIDensityData.h"
 #include "UI/CFUIRootWidget.h"
+#include "UI/CFUIStyleData.h"
 
-// [v1.0.0] World Cleanup 감시를 등록하고 초기 상태를 준비합니다.
+// [v1.5.0] UI Data를 해석하고 HUD Provider/Presenter를 LocalPlayer 수명으로 준비합니다.
 void UCFUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
+	ResolveDefaultUIDataAssets();
+
+	HUDDataProvider = NewObject<UCFHUDDataProvider>(this);
+	if (HUDDataProvider)
+	{
+		HUDDataProvider->InitializeProvider(this);
+	}
+
+	HUDPresenter = NewObject<UCFHUDPresenter>(this);
+	if (HUDPresenter && HUDDataProvider)
+	{
+		HUDPresenter->InitializePresenter(HUDDataProvider);
+	}
+
 	WorldCleanupDelegateHandle = FWorldDelegates::OnWorldCleanup.AddUObject(this, &UCFUISubsystem::HandleWorldCleanup);
 }
 
@@ -36,15 +63,91 @@ void UCFUISubsystem::Deinitialize()
 {
 	ReleaseUIRoot();
 
+	if (HUDPresenter)
+	{
+		HUDPresenter->ShutdownPresenter();
+	}
+	if (HUDDataProvider)
+	{
+		HUDDataProvider->ShutdownProvider();
+	}
+	HUDPresenter = nullptr;
+	HUDDataProvider = nullptr;
+
 	if (WorldCleanupDelegateHandle.IsValid())
 	{
 		FWorldDelegates::OnWorldCleanup.Remove(WorldCleanupDelegateHandle);
 		WorldCleanupDelegateHandle.Reset();
 	}
 
-	ActivePlayerController.Reset();
+		ActivePlayerController.Reset();
 	CurrentPawn.Reset();
+	ResolvedStyleData = nullptr;
+	ResolvedDensityData = nullptr;
+	ResolvedHUDLayoutData = nullptr;
+	ResolvedInGameHUDWidgetClass = nullptr;
 	Super::Deinitialize();
+}
+
+// [v1.4.0] Config Soft Reference의 Style·Density·HUD Layout을 Subsystem 수명에서 한 번 Load·검증해 Cache합니다.
+void UCFUISubsystem::ResolveDefaultUIDataAssets()
+{
+	ResolvedStyleData = DefaultStyleDataAsset.IsNull() ? nullptr : DefaultStyleDataAsset.LoadSynchronous();
+	if (ResolvedStyleData)
+	{
+		// [v1.4.0] 잘못된 Style DataAsset을 Native Fallback으로 내릴 때 제공할 검증 실패 사유입니다.
+		FString StyleValidationFailureReason;
+		if (!ResolvedStyleData->ValidateStyleData(StyleValidationFailureReason))
+		{
+			ResolvedStyleData = nullptr;
+		}
+	}
+
+	ResolvedDensityData = DefaultDensityDataAsset.IsNull() ? nullptr : DefaultDensityDataAsset.LoadSynchronous();
+	if (ResolvedDensityData)
+	{
+		// [v1.4.0] 잘못된 Density DataAsset을 Native Fallback으로 내릴 때 제공할 검증 실패 사유입니다.
+		FString DensityValidationFailureReason;
+		if (!ResolvedDensityData->ValidateDensityData(DensityValidationFailureReason))
+		{
+			ResolvedDensityData = nullptr;
+		}
+	}
+
+		ResolvedHUDLayoutData = DefaultHUDLayoutDataAsset.IsNull() ? nullptr : DefaultHUDLayoutDataAsset.LoadSynchronous();
+	if (ResolvedHUDLayoutData)
+	{
+		// [v1.4.0] 잘못된 Layout DataAsset을 Native Fallback으로 내릴 때 제공할 검증 실패 사유입니다.
+		FString LayoutValidationFailureReason;
+		if (!ResolvedHUDLayoutData->ValidateLayoutData(LayoutValidationFailureReason))
+		{
+			ResolvedHUDLayoutData = nullptr;
+		}
+	}
+
+	ResolvedInGameHUDWidgetClass = DefaultInGameHUDWidgetClass.IsNull() ? nullptr : DefaultInGameHUDWidgetClass.LoadSynchronous();
+	if (ResolvedInGameHUDWidgetClass && !ResolvedInGameHUDWidgetClass->IsChildOf(UCFStyledWidgetBase::StaticClass()))
+	{
+		ResolvedInGameHUDWidgetClass = nullptr;
+	}
+}
+
+// [v1.4.0] Config에서 해석된 Style Data를 반환하고 없으면 Native CDO Fallback을 반환합니다.
+UCFUIStyleData* UCFUISubsystem::GetResolvedStyleData() const
+{
+	return ResolvedStyleData ? ResolvedStyleData.Get() : GetMutableDefault<UCFUIStyleData>();
+}
+
+// [v1.4.0] Config에서 해석된 Density Data를 반환하고 없으면 Native Standard CDO Fallback을 반환합니다.
+UCFUIDensityData* UCFUISubsystem::GetResolvedDensityData() const
+{
+	return ResolvedDensityData ? ResolvedDensityData.Get() : GetMutableDefault<UCFUIDensityData>();
+}
+
+// [v1.4.0] Config에서 해석된 HUD Layout Data를 반환하고 없으면 D1-07 1080p Native CDO Fallback을 반환합니다.
+UCFHUDLayoutData* UCFUISubsystem::GetResolvedHUDLayoutData() const
+{
+	return ResolvedHUDLayoutData ? ResolvedHUDLayoutData.Get() : GetMutableDefault<UCFHUDLayoutData>();
 }
 
 // [v1.0.0] 현재 LocalPlayer Controller를 등록하고 해당 World용 Root를 보장합니다.
@@ -86,8 +189,9 @@ bool UCFUISubsystem::EnsureUIRootForWorld(UWorld* World)
 		return false;
 	}
 
-	if (RootWidget && RootWorld.Get() == World && RootWidget->IsInViewport())
+		if (RootWidget && RootWorld.Get() == World && RootWidget->IsInViewport())
 	{
+		CreateInGameHUDWidget();
 		return true;
 	}
 
@@ -105,15 +209,21 @@ bool UCFUISubsystem::EnsureUIRootForWorld(UWorld* World)
 		return false;
 	}
 
-	if (!CreatedRootWidget->AddToPlayerScreen(RootViewportZOrder))
+		// [v1.3.0] Legacy Aim Reticle·TargetSelect HUD와 동일한 Viewport 계층에서 실제 ZOrder와 Hit Test 우선권을 적용합니다.
+	CreatedRootWidget->AddToViewport(RootViewportZOrder);
+	if (!CreatedRootWidget->IsInViewport())
 	{
 		return false;
 	}
 
-	RootWidget = CreatedRootWidget;
+		RootWidget = CreatedRootWidget;
 	RootWorld = World;
 	PrePauseScreenState = ECFUIScreenState::InGame;
 	SetScreenState(ECFUIScreenState::InGame);
+	if (!CreateInGameHUDWidget())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CarFight][UI] Production InGame HUD creation skipped or failed; Root/Pause lifetime remains active."));
+	}
 	return true;
 }
 
@@ -131,7 +241,8 @@ void UCFUISubsystem::ReleaseUIRoot()
 		OnPauseStateChanged.Broadcast(true, false);
 	}
 
-	DestroyPauseMenuWidget();
+		DestroyPauseMenuWidget();
+	DestroyInGameHUDWidget();
 	PrimaryScreenWidget = nullptr;
 	CurrentModalWidget = nullptr;
 
@@ -254,10 +365,15 @@ void UCFUISubsystem::ClearModalWidget()
 		if (bSinglePlayerPauseActive)
 	{
 		SetScreenState(ECFUIScreenState::Paused);
-		if (ACFPlayerController* PlayerController = ActivePlayerController.Get())
+				if (ACFPlayerController* PlayerController = ActivePlayerController.Get())
 		{
-			// [v1.1.1] Pawn Gameplay 입력은 이미 억제됐으므로 GameAndUI로 Controller Pause·Back과 Menu Focus를 함께 유지합니다.
-			PlayerController->ApplyUIInputMode(ECFUIInputMode::GameAndUI, PauseMenuWidget, true);
+			// [v1.2.0] Pause Menu 전체가 아니라 실제 Continue 버튼을 직접 Focus 대상으로 사용합니다.
+			UWidget* PauseFocusWidget = PauseMenuWidget;
+			if (PauseMenuWidget && PauseMenuWidget->GetContinueButton())
+			{
+				PauseFocusWidget = PauseMenuWidget->GetContinueButton();
+			}
+			PlayerController->ApplyUIInputMode(ECFUIInputMode::GameAndUI, PauseFocusWidget, true);
 		}
 		if (PauseMenuWidget)
 		{
@@ -324,8 +440,8 @@ bool UCFUISubsystem::EnterSinglePlayerPause()
 	const bool bWasPaused = bSinglePlayerPauseActive;
 		bSinglePlayerPauseActive = true;
 	SetScreenState(ECFUIScreenState::Paused);
-	// [v1.1.1] Pawn Gameplay 입력은 억제하고 Controller Pause·Back 바인딩과 Menu Focus는 동시에 유지합니다.
-	PlayerController->ApplyUIInputMode(ECFUIInputMode::GameAndUI, PauseMenuWidget, true);
+		// [v1.2.0] Pawn Gameplay 입력은 억제하고 실제 Continue 버튼을 GameAndUI Focus 대상으로 사용합니다.
+	PlayerController->ApplyUIInputMode(ECFUIInputMode::GameAndUI, PauseMenuWidget->GetContinueButton(), true);
 	PauseMenuWidget->FocusDefaultButton();
 	OnPauseStateChanged.Broadcast(bWasPaused, true);
 	return true;
@@ -440,6 +556,67 @@ void UCFUISubsystem::DestroyPauseMenuWidget()
 	if (RootWidget)
 	{
 		RootWidget->ClearLayer(ECFUILayer::Menu);
+	}
+}
+
+// [v1.5.0] Config Production Widget Class로 WBP_CFInGameHUD를 만들고 HUD Layer와 Presenter에 연결합니다.
+bool UCFUISubsystem::CreateInGameHUDWidget()
+{
+	if (InGameHUDWidget && InGameHUDWidget->GetParent() == GetLayerWidget(ECFUILayer::HUD))
+	{
+		if (HUDPresenter)
+		{
+			HUDPresenter->SetProductionWidget(InGameHUDWidget);
+		}
+		return true;
+	}
+
+	ACFPlayerController* PlayerController = ActivePlayerController.Get();
+	if (!PlayerController || !RootWidget || !ResolvedInGameHUDWidgetClass)
+	{
+		return false;
+	}
+
+	UCFStyledWidgetBase* CreatedHUDWidget = CreateWidget<UCFStyledWidgetBase>(PlayerController, ResolvedInGameHUDWidgetClass);
+	if (!CreatedHUDWidget)
+	{
+		return false;
+	}
+
+	UCFHUDLayoutData* LayoutData = GetResolvedHUDLayoutData();
+	CreatedHUDWidget->SetUIVisualContext(
+		GetResolvedStyleData(),
+		GetResolvedDensityData(),
+		LayoutData ? LayoutData->GeometryScale : 1.0f,
+		LayoutData ? LayoutData->TypographyScale : 1.0f,
+		LayoutData ? LayoutData->MinimumEffectiveFontSizes : FCFUITypographyFloor());
+
+	if (!RootWidget->AddWidgetToLayer(CreatedHUDWidget, ECFUILayer::HUD, 0))
+	{
+		CreatedHUDWidget->RemoveFromParent();
+		return false;
+	}
+
+	InGameHUDWidget = CreatedHUDWidget;
+	if (HUDPresenter)
+	{
+		HUDPresenter->SetProductionWidget(InGameHUDWidget);
+	}
+	return true;
+}
+
+// [v1.5.0] Presenter 연결을 먼저 해제하고 현재 Production HUD Widget을 제거합니다.
+void UCFUISubsystem::DestroyInGameHUDWidget()
+{
+	if (HUDPresenter)
+	{
+		HUDPresenter->SetProductionWidget(nullptr);
+	}
+
+	if (InGameHUDWidget)
+	{
+		InGameHUDWidget->RemoveFromParent();
+		InGameHUDWidget = nullptr;
 	}
 }
 

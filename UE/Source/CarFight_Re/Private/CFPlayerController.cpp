@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.0
-// Date: 2026-08-01
+// Version: 1.3.0
+// Date: 2026-08-06
 // Description: CarFight UI 공통 입력·Mapping Context·싱글플레이 Pause PlayerController 구현
 // Scope: Controller 소유 Context, Pause·Back 요청, 입력 중립화와 실제 World Pause를 구현합니다.
 // Changelog:
+// - v1.3.0: Pause 중 Enter·게임패드 확인 버튼을 Continue Fallback 입력으로 처리.
 // - v1.1.0: UI-P0-02 차량 입력 중립화, 눌린 키 Flush와 World Pause 적용·해제 API를 구현.
 // - v1.0.0: UI-P0-01A 최소 PlayerController 기반을 최초 구현.
 // Migration:
@@ -103,7 +104,7 @@ void ACFPlayerController::SetupInputComponent()
 		GamepadPauseBinding.bExecuteWhenPaused = true;
 	}
 
-	if (!InputAction_Back)
+		if (!InputAction_Back)
 	{
 		FInputKeyBinding& KeyboardBackBinding = InputComponent->BindKey(EKeys::BackSpace, IE_Pressed, this, &ACFPlayerController::HandleBackFallbackKey);
 		KeyboardBackBinding.bExecuteWhenPaused = true;
@@ -111,6 +112,16 @@ void ACFPlayerController::SetupInputComponent()
 		FInputKeyBinding& GamepadBackBinding = InputComponent->BindKey(EKeys::Gamepad_FaceButton_Right, IE_Pressed, this, &ACFPlayerController::HandleBackFallbackKey);
 		GamepadBackBinding.bExecuteWhenPaused = true;
 	}
+
+	// [v1.3.0] UI Mapping Action이 없는 P0 Pause Menu에서도 확인 입력으로 Continue를 실행할 키보드 Fallback입니다.
+	FInputKeyBinding& KeyboardConfirmBinding = InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &ACFPlayerController::HandlePauseConfirmFallbackKey);
+	KeyboardConfirmBinding.bExecuteWhenPaused = true;
+	KeyboardConfirmBinding.bConsumeInput = false;
+
+	// [v1.3.0] 게임패드 확인 버튼으로도 Pause Menu Continue를 실행할 Fallback입니다.
+	FInputKeyBinding& GamepadConfirmBinding = InputComponent->BindKey(EKeys::Gamepad_FaceButton_Bottom, IE_Pressed, this, &ACFPlayerController::HandlePauseConfirmFallbackKey);
+	GamepadConfirmBinding.bExecuteWhenPaused = true;
+	GamepadConfirmBinding.bConsumeInput = false;
 }
 
 // [v1.0.0] 새 Pawn Possession을 UI와 Gameplay Context 수명에 통지합니다.
@@ -322,6 +333,18 @@ void ACFPlayerController::HandlePauseFallbackKey()
 void ACFPlayerController::HandleBackFallbackKey()
 {
 	BroadcastBackInputRequest();
+}
+
+// [v1.3.0] Pause 중 Enter·게임패드 확인 입력을 Continue 요청으로 변환합니다.
+void ACFPlayerController::HandlePauseConfirmFallbackKey()
+{
+	if (UCFUISubsystem* UISubsystem = GetUISubsystem())
+	{
+		if (UISubsystem->IsSinglePlayerPauseActive())
+		{
+			UISubsystem->ExitSinglePlayerPause();
+		}
+	}
 }
 
 // [v1.0.0] Pause 요청을 Controller와 UI Subsystem에 한 번씩 전달합니다.
