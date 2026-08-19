@@ -1,463 +1,524 @@
 # VehicleData
 
-## 최신 상태 주의
-2026-06-25 현재 이 문서에는 2026-04-22 기준 구형 설명이 남아 있다.
+- 문서 버전: v2.1.0
+- 최근 갱신일: 2026-08-18
+- 문서 상태: Current Implementation
+- 적용 범위: `UCFVehicleData`, `UCFVDAValidator`, `ACFVehiclePawn::ApplyVehicleDataConfig()`와 현재 대표 VehicleData 기준
 
-최신 `VehiclePlatformPlan` / `TurretPlan` 기준은 아래처럼 본다.
+---
 
-- `DA_PoliceCar`는 현재 P0 터렛 / 하드포인트 계획의 대표 입력이 아니라 레거시 감사 기준이다.
-- P0 기본 실행 기준은 `DA_TestSedan`, 대조 테스트 후보는 `DA_TestSUV`로 정리되어 있다.
-- `UCFVehicleData`, `HardpointSlots`, 선택 캡처, `CFVDAValidator` 하드포인트 검사는 코드에 반영되어 있다.
-- 이번 문서 세션에서는 `.uasset` 내부 기본값을 MCP 또는 AssetDump로 새로 확인하지 않았다.
-- 코드 / 에셋 작업으로 넘어가기 전에는 `BP_CFVehiclePawn`, `DA_TestSedan`, `DA_TestSUV`를 새 AssetDump 또는 MCP로 다시 확인한다.
+## 1. 문서 목적
 
-이 문서의 본문은 VehicleData 기능 설명 참고용으로 유지하되, 최신 P0 차량 / 터렛 기준을 판단할 때는 아래 문서를 우선한다.
+이 문서는 CarFight에서 `VehicleData`가 **현재 실제로 어떤 데이터를 소유하고, VehiclePawn 런타임에 어떻게 적용되며, 어떤 검증 계약으로 보호되는지** 기록한다.
+
+미래 튜닝 계획이나 사용자 주행감 목표를 기록하는 문서가 아니다.
+실제 수치 조정 계획은 `Document/Plan/VehicleDataTuningPlan.md`가 소유한다.
+
+---
+
+## 2. 현재 핵심 구조
+
+현재 VehicleData 흐름은 다음과 같다.
 
 ```text
-Document/Plan/VehiclePlatformPlan/CF_CodeStartGate.md
-Document/Plan/VehiclePlatformPlan/CF_AssetDumpResult.md
-Document/Plan/TurretPlan/CF_TurretPlan_v0_1.md
+UCFVehicleData
+→ ACFVehiclePawn.VehicleData
+→ ApplyVehicleDataConfig()
+→ Movement / Reference / WheelPhysics / WheelVisual / TurretVisual / DriveState
+→ VehicleRuntime
 ```
 
-## 문서 목적
-이 문서는 현재 프로젝트에서 `VehicleData` 기능이 실제로 어떤 일을 하는지, 그리고 그 기능이 어떤 자산/클래스/설정 구성으로 동작하는지를 기록한다.
-이 문서는 미래 설계나 개선 계획이 아니라, **현재 확인된 구현 상태**를 기준으로 작성한다.
-
-## 문서 범위
-이 문서에서 말하는 `VehicleData` 기능은 아래 요소를 묶어서 본다.
-
-- 핵심 데이터 클래스: `UCFVehicleData`
-- 데이터 정의 파일: `UE/Source/CarFight_Re/Public/CFVehicleData.h`
-- 현재 대표 데이터 자산: `/Game/CarFight/Vehicles/Data/Cars/DA_PoliceCar`
-- 현재 기본 소비 주체: `/Game/CarFight/Vehicles/BP_CFVehiclePawn`
-- 현재 직접 소비 함수:
-  - `ApplyVehicleDataConfig()`
-  - `ApplyVehicleMovementConfig()`
-  - `ApplyVehicleReferenceConfig()`
-  - `ApplyVehicleWheelPhysicsConfig()`
-  - `ApplyVehicleWheelVisualConfig()`
-  - `VehicleDriveComp->ApplyDriveStateConfig(...)`
-
-즉, 현재 기준 `VehicleData`는 **차량 설정값을 저장만 하는 DataAsset이 아니라, VehicleRuntime이 실제 차량 주행/휠/시각/Drive 상태 구성으로 풀어 적용하는 루트 차량 데이터 기능**으로 본다.
-
-## 이 기능이 현재 실제로 하는 일
-현재 구현 기준 `VehicleData`의 핵심 역할은 **차량 하나의 시각 자산, 주행 설정, 휠 물리 설정, 휠 시각 설정, Wheel Class 참조, DriveState 판정 설정을 하나의 루트 데이터 자산으로 묶어두고, VehicleRuntime이 이를 읽어 실제 차량 런타임 구성에 반영할 수 있게 하는 것**이다.
-
-이 기능은 단순히 `차량 스펙을 저장한다` 정도가 아니다.
-현재 구조상 `VehicleData`는 아래 다섯 개의 하위 데이터 축을 한 자산에 묶는다.
-
-### 1. 차량 시각 자산을 정의한다
-`UCFVehicleData`의 `VehicleVisualConfig`는 현재 차량의 시각 자산 참조를 가진다.
-
-현재 포함 항목:
-- `ChassisMesh`
-- `WheelMeshFL`
-- `WheelMeshFR`
-- `WheelMeshRL`
-- `WheelMeshRR`
-
-현재 의미:
-- 차체에 어떤 Static Mesh를 사용할지 정한다.
-- 앞/뒤, 좌/우 휠에 어떤 Static Mesh를 사용할지 정한다.
-- VehicleRuntime의 `ApplyVehicleWheelVisualConfig()`에서 실제 Pawn의 `Wheel_Mesh_*` 컴포넌트에 반영된다.
-
-즉 현재 `VehicleData`는 **차량 외형을 구성하는 핵심 Static Mesh 세트를 제공하는 시각 자산 루트**다.
-
-### 2. 차량 주행 및 휠 물리 기본값을 정의한다
-`VehicleMovementConfig`는 현재 `VehicleData`에서 가장 큰 비중을 차지하는 설정 묶음이다.
-
-현재 포함되는 주요 범주:
-
-#### A. Wheel Class 기본 물리 보정값
-- `FrontWheelMaxSteerAngle`
-- `FrontWheelMaxBrakeTorque`
-- `RearWheelMaxBrakeTorque`
-- `RearWheelMaxHandBrakeTorque`
-- `FrontWheelRadius`
-- `RearWheelRadius`
-- `FrontWheelWidth`
-- `RearWheelWidth`
-- `FrontWheelFrictionForceMultiplier`
-- `RearWheelFrictionForceMultiplier`
-- `FrontWheelCorneringStiffness`
-- `RearWheelCorneringStiffness`
-- `FrontWheelLoadRatio`
-- `RearWheelLoadRatio`
-- `FrontWheelSpringRate`
-- `RearWheelSpringRate`
-- `FrontWheelSpringPreload`
-- `RearWheelSpringPreload`
-- `FrontWheelSuspensionMaxRaise`
-- `RearWheelSuspensionMaxRaise`
-- `FrontWheelSuspensionMaxDrop`
-- `RearWheelSuspensionMaxDrop`
-- `bFrontWheelAffectedByEngine`
-- `bRearWheelAffectedByEngine`
-- `FrontWheelSweepShape`
-- `RearWheelSweepShape`
-
-#### B. VehicleMovementComponent 본체 설정값
-- `ChassisHeight`
-- `DragCoefficient`
-- `DownforceCoefficient`
-- `bEnableCenterOfMassOverride`
-- `CenterOfMassOverride`
-- `EngineMaxTorque`
-- `EngineMaxRPM`
-- `EngineIdleRPM`
-- `EngineBrakeEffect`
-- `EngineRevUpMOI`
-- `EngineRevDownRate`
-- `DifferentialType`
-- `FrontRearSplit`
-- `SteeringType`
-- `SteeringAngleRatio`
-- `bLegacyWheelFrictionPosition`
-- `FrontWheelAdditionalOffset`
-- `RearWheelAdditionalOffset`
-
-#### C. 런타임 적용 스위치
-- `bUseMovementOverrides`
-- `MovementProfileName`
-
-현재 의미:
-- 차가 얼마나 강하게 가속하는지
-- 최고 회전수와 엔진 브레이크가 어떤지
-- 조향이 어떤 방식인지
-- 앞/뒤 바퀴가 어떤 물리 특성을 가지는지
-- WheelSetup의 위치 보정이 어떻게 되는지
-
-를 한 묶음으로 정의한다.
-
-즉 현재 `VehicleData`는 **차량이 어떤 주행 성격과 어떤 바퀴 물리 특성을 가지는지 정의하는 주행/물리 데이터 루트**다.
+주요 소스:
 
-### 3. 휠 시각 동기화 기준값을 정의한다
-`WheelVisualConfig`는 현재 휠 시각 동기화에 필요한 최소 기준값을 가진다.
+```text
+UE/Source/CarFight_Re/Public/CFVehicleData.h
+UE/Source/CarFight_Re/Private/CFVehicleData.cpp
+UE/Source/CarFight_Re/Public/CFVDAValidator.h
+UE/Source/CarFight_Re/Private/CFVDAValidator.cpp
+UE/Source/CarFight_Re/Public/CFVehiclePawn.h
+UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp
+```
 
-현재 포함 항목:
-- `bUseWheelVisualOverrides`
-- `ExpectedWheelCount`
-- `FrontWheelCountForSteering`
-- `bAutoScaleWheelMeshToRadius`
-- `WheelMeshRadiusMeasureMode`
-- `bAutoCenterWheelMeshBoundsToOrigin`
-- `WheelMeshScaleClampMin`
-- `WheelMeshScaleClampMax`
+---
 
-현재 의미:
-- 이 차량이 바퀴를 몇 개로 보는지
-- 그중 몇 개를 조향 바퀴로 보는지
-- `bAutoScaleWheelMeshToRadius`가 켜져 있으면 `WheelMeshFL/FR/RL/RR`의 StaticMesh 로컬 바운드 반지름을 측정해 `FrontWheelRadius` / `RearWheelRadius`에 맞는 표시 스케일을 적용한다.
-- 기본 측정 모드는 `AutoMaxXZ`이며, 차축이 다른 메시에서는 `AxisX`, `AxisY`, `AxisZ` 중 하나로 명시 조정한다.
-- `bAutoCenterWheelMeshBoundsToOrigin`이 켜져 있으면 스케일 적용 후 StaticMesh 바운드 중심을 `Wheel_Mesh_*` 컴포넌트 원점에 맞춰 메시 피벗 오프셋을 보정한다.
-- 자동 스케일 결과는 `WheelMeshScaleClampMin` / `WheelMeshScaleClampMax` 범위로 제한한다.
+## 3. UCFVehicleData가 현재 소유하는 영역
 
-현재 `ApplyVehicleWheelVisualConfig()`는 이 값을 `WheelSyncComp`에 반영한다.
-추가로 자동 스케일 옵션이 켜진 경우 같은 함수에서 `Wheel_Mesh_*` 컴포넌트의 `RelativeScale3D`를 Uniform Scale로 갱신한다.
+`UCFVehicleData`는 단순 주행 튜닝 DataAsset이 아니라 차량 하나의 루트 구성 데이터다.
 
-즉 현재 `VehicleData`는 **휠 시각 시스템이 차량을 어떤 형태로 해석해야 하는지 알려주는 WheelSync 입력 데이터**도 함께 가진다.
+```text
+VehicleVisualConfig
+VehicleLayoutConfig
+HardpointSlots
+MountProfiles
+BaseVehicleMassKg
+MaximumGrossMassKg
+VehicleMovementConfig
+WheelVisualConfig
+VehicleReferenceConfig
+VehicleDurabilityConfig
+DefaultDefenseData
+DefaultDestroyedFxData
+DestroyedFxSocketName
+DriveStateConfig
+```
 
-### 4. 런타임 참조형 자산을 정의한다
-`VehicleReferenceConfig`는 현재 앞/뒤 Wheel Class 참조를 가진다.
+각 책임은 다음과 같다.
 
-현재 포함 항목:
-- `FrontWheelClass`
-- `RearWheelClass`
+### VehicleVisualConfig
 
-현재 의미:
-- 앞바퀴에 어떤 Wheel Blueprint/Class를 쓸지
-- 뒷바퀴에 어떤 Wheel Blueprint/Class를 쓸지
+차체·4개 휠 StaticMesh 참조를 제공한다.
 
-이 값은 `ApplyVehicleWheelPhysicsConfig()`에서 `WheelSetups`에 반영된다.
-
-즉 현재 `VehicleData`는 **수치만 담는 데이터가 아니라, 실제 런타임에 사용할 Wheel Class 참조 자산도 함께 가진다.**
-
-### 5. Drive 상태 판정 기준값을 정의한다
-`DriveStateConfig`는 현재 차량별 Drive 상태 판정 규칙을 가진다.
-
-현재 포함 항목:
-- `ActiveInputThreshold`
-- `AirborneMinSpeedThresholdKmh`
-- `AirborneStateMinimumHoldTimeSeconds`
-- `AirborneVerticalSpeedThresholdCmPerSec`
-- `DriveStateMinimumHoldTimeSeconds`
-- `IdleEnterSpeedThresholdKmh`
-- `IdleExitSpeedThresholdKmh`
-- `IdleStateMinimumHoldTimeSeconds`
-- `ReverseEnterSpeedThresholdKmh`
-- `ReverseExitSpeedThresholdKmh`
-- `ReversingStateMinimumHoldTimeSeconds`
-- `bEnableDriveStateHysteresis`
-- `bTreatOppositeThrottleAsBrake`
-- `bUseDriveStateOverrides`
-- `bUsePerStateHoldTimes`
-
-현재 의미:
-- 언제 Idle로 볼지
-- 언제 Reversing으로 볼지
-- 언제 Airborne으로 볼지
-- 상태 전이에 히스테리시스를 사용할지
-- 반대 방향 throttle을 brake처럼 처리할지
-
-를 차량별로 조정할 수 있다.
-
-즉 현재 `VehicleData`는 **Drive 상태 머신의 민감도와 판정 규칙까지 정의하는 주행 상태 정책 데이터 루트**이기도 하다.
-
-## 현재 기준 기능의 성격 정리
-현재 구현을 종합하면 `VehicleData`는 아래 역할을 가진다.
-
-1. **차량 자산 루트 데이터**
-   - 차체/휠 시각 자산을 한 곳에서 관리함
-
-2. **주행 특성 정의 데이터**
-   - 엔진, 디퍼렌셜, 조향, 중심질량, 휠 물리 특성을 한 곳에서 관리함
-
-3. **휠 시각/휠 클래스 정의 데이터**
-   - WheelSync 기준값과 Front/Rear Wheel Class를 함께 관리함
-
-4. **Drive 상태 정책 데이터**
-   - 상태 판정 임계값과 히스테리시스 정책을 차량 단위로 관리함
-
-5. **VehicleRuntime 입력 데이터**
-   - 저장용 데이터가 아니라, 실제 런타임 초기화 함수들이 직접 소비하는 데이터 세트임
-
-따라서 현재 이 기능은 단순한 데이터 에셋이라기보다,
-**차량 하나의 런타임 구성 전체를 묶어서 공급하는 루트 차량 구성 데이터 기능**이라고 보는 것이 맞다.
-
-## 현재 동작 방식
-현재 `VehicleData`는 아래 방식으로 동작한다.
-
-### 1. Pawn이 VehicleData를 참조한다
-현재 `BP_CFVehiclePawn`의 `VehicleData` 기본값은 아래 자산으로 확인된다.
-
-- `/Game/CarFight/Vehicles/Data/Cars/DA_PoliceCar.DA_PoliceCar`
-
-즉 현재 기본 차량 Pawn은 **`DA_PoliceCar`를 자신의 기본 차량 데이터 세트로 사용**한다.
-
-### 2. VehicleRuntime이 VehicleData를 풀어 적용한다
-현재 `ACFVehiclePawn::ApplyVehicleDataConfig()`는 `VehicleData`를 직접 읽어서,
-런타임 대상에 아래 순서로 분해 적용한다.
-
-1. VehicleMovementComponent 설정 적용
-2. Front/Rear WheelClass 참조 반영
-3. WheelSetups 물리/오프셋 반영
-4. WheelSyncComp와 Wheel_Mesh_* 시각 구성 반영
-5. VehicleDriveComp에 DriveStateConfig 반영
-
-즉 현재 `VehicleData`는 데이터 테이블처럼 조회만 되는 것이 아니라,
-**런타임 함수에 의해 실제 차량 구성으로 해체되어 적용되는 실행 입력 데이터**다.
-
-### 3. PostLoad에서 레거시 값 보정을 수행한다
-`UCFVehicleData`는 현재 `PostLoad()`를 오버라이드한다.
-
-헤더 설명 기준 현재 의미:
-- 레거시 VehicleMovement 실험값 세트를 현재 프로젝트 기준값으로 보정한다.
-
-즉 현재 `VehicleData`는 단순 정적 저장 구조가 아니라,
-**로딩 시점에 구버전 값 보정 책임까지 일부 갖는 데이터 자산**이다.
-
-## 현재 자산 / 클래스 역할
-### `UCFVehicleData`
-- 종류: `PrimaryDataAsset`
-- 현재 역할: 차량 루트 데이터 자산 클래스
-- 현재 기능: 시각/주행/휠/참조/DriveState 설정을 한 곳에 묶는다.
-
-### `DA_PoliceCar`
-- 종류: `CFVehicleData` 인스턴스
-- 현재 역할: 현재 기본 차량용 실제 데이터 세트
-- 현재 특징:
-  - 차체 메쉬: `Combined_Body`
-  - 휠 메쉬: `Wheel_FL/FR/RL/RR`
-  - 앞 WheelClass: `BP_Wheel_Front_C`
-  - 뒤 WheelClass: `BP_Wheel_Rear_C`
-  - `bUseMovementOverrides = true`
-  - `bUseWheelVisualOverrides = true`
-  - `bUseDriveStateOverrides = true`
-
-### `BP_CFVehiclePawn`
-- 종류: `Blueprint`
-- 현재 역할: VehicleData 소비 주체
-- 현재 특징: 기본 `VehicleData`로 `DA_PoliceCar`를 직접 참조한다.
-
-### `ACFVehiclePawn`
-- 종류: `C++ Pawn`
-- 현재 역할: VehicleData를 실제 런타임에 적용하는 중심 실행 주체
-
-## 현재 대표 데이터 세트: `DA_PoliceCar`
-현재 프로젝트에서 확인된 대표 VehicleData는 `DA_PoliceCar`다.
-
-현재 확인된 주요 값은 아래와 같다.
-
-### 시각 자산
-- `ChassisMesh` → `Combined_Body`
-- `WheelMeshFL` → `Wheel_FL`
-- `WheelMeshFR` → `Wheel_FR`
-- `WheelMeshRL` → `Wheel_RL`
-- `WheelMeshRR` → `Wheel_RR`
-
-즉 현재 기본 차량 시각 데이터는 **경찰차용 결합 차체 메쉬와 4개 개별 휠 메쉬**를 사용한다.
-
-### Movement 기본값
-현재 확인된 대표값:
-- `bUseMovementOverrides = true`
-- `DifferentialType = RearWheelDrive`
-- `EngineMaxTorque = 750`
-- `EngineMaxRPM = 7000`
-- `EngineIdleRPM = 900`
-- `FrontWheelMaxSteerAngle = 35`
-- `FrontWheelRadius = 40`
-- `RearWheelRadius = 40`
-- `SteeringType = AngleRatio`
-- `SteeringAngleRatio = 0.7`
-- `bLegacyWheelFrictionPosition = true`
-
-즉 현재 기본 차량은 **후륜구동 기반, 750 토크 / 7000 RPM / 전륜 35도 조향** 성격의 기본 세트를 사용한다.
-
-### WheelVisual 기준값
-- `bUseWheelVisualOverrides = true`
-- `ExpectedWheelCount = 4`
-- `FrontWheelCountForSteering = 2`
-
-즉 현재 기본 차량은 **4륜 차량, 전륜 2개 조향** 기준으로 WheelSync를 구성한다.
-
-### Reference 자산
-- `FrontWheelClass` → `BP_Wheel_Front_C`
-- `RearWheelClass` → `BP_Wheel_Rear_C`
-
-즉 현재 기본 차량은 **앞/뒤 Wheel Class를 분리**해서 사용한다.
-
-### DriveState 기준값
-현재 확인된 대표값:
-- `ActiveInputThreshold = 0.05`
-- `IdleEnterSpeedThresholdKmh = 0.75`
-- `IdleExitSpeedThresholdKmh = 1.5`
-- `ReverseEnterSpeedThresholdKmh = 1.25`
-- `ReverseExitSpeedThresholdKmh = 0.75`
-- `AirborneMinSpeedThresholdKmh = 3`
-- `AirborneVerticalSpeedThresholdCmPerSec = 100`
-- `bEnableDriveStateHysteresis = true`
-- `bTreatOppositeThrottleAsBrake = true`
-- `bUseDriveStateOverrides = true`
-- `bUsePerStateHoldTimes = true`
-
-즉 현재 기본 차량 데이터는 **Drive 상태 전이에 히스테리시스와 상태별 홀드 타임을 적극 사용하는 설정**을 가진다.
-
-## 현재 생성 및 연결 구조
-현재 `VehicleData` 연결 구조는 아래와 같다.
-
-1. `BP_CFVehiclePawn`이 `VehicleData` 자산 참조를 가짐
-2. 현재 기본값은 `DA_PoliceCar`
-3. `BeginPlay` 이후 `InitializeVehicleRuntime()` 진입
-4. `ApplyVehicleDataConfig()`가 `VehicleData`를 읽음
-5. Movement / Reference / WheelPhysics / WheelVisual / DriveState 설정으로 분해 적용
-6. 이후 Drive 준비 / WheelSync 준비 검증 수행
-
-현재 구조 해석:
-- VehicleData는 전역 데이터베이스가 아니라 Pawn 종속 참조 자산이다.
-- 현재 기본 차량은 `DA_PoliceCar` 한 세트를 중심으로 운영된다.
-- 실제 적용은 VehicleRuntime 파이프라인에서 이뤄진다.
-
-## 현재 기능 책임
-현재 구현 기준에서 `VehicleData`의 책임은 아래와 같다.
-
-- 차량 시각 자산 참조를 제공한다.
-- 차량 Movement 기본값을 제공한다.
-- WheelClass 및 WheelSetup 관련 참조/보정값을 제공한다.
-- WheelSync 시각 구성 기준값을 제공한다.
-- Drive 상태 판정 기준값을 제공한다.
-- VehicleRuntime이 실제 차량 구성을 적용할 수 있도록 루트 데이터 세트를 제공한다.
-- 일부 레거시 값 보정을 위해 PostLoad 보정 지점을 가진다.
-
-## 현재 기준 비책임 항목
-현재 구현상 `VehicleData`의 직접 책임으로 보지 않는 항목은 아래와 같다.
-
-- 실제 주행 상태 계산 자체
-  - 계산은 `VehicleDriveComp` 책임
-- 실제 휠 시각 동기화 계산 자체
-  - 계산은 `WheelSyncComp` 책임
-- 데이터 적용 실행 자체
-  - 적용 실행은 `ACFVehiclePawn` / VehicleRuntime 책임
-- 입력 처리 자체
-  - `Input` 기능 책임
-- 디버그 UI 표시 자체
-  - `VehicleDebug` 기능 책임
-
-즉 현재 `VehicleData`는 계산기나 실행기라기보다,
-**차량 런타임 구성을 공급하는 데이터 루트**다.
-
-## 현재 문서 기준의 핵심 결론
-현재 `VehicleData` 기능은,
-
-**차량 하나의 외형, 주행 성격, 휠 물리, 휠 시각 구성, Wheel Class 참조, Drive 상태 판정 기준을 하나의 루트 DataAsset으로 묶고, VehicleRuntime이 이를 실제 차량 구성에 반영할 수 있게 공급하는 현재 차량 구성 데이터 기능**이다.
-
-이 문서에서 가장 중요하게 봐야 할 현재 역할은 다음 한 줄로 요약할 수 있다.
-
-> `VehicleData`는 현재 차량이 어떤 외형과 어떤 주행 특성, 어떤 Wheel/Drive 정책으로 동작할지를 한 자산으로 정의해서 VehicleRuntime에 공급하는 현재 상태 기능이다.
-
-## 현재 문서에서 미확인인 항목
-아래는 아직 이 문서에서 확정하지 않은 내용이다.
-
-- `PostLoad()`의 실제 레거시 보정 로직 상세 구현
-- `PDA_VehicleArchetype`가 현재 `UCFVehicleData`와 어떤 관계를 갖는지
-- `S_WheelConfig` 자산이 현재 런타임 경로에서 직접 쓰이는지 여부
-- `DA_PoliceCar` 외 추가 차량 데이터 세트가 실제 게임플레이 경로에 연결돼 있는지 여부
-
-## 문서 갱신 조건
-아래 변경이 생기면 이 문서를 함께 갱신한다.
-
-- `CFVehicleData.h` 구조 변경
-- `VehicleData` 하위 config 항목 변경
-- `BP_CFVehiclePawn`의 기본 `VehicleData` 참조 변경
-- `ApplyVehicleDataConfig()` 소비 방식 변경
-- `DA_PoliceCar` 주요 값 변경
-- `PostLoad()` 보정 정책 변경
-- `WheelVisualConfig` 자동 스케일 정책 변경
-
-## 문서 버전 관리
-- 현재 문서 버전: `1.1.0`
-- 문서 상태: `WheelMesh Auto Scale Added / Needs Asset Refresh`
-- 관리 원칙:
-  - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
-  - 기능 설명 본문이 바뀌면 체인지로그도 같이 갱신한다.
-  - 구현 변경 없이 표현만 다듬은 경우와, 기능 이해에 영향을 주는 내용 변경을 구분해서 기록한다.
-
-### 버전 증가 기준
-- `Major`
-  - 기능 해석 자체가 바뀌는 수준의 대규모 재작성
-  - 문서 범위가 다른 기능 묶음까지 확장되거나 재정의될 때
-- `Minor`
-  - 현재 기능 설명에 중요한 항목이 추가될 때
-  - 새로운 표시 항목, 동작 조건, 연결 구조가 확인되어 본문 의미가 확장될 때
-- `Patch`
-  - 오탈자 수정
-  - 표현 명확화
-  - 근거 보강
-  - 본문 의미는 유지한 채 설명 정밀도만 올라갈 때
-
-## 체인지로그
+### VehicleLayoutConfig
+
+차량 크기와 중심, 휠베이스·트랙 같은 레이아웃 기준을 제공한다.
+
+### HardpointSlots / MountProfiles
+
+피팅과 전투 장비가 사용하는 차량 위치 슬롯과 안정 장착 규칙을 제공한다.
+
+```text
+HardpointSlot.LocationSlotId
+MountProfile.MountProfileId
+MountProfile.LocationSlotRef
+```
+
+`LocationSlotRef`는 실제 `HardpointSlots.LocationSlotId`를 참조해야 한다.
+
+### BaseVehicleMassKg / MaximumGrossMassKg
+
+CF-FQ-034 Fitting이 사용하는 차량 기준 질량과 최대 허용 총중량이다.
+
+```text
+0 / 0
+= 레거시 미설정 허용
+
+한쪽만 설정
+= 불완전 설정
+
+둘 다 > 0
+= MaximumGrossMassKg >= BaseVehicleMassKg 필요
+```
+
+### VehicleMovementConfig
+
+엔진, 차체 공력, 디퍼렌셜, 조향, Wheel Runtime 상세값과 ThrottleInputScale을 제공한다.
+
+RPM 관련 Current 계약은 다음처럼 분리한다.
+
+```text
+EngineIdleRPM
+= Chaos EngineSetup.EngineIdleRPM에 적용되는 실제 아이들 RPM
+
+EngineMaxRPM
+= Chaos EngineSetup.MaxRPM에 적용되는 실제 물리 엔진 최대 RPM
+= HUD Redline 시작값이 아님
+
+RedlineStartRPM
+= HUD Tachometer의 차량별 실제 레드라인 시작 RPM
+= 현재 Chaos 물리 설정에는 적용하지 않는 authored/presentation 계약
+= 0이면 명시적 미설정
+= EngineMaxRPM, EngineIdleRPM, 변속 설정에서 자동 추정 금지
+= 명시값은 EngineIdleRPM < RedlineStartRPM < EngineMaxRPM
+```
+
+`ChangeUpRPM`이라는 별도 CarFight VehicleData 필드는 현재 Source에 존재하지 않으며 Redline source로 가정하지 않는다.
+
+### WheelVisualConfig
+
+WheelSync와 WheelMesh 자동 스케일·바운드 중심 보정 기준을 제공한다.
+
+### VehicleReferenceConfig
+
+Front/Rear Wheel Class를 제공한다.
+
+### VehicleDurabilityConfig / DefaultDefenseData
+
+차량 내구도 기본값과 방어 데이터 참조를 제공한다.
+
+### DefaultDestroyedFxData / DestroyedFxSocketName
+
+최초 파괴 Niagara 연출의 차량별 기본값과 우선 소켓을 제공한다.
+
+### DriveStateConfig
+
+Idle / Reversing / Airborne 판정 임계값, 히스테리시스와 상태 Hold 정책을 제공한다.
+
+---
+
+## 4. 실제 런타임 적용 순서
+
+`ACFVehiclePawn::ApplyVehicleDataConfig()`는 현재 다음 순서로 VehicleData를 해석한다.
+
+```text
+ApplyVehicleMovementConfig()
+ApplyVehicleReferenceConfig()
+ApplyVehicleWheelPhysicsConfig()
+ApplyVehicleWheelVisualConfig()
+ApplyVehicleTurretVisualConfig()
+VehicleDriveComp->ApplyDriveStateConfig(...)
+```
+
+즉 VehicleData는 저장용 메타데이터가 아니라 실제 VehicleRuntime 구성 입력이다.
+
+단 `VehicleMovementConfig.RedlineStartRPM`은 현재 예외적으로 **물리 Runtime을 직접 바꾸지 않는 명시적 차량 데이터 계약**이다. `EngineMaxRPM`은 기존처럼 Chaos `EngineSetup.MaxRPM`에 적용되지만 `RedlineStartRPM`은 HUD Provider/Presenter가 읽는 authored source이며, Production SpeedGauge visual binding 전까지 차량 주행 결과에는 영향을 주지 않는다.
+
+---
+
+## 5. bUseMovementOverrides의 정확한 현재 의미
+
+`VehicleMovementConfig.bUseMovementOverrides`는 **VehicleMovementConfig 전체를 끄는 스위치가 아니다.**
+
+현재 실제 계약:
+
+```text
+bUseMovementOverrides와 무관하게 VehicleData가 있으면 적용
+- EngineSetup
+- DragCoefficient
+- DownforceCoefficient
+- CenterOfMassOverride
+- DifferentialSetup
+- SteeringSetup
+- Wheel Class / AdditionalOffset 경로
+
+bUseMovementOverrides=true일 때 차량별 상세값 사용
+- Wheel Class CDO Runtime 상세 튜닝
+- ThrottleInputScale
+
+bUseMovementOverrides=false
+- 세부 Wheel Runtime Tuning 미적용
+- ThrottleInputScale = 1.0 fallback
+- Engine/Drag/Differential/Steering 본체 적용은 유지
+```
+
+2026-08-15 `VD-P0-03 RuntimeApplyContract`가 실제 `ACFVehiclePawn::ApplyVehicleDataConfig()`를 호출해 이 계약을 자동 검증했다.
+
+따라서 UI/Validator/후속 문서에서 이 플래그를 “Movement 전체 적용 사용”으로 설명하면 안 된다.
+
+---
+
+## 6. WheelVisual 자동 스케일 계약
+
+`WheelVisualConfig.bUseWheelVisualOverrides=true`이고 `bAutoScaleWheelMeshToRadius=true`이면 WheelMesh의 로컬 바운드를 기준으로 `FrontWheelRadius / RearWheelRadius`에 맞는 표시 스케일을 계산한다.
+
+현재 Validator 안전 계약:
+
+```text
+WheelMeshScaleClampMin > 0
+WheelMeshScaleClampMax > 0
+WheelMeshScaleClampMin <= WheelMeshScaleClampMax
+FrontWheelRadius > 0
+RearWheelRadius > 0
+```
+
+런타임 내부 clamp fallback이 잘못된 데이터를 조용히 숨기는 용도로 사용되지 않도록 입력 단계에서 검증한다.
+
+---
+
+## 7. VehicleData Validator
+
+현재 공식 검증기는 기존 `UCFVDAValidator` 하나를 사용한다.
+병렬 Validator를 만들지 않는다.
+
+현재 주요 검증 범위:
+
+```text
+필수 자산 참조
+Wheel Socket
+Layout / WheelAnchor
+HardpointSlots
+Fitting Mass
+MountProfiles
+Movement
+WheelVisual
+DriveState
+기준 VehicleData 비교
+```
+
+### Fitting Mass
+
+```text
+Base=0 && MaximumGross=0
+→ Info / 레거시 미설정 허용
+
+한쪽만 0
+→ Error
+
+음수 / 비유한 값
+→ Error
+
+MaximumGross < Base
+→ Error
+```
+
+### MountProfiles
+
+```text
+MountProfiles 비어 있음
+→ Info / 장비 없는 차량 허용
+
+MountProfileId 없음
+→ Error
+
+MountProfileId 중복
+→ Error
+
+LocationSlotRef 없음
+→ Error
+
+LocationSlotRef가 HardpointSlots에 없음
+→ Error
+```
+
+### Movement
+
+`bUseMovementOverrides=false`는 Error가 아니라 현재 fallback 의미를 설명하는 Info다.
+ThrottleInputScale은 `bUseMovementOverrides=true`일 때만 0 이하를 Error로 본다.
+
+`RedlineStartRPM` Validator 계약:
+
+```text
+RedlineStartRPM = 0
+→ 유효한 미설정 / 기존 VehicleData 호환
+
+RedlineStartRPM < 0
+→ Error
+
+RedlineStartRPM > 0
+→ EngineIdleRPM보다 커야 함
+→ EngineMaxRPM보다 작아야 함
+
+자동 보정 / EngineMaxRPM fallback
+→ 금지
+```
+
+현재 Data Authoring compatibility surface는 `RedlineStartRPM` additive leaf를 포함한 **118 Registry leaf**다. P0-08 당시 original 117 Registry 검증 증거는 Historical scope로 유지한다.
+
+---
+
+## 8. Representative Compare
+
+`UCFVDAValidator::CompareVehicleData()`는 차량의 좋고 나쁨을 자동 판정하지 않는다.
+기준 차량과 대상 차량의 데이터 차이를 추적 가능한 FieldPath로 보고한다.
+
+현재 비교 범위의 주요 항목:
+
+```text
+MovementProfileName
+bUseMovementOverrides
+EngineMaxTorque / EngineMaxRPM
+ThrottleInputScale
+FrontWheelMaxSteerAngle
+Front/Rear WheelRadius
+Front/Rear WheelWidth
+Friction
+SpringRate
+CenterOfMass override
+WheelVisual auto-scale
+WheelVisual clamp min/max
+BaseVehicleMassKg
+MaximumGrossMassKg
+DriveState override / 주요 threshold
+```
+
+실제 수치 변경은 별도 USER 튜닝 결정이다.
+
+---
+
+## 9. 현재 대표 read-only baseline
+
+2026-08-15 AssetDump로 다시 확인한 현재 비교 기준은 다음 두 자산이다.
+
+```text
+/Game/CarFight/Vehicles/Data/Definitions/DA_TestSedan.DA_TestSedan
+/Game/CarFight/Vehicles/Data/Definitions/DA_TestSUV.DA_TestSUV
+```
+
+### DA_TestSedan
+
+확인된 대표 값:
+
+```text
+bUseMovementOverrides = true
+ThrottleInputScale = 0.600
+FrontWheelMaxSteerAngle = 37.0 deg
+Front/Rear WheelRadius = 35 cm
+DriveState override = true
+Layout override = true
+WheelVisual override = true
+Wheel auto-scale = true
+Wheel scale clamp = 0.25 .. 4.0
+BaseVehicleMassKg = 0
+MaximumGrossMassKg = 0
+Hardpoints = Front_01, Top_01
+MountProfile = RoofTurret_MediumOrLarge → Top_01
+```
+
+### DA_TestSUV
+
+확인된 대표 값:
+
+```text
+bUseMovementOverrides = true
+ThrottleInputScale = 0.504
+FrontWheelMaxSteerAngle = 33.48 deg
+Front/Rear WheelRadius = 40 cm
+DriveState override = true
+Layout override = true
+WheelVisual override = true
+Wheel auto-scale = false
+Wheel scale clamp = 0.25 .. 4.0
+BaseVehicleMassKg = 0
+MaximumGrossMassKg = 0
+Hardpoints = Front_01, Top_01, Top_02
+MountProfile = RoofTurret_MediumOrLarge → Top_01
+```
+
+AssetDump 결과가 노출하지 않은 WheelWidth 등은 추정하지 않는다.
+
+`DA_PoliceCar`는 현재 대표 VehicleData 기준이 아니다. 과거 문서의 DA_PoliceCar 값은 Historical 참고로만 본다.
+
+---
+
+## 10. 자동 검증 상태
+
+CF-FQ-015 원격 기술 체크포인트:
+
+```text
+Official UE 5.8 Editor Build
+0cffed2f02674b6692d4f8af811d9036
+PASS / Exit 0
+
+CarFight.VehicleData
+59091b9559db46859c3a521be72396bf
+3/3 PASS
+
+- CarFight.VehicleData.VD_P0_01.ValidatorContract
+- CarFight.VehicleData.VD_P0_02.RepresentativeCompare
+- CarFight.VehicleData.VD_P0_03.RuntimeApplyContract
+```
+
+`VD-P0-03`은 Transient `ACFVehiclePawn`과 `UCFVehicleData`를 사용해 실제 `ApplyVehicleDataConfig()` 경로를 실행했다.
+
+검증 내용:
+
+```text
+bUseMovementOverrides=false에서도
+- Engine MaxTorque / MaxRPM 적용
+- Drag / Downforce 적용
+- Differential type / split 적용
+- Steering type / ratio 적용
+
+DriveState override=true
+- DriveState 설정 전달
+
+DriveState override=false
+- 기존 DriveComp 값 유지
+```
+
+테스트는 Content Asset을 수정·저장하지 않았다.
+
+Wheel Class CDO의 전역 상세 Runtime setter는 테스트 격리 위험 때문에 이 회귀에서 의도적으로 변경하지 않았다.
+
+---
+
+## 11. 현재 미완료 범위
+
+CF-FQ-015의 원격 기술 계약은 완료됐지만 **실제 차량 주행감 튜닝은 완료되지 않았다.**
+
+남은 `VD-P0-04 USER Tuning`:
+
+```text
+DA_TestSedan 실제 출발·가속
+제동
+저속 조향
+중속 조향
+고속 안정성
+작은 턱 / 서스펜션 체감
+DA_TestSUV 동일 항목 비교
+필요한 축만 한 번에 하나씩 수정
+```
+
+사용자가 PIE를 직접 확인하기 전에는 Engine/Wheel/DriveState 값을 자동 조정하지 않는다.
+
+---
+
+## 12. 책임과 비책임
+
+VehicleData 책임:
+
+```text
+차량 구성 데이터 소유
+안정 ID와 참조 제공
+런타임 적용 입력 제공
+Validator 입력 계약 제공
+```
+
+VehicleData 비책임:
+
+```text
+실제 차량 입력 처리
+DriveState 계산 자체
+WheelSync 계산 자체
+전투 피해 계산
+UI 표시
+USER 주행감 자동 판정
+```
+
+---
+
+## 13. 갱신 조건
+
+다음이 변경되면 이 문서를 갱신한다.
+
+```text
+CFVehicleData 구조
+ApplyVehicleDataConfig 소비 경로
+bUseMovementOverrides 의미
+WheelVisual auto-scale 정책
+Fitting mass 계약
+Hardpoint / MountProfile 계약
+CFVDAValidator 검증 범위
+대표 VehicleData baseline
+USER 튜닝 결과
+```
+
+---
+
+## 14. Changelog
+
+### v2.1.0 - 2026-08-18
+
+- `FCFVehicleMovementConfig`에 `RedlineStartRPM` explicit authored field가 additive 추가된 Current 구현을 반영했다. `EngineMaxRPM`은 Chaos `EngineSetup.MaxRPM` 물리 상한, `RedlineStartRPM`은 HUD Tachometer 레드라인 시작 source로 책임을 분리했다.
+- `RedlineStartRPM=0`을 backward-compatible 미설정으로 정의했다. 값이 명시되면 `EngineIdleRPM < RedlineStartRPM < EngineMaxRPM`을 `UCFVDAValidator v1.5.0`이 강제하고 자동 보정·fallback은 하지 않는다.
+- Current HUD Provider는 Current Engine RPM을 Chaos Runtime에서, Redline/Maximum을 VehicleData에서 읽는다. Presenter mapping은 Redline→0.85, EngineMaxRPM→1.0이며 Production SpeedGauge Asset binding은 아직 Pending이다.
+- additive VehicleData leaf에 맞춰 Current Data Authoring Registry compatibility surface는 118로 확장됐다. P0-08의 original 117 Registry PASS는 Historical evidence로 보존한다.
+- Official Build `745dba430bcc47c2925c841a0c5a6686` PASS와 신규 RPM source/presentation Automation 각 1/1 PASS를 확보했다. 대표 VehicleData Asset의 실제 Redline 값은 이번 slice에서 작성하지 않았다.
+
+### v2.0.0 - 2026-08-15
+
+- 2026-04~07의 DA_PoliceCar 중심 구형 설명을 현재 `DA_TestSedan / DA_TestSUV` baseline으로 전면 교정했다.
+- Layout, Hardpoint, MountProfile, Fitting Mass, Defense/Fx/Durability까지 확장된 현재 UCFVehicleData 범위를 반영했다.
+- `bUseMovementOverrides`의 실제 런타임 의미를 Engine/Drag/Steering 본체와 Wheel Runtime/Throttle fallback으로 구분했다.
+- `UCFVDAValidator v1.3.0+`의 Fitting Mass, MountProfile, Movement flag, Wheel auto-scale 계약과 Representative Compare 범위를 기록했다.
+- CF-FQ-015 VD-P0-00~03 Technical PASS와 Build·Automation 증거를 반영했다.
+- 실제 VehicleData 튜닝값은 변경하지 않았으며 VD-P0-04 USER Tuning은 Pending으로 명시했다.
+
 ### v1.1.0 - 2026-07-08
-- `WheelVisualConfig`에 WheelRadius 기준 휠 메시 자동 스케일 옵션이 추가된 현재 구현을 반영했다.
-- 자동 스케일은 기본 비활성화이며, DA에서 명시적으로 켠 차량에만 적용한다고 명시했다.
-- 반지름 측정 모드, 메시 바운드 중심 보정, 스케일 Clamp 기준을 문서화했다.
 
-### v1.0.1 - 2026-06-25
-- 문서 상단에 최신 상태 주의 문구를 추가했다.
-- `DA_PoliceCar` 설명이 최신 P0 터렛 / 하드포인트 기준이 아니라 레거시 감사 기준임을 명시했다.
-- 최신 판단 기준 문서로 `CF_CodeStartGate.md`, `CF_AssetDumpResult.md`, `CF_TurretPlan_v0_1.md`를 연결했다.
-- 본문 전체 재작성은 하지 않고, 코드 / 에셋 작업 전 AssetDump 또는 MCP 재확인이 필요하다고 표시했다.
+- WheelVisualConfig WheelRadius 기반 WheelMesh 자동 스케일 옵션을 기록했다.
 
 ### v1.0.0 - 2026-04-22
-- `VehicleData` 문서 최초 작성
-- `UCFVehicleData` 구조와 `DA_PoliceCar` 실값 기준으로 현재 기능 정리
-- 단순 데이터 필드 목록이 아니라, VehicleRuntime이 실제로 어떻게 소비하는지 중심으로 본문 작성
-- 현재 기본 차량 데이터 세트가 `DA_PoliceCar`임을 문서화
 
-## 마지막 확인 기준
-- 확인 일시: 2026-07-08
-- 주의: 코드 구조는 2026-07-08 기준으로 확인했지만, 대표 차량 자산 실값은 별도 AssetDump 또는 MCP로 다시 확인해야 한다.
-- 확인 근거:
-  - `UE/Source/CarFight_Re/Public/CFVehicleData.h`
-  - `UE/Source/CarFight_Re/Public/CFVehiclePawn.h`
-  - `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp`
-  - `/Game/CarFight/Vehicles/Data/Cars/DA_PoliceCar`
-  - `/Game/CarFight/Vehicles/BP_CFVehiclePawn`
+- VehicleData 문서 최초 작성.
+
+---
+
+## 15. Migration
+
+- 기존 VehicleData는 `RedlineStartRPM=0` 기본값으로 기존 주행 물리를 그대로 유지한다. HUD에서 임의 Redline을 만들지 않는다.
+- 실제 Redline을 authoring할 때는 대표 차량의 Idle/Max와 설계 의도를 확인한 명시값만 사용하며 `EngineMaxRPM * 0.85` 같은 자동 산식을 사용하지 않는다.
+- P0-08 당시 117-field 문서/테스트 결과는 당시 schema의 Historical evidence다. Current Source 판단은 additive `RedlineStartRPM`을 포함한 118-field Registry를 우선한다.
+- `DA_PoliceCar`를 현재 대표 기준으로 사용하는 과거 설명은 Historical로 본다.
+- 현재 P0 대표 비교 경로는 `DA_TestSedan / DA_TestSUV`다.
+- `bUseMovementOverrides=false`를 VehicleMovement 전체 비활성으로 해석하지 않는다.
+- CF-FQ-015 Technical PASS를 USER 주행감 PASS로 승격하지 않는다.

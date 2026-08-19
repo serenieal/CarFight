@@ -80,7 +80,7 @@ Windows PowerShell에서 한글/비ASCII가 포함된 파일을 읽을 때는 �
 
 - 상세 실행 규칙, 사전 확인, 직접 수정, 검증과 상태 기록 기준은 `Document/CodeWorkGate.md`를 따른다.
 - 현재 AI 세션은 승인된 저장소 도구로 코드·설정·스크립트를 직접 수정하며, 별도 Codex 위임은 사용자가 명시적으로 요청한 경우에만 선택적으로 사용한다.
-- 문서 전용 수정, 읽기 전용 분석·리뷰와 사용자가 UE 에디터에서 직접 수행하는 Blueprint·바이너리 에셋 작업은 코드 수정 게이트의 빌드 요구를 작업 성격에 맞게 적용한다.
+- 문서 전용 수정과 읽기 전용 분석·리뷰는 코드 수정 게이트의 빌드 요구를 작업 성격에 맞게 적용한다. Blueprint·DataAsset·Niagara·StaticMesh 등 UE asset 작업은 `Document/CodeWorkGate.md`의 evidence routing에 따라 AssetDump/GoPyMCP UE MCP 기술 검증을 먼저 검토하고, 사람 판단이나 현재 capability 경계를 벗어나는 부분만 사용자 작업으로 남긴다.
 
 
 # CarFight 작업 시작 및 종료 규칙
@@ -104,16 +104,46 @@ Windows PowerShell에서 한글/비ASCII가 포함된 파일을 읽을 때는 �
 - CarFight가 독립 도구의 공개 계약에 의존할 때는 계약명, 요구 버전과 CarFight 사용 위치만 기록한다.
 - 독립 저장소 작업을 시작하면 해당 저장소의 Git 상태와 가장 가까운 `AGENTS.md`를 먼저 확인한다.
 
+# CarFight UE 증거·작업 라우팅 규칙
+
+- 저장된 Asset/DataAsset/Blueprint/reference/package 사실은 **AssetDump persisted/snapshot evidence**를 우선한다.
+- 현재 Editor/world/unsaved/PIE-runtime 사실과 Accepted scope의 bounded 기술 검증은 **GoPyMCP UE MCP live evidence**를 우선한다.
+- PIE-runtime의 World/LocalPlayer/Pawn/Component/property/snapshot/log 등 **Accepted `GoPyMCP.RuntimeRead`로 관측 가능한 기술 사실은 USER에게 대신 읽어달라고 요청하기 전에 AI가 직접 검증**한다.
+- RuntimeRead로 판정 가능한 상태 전이, 바인딩, 데이터 전달과 runtime invariant는 AI Technical Validation으로 닫을 수 있다. 반대로 시각 품질, UX, 조작감, 주행감, 조준감과 연출 감각은 사용자 PIE/manual validation으로 남긴다.
+- 단순 관측을 위해 Product code에 임시 Debug HUD, Print, UE_LOG, 전용 getter 또는 Consumer별 MCP operation을 먼저 추가하지 않는다. Accepted RuntimeRead로 충분하지 않은 실제 관측 공백이 확인될 때만 별도 capability 필요성을 검토한다.
+- RuntimeRead는 read-only 관측 수단으로 취급하며 Editor/PIE lifecycle, write/destructive approval과 분리한다. 관측 편의를 이유로 임의 getter/function 실행, blind retry 또는 기존 PIE ownership adoption을 요구하지 않는다.
+- 같은 질문에 AssetDump와 UE MCP를 습관적으로 중복 호출하지 않는다. Fresh AssetDump generation과 live UE MCP가 둘 다 필요하면 isolation이 별도 증명되기 전 기본 직렬화한다.
+- 기존 Accepted UE MCP capability의 정상 프로젝트 사용은 완료된 TC-00~09 또는 RuntimeRead RR-00~10을 다시 여는 사유가 아니다. 새 tool identity, write/destructive 종류, getter/function 실행, guard/retry/public-facade/lifetime 의미가 필요할 때만 GoPyMCP의 새 workflow-driven validation을 연다.
+
+- 상세 선택·검증·approval 경계는 `Document/CodeWorkGate.md`와 GoPyMCP Current policy를 따른다.
+
 # CarFight 빌드/실행 강제 규칙
 
 - 현재 공식 엔진은 **Unreal Engine 5.8 Source Build**이며 기준 루트는 `D:\UnrealEngine_Source`이다.
 - 에디터 빌드는 반드시 `D:\Work\CarFight_git\Tools\BuildEditor.bat`를 실행한다.
-- 에디터 실행은 반드시 `D:\Work\CarFight_git\Tools\RunEditor.bat`를 실행한다.
+- 에디터 실행은 반드시 `D:\Work\CarFight_git\Tools\RunEditor.bat`를 실행한다. Browser의 자동 lifecycle 시작은 `Tools/RunEditor.ps1`을 사용하되 이 래퍼가 canonical BAT를 호출해야 한다.
+- 공식 Editor build 또는 Consumer-loaded plugin/module DLL을 다시 link/replace하기 전에는 현재 Editor가 대상 binary를 실제 점유하는지 먼저 판정한다. 충돌이 없으면 build를 위해 Editor를 불필요하게 종료하지 않는다.
+- 대상 binary 충돌이 있으면 아래 lifecycle ownership 규칙을 적용한다. user-owned/unknown Editor는 자동 force/discard하지 않고 사용자 종료가 필요한 blocker로 보고하며, proven AI-owned + 사용자 작업 없음 + cleanup 완료 lifetime만 canonical save0 stop으로 충돌을 해소할 수 있다.
+
+
 - 빌드/실행/테스트에서 `D:\UE_5.7` 또는 `D:\UE_5.7_Source`를 사용하지 않는다. 이 경로명은 과거 금지 대상일 뿐 현재 엔진 버전을 뜻하지 않는다.
 - 오래된 문서의 UE 5.7 및 `D:\UE_5.7` 예시는 Historical/폐기 기록으로 보고 현재 판단이나 새 명령에 사용하지 않는다.
 - 직접 명령을 작성해야 하면 먼저 `Tools\CarFightEnv.bat`를 확인하고, 반드시 `D:\UnrealEngine_Source\Engine\Build\BatchFiles\Build.bat`와 `D:\UnrealEngine_Source\Engine\Binaries\Win64\UnrealEditor.exe`를 사용한다.
 
+# Unreal Editor lifecycle 자동 운영 규칙
+
+- 작업에 실제 live Editor가 필요하고 canonical lifecycle entry가 사용 가능하면 Browser가 사용자에게 수동 실행을 요구하기 전에 `Tools/RunEditor.ps1`로 CarFight Editor를 직접 시작할 수 있다. Browser fixed start의 terminal PASS는 exact CarFight project process가 local 8100 listener를 직접 소유하는 **Ready 상태**까지 확인한 경우에만 인정하며, process 출현만으로 live Ready를 주장하지 않는다. Editor 시작 자체는 Blueprint/UE write/destructive/save 승인으로 간주하지 않는다.
+- Editor가 필요하지 않은 source·문서·offline/build 작업에서는 편의를 이유로 Editor를 자동 시작하지 않는다.
+- 현재 작업 시작 전부터 실행 중이던 Editor나 start가 `already_running`으로 관측된 Editor는 사용자 소유 또는 ownership 불명으로 취급한다. prerequisite 확인과 허용된 live 작업에는 사용할 수 있지만 Browser가 자동 종료하지 않는다.
+- Browser가 현재 작업에서 직접 시작한 것이 연속 evidence로 확인되고, 그 lifetime에 사용자 작업이 없으며 AI mutation이 rollback/cleanup 완료된 경우에는 known-unreliable graceful 대기를 반복하지 않고 `Tools/StopEditor.ps1 -DiscardUnsaved` 기반의 fixed AI-owned no-save stop을 정상 종료 경로로 사용할 수 있다.
+- lifecycle 자동화는 Save/Save All을 수행하지 않는다. 사용자 작업 또는 ownership이 불명확하면 `-DiscardUnsaved`, `Stop-Process -Force`, `taskkill /F`와 동등한 폐기 종료를 사용하지 않고 중단한다.
+- Editor stop/restart, project reopen, level/asset reload는 dirty/selection/open-asset/PIE 등 volatile Editor evidence를 무효화한다. 이후 작업은 현재 lifetime에서 prerequisite를 다시 확립한다.
+- Build interference 해소를 위해 Editor를 종료한 뒤 새 binary의 live/PIE/UE MCP 검증이 필요하면 build PASS와 runtime PASS를 분리하고 fresh start → Ready 뒤 새 lifetime에서 검증한다.
+
+- 상세 lifecycle·검증 기준은 `Document/CodeWorkGate.md`를 따른다.
+
 # 이성수준 규칙
+
 
 - 작업 난이도와 위험도에 따라 이성수준을 조절한다.
 - 간단한 탐색, 파일 찾기, 짧은 설명은 낮음을 우선한다.
@@ -121,3 +151,12 @@ Windows PowerShell에서 한글/비ASCII가 포함된 파일을 읽을 때는 �
 - 디버깅, 리뷰, 구조 변경, 다중 파일 영향 분석은 높음을 우선한다.
 - 불필요하게 높은 이성수준을 남용하지 않는다.
 - 세부 기준은 더 가까운 하위 AGENTS.md를 우선한다.
+
+# Changelog
+
+- 2026-08-19: Accepted `GoPyMCP.RuntimeRead`를 CarFight PIE 기술 검증의 기본 관측 수단으로 반영했다. RuntimeRead로 관측 가능한 runtime fact는 USER 확인보다 AI 직접 검증을 우선하고, USER Gate는 시각·UX·조작감·체감 판단에 유지한다. 관측 목적의 임시 Product debug surface/Consumer별 MCP 추가를 기본 경로에서 제외하고 RuntimeRead read-only/lifecycle·mutation 분리 경계를 고정했다.
+- 2026-08-17: TC-00~09/Post-Closure Final Verification이 끝난 GoPyMCP UE MCP를 CarFight의 정식 기술 검증 수단으로 반영했다. `Persisted→AssetDump / Live·Unsaved·Runtime→UE MCP / 시각·감각→USER` 라우팅과 기존 Accepted capability 사용 시 TC replay 금지, 새 capability만 workflow-driven validation을 여는 원칙을 추가했다.
+- 2026-08-15: 공식 Editor/plugin binary build 전에 runtime-build interference를 판정하고, 실제 file-lock/loaded-binary 충돌이 있을 때만 ownership-safe lifecycle을 적용하도록 추가했다. Build 뒤 live 검증은 fresh Ready lifetime에서 별도 증거로 수행한다.
+- 2026-08-15: Browser fixed Editor start의 terminal PASS를 exact project process + editor-owned 8100 Ready까지 강화했다. Process 출현만으로 Ready를 주장하지 않으며, proven AI-owned + cleanup 완료 + 사용자 작업 부재 lifetime은 검증된 no-save discard stop을 direct 정상 종료 경로로 사용한다. User-owned/unknown force 금지는 유지한다.
+
+- 2026-08-14: Browser-managed CarFight Editor lifecycle을 공통 실행 규칙으로 추가했다. Canonical RunEditor.bat 유지, AI-owned lifetime만 no-save 종료/폐기 허용, pre-existing/user-owned Editor 자동 종료 금지와 volatile evidence invalidation을 고정했다.

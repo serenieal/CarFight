@@ -1,7 +1,9 @@
 # CarFight — 03_FeatureQueue
 
-> 문서 버전: v1.52.0
-> 작성일(Asia/Seoul): 2026-08-13
+> 문서 버전: v1.54.38
+
+
+> 작성일(Asia/Seoul): 2026-08-18
 > 문서 상태: Active
 > 역할: CarFight의 **기능 후보 / 착수 판단 / 클라이언트·서버·관리툴 필요성**을 한 곳에서 관리한다.
 
@@ -86,7 +88,7 @@ CarFight 문서 흐름은 아래 기준으로 본다.
 | `CF-FQ-012` | 1대 차량 주행감 고도화 | `DA_PoliceCar` 기준 전진/후진/조향/브레이크/핸드브레이크 감각을 전투 루프 안에서 조정 | `P1` | `Candidate` | 필요 | 불필요 | 불필요 | `Document/Systems/Vehicles/VehicleDrive.md`, `Document/Systems/Vehicles/VehicleSteering.md` 갱신 |
 | `CF-FQ-013` | 카메라/로컬 조준 고도화 | 서버 판정 없이 차량 카메라, Local Aim, Reticle 피드백을 싱글 기준으로 정리 | `P0` | `Done` | 필요 | 불필요 | 불필요 | `Document/Systems/Vehicles/VehicleCamera.md`, `Document/Systems/Vehicles/VehicleAim.md`, `Document/Systems/UI/AimReticle.md` 갱신 |
 | `CF-FQ-014` | WheelSync 시각 품질 폴리싱 | 고속 휠 스핀/조향/서스펜션 시각 품질을 기능 FAIL과 품질 후속으로 분리하고 개선 | `P1` | `Candidate` | 필요 | 불필요 | 불필요 | `Document/Systems/Vehicles/WheelSync.md` 갱신 |
-| `CF-FQ-015` | 차량 데이터 튜닝 패스 | 기준 차량 1대의 Movement/Wheel/DriveState 값을 추적 가능한 데이터 기준으로 정리 | `P1` | `Candidate` | 필요 | 불필요 | 불필요 | `Document/Systems/Vehicles/VehicleData.md` 갱신 |
+| `CF-FQ-015` | 차량 데이터 튜닝 패스 | 기준 차량 1대의 Movement/Wheel/DriveState 값을 추적 가능한 데이터 기준으로 정리 | `P1` | `Paused` | 필요 | 불필요 | 불필요 | `Document/Systems/Vehicles/VehicleData.md` 갱신 |
 | `CF-FQ-016` | 차량 무기 조준 및 발사 | 기준 차량 1대에서 로컬 조준 상태를 실제 발사 경로로 연결하고 WeaponFire 결과를 기록 | `P0` | `Done` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/WeaponFire.md`, `Document/Systems/Vehicles/VehicleAim.md`, `Document/Systems/UI/VehicleDebugPanel.md` 갱신 |
 | `CF-FQ-017` | Reticle / FireFeedback UI 구현 | WeaponFire 결과를 Reticle 색상, 상태 문구와 쿨다운 UI로 읽히게 만들기 | `P0` | `Done` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/FireFeedback.md`, `Document/Systems/UI/AimReticle.md` 갱신 |
 | `CF-FQ-018` | 피격 판정 및 피해 처리 | 시각 차체 기반 피격 콜리전 구현 결과를 유지하면서 신뢰 가능한 HitContext를 실제 피해 누적으로 연결하기 | `P0` | `Done` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/HitDamage.md` |
@@ -101,9 +103,16 @@ CarFight 문서 흐름은 아래 기준으로 본다.
 | `CF-FQ-030` | 물리 제한형 미사일 비행·유도 | 런처에서 분리된 미사일이 자체 추진·비행 전환과 제한된 선회율·횡가속도 유도로 목표 추적을 시도하되 명중을 보장하지 않게 만들기 | `P1` | `Ready` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/Missile.md`, `Document/Systems/Combat/Projectile.md` 갱신 |
 | `CF-FQ-031` | 차량 탄약·재장전 런타임 | 현재 출전 차량의 실제 사용 가능 탄약을 무기별 장전량과 탄종별 예비량으로 관리하고, 발사 소비·런처 예약·행동 잠금·재장전·HUD·피팅 중량을 하나의 Runtime 계약으로 연결하기 | `P1` | `Done` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/Ammo.md v1.0.0` Current / 관련 WeaponFire·Launcher·UI·Vehicle Systems는 후속 실제 변경 시 연계 |
 | `CF-FQ-032` | 인게임 전투 HUD 및 UI 프레임워크 | 인게임 UI를 LocalPlayer 소유 Root와 레이어로 관리하고 완전 Pause, 외부 3인칭 HUD, Radar, 차량 방어·무기 자원·타겟 지식 표시를 구현하면서 향후 전체 게임플로우 확장을 열어두기 | `P1` | `Active` | 필요 | 불필요 | 불필요 | `Document/Systems/UI/InGameHUD.md`, `Document/Systems/UI/UIFlow.md`, 관련 Combat·Targeting·Vehicle Systems 갱신 |
+
 | `CF-FQ-033` | 차량 방어·손상 런타임 | 기존 최소 HitDamage 앞에 쉴드, 6방향 독립 장갑, 관통과 차량 내구도 피해 분배를 추가하고 기존 에셋·Health 이벤트 호환을 유지하는 P0 방어 본체 구축 | `P0` | `Done` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/VehicleDefense.md`, `Document/Systems/Combat/HitDamage.md` |
-| `CF-FQ-034` | 차량 피팅·질량 런타임 | VehicleData의 하드포인트·MountProfile과 소유 장비·Ammo·VehicleDefenseData를 검증 Snapshot으로 조합하고, 출격 적용과 비전투·정지·쿨타임 완료 조건의 시간 소모 필드 장착·해제를 원자적으로 연결하기 | `P1` | `Ready` | 필요 | 불필요 | 불필요 | `Document/Systems/Vehicles/VehicleFitting.md`, `Document/Systems/Vehicles/VehicleData.md`, `Document/Systems/Vehicles/VehicleRuntime.md`, 관련 Combat·Inventory·UI Systems 갱신 |
-| `CF-FQ-035` | 인벤토리 Foundation | 실제 소유 Item Instance, VehicleCargo·Mounted 소유 상태, 접근 조회, Reservation과 Atomic Transfer를 제공해 필드 피팅과 향후 탄약·루팅·보상·저장의 공용 소유권 기반 만들기 | `P1` | `Ready` | 필요 | 불필요 | 불필요 | `Document/Systems/Inventory/InventoryFoundation.md`, 관련 Vehicle·Combat·UI Systems 갱신 |
+| `CF-FQ-034` | 차량 피팅·질량 런타임 | VehicleData의 하드포인트·MountProfile과 소유 장비·Ammo·VehicleDefenseData를 검증 Snapshot으로 조합하고, 출격 적용과 비전투·정지·쿨타임 완료 조건의 시간 소모 필드 장착·해제를 원자적으로 연결하기 | `P1` | `Paused` | 필요 | 불필요 | 불필요 | `Document/Systems/Vehicles/VehicleFitting.md`, `Document/Systems/Vehicles/VehicleData.md`, `Document/Systems/Vehicles/VehicleRuntime.md`, 관련 Combat·Inventory·UI Systems 갱신 |
+| `CF-FQ-035` | 인벤토리 Foundation | 실제 소유 Item Instance, VehicleCargo·Mounted 소유 상태, 접근 조회, Reservation과 Atomic Transfer를 제공해 필드 피팅과 향후 탄약·루팅·보상·저장의 공용 소유권 기반 만들기 | `P1` | `Paused` | 필요 | 불필요 | 불필요 | `Document/Systems/Inventory/InventoryFoundation.md`, 관련 Vehicle·Combat·UI Systems 갱신 |
+| `CF-FQ-036` | 차량 센서·Contact Intelligence Runtime | 실제 Sensor Provider를 구현해 Passive/Active 탐지, Contact 수명, Target Knowledge와 read-only Snapshot을 TargetSelect·HUD·향후 Missile/Utility가 공통 소비할 기반 만들기 | `P1` | `Done` | 필요 | 불필요 | 불필요 | `Document/Systems/Targeting/SensorContact.md v1.1.0` Current owner에 CF-FQ-037 Scanner 통합 반영 |
+
+| `CF-FQ-037` | 차량 스캐너 입력·장비 통합 | 완료된 Sensor Runtime에 실제 Scanner 장비/설정 Source와 플레이어 Active Scan 입력을 연결하고, 차량 초기화·장비 변경에서 검증된 SensorConfig를 적용하는 경로를 만든다 | `P1` | `Done` | 필요 | 불필요 | 불필요 | `Document/Systems/Targeting/SensorContact.md v1.1.0` Current |
+
+| `CF-FQ-038` | 차량 데이터 Authoring 시스템 | VehicleData의 117 leaf를 Raw 직접 입력하지 않고 Editor-only Recipe·5 Profile·Resolver·Source Trace·Diff·Validation·AI/Batch 계약으로 제작·비교·검증·Apply하는 Authoring 기반을 구축하기 | `P2` | `Paused` | 불필요 | 불필요 | 필요 | 완료 후 `Document/Systems/Vehicles/VehicleDataAuthoring.md` 신규 승격 후보 / VehicleData Current System은 실제 완료 전 유지 |
+
 | `CF-FQ-019` | 주행/전투 반복 테스트 | 주행 중 조준/발사/피격/피해와 시각 FX가 반복되는지 PIE 기준으로 검증하되, 런처·미사일 구현 범위가 확정된 뒤 통합 회귀 범위를 다시 설계 | `P1` | `Deferred` | 필요 | 불필요 | 불필요 | `Document/ProjectSSOT/05_TestChecklist.md`, `Document/Systems/Combat/CoreLoop.md` 갱신 |
 | `CF-FQ-020` | 조작감/전투 템포/피드백 개선 | 조작감, 발사 리듬, 피격 반응, UI와 시각 피드백을 핵심 루프 기준으로 조정 | `P1` | `Candidate` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/CombatFeel.md` |
 | `CF-FQ-021` | 핵심 게임 루프 검증 | 싱글 차량 전투 루프가 다음 개발 단계로 넘어갈 수 있는지 PASS/FAIL 판정 | `P1` | `Candidate` | 필요 | 불필요 | 불필요 | `Document/Systems/Combat/CoreLoop.md`, `Document/ProjectSSOT/05_TestChecklist.md` 갱신 |
@@ -114,7 +123,7 @@ CarFight 문서 흐름은 아래 기준으로 본다.
 | `CF-FQ-005` | 전투 결과 기록 | 매치 종료/승패/기본 결과 기록 기반 만들기 | `Icebox` | `Deferred` | 필요 | 필요 | 중간 | `Document/Systems/Combat/MatchResult.md` |
 | `CF-FQ-006` | 테스트 계정/상태 초기화 도구 | 반복 테스트 준비 비용 줄이기 | `Icebox` | `Deferred` | 불필요 | 필요 | 필요 | `Document/Systems/Admin/TestReset.md` |
 | `CF-FQ-007` | 차량 로드아웃 저장 | 차량/무장 장착 상태를 재접속 후 유지 | `Icebox` | `Deferred` | 필요 | 필요 | 중간 | `Document/Systems/Data/VehicleLoadout.md` |
-| `CF-FQ-008` | 무장 데이터 정의 | 차량 장착형 터렛/무기 데이터 기준 만들기 | `P2` | `Candidate` | 필요 | 불필요 | 낮음 | `Document/Systems/Data/WeaponData.md` |
+| `CF-FQ-008` | 무장 데이터 정의 | 차량 장착형 터렛/무기 데이터 기준 만들기 | `P2` | `Done` | 필요 | 불필요 | 낮음 | `Document/Systems/Combat/WeaponData.md v1.1.0` |
 | `CF-FQ-009` | 운영 로그 조회 기준 | 서버 전투/스폰/에러 로그를 추적 가능한 형태로 정리 | `Icebox` | `Deferred` | 불필요 | 필요 | 필요 | `Document/Systems/Admin/LogView.md` |
 | `CF-FQ-010` | 세션/로비 기초 | Dedicated Server 이후 접속 흐름 확장 | `Icebox` | `Deferred` | 필요 | 필요 | 중간 | `Document/Systems/Network/Session.md` |
 
@@ -122,29 +131,44 @@ CarFight 문서 흐름은 아래 기준으로 본다.
 
 ## 6. 현재 최우선 착수 후보
 
-현재 단일 Active 기능은 `CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크`다.
+`CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크`가 현재 단일 Active다. `InGameUIPlan.md v0.59.17` 기준 UI-P0-03~05 USER PASS와 UI-P0-06 Stage A+B, RPM, Heat, Applied Fitting Weapon Selection Runtime/HUD source, truthful Weapon Rail Visual Consumer, Player-facing Weapon Select Input, WeaponCharge P0 Runtime + HUD Resource Projection Technical PASS를 보존하고 **UI-P0-06은 current-runtime 기준 Technical Complete**로 닫았다. WeaponCharge는 explicit Maximum/Initial/PerShot/Recovery all-zero 기본값에서 Disabled이고, 활성 시 `UCFVehicleWeaponComp`가 선택 무기별 Current Charge·Game-Time 회복·next-shot 부족 판정·accepted-shot 1회 소비를 소유한다. Pawn은 실제 fire validation에서 `WeaponChargeInsufficient`를 반환하고 accepted result에서 Charge를 소비하며, HUD는 actual `ResourceChannels::WeaponCharge`만 `CHARGE N% / NO CHARGE`로 표시한다. VehicleBattery fallback은 0이다. final Charge Build `2d9f33261d3c427187f75338b8f37f1d` PASS, exact `WeaponChargeRuntimeResourceContract` `8bf4e80d9f1b4c88b0fd557053b27810` 1/1 PASS / Result SHA-256 `df53c9732b3135f9eae230dc9f287d646e542179c0464e5b2ef1794b54e8e137`다. closure source readback에서 Pawn Charge precheck/post-consume이 기존 동적 검증된 Heat hook과 같은 실제 fire 함수의 인접 지점임을 확인해 중복 protected-friend dynamic test는 추가하지 않았다. saved WeaponData Charge authoring은 0이다. Rail USER Visual은 representative persisted multi-weapon content가 생길 때까지 content-dependent Deferred이고 artificial fixture 금지를 유지한다. VehicleBattery는 UI-P0-06 미완료 Runtime이 아니라 별도 shared-power Gameplay feature dependency이며 실제 Provider가 없을 때 `Unavailable/Collapsed`가 Current 정답이다. Heat/Charge tuning USER Visual과 Redline authoring/RPM USER Visual도 content-dependent Deferred follow-up으로 분리하며 UI-P0-06 Technical Complete를 차단하지 않는다. formal next Gate는 UI-P0-07 Target Knowledge다.
+
 
 ```text
-1. CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크: Active / UI-P0-02 USER PASS / UI-P0-03 Source·Build·Automation PASS / Production Runtime PIE Partial USER PASS / Launcher 전체 Presentation·Defense·Pawn Rebind Pending
-2. CF-FQ-029 모듈형 런처 및 발사 인계: Paused / LM-P0-01~05 완료 유지 / LM-P0-06 사용자 PIE 체크포인트 보존
-3. CF-FQ-030 물리 제한형 미사일 비행·유도: Ready for Manual PIE / MG-P0-01~04 Direct Runtime·Test Assets Applied / Build·Automation PASS
-4. CF-FQ-031 차량 탄약·재장전 런타임: Done / AMMO-P0-00~08 Done / Heavy·Ripple USER PIE PASS / Ammo Systems Current
-5. CF-FQ-034 차량 피팅·질량 런타임: Ready / FIT-P0-05 Code·Build·Automation PASS / Physics PIE·Mobility Pending
-6. CF-FQ-035 인벤토리 Foundation: Ready / INV-P0-00~04 Done / Field Fitting Coordinator Not Started
-7. CF-FQ-033 차량 방어·손상 런타임: Done / DR-P0-00~07 Done / DR-PIE-00~06 USER PASS / Systems Current
-8. CF-FQ-028 발사체 추진 시스템: Done / User PIE PASS / CF-TC-024 PASS / Systems Current
-9. CF-FQ-027 투사체 비행 FX: Done / User PIE PASS / CF-TC-023 PASS / Systems Current
-10. CF-FQ-026 타겟 선택 시스템: Paused / TS-P0-08 재개 가능
-11. CF-FQ-020 조작감/전투 템포/피드백 개선: Candidate
-12. CF-FQ-021 핵심 게임 루프 검증: Candidate
-13. CF-FQ-019 주행/전투 반복 테스트: Deferred / 런처·미사일 이후 통합 회귀로 재설계
+1. CF-FQ-029 모듈형 런처 및 발사 인계: Paused / `LauncherMissilePlan.md v0.14.0` / LM-P0-06A Technical PASS / Build 6a633eb4cf21481d8ae26ec908d05660 PASS / Launcher 7ab7a286e5484cab845bb0cbfd5ac04e 4/4 + Ammo LauncherLock 1781accd3d9c47a59421fb1d2228e4ab 1/1 PASS / 다음 Gate `LM-P0-06 USER PIE`
+2. CF-FQ-037 차량 스캐너 입력·장비 통합: Done / SCAN-P0-00~07 PASS / P0-06 USER PIE PASS / final Build `fcf52353d1f5440392d5e1c379f09ee3` PASS / `Systems/Targeting/SensorContact.md v1.1.0` Current
+3. CF-FQ-036 차량 센서·Contact Intelligence Runtime: Done / SEN-P0-00~07 Technical Acceptance PASS / `Systems/Targeting/SensorContact.md v1.1.0` Current owner에 CF-FQ-037 Scanner 통합 반영
+
 ```
 
-`CF-FQ-032`는 UI-P0-02 전체 USER PASS 후 UI-P0-03의 Source·Build·Automation과 일부 Production Runtime PIE까지 진행됐다. Speed, Weapon Cooldown, Target 선택·해제는 USER PASS이며 CF-FQ-031 완료로 finite Ammo·Reload Snapshot도 WeaponPanel에 실제 연결됐다. TestMap_AmmoRipple의 3-shot Partial Ripple, Auto Reload, 두 번째 4-shot Ripple과 정상 Sequence AlertFeed 비노출도 USER PASS다. 남은 UI-P0-03 Gate는 Launcher Presentation 전체 회귀(Salvo·terminal Cooldown→READY), Defense 실제 변화와 Pawn Rebind다. `CF-FQ-029`와 `CF-FQ-026`은 Paused, `CF-FQ-030·034·035`는 Ready, `CF-FQ-031`은 Done, `CF-FQ-019`는 Deferred다.
+Current projection update — 2026-08-16: Launcher Runtime을 재구현하지 않고 `RecordShotResult(false)`의 ContinueRemaining/StopSequence를 asset-free Automation으로 검증했다. MuzzleBlocked·Angled/Vertical Ejection·Carrier Velocity USER PIE는 계속 Pending이며 CF-FQ-029 전체 Done으로 확대하지 않는다.
 
-`CF-FQ-034`는 VehicleData의 HardpointSlots·MountProfiles, EquipmentPresetData, WeaponData, CF-FQ-031 Ammo와 CF-FQ-033 Defense를 하나의 검증·질량 Snapshot으로 해석한다. `FIT-P0-04`에서 Legacy·Snapshot Prepare, Weapon·Defense 원자 Commit, 실패 Rollback과 `AppliedFittingSnapshot` 소유를 구현했다. `FIT-P0-05`에서는 PreRegister 초기 질량 기록, BeginPlay 실제 VehicleMesh 질량 검증과 같은 Snapshot의 Weapon·Defense Commit을 구현했고 공식 Build와 전체 Automation을 통과했다. 남은 범위는 실제 Physics PIE, Light·Default·Heavy Mobility 측정, Ammo 질량과 Physics State 생성 뒤 다른 질량의 Field Runtime 재적용이다. `FFIT-P0-00`의 비전투·쿨타임 종료·차량 정지·Inventory 예약 성공 계약과 빈 슬롯 전용 Equip·분리된 Unequip/Equip 규칙은 유지한다.
+```text
+3. CF-FQ-008 무장 데이터 정의: Done / WD-P0-00~03 Done / 기존 검증 보존 / `Systems/Combat/WeaponData.md v1.1.0` Current / UI-P0-06 Heat additive static contract 반영 / Asset 변경 0
+4. CF-FQ-015 차량 데이터 튜닝 패스: Paused / VD-P0-00~03 Remote Technical Done / VehicleData 3/3 PASS / VD-P0-04 USER Tuning Pending
+5. CF-FQ-026 타겟 선택 시스템: Paused / TS-P0-08 Remote Technical 3/3 + LOS Prefilter PASS / USER PIE Pending
+6. CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크: Active / UI-P0-03~05 USER PASS / UI-P0-06 current-runtime Technical Complete — Stage A+B + RPM + Heat + Weapon Selection Runtime/HUD source + truthful Weapon Rail + Weapon Select Input + WeaponCharge Runtime/HUD Technical PASS / Charge Build `2d9f33261d3c427187f75338b8f37f1d` PASS / exact Charge `8bf4e80d9f1b4c88b0fd557053b27810` 1/1 PASS / VehicleBattery는 future shared-power Gameplay dependency·현재 Unavailable/Collapsed / Rail USER Visual·Heat/Charge tuning Visual·Redline/RPM Visual은 content-dependent Deferred / formal next UI-P0-07 Target Knowledge / D1-11 Structure PASS·Art Polish Deferred
+7. CF-FQ-029 모듈형 런처 및 발사 인계: Paused / LM-P0-01~05 + LM-P0-06A Technical PASS / LM-P0-06 USER PIE 체크포인트 보존
+8. CF-FQ-030 물리 제한형 미사일 비행·유도: Ready for Manual PIE / MG-P0-01~04 Direct Runtime·Test Assets Applied / Persisted Asset Technical Verification PASS / fresh DirectRuntimeContract 1/1 PASS / Manual PIE Pending
+9. CF-FQ-031 차량 탄약·재장전 런타임: Done / AMMO-P0-00~08 Done / Heavy·Ripple USER PIE PASS / Ammo Systems Current
+10. CF-FQ-034 차량 피팅·질량 런타임: Paused / FIT-P0-07C Quantitative Mobility Technical PASS / Light 1000kg·Default 1570kg·Heavy 1600kg fresh-PIE metrics captured / 재개 FIT-P0-07D USER Driving Feel / Field UI Pending
+10-A. CF-FQ-038 차량 데이터 Authoring 시스템: Paused / DataAuthoringPlan.md v0.2.28 / DataAuthoringRoadmap.md v0.1.36 / DAUTH-P0-08A~M + P0-09 + P0-10 + P0-11 Technical PASS / Historical P0-08 baseline 117 Registry·Profile numeric 78 보존 / Current additive schema compatibility 118 Registry·Performance numeric 18·Profile numeric 79 PASS / UA-01~02 USER PASS / P0-12 USER PASS 2 / UA-03 DriveState RequiredProfileMissing checkpoint 보존
 
-`CF-FQ-035`는 Item Definition·Instance, VehicleCargo·Mounted 소유 상태, 접근 조회, Reservation, Atomic Transfer와 `INV-P0-04 Fitting Adapter`까지 완료했다. Adapter는 실제 ItemInstance를 Equipment·Defense Binding과 기존 Fitting Snapshot으로 결정론적으로 변환하며 Inventory Container, Reservation과 차량 Runtime을 변경하지 않는다. 다음 미구현 경계는 읽기 전용 ViewData·Events와, Field Fitting에서 Prepared Inventory Transaction·Runtime Apply·보상 Rollback을 조율하는 Coordinator다. 상점·가격·재화·월드 루팅·제작·내구도·SaveGame·네트워크는 후속으로 분리한다.
+11. CF-FQ-033 차량 방어·손상 런타임: Done / DR-P0-00~07 Done / DR-PIE-00~06 USER PASS / Systems Current
+12. CF-FQ-028 발사체 추진 시스템: Done / User PIE PASS / CF-TC-024 PASS / Systems Current
+13. CF-FQ-027 투사체 비행 FX: Done / User PIE PASS / CF-TC-023 PASS / Systems Current
+14. CF-FQ-035 인벤토리 Foundation: Paused / Remote Technical Checkpoint Complete / USER Field UI·Mobility Pending
+15. CF-FQ-020 조작감/전투 템포/피드백 개선: Candidate
+16. CF-FQ-021 핵심 게임 루프 검증: Candidate
+17. CF-FQ-019 주행/전투 반복 테스트: Deferred / 런처·미사일 이후 통합 회귀로 재설계
+```
+
+`CF-FQ-032`는 UI-P0-02 Runtime Lifetime과 UI-P0-03~05 기존 HUD 데이터·수명 이전을 USER PASS로 완료했다. UI-P0-05는 단일 Target Marker, 내부 Actor 이름·중복 의미 Text 0, Offscreen 선택 유지·재진입 단일 복구, Clear/Reselect 회귀까지 사용자 PIE로 확인했다. 현재 formal next Runtime Gate는 `UI-P0-06 차량·무기 HUD`이며 D1-11 Production Structure PASS와 Art Polish Deferred·Non-Blocking 상태를 유지한다. 이후 `UI-P0-07 Target Knowledge → UI-P0-08 Radar` 순서를 따른다. 현재 단일 Active는 계속 `CF-FQ-032`다. `CF-FQ-038`은 DAUTH-P0-12 UA-01~02 USER PASS / USER PASS 2 / 다음 UA-03 체크포인트를 보존한 Paused이며, `CF-FQ-029·026·034·035`도 Paused, `CF-FQ-037`은 Done, `CF-FQ-030`은 Ready, `CF-FQ-031`은 Done, `CF-FQ-019`는 Deferred다.
+
+
+`CF-FQ-034`는 VehicleData의 HardpointSlots·MountProfiles, EquipmentPresetData, WeaponData, CF-FQ-031 Ammo와 CF-FQ-033 Defense를 하나의 검증·질량 Snapshot으로 해석한다. `FIT-P0-04~07C`, cross-feature `FFIT-P0-01~04`까지 Technical PASS다. `/Game/CarFight/Tests/Fitting`에는 같은 `DA_VehicleDefense_TestSUV` 플랫폼의 Light 1000kg / Default 1570kg / Heavy 1600kg 공식 Fixture가 persisted 상태로 존재하며, FIT-P0-07C는 이를 fixture별 fresh PIE lifetime에서 계측해 0→30 시간 2.349081/2.252550/2.248457초, 제동거리 3.571402/3.657704/3.662367m, Steering 0.5·2초 coast Yaw 16.549116/20.418766/20.597601도를 확보했다. 결과는 단순 질량 순서의 PASS 규칙이 아니며 자동 Mobility Scalar를 만들지 않는다. 남은 범위는 `FIT-P0-07D USER Driving Feel Comparison`, `FFIT-P0-05 Field Fitting UI and PIE`와 16:9·32:9 실제 화면 가독성이다. 기술 결과를 USER PASS로 확대하지 않는다.
+
+`CF-FQ-035`는 TargetSelect 재개에 따라 Paused다. INV-P0-00~05, FFIT-P0-01~04, FIT-P0-06 C++ ViewData·Blueprint Contract와 Full CarFight 84/84 Technical PASS를 그대로 보존한다. 사용자-facing Field UI·USER PIE와 Mobility 검증이 남아 있으므로 M6 전체 Done 또는 CF-FQ-035 Done으로 승격하지 않는다. 상점·가격·재화·월드 루팅·제작·내구도·SaveGame·네트워크는 후속으로 분리한다.
 
 판단 근거:
 
@@ -164,7 +188,8 @@ CarFight 문서 흐름은 아래 기준으로 본다.
 - CF-FQ-028은 비유도 Rocket 추진, 공식 Editor 빌드, 사용자 PIE와 Systems 승격을 완료했다.
 - CF-FQ-019는 기존 반복 전투 범위를 그대로 실행하지 않고 Deferred로 유지하며 CF-FQ-029·030 이후 통합 회귀로 다시 설계한다.
 - CF-FQ-027은 사용자 PIE 전체 행렬을 완료해 Done / CF-TC-023 PASS다.
-- CF-FQ-026의 TS-P0-08 Paused 체크포인트는 변경하지 않는다.
+- CF-FQ-026은 Remote Technical 3/3 + LOS Prefilter PASS를 보존한 Paused다. 사용자 시각 확인 가능 시 TS-P0-08 USER PIE를 그대로 재개한다.
+- CF-FQ-015는 `VehicleDataTuningPlan.md v0.2.0` 기준 VD-P0-00~03 Remote Technical Done이다. 공식 Build `0cffed2f02674b6692d4f8af811d9036` PASS와 `CarFight.VehicleData` `59091b9559db46859c3a521be72396bf` 3/3 PASS를 확인했다. DA_TestSedan/DA_TestSUV는 read-only baseline이며 실제 주행 튜닝값은 USER PIE 전 변경하지 않는다.
 - CarFight는 프로젝트 전역에서 게임 사운드를 지원하지 않으며 Audio 기능을 별도 후보로 등록하지 않는다.
 ```
 
@@ -496,17 +521,27 @@ Document/Plan/ReticleAimDirection/ImplementationDesign.md
 - TS-P0-05 IA_SelectTarget / IA_ClearTarget과 IMC_Vehicle_Default 입력 연결 완료
 - TS-P0-06 UCFTargetSelectWidget / WBP_TargetSelect 후보·선택 HUD 완료
 - TS-P0-07 TargetUsePolicy와 VehicleWeaponComp 읽기 전용 장비 평가 연동 완료
-- Build Job 0fce6d253d9548dfa0ed39c94501ff47에서 Editor 빌드와 TargetSelect Automation 7/7 PASS
-- TS-P0-08 사용자 PIE 통합 검증과 튜닝은 Paused
+- 기존 TS-P0-00~07 Done과 과거 TargetSelect Automation 7/7 PASS 증거를 보존
+- 2026-08-15 공식 Build `2aa5462fbd5445379416423210054fec` PASS
+- 최종 current-source 공식 Build `4b4554ab8f7e455abf0c0538ae10a664` PASS, TS-P0-08 `3d8bb0ebbeb5427f954cc7621b432408` 3/3 PASS
+- `SettingsPath`로 표준 BP CDO 실제 source가 `FallbackTargetSelectConfig`, `TargetSelectData=None`임을 확정: Direct 2000m / Proximity 1200m / 7도 / 20Hz / Occlusion 1.5초 / Switch 15%
+- TargetPoint CDO는 Use=True / AutoAlign=True / PreferredBounds=SM_Body / Offset=0
+- `SingleTargetBoundary`는 ±6.9도 수락·±7.1도 거부가 16:9·32:9에서 좌우 대칭
+- 런타임 검색 진단을 추가하고 proximity 밖 비-Direct Targetable Actor의 LOS Trace만 생략하는 의미 보존 사전필터 적용
+- Transient 구조 샘플: WorldScanned=11 / Input=3 / VisibilityTraces=1 / PrefilterSkipped=2 / TotalTraces=2 / SearchMs=0.1780 — 성능 PASS로 해석하지 않음
+- 최종 자산 비변경 TS-P0-01·02·03·04·07 회귀 각 1/1 PASS
+- dirty WBP_TargetSelect 보호 때문에 자산 저장 가능성이 있는 TS-P0-05·06 및 전체 suite는 이번 세션 미실행
+- 전체 Actor 20Hz 순회는 남은 scalability 항목이며 대표 workload 없이 Registry/Spatial Query로 임의 전환하지 않음
+- TS-P0-08은 Paused이며 USER PIE 통합 검증과 튜닝은 미완료
 ```
 
 현재 체크포인트:
 
 ```text
-재개 위치: TS-P0-08 P0 통합 검증과 튜닝
-첫 결함: 후보 텍스트와 대상 겹침, 후보 범위 과대, 디버그 원 비가시
-보존 증거: TS-P0-00~07 Done / TargetSelect Automation 7/7 PASS
-다음 조치: 단일 대상 범위 검증 → 다중 후보 히스테리시스 분리 → HUD·디버그·성능 튜닝
+현재 위치: TS-P0-08 P0 통합 검증과 튜닝 / Paused / USER PIE Pending
+보호 USER 결함: 후보 텍스트와 대상 겹침, 후보 범위 과대 체감, debug Sphere 실제 비가시, 동일 차량 대표 위치/인식 범위 재검증
+원격 기술 증거: 단일 대상 7도 경계 좌우 대칭 + TargetPoint·CandidateRanking·SelectionLifetime·EquipmentQuery PASS
+다음 조치: 대표 workload 없이는 20Hz full-world scan 구조 교체 보류 → USER 단일 차량 범위 재검증 → HUD·debug 시각성·입력/화면비 튜닝
 ```
 
 P0 완료 전 제외 범위:
@@ -591,7 +626,7 @@ Document/Plan/<기능명>/DecisionLog.md
 
 ## 10. 문서 버전 관리
 
-- 현재 문서 버전: `v1.52.0`
+- 현재 문서 버전: `v1.54.38`
 - 문서 상태: `Active`
 
 ### 버전 증가 기준
@@ -605,6 +640,538 @@ Document/Plan/<기능명>/DecisionLog.md
 ---
 
 ## 11. 체인지로그
+
+### v1.54.38 - 2026-08-19
+
+- UI-P0-06 중간점검에서 원래 Roadmap 종료조건을 재확인했다. 현재 Runtime이 제공하는 차량/무기 HUD 채널을 Production 경로에 유지하고 Provider 없는 채널을 추정 없이 Unavailable/Collapsed로 두는 것이 완료조건이며, VehicleBattery Gameplay Runtime 신규 구현은 UI-P0-06 필수 범위가 아니다.
+- VehicleBattery를 future shared-power Gameplay dependency로 분리하고 UI-P0-06을 current-runtime 기준 `Technical Complete`로 전환했다. Rail USER Visual, Heat/Charge saved tuning USER Visual, authoritative Redline/RPM USER Visual은 실제 content가 준비될 때 수행하는 Deferred follow-up으로 남긴다.
+- formal current Gate를 `UI-P0-07 Target Knowledge`로 전진시켰다. 완료된 UI-P0-06 Stage A/B·RPM·Heat·Weapon Selection·Rail·Input·WeaponCharge 증거는 관련 결함 없이 반복하지 않는다.
+- `CFHUDDataProvider.h v1.7.0`, `CFHUDPresenter.h v1.15.0` Current 주석을 실제 상태에 맞췄다. 실행 코드·Asset·Battery·Heat/Charge tuning·Redline mutation은 0이다.
+
+Migration: 대표 Plan은 `InGameUIPlan.md v0.59.17`을 사용한다. VehicleBattery는 향후 별도 Gameplay power feature가 구현될 때 기존 `VehicleBattery` ResourceChannel에 연결하고, 그 전에는 UI-P0-07~09 진행을 막지 않는다.
+
+### v1.54.37 - 2026-08-19
+
+- `CF-FQ-032 / UI-P0-06 WeaponCharge`를 Technical PASS로 반영했다. WeaponCharge는 explicit Maximum/Initial/PerShot/Recovery가 유효할 때만 활성이고 existing all-zero WeaponData는 Disabled 호환이다. 선택 무기별 Charge 상태와 Game-Time 회복은 WeaponComp가 소유하며 Pawn fire path는 충전 부족 `WeaponChargeInsufficient`와 accepted-shot 1회 소비를 사용한다.
+- HUD는 actual `ResourceChannels::WeaponCharge`만 소비해 `CHARGE N%`와 `NO CHARGE`를 Compact 계약에 투영한다. VehicleBattery/정적 설정/Cooldown fallback은 0이고 Secondary 최대2 및 `Reload > NoAmmo > NoCharge > Overheated > Cooldown/READY` 우선순위를 유지한다.
+- final Official Build `2d9f33261d3c427187f75338b8f37f1d` PASS, exact `WeaponChargeRuntimeResourceContract` `8bf4e80d9f1b4c88b0fd557053b27810` 1/1 PASS, Result SHA-256 `df53c9732b3135f9eae230dc9f287d646e542179c0464e5b2ef1794b54e8e137`다. closure source readback에서 Charge precheck/post-consume이 기존 Heat 동적 검증 경계와 같은 Pawn fire 함수의 바로 인접 hook임을 확인해 별도 중복 friend test는 추가하지 않았다.
+- saved WeaponData Charge authoring, VehicleBattery, Heat tuning, Redline authoring, Rail USER Visual 상태 변경은 0이다. Rail USER Visual Deferred와 artificial 2무기 fixture 금지는 유지하며 현재 남은 실제 Gameplay Runtime은 VehicleBattery다.
+
+Migration: 대표 Plan은 `InGameUIPlan.md v0.59.16`을 사용한다. WeaponCharge Technical PASS는 관련 결함 없이 반복하지 않고 실제 Charge 무기 tuning은 네 explicit 값을 함께 결정한다. VehicleBattery는 별도 shared-power Runtime으로 남기며 Charge를 Battery로 재해석하지 않는다.
+
+### v1.54.36 - 2026-08-19
+
+- `CF-FQ-032 / UI-P0-06` Player-facing Weapon Select Input을 Technical PASS로 갱신했다. `IA_SelectWeapon` Axis1D + `IMC_Vehicle_Default` 숫자 1~9 direct ordinal mapping을 사용하고 Mouse Wheel Radar 예약/게임패드 미지정을 보존한다. final Build `dec0757b745342b4b90ff5f17b761eb0`, persisted IA fp `1A8A0402`, IMC fp `52D2D868` / 47→56 mapping, exact `WeaponSelectInputContract` `daeaf649669d48c79746a65cc44b1b89` 1/1 PASS다.
+- Rail USER Visual은 existing persisted representative가 모두 1무기라 Deferred로 전환했다. artificial fixture는 Production Weapon mass0 후 mass-valid test-only preset을 찾았지만 finite-ammo loadout 작성까지 필요해 사용자 중단 기준에 따라 확장하지 않았다. 실패 실행에서 생성된 fixture asset은 cleanup error0으로 삭제됐다.
+- USER Visual PASS는 추정하지 않는다. representative persisted multi-weapon content가 실제 생기면 그때 1↔2 Header/Rail swap과 내부 ID 노출0을 USER Gate로 다시 연다.
+
+Migration: 대표 Plan은 `InGameUIPlan.md v0.59.15`을 사용한다. Weapon Select Input Technical PASS는 반복하지 않고 Rail USER Visual은 representative multi-weapon content prerequisite를 만족할 때만 재개한다.
+
+### v1.54.35 - 2026-08-19
+
+- `CF-FQ-032 / UI-P0-06` Weapon Rail Visual Consumer를 Technical PASS로 전진시켰다. pre-apply persisted `WBP_CFWeaponPanel` fingerprint `4A873878`에서 Rail이 Turret/Ammo/Reload semantic Image 3개뿐이고 실제 `SelectableWeapons` source와 구조가 불일치함을 확인했다.
+- 선택 무기는 기존 Header/Selected Card에만 유지하고 비선택 weapon만 Provider fixed order로 표시하는 truthful Text Rail을 적용했다. 0개 숨김, 1~3개 `원본 순번 + DisplayName`, 4+ `앞2 + +N`, 이름 부재 `WEAPON`이며 internal MountProfileId/WeaponId/AssetName fallback과 fake icon/resource summary는 0이다.
+- Official Build `941ea18597b3483594be8de3317e68fd` PASS, targeted `WeaponPanelOnly` apply `0617f7cbed97427a942c7a6f59936e22` exact asset1 / other Production0, fresh AssetDump saved fingerprint `26CFB205`, exact `WeaponRailVisualContract` `7cc9ddd5b2204725bb3ec45c200d649b` 1/1 PASS를 확보했다.
+- Weapon Selection Runtime/HUD source와 Heat/RPM/Stage A+B/기존 USER PASS는 반복하지 않았다. Battery/Charge, Heat tuning, Redline authoring은 변경하지 않았고 Rail USER Visual과 실제 Weapon Select Input Mapping은 Pending이다.
+
+Migration: `InGameUIPlan.md v0.59.14`을 현재 UI 상세 기준으로 사용한다. truthful Text Rail Technical PASS는 관련 결함 없이 반복하지 않으며 정식 per-weapon icon/source가 생기기 전 name-only Rail을 유지한다.
+
+### v1.54.34 - 2026-08-18
+
+- `CF-FQ-032 / UI-P0-06` Player-facing WeaponGroup source를 fresh 감사해 Applied Fitting Snapshot의 weapon-bearing `ResolvedMounts` 고정 순서를 실제 source로 확정했다. 새 Group ID를 만들지 않고 fixed display order + SelectedWeaponIndex로 계약했으며 내부 MountProfileId는 Runtime identity로만 남겨 HUD 노출을 금지했다.
+- Fitting→WeaponComp 선택 목록, per-weapon Cooldown/Heat 독립 상태, Pawn 안전 전환, HUD DisplayName-only 목록을 구현했다. Launcher active 전환은 기존 WeaponChanged cancel cleanup을 사용하고 현재 single active Turret Visual도 같은 선택으로 갱신한다.
+- final Official Build `62ffb62f69524bb18c3a9f11bb9f58f1` PASS, exact `WeaponSelectionRuntimeContract` process `ff23cf6ac04e4b2c8cf0084b24173cdb` 1/1 PASS / Failure 0, Result SHA-256 `0ffa955f626d0de3f5ebf7b2ac594d7f8b039d268fe6efb2ab0730abfe77618c`다.
+- Production WeaponRail 기존 세 Image는 Turret/Ammo/Reload 의미라 실제 weapon slot으로 재해석하지 않고 Collapsed를 유지했다. Asset/Input mutation과 USER Visual PASS 추가는 0이다. 남은 actual Gameplay Runtime은 VehicleBattery·WeaponCharge다.
+
+Migration: Weapon Selection Runtime/HUD source PASS는 관련 결함 없이 반복하지 않는다. 다음 WeaponPanel slice는 실제 selection ViewData를 소비할 Rail Visual Consumer를 fresh persisted 구조 기준으로 설계하며 현재 의미 아이콘이나 내부 ID를 무기 슬롯으로 위장하지 않는다.
+
+### v1.54.33 - 2026-08-18
+
+- `CF-FQ-032 / UI-P0-06` 남은 WeaponGroup·VehicleBattery·WeaponCharge·Heat Runtime을 fresh 감사하고 Heat를 가장 독립적인 다음 slice로 선정했다. WeaponGroup은 player-facing list/index 부재, VehicleBattery는 shared power Runtime 부재, WeaponCharge는 실제 Runtime/정적 입력 부재를 유지한다.
+- `HeatDissipationPerSecond` 기본 0 + `FCFWeaponHeatRuntime`을 추가하고 실제 승인 발사 1회당 Heat 1회 누적, 자연 냉각, MaxHeat 과열과 next-shot-headroom 회복을 구현했다. existing saved WeaponData는 새 냉각값 0으로 Disabled여서 현재 동작이 자동 변경되지 않는다.
+- HUD는 실제 WeaponComp Heat만 `ResourceChannels::Heat` Percent로 전달하며 Compact Projection은 Heat Secondary와 `Reload > NoAmmo > Overheated > Cooldown/READY` FireState를 사용한다. Launcher Primary + Ammo/Heat Secondary 최대 2와 기존 LauncherSequenceRevision lifecycle은 유지한다.
+- final Official Build `0ecfed49ab3a4f41b349fc707c44e5f2` PASS, exact `HeatRuntimeResourceContract` `c736d1a6d6134a798a4b84452750e3d6` 1/1 PASS / Failure 0, Result SHA-256 `1abf0dc7a4788d6543c7933abef38433849ae57d569229cfab220f14937abad5`다. Content Asset mutation과 Heat tuning authoring, USER Visual PASS는 0이다.
+- RPM/Stage A/B/UI-P0-03~05 완료 evidence는 반복하지 않았고 `CF-FQ-038` Paused 상태도 변경하지 않았다. UI-P0-06 전체는 계속 In Progress다.
+
+### v1.54.32 - 2026-08-18
+
+- `CF-FQ-032 / UI-P0-06 RPM Gauge Production Visual Binding`을 Technical PASS로 반영했다. 기존 저장 `WBP_CFSpeedGauge`의 21 Tick 구조를 그대로 사용하고 Presenter가 explicit Redline/Maximum mapping 결과만 Runtime Percent에 적용한다.
+- Redline 0/Unavailable/invalid는 `EngineMaxRPM` 기반 fallback 없이 21 Tick fill=0으로 fail-closed reset한다. persisted representative VehicleData의 Idle/Max는 Sedan 900/6500, TestSUV·DefenseSUV 900/6020이며 authoritative Redline source가 없어 모두 0 Unconfigured를 유지했고 Asset mutation은 0이다.
+- 직전 test-only C4458 이름 충돌을 교정한 final Official Build `5ff6d404dfa44c61a85e698e27052db5` PASS, exact `CarFight.UI.UI_P0_06.RpmGaugeVisualBindingContract` process `7d32d08b7e554e9991fb64e80d472d78` 1/1 PASS / Failure 0, Result SHA-256 `0054abd391216065f732e274b00bc054478c5ab168608523504b614c860fc6d4`다.
+- Stage A/B와 UI-P0-03~05 USER PASS는 반복하지 않았다. UI-P0-06 전체 Done이나 새 USER Visual PASS로 확대하지 않으며 실제 차량 Redline authoring·RPM USER Visual과 WeaponGroup/Battery/Charge/Heat Runtime은 계속 Pending이다.
+
+### v1.54.31 - 2026-08-18
+
+- `CF-FQ-032 / UI-P0-06 RPM Gauge explicit Redline upstream contract`를 Technical PASS로 반영했다. `EngineMaxRPM`은 실제 Chaos 물리 상한, `RedlineStartRPM`은 별도 authored field이며 0은 미설정이다. `ChangeUpRPM`은 Current CarFight Source에 존재하지 않는다.
+- Runtime source를 Current RPM=Chaos `GetEngineRotationSpeed()`, Redline/Maximum=VehicleData explicit authored value로 분리하고 Presenter는 실제 Redline을 0.85, EngineMaxRPM을 1.0 화면 위치로 mapping한다. Production SpeedGauge visual binding과 실제 차량 Redline 값 authoring은 Pending이다.
+- Official Build `745dba430bcc47c2925c841a0c5a6686` PASS, 신규 exact `RpmGaugePresentationContract` `f805050484af47b8a2653cbb8ae2f639` 1/1 PASS, `RpmGaugeRuntimeSourceContract` `af1d9d010c2c433382819698a6dc7eeb` 1/1 PASS다.
+- `RedlineStartRPM` additive leaf로 Current DAUTH compatibility surface는 118 Registry / Performance numeric 18 / 5 Profile numeric 79가 됐다. P0-08의 original 117/78 evidence는 Historical로 보존하고 bounded Registry/Batch compatibility 3건은 각 1/1 PASS했다. `CF-FQ-038` USER Acceptance는 Paused 상태 그대로다.
+- Stage A 6/6, Stage B Dynamic Resource Visual, UI-P0-03~05 USER PASS는 반복하지 않았다.
+
+### v1.54.30 - 2026-08-18
+
+- `CF-FQ-032 / UI-P0-06 Dynamic Resource Visual Stage A` Presenter Projection을 Technical PASS로 반영했다. raw `ResourceChannels` 직접 0~N 렌더링을 금지하고 `Primary 최대 1 + Secondary 최대 2 + FireState 최대 1` Compact Presentation 계약을 고정했다.
+- ReserveAmmo는 Header owner를 유지하고 현재 Runtime 없는 VehicleBattery·WeaponCharge·Heat는 생성·추정하지 않는다. Production Asset 변경은 0이며 다음 UI-only 범위는 Stage B Production Visual Container다.
+- final Official Build `4c043a73e3054baab5f725b18cd7de6c` PASS, focused `CarFight.UI.UI_P0_06` process `73189888eb8042628db1b9499691c17c` 6/6 PASS / Failure 0, Result SHA-256 `39be662e7125ef4972574a75b433119283b7a279fbab56e511b140aafd6c70fe`를 Current evidence로 연결했다.
+- `CF-FQ-038` Paused checkpoint는 더 최신 `DataAuthoringPlan.md v0.2.25 / DataAuthoringRoadmap.md v0.1.33 / USER PASS 2 / UA-03 setup 진행 중`을 보존한다.
+
+### v1.54.29 - 2026-08-18
+
+- `CF-FQ-038 / DAUTH-P0-12 UA-02 Browser·Mesh-only·Create·Existing Import`을 사용자 직접 확인으로 USER PASS 처리했다.
+- Feature는 Paused를 유지하면서 보존 USER checkpoint를 `PASS 2 / 다음 UA-03 Recipe·Shared Profile·Affected Vehicle Impact`로 전진시켰다.
+- 대표 Plan/Roadmap projection을 `DataAuthoringPlan.md v0.2.24 / DataAuthoringRoadmap.md v0.1.32`로 갱신했다. DG/DEL/Wizard deletion은 계속 미개방이다.
+
+### v1.54.22 - 2026-08-18
+
+- `CF-FQ-032 / UI-P0-05 TargetSelect Marker Integration` USER Visual을 완료했다. 선택 Marker 정확히 1개, 내부 Actor 이름·거리·Track 중복 Text 0, 화면 밖 숨김+선택 유지, 화면 재진입 단일 Marker 복구, Clear/Reselect 단일 Marker 복구를 사용자 PIE로 PASS했다.
+- 기존 Official Build `242dfee7186d46aaa98e3c24b25c0d09` PASS와 focused Automation `3834e606f2b54efb9ac5c09ea410b4f4` 1/1 PASS를 결합해 UI-P0-03~05 기존 HUD 데이터·수명 이전을 USER PASS로 닫았다.
+- formal dependency에 따라 현재 Gate를 `UI-DESIGN-GATE D1-11 Structure PASS·Art Polish Deferred Non-Blocking → UI-P0-06 Vehicle·Weapon HUD`로 이동했다. `UI-P0-07 Target Knowledge → UI-P0-08 Radar`는 후속 순서를 유지한다.
+- `CF-FQ-038`은 최신 `DataAuthoringPlan.md v0.2.20 / DataAuthoringRoadmap.md v0.1.28 / UA-01 USER PASS / USER PASS 1 / 다음 UA-02` Paused 상태를 변경하지 않았다.
+
+Migration: 현재 CF-FQ-032 상세 기준은 `InGameUIPlan.md v0.58.9 / InGameUIRoadmap.md v0.26.3`이며 다음 작업은 UI-P0-06 착수 감사다. UI-P0-02~05 완료 검증은 관련 결함이 없는 한 반복하지 않는다.
+
+### v1.54.21 - 2026-08-18
+
+- `CF-FQ-038 / DAUTH-P0-12 UA-01 Workspace First Impression`을 사용자 직접 재확인으로 USER PASS 처리했다.
+- Feature 상태는 Paused를 유지하고 보존 USER checkpoint만 `PASS 1 / 다음 UA-02 Browser·Mesh-only·Create·Existing Import`로 전진시켰다.
+- 대표 Plan/Roadmap은 `DataAuthoringPlan.md v0.2.20 / DataAuthoringRoadmap.md v0.1.28`이다. DG/DEL/Wizard deletion은 미개방이다.
+
+### v1.54.20 - 2026-08-18
+
+- `CF-FQ-032`의 UI-P0-04 AimReticle UISubsystem 통합을 USER PASS로 반영했다.
+- UI-P0-05 TargetSelect Marker는 Source·Official Build·focused Automation PASS / USER Visual Pending으로 Current projection을 이동했다.
+- `CF-FQ-038` DAUTH와 다른 Paused/Ready/Done 상태는 변경하지 않았다.
+
+Migration: 현재 CF-FQ-032 Gate는 UI-P0-05 USER Visual이다. PASS 전 후속 TargetPanel/Radar 완료를 추정하지 않는다.
+
+### v1.54.19 - 2026-08-18
+
+- `CF-FQ-032 / UI-P0-03` Defense Production Panel과 Pawn Rebind USER Visual을 사용자 직접 화면 확인으로 PASS했다. Old Defense SUV 추가 피해·파괴 중 Current Pawn/HUD 무변화까지 확인해 Old Pawn Event Isolation도 USER PASS했다.
+- UI-P0-03을 USER PASS로 닫고 현재 Gate를 `UI-P0-04 AimReticle UISubsystem 통합`으로 이동했다.
+- UI-P0-04는 `UCFUISubsystem v1.6.0` HUD Layer 단일 Reticle 소유·Current Pawn Rebind·Cleanup, `CFVehiclePawn v2.148.0` direct Reticle CreateWidget/AddToViewport 자동 경로 제거, `DefaultAimReticleWidgetClass` Config와 focused Foundation contract 보강까지 Source Applied다. Official Build·Automation·USER Visual은 아직 Pending이다.
+- `CF-FQ-038`은 `DataAuthoringPlan.md v0.2.17 / DataAuthoringRoadmap.md v0.1.25 / P0-12 UA-01 / USER PASS 0` Paused 상태를 유지한다.
+
+Migration: 현재 주력은 `InGameUIPlan.md v0.58.7 / InGameUIRoadmap.md v0.26.1 / UI-P0-04`다. UI-P0-03은 관련 결함이 없는 한 반복하지 않고 UI-P0-04 PASS 전 UI-P0-05로 넘어가지 않는다.
+
+### v1.54.18 - 2026-08-18
+
+- 사용자 우선순위 변경에 따라 `CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크`를 Paused에서 현재 단일 Active로 복원했다.
+- UI는 `InGameUIPlan.md v0.58.6 / UI-P0-03 Defense Production Panel USER Visual → Pawn Rebind USER Visual`부터 재개하며 기존 UI-P0-02/03 기술·USER PASS를 반복하지 않는다.
+- `CF-FQ-038`은 P0-08A~M/P0-09~11 Technical PASS와 `DAUTH-P0-12 USER PASS 0 / UA-01`을 보존한 Paused로 전환했다. DG/DEL Gate는 미개방 상태를 유지한다.
+- `CF-FQ-037 Scanner` Done과 `SensorContact.md v1.1.0` Current를 TargetPanel/Radar 후속 UI의 Sensor source로 연결하되 Radar Range/Zoom·동적 Blip·USER Visual을 완료로 승격하지 않는다.
+
+Migration: 다음 CarFight 주력 작업은 CF-FQ-032 UI다. DAUTH는 UI 우선 작업이 끝나거나 사용자가 명시적으로 재개하기 전 자동 Active로 올리지 않는다.
+
+### v1.54.17 - 2026-08-18
+
+
+- `CF-FQ-038 / DAUTH-P0-12 USER Authoring Acceptance`를 In Progress로 착수하고 `DataAuthoringPlan.md v0.2.16` / `DataAuthoringRoadmap.md v0.1.24`의 UA-01~08을 current USER Gate로 연결했다.
+- P0-08A~M/P0-09~11 Technical PASS는 반복하지 않으며 USER PASS는 사용자 화면·입력·주행 판단 전까지 0이다.
+- DG/DEL Gate와 Wizard physical deletion은 P0-12 완료 전까지 미개방이다.
+
+### v1.54.16 - 2026-08-18
+
+- `CF-FQ-037 차량 스캐너 입력·장비 통합`을 Paused에서 Done으로 전환했다. `SCAN-P0-00~07 PASS`, P0-06 USER PIE PASS, final Build `fcf52353d1f5440392d5e1c379f09ee3` PASS를 closure evidence로 사용한다.
+- 현재 구현 owner를 `Document/Systems/Targeting/SensorContact.md v1.1.0`으로 연결하고 Scanner를 새 Active 후보에서 제거했다.
+- Radar/TargetPanel 시각, Sensor energy/heat, AI/Network와 Missile/Utility 소비는 별도 후속 범위로 유지한다.
+
+### v1.54.15 - 2026-08-18
+
+
+- `CF-FQ-038 / DAUTH-P0-11 Frozen UX Completeness Closure`를 완료해 P0-11 overall을 Technical PASS로 갱신했다.
+- Handling/Performance Adoption, Shared Profile B2 edit+affected Vehicle impact, External Drift 3-way recovery, Mesh-only Candidate/Create Vehicle From Mesh normal Workspace production gap을 닫았다.
+- final Build `98dfceab797942218bd09c844e398ceb` PASS, focused P0-11 `b53998e6cacf48a1a554d784b77e013c` 6/6 PASS, full Data Authoring `77b45525549b4866995b3d972fb4a9fa` 63/63 PASS를 current evidence로 연결했다.
+- Runtime `UCFVehicleData`, Inventory/Fitting production source, Content Asset, Wizard 삭제, DG/DEL은 변경/개방하지 않았다. `CF-FQ-038`은 P0-12 USER Acceptance가 남아 있어 Active를 유지하며 P0-12 자체는 이번 작업에서 시작하지 않았다.
+
+### v1.54.14 - 2026-08-18
+
+- `CF-FQ-038 / DAUTH-P0-11` Core Technical Validation PASS를 반영했다. representative Authoring E2E와 applied VehicleData Inventory/Fitting consumer regression을 추가하고 full Data Authoring 59/59 PASS를 확보했다.
+- Frozen 24.90~24.94 전체 workflow audit에서 normal Workspace Handling/Performance Adoption, Shared Profile edit/impact, Drift 3-way recovery, Mesh-only Candidate/Create flow가 미구현임을 확인했다.
+- 따라서 CF-FQ-038은 계속 Active, P0-11 overall은 In Progress / Completeness Blocked이며 P0-12는 Not Ready다.
+- P0-08A~M/P0-09/P0-10 Technical PASS와 기존 Wizard 보존 상태는 유지한다. DG/DEL Gate는 열지 않았다.
+- 대표 Plan을 `DataAuthoringPlan.md v0.2.14`, 다음 착수를 `DAUTH-P0-11 Frozen UX Completeness Closure`로 갱신했다.
+
+Migration: P0-11 Core E2E/consumer 검증을 반복하지 않고 명시된 Frozen production gap을 우선 구현·검증한다.
+
+### v1.54.13 - 2026-08-18
+
+- `CF-FQ-038 / DAUTH-P0-10 Existing Wizard Migration`을 Technical PASS로 반영했다.
+- 새 Vehicle Authoring Workspace에 Reference Compare, Assets/Layout semantic authoring, Measurement/Adoption, Frozen 4축 Driving Feel/preset, Stable-ID Mount/Defaults와 standard Undo를 parity했다.
+- legacy `CarFight.VehicleDAWizard` / `SCFVDAWizardTab`은 유지하며 managed Recipe Target의 Layout Capture / Quick Tune Apply / Quick Tune Revert만 비활성화했다. DG/DEL Gate는 미개방이다.
+- final Build `03fa78af4e124a3db33893ca8bfe436d` PASS, focused P0-10 4/4, full Data Authoring 57/57 PASS를 current evidence로 연결했다.
+- Runtime `UCFVehicleData`, Inventory/Fitting, Content Asset, Batch main page는 변경하지 않았고 P0-10 USER UX/Driving Feel PASS는 미판정이다.
+- 대표 Plan을 `DataAuthoringPlan.md v0.2.13`, 다음 Gate를 `DAUTH-P0-11 Technical Validation`로 갱신했다.
+
+Migration: CF-FQ-038 재개 시 P0-08A~M/P0-09/P0-10을 반복하지 않고 `DataAuthoringRoadmap.md v0.1.21 / P0-11`에서 시작한다. Wizard 삭제는 P0-11/P0-12 + DG/DEL Gate 전까지 금지한다.
+
+### v1.54.12 - 2026-08-17
+
+- `CF-FQ-038 / DAUTH-P0-09 Vehicle Authoring MVP`를 Technical PASS로 반영했다.
+- single-Vehicle `CarFight.VehicleAuthoring` Workspace와 transient ViewModel을 추가하고 Initial Import, Resolve/Diff/Trace/Validation, shared Apply/standard Undo, Raw DA Open을 기술 검증했다.
+- legacy `CarFight.VehicleDAWizard` / `SCFVDAWizardTab`은 P0-10 parity 전까지 그대로 유지한다. Batch main page는 만들지 않았다.
+- final Build `76fc476c8ccb4daf895a3b567fe0c992` PASS, focused P0-09 6/6, full Data Authoring 53/53 PASS를 current evidence로 연결했다.
+- Runtime `UCFVehicleData`, Inventory/Fitting, Content Asset은 변경하지 않았고 P0-09 USER Visual/Usability PASS는 미판정이다.
+- 대표 Plan을 `DataAuthoringPlan.md v0.2.12`, 다음 Gate를 `DAUTH-P0-10 Existing Wizard Migration`으로 갱신했다.
+
+Migration: CF-FQ-038 재개 시 P0-08A~M/P0-09를 반복하지 않고 `DataAuthoringRoadmap.md v0.1.20 / P0-10`에서 시작한다. Wizard 삭제는 별도 DG/DEL Gate 전까지 금지한다.
+
+### v1.54.11 - 2026-08-17
+
+- `CF-FQ-038 / DAUTH-P0-08M B3 Batch Definition Apply Foundation`을 Technical PASS로 반영하고 `DAUTH-P0-08 Implementation Foundation` 전체를 Technical PASS로 닫았다.
+- fresh R3 evidence, exact B3 approval, all-target global preflight, canonical TargetPath 순서의 per-Vehicle `FCFVehicleApplyService` 호출과 Stop-On-First-Failure partial result를 구현했다.
+- final Build `10027d18360e48f399a5b439f280c24c` PASS, focused M `a49d21b6b9b94d648142d5a555a79c95` 4/4 PASS, targeted `cb2ae69e9c834657a553fe52c00f5a96` 47/47 PASS를 current evidence로 연결했다.
+- Target mutation authority는 `FCFVehicleApplyService` 하나로 유지하고 batch global transaction/rollback, already-applied rollback, retry/save는 0이다. Runtime `UCFVehicleData`, Inventory/Fitting, `SCFVDAWizardTab`, Content Asset, Asset Reader, existing Validator를 변경하지 않았다.
+- Frozen 26.66~26.69 BatchOperationId/generic envelope는 첫 실제 external Batch transport/client integration 전 follow-up으로 보존한다.
+- 대표 Plan을 `DataAuthoringPlan.md v0.2.11`, 다음 Gate를 `DAUTH-P0-09 Vehicle Authoring MVP`로 갱신했다.
+
+Migration: CF-FQ-038 재개 시 P0-08A~M과 P0-08 Foundation을 반복하지 않고 `DataAuthoringRoadmap.md v0.1.19 / DAUTH-P0-09`에서 시작한다.
+
+### v1.54.10 - 2026-08-17
+
+- `CF-FQ-038 / DAUTH-P0-08L B1/B2 Batch Authoring Source Commit Foundation`을 Technical PASS로 current feature projection에 반영했다.
+- exact Batch approval binding, global source preflight, B1 Recipe/B2 shared Profile one-transaction source commit, all-or-nothing rollback과 approval invalidation을 구현했다.
+- final Build `2e2923f31d5a4f3fa703f3b7623c0741` PASS와 targeted process `3853d42dfb344bfd8eb6e516903a8d78` 43/43 PASS를 current evidence로 연결했다.
+- B1/B2는 source만 변경하며 Target mutation/Auto Save/B3/UI/file save는 아직 0이다. Runtime `UCFVehicleData`, Inventory/Fitting, `SCFVDAWizardTab`, Content Asset, Asset Reader, existing Validator를 변경하지 않았다.
+- 대표 Plan을 `DataAuthoringPlan.md v0.2.10`, 다음 Gate를 `DAUTH-P0-08M B3 Batch Definition Apply Foundation`으로 갱신했다.
+
+Migration: CF-FQ-038 재개 시 P0-08A~L을 반복하지 않고 `DataAuthoringRoadmap.md v0.1.18 / P0-08M`에서 시작한다. P0-08M은 Frozen 26.54~26.65 B3 구간에 새로 부여한 implementation checkpoint label이다.
+
+### v1.54.9 - 2026-08-17
+
+- `CF-FQ-038 / DAUTH-P0-08K Batch Import Session / 3-way Preview Foundation`을 Technical PASS로 current feature projection에 반영했다.
+- manifest/current Registry verification, canonical CSV parse, current Unreal 3-way classification과 ownership conflict, transient Recipe/Profile prospective preview, deterministic BatchPlanHash를 구현했다.
+- official Build `a3d37d4c8520442d8ceb09a72eb6a68f` PASS와 targeted process `7d2db5a9baa54dd9abf25857138d3994` 37/37 PASS를 current evidence로 연결했다.
+- persistent Recipe/Profile/Target mutation은 0이며 Runtime `UCFVehicleData`, Inventory/Fitting, `SCFVDAWizardTab`, Content Asset, Asset Reader, existing Validator를 변경하지 않았다. B1/B2/B3/UI/file save도 아직 0이다.
+- 대표 Plan을 `DataAuthoringPlan.md v0.2.9`, 다음 Gate를 `DAUTH-P0-08L B1/B2 Batch Authoring Source Commit Foundation`으로 갱신했다.
+
+Migration: CF-FQ-038 재개 시 P0-08A/B/C/D/E/F/G/H/I/J/K를 반복하지 않고 `DataAuthoringRoadmap.md v0.1.17 / P0-08L`에서 시작한다. B3는 Section 26.54+ 별도 후속이다.
+
+### v1.54.8 - 2026-08-17
+
+- `CF-FQ-038 / DAUTH-P0-08J Batch Column Registry / Canonical Export Foundation`을 Technical PASS로 current feature projection에 반영했다.
+- existing Recipe/Profile typed schema와 117 Field Registry를 projection하는 Batch Registry, Recipe 7 + Profile 78 numeric allowlist, reserved `__cf_`, stable ColumnId를 구현했다.
+- canonical BOM-less UTF-8 CSV와 `.cfbatch.json` baseline manifest/ExportSetHash foundation을 구현하고 persistent Recipe/Profile/Target mutation0을 확인했다.
+- official Build `3249098c1b99487a8fd173694573bd5e` PASS와 targeted process `534486583a1d4689bc5137505a03f806` 32/32 PASS를 current evidence로 연결했다.
+- Runtime `UCFVehicleData`, Inventory/Fitting, `SCFVDAWizardTab`, Content Asset, Asset Reader, existing Validator를 변경하지 않았으며 Import Session/B1·B2/B3/UI/file save도 0이다.
+- 대표 Plan을 `DataAuthoringPlan.md v0.2.8`, 다음 Gate를 `DAUTH-P0-08K Batch Import Session / 3-way Preview Foundation`으로 갱신했다.
+
+Migration: CF-FQ-038 재개 시 P0-08A/B/C/D/E/F/G/H/I/J를 반복하지 않고 `DataAuthoringRoadmap.md v0.1.16 / P0-08K`에서 시작한다.
+
+### v1.54.7 - 2026-08-17
+
+- `CF-FQ-038 / DAUTH-P0-08I Common Authoring Service / AI Typed Contract Foundation`을 Technical PASS로 current feature projection에 반영했다.
+- `FCFVehicleAuthoringService`와 typed AI contract로 R0~R3 risk/approval/result boundary를 구현하고 UI/AI가 기존 Snapshot/Resolver/Apply Core를 같은 경로로 호출할 기반을 만들었다.
+- prospective `PreviewRecipeChange`는 persistent mutation 0이며 R1 commit은 exact AuthoringWrite/expected-state/proposal scope 아래 Recipe만 transaction mutation한다. bounded ClientOperationId dedupe는 duplicate write를 다시 실행하지 않는다.
+- R3 `ApplyResolvedVehicle`는 ExpectedDiffHash와 DefinitionApply approval을 확인한 뒤 existing `FCFVehicleApplyService`를 actual 1회 호출한다. Raw SetField/direct Target writer/force/skip-validation/auto-retry/auto-save는 0이다.
+- `VehicleArchetypeId`는 Frozen RecipeFingerprint에 임의 편입하지 않고 operation-specific typed desired-state equality로 commit/NoChange를 처리했다.
+- official Build `252fdbd097f943379f2a1e2a942bedef` PASS와 targeted process `f2011a206c964fadb269d13c4dba3c86` 27/27 PASS를 current evidence로 연결했다.
+- Runtime `UCFVehicleData`, Inventory/Fitting, `SCFVDAWizardTab`, Content Asset, Asset Reader, existing Runtime Validator는 변경하지 않았고 UI/CSV/Batch도 0이다.
+- 대표 Plan을 `DataAuthoringPlan.md v0.2.7`, 다음 Gate를 `DAUTH-P0-08J Batch Column Registry / Canonical Export Foundation`으로 갱신했다.
+
+Migration: CF-FQ-038 재개 시 P0-08A/B/C/D/E/F/G/H/I를 반복하지 않고 `DataAuthoringRoadmap.md v0.1.15 / P0-08J`에서 시작한다.
+
+### v1.54.6 - 2026-08-17
+
+- `CF-FQ-038 / DAUTH-P0-08H Apply Transaction Foundation`을 Technical PASS로 current feature projection에 반영했다.
+- `FCFVehicleApplyService` 하나에 frozen TOCTOU precondition, fresh Resolve/Diff, transient preflight, dependency-safe exact Target write, readback/Validator, AppliedState와 rollback을 중앙화했다.
+- actual Target mutation 후 controlled failure Automation까지 포함해 Target hash/stable arrays/Recipe AppliedState/dirty state rollback을 검증했으며 no-auto-save를 유지한다.
+- official Build `b88831b71797415fac9dc0a23d12c39e` PASS와 targeted process `6f261c0b76f04d0faa6b9e855865818e` 23/23 PASS를 current evidence로 연결했다.
+- Runtime `UCFVehicleData`, Inventory/Fitting, `SCFVDAWizardTab`, Content Asset, Asset Reader, existing Runtime Validator는 변경하지 않았고 UI/CSV/Batch도 0이다.
+- 대표 Plan을 `DataAuthoringPlan.md v0.2.6`, 다음 Gate를 `DAUTH-P0-08I Common Authoring Service / AI Typed Contract Foundation`으로 갱신했다.
+
+Migration: CF-FQ-038 재개 시 P0-08A/B/C/D/E/F/G/H를 반복하지 않고 `DataAuthoringRoadmap.md v0.1.14 / P0-08I`에서 시작한다.
+
+### v1.54.5 - 2026-08-17
+
+- `CF-FQ-038 / DAUTH-P0-08G Existing Definition Import / Adoption Foundation`을 Technical PASS로 current feature projection에 반영했다.
+- Existing Definition exact field 전체를 lossless Legacy baseline으로 보존하고 Mount hidden serialized 10 leaf를 별도 passthrough로 분리하며 direct semantic candidate copy를 구현했다.
+- Movement raw → Driving Feel/Profile inverse inference와 automatic Profile binding을 금지 상태로 유지하고 group/field Adoption Preview와 Recipe-only Commit을 fresh fingerprint precondition 아래 구현했다.
+- official Build `b201d87cd13f4987a0907e08c8f00a6c` PASS와 targeted process `3b52a251ab244096b78bb872a06c0069` 20/20 PASS를 current evidence로 연결했다.
+- Runtime `UCFVehicleData`, Inventory/Fitting, `SCFVDAWizardTab`, Content Asset, Asset Reader, existing Runtime Validator는 변경하지 않았고 Target Definition mutation / Apply/UI/CSV도 0이다.
+- 대표 Plan을 `DataAuthoringPlan.md v0.2.5`, 다음 Gate를 `DAUTH-P0-08H Apply Transaction Foundation`으로 갱신했다.
+
+Migration: CF-FQ-038 재개 시 P0-08A/B/C/D/E/F/G를 반복하지 않고 `DataAuthoringRoadmap.md v0.1.13 / P0-08H`에서 시작한다.
+
+### v1.54.4 - 2026-08-17
+
+- `CF-FQ-038 / DAUTH-P0-08F Definition Materializer / Validation Foundation`을 Technical PASS로 current feature projection에 반영했다.
+- RF_Transient candidate, Stable-ID array reconstruction, FieldCodec import, existing UCFVDAValidator, DefinitionValidation과 Resolver-owned readback hash consistency를 구현했다.
+- official Build `e5d925c6531e4ae6ac58aa356e4078eb` PASS와 targeted process `4b21d25b780c4a398de7a1b47c595c5e` 17/17 PASS를 current evidence로 연결했다.
+- Runtime `UCFVehicleData`, Inventory/Fitting, `SCFVDAWizardTab`, Content Asset, Asset Reader, existing Runtime Validator는 변경하지 않았고 Apply/UI/CSV는 구현하지 않았다.
+- 대표 Plan을 `DataAuthoringPlan.md v0.2.4`, 다음 Gate를 `DAUTH-P0-08G Existing Definition Import / Adoption Foundation`으로 갱신했다.
+
+Migration: CF-FQ-038 재개 시 P0-08A/B/C/D/E/F를 반복하지 않고 `DataAuthoringRoadmap.md v0.1.12 / P0-08G`에서 시작한다.
+
+### v1.54.3 - 2026-08-17
+
+- `CF-FQ-038 / DAUTH-P0-08E Pure Resolver Foundation`을 Technical PASS로 current feature projection에 반영했다.
+- Frozen R0~R16 stage identity, deterministic source precedence, Proposal/Adoption, Source Trace/Hash, R14 Diff와 R16 Stale/Drift foundation을 실제 C++로 구현했다.
+- official Build `db202f0797af41fe86a859609cb4dfd9` PASS와 targeted process `93d445f78cbe4eaabca1478eb6d27078` 15/15 PASS를 current evidence로 연결했다.
+- R15 Materializer/Validator는 다음 P0-08F로 남겼으며 Runtime `UCFVehicleData`, Inventory/Fitting, `SCFVDAWizardTab`, Content Asset, Asset Reader, Apply/UI/CSV는 변경하지 않았다.
+- 대표 Plan을 `DataAuthoringPlan.md v0.2.3`, 다음 Gate를 `DAUTH-P0-08F Definition Materializer / Validation Foundation`으로 갱신했다.
+
+Migration: CF-FQ-038 재개 시 P0-08A/B/C/D/E를 반복하지 않고 `DataAuthoringRoadmap.md v0.1.11 / P0-08F`에서 시작한다.
+
+### v1.54.2 - 2026-08-17
+
+- `CF-FQ-038 / DAUTH-P0-08D Asset Snapshot Reader Foundation`을 Technical PASS로 current feature projection에 반영했다.
+- Chassis requested socket relative transform facts, Wheel local bounds와 Section 22.27 resolver-relevant asset fingerprints를 구현했다.
+- official Build `780d30c4a44f48feb179f7f6da5480e1` PASS와 targeted process `ab2cd64308484ce0ae0e24cb1143ca33` 9/9 PASS를 current evidence로 연결했다.
+- Runtime `UCFVehicleData`, Inventory/Fitting, `SCFVDAWizardTab`, Content Asset은 변경하지 않았고 Resolver / Apply / UI / CSV는 아직 구현하지 않았다.
+- 대표 Plan을 `DataAuthoringPlan.md v0.2.2`, 다음 Gate를 `DAUTH-P0-08E Pure Resolver Foundation`으로 갱신했다.
+
+Migration: CF-FQ-038 재개 시 P0-08A/B/C/D를 반복하지 않고 `DataAuthoringRoadmap.md v0.1.10 / P0-08E`에서 시작한다.
+
+### v1.54.1 - 2026-08-17
+
+- `CF-FQ-038 / DAUTH-P0-08C Immutable Snapshot Foundation`을 Technical PASS로 current feature projection에 반영했다.
+- Recipe / 5 Profile / Definition / Project Compatibility Default Snapshot, Registry-expanded Stable-ID field entry, deterministic fingerprint/hash와 Section 22.17 `RequiredDependencies`를 구현했다.
+- final official Build `6c81b2149de44d00a99554a44d2135aa` PASS와 targeted process `340050d2c911445da3634ebb92acc014` 8/8 PASS를 current evidence로 연결했다.
+- Runtime `UCFVehicleData`, Inventory/Fitting, `SCFVDAWizardTab`, Content Asset은 변경하지 않았고 Asset Snapshot Reader / Resolver / Apply / UI / CSV는 아직 구현하지 않았다.
+- 대표 Plan을 `DataAuthoringPlan.md v0.2.1`, 다음 Gate를 `DAUTH-P0-08D Asset Snapshot Reader Foundation`으로 갱신했다.
+
+Migration: CF-FQ-038 재개 시 P0-08A/B/C를 반복하지 않고 `DataAuthoringRoadmap.md v0.1.9 / P0-08D`에서 시작한다.
+
+### v1.54.0 - 2026-08-17
+
+- 사용자 요청에 따라 `CF-FQ-038 차량 데이터 Authoring 시스템`을 P2 / Active로 정식 등록했다.
+- 대표 Plan은 `DataAuthoringPlan.md v0.2.0`, 현재 구현 Gate는 `DAUTH-P0-08 Implementation Foundation`이다.
+- `DAUTH-P0-08A/B`에서 Editor-only Recipe + 5 Profile, `IsEditorOnly()` Never-Cook, common types, Stable Field Path / Field Value Codec와 Current `UCFVehicleData` 117 leaf Registry 양방향 coverage를 구현했다.
+- final official Build `5c745a31d19b448d9b1049877bc877ca` PASS와 targeted process `ab9de3e8c8cd410a8de0641178690dff` 4/4 PASS를 현재 기술 evidence로 연결했다.
+- Runtime `UCFVehicleData`, Inventory/Fitting 소비 경로, `SCFVDAWizardTab`, Content Asset은 변경하지 않았다.
+- `CF-FQ-034`는 Done으로 확대하지 않고 `FIT-P0-07D USER Driving Feel Comparison` 체크포인트를 보존한 Paused로 전환했다.
+- 다음 CF-FQ-038 Gate는 `DAUTH-P0-08C Immutable Snapshot Foundation`이다.
+
+Migration: CF-FQ-038은 P0-08A/B를 반복하지 않고 DataAuthoringRoadmap의 P0-08C에서 재개한다. CF-FQ-034는 VehicleFittingPlan v0.17.0 / FIT-P0-07D에서 재개한다.
+
+### v1.53.12 - 2026-08-17
+
+- CF-FQ-034 `FIT-P0-07C Quantitative Mobility Measurement`을 Technical Complete로 반영했다.
+- Light/Default/Heavy 공식 Fixture를 각각 fresh PIE lifetime에서 동일 프로토콜로 계측해 실제 Chaos Mobility baseline 3종을 확보했다.
+- final official Build `bb04d56e0cd24647b2ef6fcbc7f2bd77` PASS와 process `63bbeaf0202041b79dac8f32f5447923` Success / Metric 3/3을 현재 기술 evidence로 연결했다.
+- 가속·coast-steering의 비단조 결과에 임의 합격 기준이나 자동 Mobility Scalar를 추가하지 않고 `ordering_asserted=false`, USER 주행감 Pending을 유지했다.
+- CF-FQ-034는 계속 Active이며 다음 Gate는 `FIT-P0-07D USER Driving Feel Comparison`이다. Field UI·PIE도 Pending으로 유지한다.
+
+Migration: CF-FQ-034 재개 시 FIT-P0-07A~07C와 기존 Fitting 23/23을 반복하지 않는다. `VehicleFittingPlan.md v0.17.0 / FIT-P0-07D`에서 같은 공식 Fixture의 사용자 직접 주행감만 비교한다.
+
+### v1.53.11 - 2026-08-17
+
+- CF-FQ-034 `FIT-P0-07B Heavy Payload Resolution + Official Fixture Preparation`을 Technical Complete로 반영했다.
+- 같은 `DA_VehicleDefense_TestSUV` 플랫폼의 Light 1000kg / Default 1570kg / Heavy 1600kg 공식 Fixture 3종과 persisted 사용자 표시명·참조를 고정했다.
+- `verify_existing` PASS, fresh AssetDump persisted readback와 post-label `OfficialMobilityFixtures` 1/1 PASS를 현재 기술 evidence로 연결했다.
+- CF-FQ-034는 계속 Active이며 다음 Gate는 `FIT-P0-07C Quantitative Mobility Measurement`다. USER Mobility·Field UI·PIE는 Pending으로 유지한다.
+
+### v1.53.10 - 2026-08-17
+
+- 사용자 선택에 따라 CF-FQ-034 차량 피팅·질량 런타임을 Ready에서 Active로 전환했다.
+- `VehicleFittingPlan.md v0.15.0 / FIT-P0-07A Fixture Readiness Audit` 완료를 반영했다.
+- current AssetDump에서 CityCar·Compact·Coupe·Pickup·SubCompact·Van·Wagon을 StaticMesh-only Visual 후보로, DA_TestSedan·DA_TestSUV를 Base/Gross 0kg VehicleData baseline으로 분리했다.
+- `DA_VehicleDefense_TestSUV`는 Base 1000kg / Gross 2500kg의 Fitting-ready technical platform이고 기존 `DA_Fit_DefenseTestSUV` 1570kg baseline이 저장 계약과 일치함을 확인했다.
+- 같은 플랫폼에서 Light 1000kg과 Default 1570kg은 임의 질량 없이 준비 가능하며 Heavy는 1570kg 초과 persisted payload 확인을 다음 Gate로 유지한다.
+- Source·Content Asset·Build·USER PIE 변경/실행은 0이다.
+
+### v1.53.9 - 2026-08-17
+
+- CF-FQ-030 Persisted Missile Test Asset Technical Verification을 PASS로 반영하고 대표 Plan을 `MissileGuidancePlan.md v0.5.0`으로 갱신했다.
+- fresh `CarFight.Missile.MG_P0_01_04.DirectRuntimeContract` Process `29d0ef16dd5e4d56945ceae26eec6937` 1/1 PASS를 보호 회귀로 기록했다.
+- current AssetDump에서 Missile test folder 20/20, Maps World 12/12를 성공했고 4개 계약 DataAsset의 저장값과 Vehicle → EquipmentPreset → Weapon → Projectile hard reference chain을 확인했다.
+- MissileDirectTest World package는 33 Actor와 Missile test vehicle/RocketLauncher socket 구성을 확인했으나 전체 Actor label은 public readback 범위 밖이므로 다섯 MissileTarget label 자체를 독립 PASS로 추정하지 않았다.
+- Runtime Source·Content Asset·Blueprint·Map 저장 변경과 USER PIE는 0이며 Source 변경이 없어 새 Build는 수행하지 않았다.
+- CF-FQ-030은 Done으로 승격하지 않고 Ready / CF-TC-027 Manual PIE Pending을 유지하며 현재 단일 Active는 없다.
+
+### v1.53.8 - 2026-08-16
+
+- CF-FQ-029 `LM-P0-06A Failure Policy Technical Closure`를 Technical PASS로 반영했다.
+- 최종 closure 공식 Build `6a633eb4cf21481d8ae26ec908d05660` PASS, `CarFight.Launcher` Process `7ab7a286e5484cab845bb0cbfd5ac04e` 4/4 PASS와 `AMMO_P0_04.LauncherLock` Process `1781accd3d9c47a59421fb1d2228e4ab` 1/1 PASS를 closure evidence로 연결했다.
+- Launcher Runtime은 재구현하지 않았고 `CFLauncherSchedTests.cpp v1.2.0`에 StopSequence terminal 이후 추가 Dispatch 불가 보호 assert만 보강했다.
+- CF-FQ-029 상태를 Active에서 Paused로 전환하고 `LauncherMissilePlan.md v0.14.0 / LM-P0-06 USER PIE`를 재개 체크포인트로 고정했다.
+- MuzzleBlocked·Angled/Vertical Ejection·Carrier Velocity USER PIE와 CF-FQ-037 `SCAN-P0-06 USER PIE`는 Pending을 유지하며 현재 단일 Active는 비웠다.
+
+### v1.53.7 - 2026-08-16
+
+- 사용자 선택에 따라 CF-FQ-037을 `SCAN-P0-06 USER PIE` 체크포인트가 보존된 Paused로 전환하고 CF-FQ-029를 단일 Active로 승격했다.
+- CF-FQ-029의 현재 기술 Gate를 `LauncherMissilePlan.md v0.13.0 / LM-P0-06A Failure Policy Technical Closure`로 고정했다.
+- `ContinueRemaining / StopSequence`는 기존 Launcher Sequence Runtime을 재구현하지 않고 asset-free Automation으로 검증하며, 기존 Manual Cancel + Ammo Reservation cleanup은 보호 회귀로 유지한다.
+- MuzzleBlocked·Ejection·Carrier Velocity USER PIE와 CF-FQ-037 USER PIE는 완료로 추정하지 않는다.
+
+### v1.53.6 - 2026-08-16
+
+- CF-FQ-037 대표 Plan을 `ScannerIntegrationPlan.md v0.7.1`로 동기화했다.
+- `P0-06A` Scanner 전용 PIE fixture readiness 완료를 FeatureQueue current projection에 반영했다.
+- CF-FQ-037은 계속 Active이며 `SCAN-P0-06 USER PIE Acceptance`와 USER PIE PASS 0 상태를 유지한다.
+- P0-04/05 Technical evidence는 반복하지 않고 미구현 Field Fitting USER UI를 CF-FQ-037 P0-06 완료 조건으로 승격하지 않는다.
+
+### v1.53.5 - 2026-08-16
+
+- `CF-FQ-037 SCAN-P0-05 Technical Validation`을 Technical Done으로 반영하고 대표 Plan을 `ScannerIntegrationPlan.md v0.7.0`, 현재 Gate를 `SCAN-P0-06 USER PIE Acceptance`로 갱신했다.
+- P0-04 final Build `20ca14bdc6094650bc11209f4ce320fa`, FittingIntegration 1/1, CarFight.Fitting 22/22, CarFight.Sensor 14/14, CarFight.Inventory 12/12 PASS를 current-source Acceptance evidence로 반복 없이 재사용했다.
+- fresh asset-free `CarFight.TargetSelect.TS_P0_01.RuntimeContract` process `19077228b82f4c37a1113c51fe18eaa7` 1/1 PASS를 추가했다.
+- 정적 감사에서 Scanner Enhanced Input은 Pawn만 소유하고 Sensor/Fitting에는 Input bind가 없으며 TargetSelect에는 SensorData·SensorConfig·ActiveScan·ApplySensorRuntime 소유권 침범이 없음을 확인했다.
+- TargetSelect Input/HUD 저장 가능 테스트는 dirty Content 보호를 위해 실행하지 않았으며 해당 Asset/USER Gate를 완료로 추정하지 않는다.
+- P0-06은 실제 `V` 입력, timed Active Scan, 반복 입력, scanner-less 처리, 장비 변경 후 성능 반영과 Contact/Knowledge 보존의 사용자 직접 PIE만 소유한다.
+
+### v1.53.4 - 2026-08-16
+
+- `CF-FQ-037 SCAN-P0-04 Fitting Integration`을 Technical Done으로 반영하고 대표 Plan을 `ScannerIntegrationPlan.md v0.6.0`, 현재 Gate를 `SCAN-P0-05 Technical Validation`으로 갱신했다.
+- `ResolvedSensorData → ApplySensorData()`를 기존 Fitting Runtime Commit/Checkpoint/Compensation의 Sensor participant로 통합하고 초기 Source 선택, Runtime Ready hot reapply, scanner-less Fallback, Legacy Source 보존과 실패 복원을 확정했다.
+- Scanner Utility mount가 Weapon 후보로 오인되지 않도록 실제 WeaponData가 있는 Resolved Mount만 Weapon Runtime 후보로 선택하는 경계를 반영했다.
+- final official Build `20ca14bdc6094650bc11209f4ce320fa` PASS와 FittingIntegration 1/1, CarFight.Fitting 22/22, CarFight.Sensor 14/14, CarFight.Inventory 12/12 PASS를 P0-04 closure evidence로 연결했다.
+- P0-05는 위 검증을 반복하지 않고 현재 Source의 asset-free TargetSelect 보호 회귀와 Scanner/Sensor/Fitting/TargetSelect 책임 경계 Technical Acceptance를 수행한다.
+- USER PIE와 실제 `V` 조작감·탐지 체감은 P0-06에 유지하며 기존 Paused/Ready/USER Pending 상태를 완료로 추정하지 않는다.
+
+### v1.53.3 - 2026-08-16
+
+- `CF-FQ-037 SCAN-P0-03 Input Command Integration`을 Technical Done으로 반영하고 대표 Plan을 `ScannerIntegrationPlan.md v0.5.0`, 현재 Gate를 `SCAN-P0-04 Fitting Integration`으로 갱신했다.
+- P0 Scanner 입력을 `/Game/CarFight/Input/IA_ActiveScan` Boolean + Pressed와 `IMC_Vehicle_Default`의 `V` 단일 매핑으로 확정했다. 1회 입력 후 `ActiveScanDurationSec` 동안 실행되고 자동 종료하며 별도 Stop 키는 만들지 않았다.
+- `ACFVehiclePawn`이 Enhanced Input bind와 Sensor Gameplay command 변환을 소유하고 Sensor Component 직접 Input bind를 금지하는 책임 경계를 유지했다.
+- official Build `b84e8dabcb784b30a005fb120af5cf4d` PASS와 process `4d9a1e5ad12f416db18b1a069694c241` PASS, InputAsset 1/1·InputCommand 1/1·Sensor 14/14·TargetSelect RuntimeContract 1/1을 P0-03 closure evidence로 연결했다.
+- Persisted AssetDump에서 IA_ActiveScan Boolean/Pressed와 `IA_ActiveScan <- V` 저장 상태를 재확인했다.
+- USER PIE PASS는 추가하지 않았고 실제 Scanner 조작감은 P0-06에 유지한다. CF-FQ-037 전체는 P0-04~07이 남아 있으므로 `Active`를 유지한다.
+
+### v1.53.2 - 2026-08-16
+
+- `CF-FQ-037 SCAN-P0-02 Runtime Config Apply`를 Technical Done으로 반영하고 대표 Plan을 `ScannerIntegrationPlan.md v0.4.0`, 현재 Gate를 `SCAN-P0-03 Input Command Integration`으로 갱신했다.
+- `UCFVehicleSensorComp::ApplySensorData()`의 non-destructive hot reapply, Applied Config 사본, invalid 원자 거부, scanner-less fallback, Contact/Knowledge/Analysis 보존과 range 감소 lifecycle reconcile을 현재 기술 계약으로 확정했다.
+- official Build `d670926be7c4498dbd15b12601f8505b` PASS, `CarFight.Scanner.SCAN_P0_02.ConfigApply` 1/1 PASS와 `CarFight.Sensor` 14/14 PASS를 P0-02 closure evidence로 연결했다.
+- Content Asset·Blueprint·InputAction·Scanner tuning·PIE mutation과 USER PASS 추가는 0이며 실제 FittingSnapshot/Field Fitting Sensor 통합은 P0-04에 유지한다.
+- CF-FQ-037은 기능 전체가 아직 진행 중이므로 `Active`를 유지하고 기존 Paused/Ready/USER Pending 기능 상태를 변경하지 않았다.
+
+### v1.53.1 - 2026-08-16
+
+- `CF-FQ-037 SCAN-P0-00 Foundation Audit`을 Source·Asset·Build·PIE mutation 0으로 Technical Done 처리했다.
+- Enhanced Input owner는 `ACFVehiclePawn`, Scanner 정적 성능 payload는 기존 `UCFVehicleSensorData`, Sensor Runtime owner는 `UCFVehicleSensorComp`로 확정했다.
+- `UCFVehicleData`에는 SensorData 참조가 없고, `ECFVehicleMountType::Utility`는 존재하지만 현재 `EquipmentPresetData/FittingSnapshot`이 Turret+Weapon 중심이어서 Scanner를 그대로 표현할 수 없음을 확인했다.
+- 새 Scanner DataAsset을 만들지 않고 기존 `UCFEquipmentPresetData → FittingSnapshot` 경로가 SensorData payload를 운반하도록 최소 확장하는 `SCAN-P0-01 Scanner Data Contract`를 다음 Gate로 지정했다.
+- hot reapply와 InputAction 연결은 각각 P0-02/P0-03 이후로 분리하고 기존 USER Pending/dirty work를 그대로 보호했다.
+
+### v1.53.0 - 2026-08-16
+
+- 사용자 선택에 따라 `CF-FQ-037 차량 스캐너 입력·장비 통합`을 P1 / Active로 신규 등록했다.
+- 대표 Plan은 `ScannerIntegrationPlan.md v0.1.0`, 첫 Gate는 `SCAN-P0-00 Foundation Audit`이다.
+- 완료된 CF-FQ-036 SensorContact Runtime을 재설계하지 않고 Scanner 장비/설정 Source와 플레이어 입력 command를 연결하는 별도 후속 Feature로 분리했다.
+- Foundation Audit 전에는 새 Scanner DataAsset 클래스, 임의 Sensor tuning 값, InputAction asset을 만들지 않는다.
+- Radar/TargetPanel, Sensor energy/heat, Missile/Utility 소비, AI/Network는 이번 Feature 범위에서 제외했다.
+- 기존 CF-FQ-015/026/029/032/035 Paused, CF-FQ-030/034 Ready와 모든 USER Pending 체크포인트를 보존했다.
+
+### v1.52.17 - 2026-08-15
+
+- `CF-FQ-036 SEN-P0-07 Technical Acceptance` PASS와 `Document/Systems/Targeting/SensorContact.md v1.0.0` Current System 승격을 FeatureQueue에 반영했다.
+- CF-FQ-036 상태를 Active에서 Done으로 전환하고 현재 단일 Active를 비웠다. Paused/Ready 기능은 사용자 선택 없이 자동 승격하지 않는다.
+- Acceptance는 기존 Build `7dff9da7aaa24e76b0871348762c9d93` PASS, Sensor `85d008613a104df9b7107795995c6ac5` 14/14 PASS와 UI asset-free 1/1+1/1 PASS를 재사용했으며 Source 의미 변경이 없어 반복 실행하지 않았다.
+- Sensor/TargetSelect/HUD 책임 경계, actor-free public contract, Contact lifecycle·Knowledge·DestroyedHold·Snapshot integration 정적 감사가 PASS였음을 완료 기준으로 기록했다.
+- CF-FQ-032 Radar/TargetPanel USER Visual, Radar Range/Zoom·동적 Blip, CF-FQ-026 TS-P0-08 USER PIE와 다른 USER Pending 체크포인트는 완료로 추정하지 않았다.
+- 대표 완료 Plan은 `SensorContactPlan.md v0.9.0` Historical + Retained Path로 보존한다.
+
+### v1.52.16 - 2026-08-15
+
+- `CF-FQ-036 SEN-P0-06 Public Snapshot Integration` Technical Done 상태를 현재 우선순위 projection에 동기화했다.
+- TargetSelect가 선택·TrackState owner를 유지한 채 Target Knowledge/Radar Contact는 actor-free `FCFSensorSnapshot`을 read-only source로 소비하도록 HUD Provider/ViewData 경계를 연결했다.
+- Detected identity 비누출을 위한 Actor→ContactId association-only bridge, Snapshot 기반 상대 위치·거리, Radar normalized position Unavailable 계약을 반영했다.
+- 정적 Radar placeholder Canvas는 실제 Sensor Contact로 노출하지 않으며 Blueprint/Content Asset과 기존 CF-FQ-032 USER Visual gate는 변경하지 않았다.
+- 최종 Build `7dff9da7aaa24e76b0871348762c9d93` PASS와 `CarFight.Sensor` `85d008613a104df9b7107795995c6ac5` 14/14 PASS를 현재 기술 증거로 연결했다.
+- 관련 UI asset-free 보호 회귀 `67d114255ec943bb8ded2642a40a581c`, `395c93df5fb947a1a979ca8fa0c74665` 각각 1/1 PASS를 기록했다.
+- 대표 Plan을 `SensorContactPlan.md v0.8.0`, 다음 Gate를 `SEN-P0-07 Technical Acceptance`로 갱신했다.
+- 문서 버전 관리 섹션도 v1.52.16으로 동기화했다.
+
+### v1.52.15 - 2026-08-15
+
+- `CF-FQ-036 SEN-P0-01~05` Technical Done 상태를 현재 우선순위 projection에 동기화했다.
+- P0-05에서 `UCFVehicleHealthComp::OnVehicleDestroyed / IsDestroyed`를 authoritative destruction truth로 소비하는 Sensor 독립 DestroyedHold를 구현하고 TargetSelect의 Destroyed 즉시 clear를 유지했다.
+- official Build `954dc0ab844b40f48f2674f2a0ae672a` PASS와 `CarFight.Sensor` Process `4ba274cc90814e5b90d40c33820b3bd0` 13/13 PASS를 현재 기술 증거로 연결했다.
+- 대표 Plan을 `SensorContactPlan.md v0.7.0`, 다음 Gate를 `SEN-P0-06 Public Snapshot Integration`으로 갱신했다.
+- TargetSelect/HUD/Content Asset/Project Config와 기존 USER Pending 상태는 변경하지 않았다.
+- 문서 버전 관리 섹션의 stale current version 표기도 v1.52.15로 교정했다.
+
+### v1.52.14 - 2026-08-15
+
+- 사용자 결정에 따라 `CF-FQ-036 차량 센서·Contact Intelligence Runtime`을 P1 / Active로 신규 등록했다.
+- 대표 Plan은 `SensorContactPlan.md v0.1.0`, 첫 Gate는 `SEN-P0-00 Foundation Audit`이며 이번 인계 준비에서는 구현을 시작하지 않는다.
+- TargetSelect·UI USER Pending과 기존 dirty 자산을 보호하면서 실제 Sensor Runtime Provider를 별도 Gameplay owner로 만드는 방향을 고정했다.
+
+### v1.52.13 - 2026-08-15
+
+- CF-FQ-008 WD-P0-03 Current System Integration을 완료하고 기능 상태를 Done으로 전환했다.
+- `Document/Systems/Combat/WeaponData.md v1.0.0`을 현재 구현 owner로 등록하고 `WeaponFire.md v1.6.0`의 Ammo 도입 전 stale 설명을 교정했다.
+- WeaponData Content Asset mutation 0, 최종 Build PASS와 targeted 2/2 PASS 증거를 유지한다.
+- 현재 단일 Active를 비우고 다음 Feature는 사용자 선택 전 자동 승격하지 않는다.
+- CF-FQ-026 상세 섹션에 남아 있던 stale `TS-P0-08 Active` 표기 2곳을 상단 상태와 동일한 `Paused / USER PIE Pending`으로 교정했으며 USER PASS는 추가하지 않았다.
+
+### v1.52.12 - 2026-08-15
+
+- CF-FQ-008 WD-P0-01 Static Data Contract와 WD-P0-02 Representative Assets를 Technical Done으로 반영했다.
+- 최종 Build `53e2dbaf04a3401b8ed89c906b308cdc` PASS와 `CarFight.WeaponData` `eefe58aa87d74dcaa79a1764a5f7611b` 2/2 PASS를 기록했다.
+- 대표 WeaponData는 Load-only로 검증했고 Content Asset mutation은 0이다. 다음 Gate는 WD-P0-03 Current System Integration이다.
+
+### v1.52.11 - 2026-08-15
+
+- CF-FQ-015를 VD-P0-00~03 Remote Technical Done / VD-P0-04 USER Tuning Pending 체크포인트가 보존된 Paused로 전환했다.
+- `CF-FQ-008 무장 데이터 정의`를 단일 Active로 승격하고 WD-P0-01 Static Data Contract를 next gate로 등록했다.
+- 기존 WeaponData Content Asset과 Runtime 상태를 수정하지 않고 정적 DataValidation부터 진행하도록 고정했다.
+
+### v1.52.10 - 2026-08-15
+
+- CF-FQ-015 VD-P0-00~03 Remote Technical Done, Build PASS와 VehicleData Automation 3/3 PASS를 반영했다.
+- VehicleData Current System 문서를 v2.0.0으로 갱신하고 UCFVDAValidator, Representative Compare, 실제 Pawn Runtime Apply 계약을 현재 구현과 맞췄다.
+- VehicleData Content Asset 값은 변경하지 않았으며 남은 VD-P0-04 USER Tuning은 PIE 가능 시점까지 Pending으로 보존한다.
+
+### v1.52.9 - 2026-08-15
+
+- 사용자가 PIE를 직접 확인할 수 없는 기간의 원격 작업으로 `CF-FQ-015 차량 데이터 튜닝 패스`를 단일 Active로 승격했다.
+- `CF-FQ-026 TargetSelect`는 TS-P0-08 Remote Technical 3/3 + LOS Prefilter PASS와 기존 USER 체크포인트를 보존한 Paused로 전환했다.
+- CF-FQ-015의 첫 Gate를 `VD-P0-01 Validator Contract`로 고정하고 DA_TestSedan/DA_TestSUV 실제 튜닝값 변경은 USER PIE 전 금지했다.
+
+### v1.52.8 - 2026-08-15
+
+- TS-P0-08 최신 Build PASS와 SearchDiagnostics·SettingsPath·SingleTargetBoundary 3/3 PASS를 반영했다.
+- 저장된 BP CDO가 실제 fallback 7도·1200m·15% 설정과 SM_Body TargetPoint 자동 정렬을 사용하는 것을 확정했다.
+- 런타임 검색 진단과 후보 의미를 보존하는 LOS 사전필터를 적용해 테스트 조건에서 Input 3개를 유지하면서 LOS 2건을 생략했다.
+- 작은 Transient 검색 ms는 성능 PASS로 해석하지 않고 20Hz 전체 Actor 순회는 대표 workload 전 구조 교체를 보류한다.
+- 기존 USER 체크포인트와 dirty WBP 보호는 변경하지 않았다.
+
+### v1.52.7 - 2026-08-15
+
+- 사용자 선택에 따라 CF-FQ-026 TargetSelect / TS-P0-08을 단일 Active로 재개하고 CF-FQ-035는 USER Field UI·Mobility 체크포인트가 보존된 Paused로 전환했다.
+- TargetSelect 공식 Build PASS, TS-P0-08 SingleTargetBoundary 1/1과 자산 비변경 TS-P0-01·02·03·04·07 각 1/1 PASS를 반영했다.
+- 자동 후보 debug Sphere의 표시 수명·Debug 반경 계약을 보강했지만 후보 게임플레이 수치는 변경하지 않았다.
+- 기존 USER PASS·FAIL·재검증 항목은 그대로 보존하고 새 USER PASS를 추정하지 않았다.
+
+### v1.52.6 - 2026-08-15
+
+- `FIT-P0-06 Fitting ViewData and Debug` C++ ViewData·Blueprint Contract Technical PASS와 Full CarFight 84/84 Success를 반영했다.
+- CF-FQ-035/034 내부의 현재 원격 기술 선행 Gate를 완료 상태로 정리했다.
+- 남은 Fitting/Inventory 범위를 FFIT-P0-05 Field UI·PIE, 16:9·32:9 실제 화면 가독성, 공인 Light·Default·Heavy Mobility·USER 실제 사용 검증으로 한정했다.
+- CF-FQ-035 Active는 유지하되 다음 원격 Feature 전환은 사용자 선택 없이 자동 수행하지 않는다.
+
+### v1.52.5 - 2026-08-15
+
+- cross-feature `FFIT-P0-01~04` Technical Integration과 실제 Chaos Field Mass Reapply PASS를 반영했다.
+- 최종 Build `cd7207084dfd49c4a28b607d8577307a`, FFIT-P0-04 4/4, Fitting 21/21, Inventory 12/12, Full CarFight 83/83 Success를 기록했다.
+- 다음 원격 기술 Gate를 `FIT-P0-06 Fitting ViewData and Debug`로 이동했다.
+- CF-FQ-034는 Ready 상태를 유지하고 CF-FQ-035 Active의 cross-feature dependency로 기술 작업을 계속한다. USER Mobility·Field UI·PIE는 Pending이다.
+
+### v1.52.4 - 2026-08-14
+
+- `CF-FQ-035 INV-P0-06` Coordinator Foundation의 원자 completion·보상 Rollback을 Technical PASS로 기록했다.
+- 최종 Build `e2ef556b64484a09ba8b3544c62344e3`, M6 3/3, Inventory 12/12, Full CarFight 71/71 Success를 반영했다.
+- M6 전체 Done이나 formal FFIT-P0-03 완료로 승격하지 않는다. mass-changing Field Runtime은 FFIT-P0-04 전까지 명시 거부한다.
+- current next gate를 cross-feature `CF-FQ-034 FFIT-P0-01 Permission and Blocker Query`로 이동했다.
+- CF-FQ-032 USER Visual Paused 체크포인트는 계속 보호한다.
+
+### v1.52.3 - 2026-08-14
+
+- 사용자가 직접 USER Visual을 수행할 수 없는 기간 동안 기술 개발을 계속하기로 결정해 `CF-FQ-032`를 시각 확인 체크포인트가 보존된 Paused로 전환하고 `CF-FQ-035`를 단일 Active로 전환했다.
+- `CF-FQ-035 INV-P0-05 / M5`의 읽기 전용 Inventory Snapshot·Reservation 표시·Fitting Hint 합성·의미 ChangeSet을 완료했다.
+- 공식 Build `30503595ba074c63ba8a6bb87f7a2645`, Inventory 9/9, 전체 CarFight 68/68 Success를 반영했다.
+- 다음 Gate는 `INV-P0-06 / M6 Integration Verification`과 Field Fitting Coordinator 기술 통합이다.
+- `CF-FQ-032` Defense/Pawn Rebind USER Visual은 취소되거나 완료 처리되지 않았으며 사용자 직접 확인 가능 시 같은 체크포인트에서 재개한다.
+
+### v1.52.2 - 2026-08-14
+
+- `CF-FQ-032`은 계속 Active이며 완료 상태로 승격하지 않았다.
+- `CFHUDDataTests v1.6.0` 보강과 최종 공식 Build `681c91810da34066bb398ad1b0989f1e` Exit Code 0을 반영했다.
+- targeted `CarFight.UI.UI_P0_03` Automation `f6b08a970bbf4ec282893e86e92e72ac`에서 5/5 Success·0 Fail을 확인해 실제 Defense 저장 맵 PIE→Provider ViewData와 Pawn Rebind Old Pawn 이벤트 해제를 기술적으로 검증했다.
+- 사용자가 직접 화면을 확인하지 않았으므로 Defense/Pawn Rebind는 USER Visual Pending으로 유지하며 다음 Gate를 `Defense Production Panel USER Visual → Pawn Rebind USER Visual`로 고정했다.
+- UI-P0-03 USER Gate 완료 전 Systems 승격과 UI-P0-04 Source 착수는 하지 않는다.
 
 ### v1.52.0 - 2026-08-13
 

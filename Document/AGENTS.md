@@ -1,7 +1,7 @@
 # CarFight Document 작업 규칙
 
-- 문서 버전: v2.1
-- 최근 갱신일: 2026-08-02
+- 문서 버전: v2.2
+- 최근 갱신일: 2026-08-19
 - 문서 상태: Current
 - 적용 범위: `Document/` 이하의 문서 읽기, 작성, 정리, 색인 갱신과 상태 기록
 
@@ -131,7 +131,7 @@ Document/Plan/AGENTS.md
 상세 상태는 대표 Plan과 실제 저장소가 소유한다.
 특정 작업명이나 작업 ID가 있으면 마지막 작업 초점보다 해당 작업을 우선한다.
 
-빌드와 PIE 상태를 분리하며 사용자가 확인하지 않은 PIE 결과를 `PASS`나 `Completed`로 기록하지 않는다.
+빌드와 PIE 상태를 분리한다. Accepted GoPyMCP UE MCP/`GoPyMCP.RuntimeRead`로 직접 관측한 PIE runtime 기술 사실은 AI Technical PASS로 기록할 수 있지만, 시각 품질·UX·조작감·주행감·조준감·연출 감각은 사용자가 확인하지 않은 상태에서 USER PASS나 Completed로 확대하지 않는다.
 
 검증 기록은 가능한 범위에서 다음을 분리한다.
 
@@ -160,6 +160,11 @@ D:\Work\CarFight_git\Tools\BuildEditor.bat
 
 ## 6. Changelog
 
+### v2.2 - 2026-08-19
+
+- Accepted `GoPyMCP.RuntimeRead`로 직접 관측 가능한 PIE runtime 기술 사실은 사용자 확인 없이도 AI Technical PASS로 기록할 수 있도록 문서 증거 규칙을 갱신했다.
+- USER PASS는 시각 품질, UX, 조작감, 주행감, 조준감과 연출 감각처럼 사람 판단이 필요한 항목에만 유지하며 AI Technical PASS와 구분한다.
+
 ### v2.1 - 2026-08-02
 
 - 검증 결과, 증거, 실행 수단, 공용 재실행 진입점과 역사 범위를 분리해서 기록하도록 문서 기준을 추가했다.
@@ -187,3 +192,4 @@ D:\Work\CarFight_git\Tools\BuildEditor.bat
 - 기존 미커밋 변경은 자동으로 정리하거나 되돌리지 않는다.
 - 과거 검증 도구 부재와 Not Run 기록은 날짜가 있는 역사 상태로 유지하며 현재 검증 가능 여부는 최신 도구·저장소·범위·증거로 다시 판단한다.
 - 작업 전용 임시 실행 경로는 명시적 공용화 결정이 없는 한 공식 도구나 Git 등록 대상으로 해석하지 않는다.
+- PIE 관련 문서 상태를 기록할 때 `AI Runtime Technical Validation`과 `USER Visual/Feel Validation`을 구분한다. Accepted RuntimeRead evidence가 존재하는 기술 사실을 단순히 사용자 미확인이라는 이유로 Pending으로 되돌리지 않는다.

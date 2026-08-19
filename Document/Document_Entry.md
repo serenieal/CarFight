@@ -1,8 +1,8 @@
 # Document Entry (CarFight)
 
-- 문서 버전: v2.10
+- 문서 버전: v2.11
 - 작성일: 2026-06-19
-- 최근 갱신일: 2026-08-13
+- 최근 갱신일: 2026-08-19
 - 문서 상태: Current
 - 역할: `Document/` 전체의 작업별 진입 라우터
 
@@ -313,8 +313,9 @@ CarFight가 독립 도구의 공개 기능에 의존할 경우 다음 정보만 
 12. 수정 직후 Git diff 검수
 13. 공식 빌드와 관련 자동 테스트 실행
 14. 필요한 후속 보정과 재검증
-15. 사용자 PIE 또는 Editor 에셋 작업 절차 제공
-16. 관련 대표 Plan, ActiveWork, ProjectSSOT 또는 Systems 동기화
+15. PIE-runtime 기술 검증이 필요하면 Accepted `GoPyMCP.RuntimeRead`로 관측 가능한 사실을 AI가 먼저 직접 검증
+16. 시각·UX·조작감·주행감·조준감·연출 감각처럼 사람 판단이 남거나 현재 capability 밖인 경우에만 사용자 PIE 또는 Editor 작업 절차 제공
+17. 관련 대표 Plan, ActiveWork, ProjectSSOT 또는 Systems 동기화
 ```
 
 현재 AI 세션의 기본 완료 조건은 실제 구현, diff 검수와 가능한 검증을 같은 작업 흐름에서 수행하는 것이다.
@@ -507,6 +508,12 @@ Document/
 
 ## 11. Changelog
 
+### v2.11 - 2026-08-19
+
+- CarFight 구현 검증 라우팅에 Accepted `GoPyMCP.RuntimeRead` 우선 단계를 추가했다.
+- PIE-runtime의 관측 가능한 기술 사실은 AI가 먼저 직접 검증하고, 사용자 PIE는 시각·UX·조작감·주행감·조준감·연출 감각 또는 현재 capability 밖의 항목에만 남기도록 작업 순서를 교정했다.
+- `AI Runtime Technical Validation`과 `USER Visual/Feel Validation`을 서로 다른 evidence gate로 취급하도록 총괄 라우팅을 `CodeWorkGate.md v2.7`과 정합화했다.
+
 ### v2.10 - 2026-08-13
 
 - 대표 Plan을 detailed work status owner, ActiveWork와 Plan Index를 Current projection으로 명확히 했다.
@@ -593,6 +600,12 @@ Document/
 ---
 
 ## 12. Migration
+
+### v2.11 적용 안내
+
+- 새 CarFight 작업은 PIE-runtime technical fact가 필요한 경우 사용자 확인을 요청하기 전에 Accepted `GoPyMCP.RuntimeRead` 적용 가능성을 먼저 판정한다.
+- RuntimeRead로 기술 PASS를 확보해도 USER Visual/Feel PASS를 추정하지 않으며, 반대로 사용자 미확인만으로 RuntimeRead technical evidence를 Pending 처리하지 않는다.
+- RuntimeRead 세부 tool/policy/lifecycle 계약은 GoPyMCP Current 문서가 소유하며 CarFight 문서에는 Consumer 사용 원칙만 유지한다.
 
 ### v2.10 적용 안내
 

@@ -1,9 +1,9 @@
 # WeaponFire
 
-- Version: 1.5.2
-- Date: 2026-07-24
-- Status: Current / Muzzle Clearance User PIE Verified
-- Scope: 현재 구현된 차량 로컬 발사 명령, 무기 데이터 해석, Weapon Aim Solution, 쿨다운, HitScan / Projectile 분기, 발사 결과 기록과 UI 피드백 연결 기준
+- Version: 1.8.0
+- Date: 2026-08-18
+- Status: Current / Applied Fitting Weapon Selection + Ammo + Weapon Heat Runtime Integrated / Muzzle Clearance User PIE Verified
+- Scope: 현재 구현된 차량 로컬 발사 명령, Applied Fitting 기반 실제 무기 선택, WeaponData 해석, Weapon Aim Solution, 쿨다운·Ammo·Heat 발사 가능 경계, HitScan / Projectile 분기, 발사 결과 기록과 UI 피드백 연결 기준
 
 ---
 
@@ -111,8 +111,11 @@ VehicleData
 → FireOrigin
 ```
 
-현재 기본 활성 장착 프로파일 ID는 `RoofTurret_MediumOrLarge`다.
-현재 기본 위치 슬롯 참조는 `Top_01` 계열 하드포인트를 기준으로 해석된다.
+Legacy/single-weapon 경로의 기본 활성 장착 프로파일 ID는 `RoofTurret_MediumOrLarge`다. Applied Fitting Weapon Selection Runtime이 있으면 `FCFVehicleFittingSnapshot::ResolvedMounts` 중 실제 weapon-bearing mount의 결정론적 순서를 선택 순서로 사용하고, 선택된 항목의 내부 `MountProfileId`만 FireOrigin·Ammo Runtime identity로 사용한다. 이 내부 ID를 Player-facing WeaponGroup 이름으로 표시하지 않는다.
+
+Player-facing 선택 목록은 `EquipmentPresetData.DisplayName`만 노출하며 `WeaponId`, `EquipmentId`, `MountProfileId`, Asset 이름 fallback은 없다. `ACFVehiclePawn::RequestSelectWeaponIndex()`는 고정 순번으로만 전환하고, Launcher Sequence가 실행 중이면 기존 `WeaponChanged` 정상 취소 계약으로 예약·Action Lock을 정리한 뒤 WeaponComp와 현재 단일 Turret Visual을 같은 선택으로 갱신한다.
+
+선택 가능한 각 무기는 독립된 `LastAcceptedFireTimeSeconds`와 Heat Runtime을 가지며 비선택 Heat도 Game-Time Tick에서 계속 자연 냉각된다. 따라서 무기 A의 쿨다운·Heat가 B로 전달되거나 선택 해제 시 Heat가 소실되지 않는다.
 
 ### 4.4 Muzzle Socket이 있으면 총구 기준으로 보정
 
@@ -206,11 +209,16 @@ InvalidAimDirection
 InvalidAimOrigin
 AimBlocked
 WeaponCooldown
+WeaponOverheated
 TurretAligning
 WeaponNotAligned
 MuzzleBlocked
+Reloading
+WeaponActionLocked
 None
 ```
+
+`WeaponOverheated`는 활성·호환 WeaponData의 Heat Runtime이 실제 활성화되고 과열된 경우에만 사용한다. 이 검사는 WeaponData 호환 확인 뒤, 기존 WeaponCooldown 검사 전에 수행하며 Heat Runtime이 비활성이면 기존 발사 결과를 변경하지 않는다.
 
 `OutOfWeaponArc`는 호환용 enum 값으로 남아 있지만, 현재 P0 싱글플레이 기준에서는 조준각 초과만으로 발사를 막는 기본 거부 사유로 사용하지 않는다.
 `OutOfArc` / `bLocalWithinWeaponArc` 정책은 `Document/Systems/Vehicles/VehicleAim.md`를 우선 기준으로 본다.
@@ -231,6 +239,7 @@ MagazineSize
 ReloadTimeSeconds
 HeatPerShot
 MaxHeat
+HeatDissipationPerSecond
 DefaultProjectileData
 ProjectileDataId
 ```
@@ -246,7 +255,7 @@ ProjectileDataId
 - DefaultProjectileData
 ```
 
-현재 `MagazineSize`, `ReloadTimeSeconds`, `HeatPerShot`, `MaxHeat`는 데이터 필드로 존재하지만 실제 탄창 / 재장전 / 과열 런타임을 수행하지 않는다.
+현재 `MagazineSize`와 `ReloadTimeSeconds`는 CF-FQ-031 Ammo Runtime이 실제로 소비하는 정적 입력이다. 실제 Loaded·Reserve·발사 예약·Reload 상태는 `UCFVehicleAmmoComp`가 소유하며 WeaponFire가 직접 상태 머신을 소유하지 않는다. `HeatPerShot`, `MaxHeat`, `HeatDissipationPerSecond`는 UI-P0-06 Heat Runtime의 정적 입력이며 세 값이 모두 유한한 양수일 때만 활성화된다. 현재 Heat·자연 냉각·과열 상태는 `FCFWeaponHeatRuntime`을 포함한 `UCFVehicleWeaponComp`가 소유한다. WeaponData 전체 정적 계약은 `Document/Systems/Combat/WeaponData.md`를 우선한다.
 
 ### 4.7 Projectile Actor 또는 Dummy HitScan 분기
 
@@ -270,11 +279,14 @@ Projectile Actor 확보에 실패하면 `RunLocalDummyHitScan`으로 fallback한
 ```text
 - LastFireRequest 저장
 - LastFireResult 저장
-- 발사 성공 시 VehicleWeaponComp에 승인 발사 시각 기록
+- 발사 성공 시 VehicleWeaponComp에 실제 한 발의 Heat를 정확히 1회 누적
+- bRecordCooldown=true인 발사 성공 시 VehicleWeaponComp에 승인 발사 시각 기록
 - VehicleAimComp의 FireValidationState 갱신
 - VehicleAimComp의 FireResult 적용
 - VehicleAimComp의 AimVisualState 갱신
 ```
+
+Heat 누적은 실제 승인된 발사 결과에만 적용한다. SingleCycle과 Ripple·Salvo 후속 발사 모두 공통 `ApplyFireResultInternal`을 지나므로 승인된 실제 한 발마다 정확히 1회 증가하며, Ammo 예약·Commit/Rollback과 LauncherSequenceRevision 수명은 변경하지 않는다.
 
 현재 이 함수는 실제 대상 체력 차감이나 파괴 처리를 하지 않는다.
 
@@ -394,7 +406,8 @@ Reticle 또는 FireFeedback이 읽을 수 있는 대표 후보 데이터는 아�
 | `VehicleDisabled` | `FireRejected` | 차량 또는 Aim 런타임 준비 안 됨 |
 | `NoWeapon` | `NoWeapon` | 무기 없음 또는 무기 데이터 비호환 |
 | `WeaponCooldown` | `Cooldown` | 연사 제한 / 쿨다운 |
-| `NoAmmo` | `FireRejected` 또는 `Reloading` | 현재 탄약 시스템 미구현. 후속 상태 |
+| `WeaponOverheated` | `FireRejected` 또는 WeaponPanel `OVERHEATED` | 활성 무기의 실제 per-weapon Heat Runtime이 MaxHeat 도달 후 다음 표준 한 발의 여유가 생길 때까지 발사를 차단 |
+| `NoAmmo` | `FireRejected` 또는 `Reloading` | 유한탄 Runtime에서 새 발사에 필요한 즉시 사용 가능 탄약이 부족함. 실제 Loaded·Reserve·Reload 상태와 Action Lock은 `UCFVehicleAmmoComp`가 소유 |
 | `OutOfWeaponArc` | `OutOfArc` | 호환용 상태. 현재 기본 거부 조건 아님 |
 | `AimBlocked` | `Blocked` | 조준선 막힘 |
 | `TurretAligning` | `OutOfArcWarning` + `정렬 중` | 터렛/총구가 목표 방향으로 정렬 중 |
@@ -438,6 +451,7 @@ CooldownRatio = ActiveWeaponRemainingCooldownSeconds / ActiveWeaponCooldownSecon
 - 하드포인트 또는 Muzzle 소켓 기준 발사 원점과 방향을 만든다.
 - 가능한 경우 Weapon Aim Solution의 AimOrigin / AimDirection / Target을 HitScan과 Projectile이 공유하게 한다.
 - 쿨다운을 기록하고 검증한다.
+- 활성 WeaponData가 Heat Runtime을 명시한 경우 현재 과열을 발사 검증에서 차단하고 승인된 실제 한 발마다 Heat를 누적한다.
 - Projectile Actor 실행 경로와 Dummy HitScan fallback 경로를 분기한다.
 - 발사 결과를 AimComp와 VehicleDebug 상태에 반영한다.
 - Reticle / FireFeedback이 읽을 수 있는 발사 결과와 거부 사유를 기록한다.
@@ -454,9 +468,10 @@ CooldownRatio = ActiveWeaponRemainingCooldownSeconds / ActiveWeaponCooldownSecon
 - 차량 파괴 처리
 - 장갑 관통 계산
 - 모듈 손상 계산
-- 탄창 소모
-- 재장전 상태 전이
-- 열 누적 / 과열 상태 전이
+- 탄창 소모 상태 직접 소유 — `UCFVehicleAmmoComp` 책임
+- 재장전 상태 전이 직접 소유 — `UCFVehicleAmmoComp` 책임
+- Heat 정적 수치 소유 — `UCFWeaponData` 책임
+- 현재 Heat·자연 냉각·과열 상태 소유 — `UCFVehicleWeaponComp` / `FCFWeaponHeatRuntime` 책임
 - 서버 권한 검증
 - 멀티플레이 복제
 - 완성된 발사 VFX 출력
@@ -506,6 +521,7 @@ CooldownRatio = ActiveWeaponRemainingCooldownSeconds / ActiveWeaponCooldownSecon
 - Weapon Debug Snapshot 필드 변경
 - 실제 피해 적용이 WeaponFire 안으로 들어오는 구조 변경
 - RejectReason 종류 또는 의미 변경
+- Weapon Heat 발사 차단 또는 회복 정책 변경
 - OutOfWeaponArc를 실제 발사 거부 조건으로 사용하게 될 때
 - AimReticle / FireFeedback이 WeaponFire 결과를 읽는 최종 경로가 확정될 때
 ```
@@ -514,8 +530,8 @@ CooldownRatio = ActiveWeaponRemainingCooldownSeconds / ActiveWeaponCooldownSecon
 
 ## 13. 문서 버전 관리
 
-- 현재 문서 버전: `1.5.2`
-- 문서 상태: `Current / Muzzle Clearance User PIE Verified`
+- 현재 문서 버전: `1.8.0`
+- 문서 상태: `Current / Ammo + Weapon Heat Runtime Integrated / Muzzle Clearance User PIE Verified`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
   - 기능 설명 본문이 바뀌면 체인지로그도 같이 갱신한다.
@@ -538,6 +554,26 @@ CooldownRatio = ActiveWeaponRemainingCooldownSeconds / ActiveWeaponCooldownSecon
 ---
 
 ## 14. Migration
+
+### v1.6.0 -> v1.7.0
+
+```text
+- HeatPerShot / MaxHeat / HeatDissipationPerSecond가 모두 유효한 양수일 때만 per-weapon Heat Runtime을 활성화한다.
+- UCFVehicleWeaponComp가 CurrentHeat / 자연 냉각 / Overheated를 소유하고 ACFVehiclePawn은 과열 시 WeaponOverheated로 발사를 거부한다.
+- 승인된 실제 한 발의 Heat는 ApplyFireResultInternal에서 정확히 1회 누적한다. 기존 Ammo Transaction, Cooldown, LauncherSequenceRevision 계약은 유지한다.
+- 기존 저장 WeaponData는 HeatDissipationPerSecond 기본 0으로 Heat Runtime Disabled이므로 자동으로 발사 동작이 바뀌지 않는다.
+- Heat USER Visual과 실제 saved WeaponData tuning은 별도 Pending이며 이번 Technical PASS로 추정하지 않는다.
+```
+
+### v1.5.2 -> v1.6.0
+
+```text
+- CF-FQ-031 완료 이후 MagazineSize / ReloadTimeSeconds를 미구현 예약 필드로 해석하지 않는다.
+- WeaponData는 Ammo 정적 설정을 제공하고 UCFVehicleAmmoComp가 Loaded / Reserve / Reservation / Reload Runtime을 소유한다.
+- WeaponFire는 NoAmmo 발사 거부 결과를 사용할 수 있지만 Ammo Runtime 상태 머신을 직접 소유하지 않는다.
+- 이 v1.6.0 당시 HeatPerShot / MaxHeat의 과열 Runtime 미구현 기록은 Historical이며 현재 v1.7.0에서는 explicit HeatDissipationPerSecond와 per-weapon Heat Runtime이 추가됐다.
+- WeaponData 전체 정적 계약은 Document/Systems/Combat/WeaponData.md를 우선한다.
+```
 
 ### v1.5.1 -> v1.5.2
 
@@ -607,6 +643,41 @@ CooldownRatio = ActiveWeaponRemainingCooldownSeconds / ActiveWeaponCooldownSecon
 ---
 
 ## 15. Changelog
+
+### v1.8.0 - 2026-08-18
+
+```text
+- CF-FQ-032 UI-P0-06에서 Applied Fitting Snapshot의 실제 weapon-bearing ResolvedMounts 고정 순서를 Player-facing Weapon Selection Runtime source로 연결했다.
+- 새 WeaponGroup ID를 만들지 않고 fixed display order + SelectedWeaponIndex를 사용한다. 내부 MountProfileId는 FireOrigin/Ammo identity로만 유지하며 HUD에는 전달하지 않는다.
+- 각 선택 무기의 Cooldown과 Heat를 독립 보존하고 비선택 Heat도 자연 냉각한다. 선택 전환은 Launcher active 상태를 WeaponChanged로 정상 취소한 뒤 WeaponComp와 현재 단일 Turret Visual을 같은 선택으로 갱신한다.
+- HUD 선택 항목은 EquipmentPresetData.DisplayName + bSelected만 포함한다. WeaponId/EquipmentId/MountProfileId/AssetName fallback은 없다.
+- Production WeaponRail은 기존 자식 3개가 실제 무기 슬롯이 아니라 Turret/Ammo/Reload 의미 아이콘이므로 이번 Runtime slice에서 계속 Collapsed다. 실제 Rail Visual Consumer는 별도 UI slice다.
+- final Official Build 62ffb62f69524bb18c3a9f11bb9f58f1 PASS, exact WeaponSelectionRuntimeContract ff23cf6ac04e4b2c8cf0084b24173cdb 1/1 PASS / Failure 0, Result SHA-256 0ffa955f626d0de3f5ebf7b2ac594d7f8b039d268fe6efb2ab0730abfe77618c다.
+- Content/Blueprint/Input/DataAsset mutation은 0이며 기존 Ammo/Reload/Cooldown/Launcher, Heat, RPM 완료 evidence를 반복하지 않았다.
+```
+
+Migration: Applied Fitting 기반 차량은 Weapon Selection fixed order/SelectedWeaponIndex를 사용한다. 별도 Player-facing WeaponGroupId를 만들거나 내부 MountProfileId를 UI 이름으로 재사용하지 않는다. Production Rail 표시와 실제 입력 매핑은 별도 후속 UI/Input slice에서 연결한다.
+
+### v1.7.0 - 2026-08-18
+
+```text
+- CF-FQ-032 UI-P0-06에서 FCFWeaponHeatRuntime + UCFVehicleWeaponComp per-weapon Heat Runtime을 additive 통합했다.
+- WeaponData의 HeatPerShot / MaxHeat / HeatDissipationPerSecond 세 값이 모두 양수일 때만 Heat가 활성화되며 기존 Asset 기본 0은 호환 Disabled다.
+- 승인된 실제 발사 결과마다 Heat를 정확히 한 번 누적하고 Component Tick에서 자연 냉각한다. MaxHeat 도달은 WeaponOverheated 발사 거부로 연결되고 다음 표준 한 발의 headroom까지 냉각되면 재사용한다.
+- HUD는 실제 Heat Runtime만 ResourceChannels Heat Percent로 전달하고 Presenter는 Reload > NoAmmo > Overheated > Cooldown/READY 단일 FireState와 Heat Secondary를 사용한다.
+- final Build 0ecfed49ab3a4f41b349fc707c44e5f2 PASS, exact HeatRuntimeResourceContract c736d1a6d6134a798a4b84452750e3d6 1/1 PASS. transient Pawn의 ExecuteAcceptedFireCommand→ApplyFireResult 4발 누적과 Component Tick 냉각까지 실행 검증했다.
+- Content Asset mutation, Heat tuning authoring, USER Visual PASS는 0이며 기존 Ammo/Reload/Cooldown/Launcher USER PASS를 재실행하지 않았다.
+```
+
+### v1.6.0 - 2026-08-15
+
+```text
+- CF-FQ-031 Ammo Current System과 UCFWeaponData v1.11.0 기준으로 WeaponFire의 오래된 Ammo 미구현 설명을 교정했다.
+- MagazineSize / ReloadTimeSeconds를 실제 Ammo Runtime의 정적 입력으로 명시하고 Loaded·Reserve·Reload 소유권은 UCFVehicleAmmoComp에 유지했다.
+- NoAmmo의 현재 의미를 finite Ammo Runtime 기준으로 갱신했다.
+- HeatPerShot / MaxHeat만 당시 과열 Runtime 미구현 예약 필드로 분리했다. 현재 v1.7.0에서는 Historical 기록이다.
+- WeaponData 전체 정적 계약의 Current owner를 Document/Systems/Combat/WeaponData.md로 연결했다.
+```
 
 ### v1.5.2 - 2026-07-24
 
@@ -687,16 +758,23 @@ CooldownRatio = ActiveWeaponRemainingCooldownSeconds / ActiveWeaponCooldownSecon
 
 ## 16. 마지막 확인 기준
 
-- 확인 일시: `2026-07-09`
+- 확인 일시: `2026-08-18`
 - 확인 근거:
-  - `UE/Source/CarFight_Re/Public/CFVehiclePawn.h`
-  - `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp`
-  - `UE/Source/CarFight_Re/Public/CFVehicleWeaponComp.h`
+  - `UE/Source/CarFight_Re/Public/CFVehiclePawn.h v2.150.0`
+  - `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp v2.150.0`
+  - `UE/Source/CarFight_Re/Public/CFVehicleWeaponComp.h v1.23.0`
+  - `UE/Source/CarFight_Re/Private/CFVehicleWeaponComp.cpp v1.23.0`
+  - `UE/Source/CarFight_Re/Public/CFWeaponHeatRuntime.h v1.0.0`
   - `UE/Source/CarFight_Re/Public/CFVehicleWeaponTypes.h`
   - `UE/Source/CarFight_Re/Public/CFVehicleAimTypes.h`
   - `UE/Source/CarFight_Re/Public/CFEquipmentPresetData.h`
-  - `UE/Source/CarFight_Re/Public/CFTurretMountData.h`
-  - `UE/Source/CarFight_Re/Public/CFWeaponData.h`
+    - `UE/Source/CarFight_Re/Public/CFTurretMountData.h`
+    - `UE/Source/CarFight_Re/Public/CFWeaponData.h v1.12.1`
+  - `UE/Source/CarFight_Re/Private/CFWeaponData.cpp v1.12.0`
   - `UE/Source/CarFight_Re/Public/CFProjectileData.h`
-  - `Document/Systems/Vehicles/VehicleAim.md`
+  - `Document/Systems/Combat/WeaponData.md v1.1.0`
+  - `Document/Systems/Combat/Ammo.md v1.0.0`
+    - `Document/Systems/Vehicles/VehicleAim.md`
+  - Heat final Build `0ecfed49ab3a4f41b349fc707c44e5f2`
+  - Heat exact Automation `c736d1a6d6134a798a4b84452750e3d6` / Result SHA-256 `1abf0dc7a4788d6543c7933abef38433849ae57d569229cfab220f14937abad5`
   - `Document/Systems/UI/AimReticle.md`

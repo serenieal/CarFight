@@ -1,7 +1,8 @@
 # SystemIndex
 
-- Version: 1.16.0
-- Date: 2026-08-13
+- Version: 1.20.0
+- Date: 2026-08-18
+
 - Status: Active
 - Scope: `Document/Systems/` 하위 문서 위치 안내 색인
 
@@ -32,7 +33,8 @@
 
 | 경로 | 문서 내용 |
 | --- | --- |
-| `Document/Systems/Combat/WeaponFire.md` | 싱글플레이 로컬 차량 Pawn에서 Fire 입력을 발사 명령으로 만들고, Weapon Aim Solution을 기준으로 Projectile Actor 또는 Dummy HitScan 경로로 넘기며, 발사 결과와 거부 사유를 Aim / Debug / 후속 UI 피드백이 읽을 수 있게 남기는 현재 발사 기능 문서다. |
+| `Document/Systems/Combat/WeaponData.md` | `CF-FQ-008`에서 완료한 `UCFWeaponData` 정적 무기 DataAsset Current System이다. Identity·Mount·Mass·Fire·TargetUse·Launcher·Ammo·Projectile/FX 정적 설정, DataValidation, fallback과 legacy field 책임 경계를 기록한다. |
+| `Document/Systems/Combat/WeaponFire.md` | 싱글플레이 로컬 차량 Pawn에서 Fire 입력을 발사 명령으로 만들고, Weapon Aim Solution을 기준으로 Projectile Actor 또는 Dummy HitScan 경로로 넘기며, 발사 결과와 거부 사유를 Aim / Debug / 후속 UI 피드백이 읽을 수 있게 남기는 현재 발사 기능 문서다. Ammo 수량·Reload 상태는 `UCFVehicleAmmoComp`가 소유한다. |
 | `Document/Systems/Combat/Ammo.md` | `CF-FQ-031`에서 완료한 차량 finite Ammo Current System이다. WeaponInstanceId별 Loaded, AmmoId별 Reserve, SingleCycle Commit·Rollback, Ripple·Salvo 전체 예약, FullMagazine Reload, WeaponPanel `Loaded / MagazineCapacity + Reserve`와 출격 Ammo 질량 계약을 기록한다. Heavy·Ripple USER PIE를 완료했다. |
 | `Document/Systems/Combat/FireFeedback.md` | `WeaponFire`가 남긴 로컬 발사 성공·실패·쿨다운·NoWeapon·AimBlocked·TurretAligning·MuzzleBlocked 결과를 Reticle 텍스트와 색상으로 표시한다. P0 상태 전환과 피드백 만료를 사용자 PIE로 확인했다. |
 | `Document/Systems/Combat/Projectile.md` | `ProjectileData`, 공통 `CFProjectileActor`, `ProjectileMotorComp`와 `ProjectilePoolComp`를 통한 비추진 포탄·비유도 Rocket 이동, 점화·연소·BurnedOut 관성 비행, 지속형 Trail·Thruster 소켓/Fallback·독립 Scale, 종료 Reset·Pool 재사용·고속 Bounds, 고속 연속 충돌과 첫 Impact 피해를 기록한다. `CF-TC-020`, `CF-TC-023`, `CF-TC-024`를 사용자 PIE로 확인했다. |
@@ -77,7 +79,18 @@
 
 ---
 
-## 8. UI 폴더
+## 8. Targeting 폴더
+
+현재 Targeting 폴더는 선택 자체와 독립된 차량 Sensor Contact/Knowledge Current System을 기록한다. TargetSelect의 후보 검색·선택 수명과 Sensor의 Detection·Contact lifecycle·Knowledge 책임은 합치지 않는다.
+
+| 경로 | 문서 내용 |
+| --- | --- |
+| `Document/Systems/Targeting/SensorContact.md` | `CF-FQ-036` Sensor Runtime과 `CF-FQ-037` Scanner 입력·장비 통합을 합친 Current System이다. bounded Passive/Visual/Active Detection, Live·LastKnown·Lost·DestroyedHold, Tactical Analysis·Knowledge, actor-free Snapshot, Utility Scanner Fitting Source, Pawn-owned V Active Scan command와 Target/Radar HUD read-only 소비 경계를 기록한다. Radar Range/Zoom·동적 Blip과 CF-FQ-032 USER Visual은 후속 범위다. |
+
+
+---
+
+## 9. UI 폴더
 
 | 경로 | 문서 내용 |
 | --- | --- |
@@ -88,14 +101,14 @@
 
 ---
 
-## 9. Vehicles 폴더
+## 10. Vehicles 폴더
 
 | 경로 | 문서 내용 |
 | --- | --- |
 | `Document/Systems/Vehicles/VehicleAim.md` | `VehicleCamera`가 만든 조준 결과와 Weapon Aim Solution을 Local 표시·검증 상태로 관리하고, 사용자 조준점과 `CurrentMuzzleDirection` 기반 터렛 레티클 월드 지점을 분리해 제공한다. 정렬 정책, `MuzzleBlocked`와 CF-FQ-025 터렛 레티클을 사용자 PIE로 확인했다. |
 | `Document/Systems/Vehicles/VehicleCamera.md` | Look 입력을 차량 기준 누적 조준 상태로 변환하고, 카메라 모드, Aim Profile, 속도, 충돌 상태를 반영해 SpringArm, FOV, AimTrace를 계산/적용하는 차량 카메라 기능 문서다. |
 | `Document/Systems/Vehicles/VehicleCoreDecisions.md` | 현재 차량 코어의 유지 결정, 교체 결정, 임시 운영 판단을 기록하는 결정 로그 문서다. 차량 코어 변경 전 확인해야 하는 기준 문서다. |
-| `Document/Systems/Vehicles/VehicleData.md` | 차량 하나의 외형, 주행 성격, 휠 물리, 휠 시각 구성, Wheel Class 참조, Drive 상태 판정 기준을 하나의 DataAsset으로 묶어 공급하는 차량 구성 데이터 문서다. |
+| `Document/Systems/Vehicles/VehicleData.md` | `UCFVehicleData`의 외형·Layout·Hardpoint·MountProfile·Fitting Mass·Movement·WheelVisual·Reference·Defense/Fx·DriveState 구성, 실제 Pawn 적용 순서, `bUseMovementOverrides` 현재 의미와 `UCFVDAValidator` 계약을 기록한다. CF-FQ-015 VD-P0-00~03 원격 기술 검증은 완료됐고 실제 주행 튜닝은 USER Pending이다. |
 | `Document/Systems/Vehicles/VehicleDrive.md` | 차량 입력을 Chaos Vehicle Movement에 적용하고, 속도/방향/접지/입력 상태를 바탕으로 DriveState를 계산/유지하는 주행 상태 기능 문서다. |
 | `Document/Systems/Vehicles/VehiclePawnLegacy.md` | `CFModVehiclePawn / BP_ModularVehicle` 계열을 현재 주력 차량 Pawn이 아닌 레거시 계열로 정리하는 문서다. |
 | `Document/Systems/Vehicles/VehicleRuntime.md` | 차량 Pawn이 BeginPlay 시점에 VehicleData를 실제 주행/휠/Drive 설정에 반영하고, Drive/WheelSync 준비를 검증한 뒤 런타임 Ready 상태를 관리하는 문서다. |
@@ -104,11 +117,12 @@
 
 ---
 
-## 10. 기능별로 찾기
+## 11. 기능별로 찾기
 
 | 찾고 싶은 내용 | 확인할 문서 |
 | --- | --- |
-| 현재 로컬 발사 명령, 무기 데이터 해석, 쿨다운, FireOrigin, 발사 결과 기록 | `Combat/WeaponFire.md` |
+| 무기 정적 DataAsset 계약, 장착 호환·질량·Fire·TargetUse·Launcher·Ammo 설정, DataValidation과 legacy/fallback 경계 | `Combat/WeaponData.md` |
+| 현재 로컬 발사 명령, WeaponData 해석, 쿨다운, FireOrigin, 발사 결과 기록 | `Combat/WeaponFire.md` |
 | 차량 finite Ammo, 무기별 장전량·탄종별 Reserve, Launcher 예약, FullMagazine Reload, WeaponPanel 탄약 표시와 출격 탄약 질량 | `Combat/Ammo.md` |
 | 발사 성공/실패/쿨다운/무기 없음 상태를 Reticle, HUD와 시각 VFX로 표시하는 기준 | `Combat/FireFeedback.md` |
 | 프로젝트 전역 게임 사운드 비지원 결정과 오디오 도입 금지 기준 | `Document/ProjectSSOT/04_ProjectDecisions.md` |
@@ -122,6 +136,8 @@
 | 프로젝트 시작 맵, 렌더링, 입력 백엔드 설정 | `Config/ProjectRuntimeConfig.md` |
 | 입력 액션, 매핑 컨텍스트, 키보드/게임패드 입력 처리 | `Input/Input.md` |
 | 보류된 서버 접속 후 차량 Pawn 생성과 Possess 기록 | `Network/ServerSpawn.md` |
+| 차량 Sensor 탐지, ContactId, Live/LastKnown/Lost/DestroyedHold, Tactical Analysis·Knowledge, Scanner Utility 장비/Fitting Source와 V Active Scan 입력, actor-free Snapshot/HUD 소비 경계 | `Targeting/SensorContact.md` |
+
 | UI 텍스트를 한국어로 표시하는 기준 | `UI/DisplayTextPolicy.md` |
 | 차량 디버그 위젯의 기본 문자열 표시 | `UI/VehicleDebug.md` |
 | 차량 디버그 패널의 탭/섹션 구조 | `UI/VehicleDebugPanel.md` |
@@ -138,7 +154,7 @@
 
 ---
 
-## 11. 문서 추가 시 갱신 규칙
+## 12. 문서 추가 시 갱신 규칙
 
 `Document/Systems/` 아래에 새 시스템 문서를 추가하면 이 문서도 함께 갱신한다.
 
@@ -150,7 +166,33 @@
 
 ---
 
-## 12. Changelog
+## 13. Changelog
+
+### v1.20.0 - 2026-08-18
+
+- `CF-FQ-037 SCAN-P0-00~07` 완료를 반영해 `SensorContact.md v1.1.0`을 Scanner Utility 장비/Fitting Source와 Pawn-owned V Active Scan 입력까지 포함하는 Current System으로 갱신했다.
+- SCAN-P0-06 USER PIE에서 5초 timed scan, 반복 입력 무연장과 Target Knowledge `???` 해제를 확인했고, 임시 관측 코드를 제거한 최종 Build `fcf52353d1f5440392d5e1c379f09ee3` PASS를 closure evidence로 연결했다.
+- Radar Range/Zoom·동적 Blip·CF-FQ-032 USER Visual과 Sensor energy/heat·AI/Network는 완료 범위에 포함하지 않았다.
+
+### v1.19.0 - 2026-08-15
+
+
+- `Document/Systems/Targeting/SensorContact.md v1.0.0`을 `CF-FQ-036 SEN-P0-00~07` Technical Acceptance PASS의 Current System으로 신규 등록했다.
+- Sensor의 bounded Passive/Visual/Active Detection, Contact lifecycle, Tactical Analysis·Knowledge, VehicleHealth authoritative DestroyedHold와 actor-free Snapshot 계약을 Targeting 색인에 추가했다.
+- TargetSelect는 후보 검색·선택·TrackState owner로 유지하고 HUD는 Sensor Snapshot을 read-only 소비하며 Radar Range/Zoom·동적 Blip·CF-FQ-032 USER Visual은 완료로 해석하지 않는 책임 경계를 명시했다.
+- 현재 기술 기준선은 Build `7dff9da7aaa24e76b0871348762c9d93` PASS, `CarFight.Sensor` `85d008613a104df9b7107795995c6ac5` 14/14 PASS다.
+
+### v1.18.0 - 2026-08-15
+
+- `Document/Systems/Combat/WeaponData.md v1.0.0`을 CF-FQ-008 Current System으로 신규 등록했다.
+- WeaponData의 정적 SSOT, DataValidation, Launcher·Ammo·Projectile/Fitting 소비 경계와 legacy/fallback 계약을 Combat 색인에 추가했다.
+- WeaponFire가 Ammo Runtime 상태를 직접 소유하지 않고 `UCFVehicleAmmoComp`가 Loaded·Reserve·Reload를 소유하는 현재 책임 경계를 색인 설명에 반영했다.
+
+### v1.17.0 - 2026-08-15
+
+- `Document/Systems/Vehicles/VehicleData.md`를 v2.0.0으로 전면 교정해 DA_PoliceCar 중심 구형 설명을 현재 `DA_TestSedan / DA_TestSUV` 기준으로 갱신했다.
+- Layout·Hardpoint·MountProfile·Fitting Mass까지 확장된 현재 VehicleData 계약과 `bUseMovementOverrides` 실제 런타임 의미를 반영했다.
+- CF-FQ-015 VD-P0-00~03의 Build·VehicleData Automation 3/3 Technical PASS를 기록하되 실제 주행감 USER 튜닝은 미완료 상태로 유지했다.
 
 ### v1.16.0 - 2026-08-13
 
@@ -269,7 +311,22 @@
 
 ---
 
-## 13. Migration
+## 14. Migration
+
+### v1.19.0 적용 안내
+
+- `CF-FQ-036` 완료 이후 Sensor/Contact 현재 구현은 `Targeting/SensorContact.md v1.0.0`과 실제 Source를 우선한다.
+- `Document/Plan/SensorContactPlan.md`는 완료 당시 설계·검증 evidence를 보존하는 Historical + Retained Path로 읽는다.
+- TargetSelect 후보 검색·선택 수명과 Sensor Contact lifecycle·Knowledge를 합치지 않는다.
+- Radar Range/Zoom·NormalizedPosition·동적 Blip 및 CF-FQ-032 Target/Radar USER Visual은 이 Current System 승격으로 자동 완료되지 않는다.
+- CF-FQ-026 TS-P0-08 USER PIE도 별도 Pending 상태를 유지한다.
+
+### v1.18.0 적용 안내
+
+- `CF-FQ-008` 완료 이후 WeaponData 현재 구현은 `Combat/WeaponData.md`와 실제 `UCFWeaponData` 코드를 우선한다.
+- `Document/Plan/WeaponDataPlan.md`는 완료 당시 설계·검증 기록인 Historical + Retained Path로 읽는다.
+- `MagazineSize`와 `ReloadTimeSeconds`는 현재 Ammo Runtime의 정적 입력이며, Loaded·Reserve·Reload 진행 상태는 `UCFVehicleAmmoComp`가 소유한다.
+- `HeatPerShot / MaxHeat`는 현재 과열 Runtime 완료를 의미하지 않는다.
 
 ### v1.15.0 적용 안내
 
