@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.2.0
-// Date: 2026-08-13
+// Version: 1.3.0
+// Date: 2026-08-16
 // Description: CarFight 차량 피팅 선택·검증·결정론적 Snapshot 공용 타입
-// Scope: 출격 전 장착·탄약·방어 선택, 검증 상태·오류와 결정론적 질량 Snapshot의 데이터 계약을 제공합니다.
+// Scope: 출격 전 장착·Scanner·탄약·방어 선택, 검증 상태·오류와 결정론적 질량 Snapshot의 데이터 계약을 제공합니다.
 // Changelog:
+// - v1.3.0: CF-FQ-037 SCAN-P0-01 해석된 VehicleSensorData와 단일 Scanner Source 검증 코드를 Snapshot 계약에 추가.
 // - v1.2.0: CF-FQ-031 AMMO-P0-07 FCFAmmoSortieLoad를 Snapshot에 보존하고 실제 AmmoMassKg 계산·Runtime 초기화 원본으로 사용하도록 계약 확장.
 // - v1.1.0: CF-FQ-034 FIT-P0-03 누락 선택 문제 코드, 정책 빈 장착 소스와 해석된 방어 선택 방식을 추가.
 // - v1.0.0: CF-FQ-034 FIT-P0-02 공용 피팅 enum과 구조체를 최초 추가.
@@ -25,6 +26,7 @@ class UCFEquipmentPresetData;
 class UCFTurretMountData;
 class UCFVehicleData;
 class UCFVehicleDefenseData;
+class UCFVehicleSensorData;
 class UCFWeaponData;
 
 /**
@@ -57,7 +59,7 @@ UENUM(BlueprintType)
 enum class ECFFittingIssueCode : uint8
 {
 	None UMETA(DisplayName="없음 (None)"),
-		MissingFittingData UMETA(DisplayName="피팅 데이터 없음 (Missing Fitting Data)"),
+				MissingFittingData UMETA(DisplayName="피팅 데이터 없음 (Missing Fitting Data)"),
 	MissingFittingId UMETA(DisplayName="피팅 ID 없음 (Missing Fitting ID)"),
 	MissingVehicleData UMETA(DisplayName="차량 데이터 없음 (Missing Vehicle Data)"),
 	VehicleDataMismatch UMETA(DisplayName="차량 데이터 불일치 (Vehicle Data Mismatch)"),
@@ -65,8 +67,10 @@ enum class ECFFittingIssueCode : uint8
 	MissingMountSelection UMETA(DisplayName="장착 선택 없음 (Missing Mount Selection)"),
 	UnknownMountProfile UMETA(DisplayName="알 수 없는 장착 프로파일 (Unknown Mount Profile)"),
 	MissingHardpointSlot UMETA(DisplayName="하드포인트 슬롯 없음 (Missing Hardpoint Slot)"),
-	MissingEquipmentPreset UMETA(DisplayName="장비 프리셋 없음 (Missing Equipment Preset)"),
+				MissingEquipmentPreset UMETA(DisplayName="장비 프리셋 없음 (Missing Equipment Preset)"),
 	IncompleteEquipmentPreset UMETA(DisplayName="장비 프리셋 불완전 (Incomplete Equipment Preset)"),
+	InvalidSensorData UMETA(DisplayName="센서 데이터 무효 (Invalid Sensor Data)"),
+	MultipleSensorSources UMETA(DisplayName="복수 센서 Source (Multiple Sensor Sources)"),
 	MountTypeMismatch UMETA(DisplayName="장착 타입 불일치 (Mount Type Mismatch)"),
 	WeaponSizeExceeded UMETA(DisplayName="무기 크기 초과 (Weapon Size Exceeded)"),
 	WeaponMountIncompatible UMETA(DisplayName="무기 장착 비호환 (Weapon Mount Incompatible)"),
@@ -108,7 +112,7 @@ UENUM(BlueprintType)
 enum class ECFFittingSelectionSource : uint8
 {
 	None UMETA(DisplayName="없음 (None)"),
-		VehicleDefault UMETA(DisplayName="차량 기본값 (Vehicle Default)"),
+				VehicleDefault UMETA(DisplayName="차량 기본값 (Vehicle Default)"),
 	FittingOverride UMETA(DisplayName="피팅 덮어쓰기 (Fitting Override)"),
 	ExplicitEmpty UMETA(DisplayName="명시적 빈 장착 (Explicit Empty)"),
 	MissingPolicyEmpty UMETA(DisplayName="누락 정책 빈 장착 (Missing Policy Empty)")
@@ -209,9 +213,13 @@ struct FCFResolvedFittingMount
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Snapshot", meta=(DisplayName="터렛 마운트 데이터 (TurretMountData)", ToolTip="최종 장비 프리셋에서 해석된 TurretMountData입니다."))
 	TObjectPtr<UCFTurretMountData> TurretMountData = nullptr;
 
-	// [v1.0.0] 장비 프리셋에서 최종 해석된 무기 DataAsset입니다.
+				// [v1.0.0] 장비 프리셋에서 최종 해석된 무기 DataAsset입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Snapshot", meta=(DisplayName="무기 데이터 (WeaponData)", ToolTip="최종 장비 프리셋에서 해석된 WeaponData입니다."))
 	TObjectPtr<UCFWeaponData> WeaponData = nullptr;
+
+	// [v1.3.0] Scanner Utility 프리셋에서 최종 해석된 Sensor 설정 DataAsset입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Snapshot", meta=(DisplayName="센서 데이터 (SensorData)", ToolTip="Utility Scanner 장비 프리셋에서 해석된 VehicleSensorData입니다. Scanner가 아닌 장착에서는 비어 있습니다."))
+	TObjectPtr<UCFVehicleSensorData> SensorData = nullptr;
 
 	// [v1.0.0] 이 최종 선택이 차량 기본값인지 피팅 덮어쓰기인지 나타냅니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Snapshot", meta=(DisplayName="선택 소스 (SelectionSource)", ToolTip="이 장착 결과가 차량 기본 장비, 피팅 덮어쓰기 또는 명시적 빈 장착 중 어디에서 해석됐는지 나타냅니다."))
@@ -250,9 +258,13 @@ struct FCFVehicleFittingSnapshot
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Snapshot", meta=(DisplayName="검증 문제 목록 (ValidationIssues)", ToolTip="피팅 해석 중 수집한 정보, 경고와 오류 목록입니다."))
 	TArray<FCFFittingValidationIssue> ValidationIssues;
 
-		// [v1.0.0] 각 장착 프로파일에서 최종 해석된 장비 목록입니다.
+						// [v1.0.0] 각 장착 프로파일에서 최종 해석된 장비 목록입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Snapshot", meta=(DisplayName="해석된 장착 목록 (ResolvedMounts)", ToolTip="차량 기본값과 피팅 선택을 모두 해석한 최종 장착 결과입니다."))
 	TArray<FCFResolvedFittingMount> ResolvedMounts;
+
+	// [v1.3.0] 유효한 Snapshot에서 단 하나로 해석된 Scanner SensorData입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Snapshot", meta=(DisplayName="해석된 센서 데이터 (ResolvedSensorData)", ToolTip="장착 결과 전체에서 단 하나로 해석된 VehicleSensorData입니다. Scanner Source가 없거나 둘 이상이면 비어 있습니다."))
+	TObjectPtr<UCFVehicleSensorData> ResolvedSensorData = nullptr;
 
 	// [v1.2.0] 실제 이번 출격에 싣는 탄종별 장전+예비 전체 탄약량 목록입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Snapshot", meta=(DisplayName="출격 탄약 적재 목록 (InitialSortieAmmoLoads)", ToolTip="VehicleFittingData에서 검증된 실제 출격 탄약 목록입니다. VehicleAmmoComp 초기화와 AmmoMassKg 계산의 원본이며 피팅 최대 적재량을 현재 수량으로 대체하지 않습니다."))
@@ -274,7 +286,7 @@ struct FCFVehicleFittingSnapshot
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Snapshot|Mass", meta=(Units="kg", DisplayName="장비 질량 kg (EquipmentMassKg)", ToolTip="해석된 모든 터렛 마운트와 무기 질량을 합산한 값입니다."))
 	float EquipmentMassKg = 0.0f;
 
-		// [v1.2.0] 명시적 출격 탄약 전체가 기여하는 실제 총질량입니다.
+				// [v1.2.0] 명시적 출격 탄약 전체가 기여하는 실제 총질량입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Snapshot|Mass", meta=(Units="kg", DisplayName="탄약 질량 kg (AmmoMassKg)", ToolTip="InitialSortieAmmoLoads의 실제 출격 수량 × AmmoData.UnitMassKg를 합산한 질량입니다. MaximumLoadableAmmoCount는 질량 계산에 사용하지 않습니다."))
 	float AmmoMassKg = 0.0f;
 

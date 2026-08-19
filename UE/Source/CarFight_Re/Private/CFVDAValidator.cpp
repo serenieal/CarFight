@@ -1,14 +1,23 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.2.0
-// Date: 2026-06-25
-// Description: Vehicle DA 입력 보조용 읽기 전용 검증 헬퍼 구현입니다.
-// Scope: CFVehicleData 필수 참조, 소켓, 레이아웃, Movement, WheelVisual, DriveState, 기준 DA 비교 검증 리포트를 제공합니다.
+// Version: 1.5.0
+// Date: 2026-08-18
+// Description: CF-FQ-015 VehicleData 검증 + CF-FQ-032 explicit RedlineStartRPM 계약을 반영한 읽기 전용 검증 헬퍼 구현입니다.
+// Scope: CFVehicleData 필수 참조, 소켓, 레이아웃, 하드포인트·MountProfile, 피팅 질량, Movement, WheelVisual, DriveState, 기준 DA 비교 검증 리포트를 제공합니다.
 // Changelog:
+// - v1.5.0: UI-P0-06 explicit RedlineStartRPM 검증 추가. 0은 backward-compatible 미설정으로 허용하고, 명시값만 EngineIdleRPM < RedlineStartRPM < EngineMaxRPM을 강제.
+// - v1.4.0: VD-P0-02에서 Movement override, Wheel width, WheelVisual auto-scale·clamp와 Fitting mass 비교 항목을 기존 CompareVehicleData에 추가.
+// - v1.3.0: VD-P0-01 피팅 질량·MountProfile 검증, Movement flag 의미 교정, Wheel auto-scale clamp·radius 검증을 추가.
 // - v1.2.0: HardpointSlots의 슬롯 ID, 선택 캡처 소켓, LocalTransform 상태 검증을 추가.
 // - v1.1.0: ThrottleInputScale 검사와 기준 DA 비교 항목을 추가.
 // - v1.0.0: EUW_VDAWizard 연동을 위한 BlueprintCallable 검증 함수와 결과 구조체를 추가.
 // Migration:
+// - v1.5.0 기존 VehicleData의 RedlineStartRPM=0은 유효한 미설정 상태다. Validator는 EngineMaxRPM/변속값으로 자동 보정하지 않으며 주행을 차단하지 않는다.
+// - RedlineStartRPM을 명시하면 EngineIdleRPM보다 크고 EngineMaxRPM보다 작아야 한다.
+// - v1.4.0 비교 항목은 기준/대상 VehicleData의 차이를 리포트할 뿐 실제 Asset 값을 수정하거나 자동 튜닝하지 않는다.
+// - 0/0 피팅 질량은 레거시 미설정 Info이며 기존 주행을 막지 않는다. 한쪽만 설정되거나 MaximumGross<Base이면 Error다.
+// - MountProfiles가 비어 있는 것은 허용하지만 존재하는 프로파일의 안정 ID와 Hardpoint 참조는 Error 수준으로 검사한다.
+// - bUseMovementOverrides=false는 Info이며 세부 Wheel Runtime/Throttle fallback 의미만 안내한다. Engine/Drag/Steering 본체 적용을 끈다고 표시하지 않는다.
 // - 하드포인트 소켓 누락은 휠 소켓 누락과 달리 Warning으로만 보고 전체 오류로 승격하지 않는다.
 // - 가속감 Quick Tune 적용 차량은 ThrottleInputScale 차이를 비교 리포트에서 확인한다.
 // - 기존 VehicleData 적용 경로는 변경하지 않는다.
@@ -359,7 +368,9 @@ FCFVDAValidationReport UCFVDAValidator::ValidateVehicleData(UCFVehicleData* Targ
 	CFVDAValidatorInternal::AppendReportItems(Report, ValidateRequiredReferences(TargetVehicleData));
 	CFVDAValidatorInternal::AppendReportItems(Report, ValidateWheelSockets(TargetVehicleData));
 	CFVDAValidatorInternal::AppendReportItems(Report, ValidateLayoutConfig(TargetVehicleData));
-	CFVDAValidatorInternal::AppendReportItems(Report, ValidateHardpointSlots(TargetVehicleData));
+			CFVDAValidatorInternal::AppendReportItems(Report, ValidateHardpointSlots(TargetVehicleData));
+	CFVDAValidatorInternal::AppendReportItems(Report, ValidateFittingMassConfig(TargetVehicleData));
+	CFVDAValidatorInternal::AppendReportItems(Report, ValidateMountProfiles(TargetVehicleData));
 	CFVDAValidatorInternal::AppendReportItems(Report, ValidateMovementConfig(TargetVehicleData));
 	CFVDAValidatorInternal::AppendReportItems(Report, ValidateWheelVisualConfig(TargetVehicleData));
 	CFVDAValidatorInternal::AppendReportItems(Report, ValidateDriveStateConfig(TargetVehicleData));
@@ -619,6 +630,131 @@ FCFVDAValidationReport UCFVDAValidator::ValidateHardpointSlots(UCFVehicleData* T
 	return Report;
 }
 
+// [v1.3.0] 대상 VehicleData의 피팅 기준 질량과 최대 허용 총중량 설정 정합성을 검사합니다.
+FCFVDAValidationReport UCFVDAValidator::ValidateFittingMassConfig(UCFVehicleData* TargetVehicleData)
+{
+	if (!TargetVehicleData)
+	{
+		return CFVDAValidatorInternal::MakeMissingTargetReport();
+	}
+
+	// [v1.3.0] 피팅 질량 검사 결과를 담을 리포트입니다.
+	FCFVDAValidationReport Report;
+	CFVDAValidatorInternal::InitializeReport(Report, TargetVehicleData, nullptr);
+
+	// [v1.3.0] 장비·탄약·방어를 더하기 전 차량 기준 질량입니다.
+	const float BaseVehicleMassKg = TargetVehicleData->BaseVehicleMassKg;
+	// [v1.3.0] 장비·탄약·방어를 포함한 차량 최대 허용 총중량입니다.
+	const float MaximumGrossMassKg = TargetVehicleData->MaximumGrossMassKg;
+
+	if (!FMath::IsFinite(BaseVehicleMassKg) || BaseVehicleMassKg < 0.0f)
+	{
+		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("FittingMass")), TEXT("BaseVehicleMassKg"), TEXT("기준 차량 질량"), TEXT("BaseVehicleMassKg는 유한한 0 이상 값이어야 합니다."), TEXT("미설정이면 0으로 두고, 피팅을 사용할 차량이면 실제 기준 차량 질량 kg을 입력하세요."));
+	}
+
+	if (!FMath::IsFinite(MaximumGrossMassKg) || MaximumGrossMassKg < 0.0f)
+	{
+		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("FittingMass")), TEXT("MaximumGrossMassKg"), TEXT("최대 허용 총중량"), TEXT("MaximumGrossMassKg는 유한한 0 이상 값이어야 합니다."), TEXT("미설정이면 0으로 두고, 피팅을 사용할 차량이면 BaseVehicleMassKg 이상의 최대 총중량 kg을 입력하세요."));
+	}
+
+	if (FMath::IsFinite(BaseVehicleMassKg) && FMath::IsFinite(MaximumGrossMassKg) && BaseVehicleMassKg >= 0.0f && MaximumGrossMassKg >= 0.0f)
+	{
+		// [v1.3.0] 기준 질량이 레거시 미설정 상태인지 여부입니다.
+		const bool bBaseMassUnset = FMath::IsNearlyZero(BaseVehicleMassKg);
+		// [v1.3.0] 최대 총중량이 레거시 미설정 상태인지 여부입니다.
+		const bool bMaximumGrossMassUnset = FMath::IsNearlyZero(MaximumGrossMassKg);
+
+		if (bBaseMassUnset && bMaximumGrossMassUnset)
+		{
+			CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Info, FName(TEXT("FittingMass")), TEXT("BaseVehicleMassKg / MaximumGrossMassKg"), TEXT("피팅 질량 설정"), TEXT("기준 질량과 최대 총중량이 모두 0으로 미설정 상태입니다. 기존 주행에는 영향을 주지 않습니다."), TEXT("이 차량을 피팅 시스템에 사용할 때만 실제 BaseVehicleMassKg와 MaximumGrossMassKg를 함께 입력하세요."));
+		}
+		else if (bBaseMassUnset != bMaximumGrossMassUnset)
+		{
+			CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("FittingMass")), TEXT("BaseVehicleMassKg / MaximumGrossMassKg"), TEXT("피팅 질량 설정"), TEXT("BaseVehicleMassKg와 MaximumGrossMassKg 중 한쪽만 설정되어 피팅 질량 계약이 불완전합니다."), TEXT("피팅을 사용하지 않으면 둘 다 0으로 두고, 사용할 차량이면 두 값을 모두 0보다 크게 입력하세요."));
+		}
+		else if (MaximumGrossMassKg < BaseVehicleMassKg)
+		{
+			CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("FittingMass")), TEXT("MaximumGrossMassKg"), TEXT("최대 허용 총중량"), TEXT("MaximumGrossMassKg가 BaseVehicleMassKg보다 작습니다."), TEXT("최대 허용 총중량을 기준 차량 질량 이상으로 수정하세요."));
+		}
+	}
+
+	CFVDAValidatorInternal::FinalizeReport(Report);
+	return Report;
+}
+
+// [v1.3.0] 대상 VehicleData의 MountProfile 안정 ID와 Hardpoint 위치 참조 정합성을 검사합니다.
+FCFVDAValidationReport UCFVDAValidator::ValidateMountProfiles(UCFVehicleData* TargetVehicleData)
+{
+	if (!TargetVehicleData)
+	{
+		return CFVDAValidatorInternal::MakeMissingTargetReport();
+	}
+
+	// [v1.3.0] 장착 프로파일 검사 결과를 담을 리포트입니다.
+	FCFVDAValidationReport Report;
+	CFVDAValidatorInternal::InitializeReport(Report, TargetVehicleData, nullptr);
+
+	// [v1.3.0] 실제 차량이 제공하는 유효 Hardpoint 위치 ID 집합입니다.
+	TSet<FName> HardpointLocationSlotIds;
+	for (const FCFVehicleHardpointSlot& HardpointSlot : TargetVehicleData->HardpointSlots)
+	{
+		if (!HardpointSlot.LocationSlotId.IsNone())
+		{
+			HardpointLocationSlotIds.Add(HardpointSlot.LocationSlotId);
+		}
+	}
+
+	// [v1.3.0] 대상 차량이 선언한 장착 프로파일 목록입니다.
+	const TArray<FCFVehicleMountProfile>& MountProfiles = TargetVehicleData->MountProfiles;
+	if (MountProfiles.IsEmpty())
+	{
+		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Info, FName(TEXT("MountProfile")), TEXT("MountProfiles"), TEXT("전투 장착 프로파일"), TEXT("MountProfiles 배열이 비어 있습니다."), TEXT("전투 장비를 장착하지 않는 차량이면 그대로 둘 수 있습니다. 피팅을 사용할 차량이면 HardpointSlots를 참조하는 프로파일을 추가하세요."));
+		CFVDAValidatorInternal::FinalizeReport(Report);
+		return Report;
+	}
+
+	// [v1.3.0] 중복 MountProfileId를 검출하기 위해 이미 등장한 ID를 저장합니다.
+	TSet<FName> SeenMountProfileIds;
+	for (int32 MountProfileIndex = 0; MountProfileIndex < MountProfiles.Num(); ++MountProfileIndex)
+	{
+		// [v1.3.0] 현재 검사 중인 장착 프로파일입니다.
+		const FCFVehicleMountProfile& MountProfile = MountProfiles[MountProfileIndex];
+		// [v1.3.0] 현재 프로파일의 리포트 필드 경로 접두사입니다.
+		const FString FieldPathPrefix = FString::Printf(TEXT("MountProfiles[%d]"), MountProfileIndex);
+		// [v1.3.0] 현재 프로파일을 UI에 표시할 이름입니다.
+		const FString ProfileDisplayName = MountProfile.MountProfileId.IsNone()
+			? FString::Printf(TEXT("장착 프로파일 %d"), MountProfileIndex)
+			: FString::Printf(TEXT("장착 프로파일 %s"), *MountProfile.MountProfileId.ToString());
+
+		if (MountProfile.MountProfileId.IsNone())
+		{
+			CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("MountProfile")), FieldPathPrefix + TEXT(".MountProfileId"), ProfileDisplayName, TEXT("MountProfileId가 비어 있어 피팅과 런타임에서 이 장착 규칙을 안정적으로 참조할 수 없습니다."), TEXT("RoofTurret_MediumOrLarge처럼 고유한 MountProfileId를 입력하세요."));
+		}
+		else if (SeenMountProfileIds.Contains(MountProfile.MountProfileId))
+		{
+			const FString Message = FString::Printf(TEXT("MountProfileId %s가 중복됩니다."), *MountProfile.MountProfileId.ToString());
+			CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("MountProfile")), FieldPathPrefix + TEXT(".MountProfileId"), ProfileDisplayName, Message, TEXT("각 MountProfile은 고유한 MountProfileId를 사용하세요."));
+		}
+		else
+		{
+			SeenMountProfileIds.Add(MountProfile.MountProfileId);
+		}
+
+		if (MountProfile.LocationSlotRef.IsNone())
+		{
+			CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("MountProfile")), FieldPathPrefix + TEXT(".LocationSlotRef"), ProfileDisplayName, TEXT("LocationSlotRef가 비어 있어 실제 차량 하드포인트 위치를 해석할 수 없습니다."), TEXT("HardpointSlots에 존재하는 Front_01, Top_01 같은 LocationSlotId를 지정하세요."));
+		}
+		else if (!HardpointLocationSlotIds.Contains(MountProfile.LocationSlotRef))
+		{
+			const FString Message = FString::Printf(TEXT("LocationSlotRef %s에 대응하는 HardpointSlot이 없습니다."), *MountProfile.LocationSlotRef.ToString());
+			CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("MountProfile")), FieldPathPrefix + TEXT(".LocationSlotRef"), ProfileDisplayName, Message, TEXT("HardpointSlots에 해당 LocationSlotId를 추가하거나 프로파일 참조를 기존 슬롯 ID로 수정하세요."));
+		}
+	}
+
+	CFVDAValidatorInternal::FinalizeReport(Report);
+	return Report;
+}
+
 // 대상 VehicleData의 Movement 수치 기본 범위와 위험값을 검사합니다.
 FCFVDAValidationReport UCFVDAValidator::ValidateMovementConfig(UCFVehicleData* TargetVehicleData)
 {
@@ -634,9 +770,9 @@ FCFVDAValidationReport UCFVDAValidator::ValidateMovementConfig(UCFVehicleData* T
 	// 대상 DA의 Movement 설정입니다.
 	const FCFVehicleMovementConfig& MovementConfig = TargetVehicleData->VehicleMovementConfig;
 
-	if (!MovementConfig.bUseMovementOverrides)
+			if (!MovementConfig.bUseMovementOverrides)
 	{
-		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Warning, FName(TEXT("Movement")), TEXT("VehicleMovementConfig.bUseMovementOverrides"), TEXT("VehicleMovement 설정 사용"), TEXT("VehicleMovement 덮어쓰기가 꺼져 있습니다."), TEXT("새 차량 DA가 Movement 값을 적용해야 한다면 bUseMovementOverrides를 켜세요."));
+		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Info, FName(TEXT("Movement")), TEXT("VehicleMovementConfig.bUseMovementOverrides"), TEXT("VehicleMovement 세부 Override 사용"), TEXT("세부 Wheel Runtime 튜닝과 ThrottleInputScale은 fallback 경로를 사용합니다. Engine, Drag, Differential, Steering 같은 VehicleData 본체 Movement 값은 현재 런타임에서 계속 적용됩니다."), TEXT("차량별 Wheel 상세 튜닝과 ThrottleInputScale이 필요할 때만 bUseMovementOverrides를 켜세요."));
 	}
 
 	if (MovementConfig.bUseMovementOverrides && MovementConfig.FrontWheelRadius <= 0.0f)
@@ -659,14 +795,30 @@ FCFVDAValidationReport UCFVDAValidator::ValidateMovementConfig(UCFVehicleData* T
 		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("Movement")), TEXT("VehicleMovementConfig.RearWheelWidth"), TEXT("후륜 휠 폭"), TEXT("후륜 휠 폭은 0보다 커야 합니다."), TEXT("차량 휠 크기에 맞는 후륜 폭(cm)을 입력하세요."));
 	}
 
-	if (MovementConfig.EngineMaxRPM <= MovementConfig.EngineIdleRPM)
+		if (MovementConfig.EngineMaxRPM <= MovementConfig.EngineIdleRPM)
 	{
 		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("Movement")), TEXT("VehicleMovementConfig.EngineMaxRPM"), TEXT("엔진 최대 RPM"), TEXT("엔진 최대 RPM은 엔진 아이들 RPM보다 커야 합니다."), TEXT("EngineMaxRPM을 EngineIdleRPM보다 큰 값으로 수정하세요."));
 	}
 
-	if (MovementConfig.ThrottleInputScale <= 0.0f)
+	if (MovementConfig.RedlineStartRPM < 0.0f)
 	{
-		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("Movement")), TEXT("VehicleMovementConfig.ThrottleInputScale"), TEXT("스로틀 입력 배율"), TEXT("스로틀 입력 배율이 0 이하라 차량이 전진하지 않을 수 있습니다."), TEXT("가속감 Quick Tune을 다시 적용하거나 ThrottleInputScale을 0.2~1.0 사이로 조정하세요."));
+		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("Movement")), TEXT("VehicleMovementConfig.RedlineStartRPM"), TEXT("레드라인 시작 RPM"), TEXT("레드라인 시작 RPM은 0 이상이어야 합니다. 0은 명시적 미설정 상태입니다."), TEXT("미설정이면 0을 사용하고, 설정할 때는 EngineIdleRPM과 EngineMaxRPM 사이의 실제 값을 입력하세요."));
+	}
+	else if (MovementConfig.RedlineStartRPM > KINDA_SMALL_NUMBER)
+	{
+		if (MovementConfig.RedlineStartRPM <= MovementConfig.EngineIdleRPM)
+		{
+			CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("Movement")), TEXT("VehicleMovementConfig.RedlineStartRPM"), TEXT("레드라인 시작 RPM"), TEXT("명시된 레드라인 시작 RPM은 엔진 아이들 RPM보다 커야 합니다."), TEXT("RedlineStartRPM을 EngineIdleRPM보다 큰 실제 차량별 값으로 수정하세요."));
+		}
+		if (MovementConfig.RedlineStartRPM >= MovementConfig.EngineMaxRPM)
+		{
+			CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("Movement")), TEXT("VehicleMovementConfig.RedlineStartRPM"), TEXT("레드라인 시작 RPM"), TEXT("명시된 레드라인 시작 RPM은 엔진 최대 RPM보다 작아야 합니다."), TEXT("RedlineStartRPM을 EngineMaxRPM보다 작은 실제 차량별 값으로 수정하세요."));
+		}
+	}
+
+			if (MovementConfig.bUseMovementOverrides && MovementConfig.ThrottleInputScale <= 0.0f)
+	{
+		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("Movement")), TEXT("VehicleMovementConfig.ThrottleInputScale"), TEXT("스로틀 입력 배율"), TEXT("세부 Movement Override가 켜졌지만 ThrottleInputScale이 0 이하라 실제 스로틀 입력이 차단될 수 있습니다."), TEXT("ThrottleInputScale을 0보다 큰 값으로 수정하세요. 현재 기준 차량의 실제 값은 자동 변경하지 않습니다."));
 	}
 
 	if (MovementConfig.FrontWheelMaxSteerAngle > 50.0f)
@@ -710,9 +862,42 @@ FCFVDAValidationReport UCFVDAValidator::ValidateWheelVisualConfig(UCFVehicleData
 		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("WheelVisual")), TEXT("WheelVisualConfig.ExpectedWheelCount"), TEXT("예상 휠 개수"), TEXT("예상 휠 개수는 1 이상이어야 합니다."), TEXT("4륜 기본 차량이면 ExpectedWheelCount를 4로 설정하세요."));
 	}
 
-	if (WheelVisualConfig.FrontWheelCountForSteering > WheelVisualConfig.ExpectedWheelCount)
+			if (WheelVisualConfig.FrontWheelCountForSteering > WheelVisualConfig.ExpectedWheelCount)
 	{
 		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Warning, FName(TEXT("WheelVisual")), TEXT("WheelVisualConfig.FrontWheelCountForSteering"), TEXT("조향 전륜 개수"), TEXT("조향 전륜 개수가 예상 휠 개수보다 큽니다."), TEXT("4륜 전륜 조향 차량이면 FrontWheelCountForSteering을 2로 설정하세요."));
+	}
+
+	if (WheelVisualConfig.bUseWheelVisualOverrides && WheelVisualConfig.bAutoScaleWheelMeshToRadius)
+	{
+		// [v1.3.0] 휠 메시 자동 스케일의 최소 허용 배율입니다.
+		const float ScaleClampMin = WheelVisualConfig.WheelMeshScaleClampMin;
+		// [v1.3.0] 휠 메시 자동 스케일의 최대 허용 배율입니다.
+		const float ScaleClampMax = WheelVisualConfig.WheelMeshScaleClampMax;
+
+		if (!FMath::IsFinite(ScaleClampMin) || ScaleClampMin <= 0.0f)
+		{
+			CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("WheelVisual")), TEXT("WheelVisualConfig.WheelMeshScaleClampMin"), TEXT("휠 자동 스케일 최소값"), TEXT("자동 스케일 최소값은 유한한 0보다 큰 값이어야 합니다."), TEXT("WheelMeshScaleClampMin을 0보다 큰 안전값으로 수정하세요."));
+		}
+
+		if (!FMath::IsFinite(ScaleClampMax) || ScaleClampMax <= 0.0f)
+		{
+			CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("WheelVisual")), TEXT("WheelVisualConfig.WheelMeshScaleClampMax"), TEXT("휠 자동 스케일 최대값"), TEXT("자동 스케일 최대값은 유한한 0보다 큰 값이어야 합니다."), TEXT("WheelMeshScaleClampMax를 0보다 큰 안전값으로 수정하세요."));
+		}
+
+		if (FMath::IsFinite(ScaleClampMin) && FMath::IsFinite(ScaleClampMax) && ScaleClampMin > ScaleClampMax)
+		{
+			CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("WheelVisual")), TEXT("WheelVisualConfig.WheelMeshScaleClampMin / WheelMeshScaleClampMax"), TEXT("휠 자동 스케일 범위"), TEXT("WheelMeshScaleClampMin이 WheelMeshScaleClampMax보다 큽니다."), TEXT("최소값이 최대값보다 작거나 같도록 자동 스케일 범위를 수정하세요."));
+		}
+
+		if (!FMath::IsFinite(TargetVehicleData->VehicleMovementConfig.FrontWheelRadius) || TargetVehicleData->VehicleMovementConfig.FrontWheelRadius <= 0.0f)
+		{
+			CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("WheelVisual")), TEXT("VehicleMovementConfig.FrontWheelRadius"), TEXT("전륜 휠 반지름"), TEXT("WheelRadius 기반 자동 스케일을 사용하지만 FrontWheelRadius가 유효하지 않습니다."), TEXT("실제 전륜 반지름(cm)을 0보다 크게 입력하거나 자동 스케일을 끄세요."));
+		}
+
+		if (!FMath::IsFinite(TargetVehicleData->VehicleMovementConfig.RearWheelRadius) || TargetVehicleData->VehicleMovementConfig.RearWheelRadius <= 0.0f)
+		{
+			CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("WheelVisual")), TEXT("VehicleMovementConfig.RearWheelRadius"), TEXT("후륜 휠 반지름"), TEXT("WheelRadius 기반 자동 스케일을 사용하지만 RearWheelRadius가 유효하지 않습니다."), TEXT("실제 후륜 반지름(cm)을 0보다 크게 입력하거나 자동 스케일을 끄세요."));
+		}
 	}
 
 	CFVDAValidatorInternal::FinalizeReport(Report);
@@ -800,18 +985,33 @@ FCFVDAValidationReport UCFVDAValidator::CompareVehicleData(UCFVehicleData* Targe
 	// 기준 DA의 Movement 설정입니다.
 	const FCFVehicleMovementConfig& SourceMovementConfig = SourceVehicleData->VehicleMovementConfig;
 
-	CFVDAValidatorInternal::AddNameCompareItem(Report, FName(TEXT("Compare")), TEXT("VehicleMovementConfig.MovementProfileName"), TEXT("이동 프로필 이름"), TargetMovementConfig.MovementProfileName, SourceMovementConfig.MovementProfileName, TEXT("프로필 이름이 의도한 새 차량 구분자인지 확인하세요."));
+		CFVDAValidatorInternal::AddNameCompareItem(Report, FName(TEXT("Compare")), TEXT("VehicleMovementConfig.MovementProfileName"), TEXT("이동 프로필 이름"), TargetMovementConfig.MovementProfileName, SourceMovementConfig.MovementProfileName, TEXT("프로필 이름이 의도한 새 차량 구분자인지 확인하세요."));
+	CFVDAValidatorInternal::AddBoolCompareItem(Report, FName(TEXT("Compare")), TEXT("VehicleMovementConfig.bUseMovementOverrides"), TEXT("Movement 세부 Override 사용"), TargetMovementConfig.bUseMovementOverrides, SourceMovementConfig.bUseMovementOverrides, ECFVDASeverity::Warning, TEXT("이 차이는 Wheel Runtime 상세 튜닝과 ThrottleInputScale 적용 경로를 바꾸므로 의도한 차량별 설정인지 확인하세요."));
 	CFVDAValidatorInternal::AddFloatCompareItem(Report, FName(TEXT("Compare")), TEXT("VehicleMovementConfig.EngineMaxTorque"), TEXT("엔진 최대 토크"), TargetMovementConfig.EngineMaxTorque, SourceMovementConfig.EngineMaxTorque, 150.0f, TEXT("직선 가속 5초와 출발 휠스핀을 확인하세요."));
 	CFVDAValidatorInternal::AddFloatCompareItem(Report, FName(TEXT("Compare")), TEXT("VehicleMovementConfig.EngineMaxRPM"), TEXT("엔진 최대 RPM"), TargetMovementConfig.EngineMaxRPM, SourceMovementConfig.EngineMaxRPM, 1500.0f, TEXT("고속 성격 변경이 의도한 것인지 확인하세요."));
 	CFVDAValidatorInternal::AddFloatCompareItem(Report, FName(TEXT("Compare")), TEXT("VehicleMovementConfig.ThrottleInputScale"), TEXT("스로틀 입력 배율"), TargetMovementConfig.ThrottleInputScale, SourceMovementConfig.ThrottleInputScale, 0.15f, TEXT("가속감 0%/100% 비교 시 0~30km/h 도달 시간을 확인하세요."));
 	CFVDAValidatorInternal::AddFloatCompareItem(Report, FName(TEXT("Compare")), TEXT("VehicleMovementConfig.FrontWheelMaxSteerAngle"), TEXT("전륜 최대 조향각"), TargetMovementConfig.FrontWheelMaxSteerAngle, SourceMovementConfig.FrontWheelMaxSteerAngle, 10.0f, TEXT("저속/중속/고속 조향 테스트를 나눠서 확인하세요."));
 	CFVDAValidatorInternal::AddFloatCompareItem(Report, FName(TEXT("Compare")), TEXT("VehicleMovementConfig.FrontWheelRadius"), TEXT("전륜 휠 반지름"), TargetMovementConfig.FrontWheelRadius, SourceMovementConfig.FrontWheelRadius, 8.0f, TEXT("실제 휠 메쉬 크기와 반지름 값이 맞는지 확인하세요."));
-	CFVDAValidatorInternal::AddFloatCompareItem(Report, FName(TEXT("Compare")), TEXT("VehicleMovementConfig.RearWheelRadius"), TEXT("후륜 휠 반지름"), TargetMovementConfig.RearWheelRadius, SourceMovementConfig.RearWheelRadius, 8.0f, TEXT("실제 휠 메쉬 크기와 반지름 값이 맞는지 확인하세요."));
+		CFVDAValidatorInternal::AddFloatCompareItem(Report, FName(TEXT("Compare")), TEXT("VehicleMovementConfig.RearWheelRadius"), TEXT("후륜 휠 반지름"), TargetMovementConfig.RearWheelRadius, SourceMovementConfig.RearWheelRadius, 8.0f, TEXT("실제 휠 메쉬 크기와 반지름 값이 맞는지 확인하세요."));
+	CFVDAValidatorInternal::AddFloatCompareItem(Report, FName(TEXT("Compare")), TEXT("VehicleMovementConfig.FrontWheelWidth"), TEXT("전륜 휠 폭"), TargetMovementConfig.FrontWheelWidth, SourceMovementConfig.FrontWheelWidth, 5.0f, TEXT("휠 메쉬 폭과 Wheel Class 물리 폭의 차이가 의도한 차량 특성인지 확인하세요."));
+	CFVDAValidatorInternal::AddFloatCompareItem(Report, FName(TEXT("Compare")), TEXT("VehicleMovementConfig.RearWheelWidth"), TEXT("후륜 휠 폭"), TargetMovementConfig.RearWheelWidth, SourceMovementConfig.RearWheelWidth, 5.0f, TEXT("휠 메쉬 폭과 Wheel Class 물리 폭의 차이가 의도한 차량 특성인지 확인하세요."));
 	CFVDAValidatorInternal::AddFloatCompareItem(Report, FName(TEXT("Compare")), TEXT("VehicleMovementConfig.FrontWheelFrictionForceMultiplier"), TEXT("전륜 마찰력 배수"), TargetMovementConfig.FrontWheelFrictionForceMultiplier, SourceMovementConfig.FrontWheelFrictionForceMultiplier, 0.75f, TEXT("좌우 슬라럼과 원형 회전 테스트로 접지감을 확인하세요."));
 	CFVDAValidatorInternal::AddFloatCompareItem(Report, FName(TEXT("Compare")), TEXT("VehicleMovementConfig.RearWheelFrictionForceMultiplier"), TEXT("후륜 마찰력 배수"), TargetMovementConfig.RearWheelFrictionForceMultiplier, SourceMovementConfig.RearWheelFrictionForceMultiplier, 0.75f, TEXT("출발 휠스핀과 코너 탈출 미끄러짐을 확인하세요."));
 	CFVDAValidatorInternal::AddFloatCompareItem(Report, FName(TEXT("Compare")), TEXT("VehicleMovementConfig.FrontWheelSpringRate"), TEXT("전륜 스프링 강성"), TargetMovementConfig.FrontWheelSpringRate, SourceMovementConfig.FrontWheelSpringRate, 100.0f, TEXT("정지 차고와 작은 턱 통과 시 차체 출렁임을 확인하세요."));
 	CFVDAValidatorInternal::AddFloatCompareItem(Report, FName(TEXT("Compare")), TEXT("VehicleMovementConfig.RearWheelSpringRate"), TEXT("후륜 스프링 강성"), TargetMovementConfig.RearWheelSpringRate, SourceMovementConfig.RearWheelSpringRate, 100.0f, TEXT("정지 차고와 작은 턱 통과 시 차체 출렁임을 확인하세요."));
-	CFVDAValidatorInternal::AddBoolCompareItem(Report, FName(TEXT("Compare")), TEXT("VehicleMovementConfig.bEnableCenterOfMassOverride"), TEXT("중심질량 오버라이드 사용 여부"), TargetMovementConfig.bEnableCenterOfMassOverride, SourceMovementConfig.bEnableCenterOfMassOverride, ECFVDASeverity::Warning, TEXT("중심질량 변경은 전복과 롤링에 큰 영향을 주므로 마지막 단계에서 확인하세요."));
+		CFVDAValidatorInternal::AddBoolCompareItem(Report, FName(TEXT("Compare")), TEXT("VehicleMovementConfig.bEnableCenterOfMassOverride"), TEXT("중심질량 오버라이드 사용 여부"), TargetMovementConfig.bEnableCenterOfMassOverride, SourceMovementConfig.bEnableCenterOfMassOverride, ECFVDASeverity::Warning, TEXT("중심질량 변경은 전복과 롤링에 큰 영향을 주므로 마지막 단계에서 확인하세요."));
+
+	// [v1.4.0] 대상 DA의 휠 시각 설정입니다.
+	const FCFVehicleWheelVisualConfig& TargetWheelVisualConfig = TargetVehicleData->WheelVisualConfig;
+	// [v1.4.0] 기준 DA의 휠 시각 설정입니다.
+	const FCFVehicleWheelVisualConfig& SourceWheelVisualConfig = SourceVehicleData->WheelVisualConfig;
+
+	CFVDAValidatorInternal::AddBoolCompareItem(Report, FName(TEXT("Compare")), TEXT("WheelVisualConfig.bAutoScaleWheelMeshToRadius"), TEXT("WheelRadius 기준 휠 메시 자동 스케일"), TargetWheelVisualConfig.bAutoScaleWheelMeshToRadius, SourceWheelVisualConfig.bAutoScaleWheelMeshToRadius, ECFVDASeverity::Info, TEXT("차량별 휠 메시 크기와 WheelRadius 기준 자동 보정 사용 여부가 의도와 맞는지 확인하세요."));
+	CFVDAValidatorInternal::AddFloatCompareItem(Report, FName(TEXT("Compare")), TEXT("WheelVisualConfig.WheelMeshScaleClampMin"), TEXT("휠 메시 자동 스케일 최소값"), TargetWheelVisualConfig.WheelMeshScaleClampMin, SourceWheelVisualConfig.WheelMeshScaleClampMin, 0.5f, TEXT("자동 스케일을 사용하는 차량이면 최소 허용 배율 차이가 필요한지 확인하세요."));
+	CFVDAValidatorInternal::AddFloatCompareItem(Report, FName(TEXT("Compare")), TEXT("WheelVisualConfig.WheelMeshScaleClampMax"), TEXT("휠 메시 자동 스케일 최대값"), TargetWheelVisualConfig.WheelMeshScaleClampMax, SourceWheelVisualConfig.WheelMeshScaleClampMax, 1.0f, TEXT("자동 스케일을 사용하는 차량이면 최대 허용 배율 차이가 필요한지 확인하세요."));
+
+	CFVDAValidatorInternal::AddFloatCompareItem(Report, FName(TEXT("Compare")), TEXT("BaseVehicleMassKg"), TEXT("기준 차량 질량"), TargetVehicleData->BaseVehicleMassKg, SourceVehicleData->BaseVehicleMassKg, 250.0f, TEXT("피팅 질량을 사용하는 차량에서만 실제 기준 질량 차이가 의도한 밸런스인지 확인하세요."));
+	CFVDAValidatorInternal::AddFloatCompareItem(Report, FName(TEXT("Compare")), TEXT("MaximumGrossMassKg"), TEXT("최대 허용 총중량"), TargetVehicleData->MaximumGrossMassKg, SourceVehicleData->MaximumGrossMassKg, 250.0f, TEXT("피팅 질량을 사용하는 차량에서만 허용 탑재 질량 차이가 의도한 밸런스인지 확인하세요."));
 
 	// 대상 DA의 DriveState 설정입니다.
 	const FCFVehicleDriveStateConfig& TargetDriveStateConfig = TargetVehicleData->DriveStateConfig;

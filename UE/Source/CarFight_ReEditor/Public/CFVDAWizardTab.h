@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.7.0
-// Date: 2026-06-25
-// Description: Vehicle DA 입력 보조용 Editor Slate 탭입니다.
+// Version: 1.8.0
+// Date: 2026-08-18
+// Description: P0-10 parity 기간 동안 유지되는 Legacy Vehicle DA 입력 보조용 Editor Slate 탭입니다.
 // Scope: Content Browser 선택 CFVehicleData를 Target/Source로 지정하고 검증 리포트를 표시합니다.
 // Changelog:
+// - v1.8.0: Authoring Recipe가 연결된 Target에서는 legacy Layout/Quick Tune/Revert 변경 동작을 비활성화하고 read-only 기능은 유지.
 // - v1.7.0: 차체 소켓 캡처 Wizard 문구를 차량 레이아웃 통합 캡처 기준으로 갱신.
 // - v1.6.0: 주행감 Quick Tune 되돌리기 버튼과 Target DA 기준값 스냅샷을 추가.
 // - v1.5.0: Target DA 선택/로드 시 현재 Movement 값으로 Quick Tune 슬라이더를 역동기화.
@@ -84,6 +85,8 @@ struct FCFDrivingFeelValues
 
 class SCFVDAWizardTab : public SCompoundWidget
 {
+	friend class FCFVDAWizardTestAccess;
+
 public:
 	SLATE_BEGIN_ARGS(SCFVDAWizardTab) {}
 	SLATE_END_ARGS()
@@ -257,8 +260,12 @@ private:
 	// 대상 DA가 지정되어 주행감 적용을 시도할 수 있는지 반환합니다.
 	bool CanApplyDrivingFeel() const;
 
-	// Target DA를 Quick Tune 기준 수치로 되돌릴 수 있는지 반환합니다.
+		// Target DA를 Quick Tune 기준 수치로 되돌릴 수 있는지 반환합니다.
 	bool CanRevertDrivingFeel() const;
+
+	// Current Target이 새 Authoring Recipe에 연결되어 있는지 Common Authoring facade로 확인합니다.
+	bool HasManagedAuthoringRecipe(FString* OutMessage = nullptr) const;
+
 
 	// 복사할 리포트 텍스트가 있는지 반환합니다.
 	bool CanCopyReport() const;

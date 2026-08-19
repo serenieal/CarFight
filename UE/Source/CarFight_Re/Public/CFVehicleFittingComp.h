@@ -1,10 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.2.0
-// Date: 2026-08-04
-// Description: CF-FQ-033~034 초기 출격 피팅·질량·Defense Commit 상태 컴포넌트
-// Scope: Legacy·Snapshot 입력 준비, Initial Mass 설정값·실제 질량 Coverage 검증, Weapon·Defense 원자 Commit·Rollback과 Applied Snapshot 수명을 소유합니다.
+// Version: 1.6.0
+// Date: 2026-08-18
+// Description: CF-FQ-033~037 출격·Field 피팅 Runtime Apply·원자 Rollback 상태 + UI-P0-06 Weapon Selection Source 컴포넌트
+// Scope: Legacy·Snapshot 입력 준비, Initial Mass 검증, Weapon·Defense·Sensor 원자 Commit·Rollback, Applied Snapshot과 Player-facing Weapon Selection의 실제 mounted source를 소유합니다.
 // Changelog:
+// - v1.6.0: UI-P0-06 Applied Fitting Snapshot의 weapon-bearing ResolvedMounts 고정 순서를 WeaponComp 선택 Runtime 입력으로 전달. 내부 MountProfileId는 Runtime identity로만 유지하고 UI 표시 의미로 승격하지 않음.
+// - v1.5.0: SCAN-P0-04 ResolvedSensorData를 Fitting Runtime Sensor 입력으로 승격하고 Weapon·Defense와 같은 Commit/Checkpoint/Compensation 경계에 포함.
+// - v1.4.0: Commit 실패 시 내부 Weapon·Defense Rollback이 실제 성공했는지 C++ 전용 상태로 기록해 상위 Coordinator가 RecoveryFailed를 구분할 수 있게 함.
+// - v1.3.0: 검증 완료 FittingSnapshot 직접 Prepare와 Inventory Commit 실패 보상용 Applied Runtime Checkpoint 캡처·복원을 추가.
 // - v1.2.0: Movement 설정값은 Snapshot Target과 정확 비교하고 VehicleMesh 실제 질량은 PhysicsAsset 집계 질량을 허용하는 Target 하한 검증으로 분리.
 // - v1.1.0: PreRegister와 BeginPlay가 공유할 Initial Mass Target, Legacy fallback, Verify Only, 재적용 거부와 실제 질량 검증 계약을 추가.
 // - v1.0.0: Sortie Fitting Prepare·Commit·Rollback, Applied Snapshot, Legacy 경로와 Pawn 없는 Adapter 계약을 최초 추가.
@@ -13,12 +17,16 @@
 // - 초기 Invalid Snapshot은 Legacy 입력으로 fallback하며, 이미 다른 Snapshot 질량이 구성된 수명에서는 변경 요청을 거부한다.
 // - Initial Mass는 Pawn이 물리 등록 전에 Movement Mass에 기록하고 이 컴포넌트는 Target·상태·허용 오차만 관리한다.
 // - VehicleMesh 실제 질량이 Target보다 큰 경우는 PhysicsAsset의 집계 질량 증거로 허용하며, 허용 오차보다 크게 부족한 경우만 전파 실패로 거부한다.
-// - SetMassOverrideInKg, Physics State 재생성, Ammo, Inventory Adapter와 Field Equip·Unequip은 이 컴포넌트에서 처리하지 않는다.
+// - SetMassOverrideInKg, Physics State 재생성, Ammo와 Inventory 소유권 이동은 이 컴포넌트에서 처리하지 않는다.
+// - v1.3.0 Checkpoint/Restore의 기존 Weapon·Defense와 Applied Snapshot 보상에 v1.5.0부터 Sensor Runtime 입력도 함께 포함한다. Field Mass Reapply는 FFIT-P0-04의 별도 ICFFieldFitMassRuntime 경계가 소유한다.
+// - Legacy VehicleData 경로는 기존 SensorData Source를 강제로 비우지 않는다. 유효 Snapshot의 ResolvedSensorData가 null이면 scanner-less Fallback 적용을 명시적으로 요청한다.
+// - v1.6.0 Snapshot Weapon Selection은 ResolvedMounts의 기존 결정론적 순서를 그대로 사용한다. MountProfileId는 내부 Ammo/FireOrigin identity일 뿐 Player-facing WeaponGroup 이름으로 노출하지 않는다.
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "CFFittingTypes.h"
+#include "CFWeaponSelectTypes.h"
 #include "Components/ActorComponent.h"
 #include "CFVehicleFittingComp.generated.h"
 
@@ -28,6 +36,7 @@ class UCFVehicleData;
 class UCFVehicleDefenseComp;
 class UCFVehicleDefenseData;
 class UCFVehicleFittingData;
+class UCFVehicleSensorData;
 class UCFVehicleWeaponComp;
 
 /** 출격 피팅 Runtime Apply의 현재 트랜잭션 상태입니다. */
@@ -81,9 +90,17 @@ struct FCFFittingWeaponRuntimeInput
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Runtime|Weapon")
 	TObjectPtr<UCFEquipmentPresetData> EquipmentPresetData = nullptr;
 
-	// [v1.0.0] Snapshot 장비 선택의 원본입니다.
+		// [v1.0.0] Snapshot 장비 선택의 원본입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Runtime|Weapon")
 	ECFFittingSelectionSource SelectionSource = ECFFittingSelectionSource::None;
+
+	// [v1.6.0] Applied Snapshot의 weapon-bearing ResolvedMounts를 기존 고정 순서 그대로 복사한 내부 선택 Runtime 목록입니다.
+	UPROPERTY()
+	TArray<FCFWeaponSelectRuntimeItem> SelectableWeapons;
+
+	// [v1.6.0] SelectableWeapons에서 현재 활성 무기로 적용할 0-based 내부 선택 인덱스입니다.
+	UPROPERTY()
+	int32 SelectedWeaponIndex = INDEX_NONE;
 };
 
 /** VehicleDefenseComp에 전달할 출격 피팅 입력입니다. */
@@ -108,7 +125,25 @@ struct FCFFittingDefenseRuntimeInput
 	TObjectPtr<UCFVehicleDefenseData> DefenseData = nullptr;
 };
 
-/** 하나의 출격 초기화에서 Weapon·Defense가 함께 사용할 원자 적용 입력입니다. */
+/** VehicleSensorComp에 전달할 출격·Field 피팅 Sensor 입력입니다. */
+USTRUCT(BlueprintType)
+struct FCFFittingSensorRuntimeInput
+{
+	GENERATED_BODY()
+
+	// [v1.5.0] 이 입력이 기존 VehicleData/컴포넌트 Sensor Source를 보존하는 Legacy 경로인지 반환합니다.
+	bool UsesLegacyVehicleConfiguration() const { return bUseLegacyVehicleConfiguration; }
+
+	// [v1.5.0] True이면 기존 SensorData Source를 변경하지 않습니다. False이면 Snapshot의 SensorData 또는 scanner-less null을 명시 적용합니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Runtime|Sensor")
+	bool bUseLegacyVehicleConfiguration = true;
+
+	// [v1.5.0] Snapshot이 단일 Source로 해석한 SensorData입니다. Snapshot scanner-less 상태에서는 None이며 Fallback 적용을 의미합니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Runtime|Sensor")
+	TObjectPtr<UCFVehicleSensorData> SensorData = nullptr;
+};
+
+/** 하나의 출격 초기화에서 Weapon·Defense·Sensor가 함께 사용할 원자 적용 입력입니다. */
 USTRUCT(BlueprintType)
 struct FCFFittingSortieRuntimeInput
 {
@@ -136,9 +171,26 @@ struct FCFFittingSortieRuntimeInput
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Runtime")
 	FCFFittingWeaponRuntimeInput WeaponInput;
 
-	// [v1.0.0] VehicleDefenseComp에 전달할 방어 입력입니다.
+		// [v1.0.0] VehicleDefenseComp에 전달할 방어 입력입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Runtime")
 	FCFFittingDefenseRuntimeInput DefenseInput;
+
+	// [v1.5.0] VehicleSensorComp에 전달할 Scanner Source 입력입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Fitting|Runtime")
+	FCFFittingSensorRuntimeInput SensorInput;
+};
+
+/** Inventory Commit 실패 뒤 직전 Applied Weapon·Defense·Sensor Runtime으로 보상 복원할 C++ 전용 Checkpoint입니다. */
+struct CARFIGHT_RE_API FCFFittingRuntimeCheckpoint
+{
+	// [v1.3.0] 실제 복원 가능한 Applied Runtime 입력이 포함됐는지 반환합니다.
+	bool IsValid() const { return bHasAppliedRuntimeInput && AppliedRuntimeInput.IsValid(); }
+
+	// [v1.3.0] Checkpoint 캡처 시점에 Applied Runtime 입력이 존재했는지 여부입니다.
+	bool bHasAppliedRuntimeInput = false;
+
+	// [v1.3.0] 보상 Rollback에서 Weapon·Defense에 다시 적용할 직전 Applied Runtime 입력입니다.
+	FCFFittingSortieRuntimeInput AppliedRuntimeInput;
 };
 
 /** Pawn 없이 Prepare·Commit·Rollback을 검증할 수 있게 하는 Runtime Adapter 계약입니다. */
@@ -153,6 +205,12 @@ public:
 
 	// [v1.0.0] Defense Runtime 입력을 적용하고 실제 준비 상태를 반환합니다.
 	virtual bool ApplyDefenseRuntime(const FCFFittingDefenseRuntimeInput& DefenseInput, bool& bOutDefenseRuntimeReady) = 0;
+
+	// [v1.5.0] Sensor Runtime 입력을 적용합니다. 기존 Adapter는 Legacy/scanner-less 입력만 안전하게 통과하며 실제 Scanner payload는 명시적 override 없이는 fail-closed합니다.
+	virtual bool ApplySensorRuntime(const FCFFittingSensorRuntimeInput& SensorInput)
+	{
+		return SensorInput.UsesLegacyVehicleConfiguration() || SensorInput.SensorData == nullptr;
+	}
 };
 
 /** 출격 피팅의 검증, 원자 적용 경계와 Applied Snapshot을 소유하는 차량 컴포넌트입니다. */
@@ -169,7 +227,10 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 		// [v1.0.0] VehicleFittingData를 검증해 아직 적용하지 않은 Runtime 입력을 준비합니다.
-	bool PrepareSortieFitting(const UCFVehicleFittingData* InVehicleFittingData, UCFVehicleData* InVehicleData, FName RequestedActiveMountProfileId);
+		bool PrepareSortieFitting(const UCFVehicleFittingData* InVehicleFittingData, UCFVehicleData* InVehicleData, FName RequestedActiveMountProfileId);
+
+	// [v1.3.0] Inventory Adapter 등이 이미 검증한 Snapshot을 다시 DataAsset으로 만들지 않고 Runtime 입력으로 직접 준비합니다.
+	bool PrepareSortieFittingSnapshot(const FCFVehicleFittingSnapshot& InFittingSnapshot, FName RequestedActiveMountProfileId);
 
 	// [v1.1.0] 초기 출격에서 PreRegister와 BeginPlay가 공유할 Runtime 입력과 질량 Target을 한 번 준비합니다.
 	bool PrepareInitialSortieFitting(const UCFVehicleFittingData* InVehicleFittingData, UCFVehicleData* InVehicleData, FName RequestedActiveMountProfileId);
@@ -195,11 +256,17 @@ public:
 	// [v1.1.0] 물리 생성 전 Snapshot Mass 적용 실패를 Legacy Runtime 입력으로 되돌립니다.
 	bool FallbackPreparedInitialMassToLegacy(UCFVehicleData* InVehicleData, FName RequestedActiveMountProfileId, const FString& FailureReason);
 
-	// [v1.0.0] 준비된 입력을 Adapter에 원자 적용하고 실패 시 직전 입력으로 복원합니다.
+		// [v1.5.0] 준비된 Weapon·Defense·Sensor 입력을 Adapter에 원자 적용하고 실패 시 직전 입력으로 복원합니다.
 	bool CommitPreparedSortieFitting(ICFFittingRuntimeApplyAdapter& RuntimeApplyAdapter);
 
 	// [v1.0.0] 실제 차량 Weapon·Defense 컴포넌트에 준비된 출격 피팅을 Commit합니다.
-	bool CommitPreparedSortieFittingToVehicle(ACFVehiclePawn* OwnerVehiclePawn, UCFVehicleWeaponComp* VehicleWeaponComp, UCFVehicleDefenseComp* VehicleDefenseComp);
+		bool CommitPreparedSortieFittingToVehicle(ACFVehiclePawn* OwnerVehiclePawn, UCFVehicleWeaponComp* VehicleWeaponComp, UCFVehicleDefenseComp* VehicleDefenseComp);
+
+	// [v1.3.0] Inventory Commit보다 먼저 Runtime을 적용할 때 실패 보상용 직전 Applied 입력을 캡처합니다.
+	FCFFittingRuntimeCheckpoint CaptureAppliedRuntimeCheckpoint() const;
+
+	// [v1.3.0] 성공한 후보 Runtime Commit을 직전 Applied Checkpoint로 보상 복원하고 Applied Snapshot 상태도 함께 되돌립니다.
+	bool RestoreAppliedRuntimeCheckpoint(ICFFittingRuntimeApplyAdapter& RuntimeApplyAdapter, const FCFFittingRuntimeCheckpoint& RuntimeCheckpoint);
 
 	// [v1.0.0] 하위 Runtime을 변경하지 않고 Prepared 입력만 취소합니다.
 	UFUNCTION(BlueprintCallable, Category="CarFight|Fitting|Runtime")
@@ -257,18 +324,22 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|Fitting|Runtime")
 	bool WasLastDefenseRuntimeReady() const { return bLastDefenseRuntimeReady; }
 
+		// [v1.4.0] 마지막 Commit 실패에서 내부 Weapon·Defense Rollback이 이전 Runtime을 복원했는지 반환합니다.
+	bool WasLastCommitFailureRecovered() const { return bLastCommitFailureRecovered; }
+
 	// [v1.0.0] 마지막 Prepare·Commit·Rollback 결과를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|Fitting|Runtime")
 	FString GetLastFittingRuntimeSummary() const { return LastFittingRuntimeSummary; }
+
 
 private:
 	// [v1.0.0] VehicleFittingData가 없을 때 Legacy Runtime 입력을 생성합니다.
 	static FCFFittingSortieRuntimeInput BuildLegacyRuntimeInput(UCFVehicleData* InVehicleData, FName RequestedActiveMountProfileId);
 
-	// [v1.0.0] 유효 Snapshot을 Weapon·Defense 입력으로 변환합니다.
+		// [v1.5.0] 유효 Snapshot을 Weapon·Defense·Sensor 입력으로 변환합니다.
 	static bool BuildSnapshotRuntimeInput(const FCFVehicleFittingSnapshot& FittingSnapshot, FName RequestedActiveMountProfileId, FCFFittingSortieRuntimeInput& OutRuntimeInput, FString& OutFailureSummary);
 
-	// [v1.0.0] 직전 Applied 또는 Legacy 입력을 Adapter에 다시 적용합니다.
+	// [v1.5.0] 직전 Applied 또는 Legacy Weapon·Defense·Sensor 입력을 Adapter에 다시 적용합니다.
 	static bool RestoreRuntimeInput(ICFFittingRuntimeApplyAdapter& RuntimeApplyAdapter, const FCFFittingSortieRuntimeInput& RuntimeInput, bool& bOutWeaponRuntimeReady, bool& bOutDefenseRuntimeReady);
 
 		// [v1.0.0] Prepared 입력만 기본값으로 정리합니다.
@@ -353,9 +424,13 @@ private:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Fitting|Runtime", meta=(AllowPrivateAccess="true"))
 	bool bLastWeaponRuntimeReady = false;
 
-	// [v1.0.0] 마지막 Commit 후 DefenseData 준비 상태입니다.
+		// [v1.0.0] 마지막 Commit 후 DefenseData 준비 상태입니다.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Fitting|Runtime", meta=(AllowPrivateAccess="true"))
 	bool bLastDefenseRuntimeReady = false;
+
+		// [v1.5.0] 마지막 Commit 실패가 Weapon·Defense·Sensor 내부 Rollback까지 포함해 이전 Runtime 상태를 보존했는지 여부입니다.
+	UPROPERTY(Transient)
+	bool bLastCommitFailureRecovered = true;
 
 	// [v1.0.0] 마지막 피팅 Runtime 결과 요약입니다.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Fitting|Runtime", meta=(AllowPrivateAccess="true"))

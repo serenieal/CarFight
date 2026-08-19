@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.2.0
-// Date: 2026-08-13
+// Version: 1.3.0
+// Date: 2026-08-16
 // Description: CarFight 출격 전 차량 피팅 선택과 결정론적 Snapshot 구현
-// Scope: 피팅 기본값, 데이터 계약, MountProfile·Hardpoint·장비·출격 탄약·방어 호환 검증과 Pawn 없는 질량 Snapshot 생성을 구현합니다.
+// Scope: 피팅 기본값, 데이터 계약, MountProfile·Hardpoint·장비·Scanner·출격 탄약·방어 호환 검증과 Pawn 없는 질량 Snapshot 생성을 구현합니다.
 // Changelog:
+// - v1.3.0: CF-FQ-037 SCAN-P0-01 Utility Scanner SensorData 해석, mount-aware 장비 완성도와 단일 Scanner Source 검증을 추가.
 // - v1.2.0: CF-FQ-031 AMMO-P0-07 명시적 출격 탄약 검증, 결정론적 Snapshot 복사, finite 무기 초기 장전 충족 검사와 AmmoMassKg 합산을 추가.
 // - v1.1.0: CF-FQ-034 FIT-P0-03 결정론적 Compatibility Validation, 방어 3상태 해석, 질량 합산과 GrossMass 검증을 추가.
 // - v1.0.0: CF-FQ-034 FIT-P0-02 VehicleFittingData 계약 검증과 요약을 최초 구현.
@@ -23,6 +24,7 @@
 #include "CFTurretMountData.h"
 #include "CFVehicleData.h"
 #include "CFVehicleDefenseData.h"
+#include "CFVehicleSensorData.h"
 #include "CFWeaponData.h"
 
 #define LOCTEXT_NAMESPACE "CFVehicleFittingData"
@@ -229,15 +231,37 @@ bool UCFVehicleFittingData::ValidateFittingDataContract(TArray<FText>& OutValida
 			continue;
 		}
 
-		if (!MountSelection.EquipmentPresetData->HasCompleteEquipmentData())
+								// [v1.3.0] 현재 선택이 가리키는 VehicleData 장착 프로파일입니다. 존재하면 실제 MountType 기준 payload 계약을 검사합니다.
+		const FCFVehicleMountProfile* MatchingMountProfile = VehicleData
+			? VehicleData->MountProfiles.FindByPredicate([&MountSelection](const FCFVehicleMountProfile& MountProfile)
+			{
+				return MountProfile.MountProfileId == MountSelection.MountProfileId;
+			})
+			: nullptr;
+
+		// [v1.3.0] 알려진 MountProfile은 mount-aware 계약을, 알 수 없는 선택은 프리셋 자체의 단일 payload 계약을 검사합니다.
+		const bool bEquipmentPresetComplete = MatchingMountProfile
+			? MountSelection.EquipmentPresetData->HasCompleteEquipmentDataForMount(MatchingMountProfile->MountType)
+			: MountSelection.EquipmentPresetData->HasCompleteEquipmentData();
+		if (!bEquipmentPresetComplete)
 		{
 			OutValidationErrors.Add(FText::Format(
-				LOCTEXT("IncompleteEquipmentPreset", "MountProfileId '{0}'의 EquipmentPresetData에 TurretMountData와 WeaponData가 모두 필요합니다."),
+				LOCTEXT("IncompleteEquipmentPreset", "MountProfileId '{0}'의 EquipmentPresetData가 해당 장착 타입에 필요한 단일 payload 계약을 만족하지 않습니다."),
 				FText::FromName(MountSelection.MountProfileId)));
 		}
-	}
 
-		// [v1.2.0] 출격 탄약 목록에서 같은 AmmoId 중복을 검출할 집합입니다.
+
+		if (MountSelection.EquipmentPresetData->DefaultSensorData
+			&& !MountSelection.EquipmentPresetData->DefaultSensorData->IsSensorConfigValid())
+		{
+			OutValidationErrors.Add(FText::Format(
+				LOCTEXT("InvalidEquipmentSensorData", "MountProfileId '{0}'의 VehicleSensorData SensorConfig가 유효하지 않습니다."),
+				FText::FromName(MountSelection.MountProfileId)));
+		}
+
+		}
+
+	// [v1.2.0] 출격 탄약 목록에서 같은 AmmoId 중복을 검출할 집합입니다.
 	TSet<FName> SeenAmmoIds;
 	for (const FCFAmmoSortieLoad& AmmoLoad : InitialSortieAmmoLoads)
 	{
@@ -436,7 +460,7 @@ FCFVehicleFittingSnapshot UCFVehicleFittingData::BuildFittingSnapshot() const
 			SortedUnknownMountSelectionIds.Add(MountSelectionId);
 		}
 	}
-	SortNamesDeterministically(SortedUnknownMountSelectionIds);
+		SortNamesDeterministically(SortedUnknownMountSelectionIds);
 	for (const FName UnknownMountSelectionId : SortedUnknownMountSelectionIds)
 	{
 		AddFittingValidationIssue(
@@ -448,6 +472,9 @@ FCFVehicleFittingSnapshot UCFVehicleFittingData::BuildFittingSnapshot() const
 				FText::FromName(UnknownMountSelectionId)),
 			UnknownMountSelectionId);
 	}
+
+	// [v1.3.0] 현재 Snapshot에 해석된 Scanner Source 수입니다. 단 하나만 최종 ResolvedSensorData가 될 수 있습니다.
+	int32 ResolvedSensorSourceCount = 0;
 
 	for (const FCFVehicleMountProfile& MountProfile : VehicleData->MountProfiles)
 	{
@@ -480,7 +507,7 @@ FCFVehicleFittingSnapshot UCFVehicleFittingData::BuildFittingSnapshot() const
 				MountProfile.MountProfileId);
 		}
 
-				// [v1.1.0] 현재 장착 프로파일에 최종 적용할 장비 프리셋입니다.
+						// [v1.1.0] 현재 장착 프로파일에 최종 적용할 장비 프리셋입니다.
 		UCFEquipmentPresetData* ResolvedEquipmentPresetData = nullptr;
 
 		if (!DuplicateMountSelectionIds.Contains(MountProfile.MountProfileId))
@@ -528,7 +555,7 @@ FCFVehicleFittingSnapshot UCFVehicleFittingData::BuildFittingSnapshot() const
 			}
 		}
 
-				ResolvedMount.EquipmentPresetData = ResolvedEquipmentPresetData;
+						ResolvedMount.EquipmentPresetData = ResolvedEquipmentPresetData;
 
 		// [v1.1.0] 명시적 또는 정책상 빈 장착인지 여부입니다.
 		const bool bResolvedAsEmpty = ResolvedMount.SelectionSource == ECFFittingSelectionSource::ExplicitEmpty
@@ -552,20 +579,33 @@ FCFVehicleFittingSnapshot UCFVehicleFittingData::BuildFittingSnapshot() const
 			continue;
 		}
 
-		ResolvedMount.TurretMountData = ResolvedEquipmentPresetData->DefaultTurretMountData;
+								ResolvedMount.TurretMountData = ResolvedEquipmentPresetData->DefaultTurretMountData;
 		ResolvedMount.WeaponData = ResolvedEquipmentPresetData->DefaultWeaponData;
+		ResolvedMount.SensorData = ResolvedEquipmentPresetData->DefaultSensorData;
 
-		if (!ResolvedEquipmentPresetData->HasCompleteEquipmentData())
+		if (!ResolvedEquipmentPresetData->HasCompleteEquipmentDataForMount(MountProfile.MountType))
 		{
 			AddFittingValidationIssue(
 				Snapshot,
 				ECFFittingIssueSeverity::Error,
 				ECFFittingIssueCode::IncompleteEquipmentPreset,
 				FText::Format(
-					LOCTEXT("IncompleteEquipmentPresetIssue", "MountProfileId '{0}'의 EquipmentPresetData에 TurretMountData와 WeaponData가 모두 필요합니다."),
+					LOCTEXT("IncompleteEquipmentPresetIssue", "MountProfileId '{0}'의 EquipmentPresetData가 해당 장착 타입에 필요한 단일 payload 계약을 만족하지 않습니다."),
 					FText::FromName(MountProfile.MountProfileId)),
 				MountProfile.MountProfileId);
 		}
+
+		if (ResolvedMount.SensorData && !ResolvedMount.SensorData->IsSensorConfigValid())
+		{
+			AddFittingValidationIssue(
+				Snapshot,
+				ECFFittingIssueSeverity::Error,
+				ECFFittingIssueCode::InvalidSensorData,
+				FText::Format(
+					LOCTEXT("InvalidSensorDataIssue", "MountProfileId '{0}'의 VehicleSensorData SensorConfig가 유효하지 않습니다."),
+					FText::FromName(MountProfile.MountProfileId)),
+				MountProfile.MountProfileId);
+						}
 
 		if (ResolvedEquipmentPresetData->RequiredMountType != ECFVehicleMountType::None
 			&& ResolvedEquipmentPresetData->RequiredMountType != MountProfile.MountType)
@@ -580,13 +620,15 @@ FCFVehicleFittingSnapshot UCFVehicleFittingData::BuildFittingSnapshot() const
 				MountProfile.MountProfileId);
 		}
 
-		// [v1.1.0] 프리셋 또는 무기 자체의 크기가 장착 제한을 초과하는지 여부입니다.
-		bool bWeaponSizeExceeded = DoesWeaponSizeExceedLimit(
-			ResolvedEquipmentPresetData->RequiredWeaponSize,
-			MountProfile.SizeLimit);
+								// [v1.3.0] 실제 WeaponData가 존재하는 무장 패키지에서만 무기 크기 제한을 계산합니다.
+		bool bWeaponSizeExceeded = false;
 
 		if (ResolvedEquipmentPresetData->DefaultWeaponData)
 		{
+			bWeaponSizeExceeded = DoesWeaponSizeExceedLimit(
+				ResolvedEquipmentPresetData->RequiredWeaponSize,
+				MountProfile.SizeLimit);
+
 			if (!ResolvedEquipmentPresetData->DefaultWeaponData->SupportsMountType(MountProfile.MountType))
 			{
 				AddFittingValidationIssue(
@@ -633,8 +675,30 @@ FCFVehicleFittingSnapshot UCFVehicleFittingData::BuildFittingSnapshot() const
 				MountProfile.MountProfileId);
 		}
 
-				Snapshot.EquipmentMassKg += ResolvedMount.TurretMountMassKg + ResolvedMount.WeaponMassKg;
-		Snapshot.ResolvedMounts.Add(ResolvedMount);
+										Snapshot.EquipmentMassKg += ResolvedMount.TurretMountMassKg + ResolvedMount.WeaponMassKg;
+
+		if (ResolvedMount.SensorData)
+		{
+			++ResolvedSensorSourceCount;
+			if (ResolvedSensorSourceCount == 1)
+			{
+				Snapshot.ResolvedSensorData = ResolvedMount.SensorData;
+			}
+			else
+			{
+				Snapshot.ResolvedSensorData = nullptr;
+				AddFittingValidationIssue(
+					Snapshot,
+					ECFFittingIssueSeverity::Error,
+					ECFFittingIssueCode::MultipleSensorSources,
+					FText::Format(
+						LOCTEXT("MultipleSensorSourcesIssue", "MountProfileId '{0}'까지 둘 이상의 Scanner SensorData가 해석되어 단일 Sensor Runtime Source를 결정할 수 없습니다."),
+						FText::FromName(MountProfile.MountProfileId)),
+					MountProfile.MountProfileId);
+			}
+		}
+
+				Snapshot.ResolvedMounts.Add(ResolvedMount);
 	}
 
 	// [v1.2.0] 편집 배열 순서와 무관하게 AmmoId 이름 순서로 Snapshot에 복사할 출격 탄약 목록입니다.

@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.25.0
-// Date: 2026-08-01
-// Description: CarFight 차량 루트 DataAsset 피팅 기준 질량과 최대 허용 총중량 추가
+// Version: 1.27.0
+// Date: 2026-08-18
+// Description: CF-FQ-032 UI-P0-06 RPM Gauge용 explicit RedlineStartRPM 차량 데이터 계약 추가
 // Scope: 차량 시각 자산, Wheel Class 참조, VehicleMovement/WheelVisual/Layout, 피팅 질량, 최대 체력과 선택적 방어 설정을 함께 다룹니다.
 // Changelog:
+// - v1.27.0: EngineMaxRPM과 독립된 HUD Tachometer 레드라인 시작점 RedlineStartRPM을 additive 추가. 0은 미설정이며 EngineMaxRPM/변속값에서 자동 추정하지 않음.
+// - v1.26.0: bUseMovementOverrides가 전체 Movement on/off가 아니라 Wheel Runtime 상세 튜닝·ThrottleInputScale 경로 제어임을 Tooltip과 Migration에 명확히 기록.
 // - v1.25.0: CF-FQ-034 FIT-P0-02 BaseVehicleMassKg와 MaximumGrossMassKg 데이터 계약을 추가.
 // - v1.24.0: CF-FQ-033 DR-P0-01 VehicleDefenseData 선택 참조를 추가하고 기존 None Fallback을 유지.
 // - v1.23.0: 차량별 파괴 FX 위치를 SM_Body 소켓으로 지정하는 DestroyedFxSocketName을 추가.
@@ -20,6 +22,9 @@
 // - v1.14.0: VehicleLayoutConfig와 WheelAnchor 포즈 구조를 추가해 차량별 시각 휠 기준 위치를 DataAsset에서 관리.
 // - v1.13.0: VehicleMovement 기본값 재정렬 및 레거시 실험값 자동 마이그레이션 추가.
 // Migration:
+// - v1.27.0 기존 VehicleData는 RedlineStartRPM=0 기본값으로 주행 물리 결과를 그대로 유지한다. 0은 HUD Redline 미설정이며 EngineMaxRPM이나 변속 RPM에서 자동 보정/추정하지 않는다.
+// - RedlineStartRPM을 명시하는 차량은 EngineIdleRPM보다 크고 EngineMaxRPM보다 작은 실제 차량별 값을 작성한다.
+// - bUseMovementOverrides=false여도 Engine/Drag/Differential/Steering 본체 VehicleData 값은 적용된다. false는 세부 Wheel Runtime Tuning과 ThrottleInputScale이 fallback을 쓰는 현재 계약이며 동작 변경은 없다.
 // - 기존 VehicleData는 BaseVehicleMassKg=0과 MaximumGrossMassKg=0 기본값으로 현재 주행 결과를 유지한다.
 // - 피팅에 연결할 VehicleData만 실제 기준 질량과 최대 허용 총중량을 명시하며 값을 자동 추정하지 않는다.
 // - 기존 VehicleData는 DefaultDefenseData=None 기본값으로 기존 BaseDamage 직접 Health 적용 경로를 유지한다.
@@ -170,7 +175,8 @@ struct FCFVehicleMovementConfig
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="VehicleMovement 설정 사용 (bUseMovementOverrides)", ToolTip="True이면 이 차량 DataAsset의 VehicleMovementConfig 값을 차량 기본 Movement/Wheel 설정에 일괄 적용합니다."))
+			// [v1.26.0] 세부 Wheel Runtime Tuning과 ThrottleInputScale을 차량별 값으로 사용할지 선택합니다. Engine/Drag/Differential/Steering 본체 VehicleData 적용 자체를 끄는 스위치는 아닙니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="VehicleMovement 세부 Override 사용 (bUseMovementOverrides)", ToolTip="True이면 차량별 Wheel Runtime 상세 튜닝과 ThrottleInputScale을 사용합니다. False여도 Engine, Drag, Differential, Steering 같은 VehicleData 본체 Movement 값은 현재 런타임에서 적용됩니다."))
 	bool bUseMovementOverrides = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="이동 프로필 이름 (MovementProfileName)", ToolTip="현재 단계에서는 실제 수치 대신 식별용 이름 또는 메모성 구분자로 사용합니다."))
@@ -276,8 +282,12 @@ struct FCFVehicleMovementConfig
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ClampMin="0.0", DisplayName="엔진 최대 토크 (EngineMaxTorque)", ToolTip="EngineSetup.MaxTorque 값입니다."))
 	float EngineMaxTorque = 750.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ClampMin="0.0", DisplayName="엔진 최대 RPM (EngineMaxRPM)", ToolTip="EngineSetup.MaxRPM 값입니다."))
+		UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ClampMin="0.0", DisplayName="엔진 최대 RPM (EngineMaxRPM)", ToolTip="EngineSetup.MaxRPM에 실제 적용되는 물리 엔진 최대 RPM입니다. HUD Redline 시작값으로 자동 재해석하지 않습니다."))
 	float EngineMaxRPM = 7000.0f;
+
+	// [v1.27.0] HUD Tachometer의 85% Red Zone 시작 위치에 매핑할 차량별 실제 레드라인 시작 RPM입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ClampMin="0.0", Units="rpm", DisplayName="레드라인 시작 RPM (RedlineStartRPM)", ToolTip="HUD Tachometer의 실제 레드라인 시작 RPM입니다. 0은 미설정이며 EngineMaxRPM이나 변속 RPM에서 자동 추정하지 않습니다. 값을 설정하면 EngineIdleRPM보다 크고 EngineMaxRPM보다 작아야 합니다."))
+	float RedlineStartRPM = 0.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ClampMin="0.0", DisplayName="엔진 아이들 RPM (EngineIdleRPM)", ToolTip="EngineSetup.EngineIdleRPM 값입니다."))
 	float EngineIdleRPM = 900.0f;

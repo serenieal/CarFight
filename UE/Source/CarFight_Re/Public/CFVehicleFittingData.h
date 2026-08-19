@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.2.0
-// Date: 2026-08-13
+// Version: 1.3.0
+// Date: 2026-08-16
 // Description: CarFight 출격 전 차량 피팅 선택과 결정론적 Snapshot DataAsset
-// Scope: 기준 VehicleData, 장착·출격 탄약·방어 선택, 누락 장착 정책, 데이터 계약 검증과 Pawn 없는 Snapshot 생성을 제공합니다.
+// Scope: 기준 VehicleData, 장착·Scanner·출격 탄약·방어 선택, 누락 장착 정책, 데이터 계약 검증과 Pawn 없는 Snapshot 생성을 제공합니다.
 // Changelog:
+// - v1.3.0: CF-FQ-037 SCAN-P0-01 Utility Scanner SensorData payload가 기존 장착 선택과 Snapshot 경로를 재사용하도록 계약 설명을 확장.
 // - v1.2.0: CF-FQ-031 AMMO-P0-07 기존 FCFAmmoSortieLoad를 재사용하는 InitialSortieAmmoLoads를 추가해 실제 출격 탄약 수량을 명시.
 // - v1.1.0: CF-FQ-034 FIT-P0-03 Compatibility Validation과 결정론적 Mass Snapshot 생성을 추가.
 // - v1.0.0: CF-FQ-034 FIT-P0-02 VehicleFittingData Foundation과 DataValidation 계약을 최초 추가.

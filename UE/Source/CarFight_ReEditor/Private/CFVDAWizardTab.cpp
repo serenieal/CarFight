@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.7.0
-// Date: 2026-06-25
-// Description: Vehicle DA 입력 보조용 Editor Slate 탭 구현입니다.
+// Version: 1.8.0
+// Date: 2026-08-18
+// Description: P0-10 parity 기간 동안 유지되는 Legacy Vehicle DA 입력 보조용 Editor Slate 탭 구현입니다.
 // Scope: CFVehicleData 선택, UCFVDAValidator 실행, 리포트 텍스트 표시와 복사를 제공합니다.
 // Changelog:
+// - v1.8.0: managed Authoring Recipe Target에서는 legacy Layout/Quick Tune/Revert 변경 동작을 Common Authoring facade 판정으로 비활성화하고 handler에서도 재검사.
 // - v1.7.0: 차체 소켓 캡처 Wizard 문구와 트랜잭션 이름을 차량 레이아웃 통합 캡처 기준으로 갱신.
 // - v1.6.0: 주행감 Quick Tune 되돌리기 버튼과 Target DA 기준값 스냅샷을 추가.
 // - v1.5.0: Target DA 선택/로드 시 현재 Movement 값으로 Quick Tune 슬라이더를 역동기화.
@@ -24,6 +25,7 @@
 #include "CFVDAWizardTab.h"
 
 #include "CFVehicleData.h"
+#include "DataAuthoring/CFVehicleAuthoringService.h"
 #include "AssetRegistry/AssetData.h"
 #include "ContentBrowserModule.h"
 #include "Editor.h"
@@ -797,6 +799,13 @@ FReply SCFVDAWizardTab::HandleCaptureLayoutClicked()
 	}
 
 	SetVehicleData(TargetVehicleData, TargetPathTextBox, LoadedTargetVehicleData);
+	// 새 Authoring Recipe가 연결된 Target은 legacy direct Layout mutation 대신 Workspace를 사용합니다.
+	FString ManagedTargetMessage;
+	if (HasManagedAuthoringRecipe(&ManagedTargetMessage))
+	{
+		StatusMessage = ManagedTargetMessage;
+		return FReply::Handled();
+	}
 	CaptureDrivingFeelRevertValuesFromTargetData(LoadedTargetVehicleData);
 	SyncDrivingFeelSlidersFromTargetData(LoadedTargetVehicleData);
 
@@ -874,6 +883,13 @@ FReply SCFVDAWizardTab::HandleApplyDrivingFeelClicked()
 	}
 
 	SetVehicleData(TargetVehicleData, TargetPathTextBox, LoadedTargetVehicleData);
+	// 새 Authoring Recipe에 연결된 Target은 Vehicle Authoring Workspace에서 조정합니다.
+	FString ManagedTargetMessage;
+	if (HasManagedAuthoringRecipe(&ManagedTargetMessage))
+	{
+		StatusMessage = ManagedTargetMessage;
+		return FReply::Handled();
+	}
 
 	// Source 경로 로드 결과 메시지입니다.
 	FString SourceLoadMessage;
@@ -939,6 +955,13 @@ FReply SCFVDAWizardTab::HandleRevertDrivingFeelClicked()
 	}
 
 	SetVehicleData(TargetVehicleData, TargetPathTextBox, LoadedTargetVehicleData);
+	// 새 Authoring Recipe에 연결된 Target은 Workspace의 Unreal 표준 Undo를 사용합니다.
+	FString ManagedTargetMessage;
+	if (HasManagedAuthoringRecipe(&ManagedTargetMessage))
+	{
+		StatusMessage = ManagedTargetMessage;
+		return FReply::Handled();
+	}
 
 	// Source 경로 로드 결과 메시지입니다.
 	FString SourceLoadMessage;
@@ -1207,19 +1230,53 @@ bool SCFVDAWizardTab::CanValidate() const
 // 대상 DA가 지정되어 소켓 캡처를 시도할 수 있는지 반환합니다.
 bool SCFVDAWizardTab::CanCaptureLayout() const
 {
-	return CanValidate();
+	return CanValidate() && !HasManagedAuthoringRecipe();
 }
 
 // 대상 DA가 지정되어 주행감 적용을 시도할 수 있는지 반환합니다.
 bool SCFVDAWizardTab::CanApplyDrivingFeel() const
 {
-	return CanValidate();
+	return CanValidate() && !HasManagedAuthoringRecipe();
 }
 
 // Target DA를 Quick Tune 기준 수치로 되돌릴 수 있는지 반환합니다.
 bool SCFVDAWizardTab::CanRevertDrivingFeel() const
 {
-	return CanValidate() && bHasDrivingFeelRevertValues && !DrivingFeelRevertTargetPath.IsEmpty();
+	return CanValidate() && !HasManagedAuthoringRecipe() && bHasDrivingFeelRevertValues && !DrivingFeelRevertTargetPath.IsEmpty();
+}
+
+// Current Target이 새 Authoring Recipe에 연결되어 있는지 Common Authoring facade로 확인합니다.
+bool SCFVDAWizardTab::HasManagedAuthoringRecipe(FString* OutMessage) const
+{
+	// Current weak Target 또는 입력 경로에서 resolve한 조회 대상입니다.
+	UCFVehicleData* GuardTarget = TargetVehicleData.Get();
+	// Path-only 상태의 optional load diagnostic입니다.
+	FString LoadMessage;
+	if (!GuardTarget && TargetPathTextBox.IsValid() && !TargetPathTextBox->GetText().ToString().TrimStartAndEnd().IsEmpty())
+	{
+		GuardTarget = LoadVehicleDataFromTextBox(TargetPathTextBox, true, LoadMessage);
+	}
+	if (!GuardTarget)
+	{
+		return false;
+	}
+	// Common Authoring facade의 managed-target read result입니다.
+	FCFVehicleManagedReadResult ManagedResult;
+	if (!FCFVehicleAuthoringService::ReadManagedTarget(GuardTarget, ManagedResult))
+	{
+		if (OutMessage)
+		{
+			*OutMessage = TEXT("Authoring 관리 상태를 확인하지 못했습니다. CarFight Vehicle Authoring Workspace에서 다시 확인하세요.");
+		}
+		return true;
+	}
+	if (ManagedResult.bManaged && OutMessage)
+	{
+		*OutMessage = FString::Printf(
+			TEXT("이 Target은 Vehicle Authoring Recipe에 연결되어 있습니다: %s\nLayout/Driving Feel 변경은 CarFight Vehicle Authoring의 Preview/Apply/Undo를 사용하세요."),
+			*ManagedResult.RecipePath.ToString());
+	}
+	return ManagedResult.bManaged;
 }
 
 // 복사할 리포트 텍스트가 있는지 반환합니다.

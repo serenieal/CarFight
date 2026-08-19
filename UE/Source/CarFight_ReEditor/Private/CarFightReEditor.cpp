@@ -1,18 +1,22 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-06-23
+// Version: 1.2.0
+// Date: 2026-08-18
 // Description: CarFight Editor 전용 도구 모듈 구현입니다.
-// Scope: Vehicle DA Wizard 탭 등록, 메뉴 등록, 탭 열기 처리를 담당합니다.
+// Scope: Vehicle Authoring Workspace와 기존 Vehicle DA Wizard 탭/메뉴 등록을 담당합니다.
 // Changelog:
+// - v1.2.0: P0-12 UA-01 사용자 피드백에 따라 Vehicle Authoring 탭/메뉴 표시명을 한국어 우선으로 변경. 내부 Tab ID는 유지.
+// - v1.1.0: DAUTH-P0-09 Vehicle Authoring Workspace Nomad Tab과 메뉴를 추가하고 기존 Wizard tab/menu를 유지.
 // - v1.0.0: Window 메뉴에서 열 수 있는 Vehicle DA Wizard 탭을 추가.
 // Migration:
-// - 기존 에디터 메뉴 항목은 변경하지 않는다.
-// - Vehicle DA Wizard는 새 CarFight_ReEditor 모듈의 독립 탭으로 제공한다.
+// - 기존 Vehicle DA Wizard 등록/메뉴/spawn 경로는 P0-10 parity 전까지 유지한다.
+// - Vehicle Authoring Workspace는 별도 Nomad Tab으로 추가된다.
 
 #include "CarFightReEditor.h"
 
 #include "CFVDAWizardTab.h"
+#include "DataAuthoring/CFVehicleAuthoringTab.h"
+
 
 #include "Framework/Docking/TabManager.h"
 #include "ToolMenus.h"
@@ -22,13 +26,22 @@
 
 namespace
 {
-	// Vehicle DA Wizard 탭 등록에 사용할 고정 탭 식별자입니다.
+	// Vehicle Authoring Workspace 탭 등록에 사용할 고정 탭 식별자입니다.
+	static const FName VehicleAuthoringTabName(TEXT("CarFight.VehicleAuthoring"));
+
+	// Vehicle DA Wizard 탭 등록에 사용할 기존 고정 탭 식별자입니다.
 	static const FName VDAWizardTabName(TEXT("CarFight.VehicleDAWizard"));
 }
 
-// Editor 모듈 로드 시 Vehicle DA Wizard 탭과 메뉴를 등록합니다.
+// Editor 모듈 로드 시 Vehicle Authoring Workspace와 기존 Vehicle DA Wizard 탭/메뉴를 등록합니다.
 void FCarFightReEditorModule::StartupModule()
 {
+	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(
+		VehicleAuthoringTabName,
+		FOnSpawnTab::CreateRaw(this, &FCarFightReEditorModule::HandleSpawnAuthoringTab))
+		.SetDisplayName(LOCTEXT("VehicleAuthoringTabTitle", "차량 데이터 제작"))
+		.SetMenuType(ETabSpawnerMenuType::Hidden);
+
 	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(
 		VDAWizardTabName,
 		FOnSpawnTab::CreateRaw(this, &FCarFightReEditorModule::HandleSpawnVDAWizardTab))
@@ -48,7 +61,18 @@ void FCarFightReEditorModule::ShutdownModule()
 		UToolMenus::UnregisterOwner(this);
 	}
 
+		FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(VehicleAuthoringTabName);
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(VDAWizardTabName);
+}
+
+// Vehicle Authoring Workspace 탭 인스턴스를 생성합니다.
+TSharedRef<SDockTab> FCarFightReEditorModule::HandleSpawnAuthoringTab(const FSpawnTabArgs& InSpawnTabArgs)
+{
+	return SNew(SDockTab)
+		.TabRole(ETabRole::NomadTab)
+		[
+			SNew(SCFVehicleAuthoringTab)
+		];
 }
 
 // Vehicle DA Wizard 탭 인스턴스를 생성합니다.
@@ -74,14 +98,27 @@ void FCarFightReEditorModule::RegisterMenus()
 		return;
 	}
 
-	// CarFight 에디터 도구 메뉴 섹션입니다.
+		// CarFight 에디터 도구 메뉴 섹션입니다.
 	FToolMenuSection& CarFightSection = WindowMenu->FindOrAddSection(TEXT("CarFight"));
+	CarFightSection.AddMenuEntry(
+		TEXT("OpenVehicleAuthoringTab"),
+		LOCTEXT("OpenVehicleAuthoringTabLabel", "CarFight 차량 데이터 제작"),
+		LOCTEXT("OpenVehicleAuthoringTabTooltip", "CarFight 단일 차량 데이터 제작 작업창을 엽니다."),
+		FSlateIcon(),
+		FUIAction(FExecuteAction::CreateRaw(this, &FCarFightReEditorModule::OpenAuthoringTab)));
+
 	CarFightSection.AddMenuEntry(
 		TEXT("OpenVehicleDAWizardTab"),
 		LOCTEXT("OpenVehicleDAWizardTabLabel", "CarFight Vehicle DA Wizard"),
 		LOCTEXT("OpenVehicleDAWizardTabTooltip", "Open the CarFight Vehicle DA validation helper tab."),
 		FSlateIcon(),
 		FUIAction(FExecuteAction::CreateRaw(this, &FCarFightReEditorModule::OpenVDAWizardTab)));
+}
+
+// 등록된 Vehicle Authoring Workspace 탭을 엽니다.
+void FCarFightReEditorModule::OpenAuthoringTab()
+{
+	FGlobalTabmanager::Get()->TryInvokeTab(VehicleAuthoringTabName);
 }
 
 // 등록된 Vehicle DA Wizard 탭을 엽니다.
