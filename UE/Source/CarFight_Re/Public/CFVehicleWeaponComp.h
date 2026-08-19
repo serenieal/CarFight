@@ -1,10 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.22.0
-// Date: 2026-07-29
-// Description: CarFight 차량 전투 장착 프로파일과 선택 대상 사용 평가 컴포넌트
-// Scope: 장착 데이터, FireOrigin, 터렛 상태, Muzzle 순서, 런처 발사 패턴·Release 설정과 활성 무기의 선택 대상 사용 가능 결과를 제공합니다.
+// Version: 1.25.0
+// Date: 2026-08-19
+// Description: CarFight 차량 전투 장착 프로파일·Player-facing Weapon Selection·무기 Charge·Heat와 선택 대상 사용 평가 컴포넌트
+// Scope: Applied Fitting의 실제 weapon-bearing 고정 순서를 선택 Runtime으로 보존하고 FireOrigin, Ammo identity, per-weapon Cooldown·Charge·Heat와 활성 WeaponData를 안전하게 전환합니다.
 // Changelog:
+// - v1.25.0: UI-P0-06 explicit WeaponCharge를 선택 순번별 독립 Runtime으로 소유하고 자연 회복·승인 한 발 소비·충전 부족 판정·HUD read API를 추가. VehicleBattery와 독립 유지.
+// - v1.24.0: UI-P0-06 Applied Fitting 기반 Weapon Selection Runtime, SelectedWeaponIndex와 Player-facing DisplayName read API, 무기별 Cooldown·Heat 상태 보존/비선택 Heat 냉각을 추가. 내부 MountProfileId는 UI 의미로 노출하지 않음.
+// - v1.23.0: UI-P0-06 활성 WeaponData의 explicit Heat 설정을 per-weapon Runtime으로 소유하고 자연 냉각·과열·승인 발사 누적 public read API를 추가.
 // - v1.22.0: FIT-P0-04 Snapshot EquipmentPresetData Override와 활성 프로파일 명시 초기화 API를 추가.
 // - v1.21.0: 활성 WeaponData의 안전한 런처 Release 설정과 전용 요약 Getter를 추가.
 // - v1.20.0: 활성 WeaponData의 안전한 런처 발사 패턴 설정과 전용 요약 Getter를 추가.
@@ -30,6 +33,9 @@
 // - v1.1.0: 활성 MountProfile의 DefaultWeaponData를 읽고 호환성/요약을 디버그로 노출.
 // - v1.0.0: P0 Top_01 터렛 발사 원점 계산을 위한 최소 WeaponComp 추가.
 // Migration:
+// - v1.25.0 WeaponCharge는 활성·호환 WeaponData의 Maximum/Initial/PerShot/Recovery explicit 값이 유효할 때만 켜진다. 기존 all-zero Asset은 Disabled이며 발사를 제한하지 않고 VehicleBattery fallback도 사용하지 않는다.
+// - v1.24.0 Snapshot Weapon Selection은 Applied Fitting이 전달한 고정 순서만 사용하고 선택 항목마다 Cooldown/Heat를 독립 보존한다. Legacy·single snapshot 초기화는 선택 Runtime을 비워 기존 단일 무기 동작을 유지한다.
+// - v1.23.0 Heat Runtime은 활성·호환 WeaponData의 HeatPerShot/MaxHeat/HeatDissipationPerSecond가 모두 명시됐을 때만 켜진다. 무기/출격 재초기화 시 Heat는 0으로 reset하고 동일 WeaponData의 단순 FireOrigin 재해석은 현재 Heat를 보존한다.
 // - 활성 WeaponData가 없거나 호환되지 않으면 런처 발사 패턴 Getter는 기존 단발 동작과 같은 SingleCycle / 1발 기본값을 반환한다.
 // - DefaultEquipmentPresetData가 지정되면 TurretMountData / WeaponData의 단일 소스로 사용하고, 프리셋 내부 참조가 비면 해당 장비 데이터는 Missing 상태가 된다.
 // - 터렛이 조준 목표를 따라가는 중이어도 발사는 막지 않으며, 시각 회전값은 TurretMountData의 Min/Max Yaw/Pitch 안에 고정한다.
@@ -50,6 +56,9 @@
 #include "CoreMinimal.h"
 #include "CFTargetUseTypes.h"
 #include "CFLauncherTypes.h"
+#include "CFWeaponChargeRuntime.h"
+#include "CFWeaponHeatRuntime.h"
+#include "CFWeaponSelectTypes.h"
 #include "CFVehicleWeaponTypes.h"
 #include "Components/ActorComponent.h"
 #include "CFVehicleWeaponComp.generated.h"
@@ -93,8 +102,31 @@ virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponent
 		// [v1.22.0] 지정 활성 프로파일에서 VehicleData 기본 장비를 사용하는 Legacy Runtime을 초기화합니다.
 	bool InitializeWeaponRuntimeForActiveProfile(ACFVehiclePawn* InOwnerVehiclePawn, UCFVehicleData* InVehicleData, FName InActiveMountProfileId);
 
-	// [v1.22.0] 지정 활성 프로파일에 Snapshot 장비 또는 빈 장착을 적용해 Runtime을 초기화합니다.
+		// [v1.22.0] 지정 활성 프로파일에 Snapshot 장비 또는 빈 장착을 적용해 Runtime을 초기화합니다.
 	bool InitializeWeaponRuntimeFromFitting(ACFVehiclePawn* InOwnerVehiclePawn, UCFVehicleData* InVehicleData, FName InActiveMountProfileId, UCFEquipmentPresetData* InEquipmentPresetData);
+
+	// [v1.24.0] Applied Fitting의 실제 weapon-bearing 고정 순서와 선택 인덱스로 다중 무기 Runtime을 초기화합니다.
+	bool InitializeWeaponSelectionRuntime(ACFVehiclePawn* InOwnerVehiclePawn, UCFVehicleData* InVehicleData, const TArray<FCFWeaponSelectRuntimeItem>& InSelectableWeapons, int32 InSelectedWeaponIndex);
+
+	// [v1.24.0] Applied Fitting 기반 실제 Weapon Selection Runtime이 활성화됐는지 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Selection", meta=(DisplayName="무기 선택 Runtime 사용 여부", ToolTip="Applied Fitting의 실제 weapon-bearing mount 목록이 Weapon Selection Runtime으로 초기화됐는지 반환합니다. 내부 MountProfileId는 UI에 노출하지 않습니다."))
+	bool HasWeaponSelectionRuntime() const { return !SelectableWeapons.IsEmpty() && SelectableWeapons.IsValidIndex(SelectedWeaponIndex); }
+
+	// [v1.24.0] Player-facing 고정 표시 순서에 포함된 실제 선택 가능 무기 수를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Selection", meta=(DisplayName="선택 가능 무기 수 반환", ToolTip="Applied Fitting의 weapon-bearing ResolvedMounts 고정 순서에 포함된 실제 선택 가능 무기 수를 반환합니다."))
+	int32 GetSelectableWeaponCount() const { return SelectableWeapons.Num(); }
+
+	// [v1.24.0] Player-facing 고정 표시 순서에서 현재 활성 무기의 0-based 선택 인덱스를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Selection", meta=(DisplayName="현재 선택 무기 인덱스 반환", ToolTip="Applied Fitting의 고정 표시 순서에서 현재 선택된 무기의 0-based 인덱스를 반환합니다. 선택 Runtime이 없으면 -1입니다."))
+	int32 GetSelectedWeaponIndex() const { return HasWeaponSelectionRuntime() ? SelectedWeaponIndex : INDEX_NONE; }
+
+	// [v1.24.0] 지정 선택 인덱스에 실제 Player-facing DisplayName source가 있는지 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Selection", meta=(DisplayName="선택 무기 표시 이름 사용 가능 여부", ToolTip="지정 순번의 실제 EquipmentPresetData에 비어 있지 않은 DisplayName이 있는지 반환합니다. 내부 ID나 Asset 이름 fallback은 사용하지 않습니다."))
+	bool IsSelectableWeaponDisplayNameAvailable(int32 WeaponIndex) const;
+
+	// [v1.24.0] 지정 선택 인덱스의 실제 EquipmentPresetData.DisplayName을 반환하고 없으면 빈 Text를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Selection", meta=(DisplayName="선택 무기 표시 이름 반환", ToolTip="지정 순번의 실제 EquipmentPresetData.DisplayName만 반환합니다. WeaponId, EquipmentId, MountProfileId, Asset 이름으로 fallback하지 않습니다."))
+	FText GetSelectableWeaponDisplayName(int32 WeaponIndex) const;
 
 	// [v1.22.0] 현재 Runtime이 Snapshot 장비 선택을 사용하는지 반환합니다.
 	bool IsUsingRuntimeEquipmentPresetOverride() const { return bUseRuntimeEquipmentPresetOverride; }
@@ -246,13 +278,61 @@ float TargetUseRefreshIntervalSeconds = 0.10f;
 	UFUNCTION(BlueprintPure, Category="CarFight|Weapon", meta=(DisplayName="활성 무기 쿨다운 여부 (Is Active Weapon On Cooldown)", ToolTip="현재 월드 시간 기준 활성 무기가 쿨다운 중인지 반환합니다."))
 	bool IsActiveWeaponOnCooldown(float CurrentTimeSeconds) const;
 
-	// [v1.2.0] 승인된 발사 시간을 기록해 이후 쿨다운 검증에 사용합니다.
+		// [v1.2.0] 승인된 발사 시간을 기록해 이후 쿨다운 검증에 사용합니다.
 	UFUNCTION(BlueprintCallable, Category="CarFight|Weapon", meta=(DisplayName="승인 발사 시간 기록 (Record Accepted Fire)", ToolTip="로컬 발사 검증이 승인된 시간을 기록해 활성 무기 쿨다운 계산에 사용합니다."))
 	void RecordAcceptedFire(float AcceptedFireTimeSeconds);
 
-		// [v1.2.0] 마지막으로 승인된 발사 시간을 반환합니다.
-	UFUNCTION(BlueprintPure, Category="CarFight|Weapon", meta=(DisplayName="마지막 승인 발사 시간 반환 (Get Last Accepted Fire Time)", ToolTip="WeaponComp가 마지막으로 기록한 승인 발사 시간입니다. 아직 없으면 음수입니다."))
-	float GetLastAcceptedFireTimeSeconds() const { return LastAcceptedFireTimeSeconds; }
+			// [v1.25.0] 활성 WeaponData에 실제 Charge Runtime이 구성됐는지 반환하며 Weapon Selection에서는 선택 항목의 독립 상태를 사용합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Charge", meta=(DisplayName="활성 무기 Charge Runtime 사용 여부", ToolTip="현재 활성·호환 WeaponData의 실제 내부 Charge Runtime 활성 여부를 반환합니다. VehicleBattery와는 별개입니다."))
+	bool IsActiveWeaponChargeRuntimeEnabled() const;
+
+	// [v1.25.0] 현재 활성 무기의 실제 내부 Charge를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Charge", meta=(DisplayName="현재 무기 Charge 반환", ToolTip="현재 활성 무기의 실제 내부 Charge를 반환합니다. 다중 무기 선택에서는 선택된 무기의 독립 Charge 상태입니다."))
+	float GetCurrentWeaponCharge() const;
+
+	// [v1.25.0] 현재 활성 무기의 명시된 최대 내부 Charge를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Charge", meta=(DisplayName="활성 무기 최대 Charge 반환", ToolTip="현재 활성 Charge Runtime의 최대 내부 충전량을 반환합니다. Charge Runtime이 비활성이면 0입니다."))
+	float GetActiveWeaponMaximumCharge() const;
+
+	// [v1.25.0] 현재 내부 Charge를 최대값 기준 0~1 비율로 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Charge", meta=(DisplayName="활성 무기 Charge 비율 반환", ToolTip="현재 활성 무기의 실제 내부 Charge를 최대 Charge 기준 0부터 1까지의 비율로 반환합니다."))
+	float GetActiveWeaponChargeRatio() const;
+
+	// [v1.25.0] 현재 Charge 상태에서 실제 한 발을 추가로 승인할 수 있는지 반환합니다.
+	bool CanActiveWeaponAcceptChargeShot() const;
+
+	// [v1.25.0] 실제 승인된 한 발의 Charge를 현재 선택 무기의 독립 Runtime에서 정확히 한 번 소비합니다.
+	void RecordAcceptedWeaponShotCharge();
+
+		// [v1.24.0] 활성 WeaponData에 실제 Heat Runtime이 구성됐는지 반환하며 Weapon Selection에서는 선택 항목의 독립 상태를 사용합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Heat", meta=(DisplayName="활성 무기 Heat Runtime 사용 여부", ToolTip="현재 활성·호환 WeaponData의 실제 Heat Runtime 활성 여부를 반환합니다. 다중 무기 선택에서는 선택된 무기의 독립 Heat 상태만 읽습니다."))
+	bool IsActiveWeaponHeatRuntimeEnabled() const;
+
+	// [v1.24.0] 현재 활성 무기에 누적된 실제 Heat를 반환하며 Weapon Selection에서는 선택 항목의 독립 상태를 사용합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Heat", meta=(DisplayName="현재 무기 Heat 반환", ToolTip="현재 활성 무기에 실제 누적된 Heat를 반환합니다. 다중 무기 선택에서는 선택된 무기의 독립 Heat 상태입니다."))
+	float GetCurrentWeaponHeat() const;
+
+	// [v1.24.0] 현재 활성 무기의 명시된 최대 Heat를 반환하며 Weapon Selection에서는 선택 항목의 독립 상태를 사용합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Heat", meta=(DisplayName="활성 무기 최대 Heat 반환", ToolTip="현재 활성 Heat Runtime의 최대 열량을 반환합니다. Heat Runtime이 비활성이면 0입니다."))
+	float GetActiveWeaponMaximumHeat() const;
+
+	// [v1.24.0] 현재 Heat를 최대 Heat 기준 0~1 비율로 반환하며 Weapon Selection에서는 선택 항목의 독립 상태를 사용합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Heat", meta=(DisplayName="활성 무기 Heat 비율 반환", ToolTip="현재 활성 무기의 실제 Heat를 최대 Heat 기준 0부터 1까지의 비율로 반환합니다."))
+	float GetActiveWeaponHeatRatio() const;
+
+	// [v1.24.0] 현재 활성 무기가 MaxHeat 도달 후 냉각 대기 중인지 반환하며 Weapon Selection에서는 선택 항목의 독립 상태를 사용합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Heat", meta=(DisplayName="활성 무기 과열 여부", ToolTip="현재 활성 무기가 최대 Heat에 도달해 다음 표준 한 발을 위한 여유가 생길 때까지 발사가 차단되는지 반환합니다."))
+	bool IsActiveWeaponOverheated() const;
+
+	// [v1.24.0] 현재 Heat 상태에서 실제 한 발을 추가로 승인할 수 있는지 반환합니다.
+	bool CanActiveWeaponAcceptHeatShot() const;
+
+	// [v1.24.0] 실제 승인된 한 발의 Heat를 현재 선택 무기의 독립 Runtime에 정확히 한 번 누적합니다.
+	void RecordAcceptedWeaponShotHeat();
+
+	// [v1.24.0] 마지막으로 승인된 발사 시간을 반환하며 Weapon Selection에서는 현재 선택 무기의 독립 시간을 사용합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Weapon", meta=(DisplayName="마지막 승인 발사 시간 반환 (Get Last Accepted Fire Time)", ToolTip="현재 활성 무기의 마지막 승인 발사 시간입니다. 다중 무기 선택에서는 선택된 무기의 독립 쿨다운 상태를 반환합니다."))
+	float GetLastAcceptedFireTimeSeconds() const;
 
 	// [v1.19.0] 현재 EquipmentPresetData에서 해석한 활성 TurretMountData를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|Weapon|Launcher", meta=(DisplayName="활성 TurretMountData 반환 (Get Active Turret Mount Data)", ToolTip="현재 활성 장비 프리셋에서 해석한 TurretMountData입니다. Muzzle 배열과 발사 정책의 원본입니다."))
@@ -296,8 +376,28 @@ float TargetUseRefreshIntervalSeconds = 0.10f;
 	void ResetTurretState();
 
 private:
-		// [v1.22.0] Legacy 또는 Snapshot Override 설정을 유지한 채 공통 Runtime 초기화를 수행합니다.
+	friend class ACFVehiclePawn;
+
+	// [v1.22.0] Legacy 또는 Snapshot Override 설정을 유지한 채 공통 Runtime 초기화를 수행합니다.
 	bool InitializeWeaponRuntimeInternal(ACFVehiclePawn* InOwnerVehiclePawn, UCFVehicleData* InVehicleData);
+
+	// [v1.24.0] 이미 초기화된 Weapon Selection Runtime에서 새 고정 순번을 활성화하고 실패하면 이전 선택을 복원합니다.
+	bool ApplySelectedWeaponIndex(int32 NewWeaponIndex);
+
+		// [v1.25.0] Legacy 또는 single-snapshot 초기화 전 다중 무기 선택 상태와 per-weapon Cooldown·Charge·Heat를 비웁니다.
+	void ClearWeaponSelectionRuntime();
+
+	// [v1.25.0] 현재 선택 인덱스의 per-weapon Charge Runtime을 반환하고 선택 Runtime이 없으면 nullptr를 반환합니다.
+	FCFWeaponChargeRuntime* GetSelectedWeaponChargeRuntime();
+
+	// [v1.25.0] 현재 선택 인덱스의 per-weapon Charge Runtime을 const로 반환하고 선택 Runtime이 없으면 nullptr를 반환합니다.
+	const FCFWeaponChargeRuntime* GetSelectedWeaponChargeRuntime() const;
+
+	// [v1.24.0] 현재 선택 인덱스의 per-weapon Heat Runtime을 반환하고 선택 Runtime이 없으면 nullptr를 반환합니다.
+	FCFWeaponHeatRuntime* GetSelectedWeaponHeatRuntime();
+
+	// [v1.24.0] 현재 선택 인덱스의 per-weapon Heat Runtime을 const로 반환하고 선택 Runtime이 없으면 nullptr를 반환합니다.
+	const FCFWeaponHeatRuntime* GetSelectedWeaponHeatRuntime() const;
 
 	// [v1.22.0] VehicleData 기본값 또는 Snapshot Override 장비를 해석합니다.
 	UCFEquipmentPresetData* ResolveActiveEquipmentPresetData(const FCFVehicleMountProfile& ActiveMountProfile) const;
@@ -323,8 +423,14 @@ private:
 	// [v1.0.0] 위치 슬롯 ID와 일치하는 하드포인트 슬롯을 찾습니다.
 	const FCFVehicleHardpointSlot* FindHardpointSlot(FName LocationSlotId) const;
 
-	// [v1.17.0] 활성 장착 프로파일에 연결된 EquipmentPresetData / WeaponData / ProjectileData / DamageData와 Projectile 스폰 준비 상태를 캐시합니다.
+		// [v1.17.0] 활성 장착 프로파일에 연결된 EquipmentPresetData / WeaponData / ProjectileData / DamageData와 Projectile 스폰 준비 상태를 캐시합니다.
 	void CacheActiveWeaponData(const FCFVehicleMountProfile& ActiveMountProfile);
+
+		// [v1.25.0] 현재 활성 WeaponData의 explicit Charge 설정을 Runtime에 반영하되 같은 Source/설정이면 현재 Charge를 보존합니다.
+	void RefreshActiveWeaponChargeRuntimeConfig();
+
+	// [v1.23.0] 현재 활성 WeaponData의 explicit Heat 설정을 Runtime에 반영하되 같은 Source/설정이면 누적 Heat를 보존합니다.
+	void RefreshActiveWeaponHeatRuntimeConfig();
 
 	// [v1.13.0] ProjectileData 단일 소유 기준으로 활성 DamageData를 캐시합니다.
 	void CacheActiveDamageData();
@@ -356,9 +462,25 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UCFVehicleData> CachedVehicleData = nullptr;
 
-	// [v1.0.0] 우선 사용할 장착 프로파일 ID입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(AllowPrivateAccess="true", DisplayName="활성 장착 프로파일 ID (ActiveMountProfileId)", ToolTip="WeaponComp가 우선 사용할 장착 프로파일 ID입니다. 기본값은 P0 루프 터렛입니다."))
+		// [v1.0.0] 우선 사용할 장착 프로파일 ID입니다. Weapon Selection에서는 내부 FireOrigin·Ammo identity로만 사용하고 Player-facing 그룹명으로 노출하지 않습니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(AllowPrivateAccess="true", DisplayName="활성 장착 프로파일 ID (ActiveMountProfileId)", ToolTip="WeaponComp 내부에서 활성 mount를 찾는 ID입니다. Player-facing 무기 이름이나 그룹으로 표시하지 않습니다."))
 	FName ActiveMountProfileId = TEXT("RoofTurret_MediumOrLarge");
+
+	// [v1.24.0] Applied Fitting의 weapon-bearing ResolvedMounts를 고정 순서로 보존한 실제 선택 가능 무기 목록입니다.
+	UPROPERTY(Transient)
+	TArray<FCFWeaponSelectRuntimeItem> SelectableWeapons;
+
+	// [v1.24.0] SelectableWeapons에서 현재 활성 무기의 0-based 선택 인덱스입니다.
+	int32 SelectedWeaponIndex = INDEX_NONE;
+
+	// [v1.24.0] 선택 가능 무기마다 독립 보존하는 마지막 승인 발사 시각입니다.
+	TArray<float> SelectableWeaponLastAcceptedFireTimes;
+
+		// [v1.25.0] 선택 가능 무기마다 독립 보존하고 비선택 상태에서도 자연 회복하는 Charge Runtime입니다.
+	TArray<FCFWeaponChargeRuntime> SelectableWeaponChargeRuntimes;
+
+	// [v1.24.0] 선택 가능 무기마다 독립 보존하고 비선택 상태에서도 자연 냉각하는 Heat Runtime입니다.
+	TArray<FCFWeaponHeatRuntime> SelectableWeaponHeatRuntimes;
 
 	// [v1.0.0] 하드포인트 LocalTransform을 월드로 바꿀 때 우선 사용할 부모 컴포넌트 이름입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Weapon", meta=(AllowPrivateAccess="true", DisplayName="장착 부모 컴포넌트 이름 (MountParentComponentName)", ToolTip="하드포인트 위치를 월드 Transform으로 바꿀 때 우선 기준으로 사용할 컴포넌트 이름입니다. 없으면 차량 Actor Transform을 사용합니다."))
@@ -456,9 +578,21 @@ private:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Weapon|Launcher", meta=(AllowPrivateAccess="true", DisplayName="Muzzle 순서 진행 횟수 (MuzzleSequenceAdvanceCount)", ToolTip="승인된 발사 결과로 다음 Muzzle 인덱스를 진행한 누적 횟수입니다. 발사 거부는 증가시키지 않습니다."))
 	int32 MuzzleSequenceAdvanceCount = 0;
 
-	// [v1.2.0] 마지막으로 승인된 발사 시간입니다.
+		// [v1.2.0] 마지막으로 승인된 발사 시간입니다.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Weapon", meta=(AllowPrivateAccess="true", DisplayName="마지막 승인 발사 시간 (LastAcceptedFireTimeSeconds)", ToolTip="WeaponComp가 마지막으로 기록한 승인 발사 시간입니다. 아직 없으면 음수입니다."))
 	float LastAcceptedFireTimeSeconds = -1.0f;
+
+		// [v1.25.0] single/legacy Runtime에서 실제 무기 내부 Charge 상태를 소유합니다.
+	FCFWeaponChargeRuntime ActiveWeaponChargeRuntime;
+
+	// [v1.25.0] 같은 Charge 설정을 가진 다른 WeaponData로 바뀌어도 이전 Charge가 이어지지 않도록 현재 Runtime Source를 추적합니다.
+	TWeakObjectPtr<UCFWeaponData> ActiveWeaponChargeSourceData;
+
+	// [v1.23.0] 현재 활성 무기의 실제 Heat 누적·냉각·과열 상태입니다.
+	FCFWeaponHeatRuntime ActiveWeaponHeatRuntime;
+
+	// [v1.23.0] 같은 Heat 설정을 가진 다른 WeaponData로 바뀌어도 이전 Heat가 이어지지 않도록 현재 Runtime Source를 추적합니다.
+	TWeakObjectPtr<UCFWeaponData> ActiveWeaponHeatSourceData;
 
 	// [v1.0.0] 마지막 무기 런타임 처리 요약입니다.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Weapon", meta=(AllowPrivateAccess="true", DisplayName="무기 런타임 요약 (LastWeaponRuntimeSummary)", ToolTip="마지막 무기 런타임 초기화 또는 발사 원점 계산 결과 요약입니다."))

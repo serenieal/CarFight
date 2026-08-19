@@ -1,10 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.10.0
-// Date: 2026-08-13
-// Description: CarFight 차량 무기 DataAsset과 피팅 무기 질량
-// Scope: EquipmentPresetData가 참조할 무기 데이터, 장착 호환성, 피팅 질량, 런처 발사 패턴·Release 설정, 탄약 정적 설정과 선택 대상 사용 정책을 제공합니다.
+// Version: 1.13.0
+// Date: 2026-08-19
+// Description: CarFight 차량 무기 DataAsset·피팅 질량·Charge·Heat P0 입력과 CF-FQ-008 정적 DataValidation 계약
+// Scope: EquipmentPresetData가 참조할 무기 데이터, 장착 호환성, 피팅 질량, 런처 발사 패턴·Release 설정, 탄약·Charge·Heat 정적 설정과 선택 대상 사용 정책을 제공합니다.
 // Changelog:
+// - v1.13.0: UI-P0-06 WeaponCharge Runtime용 explicit Maximum/Initial/PerShot/Recovery 입력과 opt-in 활성 조건을 추가. 기존 Asset all-zero는 Disabled 호환.
+// - v1.12.1: UE 5.8 UHT가 지원하지 않는 HeatDissipationPerSecond Units 메타데이터를 제거. Heat 값·Runtime 계약 변경 없음.
+// - v1.12.0: UI-P0-06 실제 Heat Runtime이 사용할 explicit HeatDissipationPerSecond와 Heat Runtime 활성 조건을 추가. 기존 Asset 기본값은 0으로 발사 동작 변경 없음.
+// - v1.11.0: CF-FQ-008 WD-P0-01 WeaponData 정적 계약 검증과 Unreal Data Validation 진입점을 추가. Runtime fallback과 기존 에셋 값은 변경하지 않음.
 // - v1.10.0: CF-FQ-031 AMMO-P0-01 DefaultAmmoData, 초기 장전량, 발사당 탄약량, Reload·부분 처리 정책과 기존 무한탄 호환 Getter를 추가.
 // - v1.9.0: CF-FQ-034 FIT-P0-02 WeaponMassKg와 안전 Getter·요약 출력을 추가.
 // - v1.8.0: Direct·AngledEjection·VerticalEjection Release 설정과 유효값·요약 Getter를 추가.
@@ -17,6 +21,10 @@
 // - v1.1.0: 기본 ProjectileData 직접 참조를 추가하고 기존 ProjectileDataId는 마이그레이션용으로 유지.
 // - v1.0.0: WeaponData / ProjectileData / DamageData 분리의 첫 단계로 차량 무기 DataAsset 타입을 추가.
 // Migration:
+// - v1.13.0 WeaponCharge는 MaximumWeaponCharge/WeaponChargePerShot/WeaponChargeRecoveryPerSecond가 유효한 양수이고 InitialWeaponCharge가 0~Maximum 범위일 때만 활성화한다. 기존 네 값 all-zero Asset은 발사를 제한하지 않는다.
+// - v1.12.0 Heat Runtime은 HeatPerShot, MaxHeat, HeatDissipationPerSecond가 모두 유효한 양수일 때만 활성화한다. 기존 Asset의 HeatDissipationPerSecond 기본 0은 Heat 비활성으로 현재 발사 결과를 유지한다.
+// - v1.11.0 DataValidation은 정적 모순만 Invalid로 보고하며 FireRate=0, MaxRange=0, WeaponMass=0, DefaultProjectileData=None과 기존 무한탄 호환 조합은 허용한다.
+// - WeaponFire·Launcher·Ammo의 현재 Runtime 상태와 Scheduler 정책은 이 DataAsset 검증이 중복 소유하지 않는다.
 // - 기존 WeaponData는 bUseInfiniteAmmoForDebug=true와 DefaultAmmoData=None 기본값으로 현재 무한탄 발사 결과를 유지한다.
 // - MagazineSize·ReloadTimeSeconds·AmmoTypeId는 삭제하거나 리네이밍하지 않고 신규 Ammo Runtime의 호환 입력으로 유지한다.
 // - 기존 WeaponData는 WeaponMassKg=0 기본값으로 현재 발사와 차량 주행 결과를 유지한다.
@@ -40,6 +48,7 @@
 #include "CFLauncherTypes.h"
 #include "CFVehicleWeaponTypes.h"
 #include "Engine/DataAsset.h"
+#include "Misc/DataValidation.h"
 #include "CFWeaponData.generated.h"
 
 class UCFAmmoData;
@@ -103,17 +112,33 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData|Ammo", meta=(DisplayName="유효 재장전 시간 반환", ToolTip="ReloadTimeSeconds를 0 이상의 유한한 값으로 보정해 반환합니다."))
 	float GetEffectiveReloadTimeSeconds() const;
 
-	// [v1.10.0] 이 WeaponData가 명시적인 유한 탄약 Runtime을 사용하도록 설정됐는지 반환합니다.
+		// [v1.10.0] 이 WeaponData가 명시적인 유한 탄약 Runtime을 사용하도록 설정됐는지 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData|Ammo", meta=(DisplayName="유한 탄약 Runtime 사용 여부", ToolTip="무한탄 Debug 호환이 꺼지고 DefaultAmmoData와 유효 탄창 용량이 있을 때만 True입니다."))
 	bool UsesFiniteAmmoRuntime() const;
+
+		// [v1.13.0] 네 explicit Charge 입력이 유효해 실제 무기 내부 Charge Runtime을 사용할지 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData|Charge", meta=(DisplayName="무기 Charge Runtime 사용 여부", ToolTip="최대 충전량, 발사당 소비량, 초당 회복량이 유효한 양수이고 초기 충전량이 0부터 최대 충전량 사이일 때만 True입니다. 기존 기본값 0 조합은 Charge Runtime을 사용하지 않습니다."))
+	bool UsesWeaponChargeRuntime() const;
+
+	// [v1.12.0] 세 explicit Heat 입력이 모두 유효해 실제 무기 Heat Runtime을 사용할지 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData|Heat", meta=(DisplayName="무기 Heat Runtime 사용 여부", ToolTip="발사 열량, 최대 열량, 초당 자연 냉각량이 모두 유효한 양수일 때만 True입니다. 하나라도 0이면 기존 무기처럼 Heat Runtime을 사용하지 않습니다."))
+	bool UsesWeaponHeatRuntime() const;
 
 	// [v1.10.0] 로그와 Debug에서 사용할 탄약 정적 설정 요약을 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData|Ammo", meta=(DisplayName="탄약 설정 요약 생성", ToolTip="유한탄 사용 여부, AmmoData, 탄창 용량, 초기 장전량, 발사당 소비량과 Reload 정책을 한 줄로 반환합니다."))
 	FString BuildAmmoConfigSummary() const;
 
-	// [v1.0.0] 디버그 패널에 표시할 무기 데이터 요약 문자열을 생성합니다.
+		// [v1.0.0] 디버그 패널에 표시할 무기 데이터 요약 문자열을 생성합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData", meta=(DisplayName="무기 요약 생성 (Build Weapon Summary)", ToolTip="디버그 패널과 로그에 표시할 핵심 무기 데이터 요약 문자열을 생성합니다."))
 	FString BuildWeaponSummary() const;
+
+	// [v1.11.0] DataValidation과 Automation이 공유할 WeaponData 정적 계약 오류 목록을 생성합니다.
+	bool ValidateWeaponDataContract(TArray<FText>& OutValidationErrors) const;
+
+#if WITH_EDITOR
+	// [v1.11.0] Unreal Data Validation에서 잘못된 WeaponData 정적 설정을 보고합니다.
+	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
+#endif
 
 	// [v1.2.0] 음수를 제거한 유효 분당 발사속도를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|WeaponData", meta=(DisplayName="분당 발사속도 반환 (Get Effective Fire Rate Per Minute)", ToolTip="음수를 제거한 유효 분당 발사속도를 반환합니다. 60이면 1초마다 1발입니다."))
@@ -227,13 +252,33 @@ FCFTargetUsePolicy TargetUsePolicy;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Ammo", meta=(DisplayName="무한 탄약 Debug 호환", ToolTip="True이면 신규 Ammo Runtime이 이 WeaponData의 발사를 제한하지 않습니다. 기존 WeaponData 호환을 위해 기본값은 True입니다."))
 	bool bUseInfiniteAmmoForDebug = true;
 
+		// [v1.13.0] 이 무기 내부 축전기가 보유할 수 있는 최대 Charge입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Charge", meta=(ClampMin="0.0", DisplayName="최대 무기 충전량 (MaximumWeaponCharge)", ToolTip="무기 자체 내부 축전기의 최대 충전량입니다. 0이면 Charge Runtime을 활성화하지 않습니다. VehicleBattery 용량과는 별개입니다."))
+	float MaximumWeaponCharge = 0.0f;
+
+	// [v1.13.0] 무기 Runtime 초기화 시 시작할 내부 Charge입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Charge", meta=(ClampMin="0.0", DisplayName="초기 무기 충전량 (InitialWeaponCharge)", ToolTip="출격 또는 무기 Runtime 초기화 시 시작할 내부 Charge입니다. 0부터 최대 무기 충전량 사이의 명시값만 사용합니다."))
+	float InitialWeaponCharge = 0.0f;
+
+	// [v1.13.0] 실제 승인된 한 발이 소비할 무기 내부 Charge입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Charge", meta=(ClampMin="0.0", DisplayName="발사당 무기 충전 소비량 (WeaponChargePerShot)", ToolTip="실제 승인된 한 발마다 무기 내부 Charge에서 소비할 양입니다. 0이면 Charge Runtime을 활성화하지 않습니다."))
+	float WeaponChargePerShot = 0.0f;
+
+	// [v1.13.0] 실제 Game-Time 1초마다 자연 회복할 무기 내부 Charge입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Charge", meta=(ClampMin="0.0", DisplayName="초당 무기 충전 회복량 (WeaponChargeRecoveryPerSecond)", ToolTip="게임이 진행되는 동안 1초마다 자연 회복할 무기 내부 Charge입니다. 0이면 Charge Runtime을 활성화하지 않습니다."))
+	float WeaponChargeRecoveryPerSecond = 0.0f;
+
 	// [v1.0.0] 한 발 발사 시 누적할 열량입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Heat", meta=(ClampMin="0.0", DisplayName="발사 열량 (HeatPerShot)", ToolTip="과열 시스템을 사용할 때 한 발 발사마다 누적할 열량입니다. 0이면 현재 P0 단계에서 사용하지 않습니다."))
 	float HeatPerShot = 0.0f;
 
-	// [v1.0.0] 과열 시스템에서 허용할 최대 열량입니다.
+		// [v1.0.0] 과열 시스템에서 허용할 최대 열량입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Heat", meta=(ClampMin="0.0", DisplayName="최대 열량 (MaxHeat)", ToolTip="과열 시스템에서 허용할 최대 열량입니다. 0이면 현재 P0 단계에서 사용하지 않습니다."))
 	float MaxHeat = 0.0f;
+
+	// [v1.12.0] 발사하지 않는 동안 1초마다 자연 감소할 Heat 양입니다.
+		UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Heat", meta=(ClampMin="0.0", DisplayName="초당 자연 냉각량 (HeatDissipationPerSecond)", ToolTip="발사하지 않는 동안 1초마다 감소할 열량입니다. 0이면 Heat Runtime을 활성화하지 않아 기존 무기 동작을 유지합니다."))
+	float HeatDissipationPerSecond = 0.0f;
 
 	// [v1.0.0] 후속 AmmoData 분리 전 탄종을 구분할 임시 ID입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|WeaponData|Refs", meta=(DisplayName="탄종 ID (AmmoTypeId)", ToolTip="후속 AmmoData 분리 전 탄종을 구분할 임시 ID입니다."))

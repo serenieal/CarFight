@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.3.0
-// Date: 2026-08-06
+// Version: 1.4.0
+// Date: 2026-08-18
 // Description: CarFight UI 공통 입력·Mapping Context·싱글플레이 Pause PlayerController 구현
-// Scope: Controller 소유 Context, Pause·Back 요청, 입력 중립화와 실제 World Pause를 구현합니다.
+// Scope: Controller 소유 Context, Pause·Back 요청, 입력 중립화, 실제 World Pause와 UI USER Visual 검증 진입점을 구현합니다.
 // Changelog:
+// - v1.4.0: M_VehicleDefensePIE 전용 UI-P0-03 USER Visual 검증을 위해 PIE 한정 방어 Pawn 빙의·기준 Pawn 복귀·방어 피해 Exec 진입점을 구현.
 // - v1.3.0: Pause 중 Enter·게임패드 확인 버튼을 Continue Fallback 입력으로 처리.
 // - v1.1.0: UI-P0-02 차량 입력 중립화, 눌린 키 Flush와 World Pause 적용·해제 API를 구현.
 // - v1.0.0: UI-P0-01A 최소 PlayerController 기반을 최초 구현.
@@ -12,9 +13,15 @@
 // - Legacy Pawn DefaultInputMappingContext는 Controller가 제거하지 않는다.
 // - UI 입력 중 Pawn 입력 억제는 기존 Binding과 Context를 삭제하지 않는 임시 호환 게이트다.
 // - Pause 진입은 ACFVehiclePawn 입력만 중립화하며 Launcher·Projectile Runtime을 취소하거나 초기화하지 않는다.
+// - v1.4.0 UI Visual Exec 진입점은 PIE의 M_VehicleDefensePIE 계열 맵에서만 동작하고 저장 에셋을 변경하지 않는다.
+
+
+
 
 #include "CFPlayerController.h"
 
+#include "CFDamageData.h"
+#include "CFVehicleDefenseComp.h"
 #include "CFVehiclePawn.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -24,9 +31,11 @@
 #include "Components/Widget.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
 #include "InputCoreTypes.h"
 #include "UI/CFUISubsystem.h"
+
 
 // [v1.0.0] 게임 입력을 기본 상태로 하고 커서를 숨깁니다.
 ACFPlayerController::ACFPlayerController()
@@ -307,6 +316,170 @@ UCFUISubsystem* ACFPlayerController::GetUISubsystem() const
 {
 	ULocalPlayer* LocalPlayer = GetLocalPlayer();
 	return LocalPlayer ? LocalPlayer->GetSubsystem<UCFUISubsystem>() : nullptr;
+}
+
+// [v1.4.0] UI-P0-03 USER Visual에서 현재 PIE의 정식 Defense Pawn으로 빙의합니다.
+void ACFPlayerController::CFUIVisualPossessDefensePawn()
+{
+	if (!IsUIVisualAcceptancePIE() || !HasAuthority())
+	{
+		ClientMessage(TEXT("CFUIVisual: M_VehicleDefensePIE PIE authority에서만 사용할 수 있습니다."));
+		return;
+	}
+
+	ACFVehiclePawn* DefensePawn = FindUIVisualDefensePawn();
+	if (!DefensePawn)
+	{
+		ClientMessage(TEXT("CFUIVisual: 정식 Defense Pawn을 찾지 못했습니다."));
+		return;
+	}
+
+	if (GetPawn() != DefensePawn)
+	{
+		Possess(DefensePawn);
+	}
+
+	ClientMessage(FString::Printf(TEXT("CFUIVisual: Defense Pawn 빙의 완료 | %s"), *DefensePawn->GetName()));
+}
+
+// [v1.4.0] UI-P0-03 Pawn Rebind USER Visual에서 비방어 기준 Pawn으로 돌아갑니다.
+void ACFPlayerController::CFUIVisualPossessBaselinePawn()
+{
+	if (!IsUIVisualAcceptancePIE() || !HasAuthority())
+	{
+		ClientMessage(TEXT("CFUIVisual: M_VehicleDefensePIE PIE authority에서만 사용할 수 있습니다."));
+		return;
+	}
+
+	ACFVehiclePawn* BaselinePawn = FindUIVisualBaselinePawn();
+	if (!BaselinePawn)
+	{
+		ClientMessage(TEXT("CFUIVisual: 비방어 기준 Pawn을 찾지 못했습니다."));
+		return;
+	}
+
+	if (GetPawn() != BaselinePawn)
+	{
+		Possess(BaselinePawn);
+	}
+
+	ClientMessage(FString::Printf(TEXT("CFUIVisual: Baseline Pawn 빙의 완료 | %s"), *BaselinePawn->GetName()));
+}
+
+// [v1.4.0] UI-P0-03 Defense USER Visual에서 방어 차량에 Shield·Armor·Integrity가 모두 변하는 정면 피해를 1회 적용합니다.
+void ACFPlayerController::CFUIVisualApplyDefenseDamage()
+{
+	if (!IsUIVisualAcceptancePIE() || !HasAuthority())
+	{
+		ClientMessage(TEXT("CFUIVisual: M_VehicleDefensePIE PIE authority에서만 사용할 수 있습니다."));
+		return;
+	}
+
+	ACFVehiclePawn* DefensePawn = FindUIVisualDefensePawn();
+	if (!DefensePawn)
+	{
+		ClientMessage(TEXT("CFUIVisual: 피해를 적용할 정식 Defense Pawn을 찾지 못했습니다."));
+		return;
+	}
+
+	UCFDamageData* VisualDamageData = NewObject<UCFDamageData>(this);
+	if (!VisualDamageData)
+	{
+		ClientMessage(TEXT("CFUIVisual: Transient DamageData 생성에 실패했습니다."));
+		return;
+	}
+
+	VisualDamageData->DamageId = TEXT("UIVisualDefenseDamage");
+	VisualDamageData->BaseDamage = 200.0f;
+	VisualDamageData->ArmorPenetration = 50.0f;
+	VisualDamageData->bCanDamageSelf = false;
+
+	FCFDamageHitContext DamageHitContext;
+	DamageHitContext.DamageData = VisualDamageData;
+	DamageHitContext.HitActor = DefensePawn;
+	DamageHitContext.InstigatorActor = this;
+	DamageHitContext.ImpactLocation = DefensePawn->GetActorLocation() + (DefensePawn->GetActorForwardVector() * 100.0f);
+	DamageHitContext.ImpactNormal = DefensePawn->GetActorForwardVector();
+	DamageHitContext.IncomingDirection = -DefensePawn->GetActorForwardVector();
+	DamageHitContext.bBlockingHit = true;
+
+	FCFVehicleDamageResult VehicleDamageResult;
+	if (!UCFVehicleDefenseComp::TryApplyDamageToActor(DamageHitContext, VehicleDamageResult))
+	{
+		ClientMessage(TEXT("CFUIVisual: 정식 VehicleDefense 피해 적용에 실패했습니다."));
+		return;
+	}
+
+	UCFVehicleDefenseComp* DefenseComponent = DefensePawn->GetVehicleDefenseComp();
+	ClientMessage(FString::Printf(
+		TEXT("CFUIVisual: Defense 피해 적용 완료 | %s"),
+		DefenseComponent ? *DefenseComponent->BuildVehicleDefenseSummary() : TEXT("Defense summary unavailable")));
+}
+
+// [v1.4.0] UI Visual Exec 진입점이 허용되는 M_VehicleDefensePIE 계열 PIE World인지 확인합니다.
+bool ACFPlayerController::IsUIVisualAcceptancePIE() const
+{
+	const UWorld* CurrentWorld = GetWorld();
+	if (!CurrentWorld || CurrentWorld->WorldType != EWorldType::PIE)
+	{
+		return false;
+	}
+
+	return CurrentWorld->GetMapName().Contains(TEXT("M_VehicleDefensePIE"));
+}
+
+// [v1.4.0] 현재 PIE World에서 정식 DefenseData가 초기화된 차량 Pawn을 찾습니다.
+ACFVehiclePawn* ACFPlayerController::FindUIVisualDefensePawn() const
+{
+	UWorld* CurrentWorld = GetWorld();
+	if (!CurrentWorld)
+	{
+		return nullptr;
+	}
+
+	for (TActorIterator<ACFVehiclePawn> VehiclePawnIterator(CurrentWorld); VehiclePawnIterator; ++VehiclePawnIterator)
+	{
+		ACFVehiclePawn* CandidatePawn = *VehiclePawnIterator;
+		if (!IsValid(CandidatePawn))
+		{
+			continue;
+		}
+
+		UCFVehicleDefenseComp* DefenseComponent = CandidatePawn->GetVehicleDefenseComp();
+		if (DefenseComponent && DefenseComponent->IsDefenseInitialized() && DefenseComponent->GetActiveDefenseData())
+		{
+			return CandidatePawn;
+		}
+	}
+
+	return nullptr;
+}
+
+// [v1.4.0] 현재 PIE World에서 DefenseData가 없는 비방어 기준 차량 Pawn을 찾습니다.
+ACFVehiclePawn* ACFPlayerController::FindUIVisualBaselinePawn() const
+{
+	UWorld* CurrentWorld = GetWorld();
+	if (!CurrentWorld)
+	{
+		return nullptr;
+	}
+
+	for (TActorIterator<ACFVehiclePawn> VehiclePawnIterator(CurrentWorld); VehiclePawnIterator; ++VehiclePawnIterator)
+	{
+		ACFVehiclePawn* CandidatePawn = *VehiclePawnIterator;
+		if (!IsValid(CandidatePawn) || CandidatePawn == GetPawn())
+		{
+			continue;
+		}
+
+		UCFVehicleDefenseComp* DefenseComponent = CandidatePawn->GetVehicleDefenseComp();
+		if (!DefenseComponent || !DefenseComponent->IsDefenseInitialized() || !DefenseComponent->GetActiveDefenseData())
+		{
+			return CandidatePawn;
+		}
+	}
+
+	return nullptr;
 }
 
 // [v1.0.0] Enhanced Input Pause Action 입력을 공통 요청으로 변환합니다.

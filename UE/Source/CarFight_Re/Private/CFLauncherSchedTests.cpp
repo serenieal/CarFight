@@ -1,13 +1,15 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.0
-// Date: 2026-08-02
-// Description: CF-FQ-029 LM-P0-03B 런처 발사 시퀀스 스케줄러 자동화 테스트
+// Version: 1.2.0
+// Date: 2026-08-16
+// Description: CF-FQ-029 LM-P0-03B/LM-P0-06A 런처 발사 시퀀스 스케줄러 자동화 테스트
 // Scope: SingleCycle 완료, Ripple 시간 진행, Salvo 처리 묶음, Volley 목표 Snapshot, 실패 정책, 취소와 Reset 계약을 검증합니다.
 // Changelog:
+// - v1.2.0: LM-P0-06A Failure Policy Technical Closure를 위해 StopSequence 실패 직후 추가 Dispatch 예산과 Dispatch 기록이 모두 차단되는 계약을 명시적으로 검증합니다.
 // - v1.1.0: 첫 발사 순간 위치·Actor Snapshot이 이후 선택 변경과 독립적으로 유지되고 Reset에서 함께 제거되는 계약을 추가.
 // - v1.0.0: Launcher Scheduler RuntimeContract 최초 추가.
 // Migration:
+// - Launcher Runtime 구현은 변경하지 않고 기존 RecordShotResult(false) 실패 정책의 terminal dispatch 차단을 보호 회귀로 고정합니다.
 // - 실제 Pawn·Muzzle·Projectile 시각 실행은 Editor 검증 대상으로 남기고 이 테스트는 순수 결정적 시퀀스·Snapshot 상태를 검증합니다.
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -23,7 +25,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"CarFight.Launcher.LM_P0_03B.SchedulerContract",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-// [v1.1.0] 런처 패턴별 Dispatch 상태와 첫 발사 순간 위치·Actor 목표 Snapshot 계약을 검증합니다.
+// [v1.2.0] 런처 패턴별 Dispatch·Failure Policy와 첫 발사 순간 위치·Actor 목표 Snapshot 계약을 검증합니다.
 bool FCFLauncherSchedulerContractTest::RunTest(const FString& Parameters)
 {
 	(void)Parameters;
@@ -99,6 +101,8 @@ bool FCFLauncherSchedulerContractTest::RunTest(const FString& Parameters)
 	StopRippleRuntime.RecordShotResult(false);
 	TestEqual(TEXT("StopSequence 실패 후 Cancelled"), StopRippleRuntime.State, ECFLauncherSequenceState::Cancelled);
 	TestEqual(TEXT("StopSequence 취소 사유 ShotFailed"), StopRippleRuntime.CancelReason, ECFLauncherSequenceCancelReason::ShotFailed);
+	TestEqual(TEXT("StopSequence 취소 뒤 추가 Dispatch 예산 없음"), StopRippleRuntime.GetDispatchBudget(1.0f), 0);
+	TestFalse(TEXT("StopSequence 취소 뒤 추가 Dispatch 기록 불가"), StopRippleRuntime.MarkShotDispatched());
 
 	// [v1.0.0] 6발 Salvo와 최대 동시 처리 4를 검증할 설정입니다.
 	FCFLauncherFirePatternConfig SalvoConfig;

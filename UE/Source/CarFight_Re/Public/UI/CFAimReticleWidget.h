@@ -1,15 +1,17 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.7.0
-// Date: 2026-07-21
+// Version: 1.9.0
+// Date: 2026-08-18
 // Description: Aim Reticle UI용 C++ 부모 위젯 클래스입니다.
 // Changelog:
+// - v1.9.0: UI-P0-04 UISubsystem 소유 수명에 맞춰 VehiclePawnRef를 Weak Object Reference로 전환해 Reticle Widget이 이전 Pawn lifetime을 소유하지 않도록 교정.
 // - v1.7.0: Image_WeaponReticle을 탄종별 Preview가 아닌 CurrentMuzzleDirection 기반 터렛 레티클 월드 지점에 연결.
 // - v1.6.0: Weapon Preview 월드 위치를 화면 좌표로 투영해 선택적 Weapon Reticle 이미지를 표시.
 // - v1.5.0: TurretAligning FireFeedback 표시용 amber 색상과 표시 키 판별 헬퍼를 추가.
 // - v1.4.0: 선택적 Reticle 이미지와 FireFeedback TextBlock에 상태별 색상을 안전하게 적용.
 // - v1.3.0: Pawn FireFeedback ViewData를 읽어 Reticle 상태와 선택적 피드백 TextBlock에 반영.
 // Migration:
+// - v1.9.0부터 VehiclePawnRef는 약한 참조이며 Pawn이 소멸하면 다음 Refresh에서 Hidden fallback으로 안전 전환한다.
 // - Image_WeaponReticle은 터렛 레티클이며 탄종, 중력, 첫 충돌 또는 착탄 위치를 표시하지 않는다.
 // - Image_WeaponReticle은 선택 사항이며, WBP에 없어도 기존 Command Reticle과 FireFeedback은 그대로 동작한다.
 // - TurretAligning은 ReticleState enum 확장 없이 FireFeedback DisplayKey로 해석하므로 기존 WBP 바인딩은 유지한다.
@@ -124,9 +126,9 @@ protected:
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UImage> Image_WeaponReticle = nullptr;
 
-	// [v1.0.0] Reticle이 조준 상태를 읽어올 차량 Pawn 참조입니다.
-	UPROPERTY(BlueprintReadOnly, Category="CarFight|Aim|Reticle", meta=(DisplayName="차량 Pawn 참조 (VehiclePawnRef)", ToolTip="현재 Reticle UI가 조준 상태를 읽어올 차량 Pawn 참조입니다."))
-	TObjectPtr<ACFVehiclePawn> VehiclePawnRef = nullptr;
+		// [v1.9.0] Reticle이 조준 상태를 읽되 lifetime을 소유하지 않는 현재 차량 Pawn 약한 참조입니다.
+	UPROPERTY(BlueprintReadOnly, Category="CarFight|Aim|Reticle", meta=(DisplayName="차량 Pawn 약한 참조 (VehiclePawnRef)", ToolTip="현재 Reticle UI가 조준 상태를 읽어올 차량 Pawn의 약한 참조입니다. Pawn 수명을 소유하지 않으며 소멸 시 자동으로 무효화됩니다."))
+	TWeakObjectPtr<ACFVehiclePawn> VehiclePawnRef;
 
 	// [v1.0.0] 현재 Reticle에 적용 중인 상태 캐시입니다.
 	UPROPERTY(BlueprintReadOnly, Category="CarFight|Aim|Reticle", meta=(DisplayName="Reticle 상태 캐시 (CachedReticleState)", ToolTip="현재 Reticle UI에 적용 중인 조준점 상태 캐시입니다."))

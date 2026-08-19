@@ -1,10 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.22.0
-// Date: 2026-07-29
-// Description: CarFight 차량 전투 장착 프로파일과 선택 대상 사용 평가 컴포넌트 구현
-// Scope: 장착 데이터, FireOrigin, 터렛 상태, Muzzle 순서, 런처 발사 패턴·Release 설정과 활성 무기의 선택 대상 사용 가능 캐시를 제공합니다.
+// Version: 1.25.0
+// Date: 2026-08-19
+// Description: CarFight 차량 전투 장착 프로파일·Player-facing Weapon Selection·무기 Charge·Heat와 선택 대상 사용 평가 컴포넌트 구현
+// Scope: Applied Fitting weapon-bearing 고정 순서를 선택 Runtime으로 보존하고 활성 무기 전환, per-weapon Cooldown·Charge·Heat, FireOrigin과 TargetUse 재해석을 수행합니다.
 // Changelog:
+// - v1.25.0: UI-P0-06 WeaponCharge Runtime을 선택 순번별 독립 상태로 구성하고 비선택 포함 Game-Time 자연 회복, accepted-shot 소비, HUD read API와 legacy source-preserving refresh를 구현.
+// - v1.24.0: UI-P0-06 Weapon Selection Runtime, 선택 순번별 독립 Cooldown/Heat, 비선택 Heat 자연 냉각, DisplayName-only Player-facing read API와 fail-safe 선택 복원을 구현.
+// - v1.23.0: UI-P0-06 explicit WeaponData Heat 설정을 per-weapon Runtime으로 구성하고 Tick 자연 냉각, 동일 Source Heat 보존, 승인 발사 누적과 과열 public state를 구현.
 // - v1.22.0: FIT-P0-04 Snapshot EquipmentPresetData Override와 Legacy 복원 초기화를 구현.
 // - v1.21.0: 활성 WeaponData의 안전한 런처 Release 설정과 요약 Getter를 구현.
 // - v1.20.0: 활성 WeaponData의 안전한 런처 발사 패턴 설정과 요약 Getter를 구현.
@@ -30,6 +33,9 @@
 // - v1.1.0: 활성 MountProfile의 DefaultWeaponData를 캐시하고 장착 타입/크기 호환성을 디버그 요약에 포함.
 // - v1.0.0: P0 Top_01 터렛 발사 원점 계산을 위한 최소 WeaponComp 구현.
 // Migration:
+// - v1.25.0 explicit WeaponCharge가 활성인 무기는 각 선택 순번별 Charge를 독립 보존하고 Game-Time Tick으로 회복한다. 기존 all-zero WeaponData는 Charge Disabled이며 발사 동작이 바뀌지 않는다. VehicleBattery와는 연결하지 않는다.
+// - v1.24.0 Applied Fitting 선택 Runtime에서는 각 무기의 Cooldown/Heat를 별도 보존하고 모든 Heat를 Game-Time Tick으로 냉각한다. Legacy/single-snapshot 초기화는 선택 Runtime을 비우고 기존 단일 상태 경로를 사용한다.
+// - v1.23.0 Heat Runtime은 활성·호환 WeaponData의 세 explicit Heat 값이 모두 양수일 때만 켜진다. 출격/무기 재초기화는 Heat를 0으로 reset하고 같은 WeaponData의 FireOrigin 재계산은 현재 Heat를 유지한다.
 // - 활성 WeaponData가 없거나 호환되지 않으면 SingleCycle / 1발 기본 패턴을 반환하고 기존 발사 결과를 유지한다.
 // - DefaultEquipmentPresetData가 지정되면 TurretMountData / WeaponData의 단일 소스로 사용하고, 프리셋 내부 참조가 비면 해당 장비 데이터는 Missing 상태가 된다.
 // - 터렛이 조준 목표를 따라가는 중이어도 발사는 막지 않으며, 시각 회전값은 TurretMountData의 Min/Max Yaw/Pitch 안에 고정한다.
@@ -98,7 +104,28 @@ void UCFVehicleWeaponComp::TickComponent(
 	const ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction)
 {
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+		Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+			// [v1.25.0] 이번 Game-Time Tick에서 Charge 회복과 Heat 냉각에 공통 적용할 안전한 시간입니다.
+	const float ResourceDeltaSeconds = FMath::Max(DeltaTime, 0.0f);
+	if (HasWeaponSelectionRuntime())
+	{
+		for (FCFWeaponChargeRuntime& WeaponChargeRuntime : SelectableWeaponChargeRuntimes)
+		{
+			WeaponChargeRuntime.AdvanceRecovery(ResourceDeltaSeconds);
+		}
+
+		for (FCFWeaponHeatRuntime& WeaponHeatRuntime : SelectableWeaponHeatRuntimes)
+		{
+			WeaponHeatRuntime.AdvanceCooling(ResourceDeltaSeconds);
+		}
+	}
+	else
+	{
+		// [v1.25.0] Legacy/single-weapon 경로는 기존 활성 무기 Charge와 Heat Runtime만 자연 갱신합니다.
+		ActiveWeaponChargeRuntime.AdvanceRecovery(ResourceDeltaSeconds);
+		ActiveWeaponHeatRuntime.AdvanceCooling(ResourceDeltaSeconds);
+	}
 
 	if (!bAutoRefreshTargetUseResult
 		|| !BoundTargetSelectComp.IsValid()
@@ -301,6 +328,7 @@ bool UCFVehicleWeaponComp::InitializeWeaponRuntime(ACFVehiclePawn* InOwnerVehicl
 // [v1.22.0] 지정 활성 프로파일에서 VehicleData 기본 장비를 사용하는 Legacy Runtime을 초기화합니다.
 bool UCFVehicleWeaponComp::InitializeWeaponRuntimeForActiveProfile(ACFVehiclePawn* InOwnerVehiclePawn, UCFVehicleData* InVehicleData, const FName InActiveMountProfileId)
 {
+	ClearWeaponSelectionRuntime();
 	ActiveMountProfileId = InActiveMountProfileId;
 	bUseRuntimeEquipmentPresetOverride = false;
 	RuntimeEquipmentPresetOverride = nullptr;
@@ -310,10 +338,182 @@ bool UCFVehicleWeaponComp::InitializeWeaponRuntimeForActiveProfile(ACFVehiclePaw
 // [v1.22.0] 지정 활성 프로파일에 Snapshot 장비 또는 빈 장착을 적용합니다.
 bool UCFVehicleWeaponComp::InitializeWeaponRuntimeFromFitting(ACFVehiclePawn* InOwnerVehiclePawn, UCFVehicleData* InVehicleData, const FName InActiveMountProfileId, UCFEquipmentPresetData* InEquipmentPresetData)
 {
+	ClearWeaponSelectionRuntime();
 	ActiveMountProfileId = InActiveMountProfileId;
 	bUseRuntimeEquipmentPresetOverride = true;
-	RuntimeEquipmentPresetOverride = InEquipmentPresetData;
+		RuntimeEquipmentPresetOverride = InEquipmentPresetData;
 	return InitializeWeaponRuntimeInternal(InOwnerVehiclePawn, InVehicleData);
+}
+
+// [v1.24.0] Applied Fitting의 실제 weapon-bearing 고정 순서와 선택 인덱스로 다중 무기 Runtime을 초기화합니다.
+bool UCFVehicleWeaponComp::InitializeWeaponSelectionRuntime(
+	ACFVehiclePawn* InOwnerVehiclePawn,
+	UCFVehicleData* InVehicleData,
+	const TArray<FCFWeaponSelectRuntimeItem>& InSelectableWeapons,
+	const int32 InSelectedWeaponIndex)
+{
+	ClearWeaponSelectionRuntime();
+
+	if (!InOwnerVehiclePawn
+		|| !InVehicleData
+		|| InSelectableWeapons.IsEmpty()
+		|| !InSelectableWeapons.IsValidIndex(InSelectedWeaponIndex))
+	{
+		LastWeaponRuntimeSummary = TEXT("WeaponSelectionRuntime: InvalidInput");
+		return false;
+	}
+
+	// [v1.24.0] 중복 내부 mount identity를 거부해 Ammo/FireOrigin source가 서로 섞이지 않도록 확인하는 집합입니다.
+	TSet<FName> UniqueInternalMountIds;
+	for (const FCFWeaponSelectRuntimeItem& SelectionItem : InSelectableWeapons)
+	{
+				if (SelectionItem.InternalMountProfileId.IsNone()
+			|| !SelectionItem.EquipmentPresetData
+			|| !SelectionItem.WeaponData
+			|| SelectionItem.EquipmentPresetData->DefaultWeaponData != SelectionItem.WeaponData
+			|| UniqueInternalMountIds.Contains(SelectionItem.InternalMountProfileId))
+		{
+			LastWeaponRuntimeSummary = TEXT("WeaponSelectionRuntime: InvalidResolvedWeaponItem");
+			ClearWeaponSelectionRuntime();
+			return false;
+		}
+
+		UniqueInternalMountIds.Add(SelectionItem.InternalMountProfileId);
+	}
+
+	SelectableWeapons = InSelectableWeapons;
+	SelectedWeaponIndex = InSelectedWeaponIndex;
+		SelectableWeaponLastAcceptedFireTimes.Init(-1.0f, SelectableWeapons.Num());
+	SelectableWeaponChargeRuntimes.SetNum(SelectableWeapons.Num());
+	SelectableWeaponHeatRuntimes.SetNum(SelectableWeapons.Num());
+
+	for (int32 WeaponIndex = 0; WeaponIndex < SelectableWeapons.Num(); ++WeaponIndex)
+	{
+		// [v1.25.0] 각 실제 선택 항목의 authored Charge/Heat 설정을 독립 상태로 구성할 WeaponData입니다.
+		const UCFWeaponData* SelectionWeaponData = SelectableWeapons[WeaponIndex].WeaponData;
+		if (SelectionWeaponData && SelectionWeaponData->UsesWeaponChargeRuntime())
+		{
+			SelectableWeaponChargeRuntimes[WeaponIndex].Configure(
+				SelectionWeaponData->MaximumWeaponCharge,
+				SelectionWeaponData->InitialWeaponCharge,
+				SelectionWeaponData->WeaponChargePerShot,
+				SelectionWeaponData->WeaponChargeRecoveryPerSecond);
+		}
+
+		if (SelectionWeaponData && SelectionWeaponData->UsesWeaponHeatRuntime())
+		{
+			SelectableWeaponHeatRuntimes[WeaponIndex].Configure(
+				SelectionWeaponData->HeatPerShot,
+				SelectionWeaponData->MaxHeat,
+				SelectionWeaponData->HeatDissipationPerSecond);
+		}
+	}
+
+	ActiveMountProfileId = SelectableWeapons[SelectedWeaponIndex].InternalMountProfileId;
+	bUseRuntimeEquipmentPresetOverride = true;
+	RuntimeEquipmentPresetOverride = SelectableWeapons[SelectedWeaponIndex].EquipmentPresetData;
+	if (!InitializeWeaponRuntimeInternal(InOwnerVehiclePawn, InVehicleData))
+	{
+		ClearWeaponSelectionRuntime();
+		return false;
+	}
+
+	return true;
+}
+
+// [v1.24.0] 지정 선택 인덱스에 실제 Player-facing DisplayName source가 있는지 반환합니다.
+bool UCFVehicleWeaponComp::IsSelectableWeaponDisplayNameAvailable(const int32 WeaponIndex) const
+{
+	if (!SelectableWeapons.IsValidIndex(WeaponIndex)
+		|| !SelectableWeapons[WeaponIndex].EquipmentPresetData)
+	{
+		return false;
+	}
+
+	return !SelectableWeapons[WeaponIndex].EquipmentPresetData->DisplayName.IsEmpty();
+}
+
+// [v1.24.0] 지정 선택 인덱스의 실제 EquipmentPresetData.DisplayName을 반환하고 없으면 빈 Text를 반환합니다.
+FText UCFVehicleWeaponComp::GetSelectableWeaponDisplayName(const int32 WeaponIndex) const
+{
+	return IsSelectableWeaponDisplayNameAvailable(WeaponIndex)
+		? SelectableWeapons[WeaponIndex].EquipmentPresetData->DisplayName
+		: FText::GetEmpty();
+}
+
+// [v1.24.0] 이미 초기화된 Weapon Selection Runtime에서 새 고정 순번을 활성화하고 실패하면 이전 선택을 복원합니다.
+bool UCFVehicleWeaponComp::ApplySelectedWeaponIndex(const int32 NewWeaponIndex)
+{
+	if (!HasWeaponSelectionRuntime() || !SelectableWeapons.IsValidIndex(NewWeaponIndex))
+	{
+		return false;
+	}
+
+	if (NewWeaponIndex == SelectedWeaponIndex)
+	{
+		return true;
+	}
+
+	// [v1.24.0] 새 선택 초기화 실패 시 되돌릴 이전 고정 순번입니다.
+	const int32 PreviousWeaponIndex = SelectedWeaponIndex;
+	SelectedWeaponIndex = NewWeaponIndex;
+	ActiveMountProfileId = SelectableWeapons[SelectedWeaponIndex].InternalMountProfileId;
+	bUseRuntimeEquipmentPresetOverride = true;
+	RuntimeEquipmentPresetOverride = SelectableWeapons[SelectedWeaponIndex].EquipmentPresetData;
+
+	if (InitializeWeaponRuntimeInternal(OwnerVehiclePawn.Get(), CachedVehicleData.Get()))
+	{
+		return true;
+	}
+
+	SelectedWeaponIndex = PreviousWeaponIndex;
+	ActiveMountProfileId = SelectableWeapons[SelectedWeaponIndex].InternalMountProfileId;
+	bUseRuntimeEquipmentPresetOverride = true;
+	RuntimeEquipmentPresetOverride = SelectableWeapons[SelectedWeaponIndex].EquipmentPresetData;
+	InitializeWeaponRuntimeInternal(OwnerVehiclePawn.Get(), CachedVehicleData.Get());
+	return false;
+}
+
+// [v1.25.0] Legacy 또는 single-snapshot 초기화 전 다중 무기 선택 상태와 per-weapon Cooldown·Charge·Heat를 비웁니다.
+void UCFVehicleWeaponComp::ClearWeaponSelectionRuntime()
+{
+	SelectableWeapons.Reset();
+	SelectedWeaponIndex = INDEX_NONE;
+	SelectableWeaponLastAcceptedFireTimes.Reset();
+	SelectableWeaponChargeRuntimes.Reset();
+	SelectableWeaponHeatRuntimes.Reset();
+}
+
+// [v1.25.0] 현재 선택 인덱스의 per-weapon Charge Runtime을 반환하고 선택 Runtime이 없으면 nullptr를 반환합니다.
+FCFWeaponChargeRuntime* UCFVehicleWeaponComp::GetSelectedWeaponChargeRuntime()
+{
+	return HasWeaponSelectionRuntime() && SelectableWeaponChargeRuntimes.IsValidIndex(SelectedWeaponIndex)
+		? &SelectableWeaponChargeRuntimes[SelectedWeaponIndex]
+		: nullptr;
+}
+
+// [v1.25.0] 현재 선택 인덱스의 per-weapon Charge Runtime을 const로 반환하고 선택 Runtime이 없으면 nullptr를 반환합니다.
+const FCFWeaponChargeRuntime* UCFVehicleWeaponComp::GetSelectedWeaponChargeRuntime() const
+{
+	return HasWeaponSelectionRuntime() && SelectableWeaponChargeRuntimes.IsValidIndex(SelectedWeaponIndex)
+		? &SelectableWeaponChargeRuntimes[SelectedWeaponIndex]
+		: nullptr;
+}
+
+// [v1.24.0] 현재 선택 인덱스의 per-weapon Heat Runtime을 반환하고 선택 Runtime이 없으면 nullptr를 반환합니다.
+FCFWeaponHeatRuntime* UCFVehicleWeaponComp::GetSelectedWeaponHeatRuntime()
+{
+	return HasWeaponSelectionRuntime() && SelectableWeaponHeatRuntimes.IsValidIndex(SelectedWeaponIndex)
+		? &SelectableWeaponHeatRuntimes[SelectedWeaponIndex]
+		: nullptr;
+}
+
+// [v1.24.0] 현재 선택 인덱스의 per-weapon Heat Runtime을 const로 반환하고 선택 Runtime이 없으면 nullptr를 반환합니다.
+const FCFWeaponHeatRuntime* UCFVehicleWeaponComp::GetSelectedWeaponHeatRuntime() const
+{
+	return HasWeaponSelectionRuntime() && SelectableWeaponHeatRuntimes.IsValidIndex(SelectedWeaponIndex)
+		? &SelectableWeaponHeatRuntimes[SelectedWeaponIndex]
+		: nullptr;
 }
 
 // [v1.22.0] Legacy 또는 Snapshot 설정을 유지한 채 공통 Runtime 초기화를 수행합니다.
@@ -324,9 +524,16 @@ bool UCFVehicleWeaponComp::InitializeWeaponRuntimeInternal(ACFVehiclePawn* InOwn
 	CachedVehicleData = InVehicleData;
 	LastActiveWeaponTargetUseResult = FCFTargetUseResult();
 	LastActiveWeaponTargetUseSummary = TEXT("ActiveWeaponTargetUse: Initializing");
-	TargetUseRefreshElapsedSeconds = 0.0f;
+		TargetUseRefreshElapsedSeconds = 0.0f;
 	BindTargetSelectEvents();
-	bWeaponRuntimeReady = false;
+		bWeaponRuntimeReady = false;
+		if (!HasWeaponSelectionRuntime())
+	{
+		ActiveWeaponChargeRuntime.Reset();
+		ActiveWeaponChargeSourceData.Reset();
+		ActiveWeaponHeatRuntime.Reset();
+		ActiveWeaponHeatSourceData.Reset();
+	}
 		ActiveEquipmentPresetData = nullptr;
 		CachedActiveTurretMountData = nullptr;
 	bActiveEquipmentPresetCompatible = false;
@@ -646,18 +853,20 @@ float UCFVehicleWeaponComp::GetActiveWeaponCooldownSeconds() const
 	return ActiveWeaponData->GetFireIntervalSeconds();
 }
 
-// [v1.2.0] 현재 시간 기준 남은 무기 쿨다운 시간을 반환합니다.
+// [v1.24.0] 현재 시간 기준 남은 무기 쿨다운 시간을 반환하며 Weapon Selection에서는 선택 항목의 독립 승인 시각을 사용합니다.
 float UCFVehicleWeaponComp::GetRemainingCooldownSeconds(const float CurrentTimeSeconds) const
 {
 	// [v1.7.0] 활성 WeaponData의 분당 발사속도에서 환산한 발사 간격입니다.
 	const float ActiveCooldownSeconds = GetActiveWeaponCooldownSeconds();
-	if (ActiveCooldownSeconds <= 0.0f || LastAcceptedFireTimeSeconds < 0.0f)
+	// [v1.24.0] 현재 선택 무기 또는 Legacy 단일 무기의 마지막 승인 발사 시각입니다.
+	const float ActiveLastAcceptedFireTimeSeconds = GetLastAcceptedFireTimeSeconds();
+	if (ActiveCooldownSeconds <= 0.0f || ActiveLastAcceptedFireTimeSeconds < 0.0f)
 	{
 		return 0.0f;
 	}
 
-	// [v1.2.0] 현재 쿨다운이 끝나는 월드 시간입니다.
-	const float CooldownEndTimeSeconds = LastAcceptedFireTimeSeconds + ActiveCooldownSeconds;
+	// [v1.24.0] 현재 선택 무기의 독립 쿨다운이 끝나는 월드 시간입니다.
+	const float CooldownEndTimeSeconds = ActiveLastAcceptedFireTimeSeconds + ActiveCooldownSeconds;
 
 	return FMath::Max(CooldownEndTimeSeconds - CurrentTimeSeconds, 0.0f);
 }
@@ -668,10 +877,141 @@ bool UCFVehicleWeaponComp::IsActiveWeaponOnCooldown(const float CurrentTimeSecon
 	return GetRemainingCooldownSeconds(CurrentTimeSeconds) > KINDA_SMALL_NUMBER;
 }
 
-// [v1.2.0] 승인된 발사 시간을 기록해 이후 쿨다운 검증에 사용합니다.
+// [v1.24.0] 승인된 발사 시간을 기록하며 Weapon Selection에서는 현재 선택 무기의 독립 쿨다운 상태에만 기록합니다.
 void UCFVehicleWeaponComp::RecordAcceptedFire(const float AcceptedFireTimeSeconds)
 {
-	LastAcceptedFireTimeSeconds = FMath::Max(AcceptedFireTimeSeconds, 0.0f);
+	// [v1.24.0] 음수 입력을 기존 계약과 동일하게 0 이상으로 보정한 승인 발사 시각입니다.
+	const float SafeAcceptedFireTimeSeconds = FMath::Max(AcceptedFireTimeSeconds, 0.0f);
+	if (HasWeaponSelectionRuntime() && SelectableWeaponLastAcceptedFireTimes.IsValidIndex(SelectedWeaponIndex))
+	{
+		SelectableWeaponLastAcceptedFireTimes[SelectedWeaponIndex] = SafeAcceptedFireTimeSeconds;
+		return;
+	}
+
+	LastAcceptedFireTimeSeconds = SafeAcceptedFireTimeSeconds;
+}
+
+// [v1.24.0] 마지막으로 승인된 발사 시간을 반환하며 Weapon Selection에서는 현재 선택 무기의 독립 시간을 사용합니다.
+float UCFVehicleWeaponComp::GetLastAcceptedFireTimeSeconds() const
+{
+	if (HasWeaponSelectionRuntime() && SelectableWeaponLastAcceptedFireTimes.IsValidIndex(SelectedWeaponIndex))
+	{
+		return SelectableWeaponLastAcceptedFireTimes[SelectedWeaponIndex];
+	}
+
+	return LastAcceptedFireTimeSeconds;
+}
+
+// [v1.25.0] 활성 WeaponData에 실제 Charge Runtime이 구성됐는지 반환하며 Weapon Selection에서는 선택 항목의 독립 상태를 사용합니다.
+bool UCFVehicleWeaponComp::IsActiveWeaponChargeRuntimeEnabled() const
+{
+	// [v1.25.0] 현재 선택 무기의 독립 Charge 상태가 있으면 그 상태를 authoritative source로 사용합니다.
+	const FCFWeaponChargeRuntime* SelectedChargeRuntime = GetSelectedWeaponChargeRuntime();
+	return SelectedChargeRuntime ? SelectedChargeRuntime->IsEnabled() : ActiveWeaponChargeRuntime.IsEnabled();
+}
+
+// [v1.25.0] 현재 활성 무기에 남은 실제 내부 Charge를 반환합니다.
+float UCFVehicleWeaponComp::GetCurrentWeaponCharge() const
+{
+	// [v1.25.0] 현재 선택 무기의 독립 Charge 상태가 있으면 그 상태를 authoritative source로 사용합니다.
+	const FCFWeaponChargeRuntime* SelectedChargeRuntime = GetSelectedWeaponChargeRuntime();
+	return SelectedChargeRuntime ? SelectedChargeRuntime->GetCurrentCharge() : ActiveWeaponChargeRuntime.GetCurrentCharge();
+}
+
+// [v1.25.0] 현재 활성 무기의 명시된 최대 내부 Charge를 반환합니다.
+float UCFVehicleWeaponComp::GetActiveWeaponMaximumCharge() const
+{
+	// [v1.25.0] 현재 선택 무기의 독립 Charge 상태가 있으면 그 상태를 authoritative source로 사용합니다.
+	const FCFWeaponChargeRuntime* SelectedChargeRuntime = GetSelectedWeaponChargeRuntime();
+	return SelectedChargeRuntime ? SelectedChargeRuntime->GetMaximumCharge() : ActiveWeaponChargeRuntime.GetMaximumCharge();
+}
+
+// [v1.25.0] 현재 내부 Charge를 최대값 기준 0~1 비율로 반환합니다.
+float UCFVehicleWeaponComp::GetActiveWeaponChargeRatio() const
+{
+	// [v1.25.0] 현재 선택 무기의 독립 Charge 상태가 있으면 그 상태를 authoritative source로 사용합니다.
+	const FCFWeaponChargeRuntime* SelectedChargeRuntime = GetSelectedWeaponChargeRuntime();
+	return SelectedChargeRuntime ? SelectedChargeRuntime->GetChargeRatio() : ActiveWeaponChargeRuntime.GetChargeRatio();
+}
+
+// [v1.25.0] 현재 Charge 상태에서 실제 한 발을 추가로 승인할 수 있는지 반환합니다.
+bool UCFVehicleWeaponComp::CanActiveWeaponAcceptChargeShot() const
+{
+	// [v1.25.0] 현재 선택 무기의 독립 Charge 상태가 있으면 그 상태를 authoritative source로 사용합니다.
+	const FCFWeaponChargeRuntime* SelectedChargeRuntime = GetSelectedWeaponChargeRuntime();
+	return SelectedChargeRuntime ? SelectedChargeRuntime->CanAcceptShot() : ActiveWeaponChargeRuntime.CanAcceptShot();
+}
+
+// [v1.25.0] 실제 승인된 한 발의 Charge를 현재 선택 무기의 독립 Runtime에서 정확히 한 번 소비합니다.
+void UCFVehicleWeaponComp::RecordAcceptedWeaponShotCharge()
+{
+	if (FCFWeaponChargeRuntime* SelectedChargeRuntime = GetSelectedWeaponChargeRuntime())
+	{
+		SelectedChargeRuntime->RecordAcceptedShot();
+		return;
+	}
+
+	ActiveWeaponChargeRuntime.RecordAcceptedShot();
+}
+
+// [v1.24.0] 활성 WeaponData에 실제 Heat Runtime이 구성됐는지 반환하며 Weapon Selection에서는 선택 항목의 독립 상태를 사용합니다.
+bool UCFVehicleWeaponComp::IsActiveWeaponHeatRuntimeEnabled() const
+{
+	// [v1.24.0] 현재 선택 무기의 독립 Heat 상태가 있으면 그 상태를 authoritative source로 사용합니다.
+	const FCFWeaponHeatRuntime* SelectedHeatRuntime = GetSelectedWeaponHeatRuntime();
+	return SelectedHeatRuntime ? SelectedHeatRuntime->IsEnabled() : ActiveWeaponHeatRuntime.IsEnabled();
+}
+
+// [v1.24.0] 현재 활성 무기에 누적된 실제 Heat를 반환하며 Weapon Selection에서는 선택 항목의 독립 상태를 사용합니다.
+float UCFVehicleWeaponComp::GetCurrentWeaponHeat() const
+{
+	// [v1.24.0] 현재 선택 무기의 독립 Heat 상태가 있으면 그 상태를 authoritative source로 사용합니다.
+	const FCFWeaponHeatRuntime* SelectedHeatRuntime = GetSelectedWeaponHeatRuntime();
+	return SelectedHeatRuntime ? SelectedHeatRuntime->GetCurrentHeat() : ActiveWeaponHeatRuntime.GetCurrentHeat();
+}
+
+// [v1.24.0] 현재 활성 무기의 명시된 최대 Heat를 반환하며 Weapon Selection에서는 선택 항목의 독립 상태를 사용합니다.
+float UCFVehicleWeaponComp::GetActiveWeaponMaximumHeat() const
+{
+	// [v1.24.0] 현재 선택 무기의 독립 Heat 상태가 있으면 그 상태를 authoritative source로 사용합니다.
+	const FCFWeaponHeatRuntime* SelectedHeatRuntime = GetSelectedWeaponHeatRuntime();
+	return SelectedHeatRuntime ? SelectedHeatRuntime->GetMaximumHeat() : ActiveWeaponHeatRuntime.GetMaximumHeat();
+}
+
+// [v1.24.0] 현재 Heat를 최대 Heat 기준 0~1 비율로 반환하며 Weapon Selection에서는 선택 항목의 독립 상태를 사용합니다.
+float UCFVehicleWeaponComp::GetActiveWeaponHeatRatio() const
+{
+	// [v1.24.0] 현재 선택 무기의 독립 Heat 상태가 있으면 그 상태를 authoritative source로 사용합니다.
+	const FCFWeaponHeatRuntime* SelectedHeatRuntime = GetSelectedWeaponHeatRuntime();
+	return SelectedHeatRuntime ? SelectedHeatRuntime->GetHeatRatio() : ActiveWeaponHeatRuntime.GetHeatRatio();
+}
+
+// [v1.24.0] 현재 활성 무기가 MaxHeat 도달 후 냉각 대기 중인지 반환하며 Weapon Selection에서는 선택 항목의 독립 상태를 사용합니다.
+bool UCFVehicleWeaponComp::IsActiveWeaponOverheated() const
+{
+	// [v1.24.0] 현재 선택 무기의 독립 Heat 상태가 있으면 그 상태를 authoritative source로 사용합니다.
+	const FCFWeaponHeatRuntime* SelectedHeatRuntime = GetSelectedWeaponHeatRuntime();
+	return SelectedHeatRuntime ? SelectedHeatRuntime->IsOverheated() : ActiveWeaponHeatRuntime.IsOverheated();
+}
+
+// [v1.24.0] 현재 Heat 상태에서 실제 한 발을 추가로 승인할 수 있는지 반환합니다.
+bool UCFVehicleWeaponComp::CanActiveWeaponAcceptHeatShot() const
+{
+	// [v1.24.0] 현재 선택 무기의 독립 Heat 상태가 있으면 그 상태를 authoritative source로 사용합니다.
+	const FCFWeaponHeatRuntime* SelectedHeatRuntime = GetSelectedWeaponHeatRuntime();
+	return SelectedHeatRuntime ? SelectedHeatRuntime->CanAcceptShot() : ActiveWeaponHeatRuntime.CanAcceptShot();
+}
+
+// [v1.24.0] 실제 승인된 한 발의 Heat를 현재 선택 무기의 독립 Runtime에 정확히 한 번 누적합니다.
+void UCFVehicleWeaponComp::RecordAcceptedWeaponShotHeat()
+{
+	if (FCFWeaponHeatRuntime* SelectedHeatRuntime = GetSelectedWeaponHeatRuntime())
+	{
+		SelectedHeatRuntime->RecordAcceptedShot();
+		return;
+	}
+
+	ActiveWeaponHeatRuntime.RecordAcceptedShot();
 }
 
 // [v1.19.0] Pawn이 실제 Pitch 메쉬에서 해결한 현재 Muzzle 선택을 Debug 상태로 기록합니다.
@@ -934,12 +1274,16 @@ void UCFVehicleWeaponComp::CacheActiveWeaponData(const FCFVehicleMountProfile& A
 		ActiveEquipmentPresetSummary = ActiveEquipmentPresetData->BuildEquipmentSummary();
 	}
 
-	if (!ActiveWeaponData)
+				if (!ActiveWeaponData)
 	{
+		RefreshActiveWeaponChargeRuntimeConfig();
+		RefreshActiveWeaponHeatRuntimeConfig();
 		return;
 	}
 
 	bActiveWeaponDataCompatible = ActiveWeaponData->CanUseOnMount(ActiveMountProfile.MountType, ActiveMountProfile.SizeLimit);
+	RefreshActiveWeaponChargeRuntimeConfig();
+	RefreshActiveWeaponHeatRuntimeConfig();
 	ActiveWeaponSummary = ActiveWeaponData->BuildWeaponSummary();
 	ActiveProjectileData = ActiveWeaponData->DefaultProjectileData;
 	CacheActiveDamageData();
@@ -969,7 +1313,123 @@ void UCFVehicleWeaponComp::CacheActiveWeaponData(const FCFVehicleMountProfile& A
 		{
 			ActiveProjectileExecutionSummary = TEXT("ProjectileExecution: ProjectileActorClassMissingDummyHitScanFallback");
 		}
+		}
+}
+
+// [v1.25.0] 현재 활성 WeaponData의 explicit Charge 설정을 Runtime에 반영하되 Weapon Selection에서는 해당 순번의 독립 Charge 상태를 보존합니다.
+void UCFVehicleWeaponComp::RefreshActiveWeaponChargeRuntimeConfig()
+{
+	if (FCFWeaponChargeRuntime* SelectedChargeRuntime = GetSelectedWeaponChargeRuntime())
+	{
+		if (!ActiveWeaponData
+			|| !bActiveWeaponDataCompatible
+			|| !ActiveWeaponData->UsesWeaponChargeRuntime())
+		{
+			SelectedChargeRuntime->Reset();
+			return;
+		}
+
+		// [v1.25.0] 현재 선택 순번의 Charge 설정이 Active WeaponData authored 값과 달라졌는지 여부입니다.
+		const bool bSelectedChargeConfigurationMatches = SelectedChargeRuntime->MatchesConfiguration(
+			ActiveWeaponData->MaximumWeaponCharge,
+			ActiveWeaponData->InitialWeaponCharge,
+			ActiveWeaponData->WeaponChargePerShot,
+			ActiveWeaponData->WeaponChargeRecoveryPerSecond);
+		if (!bSelectedChargeConfigurationMatches)
+		{
+			SelectedChargeRuntime->Configure(
+				ActiveWeaponData->MaximumWeaponCharge,
+				ActiveWeaponData->InitialWeaponCharge,
+				ActiveWeaponData->WeaponChargePerShot,
+				ActiveWeaponData->WeaponChargeRecoveryPerSecond);
+		}
+		return;
 	}
+
+	if (!ActiveWeaponData
+		|| !bActiveWeaponDataCompatible
+		|| !ActiveWeaponData->UsesWeaponChargeRuntime())
+	{
+		ActiveWeaponChargeRuntime.Reset();
+		ActiveWeaponChargeSourceData.Reset();
+		return;
+	}
+
+	// [v1.25.0] Legacy/single-weapon 경로에서 같은 수치를 가진 다른 WeaponData로 교체됐는지 구분해 이전 무기의 Charge를 넘기지 않는 Source 변경 여부입니다.
+	const bool bChargeSourceChanged = ActiveWeaponChargeSourceData.Get() != ActiveWeaponData;
+	// [v1.25.0] Legacy/single-weapon Runtime 설정이 Active WeaponData의 네 explicit Charge 값과 정확히 같은지 여부입니다.
+	const bool bChargeConfigurationMatches = ActiveWeaponChargeRuntime.MatchesConfiguration(
+		ActiveWeaponData->MaximumWeaponCharge,
+		ActiveWeaponData->InitialWeaponCharge,
+		ActiveWeaponData->WeaponChargePerShot,
+		ActiveWeaponData->WeaponChargeRecoveryPerSecond);
+	if (!bChargeSourceChanged && bChargeConfigurationMatches)
+	{
+		return;
+	}
+
+	ActiveWeaponChargeRuntime.Configure(
+		ActiveWeaponData->MaximumWeaponCharge,
+		ActiveWeaponData->InitialWeaponCharge,
+		ActiveWeaponData->WeaponChargePerShot,
+		ActiveWeaponData->WeaponChargeRecoveryPerSecond);
+	ActiveWeaponChargeSourceData = ActiveWeaponData;
+}
+
+// [v1.24.0] 현재 활성 WeaponData의 explicit Heat 설정을 Runtime에 반영하되 Weapon Selection에서는 해당 순번의 독립 Heat 상태를 보존합니다.
+void UCFVehicleWeaponComp::RefreshActiveWeaponHeatRuntimeConfig()
+{
+	if (FCFWeaponHeatRuntime* SelectedHeatRuntime = GetSelectedWeaponHeatRuntime())
+	{
+		if (!ActiveWeaponData
+			|| !bActiveWeaponDataCompatible
+			|| !ActiveWeaponData->UsesWeaponHeatRuntime())
+		{
+			SelectedHeatRuntime->Reset();
+			return;
+		}
+
+		// [v1.24.0] 현재 선택 순번의 Heat 설정이 Active WeaponData authored 값과 달라졌는지 여부입니다.
+		const bool bSelectedHeatConfigurationMatches = SelectedHeatRuntime->MatchesConfiguration(
+			ActiveWeaponData->HeatPerShot,
+			ActiveWeaponData->MaxHeat,
+			ActiveWeaponData->HeatDissipationPerSecond);
+		if (!bSelectedHeatConfigurationMatches)
+		{
+			SelectedHeatRuntime->Configure(
+				ActiveWeaponData->HeatPerShot,
+				ActiveWeaponData->MaxHeat,
+				ActiveWeaponData->HeatDissipationPerSecond);
+		}
+		return;
+	}
+
+	if (!ActiveWeaponData
+		|| !bActiveWeaponDataCompatible
+		|| !ActiveWeaponData->UsesWeaponHeatRuntime())
+	{
+		ActiveWeaponHeatRuntime.Reset();
+		ActiveWeaponHeatSourceData.Reset();
+		return;
+	}
+
+	// [v1.23.0] Legacy/single-weapon 경로에서 같은 수치를 가진 다른 WeaponData로 교체됐는지 구분해 이전 무기의 Heat를 넘기지 않는 Source 변경 여부입니다.
+	const bool bHeatSourceChanged = ActiveWeaponHeatSourceData.Get() != ActiveWeaponData;
+	// [v1.23.0] Legacy/single-weapon Runtime 설정이 Active WeaponData의 세 explicit Heat 값과 정확히 같은지 여부입니다.
+	const bool bHeatConfigurationMatches = ActiveWeaponHeatRuntime.MatchesConfiguration(
+		ActiveWeaponData->HeatPerShot,
+		ActiveWeaponData->MaxHeat,
+		ActiveWeaponData->HeatDissipationPerSecond);
+	if (!bHeatSourceChanged && bHeatConfigurationMatches)
+	{
+		return;
+	}
+
+	ActiveWeaponHeatRuntime.Configure(
+		ActiveWeaponData->HeatPerShot,
+		ActiveWeaponData->MaxHeat,
+		ActiveWeaponData->HeatDissipationPerSecond);
+	ActiveWeaponHeatSourceData = ActiveWeaponData;
 }
 
 // [v1.13.0] ProjectileData 단일 소유 기준으로 활성 DamageData를 캐시합니다.

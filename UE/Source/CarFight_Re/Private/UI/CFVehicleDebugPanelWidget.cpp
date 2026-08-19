@@ -65,6 +65,7 @@
 #include "Blueprint/WidgetTree.h"
 #include "UI/CFVehicleDebugNavItemWidget.h"
 #include "UI/CFVehicleDebugSectionWidget.h"
+
 #include "Input/Reply.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
@@ -615,7 +616,7 @@ FString UCFVehicleDebugPanelWidget::BuildOverviewLastTransitionBodyText(const FC
 	// [v1.4.0] Panel 표시용 Overview Last Transition 문자열입니다.
 	const FString OverviewLastTransitionPanelText = FormatLongSummaryForPanel(InOverview.LastTransitionShortText, TEXT("주행 상태 전이: "));
 
-	return OverviewLastTransitionPanelText;
+		return OverviewLastTransitionPanelText;
 }
 
 FString UCFVehicleDebugPanelWidget::BuildDriveBodyText(const FCFVehicleDebugDrive& InDrive) const

@@ -1,12 +1,17 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.2.1
-// Date: 2026-08-13
-// Description: TS-P0-03 후보 탐색과 TS-P0-04 선택 수명 Tick 연결 구현
+// Version: 1.5.0
+// Date: 2026-08-15
+// Description: TS-P0-03 후보 탐색·TS-P0-04 선택 수명과 TS-P0-08 지속형 디버그·LOS 사전필터·검색 진단 구현
 // Changelog:
+// - v1.5.0: 기존 Evaluate가 반드시 거부할 비-Direct 거리·반각 밖 Targetable Actor의 LOS Trace를 사전 생략하고 생략 수를 진단.
+// - v1.4.0: 실제 런타임 후보 갱신의 월드 Actor 스캔 수, Visibility/전체 Trace 수와 View·수집·평가 전체 경과시간을 진단 결과에 기록.
+// - v1.3.0: 자동 후보 디버그 Sphere를 한 프레임이 아니라 CandidateRefreshIntervalSec 동안 유지하고 반경을 컴포넌트 Debug 설정에서 읽도록 변경.
 // - v1.2.1: 기존 v1.2.0 의도와 달리 남아 있던 익명 네임스페이스 IsFiniteVector를 IsFiniteTargetCandidateVector로 실제 교정해 Unity Build 충돌을 제거.
 // - v1.2.0: Unity 빌드에서 다른 구현 파일의 익명 네임스페이스 심볼과 충돌하지 않도록 후보 탐색 전용 이름으로 분리.
 // Migration:
+// - v1.5.0 사전필터는 LOS Trace 수만 줄이며 모든 Targetable Actor를 OutCandidateActors에 유지한다. 직접 조준 후보와 기존 Evaluate/정렬/히스테리시스 계약은 변경하지 않는다.
+// - TS-P0-08 디버그 표시 변경은 시각 진단 수명·반경만 다루며 ProximityHalfAngleDeg, 거리, 히스테리시스와 후보 정렬 계약은 변경하지 않는다.
 // - 후보 평가는 TargetSelect 전용 Trace와 ICFTargetSelectable 대표 위치를 사용한다.
 // - 선택 확정 입력은 후속 Task에서 연결하며 Tick은 현재 후보 갱신과 이미 선택된 대상의 수명 검사만 수행한다.
 
@@ -24,6 +29,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Actor.h"
+#include "HAL/PlatformTime.h"
 #include "UnrealClient.h"
 
 namespace
@@ -157,9 +163,10 @@ void UCFTargetSelectComp::TickComponent(float DeltaTime, ELevelTick TickType, FA
 	CandidateRefreshElapsedSeconds = 0.0f;
 	RefreshCurrentCandidate();
 
-	if (bDrawCandidateSearchDebug)
+						if (bDrawCandidateSearchDebug)
 	{
-		DrawCandidateSearchDebug(0.0f, 20.0f);
+		// [v1.3.0] 한 프레임 표시가 후보 갱신 사이에서 사라지지 않도록 다음 예정 갱신까지 Debug Sphere를 유지합니다.
+		DrawCandidateSearchDebug(RefreshIntervalSeconds, CandidateSearchDebugSphereRadiusCm);
 	}
 }
 
@@ -293,7 +300,7 @@ FCFTargetSearchResult UCFTargetSelectComp::EvaluateCandidateActors(const TArray<
 		return SearchResult;
 	}
 
-			FCFTargetCandidate RawBestCandidate = *SearchResult.SortedCandidates.GetData();
+				FCFTargetCandidate RawBestCandidate = *SearchResult.SortedCandidates.GetData();
 	FCFTargetCandidate CurrentCandidate;
 	if (ShouldKeepCurrentCandidateForStability(RawBestCandidate, SearchResult.SortedCandidates, Config, CurrentCandidate))
 	{
@@ -360,8 +367,20 @@ bool UCFTargetSelectComp::ShouldKeepCurrentCandidateForStability(const FCFTarget
 	return false;
 }
 
-bool UCFTargetSelectComp::BuildRuntimeSearchView(FCFTargetSearchView& OutSearchView, TArray<AActor*>& OutCandidateActors) const
+bool UCFTargetSelectComp::BuildRuntimeSearchView(
+	FCFTargetSearchView& OutSearchView,
+	TArray<AActor*>& OutCandidateActors,
+			int32& OutWorldActorScanCount,
+	int32& OutVisibilityTraceCount,
+	int32& OutVisibilityPrefilterSkipCount,
+	int32& OutTotalTraceCount) const
 {
+	// [v1.5.0] 호출자가 실패 경로에서도 이전 프레임 수치를 재사용하지 않도록 런타임 진단값을 먼저 초기화합니다.
+	OutWorldActorScanCount = 0;
+	OutVisibilityTraceCount = 0;
+	OutVisibilityPrefilterSkipCount = 0;
+	OutTotalTraceCount = 0;
+
 	ACFVehiclePawn* OwnerVehiclePawn = Cast<ACFVehiclePawn>(GetOwner());
 	UWorld* CurrentWorld = GetWorld();
 	UCFVehicleCameraComp* CameraComponent = OwnerVehiclePawn ? OwnerVehiclePawn->GetVehicleCameraComp() : nullptr;
@@ -395,30 +414,58 @@ bool UCFTargetSelectComp::BuildRuntimeSearchView(FCFTargetSearchView& OutSearchV
 
 	const FCFTargetSelectConfig Config = GetResolvedTargetSelectConfig();
 	const FVector DirectTraceEnd = OutSearchView.ViewOrigin + OutSearchView.ViewDirection * Config.DirectSelectMaxDistanceCm;
-	FHitResult DirectHitResult;
+				FHitResult DirectHitResult;
 	FCollisionQueryParams DirectQueryParams(SCENE_QUERY_STAT(CFTargetSelectDirectTrace), false, OwnerVehiclePawn);
+	// [v1.4.0] 런타임 후보 갱신은 카메라 중앙 직접 조준 Trace를 정확히 한 번 수행합니다.
+	++OutTotalTraceCount;
 	if (CurrentWorld->LineTraceSingleByChannel(DirectHitResult, OutSearchView.ViewOrigin, DirectTraceEnd, CFCollisionChannels::TargetSelect, DirectQueryParams))
 	{
 		OutSearchView.DirectAimHitActor = DirectHitResult.GetActor();
 	}
 
-	for (TActorIterator<AActor> ActorIterator(CurrentWorld); ActorIterator; ++ActorIterator)
+				for (TActorIterator<AActor> ActorIterator(CurrentWorld); ActorIterator; ++ActorIterator)
 	{
+		// [v1.4.0] 현재 구현이 매 후보 갱신마다 실제로 순회한 전체 월드 Actor 수를 성능 진단에 기록합니다.
+		++OutWorldActorScanCount;
 		AActor* CandidateActor = *ActorIterator;
 		if (!CanUseActorAsTarget(CandidateActor, DefaultSelectionContext))
 		{
 			continue;
 		}
 
-		OutCandidateActors.Add(CandidateActor);
+						OutCandidateActors.Add(CandidateActor);
 
-		bool bVisible = !DefaultSelectionContext.bRequireLineOfSightForNewSelection
-			|| OutSearchView.DirectAimHitActor.Get() == CandidateActor;
+		// [v1.5.0] 직접 조준 적중 Actor는 기존처럼 별도 LOS Trace 없이 visible로 취급합니다.
+		const bool bDirectAimActor = OutSearchView.DirectAimHitActor.Get() == CandidateActor;
+		bool bVisible = !DefaultSelectionContext.bRequireLineOfSightForNewSelection || bDirectAimActor;
 		if (!bVisible)
 		{
+			// [v1.5.0] 기존 EvaluateCandidateActors와 동일한 TargetPoint 위치를 사용해 LOS 전에 proximity 가능성만 판정합니다.
 			const FVector TargetLocation = ResolveTargetSelectionLocation(CandidateActor);
+			const FVector ToTarget = TargetLocation - OutSearchView.ViewOrigin;
+			const float WorldDistanceCm = ToTarget.Size();
+			const FVector DirectionToTarget = ToTarget.GetSafeNormal();
+			const float AimDot = DirectionToTarget.IsNearlyZero()
+				? 0.0f
+				: FMath::Clamp(FVector::DotProduct(OutSearchView.ViewDirection, DirectionToTarget), -1.0f, 1.0f);
+			const float CrosshairAngleDeg = FMath::RadiansToDegrees(FMath::Acos(AimDot));
+			const bool bCanBecomeProximityCandidate = IsFiniteTargetCandidateVector(TargetLocation)
+				&& FMath::IsFinite(WorldDistanceCm)
+				&& FMath::IsFinite(CrosshairAngleDeg)
+				&& WorldDistanceCm <= Config.ProximitySelectMaxDistanceCm
+				&& CrosshairAngleDeg <= Config.ProximityHalfAngleDeg;
+			if (!bCanBecomeProximityCandidate)
+			{
+				// [v1.5.0] 후보 배열은 유지하지만 기존 Evaluate가 반드시 거부할 대상이므로 LOS Trace만 생략합니다.
+				++OutVisibilityPrefilterSkipCount;
+				continue;
+			}
+
 			FHitResult VisibilityHitResult;
 			FCollisionQueryParams VisibilityQueryParams(SCENE_QUERY_STAT(CFTargetSelectVisibilityTrace), false, OwnerVehiclePawn);
+			// [v1.5.0] 실제 proximity 후보 가능성이 남은 대상에만 LOS Trace를 수행합니다.
+			++OutVisibilityTraceCount;
+			++OutTotalTraceCount;
 			const bool bVisibilityBlocked = CurrentWorld->LineTraceSingleByChannel(VisibilityHitResult, OutSearchView.ViewOrigin, TargetLocation, CFCollisionChannels::TargetSelect, VisibilityQueryParams);
 			bVisible = !bVisibilityBlocked || VisibilityHitResult.GetActor() == CandidateActor;
 		}
@@ -434,16 +481,39 @@ bool UCFTargetSelectComp::BuildRuntimeSearchView(FCFTargetSearchView& OutSearchV
 
 bool UCFTargetSelectComp::RefreshCurrentCandidate()
 {
+	// [v1.4.0] View 생성·월드 Actor 수집·Trace·후보 평가 전체의 실제 검색 시간을 측정할 시작 시각입니다.
+	const double SearchStartSeconds = FPlatformTime::Seconds();
 	FCFTargetSearchView SearchView;
 	TArray<AActor*> CandidateActors;
-	if (!BuildRuntimeSearchView(SearchView, CandidateActors))
+	// [v1.4.0] 이번 런타임 검색이 TActorIterator로 순회한 전체 Actor 수입니다.
+	int32 WorldActorScanCount = 0;
+			// [v1.4.0] 이번 런타임 검색이 대상 시야 확인에 실제 사용한 Visibility Trace 수입니다.
+	int32 VisibilityTraceCount = 0;
+	// [v1.5.0] 기존 proximity 거리·반각 밖이라 LOS Trace를 생략한 Targetable Actor 수입니다.
+	int32 VisibilityPrefilterSkipCount = 0;
+	// [v1.4.0] 직접 조준 Trace와 Visibility Trace를 합친 전체 Trace 수입니다.
+	int32 TotalTraceCount = 0;
+	if (!BuildRuntimeSearchView(SearchView, CandidateActors, WorldActorScanCount, VisibilityTraceCount, VisibilityPrefilterSkipCount, TotalTraceCount))
 	{
-		CacheLastCandidateSearchResult(FCFTargetSearchResult());
+		// [v1.4.0] 검색 View 구성 실패도 비용과 실제 시도 횟수를 잃지 않고 마지막 진단 결과로 남깁니다.
+		FCFTargetSearchResult FailedSearchResult;
+						FailedSearchResult.RuntimeWorldActorScanCount = WorldActorScanCount;
+		FailedSearchResult.RuntimeVisibilityTraceCount = VisibilityTraceCount;
+		FailedSearchResult.RuntimeVisibilityPrefilterSkipCount = VisibilityPrefilterSkipCount;
+		FailedSearchResult.RuntimeTotalTraceCount = TotalTraceCount;
+		FailedSearchResult.RuntimeSearchDurationMs = static_cast<float>((FPlatformTime::Seconds() - SearchStartSeconds) * 1000.0);
+		CacheLastCandidateSearchResult(FailedSearchResult);
 		ClearCurrentCandidate();
 		return false;
 	}
 
-	const FCFTargetSearchResult SearchResult = EvaluateCandidateActors(CandidateActors, SearchView, DefaultSelectionContext);
+	// [v1.4.0] 기존 결정적 후보 판정을 그대로 수행한 뒤 런타임 성능 진단값만 결과에 덧붙입니다.
+	FCFTargetSearchResult SearchResult = EvaluateCandidateActors(CandidateActors, SearchView, DefaultSelectionContext);
+		SearchResult.RuntimeWorldActorScanCount = WorldActorScanCount;
+	SearchResult.RuntimeVisibilityTraceCount = VisibilityTraceCount;
+	SearchResult.RuntimeVisibilityPrefilterSkipCount = VisibilityPrefilterSkipCount;
+	SearchResult.RuntimeTotalTraceCount = TotalTraceCount;
+	SearchResult.RuntimeSearchDurationMs = static_cast<float>((FPlatformTime::Seconds() - SearchStartSeconds) * 1000.0);
 	CacheLastCandidateSearchResult(SearchResult);
 
 	if (!SearchResult.bHasBestCandidate)
@@ -495,11 +565,16 @@ FString UCFTargetSelectComp::BuildCandidateSearchDebugSummary() const
 		? SearchResult.BestCandidate.TargetActor->GetName()
 		: TEXT("None");
 
-	return FString::Printf(
-		TEXT("TargetCandidateSearch: Input=%d, Accepted=%d, Direct=%d, Best=%s, KeptForStability=%s"),
+			return FString::Printf(
+				TEXT("TargetCandidateSearch: Input=%d, Accepted=%d, Direct=%d, WorldScanned=%d, VisibilityTraces=%d, PrefilterSkipped=%d, TotalTraces=%d, SearchMs=%.4f, Best=%s, KeptForStability=%s"),
 		SearchResult.InputActorCount,
 		SearchResult.AcceptedCandidateCount,
 		SearchResult.DirectAimCandidateCount,
+		SearchResult.RuntimeWorldActorScanCount,
+		SearchResult.RuntimeVisibilityTraceCount,
+		SearchResult.RuntimeVisibilityPrefilterSkipCount,
+		SearchResult.RuntimeTotalTraceCount,
+		SearchResult.RuntimeSearchDurationMs,
 		*BestCandidateName,
 		SearchResult.bKeptCurrentCandidateForStability ? TEXT("True") : TEXT("False"));
 }

@@ -1,9 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.143.0
-// Date: 2026-08-13
-// Description: CarFight 싱글플레이 차량 Pawn 구현
+// Version: 2.153.0
+// Date: 2026-08-19
+// Description: CarFight 싱글플레이 차량 Pawn 구현 / CF-FQ-032 UI-P0-06 WeaponCharge 발사 검증·승인 소비 통합
 // Changelog:
+// - v2.153.0: explicit WeaponCharge Runtime의 충전 부족을 발사 검증에서 별도 차단하고 실제 승인된 각 발사 결과마다 Charge를 정확히 한 번 소비. 기존 Heat/Ammo/Launcher/Cooldown 순서를 보존.
+// - v2.152.0: IA_SelectWeapon Axis1D를 기본 로드하고 Started 입력을 1-based ordinal→0-based RequestSelectWeaponIndex로 전달. 숫자키 직접 선택 외 cycle state·WeaponGroup ID·내부 MountProfileId 입력 의미는 추가하지 않음.
+// - v2.151.0: Applied Fitting 고정 순번의 Weapon Selection 요청을 구현. 유효 순번 검증 후 Launcher active는 WeaponChanged로 정상 취소하고 WeaponComp 선택·단일 활성 Turret Visual을 같은 순번으로 전환.
+// - v2.150.0: explicit Heat Runtime 과열을 발사 검증에서 차단하고 실제 승인된 각 발사 결과에 Heat를 정확히 한 번 누적. 기존 Ammo/Launcher/Cooldown 순서와 계약은 유지.
+// - v2.149.0: BeginPlay/SetupPlayerInputComponent의 TargetSelect 직접 생성을 제거하고 Legacy Create/Refresh API를 현재 UISubsystem 소유 Game Layer Marker 조회·갱신 wrapper로 전환.
+// - v2.148.0: BeginPlay/SetupPlayerInputComponent의 AimReticle 직접 생성을 제거하고 Legacy Create/Refresh API를 현재 UISubsystem 소유 Reticle 조회·갱신 wrapper로 전환.
+// - v2.147.0: `/Game/CarFight/Input/IA_ActiveScan`을 P0 기본 Start Action으로 로드해 V 단발 입력을 기존 StartActiveScan command에 연결. 별도 Stop Action은 기본 로드하지 않음.
+// - v2.146.0: optional Active Scan Start/Stop InputAction을 Pawn 입력 계층에서 Sensor Gameplay command로 연결하고 RequestStartActiveScan/RequestStopActiveScan wrapper를 추가. 실제 InputAction 자산·키·트리거는 자동 생성/로드하지 않음.
+// - v2.144.0: UCFVehicleSensorComp 기본 서브오브젝트를 생성하고 InitializeVehicleRuntime에서 독립 Sensor Foundation을 초기화. Sensor 결과는 기존 CoreReady/CombatReady 게이트에 포함하지 않음.
 // - v2.143.0: CF-FQ-031 AMMO-P0-07 Applied Fitting Snapshot의 InitialSortieAmmoLoads와 finite ResolvedMounts로 VehicleAmmoComp를 초기화하고 Ammo Ready를 CombatReady에 포함.
 // - v2.142.0: CF-FQ-031 AMMO-P0-05 현재 활성 WeaponInstance를 VehicleAmmoComp 수동 Reload API로 전달하는 Gameplay 명령을 추가.
 // - v2.141.0: CF-FQ-031 AMMO-P0-04 유한탄 Ripple·Salvo 전체 유효 발수를 첫 발 실행 전에 예약하고 첫 발 Commit·실패/시작 실패 Release 및 Launcher Action Lock 거부를 연결.
@@ -91,6 +100,12 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth Visual/Shell 적용 전 기준선을 깨끗하게 만들기 위해 차량 진단 로그와 Owner 표시 안정화 기본값을 False로 통일.
 // Migration:
+// - v2.152.0부터 `/Game/CarFight/Input/IA_SelectWeapon` Axis1D를 Pawn Gameplay Input으로 사용한다. 숫자키 1~9가 실제 SelectableWeapons의 1-based ordinal을 전달하며 Mouse Wheel은 Radar Range/Zoom 예약을 보존하고 게임패드 선택키는 이번 P0에서 지정하지 않는다.
+// - v2.152.0 handler는 정수 1~9 ordinal만 수락해 `RequestSelectWeaponIndex(Ordinal - 1)`에 위임한다. 실제 목록 범위·Launcher cancel·WeaponComp/Turret 전환은 기존 검증된 Gameplay command가 계속 소유한다.
+// - v2.148.0부터 AimReticle은 Pawn에서 CreateWidget/AddToViewport하지 않는다. UISubsystem이 HUD Layer 단일 인스턴스를 소유하고 Possess 변경마다 현재 Pawn만 SetVehiclePawnRef로 연결한다.
+// - v2.147.0부터 InputAction_StartActiveScan은 IA_ActiveScan을 기본 로드한다. IA_ActiveScan은 Boolean + Pressed이고 IMC_Vehicle_Default의 V 키 한 번으로 ActiveScanDurationSec 실행을 시작한다.
+// - InputAction_StopActiveScan은 기본 null이며 P0 키 매핑을 만들지 않는다. RequestStopActiveScan은 시스템/장비 전환용 명시적 중단 command로만 유지한다.
+// - v2.146.0의 Pawn wrapper는 VehicleSensorComp Start/Stop 명령에만 위임하며 SensorData Apply, InitializeSensorRuntime, ResetSensorRuntime과 FittingSnapshot 연결을 호출하지 않는다.
 // - bVehicleRuntimeReady는 기존 Tick·Debug 호환을 위해 bVehicleCoreRuntimeReady와 같은 값을 유지한다. 전투 HUD와 전투 명령은 bVehicleCombatRuntimeReady를 별도로 사용한다.
 // - 유효 피팅 Snapshot 질량은 게임 World의 PreRegisterAllComponents에서 Super 호출 전에 Movement Mass에 1회 기록한다.
 // - BeginPlay는 같은 Cached Snapshot의 Configured Mass와 VehicleMesh 실제 질량을 검증한 뒤에만 Weapon·Defense를 Commit한다.
@@ -178,12 +193,14 @@
 #include "CFVehicleFittingData.h"
 #include "CFVehicleAmmoComp.h"
 #include "CFTargetSelectComp.h"
+#include "CFVehicleSensorComp.h"
 #include "CFWeaponData.h"
 #include "CFVehicleWeaponComp.h"
 #include "CFWheelSyncComp.h"
 #include "CarFightVehicleUtils.h"
 #include "UI/CFAimReticleWidget.h"
 #include "UI/CFTargetSelectWidget.h"
+#include "UI/CFUISubsystem.h"
 
 #include "ChaosVehicleWheel.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
@@ -1037,8 +1054,11 @@ ACFVehiclePawn::ACFVehiclePawn()
 	VehicleDefenseComp = CreateDefaultSubobject<UCFVehicleDefenseComp>(TEXT("VehicleDefenseComp"));
 	CombatFxComp = CreateDefaultSubobject<UCFCombatFxComp>(TEXT("CombatFxComp"));
 
-	// [v2.118.0] 후보와 지속 선택 대상의 최소 상태 계약을 관리할 기본 서브오브젝트입니다.
+				// [v2.118.0] 후보와 지속 선택 대상의 최소 상태 계약을 관리할 기본 서브오브젝트입니다.
 					TargetSelectComp = CreateDefaultSubobject<UCFTargetSelectComp>(TEXT("TargetSelectComp"));
+
+	// [v2.144.0] TargetSelect와 독립적으로 Sensor Contact/Knowledge Snapshot을 소유할 기본 서브오브젝트입니다.
+	VehicleSensorComp = CreateDefaultSubobject<UCFVehicleSensorComp>(TEXT("VehicleSensorComp"));
 
 	// [v2.119.0] Per-vehicle target selection position. Disabled by default for bounds compatibility.
 	TargetPointComp = CreateDefaultSubobject<UCFTargetPointComp>(TEXT("TargetPoint"));
@@ -1239,9 +1259,21 @@ ACFVehiclePawn::ACFVehiclePawn()
 		InputAction_SelectTarget = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_SelectTarget.IA_SelectTarget"));
 	}
 
-			if (!InputAction_ClearTarget)
+												if (!InputAction_ClearTarget)
 	{
 		InputAction_ClearTarget = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_ClearTarget.IA_ClearTarget"));
+	}
+
+	// [v2.152.0] P0 숫자키 1~9가 실제 selectable weapon ordinal을 전달할 기본 Axis1D Input Action입니다.
+	if (!InputAction_SelectWeapon)
+	{
+		InputAction_SelectWeapon = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_SelectWeapon.IA_SelectWeapon"));
+	}
+
+	// [v2.147.0] P0의 1회 입력→ActiveScanDurationSec 자동 실행에 사용할 기본 Active Scan Input Action입니다.
+	if (!InputAction_StartActiveScan)
+	{
+		InputAction_StartActiveScan = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_ActiveScan.IA_ActiveScan"));
 	}
 
 	if (!TargetSelectWidgetClass)
@@ -1396,11 +1428,8 @@ void ACFVehiclePawn::BeginPlay()
 	ScheduleEditorPIEVehicleRuntimeProbes(this);
 #endif
 
-	if (bCanRunLocalPresentation)
-	{
-		CreateAimReticleWidget();
-		CreateTargetSelectWidget();
-	}
+			// [v2.149.0] AimReticle과 TargetSelect Marker의 자동 생성·Rebind 수명은 UCFUISubsystem이 소유하므로 Pawn BeginPlay에서는 UI Widget을 직접 만들지 않습니다.
+	(void)bCanRunLocalPresentation;
 }
 
 void ACFVehiclePawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -1437,8 +1466,9 @@ void ACFVehiclePawn::Tick(float DeltaSeconds)
 
 	if (!bVehicleRuntimeReady)
 	{
-		DisplayDriveStateOnScreenDebug();
+				DisplayDriveStateOnScreenDebug();
 		return;
+
 	}
 
 	// [v2.8.0] VehicleMove 기반 조향은 입력 이벤트가 없는 동안에도 중립 복귀가 필요하므로 Tick에서 계속 갱신합니다.
@@ -1534,14 +1564,25 @@ void ACFVehiclePawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 	{
 		EnhancedInputComponent->BindAction(InputAction_SelectTarget, ETriggerEvent::Started, this, &ACFVehiclePawn::HandleSelectTargetStarted);
 	}
-	if (InputAction_ClearTarget)
+				if (InputAction_ClearTarget)
 	{
 		EnhancedInputComponent->BindAction(InputAction_ClearTarget, ETriggerEvent::Started, this, &ACFVehiclePawn::HandleClearTargetStarted);
 	}
+	// [v2.152.0] 숫자키 ordinal은 Started 1회만 Gameplay selection command로 전달합니다.
+	if (InputAction_SelectWeapon)
+	{
+		EnhancedInputComponent->BindAction(InputAction_SelectWeapon, ETriggerEvent::Started, this, &ACFVehiclePawn::HandleSelectWeaponStarted);
+	}
+	if (InputAction_StartActiveScan)
+	{
+		EnhancedInputComponent->BindAction(InputAction_StartActiveScan, ETriggerEvent::Started, this, &ACFVehiclePawn::HandleStartActiveScanStarted);
+	}
+	if (InputAction_StopActiveScan)
+	{
+		EnhancedInputComponent->BindAction(InputAction_StopActiveScan, ETriggerEvent::Started, this, &ACFVehiclePawn::HandleStopActiveScanStarted);
+	}
 
-	// [v2.21.0] 소유 입력 컴포넌트가 준비된 뒤 로컬 Viewport UI 생성을 한 번 더 시도합니다.
-			CreateAimReticleWidget();
-	CreateTargetSelectWidget();
+			// [v2.149.0] AimReticle과 TargetSelect Marker는 UISubsystem이 Current Pawn에 Rebind하므로 Pawn 입력 준비 단계에서 Widget을 직접 생성하지 않습니다.
 }
 
 // [v2.142.0] 현재 활성 WeaponInstance의 FullMagazine 재장전을 Gameplay 명령으로 요청합니다.
@@ -1553,6 +1594,52 @@ ECFAmmoTransactionResult ACFVehiclePawn::RequestReloadCurrentWeapon()
 	}
 
 	return VehicleAmmoComp->RequestActiveWeaponReload(VehicleWeaponComp);
+}
+
+// [v2.151.0] Applied Fitting의 실제 고정 표시 순서에서 무기를 선택하고 Launcher·Weapon Runtime·단일 활성 Turret Visual을 안전한 순서로 전환합니다.
+bool ACFVehiclePawn::RequestSelectWeaponIndex(const int32 NewWeaponIndex)
+{
+	if (!VehicleWeaponComp
+		|| !VehicleWeaponComp->HasWeaponSelectionRuntime()
+		|| NewWeaponIndex < 0
+		|| NewWeaponIndex >= VehicleWeaponComp->GetSelectableWeaponCount())
+	{
+		return false;
+	}
+
+	if (NewWeaponIndex == VehicleWeaponComp->GetSelectedWeaponIndex())
+	{
+		return true;
+	}
+
+	// [v2.151.0] 이미 예약된 Ripple·Salvo 후속 발사가 이전 무기 상태로 계속 실행되지 않도록 기존 정상 취소 계약을 먼저 사용합니다.
+	if (LauncherComp && LauncherComp->IsFireSequenceActive())
+	{
+		LauncherComp->CancelFireSequence(ECFLauncherSequenceCancelReason::WeaponChanged);
+	}
+
+	if (!VehicleWeaponComp->ApplySelectedWeaponIndex(NewWeaponIndex))
+	{
+		return false;
+	}
+
+	// [v2.151.0] 현재 Pawn의 단일 활성 터렛 시각을 새 WeaponComp active mount/preset과 같은 source로 다시 구성합니다.
+	ApplyVehicleTurretVisualConfig();
+	return true;
+}
+
+// [v2.146.0] Pawn 입력 계층에서 VehicleSensorComp의 기존 Active Scan 시작 명령만 호출합니다.
+bool ACFVehiclePawn::RequestStartActiveScan()
+{
+	return IsValid(VehicleSensorComp)
+		&& VehicleSensorComp->StartActiveScan();
+}
+
+// [v2.146.0] Pawn 입력 계층에서 VehicleSensorComp의 기존 Active Scan 중단 명령만 호출합니다.
+bool ACFVehiclePawn::RequestStopActiveScan()
+{
+	return IsValid(VehicleSensorComp)
+		&& VehicleSensorComp->StopActiveScan();
 }
 
 bool ACFVehiclePawn::RegisterDefaultInputMappingContext()
@@ -1725,9 +1812,15 @@ bool ACFVehiclePawn::InitializeVehicleRuntime()
 	// [v2.129.0] Legacy Fallback 상태여도 정식 방어 진입점을 제공할 컴포넌트 존재 여부입니다.
 	const bool bDefenseComponentReady = VehicleDefenseComp != nullptr;
 
-	if (CombatFxComp)
+				if (CombatFxComp)
 	{
 		CombatFxComp->InitializeCombatFxRuntime(this, VehicleData, VehicleHealthComp);
+	}
+
+	// [v2.144.0] Sensor Foundation은 TargetSelect와 독립 초기화하며 아직 기존 CoreReady/CombatReady의 필수 조건으로 사용하지 않습니다.
+	if (VehicleSensorComp)
+	{
+		VehicleSensorComp->InitializeSensorRuntime();
 	}
 
 						// [v2.134.0] 기본 주행·물리·내구도·피팅을 사용할 수 있는 차량 코어 Runtime 준비 상태입니다.
@@ -1946,41 +2039,48 @@ bool ACFVehiclePawn::ShouldShowAimReticle() const
 	return bShowAimReticle && bHasViewportContext && IsLocallyControlled();
 }
 
+// [v2.148.0] 현재 Pawn이 UISubsystem Current Pawn일 때 UISubsystem 소유 Aim Reticle을 호환 반환합니다.
 UCFAimReticleWidget* ACFVehiclePawn::CreateAimReticleWidget()
 {
 	if (AimReticleWidgetInstance)
 	{
-		RefreshAimReticleWidget();
-		return AimReticleWidgetInstance;
+		DestroyAimReticleWidget();
 	}
 
-	if (!ShouldShowAimReticle() || !AimReticleWidgetClass)
-	{
-		return nullptr;
-	}
-
-	// [v2.20.0] Aim Reticle 위젯을 소유할 로컬 플레이어 컨트롤러입니다.
+	// [v2.148.0] 현재 Pawn의 LocalPlayer를 확인할 소유 PlayerController입니다.
 	APlayerController* OwningPlayerController = Cast<APlayerController>(GetController());
 	if (!OwningPlayerController)
 	{
 		return nullptr;
 	}
 
-	// [v2.20.0] Viewport에 추가할 Aim Reticle 위젯 인스턴스입니다.
-	UCFAimReticleWidget* CreatedAimReticleWidget = CreateWidget<UCFAimReticleWidget>(OwningPlayerController, AimReticleWidgetClass);
-	if (!CreatedAimReticleWidget)
+	// [v2.148.0] UISubsystem을 소유하는 현재 LocalPlayer입니다.
+	ULocalPlayer* LocalPlayer = OwningPlayerController->GetLocalPlayer();
+	if (!LocalPlayer)
 	{
 		return nullptr;
 	}
 
-	AimReticleWidgetInstance = CreatedAimReticleWidget;
-	AimReticleWidgetInstance->SetVehiclePawnRef(this);
-	AimReticleWidgetInstance->AddToViewport(AimReticleZOrder);
-	RefreshAimReticleWidget();
+	// [v2.148.0] UI-P0-04 AimReticle 단일 수명을 소유하는 LocalPlayer UISubsystem입니다.
+	UCFUISubsystem* UISubsystem = LocalPlayer->GetSubsystem<UCFUISubsystem>();
+	if (!UISubsystem || UISubsystem->GetCurrentPawn() != this)
+	{
+		return nullptr;
+	}
 
-	return AimReticleWidgetInstance;
+	// [v2.148.0] 현재 HUD Layer에 UISubsystem이 소유하고 있는 단일 Aim Reticle 인스턴스입니다.
+	UCFAimReticleWidget* SubsystemAimReticleWidget = UISubsystem->GetAimReticleWidget();
+	if (!SubsystemAimReticleWidget)
+	{
+		return nullptr;
+	}
+
+	SubsystemAimReticleWidget->SetVehiclePawnRef(this);
+	SubsystemAimReticleWidget->SetVisibility(ShouldShowAimReticle() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	return SubsystemAimReticleWidget;
 }
 
+// [v2.148.0] UI-P0-04 이전 Pawn 직접 생성 Reticle 인스턴스만 안전하게 정리합니다.
 void ACFVehiclePawn::DestroyAimReticleWidget()
 {
 	if (!AimReticleWidgetInstance)
@@ -1988,19 +2088,15 @@ void ACFVehiclePawn::DestroyAimReticleWidget()
 		return;
 	}
 
+	AimReticleWidgetInstance->SetVehiclePawnRef(nullptr);
 	AimReticleWidgetInstance->RemoveFromParent();
 	AimReticleWidgetInstance = nullptr;
 }
 
+// [v2.148.0] 현재 Pawn에 연결된 UISubsystem 소유 Reticle의 표시 상태를 호환 갱신합니다.
 void ACFVehiclePawn::RefreshAimReticleWidget()
 {
-	if (!AimReticleWidgetInstance)
-	{
-		return;
-	}
-
-	AimReticleWidgetInstance->SetVehiclePawnRef(this);
-	AimReticleWidgetInstance->SetVisibility(ShouldShowAimReticle() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	(void)CreateAimReticleWidget();
 }
 
 bool ACFVehiclePawn::ShouldShowTargetSelectHud() const
@@ -2008,32 +2104,46 @@ bool ACFVehiclePawn::ShouldShowTargetSelectHud() const
 	return bShowTargetSelectHud && GetNetMode() != NM_DedicatedServer && IsLocallyControlled();
 }
 
+// [v2.149.0] 현재 Pawn이 UISubsystem Current Pawn일 때 UISubsystem 소유 TargetSelect Marker를 호환 반환합니다.
 UCFTargetSelectWidget* ACFVehiclePawn::CreateTargetSelectWidget()
 {
 	if (TargetSelectWidgetInstance)
 	{
-		RefreshTargetSelectWidget();
-		return TargetSelectWidgetInstance;
+		DestroyTargetSelectWidget();
 	}
-	if (!ShouldShowTargetSelectHud() || !TargetSelectWidgetClass)
-	{
-		return nullptr;
-	}
+
+	// [v2.149.0] 현재 Pawn의 LocalPlayer를 확인할 소유 PlayerController입니다.
 	APlayerController* OwningPlayerController = Cast<APlayerController>(GetController());
 	if (!OwningPlayerController)
 	{
 		return nullptr;
 	}
-	UCFTargetSelectWidget* CreatedWidget = CreateWidget<UCFTargetSelectWidget>(OwningPlayerController, TargetSelectWidgetClass);
-	if (!CreatedWidget)
+
+	// [v2.149.0] UISubsystem을 소유하는 현재 LocalPlayer입니다.
+	ULocalPlayer* LocalPlayer = OwningPlayerController->GetLocalPlayer();
+	if (!LocalPlayer)
 	{
 		return nullptr;
 	}
-	TargetSelectWidgetInstance = CreatedWidget;
-	TargetSelectWidgetInstance->SetVehiclePawnRef(this);
-	TargetSelectWidgetInstance->AddToViewport(TargetSelectHudZOrder);
-	RefreshTargetSelectWidget();
-	return TargetSelectWidgetInstance;
+
+	// [v2.149.0] UI-P0-05 TargetSelect Marker 단일 수명을 소유하는 LocalPlayer UISubsystem입니다.
+	UCFUISubsystem* UISubsystem = LocalPlayer->GetSubsystem<UCFUISubsystem>();
+	if (!UISubsystem || UISubsystem->GetCurrentPawn() != this)
+	{
+		return nullptr;
+	}
+
+	// [v2.149.0] 현재 Game Layer에 UISubsystem이 소유하고 있는 단일 TargetSelect Marker 인스턴스입니다.
+	UCFTargetSelectWidget* SubsystemTargetSelectWidget = UISubsystem->GetTargetSelectWidget();
+	if (!SubsystemTargetSelectWidget)
+	{
+		return nullptr;
+	}
+
+	SubsystemTargetSelectWidget->SetVehiclePawnRef(this);
+	SubsystemTargetSelectWidget->SetVisibility(ShouldShowTargetSelectHud() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	SubsystemTargetSelectWidget->RefreshFromTargetSelect();
+	return SubsystemTargetSelectWidget;
 }
 
 void ACFVehiclePawn::DestroyTargetSelectWidget()
@@ -2047,15 +2157,10 @@ void ACFVehiclePawn::DestroyTargetSelectWidget()
 	TargetSelectWidgetInstance = nullptr;
 }
 
+// [v2.149.0] 현재 Pawn에 연결된 UISubsystem 소유 Target Marker의 표시 상태를 호환 갱신합니다.
 void ACFVehiclePawn::RefreshTargetSelectWidget()
 {
-	if (!TargetSelectWidgetInstance)
-	{
-		return;
-	}
-	TargetSelectWidgetInstance->SetVehiclePawnRef(this);
-	TargetSelectWidgetInstance->SetVisibility(ShouldShowTargetSelectHud() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
-	TargetSelectWidgetInstance->RefreshFromTargetSelect();
+	(void)CreateTargetSelectWidget();
 }
 
 
@@ -4260,15 +4365,18 @@ void ACFVehiclePawn::DisplayDriveStateOnScreenDebug() const
 	{
 		return;
 	}
-	const FString DebugSummary = BuildVehicleDebugSummary(
+
+		const FString DebugSummary = BuildVehicleDebugSummary(
 		DriveStateDebugDisplayMode == ECFVehicleDebugDisplayMode::MultiLine,
+
 		true,
 		bShowDriveStateTransitionSummary,
 		true);
+
 	GEngine->AddOnScreenDebugMessage(
 		reinterpret_cast<uint64>(this),
 		DriveStateDebugMessageDuration,
-		FColor::Cyan,
+				FColor::Cyan,
 		DebugSummary);
 }
 
@@ -4948,6 +5056,20 @@ bool ACFVehiclePawn::ValidateFireCommandInternal(
 		if (!bActiveWeaponDataCompatible)
 		{
 			OutFireResult.RejectReason = ECFVehicleFireRejectReason::NoWeapon;
+			return false;
+		}
+
+								// [v2.150.0] 실제 Heat Runtime이 MaxHeat 도달 후 다음 표준 한 발을 위한 여유가 생기기 전인지 여부입니다.
+		if (!VehicleWeaponComp->CanActiveWeaponAcceptHeatShot())
+		{
+			OutFireResult.RejectReason = ECFVehicleFireRejectReason::WeaponOverheated;
+			return false;
+		}
+
+		// [v2.153.0] 실제 WeaponCharge Runtime이 다음 표준 한 발의 명시 소비량을 감당할 수 있는지 확인합니다.
+		if (!VehicleWeaponComp->CanActiveWeaponAcceptChargeShot())
+		{
+			OutFireResult.RejectReason = ECFVehicleFireRejectReason::WeaponChargeInsufficient;
 			return false;
 		}
 
@@ -6116,6 +6238,40 @@ void ACFVehiclePawn::HandleClearTargetStarted(const FInputActionValue&)
 	ClearSelectedTargetManually();
 }
 
+// [v2.152.0] Axis1D의 1-based weapon ordinal 입력을 기존 0-based Weapon Selection Gameplay command로 변환합니다.
+void ACFVehiclePawn::HandleSelectWeaponStarted(const FInputActionValue& InputActionValue)
+{
+	// [v2.152.0] Enhanced Input mapping이 전달한 실제 1-based weapon ordinal 값입니다.
+	const float WeaponOrdinalValue = InputActionValue.Get<float>();
+	if (!FMath::IsFinite(WeaponOrdinalValue))
+	{
+		return;
+	}
+
+	// [v2.152.0] 정수 ordinal 검증과 RequestSelectWeaponIndex 전달에 사용할 반올림 결과입니다.
+	const int32 RequestedWeaponOrdinal = FMath::RoundToInt(WeaponOrdinalValue);
+	if (RequestedWeaponOrdinal < 1
+		|| RequestedWeaponOrdinal > 9
+		|| !FMath::IsNearlyEqual(WeaponOrdinalValue, static_cast<float>(RequestedWeaponOrdinal), KINDA_SMALL_NUMBER))
+	{
+		return;
+	}
+
+	RequestSelectWeaponIndex(RequestedWeaponOrdinal - 1);
+}
+
+// [v2.146.0] optional Start Active Scan InputAction을 Sensor Gameplay command로 변환합니다.
+void ACFVehiclePawn::HandleStartActiveScanStarted(const FInputActionValue&)
+{
+	RequestStartActiveScan();
+}
+
+// [v2.146.0] optional Stop Active Scan InputAction을 Sensor Gameplay command로 변환합니다.
+void ACFVehiclePawn::HandleStopActiveScanStarted(const FInputActionValue&)
+{
+	RequestStopActiveScan();
+}
+
 // [v2.141.0] Fire 입력 순간 위치·Actor 목표 Snapshot을 캡처하고 유한탄 Ripple·Salvo는 첫 발 전에 전체 유효 발수를 예약합니다.
 void ACFVehiclePawn::HandleFireStarted(const FInputActionValue&)
 {
@@ -6278,8 +6434,14 @@ void ACFVehiclePawn::ApplyFireResultInternal(
 	// [v2.104.0] 마지막 로컬 FireFeedback 표시 시작 시간을 기록합니다.
 	LastFireFeedbackStartTimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : -1.0;
 
-	if (FireResult.bAccepted && VehicleWeaponComp)
+		if (FireResult.bAccepted && VehicleWeaponComp)
 	{
+				// [v2.150.0] SingleCycle과 Ripple·Salvo 후속 발사를 구분하지 않고 실제 승인된 한 발마다 Heat를 정확히 한 번 누적합니다.
+		VehicleWeaponComp->RecordAcceptedWeaponShotHeat();
+
+		// [v2.153.0] 실제 승인된 한 발마다 현재 선택 무기의 내부 Charge를 정확히 한 번 소비합니다.
+		VehicleWeaponComp->RecordAcceptedWeaponShotCharge();
+
 		if (bRecordCooldown)
 		{
 			VehicleWeaponComp->RecordAcceptedFire(FireCommand.ClientFireTimeSeconds);

@@ -1,14 +1,16 @@
 # Copyright (c) CarFight. All Rights Reserved.
 #
-# Version: 1.0.0
-# Date: 2026-08-10
-# Description: ApplyUIHUDProduction.py를 공식 UE 5.8 Probe/DryRun/Apply/Readback 경로에서 실행합니다.
-# Scope: D1-11 Production HUD exact 10 Asset allowlist만 Full Editor Apply하고 나머지 모드는 읽기 전용 Commandlet로 실행합니다.
+# Version: 1.1.0
+# Date: 2026-08-18
+# Description: ApplyUIHUDProduction.py를 공식 UE 5.8 Production 전체 또는 WeaponPanel-only 경로에서 실행합니다.
+# Scope: 기존 D1-11 Production exact 10 Asset Apply를 보존하고, UI-P0-06 Stage B는 WBP_CFWeaponPanel 하나만 Full Editor에서 Build·Compile·Validate·Save할 수 있습니다.
 # Changelog:
+# - v1.1.0: -WeaponPanelOnly 스위치를 추가해 전체 Production 재작성을 우회하고 exact WBP_CFWeaponPanel 단일 Asset만 변경하는 targeted apply mode를 연결.
 # - v1.0.0: Production Root 1 + Panel 6 + Element 2 + Visual DataAsset 1의 Full Editor Wait와 UTF-8 Report 검증을 최초 추가.
 # Migration:
 # - 기본 실행은 Probe입니다.
-# - -DryRun/-Readback은 읽기 전용이고 -Apply만 Production exact 10 Asset allowlist를 변경할 수 있습니다.
+# - -DryRun/-Readback은 읽기 전용이고 -Apply는 Production exact 10 Asset allowlist를 변경합니다.
+# - -WeaponPanelOnly는 UI-P0-06 Stage B 전용으로 기존 WBP_CFWeaponPanel 하나만 변경하며 다른 Production Asset은 저장하지 않습니다.
 
 [CmdletBinding()]
 param(
@@ -24,9 +26,13 @@ param(
     [Parameter(Mandatory = $false)]
     [switch]$Apply,
 
-    # [v1.0.0] 저장된 Production 10 Asset을 새 프로세스에서 변경 없이 검증합니다.
+            # [v1.0.0] 저장된 Production 10 Asset을 새 프로세스에서 변경 없이 검증합니다.
     [Parameter(Mandatory = $false)]
-    [switch]$Readback
+    [switch]$Readback,
+
+    # [v1.1.0] UI-P0-06 Stage B에서 기존 WBP_CFWeaponPanel 정확히 1개만 Build·Compile·Validate·Save합니다.
+    [Parameter(Mandatory = $false)]
+    [switch]$WeaponPanelOnly
 )
 
 Set-StrictMode -Version Latest
@@ -47,15 +53,15 @@ $PythonScript = Join-Path $ToolsDirectory 'ApplyUIHUDProduction.py'
 # [v1.0.0] Python 도구가 기록할 Production 구조화 결과 JSON 경로입니다.
 $ReportPath = Join-Path $RepositoryRoot 'UE\Saved\UIHUDProduction\report.json'
 
-# [v1.0.0] 동시에 여러 실행 모드를 선택하지 않았는지 확인할 선택 개수입니다.
-$ModeCount = @($Probe, $DryRun, $Apply, $Readback | Where-Object { $_ }).Count
+# [v1.1.0] 동시에 여러 실행 모드를 선택하지 않았는지 확인할 선택 개수입니다.
+$ModeCount = @(@($Probe, $DryRun, $Apply, $Readback, $WeaponPanelOnly) | Where-Object { $_ }).Count
 if ($ModeCount -gt 1)
 {
-    throw 'Choose only one of -Probe, -DryRun, -Apply or -Readback.'
+    throw 'Choose only one of -Probe, -DryRun, -Apply, -Readback or -WeaponPanelOnly.'
 }
 
-# [v1.0.0] 아무 스위치도 없으면 가장 안전한 Probe를 사용하는 실제 실행 모드입니다.
-$RunMode = if ($DryRun) { 'dry_run' } elseif ($Apply) { 'apply' } elseif ($Readback) { 'readback' } else { 'probe' }
+# [v1.1.0] 아무 스위치도 없으면 가장 안전한 Probe를 사용하고 WeaponPanel-only는 별도 targeted mutation 모드로 분리합니다.
+$RunMode = if ($DryRun) { 'dry_run' } elseif ($Apply) { 'apply' } elseif ($Readback) { 'readback' } elseif ($WeaponPanelOnly) { 'weapon_panel_apply' } else { 'probe' }
 
 foreach ($RequiredFile in @($EnvironmentGuard, $PythonScript))
 {
@@ -109,7 +115,7 @@ if (Test-Path -LiteralPath $ReportPath -PathType Leaf)
 $PreviousRunMode = $env:CARFIGHT_UI_HUD_PROD_MODE
 $env:CARFIGHT_UI_HUD_PROD_MODE = $RunMode
 
-if ($RunMode -eq 'apply')
+if ($RunMode -eq 'apply' -or $RunMode -eq 'weapon_panel_apply')
 {
     # [v1.0.0] 실제 UMG Widget Blueprint 생성에 사용할 Full Editor 프로그램입니다.
     $EditorProgram = $EditorExecutable
@@ -140,13 +146,13 @@ else
     )
 }
 
-Write-Host '[CarFight] D1-11 Production UI HUD Tool'
+Write-Host '[CarFight] Production UI HUD Tool'
 Write-Host ("Mode: {0}" -f $RunMode)
 
 Push-Location $UnrealWorkingDirectory
 try
 {
-    if ($RunMode -eq 'apply')
+    if ($RunMode -eq 'apply' -or $RunMode -eq 'weapon_panel_apply')
     {
         # [v1.0.0] Full Editor가 Production Python Apply와 종료를 모두 마칠 때까지 대기할 Process입니다.
         $EditorProcess = Start-Process -FilePath $EditorProgram -ArgumentList $EditorArguments -WorkingDirectory $UnrealWorkingDirectory -Wait -PassThru

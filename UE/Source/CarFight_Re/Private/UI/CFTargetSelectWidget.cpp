@@ -1,8 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-07-24
-// Description: TS-P0-06 후보 및 선택 타겟 HUD용 C++ 부모 위젯 구현
+// Version: 1.1.0
+// Date: 2026-08-18
+// Description: UI-P0-05 후보 및 선택 Target World Marker용 C++ 부모 위젯 구현
+// Changelog:
+// - v1.1.0: VehiclePawnRef Weak Binding, Marker-only 표시, Player-facing 의미 텍스트 제거, 이벤트 기반 의미 캐시 + Projection-only Tick, 화면 재진입 Marker 복구.
+// Migration:
+// - Target 의미 텍스트는 Production TargetPanel이 Provider/Presenter ViewData로 표시하며 이 Widget은 World Marker만 투영합니다.
 
 #include "UI/CFTargetSelectWidget.h"
 
@@ -17,8 +21,17 @@
 
 void UCFTargetSelectWidget::SetVehiclePawnRef(ACFVehiclePawn* InVehiclePawnRef)
 {
-	if (VehiclePawnRef == InVehiclePawnRef)
+			if (VehiclePawnRef.Get() == InVehiclePawnRef)
 	{
+		// [v1.1.0] Weak Pointer가 이미 Null로 해석되는 종료 수명에서도 이전 Delegate가 남지 않도록 명시적으로 정리합니다.
+		if (InVehiclePawnRef)
+		{
+			BindTargetSelectEvents();
+		}
+		else
+		{
+			UnbindTargetSelectEvents();
+		}
 		RefreshFromTargetSelect();
 		return;
 	}
@@ -52,15 +65,18 @@ void UCFTargetSelectWidget::NativeTick(const FGeometry& MyGeometry, const float 
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
 	(void)InDeltaTime;
-	if (bAutoRefreshEveryTick)
+		if (bAutoRefreshEveryTick)
 	{
-		RefreshFromTargetSelect();
+		// [v1.1.0] 의미 상태는 TargetSelect 이벤트에서 갱신하고 Tick에서는 움직이는 TargetPoint의 화면 투영만 갱신합니다.
+		RefreshMarkerProjection();
 	}
 }
 
 void UCFTargetSelectWidget::BindTargetSelectEvents()
 {
-	UCFTargetSelectComp* TargetSelectComp = IsValid(VehiclePawnRef) ? VehiclePawnRef->GetTargetSelectComp() : nullptr;
+	// [v1.1.0] Weak Pawn Reference에서 이번 바인딩 동안만 사용할 현재 차량 Pawn입니다.
+	ACFVehiclePawn* CurrentVehiclePawn = VehiclePawnRef.Get();
+	UCFTargetSelectComp* TargetSelectComp = IsValid(CurrentVehiclePawn) ? CurrentVehiclePawn->GetTargetSelectComp() : nullptr;
 	if (!TargetSelectComp || BoundTargetSelectComp.Get() == TargetSelectComp)
 	{
 		return;
@@ -105,7 +121,9 @@ void UCFTargetSelectWidget::ClearCachedTargetState()
 
 void UCFTargetSelectWidget::RefreshCachedTargetState()
 {
-	UCFTargetSelectComp* TargetSelectComp = IsValid(VehiclePawnRef) ? VehiclePawnRef->GetTargetSelectComp() : nullptr;
+	// [v1.1.0] Weak Pawn Reference에서 이번 Refresh 동안만 사용할 현재 차량 Pawn입니다.
+	ACFVehiclePawn* CurrentVehiclePawn = VehiclePawnRef.Get();
+	UCFTargetSelectComp* TargetSelectComp = IsValid(CurrentVehiclePawn) ? CurrentVehiclePawn->GetTargetSelectComp() : nullptr;
 	if (!TargetSelectComp)
 	{
 		ClearCachedTargetState();
@@ -124,26 +142,10 @@ void UCFTargetSelectWidget::RefreshCachedTargetState()
 	bCandidateMarkerVisible = IsValid(CandidateActor) && CandidateActor != SelectedActor;
 	bSelectedMarkerVisible = IsValid(SelectedActor) && bCachedSelectedTargetValid;
 
-	float CandidateDistanceCm = CachedCandidateData.WorldDistanceCm;
-	if (CandidateDistanceCm <= 0.0f && IsValid(VehiclePawnRef) && IsValid(CandidateActor))
-	{
-		CandidateDistanceCm = FVector::Distance(VehiclePawnRef->GetActorLocation(), CachedCandidateData.TargetWorldLocation);
-	}
-	CachedCandidateInfoText = bCandidateMarkerVisible
-		? BuildTargetInfoText(TEXT("후보"), CandidateActor, CachedCandidateData.DisplayInfo, CandidateDistanceCm)
-		: FText::GetEmpty();
-
-	float SelectedDistanceCm = 0.0f;
-	if (IsValid(VehiclePawnRef) && IsValid(SelectedActor))
-	{
-		SelectedDistanceCm = FVector::Distance(VehiclePawnRef->GetActorLocation(), UCFTargetPointComp::ResolveTargetPoint(SelectedActor).WorldLocation);
-	}
-	CachedSelectedInfoText = bSelectedMarkerVisible
-		? BuildTargetInfoText(TEXT("선택"), SelectedActor, CachedSelectedDisplayInfo, SelectedDistanceCm)
-		: FText::GetEmpty();
-	CachedSelectedTrackStateText = bSelectedMarkerVisible
-		? FText::FromString(FString::Printf(TEXT("%s · %s"), *GetRelationDisplayText(CachedSelectedDisplayInfo.Relation).ToString(), *GetTrackStateDisplayText(CachedSelectedTrackState).ToString()))
-		: FText::GetEmpty();
+		// [v1.1.0] World Marker는 의미 텍스트를 소유하지 않습니다. 이름·거리·관계·Knowledge는 Production TargetPanel ViewData에서만 표시합니다.
+	CachedCandidateInfoText = FText::GetEmpty();
+	CachedSelectedInfoText = FText::GetEmpty();
+	CachedSelectedTrackStateText = FText::GetEmpty();
 	CachedSelectedMarkerGlyphText = CachedSelectedTrackState == ECFTargetTrackState::Occluded ? OccludedSelectedMarkerGlyph : SelectedMarkerGlyph;
 }
 
@@ -158,10 +160,10 @@ void UCFTargetSelectWidget::RefreshWidgetTextAndStyle()
 		Text_CandidateMarker->SetText(CandidateMarkerGlyph);
 		Text_CandidateMarker->SetColorAndOpacity(CandidateMarkerColor);
 	}
-	if (Text_CandidateInfo)
+		if (Text_CandidateInfo)
 	{
-		Text_CandidateInfo->SetText(CachedCandidateInfoText);
-		Text_CandidateInfo->SetColorAndOpacity(CandidateMarkerColor);
+		Text_CandidateInfo->SetText(FText::GetEmpty());
+		Text_CandidateInfo->SetVisibility(ESlateVisibility::Collapsed);
 	}
 
 	if (VerticalBox_SelectedRoot)
@@ -182,40 +184,56 @@ void UCFTargetSelectWidget::RefreshWidgetTextAndStyle()
 		Text_SelectedMarker->SetText(CachedSelectedMarkerGlyphText);
 		Text_SelectedMarker->SetColorAndOpacity(SelectedColor);
 	}
-	if (Text_SelectedInfo)
+		if (Text_SelectedInfo)
 	{
-		Text_SelectedInfo->SetText(CachedSelectedInfoText);
-		Text_SelectedInfo->SetColorAndOpacity(SelectedColor);
+		Text_SelectedInfo->SetText(FText::GetEmpty());
+		Text_SelectedInfo->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	if (Text_SelectedTrackState)
 	{
-		Text_SelectedTrackState->SetText(CachedSelectedTrackStateText);
-		Text_SelectedTrackState->SetColorAndOpacity(SelectedColor);
+		Text_SelectedTrackState->SetText(FText::GetEmpty());
+		Text_SelectedTrackState->SetVisibility(ESlateVisibility::Collapsed);
 	}
 }
 
 void UCFTargetSelectWidget::RefreshMarkerProjection()
 {
-	if (bCandidateMarkerVisible && VerticalBox_CandidateRoot)
+	// [v1.1.0] 현재 프레임의 후보 World 위치를 TargetPoint에서 다시 해석할 약한 Actor입니다.
+	AActor* CandidateActor = CachedCandidateActor.Get();
+
+	// [v1.1.0] 현재 프레임의 선택 World 위치를 TargetPoint에서 다시 해석할 약한 Actor입니다.
+	AActor* SelectedActor = CachedSelectedActor.Get();
+
+	// [v1.1.0] 후보의 의미상 표시 가능 여부는 이벤트 캐시 Actor와 현재 선택 Actor 관계에서 매 프레임 복구합니다.
+	const bool bCandidateEligible = IsValid(CandidateActor) && CandidateActor != SelectedActor;
+	bCandidateMarkerVisible = bCandidateEligible
+		&& VerticalBox_CandidateRoot
+		&& ProjectMarkerRoot(VerticalBox_CandidateRoot, UCFTargetPointComp::ResolveTargetPoint(CandidateActor).WorldLocation);
+	if (VerticalBox_CandidateRoot)
 	{
-		bCandidateMarkerVisible = ProjectMarkerRoot(VerticalBox_CandidateRoot, CachedCandidateData.TargetWorldLocation);
 		VerticalBox_CandidateRoot->SetVisibility(bCandidateMarkerVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
-	AActor* SelectedActor = CachedSelectedActor.Get();
-	if (bSelectedMarkerVisible && VerticalBox_SelectedRoot && IsValid(SelectedActor))
+
+	// [v1.1.0] 선택 Marker의 의미상 표시 가능 여부는 이벤트로 캐시된 유효성만 사용하고 현재 위치만 프레임 단위로 다시 투영합니다.
+	const bool bSelectedEligible = IsValid(SelectedActor) && bCachedSelectedTargetValid;
+	bSelectedMarkerVisible = bSelectedEligible
+		&& VerticalBox_SelectedRoot
+		&& ProjectMarkerRoot(VerticalBox_SelectedRoot, UCFTargetPointComp::ResolveTargetPoint(SelectedActor).WorldLocation);
+	if (VerticalBox_SelectedRoot)
 	{
-		bSelectedMarkerVisible = ProjectMarkerRoot(VerticalBox_SelectedRoot, UCFTargetPointComp::ResolveTargetPoint(SelectedActor).WorldLocation);
 		VerticalBox_SelectedRoot->SetVisibility(bSelectedMarkerVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
 }
 
 bool UCFTargetSelectWidget::ProjectMarkerRoot(UVerticalBox* MarkerRoot, const FVector& WorldLocation) const
 {
-	if (!MarkerRoot || WorldLocation.ContainsNaN() || !IsValid(VehiclePawnRef))
+	// [v1.1.0] Projection 시점에 Weak Reference에서 안전하게 해석한 현재 차량 Pawn입니다.
+	ACFVehiclePawn* CurrentVehiclePawn = VehiclePawnRef.Get();
+	if (!MarkerRoot || WorldLocation.ContainsNaN() || !IsValid(CurrentVehiclePawn))
 	{
 		return false;
 	}
-	APlayerController* PlayerController = Cast<APlayerController>(VehiclePawnRef->GetController());
+	APlayerController* PlayerController = Cast<APlayerController>(CurrentVehiclePawn->GetController());
 	if (!PlayerController)
 	{
 		return false;
@@ -243,34 +261,7 @@ bool UCFTargetSelectWidget::ProjectMarkerRoot(UVerticalBox* MarkerRoot, const FV
 	return true;
 }
 
-FText UCFTargetSelectWidget::BuildTargetInfoText(const TCHAR* Prefix, AActor* TargetActor, const FCFTargetDisplayInfo& DisplayInfo, const float DistanceCm) const
-{
-	const FString DisplayName = DisplayInfo.DisplayName.IsEmpty() ? (IsValid(TargetActor) ? TargetActor->GetName() : TEXT("Unknown")) : DisplayInfo.DisplayName.ToString();
-	return FText::FromString(FString::Printf(TEXT("%s · %s · %.0f m"), Prefix, *DisplayName, FMath::Max(0.0f, DistanceCm) / 100.0f));
-}
 
-FText UCFTargetSelectWidget::GetRelationDisplayText(const ECFTargetRelation Relation) const
-{
-	switch (Relation)
-	{
-	case ECFTargetRelation::Friendly: return FText::FromString(TEXT("아군"));
-	case ECFTargetRelation::Neutral: return FText::FromString(TEXT("중립"));
-	case ECFTargetRelation::Hostile: return FText::FromString(TEXT("적대"));
-	default: return FText::FromString(TEXT("미확인"));
-	}
-}
-
-FText UCFTargetSelectWidget::GetTrackStateDisplayText(const ECFTargetTrackState TrackState) const
-{
-	switch (TrackState)
-	{
-	case ECFTargetTrackState::Visible: return FText::FromString(TEXT("가시"));
-	case ECFTargetTrackState::Occluded: return FText::FromString(TEXT("가림"));
-	case ECFTargetTrackState::Estimated: return FText::FromString(TEXT("추정 추적"));
-	case ECFTargetTrackState::SignalLost: return FText::FromString(TEXT("신호 손실"));
-	default: return FText::FromString(TEXT("무효"));
-	}
-}
 
 void UCFTargetSelectWidget::HandleTargetCandidateChanged(AActor*, AActor*, FCFTargetCandidate) { RefreshFromTargetSelect(); }
 void UCFTargetSelectWidget::HandleSelectedTargetChanged(AActor*, AActor*, FCFTargetDisplayInfo) { RefreshFromTargetSelect(); }

@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.3.0
-// Date: 2026-08-06
+// Version: 1.4.0
+// Date: 2026-08-18
 // Description: CarFight UI 공통 입력·Mapping Context·싱글플레이 Pause PlayerController
-// Scope: Pawn 독립 Pause·Back 입력, Controller 소유 Context, 입력 중립화와 실제 World Pause를 제공합니다.
+// Scope: Pawn 독립 Pause·Back 입력, Controller 소유 Context, 입력 중립화, 실제 World Pause와 UI USER Visual 검증 진입점을 제공합니다.
 // Changelog:
+// - v1.4.0: M_VehicleDefensePIE 전용 UI-P0-03 USER Visual 검증을 위해 PIE 한정 방어 Pawn 빙의·기준 Pawn 복귀·방어 피해 Exec 진입점을 추가.
 // - v1.3.0: Pause 중 Enter·게임패드 확인 버튼으로 Continue를 실행하는 Controller Fallback 입력을 추가.
 // - v1.2.0: 차량 Gameplay 입력 소유권을 Pawn DefaultInputMappingContext로 잠그고 Controller Gameplay Context의 원자 이전 조건을 명시.
 // - v1.1.0: UI-P0-02 차량 Gameplay 입력 중립화, 키 상태 Flush와 실제 싱글플레이 Pause 적용·해제 API를 추가.
@@ -15,6 +16,7 @@
 // - Controller는 자신이 등록한 Mapping Context만 제거하며 Legacy Pawn Context를 제거하지 않는다.
 // - 실제 게임 일시정지와 입력 잔류 초기화는 v1.1.0부터 UISubsystem Pause Menu 수명과 함께 사용한다.
 // - Pause 진입은 차량 입력만 중립화하며 Launcher Sequence와 Projectile 상태를 취소하거나 재생성하지 않는다.
+// - v1.4.0 UI Visual Exec 진입점은 PIE의 M_VehicleDefensePIE 계열 맵에서만 동작하며 Production Gameplay 입력이나 저장 에셋 계약에는 포함하지 않는다.
 
 #pragma once
 
@@ -24,6 +26,7 @@
 #include "CFPlayerController.generated.h"
 
 class APawn;
+class ACFVehiclePawn;
 class UCFUISubsystem;
 class UEnhancedInputLocalPlayerSubsystem;
 class UInputAction;
@@ -105,9 +108,21 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|PlayerController|Input", meta=(DisplayName="소유 Mapping Context 수 반환 (Get Owned Mapping Context Count)", ToolTip="Controller가 직접 등록해 제거 책임을 가진 System, Gameplay와 UI Mapping Context 수를 반환합니다."))
 	int32 GetOwnedMappingContextCount() const;
 
-	// [v1.0.0] 현재 LocalPlayer의 CarFight UI Subsystem을 반환합니다.
+			// [v1.0.0] 현재 LocalPlayer의 CarFight UI Subsystem을 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|PlayerController|UI", meta=(DisplayName="UI Subsystem 반환 (Get UI Subsystem)", ToolTip="현재 LocalPlayer가 소유한 CFUISubsystem을 반환합니다."))
 	UCFUISubsystem* GetUISubsystem() const;
+
+	// [v1.4.0] UI-P0-03 USER Visual에서 현재 PIE의 정식 Defense Pawn으로 빙의합니다.
+	UFUNCTION(Exec, Category="CarFight|PlayerController|UI|Acceptance", meta=(DisplayName="UI Visual 방어 Pawn 빙의", ToolTip="M_VehicleDefensePIE 계열 PIE에서 정식 DefenseData가 초기화된 차량 Pawn으로 빙의합니다. 저장 에셋은 변경하지 않습니다."))
+	void CFUIVisualPossessDefensePawn();
+
+	// [v1.4.0] UI-P0-03 Pawn Rebind USER Visual에서 비방어 기준 Pawn으로 돌아갑니다.
+	UFUNCTION(Exec, Category="CarFight|PlayerController|UI|Acceptance", meta=(DisplayName="UI Visual 기준 Pawn 빙의", ToolTip="M_VehicleDefensePIE 계열 PIE에서 DefenseData가 없는 기준 차량 Pawn으로 빙의해 HUD Rebind를 확인합니다. 저장 에셋은 변경하지 않습니다."))
+	void CFUIVisualPossessBaselinePawn();
+
+	// [v1.4.0] UI-P0-03 Defense USER Visual에서 방어 차량에 Shield·Armor·Integrity가 모두 변하는 정면 피해를 1회 적용합니다.
+	UFUNCTION(Exec, Category="CarFight|PlayerController|UI|Acceptance", meta=(DisplayName="UI Visual 방어 피해 적용", ToolTip="M_VehicleDefensePIE 계열 PIE의 정식 Defense 차량에 BaseDamage 200 / ArmorPenetration 50 정면 피해를 적용합니다. Production Damage 경로를 사용하며 저장 에셋은 변경하지 않습니다."))
+	void CFUIVisualApplyDefenseDamage();
 
 	// [v1.0.0] Pause 공통 입력 요청 이벤트입니다.
 	UPROPERTY(BlueprintAssignable, Category="CarFight|PlayerController|Input")
@@ -159,6 +174,15 @@ protected:
 	bool bBindFallbackSystemKeysWhenActionsMissing = true;
 
 private:
+	// [v1.4.0] UI Visual Exec 진입점이 허용되는 M_VehicleDefensePIE 계열 PIE World인지 확인합니다.
+	bool IsUIVisualAcceptancePIE() const;
+
+	// [v1.4.0] 현재 PIE World에서 정식 DefenseData가 초기화된 차량 Pawn을 찾습니다.
+	ACFVehiclePawn* FindUIVisualDefensePawn() const;
+
+	// [v1.4.0] 현재 PIE World에서 DefenseData가 없는 비방어 기준 차량 Pawn을 찾습니다.
+	ACFVehiclePawn* FindUIVisualBaselinePawn() const;
+
 	// [v1.0.0] Enhanced Input Pause Action 입력을 공통 요청으로 변환합니다.
 	void HandlePauseInputAction(const FInputActionValue& InputActionValue);
 

@@ -1,10 +1,11 @@
 # Copyright (c) CarFight. All Rights Reserved.
 #
-# Version: 1.1.0
-# Date: 2026-08-13
-# Description: CF-FQ-032 D1-11 Production HUD Probe/DryRun/Apply/Readback Unreal Python 도구
-# Scope: Root 1 + Panel 6 + Element 2 Widget Blueprint와 HUD Visual DataAsset 1개만 생성·재구축·검증합니다.
+# Version: 1.2.0
+# Date: 2026-08-18
+# Description: CF-FQ-032 D1-11 Production HUD + UI-P0-06 WeaponPanel Targeted Apply Unreal Python 도구
+# Scope: 기존 전체 Production Probe/DryRun/Apply/Readback을 보존하고, UI-P0-06 Stage B에서는 WBP_CFWeaponPanel 정확히 1개만 재구축·Compile·Validate·Save할 수 있습니다.
 # Changelog:
+# - v1.2.0: `weapon_panel_apply` targeted mode를 추가해 기존 Production 전체 10 Asset 재작성 없이 WBP_CFWeaponPanel 하나만 Bridge Build→Compile→Validate→Save하도록 제한.
 # - v1.1.0: 사용자 결정에 맞춰 D1-11을 Structure-first Gate로 판정하고, 미술 승인/세부 배치를 별도 D1-11-ART Pending 상태로 분리.
 # - v1.0.0: Production 의미 단위 Widget 9개와 DA_CFHUDVisual_Default의 exact allowlist, 순차 Compile/Root Composition/Readback을 최초 추가.
 # Migration:
@@ -12,6 +13,7 @@
 # - Production Apply는 D1-09B Style/Density/Layout/Icon Asset을 읽기 전용으로 사용합니다.
 # - D1-11 Structure PASS는 Root/Panel/Element/VisualData exact 구조와 Validator 계약을 의미하며 최종 HUD Art 승인과 픽셀 폴리시는 D1-11-ART에서 별도 판정합니다.
 # - D1-12, UI-P0-03, Runtime Event Binding과 Gameplay 조회를 생성하지 않습니다.
+# - v1.2.0 `weapon_panel_apply`는 기존 Asset 생성을 허용하지 않고 정확한 WBP_CFWeaponPanel이 이미 존재해야 하며, 다른 Production Asset은 읽기 전용 Dependency로만 사용합니다.
 
 from __future__ import annotations
 
@@ -25,7 +27,7 @@ import unreal
 
 
 # [v1.1.0] 구조화 보고서에서 식별할 현재 Production 도구 버전입니다.
-TOOL_VERSION = "1.1.0"
+TOOL_VERSION = "1.2.0"
 
 # [v1.0.0] Probe/DryRun/Apply/Readback 중 현재 실행 모드입니다.
 RUN_MODE = os.environ.get("CARFIGHT_UI_HUD_PROD_MODE", "probe").strip().lower()
@@ -264,10 +266,18 @@ def compile_widget(asset_path: str, blueprint_asset: Any) -> None:
     REPORT["compiled_assets"].append(asset_path)
 
 
-# [v1.0.0] 정확한 Production allowlist Asset 한 개를 저장합니다.
+# [v1.2.0] 현재 실행 모드의 exact mutation allowlist 안에 있는 Production Asset 한 개만 저장합니다.
 def save_asset(asset_path: str, asset: Any) -> None:
-    if RUN_MODE != "apply" or asset_path not in MUTABLE_ASSET_PATHS:
-        raise RuntimeError(f"Production HUD save is outside apply contract: {asset_path}")
+    # [v1.2.0] 전체 Apply는 기존 10 Asset, WeaponPanel-only Apply는 정확히 WeaponPanel 하나만 허용하는 mode-scoped 저장 allowlist입니다.
+    allowed_asset_paths = (
+        MUTABLE_ASSET_PATHS
+        if RUN_MODE == "apply"
+        else {PANEL_ASSETS["WeaponPanel"]}
+        if RUN_MODE == "weapon_panel_apply"
+        else set()
+    )
+    if asset_path not in allowed_asset_paths:
+        raise RuntimeError(f"Production HUD save is outside apply contract: mode={RUN_MODE} asset={asset_path}")
     if not unreal.EditorAssetLibrary.save_loaded_asset(asset, only_if_is_dirty=False):
         raise RuntimeError(f"Production HUD asset save failed: {asset_path}")
     REPORT["saved_assets"].append(asset_path)
@@ -460,8 +470,67 @@ def run_apply() -> None:
         "panel_generated_classes": {
             role: read_generated_class_path(asset) for role, asset in panels.items()
         },
-    }
+        }
     finalize_contracts()
+    REPORT["success"] = True
+
+
+# [v1.2.0] UI-P0-06 Stage B에서 기존 WBP_CFWeaponPanel 정확히 1개만 새 Bridge 계약으로 재구축·검증·저장합니다.
+def run_weapon_panel_apply() -> None:
+    # [v1.2.0] WeaponPanel Build/Validate가 읽기 전용으로 참조할 기존 Style/Density/Layout DataAsset 묶음입니다.
+    dependencies = load_read_only_dependencies()
+    # [v1.2.0] WeaponPanel Style/Image Resolve에 사용할 기존 HUD Visual DataAsset이며 이번 targeted mode에서는 저장하지 않습니다.
+    visual_data = require_asset(VISUAL_ASSET_PATH)
+    # [v1.2.0] 공용 call_widget_bridge 시그니처를 만족할 기존 SpeedGauge Asset이며 WeaponPanel Build에서는 읽기 전용입니다.
+    speed_gauge_asset = require_asset(ELEMENT_ASSETS["SpeedGauge"])
+    # [v1.2.0] 공용 call_widget_bridge 시그니처를 만족할 기존 ArmorBodyMap Asset이며 WeaponPanel Build에서는 읽기 전용입니다.
+    armor_body_map_asset = require_asset(ELEMENT_ASSETS["ArmorBodyMap"])
+    # [v1.2.0] 이번 targeted mutation이 허용하는 유일한 Production Asset 경로입니다.
+    weapon_panel_path = PANEL_ASSETS["WeaponPanel"]
+    # [v1.2.0] 신규 생성 없이 반드시 이미 존재해야 하는 현재 Production WeaponPanel Blueprint입니다.
+    weapon_panel_asset = require_asset(weapon_panel_path)
+    validate_widget_parent(weapon_panel_asset)
+    REPORT["reused_assets"].append(weapon_panel_path)
+
+    if not call_widget_bridge(
+        "build_production_widget_result",
+        weapon_panel_asset,
+        "WeaponPanel",
+        dependencies,
+        visual_data,
+        speed_gauge_asset,
+        armor_body_map_asset,
+    ):
+        raise RuntimeError("Targeted Production WeaponPanel build failed")
+    REPORT["rebuilt_assets"].append(weapon_panel_path)
+
+    compile_widget(weapon_panel_path, weapon_panel_asset)
+    if not call_widget_bridge(
+        "validate_production_widget_result",
+        weapon_panel_asset,
+        "WeaponPanel",
+        dependencies,
+        visual_data,
+        speed_gauge_asset,
+        armor_body_map_asset,
+    ):
+        raise RuntimeError("Targeted Production WeaponPanel validation failed")
+    save_asset(weapon_panel_path, weapon_panel_asset)
+
+    REPORT["readback"] = {
+        "weapon_panel_generated_class": read_generated_class_path(weapon_panel_asset),
+        "weapon_panel_asset_path": weapon_panel_path,
+    }
+    REPORT["contracts"] = {
+        "operation_scope": "WeaponPanelOnly",
+        "exact_mutated_asset_count": 1,
+        "exact_mutated_assets": [weapon_panel_path],
+        "other_production_asset_mutation_count": 0,
+        "stage_b_compact_resource_slots": True,
+        "raw_resource_channel_direct_row_generation": False,
+        "reserve_ammo_header_owner_preserved": True,
+        "legacy_fixed_resource_rows_forbidden": True,
+    }
     REPORT["success"] = True
 
 
@@ -548,6 +617,8 @@ try:
         run_dry_run()
     elif RUN_MODE == "apply":
         run_apply()
+    elif RUN_MODE == "weapon_panel_apply":
+        run_weapon_panel_apply()
     elif RUN_MODE == "readback":
         run_readback()
     else:

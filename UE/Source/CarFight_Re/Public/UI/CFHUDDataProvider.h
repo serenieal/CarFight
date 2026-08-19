@@ -1,10 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.4.0
-// Date: 2026-08-13
-// Description: CF-FQ-032 UI-P0-03 + CF-FQ-031 AMMO-P0-06 Gameplay Runtime → HUD ViewData Provider
-// Scope: UCFUISubsystem OnCurrentPawnChanged를 구독하고 차량 Gameplay Runtime과 finite Ammo Snapshot을 Player-facing ViewData로 변환합니다.
+// Version: 1.7.0
+// Date: 2026-08-19
+// Description: CF-FQ-032 HUD Provider + CF-FQ-036 SEN-P0-06 Public Sensor Snapshot Integration
+// Scope: UCFUISubsystem OnCurrentPawnChanged를 구독하고 차량 Gameplay Runtime, finite Ammo, WeaponCharge/Heat와 Actor-free Sensor Snapshot을 Player-facing ViewData로 변환합니다.
 // Changelog:
+// - v1.7.0: UI-P0-06 Technical Complete 범위 교정에 맞춰 Current 주석을 동기화. WeaponCharge/Heat는 실제 Runtime Provider가 존재하며 VehicleBattery만 미구현 shared-power Gameplay 기능으로 분리.
+// - v1.6.0: UI-P0-06 기존 실제 Weapon 필드를 additive 공통 ResourceChannels로 투영. 당시 실제 Runtime 없던 Battery·Charge·Heat는 생성하지 않음. Chaos RPM/Gear 실제 Provider 상태를 Current 계약에 반영.
+// - v1.5.0: TargetSelect는 선택/TrackState만, Sensor Snapshot은 Target Knowledge/Radar Contact만 제공하도록 read-only 소비 경계를 확정.
 // - v1.4.0: OnLauncherSequenceChanged에서만 증가하는 LauncherSequenceRevision을 추가해 Launcher 의미 전이와 Ammo/Timer 부수 Refresh를 분리.
 // - v1.3.0: VehicleAmmoComp OnAmmoRuntimeChanged를 Pawn Rebind 수명에 연결하고 실제 finite Ammo·Reload Snapshot을 Weapon ViewData로 변환.
 // - v1.2.0: 정상 Launcher Sequence는 Weapon ViewData가 소유하고 AlertFeed에는 전역 주의 상태만 전달하도록 역할을 명확화.
@@ -13,7 +16,11 @@
 // Migration:
 // - Widget은 Pawn/Component를 직접 Cast하지 않고 이 Provider의 ViewData만 소비합니다.
 // - Launcher 계산을 UI에서 재구현하지 않고 UCFLauncherComp의 public 상태 변경 이벤트를 읽기 전용으로 소비합니다.
-// - Sensor/Radar, Ammo, Heat와 실제 Gear/RPM Provider가 없는 채널은 Unavailable로 유지합니다.
+// - v1.5.0부터 Target Knowledge와 Radar는 FCFSensorSnapshot만 읽으며 TargetSelectable 원본 InformationLevel/이름을 Player Knowledge로 사용하지 않습니다.
+// - TargetSelect는 선택 기록·유효성·TrackState owner로 유지하고 Sensor Contact lifecycle을 재계산하지 않습니다.
+// - Radar Range/Zoom 정규화는 별도 UI 계약 전까지 추정하지 않으며 Snapshot 상대 위치·거리만 ViewData에 제공합니다.
+// - Engine RPM과 Gear는 실제 UE 5.8 Chaos Vehicle Runtime을 읽고, RPM Gauge Redline은 별도 명시 계약 전 추정하지 않습니다.
+// - 실제 Gameplay Runtime Provider가 없는 VehicleBattery는 Unavailable로 유지하고 ResourceChannels 항목도 생성하지 않습니다. WeaponCharge와 Heat는 실제 Runtime Provider가 있을 때만 actual ResourceChannel로 전달합니다.
 
 #pragma once
 
@@ -150,10 +157,10 @@ private:
 	// [v1.0.0] 현재 활성 Weapon과 Launcher ViewData를 채웁니다.
 	void FillWeaponViewData(FCFWeaponHUDData& OutWeaponViewData) const;
 
-	// [v1.0.0] TargetSelect 공개 정보를 Target Knowledge ViewData로 좁혀 채웁니다.
+			// [v1.5.0] TargetSelect의 선택/TrackState와 Sensor Snapshot의 Player Knowledge를 중복 판정 없이 합성합니다.
 	void FillTargetViewData(FCFTargetHUDData& OutTargetViewData) const;
 
-	// [v1.0.0] 실제 Sensor Provider 부재를 Radar Unavailable로 명시합니다.
+	// [v1.5.0] Actor-free Sensor Snapshot Contact를 Radar ViewData로 읽기 전용 변환합니다.
 	void FillRadarViewData(FCFRadarHUDData& OutRadarViewData) const;
 
 	// [v1.0.0] 실제 Destroyed, Shield Down, Armor Breach, Launcher Active 상태로 현재 Alert 목록을 만듭니다.

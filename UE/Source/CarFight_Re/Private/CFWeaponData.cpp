@@ -1,10 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.10.0
-// Date: 2026-08-13
-// Description: CarFight 차량 무기 DataAsset과 피팅 무기 질량 구현
-// Scope: 차량 장착 프로파일 호환성, 피팅 질량, 런처 발사 패턴·Release 설정, 탄약 정적 설정과 선택 대상 사용 정책 요약을 제공합니다.
+// Version: 1.13.0
+// Date: 2026-08-19
+// Description: CarFight 차량 무기 DataAsset·피팅 질량·Charge·Heat P0 입력과 CF-FQ-008 정적 DataValidation 구현
+// Scope: 차량 장착 프로파일 호환성, 피팅 질량, 런처 발사 패턴·Release 설정, 탄약·Charge·Heat 정적 설정과 선택 대상 사용 정책 요약을 제공합니다.
 // Changelog:
+// - v1.13.0: UI-P0-06 WeaponCharge explicit opt-in 판정과 정적 범위 검증을 추가. all-zero/incomplete zero 조합은 Disabled 호환 상태로 허용.
+// - v1.12.0: UI-P0-06 Heat Runtime 활성 조건과 HeatDissipationPerSecond 정적 검증을 추가. 불완전한 기존 Heat 설정은 Disabled 호환 상태로 허용.
+// - v1.11.0: CF-FQ-008 WD-P0-01 WeaponData 정적 계약 검증과 Unreal Data Validation 구현. Runtime fallback과 기존 에셋 값은 변경하지 않음.
 // - v1.10.0: CF-FQ-031 AMMO-P0-01 탄창·초기 장전·발사당 탄약·Reload 유효값과 유한탄 호환 판정·요약을 추가.
 // - v1.8.0: CF-FQ-034 FIT-P0-02 유효 무기 질량 Getter와 통합 요약 출력을 추가.
 // - v1.7.0: 런처 Release 유효값 보정, 전용 요약과 WeaponData 통합 요약을 추가.
@@ -16,6 +19,9 @@
 // - v1.1.0: DefaultProjectileData 직접 참조를 디버그 요약에 포함.
 // - v1.0.0: WeaponData 최소 필드, 장착 타입/크기 호환성 검사, 디버그 요약 생성을 추가.
 // Migration:
+// - v1.13.0 WeaponCharge는 Maximum/PerShot/Recovery가 양수이고 Initial이 0~Maximum 범위일 때만 활성화한다. 기존 all-zero Asset은 Disabled이며 발사를 제한하지 않는다.
+// - v1.12.0 HeatPerShot, MaxHeat, HeatDissipationPerSecond가 모두 양수일 때만 Heat Runtime을 활성화한다. 일부 값만 0인 기존/예약 설정은 Invalid로 만들지 않는다.
+// - v1.11.0 DataValidation은 음수·비유한 값, 식별/장착 모순과 finite-ammo 정적 불완전성만 Invalid로 보고한다. 기존 안전 fallback 값은 허용한다.
 // - 기존 WeaponData는 bUseInfiniteAmmoForDebug=true와 DefaultAmmoData=None 기본값으로 신규 탄약 Runtime이 발사를 제한하지 않는다.
 // - 기존 WeaponData는 WeaponMassKg=0 기본값으로 기존 발사와 차량 주행 결과를 유지한다.
 // - 기존 WeaponData는 SingleCycle / 1발 기본값으로 기존 발사 결과를 유지하며 Ripple·Salvo 실행은 아직 시작하지 않는다.
@@ -27,6 +33,8 @@
 
 #include "CFAmmoData.h"
 #include "CFProjectileData.h"
+
+#define LOCTEXT_NAMESPACE "CFWeaponData"
 
 // [v1.10.0] 기존 MagazineSize를 신규 Runtime의 MagazineCapacity 의미로 안전하게 보정해 반환합니다.
 int32 UCFWeaponData::GetEffectiveMagazineCapacity() const
@@ -59,6 +67,32 @@ bool UCFWeaponData::UsesFiniteAmmoRuntime() const
 		&& IsValid(DefaultAmmoData)
 		&& DefaultAmmoData->IsAmmoDataValid()
 		&& GetEffectiveMagazineCapacity() > 0;
+}
+
+// [v1.13.0] 네 explicit Charge 입력이 유효해 실제 무기 내부 Charge Runtime을 사용할지 반환합니다.
+bool UCFWeaponData::UsesWeaponChargeRuntime() const
+{
+	return FMath::IsFinite(MaximumWeaponCharge)
+		&& FMath::IsFinite(InitialWeaponCharge)
+		&& FMath::IsFinite(WeaponChargePerShot)
+		&& FMath::IsFinite(WeaponChargeRecoveryPerSecond)
+		&& MaximumWeaponCharge > KINDA_SMALL_NUMBER
+		&& InitialWeaponCharge >= 0.0f
+		&& InitialWeaponCharge <= MaximumWeaponCharge + KINDA_SMALL_NUMBER
+		&& WeaponChargePerShot > KINDA_SMALL_NUMBER
+		&& WeaponChargePerShot <= MaximumWeaponCharge + KINDA_SMALL_NUMBER
+		&& WeaponChargeRecoveryPerSecond > KINDA_SMALL_NUMBER;
+}
+
+// [v1.12.0] 세 explicit Heat 입력이 모두 유효해 실제 무기 Heat Runtime을 사용할지 반환합니다.
+bool UCFWeaponData::UsesWeaponHeatRuntime() const
+{
+	return FMath::IsFinite(HeatPerShot)
+		&& FMath::IsFinite(MaxHeat)
+		&& FMath::IsFinite(HeatDissipationPerSecond)
+		&& HeatPerShot > KINDA_SMALL_NUMBER
+		&& MaxHeat > KINDA_SMALL_NUMBER
+		&& HeatDissipationPerSecond > KINDA_SMALL_NUMBER;
 }
 
 // [v1.10.0] 로그와 Debug에서 사용할 탄약 정적 설정 요약을 반환합니다.
@@ -209,6 +243,187 @@ FString UCFWeaponData::BuildWeaponSummary() const
 		BaseDamage);
 }
 
+// [v1.11.0] DataValidation과 Automation이 공유할 WeaponData 정적 계약 오류 목록을 생성합니다.
+bool UCFWeaponData::ValidateWeaponDataContract(TArray<FText>& OutValidationErrors) const
+{
+	OutValidationErrors.Reset();
+
+	if (WeaponId.IsNone())
+	{
+		OutValidationErrors.Add(LOCTEXT("MissingWeaponId", "WeaponId는 None일 수 없습니다."));
+	}
+
+	if (WeaponSize == ECFVehicleWeaponSize::None)
+	{
+		OutValidationErrors.Add(LOCTEXT("MissingWeaponSize", "WeaponSize는 None일 수 없습니다."));
+	}
+
+	if (CompatibleMountTypes.IsEmpty())
+	{
+		OutValidationErrors.Add(LOCTEXT("EmptyCompatibleMountTypes", "CompatibleMountTypes에는 최소 하나의 유효한 장착 타입이 필요합니다."));
+	}
+
+	// [v1.11.0] 중복 장착 타입을 검출하기 위해 이미 확인한 유효 장착 타입 집합입니다.
+	TSet<ECFVehicleMountType> SeenMountTypes;
+	for (const ECFVehicleMountType MountType : CompatibleMountTypes)
+	{
+		if (MountType == ECFVehicleMountType::None)
+		{
+			OutValidationErrors.Add(LOCTEXT("InvalidCompatibleMountTypeNone", "CompatibleMountTypes에는 None을 넣을 수 없습니다."));
+			continue;
+		}
+
+		if (SeenMountTypes.Contains(MountType))
+		{
+			OutValidationErrors.Add(LOCTEXT("DuplicateCompatibleMountType", "CompatibleMountTypes에는 같은 장착 타입을 중복으로 넣을 수 없습니다."));
+			continue;
+		}
+
+		SeenMountTypes.Add(MountType);
+	}
+
+	if (!FMath::IsFinite(WeaponMassKg) || WeaponMassKg < 0.0f)
+	{
+		OutValidationErrors.Add(LOCTEXT("InvalidWeaponMass", "WeaponMassKg는 유한한 0 이상의 값이어야 합니다."));
+	}
+
+	if (!FMath::IsFinite(FireRatePerMinute) || FireRatePerMinute < 0.0f)
+	{
+		OutValidationErrors.Add(LOCTEXT("InvalidFireRate", "FireRatePerMinute는 유한한 0 이상의 값이어야 합니다. 0은 쿨다운 없는 현재 fallback으로 허용됩니다."));
+	}
+
+	if (!FMath::IsFinite(MaxRange) || MaxRange < 0.0f)
+	{
+		OutValidationErrors.Add(LOCTEXT("InvalidMaxRange", "MaxRange는 유한한 0 이상의 값이어야 합니다. 0은 현재 사거리 fallback으로 허용됩니다."));
+	}
+
+	if (!FMath::IsFinite(SpreadDeg) || SpreadDeg < 0.0f)
+	{
+		OutValidationErrors.Add(LOCTEXT("InvalidSpread", "SpreadDeg는 유한한 0 이상의 값이어야 합니다."));
+	}
+
+	if (MagazineSize < 0)
+	{
+		OutValidationErrors.Add(LOCTEXT("NegativeMagazineSize", "MagazineSize는 0 이상이어야 합니다."));
+	}
+
+	if (!FMath::IsFinite(ReloadTimeSeconds) || ReloadTimeSeconds < 0.0f)
+	{
+		OutValidationErrors.Add(LOCTEXT("InvalidReloadTime", "ReloadTimeSeconds는 유한한 0 이상의 값이어야 합니다."));
+	}
+
+	if (InitialLoadedAmmoCount < 0)
+	{
+		OutValidationErrors.Add(LOCTEXT("NegativeInitialLoadedAmmoCount", "InitialLoadedAmmoCount는 0 이상이어야 합니다."));
+	}
+	else if (MagazineSize >= 0 && InitialLoadedAmmoCount > MagazineSize)
+	{
+		OutValidationErrors.Add(LOCTEXT("InitialLoadedExceedsMagazine", "InitialLoadedAmmoCount는 MagazineSize를 넘을 수 없습니다."));
+	}
+
+	if (AmmoUnitsPerShot < 1)
+	{
+		OutValidationErrors.Add(LOCTEXT("InvalidAmmoUnitsPerShot", "AmmoUnitsPerShot는 최소 1이어야 합니다."));
+	}
+
+	// [v1.11.0] 명시된 DefaultAmmoData가 안정 AmmoId를 가진 유효 정적 탄종인지 여부입니다.
+	const bool bHasValidDefaultAmmoData = IsValid(DefaultAmmoData) && DefaultAmmoData->IsAmmoDataValid();
+	if (DefaultAmmoData && !bHasValidDefaultAmmoData)
+	{
+		OutValidationErrors.Add(LOCTEXT("InvalidDefaultAmmoData", "DefaultAmmoData가 지정되면 유효한 AmmoId를 가진 AmmoData여야 합니다."));
+	}
+
+	if (!bUseInfiniteAmmoForDebug)
+	{
+		if (!bHasValidDefaultAmmoData)
+		{
+			OutValidationErrors.Add(LOCTEXT("FiniteAmmoMissingDefaultAmmo", "유한 탄약 Runtime을 사용하려면 유효한 DefaultAmmoData가 필요합니다."));
+		}
+
+		if (MagazineSize <= 0)
+		{
+			OutValidationErrors.Add(LOCTEXT("FiniteAmmoMissingMagazine", "유한 탄약 Runtime을 사용하려면 MagazineSize가 0보다 커야 합니다."));
+		}
+	}
+
+		if (!FMath::IsFinite(MaximumWeaponCharge) || MaximumWeaponCharge < 0.0f)
+	{
+		OutValidationErrors.Add(LOCTEXT("InvalidMaximumWeaponCharge", "MaximumWeaponCharge는 유한한 0 이상의 값이어야 합니다."));
+	}
+
+	if (!FMath::IsFinite(InitialWeaponCharge) || InitialWeaponCharge < 0.0f)
+	{
+		OutValidationErrors.Add(LOCTEXT("InvalidInitialWeaponCharge", "InitialWeaponCharge는 유한한 0 이상의 값이어야 합니다."));
+	}
+	else if (FMath::IsFinite(MaximumWeaponCharge)
+		&& MaximumWeaponCharge >= 0.0f
+		&& InitialWeaponCharge > MaximumWeaponCharge + KINDA_SMALL_NUMBER)
+	{
+		OutValidationErrors.Add(LOCTEXT("InitialWeaponChargeExceedsMaximum", "InitialWeaponCharge는 MaximumWeaponCharge를 넘을 수 없습니다."));
+	}
+
+	if (!FMath::IsFinite(WeaponChargePerShot) || WeaponChargePerShot < 0.0f)
+	{
+		OutValidationErrors.Add(LOCTEXT("InvalidWeaponChargePerShot", "WeaponChargePerShot은 유한한 0 이상의 값이어야 합니다."));
+	}
+	else if (FMath::IsFinite(MaximumWeaponCharge)
+		&& MaximumWeaponCharge >= 0.0f
+		&& WeaponChargePerShot > MaximumWeaponCharge + KINDA_SMALL_NUMBER)
+	{
+		OutValidationErrors.Add(LOCTEXT("WeaponChargePerShotExceedsMaximum", "WeaponChargePerShot은 MaximumWeaponCharge를 넘을 수 없습니다."));
+	}
+
+	if (!FMath::IsFinite(WeaponChargeRecoveryPerSecond) || WeaponChargeRecoveryPerSecond < 0.0f)
+	{
+		OutValidationErrors.Add(LOCTEXT("InvalidWeaponChargeRecovery", "WeaponChargeRecoveryPerSecond는 유한한 0 이상의 값이어야 합니다."));
+	}
+
+	if (!FMath::IsFinite(HeatPerShot) || HeatPerShot < 0.0f)
+	{
+		OutValidationErrors.Add(LOCTEXT("InvalidHeatPerShot", "HeatPerShot은 유한한 0 이상의 값이어야 합니다."));
+	}
+
+	if (!FMath::IsFinite(MaxHeat) || MaxHeat < 0.0f)
+	{
+		OutValidationErrors.Add(LOCTEXT("InvalidMaxHeat", "MaxHeat는 유한한 0 이상의 값이어야 합니다."));
+	}
+
+	if (!FMath::IsFinite(HeatDissipationPerSecond) || HeatDissipationPerSecond < 0.0f)
+	{
+		OutValidationErrors.Add(LOCTEXT("InvalidHeatDissipationPerSecond", "HeatDissipationPerSecond는 유한한 0 이상의 값이어야 합니다."));
+	}
+
+	return OutValidationErrors.IsEmpty();
+}
+
+#if WITH_EDITOR
+// [v1.11.0] Unreal Data Validation에서 잘못된 WeaponData 정적 설정을 보고합니다.
+EDataValidationResult UCFWeaponData::IsDataValid(FDataValidationContext& Context) const
+{
+	// [v1.11.0] 상위 PrimaryDataAsset이 반환한 기본 검증 결과입니다.
+	EDataValidationResult ValidationResult = Super::IsDataValid(Context);
+
+	// [v1.11.0] WeaponData 정적 계약에서 발견된 오류 목록입니다.
+	TArray<FText> ValidationErrors;
+	if (!ValidateWeaponDataContract(ValidationErrors))
+	{
+		for (const FText& ValidationError : ValidationErrors)
+		{
+			Context.AddError(ValidationError);
+		}
+
+		return EDataValidationResult::Invalid;
+	}
+
+	if (ValidationResult == EDataValidationResult::NotValidated)
+	{
+		ValidationResult = EDataValidationResult::Valid;
+	}
+
+	return ValidationResult;
+}
+#endif
+
 // [v1.6.0] 음수·0·패턴 비적용 값을 안전하게 보정한 런처 발사 패턴 설정을 반환합니다.
 FCFLauncherFirePatternConfig UCFWeaponData::GetEffectiveLauncherFirePatternConfig() const
 {
@@ -292,3 +507,5 @@ float UCFWeaponData::GetFireIntervalSeconds() const
 
 	return 60.0f / EffectiveFireRatePerMinute;
 }
+
+#undef LOCTEXT_NAMESPACE

@@ -1,10 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.3.0
-// Date: 2026-07-24
-// Description: CarFight 타겟 선택 상태, 후보 탐색, 선택 수명과 장비 조회 컴포넌트
-// Scope: 후보 결정적 정렬, 선택 대상 수명과 장비별 읽기 전용 사용 가능 평가를 제공합니다.
+// Version: 1.6.0
+// Date: 2026-08-15
+// Description: CarFight 타겟 선택 상태, 후보 탐색, 선택 수명·장비 조회와 TS-P0-08 LOS 사전필터·검색 진단 컴포넌트
+// Scope: 후보 결정적 정렬, 선택 대상 수명, 장비별 읽기 전용 사용 가능 평가와 후보 디버그 표시 계약을 제공합니다.
 // Changelog:
+// - v1.6.0: 비-Direct Targetable Actor가 기존 proximity 거리·반각 밖이면 LOS Trace만 생략하고 후보 입력 배열은 유지하는 의미 보존 사전필터를 추가.
+// - v1.5.0: TS-P0-08 런타임 후보 검색의 월드 Actor 스캔 수·Trace 수·경과시간을 LastCandidateSearchResult와 DebugSummary에 기록하도록 진단 계약 확장.
+// - v1.4.0: TS-P0-08에서 자동 후보 디버그 표시를 후보 갱신 간격 동안 유지하고 Sphere 반경을 데이터 기반 Debug 값으로 분리해 한 프레임 하드코딩을 제거.
 // - v1.3.0: TS-P0-07 장비별 선택 대상 호환성·거리·실패 사유 평가 API를 추가.
 // - v1.2.1: Actor Destroy 전용 OnDestroyed 구독을 추가해 BeginPlay 이전 Actor 파괴도 즉시 선택 해제하도록 보강.
 // - v1.2.0: TS-P0-04 선택 대상 수명 구독, 가림 유예, 거리 이탈, 컴포넌트 비활성화와 자동 해제 계약을 추가.
@@ -12,6 +15,9 @@
 // - v1.0.1: Native C++ TargetSelectable과 실제 Blueprint 재정의를 구분하는 안전 인터페이스 디스패치 정책을 반영.
 // - v1.0.0: TS-P0-01용 설정 해석, 대상 필터, 후보/선택 상태 API와 BlueprintAssignable 이벤트를 추가.
 // Migration:
+// - v1.6.0 LOS 사전필터는 `!Direct && (Distance > ProximityMax || Angle > ProximityHalfAngle)`인 대상의 Visibility Trace만 생략한다. CandidateActors, EvaluateCandidateActors와 안정화 규칙은 유지한다.
+// - v1.5.0 검색 진단값은 관측 전용이며 후보 판정·정렬·Refresh 주기 결정에 피드백하지 않는다. 순수 EvaluateCandidateActors는 기존처럼 월드 Trace를 수행하지 않는다.
+// - TS-P0-08 자동 후보 디버그 Sphere는 CandidateRefreshIntervalSec 동안 유지되며 CandidateSearchDebugSphereRadiusCm으로 크기만 조절한다. 후보 판정 거리·반각·히스테리시스 값은 변경하지 않는다.
 // - ACFVehiclePawn 부착은 TS-P0-01에서 완료했으며 Enhanced Input, HUD와 장비 소비 연결은 후속 Task에서 수행한다.
 // - 장기 Actor 참조는 약한 참조로 유지하며 검색 결과 구조체의 Actor는 컴포넌트 캐시에 강하게 보관하지 않는다.
 // - 선택 대상은 OnDestroyed, OnEndPlay와 VehicleHealth 파괴 이벤트를 자동 구독하고 변경·해제 시 기존 구독을 제거한다.
@@ -82,7 +88,7 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|TargetSelect|Search", meta=(DisplayName="마지막 후보 검색 결과 반환 (Get Last Candidate Search Result)", ToolTip="마지막 런타임 후보 갱신에서 계산된 정렬 후보와 최종 후보 결과를 반환합니다."))
 	FCFTargetSearchResult GetLastCandidateSearchResult() const;
 
-	UFUNCTION(BlueprintPure, Category="CarFight|TargetSelect|Debug", meta=(DisplayName="후보 검색 디버그 요약 생성 (Build Candidate Search Debug Summary)", ToolTip="마지막 후보 검색의 입력 수, 허용 수, 직접 후보, 최종 후보와 안정화 여부를 한 줄 문자열로 생성합니다."))
+			UFUNCTION(BlueprintPure, Category="CarFight|TargetSelect|Debug", meta=(DisplayName="후보 검색 디버그 요약 생성 (Build Candidate Search Debug Summary)", ToolTip="마지막 후보 검색의 입력·허용·직접 후보 수, 런타임 월드 스캔·Trace·검색 시간, 최종 후보와 안정화 여부를 한 줄 문자열로 생성합니다."))
 	FString BuildCandidateSearchDebugSummary() const;
 
 	UFUNCTION(BlueprintCallable, CallInEditor, Category="CarFight|TargetSelect|Debug", meta=(DisplayName="후보 검색 디버그 그리기 (Draw Candidate Search Debug)", ToolTip="마지막 후보 검색 목록의 위치와 최종 후보를 월드 디버그 도형으로 표시합니다."))
@@ -210,11 +216,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|TargetSelect|Search", meta=(DisplayName="후보 자동 갱신 (bAutoRefreshCandidate)", ToolTip="True이면 로컬 플레이어 차량에서 CandidateRefreshIntervalSec 간격으로 현재 후보를 자동 갱신합니다."))
 	bool bAutoRefreshCandidate = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|TargetSelect|Debug", meta=(DisplayName="후보 검색 디버그 자동 표시 (bDrawCandidateSearchDebug)", ToolTip="True이면 자동 후보 갱신 직후 마지막 검색 후보와 최종 후보를 한 프레임 동안 표시합니다."))
+				// [v1.0.0] 자동 후보 갱신 직후 마지막 검색 후보와 최종 후보의 디버그 Sphere를 표시할지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|TargetSelect|Debug", meta=(DisplayName="후보 검색 디버그 자동 표시 (bDrawCandidateSearchDebug)", ToolTip="True이면 자동 후보 갱신 직후 마지막 검색 후보와 최종 후보 Sphere를 다음 후보 갱신 시점까지 유지해 표시합니다."))
 	bool bDrawCandidateSearchDebug = false;
 
+	// [v1.4.0] 자동 후보 검색 디버그 Sphere의 월드 반경입니다. 게임플레이 후보 판정 범위에는 영향을 주지 않습니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|TargetSelect|Debug", meta=(ClampMin="1.0", Units="cm", DisplayName="후보 디버그 Sphere 반경 (CandidateSearchDebugSphereRadiusCm)", ToolTip="자동 후보 디버그 Sphere의 월드 반경입니다. 디버그 가독성만 조절하며 선택 거리, 반각과 후보 전환 판정에는 영향을 주지 않습니다."))
+	float CandidateSearchDebugSphereRadiusCm = 20.0f;
+
 private:
-	bool BuildRuntimeSearchView(FCFTargetSearchView& OutSearchView, TArray<AActor*>& OutCandidateActors) const;
+		// [v1.6.0] 실제 런타임 카메라 View와 후보 Actor를 수집하고 월드 스캔·LOS Trace·사전필터 진단값을 반환합니다.
+	bool BuildRuntimeSearchView(FCFTargetSearchView& OutSearchView, TArray<AActor*>& OutCandidateActors, int32& OutWorldActorScanCount, int32& OutVisibilityTraceCount, int32& OutVisibilityPrefilterSkipCount, int32& OutTotalTraceCount) const;
 	void CacheLastCandidateSearchResult(const FCFTargetSearchResult& SearchResult);
 	bool ShouldKeepCurrentCandidateForStability(const FCFTargetCandidate& RawBestCandidate, const TArray<FCFTargetCandidate>& SortedCandidates, const FCFTargetSelectConfig& Config, FCFTargetCandidate& OutCurrentCandidate) const;
 	FVector ResolveTargetSelectionLocation(AActor* TargetActor) const;

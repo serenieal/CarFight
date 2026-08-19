@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.5.0
-// Date: 2026-08-13
-// Description: CarFight LocalPlayer UI 수명·레이어·Pause·Production HUD Runtime 연결 Subsystem 구현
-// Scope: 기존 Pause·Root 동작을 보존하면서 UI-P0-03 Provider/Presenter와 Production HUD를 World HUD Layer에 연결합니다.
+// Version: 1.7.0
+// Date: 2026-08-18
+// Description: CarFight LocalPlayer UI 수명·레이어·Pause·Production HUD·AimReticle·Target Marker Runtime 연결 Subsystem 구현
+// Scope: 기존 Pause·Root·Production HUD·AimReticle 동작을 보존하면서 UI-P0-05 TargetSelect 생성·Game Layer·Current Pawn Rebind 수명을 UISubsystem으로 이전합니다.
 // Changelog:
+// - v1.7.0: Config WBP_TargetSelect을 Game Layer ZOrder 0에 단일 생성하고 Possess·UnPossess·World Cleanup에서 같은 Marker 인스턴스를 현재 Pawn에 재바인딩.
+// - v1.6.0: Config WBP_AimReticle을 HUD Layer ZOrder 10에 단일 생성하고 Possess·UnPossess·World Cleanup에서 같은 인스턴스를 현재 Pawn에 재바인딩.
 // - v1.5.0: HUDDataProvider/HUDPresenter 생성, Production WBP_CFInGameHUD Config Class 해석과 HUD Layer 수명을 추가.
 // - v1.4.0: D1-09A Config Soft Reference 해석, 검증 실패 Fallback과 Style·Density·Layout Getter를 추가.
 // - v1.3.0: UI Root를 AddToPlayerScreen에서 AddToViewport로 전환해 Legacy HUD 위 표시와 Pause 마우스 Hit Test를 복구.
@@ -17,10 +19,13 @@
 // - Pause 해제 뒤 Primary Screen이 남아 있으면 UIOnly, 없으면 GameOnly 입력으로 복귀한다.
 // - UI Data Config가 비었거나 유효하지 않으면 각 타입의 Native CDO Fallback을 사용하며 Pause·Gameplay 수명에는 영향을 주지 않는다.
 // - Production HUD Asset은 재부모화하지 않으며 CFStyledWidgetBase를 유지하고 Provider/Presenter가 Runtime ViewData만 주입합니다.
+// - v1.6.0 AimReticle은 기존 WBP_AimReticle/UCFAimReticleWidget 시각·Gameplay 읽기 계약을 그대로 사용하고, 생성·Parent·Pawn Source 수명만 UISubsystem이 소유합니다.
+// - v1.7.0 TargetSelect은 기존 후보·선택·TrackState Gameplay 소유권을 유지하고 WBP_TargetSelect의 생성·Game Layer·Pawn Source 수명만 UISubsystem이 소유합니다.
 
 #include "UI/CFUISubsystem.h"
 
 #include "CFPlayerController.h"
+#include "CFVehiclePawn.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/Button.h"
 #include "Components/CanvasPanel.h"
@@ -28,11 +33,13 @@
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
+#include "UI/CFAimReticleWidget.h"
 #include "UI/CFHUDDataProvider.h"
 #include "UI/CFHUDLayoutData.h"
 #include "UI/CFHUDPresenter.h"
 #include "UI/CFPauseMenuWidget.h"
 #include "UI/CFStyledWidgetBase.h"
+#include "UI/CFTargetSelectWidget.h"
 #include "UI/CFUIDensityData.h"
 #include "UI/CFUIRootWidget.h"
 #include "UI/CFUIStyleData.h"
@@ -74,18 +81,20 @@ void UCFUISubsystem::Deinitialize()
 	HUDPresenter = nullptr;
 	HUDDataProvider = nullptr;
 
-	if (WorldCleanupDelegateHandle.IsValid())
+		if (WorldCleanupDelegateHandle.IsValid())
 	{
 		FWorldDelegates::OnWorldCleanup.Remove(WorldCleanupDelegateHandle);
 		WorldCleanupDelegateHandle.Reset();
 	}
 
-		ActivePlayerController.Reset();
+	ActivePlayerController.Reset();
 	CurrentPawn.Reset();
 	ResolvedStyleData = nullptr;
 	ResolvedDensityData = nullptr;
 	ResolvedHUDLayoutData = nullptr;
-	ResolvedInGameHUDWidgetClass = nullptr;
+		ResolvedInGameHUDWidgetClass = nullptr;
+	ResolvedAimReticleWidgetClass = nullptr;
+	ResolvedTargetSelectWidgetClass = nullptr;
 	Super::Deinitialize();
 }
 
@@ -103,7 +112,7 @@ void UCFUISubsystem::ResolveDefaultUIDataAssets()
 		}
 	}
 
-	ResolvedDensityData = DefaultDensityDataAsset.IsNull() ? nullptr : DefaultDensityDataAsset.LoadSynchronous();
+		ResolvedDensityData = DefaultDensityDataAsset.IsNull() ? nullptr : DefaultDensityDataAsset.LoadSynchronous();
 	if (ResolvedDensityData)
 	{
 		// [v1.4.0] 잘못된 Density DataAsset을 Native Fallback으로 내릴 때 제공할 검증 실패 사유입니다.
@@ -114,7 +123,7 @@ void UCFUISubsystem::ResolveDefaultUIDataAssets()
 		}
 	}
 
-		ResolvedHUDLayoutData = DefaultHUDLayoutDataAsset.IsNull() ? nullptr : DefaultHUDLayoutDataAsset.LoadSynchronous();
+	ResolvedHUDLayoutData = DefaultHUDLayoutDataAsset.IsNull() ? nullptr : DefaultHUDLayoutDataAsset.LoadSynchronous();
 	if (ResolvedHUDLayoutData)
 	{
 		// [v1.4.0] 잘못된 Layout DataAsset을 Native Fallback으로 내릴 때 제공할 검증 실패 사유입니다.
@@ -123,12 +132,24 @@ void UCFUISubsystem::ResolveDefaultUIDataAssets()
 		{
 			ResolvedHUDLayoutData = nullptr;
 		}
-	}
+		}
 
 	ResolvedInGameHUDWidgetClass = DefaultInGameHUDWidgetClass.IsNull() ? nullptr : DefaultInGameHUDWidgetClass.LoadSynchronous();
 	if (ResolvedInGameHUDWidgetClass && !ResolvedInGameHUDWidgetClass->IsChildOf(UCFStyledWidgetBase::StaticClass()))
 	{
 		ResolvedInGameHUDWidgetClass = nullptr;
+	}
+
+		ResolvedAimReticleWidgetClass = DefaultAimReticleWidgetClass.IsNull() ? nullptr : DefaultAimReticleWidgetClass.LoadSynchronous();
+	if (ResolvedAimReticleWidgetClass && !ResolvedAimReticleWidgetClass->IsChildOf(UCFAimReticleWidget::StaticClass()))
+	{
+		ResolvedAimReticleWidgetClass = nullptr;
+	}
+
+	ResolvedTargetSelectWidgetClass = DefaultTargetSelectWidgetClass.IsNull() ? nullptr : DefaultTargetSelectWidgetClass.LoadSynchronous();
+	if (ResolvedTargetSelectWidgetClass && !ResolvedTargetSelectWidgetClass->IsChildOf(UCFTargetSelectWidget::StaticClass()))
+	{
+		ResolvedTargetSelectWidgetClass = nullptr;
 	}
 }
 
@@ -184,7 +205,7 @@ void UCFUISubsystem::UnregisterPlayerController(ACFPlayerController* PlayerContr
 // [v1.0.0] 현재 World에 정확히 하나의 UI Root가 존재하도록 보장합니다.
 bool UCFUISubsystem::EnsureUIRootForWorld(UWorld* World)
 {
-	if (!World || World->GetNetMode() == NM_DedicatedServer)
+		if (!World || World->GetNetMode() == NM_DedicatedServer)
 	{
 		return false;
 	}
@@ -192,6 +213,8 @@ bool UCFUISubsystem::EnsureUIRootForWorld(UWorld* World)
 		if (RootWidget && RootWorld.Get() == World && RootWidget->IsInViewport())
 	{
 		CreateInGameHUDWidget();
+		CreateAimReticleWidget();
+		CreateTargetSelectWidget();
 		return true;
 	}
 
@@ -204,25 +227,33 @@ bool UCFUISubsystem::EnsureUIRootForWorld(UWorld* World)
 	}
 
 	UCFUIRootWidget* CreatedRootWidget = CreateWidget<UCFUIRootWidget>(PlayerController, UCFUIRootWidget::StaticClass());
-	if (!CreatedRootWidget || !CreatedRootWidget->EnsureLayerTree())
+		if (!CreatedRootWidget || !CreatedRootWidget->EnsureLayerTree())
 	{
 		return false;
 	}
 
-		// [v1.3.0] Legacy Aim Reticle·TargetSelect HUD와 동일한 Viewport 계층에서 실제 ZOrder와 Hit Test 우선권을 적용합니다.
+	// [v1.3.0] Legacy TargetSelect HUD와 동일한 Viewport 계층에서 실제 ZOrder와 Hit Test 우선권을 적용합니다.
 	CreatedRootWidget->AddToViewport(RootViewportZOrder);
-	if (!CreatedRootWidget->IsInViewport())
+		if (!CreatedRootWidget->IsInViewport())
 	{
 		return false;
 	}
 
-		RootWidget = CreatedRootWidget;
+	RootWidget = CreatedRootWidget;
 	RootWorld = World;
 	PrePauseScreenState = ECFUIScreenState::InGame;
 	SetScreenState(ECFUIScreenState::InGame);
 	if (!CreateInGameHUDWidget())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[CarFight][UI] Production InGame HUD creation skipped or failed; Root/Pause lifetime remains active."));
+	}
+		if (!CreateAimReticleWidget())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CarFight][UI] Aim Reticle creation skipped or failed; Root/Production HUD lifetime remains active."));
+	}
+	if (!CreateTargetSelectWidget())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CarFight][UI] Target Marker creation skipped or failed; Root/Production HUD/AimReticle lifetime remains active."));
 	}
 	return true;
 }
@@ -241,7 +272,9 @@ void UCFUISubsystem::ReleaseUIRoot()
 		OnPauseStateChanged.Broadcast(true, false);
 	}
 
-		DestroyPauseMenuWidget();
+				DestroyPauseMenuWidget();
+	DestroyTargetSelectWidget();
+	DestroyAimReticleWidget();
 	DestroyInGameHUDWidget();
 	PrimaryScreenWidget = nullptr;
 	CurrentModalWidget = nullptr;
@@ -507,7 +540,9 @@ void UCFUISubsystem::NotifyPossessedPawnChanged(APawn* PreviousPawn, APawn* NewP
 		return;
 	}
 
-	CurrentPawn = NewPawn;
+			CurrentPawn = NewPawn;
+	RebindAimReticleToCurrentPawn();
+	RebindTargetSelectToCurrentPawn();
 	OnCurrentPawnChanged.Broadcast(PreviousPawn, NewPawn);
 }
 
@@ -618,6 +653,144 @@ void UCFUISubsystem::DestroyInGameHUDWidget()
 		InGameHUDWidget->RemoveFromParent();
 		InGameHUDWidget = nullptr;
 	}
+}
+
+// [v1.6.0] Config Aim Reticle Class로 단일 Widget을 만들고 HUD Layer에 연결합니다.
+bool UCFUISubsystem::CreateAimReticleWidget()
+{
+	if (AimReticleWidget && AimReticleWidget->GetParent() == GetLayerWidget(ECFUILayer::HUD))
+	{
+		RebindAimReticleToCurrentPawn();
+		return true;
+	}
+
+	if (AimReticleWidget)
+	{
+		DestroyAimReticleWidget();
+	}
+
+	// [v1.6.0] Aim Reticle을 소유할 현재 LocalPlayer의 PlayerController입니다.
+	ACFPlayerController* PlayerController = ActivePlayerController.Get();
+	if (!PlayerController || !RootWidget || !ResolvedAimReticleWidgetClass)
+	{
+		return false;
+	}
+
+	// [v1.6.0] 기존 WBP_AimReticle Class로 생성한 UISubsystem 소유 단일 인스턴스입니다.
+	UCFAimReticleWidget* CreatedAimReticleWidget = CreateWidget<UCFAimReticleWidget>(PlayerController, ResolvedAimReticleWidgetClass);
+	if (!CreatedAimReticleWidget)
+	{
+		return false;
+	}
+
+	if (!RootWidget->AddWidgetToLayer(CreatedAimReticleWidget, ECFUILayer::HUD, AimReticleHUDLayerZOrder))
+	{
+		CreatedAimReticleWidget->RemoveFromParent();
+		return false;
+	}
+
+	AimReticleWidget = CreatedAimReticleWidget;
+	RebindAimReticleToCurrentPawn();
+	return true;
+}
+
+// [v1.6.0] 현재 Reticle의 Pawn 참조를 먼저 비운 뒤 HUD Layer에서 제거합니다.
+void UCFUISubsystem::DestroyAimReticleWidget()
+{
+	if (!AimReticleWidget)
+	{
+		return;
+	}
+
+	AimReticleWidget->SetVehiclePawnRef(nullptr);
+	AimReticleWidget->RemoveFromParent();
+	AimReticleWidget = nullptr;
+}
+
+// [v1.6.0] 현재 Possessed Pawn만 Reticle Source로 연결하고 표시 토글을 갱신합니다.
+void UCFUISubsystem::RebindAimReticleToCurrentPawn()
+{
+	if (!AimReticleWidget)
+	{
+		return;
+	}
+
+	// [v1.6.0] Aim Reticle의 Gameplay Source로 허용할 현재 Possessed 차량 Pawn입니다.
+	ACFVehiclePawn* CurrentVehiclePawn = Cast<ACFVehiclePawn>(CurrentPawn.Get());
+	AimReticleWidget->SetVehiclePawnRef(CurrentVehiclePawn);
+	AimReticleWidget->SetVisibility(
+		CurrentVehiclePawn && CurrentVehiclePawn->ShouldShowAimReticle()
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+}
+
+// [v1.7.0] Config TargetSelect Class로 단일 World Marker Widget을 만들고 Game Layer에 연결합니다.
+bool UCFUISubsystem::CreateTargetSelectWidget()
+{
+	if (TargetSelectWidget && TargetSelectWidget->GetParent() == GetLayerWidget(ECFUILayer::Game))
+	{
+		RebindTargetSelectToCurrentPawn();
+		return true;
+	}
+
+	if (TargetSelectWidget)
+	{
+		DestroyTargetSelectWidget();
+	}
+
+	// [v1.7.0] Target Marker를 소유할 현재 LocalPlayer의 PlayerController입니다.
+	ACFPlayerController* PlayerController = ActivePlayerController.Get();
+	if (!PlayerController || !RootWidget || !ResolvedTargetSelectWidgetClass)
+	{
+		return false;
+	}
+
+	// [v1.7.0] 기존 WBP_TargetSelect Class로 생성한 UISubsystem 소유 단일 World Marker 인스턴스입니다.
+	UCFTargetSelectWidget* CreatedTargetSelectWidget = CreateWidget<UCFTargetSelectWidget>(PlayerController, ResolvedTargetSelectWidgetClass);
+	if (!CreatedTargetSelectWidget)
+	{
+		return false;
+	}
+
+	if (!RootWidget->AddWidgetToLayer(CreatedTargetSelectWidget, ECFUILayer::Game, TargetSelectGameLayerZOrder))
+	{
+		CreatedTargetSelectWidget->RemoveFromParent();
+		return false;
+	}
+
+	TargetSelectWidget = CreatedTargetSelectWidget;
+	RebindTargetSelectToCurrentPawn();
+	return true;
+}
+
+// [v1.7.0] 현재 Target Marker의 Pawn 참조와 Delegate를 먼저 비운 뒤 Game Layer에서 제거합니다.
+void UCFUISubsystem::DestroyTargetSelectWidget()
+{
+	if (!TargetSelectWidget)
+	{
+		return;
+	}
+
+	TargetSelectWidget->SetVehiclePawnRef(nullptr);
+	TargetSelectWidget->RemoveFromParent();
+	TargetSelectWidget = nullptr;
+}
+
+// [v1.7.0] 현재 Possessed Pawn만 Target Marker Source로 연결하고 표시 토글을 갱신합니다.
+void UCFUISubsystem::RebindTargetSelectToCurrentPawn()
+{
+	if (!TargetSelectWidget)
+	{
+		return;
+	}
+
+	// [v1.7.0] Target Marker의 Gameplay Source로 허용할 현재 Possessed 차량 Pawn입니다.
+	ACFVehiclePawn* CurrentVehiclePawn = Cast<ACFVehiclePawn>(CurrentPawn.Get());
+	TargetSelectWidget->SetVehiclePawnRef(CurrentVehiclePawn);
+	TargetSelectWidget->SetVisibility(
+		CurrentVehiclePawn && CurrentVehiclePawn->ShouldShowTargetSelectHud()
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
 }
 
 // [v1.1.0] Pause 해제 후 Primary Screen 또는 인게임 입력 모드와 화면 상태를 복원합니다.

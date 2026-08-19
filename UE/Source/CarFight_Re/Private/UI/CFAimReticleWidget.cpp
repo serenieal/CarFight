@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.8.0
-// Date: 2026-07-21
+// Version: 1.9.0
+// Date: 2026-08-18
 // Description: Aim Reticle UI용 C++ 부모 위젯 클래스 구현입니다.
 // Changelog:
+// - v1.9.0: UI-P0-04 Weak Pawn Binding을 적용하고 Refresh 시점마다 약한 참조를 안전하게 해석해 Old Pawn lifetime 비소유를 보장.
 // - v1.8.0: Image_WeaponReticle을 탄종별 Weapon Preview가 아닌 CurrentMuzzleDirection 기반 터렛 레티클 지점에 투영.
 // - v1.7.1: Weapon Reticle Canvas Slot의 앵커를 좌측 상단으로 고정해 뷰포트 좌표가 중복 오프셋되지 않도록 수정.
 // - v1.7.0: Weapon Preview 월드 위치를 화면 좌표로 투영해 선택적 Weapon Reticle 이미지를 표시.
@@ -16,6 +17,7 @@
 // - v1.2.0: Reticle enum 값 이름을 FirePending / FireRejected 싱글플레이 명칭으로 교체.
 // - v1.1.0: 싱글플레이 전환에 맞춰 서버 대기/거부 표시 문구를 로컬 발사 처리/거부 문구로 변경.
 // Migration:
+// - v1.9.0부터 Pawn이 소멸하거나 Rebind에서 해제되면 VehiclePawnRef.Get()이 Null이 되고 Reticle은 Hidden fallback으로 전환한다.
 // - Image_WeaponReticle은 bHasValidTurretReticlePoint와 TurretReticleWorldLocation만 소비하며 Legacy Weapon Preview 모드와 착탄 정보에는 의존하지 않는다.
 // - Image_WeaponReticle의 디자이너 앵커 값과 관계없이 런타임에는 좌측 상단 앵커를 사용한다.
 // - Image_WeaponReticle은 BindWidgetOptional로 사용하며 누락 시 기존 Command Reticle과 FireFeedback에는 영향이 없다.
@@ -51,7 +53,9 @@ void UCFAimReticleWidget::RefreshFromPawn()
 	// [v1.0.0] 유효한 Pawn이 없을 때 적용할 안전한 fallback 상태입니다.
 	const ECFVehicleReticleState FallbackReticleState = ECFVehicleReticleState::Hidden;
 
-	if (!IsValid(VehiclePawnRef))
+		// [v1.9.0] Weak Pawn Reference에서 이번 갱신 동안만 사용할 안전한 차량 Pawn입니다.
+	ACFVehiclePawn* CurrentVehiclePawn = VehiclePawnRef.Get();
+	if (!IsValid(CurrentVehiclePawn))
 	{
 		bCachedCanFire = false;
 		HideWeaponReticle();
@@ -62,7 +66,7 @@ void UCFAimReticleWidget::RefreshFromPawn()
 	}
 
 	// [v1.0.0] 현재 Pawn에서 읽은 Aim 컴포넌트입니다.
-	const UCFVehicleAimComp* VehicleAimComp = VehiclePawnRef->GetVehicleAimComp();
+		const UCFVehicleAimComp* VehicleAimComp = CurrentVehiclePawn->GetVehicleAimComp();
 	if (!IsValid(VehicleAimComp))
 	{
 		bCachedCanFire = false;
@@ -83,7 +87,7 @@ void UCFAimReticleWidget::RefreshFromPawn()
 	// [v1.3.0] VehicleAimComp가 계산한 기본 Reticle 상태입니다.
 	const ECFVehicleReticleState BaseReticleState = VehicleAimComp->GetReticleState();
 
-	ApplyFireFeedbackViewData(VehiclePawnRef->BuildFireFeedbackViewData());
+		ApplyFireFeedbackViewData(CurrentVehiclePawn->BuildFireFeedbackViewData());
 
 	// [v1.3.0] FireFeedback 오버레이 정책이 반영된 최종 Reticle 상태입니다.
 	const ECFVehicleReticleState FinalReticleState = ResolveReticleStateFromFireFeedback(CachedFireFeedbackViewData, BaseReticleState);
@@ -332,8 +336,10 @@ void UCFAimReticleWidget::RefreshWeaponReticle(const FCFVehicleWeaponAimSolution
 		return;
 	}
 
+		// [v1.9.0] Weapon Reticle 투영 시점에 Weak Reference에서 안전하게 해석한 현재 차량 Pawn입니다.
+	ACFVehiclePawn* CurrentVehiclePawn = VehiclePawnRef.Get();
 	// [v1.7.0] Weapon Reticle 투영에 사용할 로컬 플레이어 컨트롤러입니다.
-	APlayerController* PlayerController = IsValid(VehiclePawnRef) ? Cast<APlayerController>(VehiclePawnRef->GetController()) : nullptr;
+	APlayerController* PlayerController = IsValid(CurrentVehiclePawn) ? Cast<APlayerController>(CurrentVehiclePawn->GetController()) : nullptr;
 	if (!IsValid(PlayerController))
 	{
 		HideWeaponReticle();

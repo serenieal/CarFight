@@ -1,13 +1,17 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.0
-// Date: 2026-07-24
-// Description: CarFight 타겟 선택 시스템 공용 타입 정의
+// Version: 1.3.0
+// Date: 2026-08-15
+// Description: CarFight 타겟 선택 시스템 공용 타입·TS-P0-08 검색 진단·LOS 사전필터 정의
 // Scope: 선택 상태, 관계, 분류, 정보 단계, 추적 상태, 선택 컨텍스트, 후보 평가값, 검색 View와 결과 계약을 제공합니다.
 // Changelog:
+// - v1.3.0: 비-Direct Targetable Actor가 proximity 거리·반각 밖이면 LOS Trace를 생략한 수를 RuntimeVisibilityPrefilterSkipCount로 진단.
+// - v1.2.0: TS-P0-08 런타임 후보 검색의 월드 Actor 스캔 수, Visibility/전체 Trace 수와 경과 ms를 읽기 전용 진단값으로 추가.
 // - v1.1.0: TS-P0-03 후보 평가용 SearchView와 결정적 정렬 결과 구조를 추가.
 // - v1.0.0: TS-P0-01용 최소 타겟 선택 enum, 표시 정보, 선택 컨텍스트, 후보 데이터와 설정 구조체를 추가.
 // Migration:
+// - v1.3.0 LOS 사전필터는 기존 EvaluateCandidateActors가 반드시 탈락시키는 비-Direct 거리·반각 밖 대상의 Visibility Trace만 생략한다. OutCandidateActors와 정렬·히스테리시스 입력은 유지한다.
+// - v1.2.0 진단값은 RefreshCurrentCandidate 런타임 검색에서만 채워지며 순수 EvaluateCandidateActors 호출에서는 0을 유지한다. 후보 판정·정렬·튜닝에는 사용하지 않는다.
 // - 기존 Aim, Weapon, Health 계약은 변경하지 않는다.
 // - 후보 검색, 정렬, Trace와 장비 락온 상태는 후속 Task에서 별도 구현한다.
 
@@ -306,8 +310,28 @@ struct FCFTargetSearchResult
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|TargetSelect|Search", meta=(DisplayName="허용 후보 수 (AcceptedCandidateCount)", ToolTip="선택 필터와 직접 또는 근접 후보 조건을 통과한 Actor 수입니다."))
 	int32 AcceptedCandidateCount = 0;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|TargetSelect|Search", meta=(DisplayName="직접 조준 후보 수 (DirectAimCandidateCount)", ToolTip="직접 조준 적중 후보로 인정된 Actor 수입니다."))
+			UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|TargetSelect|Search", meta=(DisplayName="직접 조준 후보 수 (DirectAimCandidateCount)", ToolTip="직접 조준 적중 후보로 인정된 Actor 수입니다."))
 	int32 DirectAimCandidateCount = 0;
+
+	// [v1.2.0] 실제 RefreshCurrentCandidate 런타임 검색에서 TActorIterator가 순회한 전체 월드 Actor 수입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|TargetSelect|Search|Diagnostics", meta=(DisplayName="런타임 월드 Actor 스캔 수 (RuntimeWorldActorScanCount)", ToolTip="마지막 자동·수동 런타임 후보 갱신에서 전체 월드를 순회하며 검사한 Actor 수입니다. 순수 Evaluate Candidate Actors 호출에서는 0입니다."))
+	int32 RuntimeWorldActorScanCount = 0;
+
+		// [v1.2.0] 실제 런타임 검색에서 Targetable Actor의 시야 확인을 위해 수행한 Visibility Trace 수입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|TargetSelect|Search|Diagnostics", meta=(DisplayName="런타임 Visibility Trace 수 (RuntimeVisibilityTraceCount)", ToolTip="마지막 런타임 후보 갱신에서 직접 조준 Trace 외에 후보 시야 확인을 위해 실제 수행한 Trace 수입니다. 순수 Evaluate Candidate Actors 호출에서는 0입니다."))
+	int32 RuntimeVisibilityTraceCount = 0;
+
+	// [v1.3.0] 비-Direct Targetable Actor 중 거리 또는 반각 조건상 proximity 후보가 될 수 없어 Visibility Trace를 생략한 수입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|TargetSelect|Search|Diagnostics", meta=(DisplayName="Visibility Trace 사전필터 생략 수 (RuntimeVisibilityPrefilterSkipCount)", ToolTip="마지막 런타임 후보 갱신에서 proximity 거리·반각 밖이라 LOS Trace를 실행하지 않은 Targetable Actor 수입니다. 후보 배열 자체에서는 제거하지 않습니다."))
+	int32 RuntimeVisibilityPrefilterSkipCount = 0;
+
+	// [v1.2.0] 실제 런타임 검색에서 수행한 직접 조준 Trace와 Visibility Trace를 합친 수입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|TargetSelect|Search|Diagnostics", meta=(DisplayName="런타임 전체 Trace 수 (RuntimeTotalTraceCount)", ToolTip="마지막 런타임 후보 갱신의 직접 조준 Trace와 Visibility Trace를 합친 수입니다. 검색 View를 만들지 못했거나 순수 평가만 수행하면 0입니다."))
+	int32 RuntimeTotalTraceCount = 0;
+
+	// [v1.2.0] 실제 RefreshCurrentCandidate 한 번의 View 생성·월드 수집·후보 평가에 걸린 경과 시간입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|TargetSelect|Search|Diagnostics", meta=(ClampMin="0.0", Units="ms", DisplayName="런타임 검색 시간 ms (RuntimeSearchDurationMs)", ToolTip="마지막 Refresh Current Candidate의 View 생성, 월드 Actor 수집, Trace와 후보 평가 전체에 걸린 경과 시간입니다. 성능 관측용이며 후보 판정에 사용하지 않습니다."))
+	float RuntimeSearchDurationMs = 0.0f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|TargetSelect|Search", meta=(DisplayName="최종 후보 (BestCandidate)", ToolTip="직접 조준, 화면 근접도, 월드 거리와 안정 정렬 키 순으로 선택된 최종 후보입니다."))
 	FCFTargetCandidate BestCandidate;

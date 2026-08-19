@@ -1,10 +1,29 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.4.0
-// Date: 2026-08-13
-// Description: CF-FQ-032 UI-P0-03 HUD ViewData/Provider Automation
-// Scope: 명시 가용 상태, OnCurrentPawnChanged Provider Rebind와 공통 Weapon/Launcher Presentation lifecycle 계약을 검증합니다.
+// Version: 1.21.0
+// Date: 2026-08-19
+// Description: CF-FQ-032 UI-P0-03 HUD ViewData/Provider Automation + UI-P0-06 Weapon Selection·truthful Rail·Resource·Charge·Heat·RPM Production 계약 검증
+// Scope: 실제 Defense/Drive/Weapon Runtime 계약과 저장 Production HUD의 이름 기반 비선택 Weapon Rail 구조·Projection·Visibility/Text 적용을 검증합니다.
 // Changelog:
+// - v1.21.0: explicit WeaponCharge의 초기값·승인 한 발 소비·Game-Time 회복·충전 부족 차단 가능 상태, 실제 WeaponComp 연계, HUD Charge Channel과 Compact Primary/Secondary/NO CHARGE 우선순위를 검증하는 WeaponChargeRuntimeResourceContract 추가. Pawn protected fire helper는 테스트 편의로 노출하지 않음.
+// - v1.20.0: saved Production WeaponPanel의 truthful Text Rail 구조, selected exclusion, fixed order, DisplayName-only/generic fallback, 2+overflow와 실제 Presenter slot 적용을 검증하는 WeaponRailVisualContract 추가.
+// - v1.19.0: Applied Fitting ResolvedMounts 고정 순서→Weapon Selection Runtime→per-weapon Cooldown/Heat 격리→HUD DisplayName/SelectedIndex를 transient-only로 검증하는 WeaponSelectionRuntimeContract 추가. Production Rail/Asset mutation 0.
+// - v1.18.1: HeatRuntimeResourceContract에 실제 transient Pawn/WeaponComp ExecuteAcceptedFireCommand→ApplyFireResult 4발 누적과 Component Tick 냉각 검증을 추가. Asset mutation 0.
+// - v1.18.0: explicit Heat Runtime의 누적·자연 냉각·과열 회복, actual Heat Resource Channel, Reload/NoAmmo/Cooldown 우선순위 보호와 Launcher+Ammo+Heat Compact Projection을 검증하는 HeatRuntimeResourceContract 추가.
+// - v1.17.1: 신규 RPM Visual test helper 인자명을 AutomationTestBase::TestName과 충돌하지 않도록 TickPercentTestLabel로 교정. Production 구현 변경 0.
+// - v1.17.0: 저장 Production WBP_CFSpeedGauge의 기존 21 Tick이 explicit RPM ratio를 소비하고 Redline unavailable에서 21 fill을 0으로 reset하는 RpmGaugeVisualBindingContract 추가. Asset mutation 0.
+// - v1.16.0: RPM Gauge Runtime Source Contract 추가. Current RPM은 Chaos Movement, Redline/Maximum은 Current Pawn VehicleData explicit source이며 Redline 0에서 fallback 없이 Unavailable인지 검증.
+// - v1.15.0: explicit RedlineStartRPM→0.85 / EngineMaxRPM→1.0 piecewise RPM Gauge mapping과 미설정/invalid fail-closed 계약을 검증하는 RpmGaugePresentationContract 추가.
+// - v1.14.0: ResourceVisualSlotContract의 표시 상태 expectation을 Presenter 공통 정책인 HitTestInvisible로 교정. Production 구현과 Presentation 값/lifecycle은 변경하지 않음.
+// - v1.13.0: Dynamic Resource Visual Stage B. 저장 Production HUD의 새 Compact 의미 슬롯에 한 ViewData 적용당 Projection이 정확히 한 번 소비되는지, Header Reserve·Primary/Secondary/FireState·Launcher terminal 1주기와 legacy 고정 Row 부재를 검증하는 ResourceVisualSlotContract를 추가.
+// - v1.12.0: Dynamic Resource Visual Stage A. raw ResourceChannels 직접 렌더링 대신 Primary 1 + Secondary 최대 2 + FireState 1 Projection, Reserve Header 분리와 Launcher Active→Terminal 1주기→Cooldown 전이를 검증하는 ResourcePresentationProjection 회귀를 추가.
+// - v1.11.0: legacy Weapon 필드와 충돌하는 ResourceChannels를 구성해 Presenter가 Ammo·Reserve·Reload·NoAmmo·Cooldown·Launcher를 공통 채널에서 우선 해석하는 parity 회귀를 추가.
+// - v1.10.0: 호환되는 실제 활성 EquipmentPresetData.DisplayName이 HUD Weapon DisplayName으로 전달되고 빈 이름에서 내부 ID fallback 없이 Unavailable로 복귀하는 focused 회귀를 추가.
+// - v1.9.0: 기존 실제 Ammo·Reserve·Cooldown·Reload·LauncherSequence가 additive ResourceChannels에 값 손실 없이 투영되고 Battery·Charge·Heat는 생성되지 않는 UI-P0-06 focused 회귀를 추가.
+// - v1.8.0: 실제 ACFVehiclePawn의 Chaos Movement Engine RPM/Current Gear가 Provider Vehicle ViewData와 Gear Text로 동일하게 전달되는 UI-P0-06 focused 회귀를 추가.
+// - v1.7.0: UI-P0-06 착수 감사에서 Provider 부재로 확정된 Weapon DisplayName·VehicleBattery·WeaponCharge와 기존 RPM·Gear·Heat가 기본 ViewData에서 Unavailable을 유지하는 회귀를 보강.
+// - v1.6.0: 저장된 M_VehicleDefensePIE의 실제 PIE 복제 Defense SUV를 Provider에 바인딩하고 정식 3층 피해가 Shield/Front Armor/Integrity ViewData로 전달되는 Technical PIE 회귀를 추가.
+// - v1.5.0: 실제 VehicleDefenseComp 피해·재생으로 Shield/Armor/Integrity ViewData를 검증하고 Provider Rebind 뒤 Old Pawn Defense 이벤트가 새 Pawn ViewData를 갱신하지 않는 구독 해제 회귀를 추가.
 // - v1.4.0: Salvo 전용 Hold 회귀를 제거하고 LauncherSequenceRevision 기반 Ripple·Salvo 공통 Active→Terminal→Cooldown/READY lifecycle 및 HeavyCannon SingleCycle 상태 경로를 검증.
 // - v1.3.0: [폐기 이력] 같은 프레임에 완료되는 Salvo Hold가 사용할 terminal Snapshot 변환 계약을 추가.
 // - v1.2.0: 정상 LauncherSequence를 Alert가 아닌 WeaponPanel 진행 상태로 표현하는 RIPPLE/SALVO 문구·진행률 회귀를 추가하고 구형 AlertSemanticRouting 회귀를 제거.
@@ -14,19 +33,304 @@
 // - v1.0.0: ViewData Availability와 Provider Rebind Generation/Old Pawn 해제 계약 테스트를 최초 추가.
 // Migration:
 // - 테스트는 Transient ULocalPlayer/UObject와 Automation World만 사용하며 Unreal Asset을 생성하거나 저장하지 않습니다.
+// - Defense 검증은 Production 계산을 복제하지 않고 실제 UCFVehicleDefenseComp::TryApplyDamageToActor와 Shield 재생 Tick을 사용합니다.
 // - FirePattern은 RIPPLE/SALVO 문구 선택에만 사용하며 Presentation 수명 전이는 LauncherSequenceRevision과 Active 상태로 검증합니다.
+// - v1.13.0 Stage B 테스트는 저장 Production HUD를 읽기만 하며 Asset을 생성·수정·저장하지 않습니다. 새 의미 슬롯 Asset 적용 전에는 의도적으로 통과 조건이 성립하지 않습니다.
+// - v1.17.0 RPM Visual Binding 테스트도 저장 Production HUD를 읽기만 하며 대표 VehicleData의 RedlineStartRPM을 작성하거나 Asset을 저장하지 않습니다.
+// - v1.18.0 Heat 검증은 transient 순수 Runtime/ViewData만 사용하고 WeaponData/Production Asset을 생성·수정·저장하지 않습니다.
+// - v1.19.0 Weapon Selection 검증은 transient Fitting Snapshot·Pawn·DataAsset UObject만 사용하고 실제 Content/Production Rail/Input Asset을 생성·수정·저장하지 않습니다.
+// - v1.20.0 Weapon Rail 검증은 저장 Production HUD를 읽기만 하고 Presenter synthetic ViewData를 적용합니다. Runtime ID, weapon icon, 비선택 resource summary를 생성하지 않으며 Asset을 저장하지 않습니다. 내부 MountProfileId는 Fitting→WeaponComp identity 검증에만 사용하고 HUD ViewData에는 노출하지 않습니다.
+// - v1.21.0 WeaponCharge 검증은 transient Runtime/Pawn/ViewData만 사용하고 저장 WeaponData/Production Asset을 생성·수정·저장하지 않습니다. VehicleBattery, Heat tuning, Redline authoring은 변경하지 않습니다.
+
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "CFDamageData.h"
+#include "CFEquipmentPresetData.h"
+#include "CFTurretMountData.h"
+#include "CFVehicleData.h"
+#include "CFVehicleDefenseComp.h"
+#include "CFVehicleDefenseData.h"
+#include "CFVehicleFittingComp.h"
+#include "CFVehicleHealthComp.h"
 #include "CFVehiclePawn.h"
+#include "CFVehicleDriveComp.h"
+#include "CFVehicleWeaponComp.h"
+#include "CFWeaponData.h"
+#include "CFWeaponChargeRuntime.h"
+#include "CFWeaponHeatRuntime.h"
+#include "ChaosWheeledVehicleMovementComponent.h"
+#include "Blueprint/UserWidget.h"
+#include "Components/ProgressBar.h"
+#include "Components/TextBlock.h"
+#include "Components/Widget.h"
 #include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
+#include "EngineUtils.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/AutomationEditorCommon.h"
 #include "UI/CFHUDDataProvider.h"
 #include "UI/CFHUDPresenter.h"
 #include "UI/CFHUDViewData.h"
+#include "UI/CFStyledWidgetBase.h"
 #include "UI/CFUISubsystem.h"
+
+namespace
+{
+	// [v1.5.0] HUD Provider가 읽을 실제 차량 방어 런타임 묶음입니다.
+	struct FCFHUDDefenseFixture
+	{
+		// [v1.5.0] Provider Source와 실제 피해 대상 역할을 하는 차량 Pawn입니다.
+		ACFVehiclePawn* VehiclePawn = nullptr;
+
+		// [v1.5.0] 차량 Integrity 상태를 소유하는 실제 Health 컴포넌트입니다.
+		UCFVehicleHealthComp* HealthComponent = nullptr;
+
+		// [v1.5.0] Shield·6방향 Armor 상태와 피해 분배를 소유하는 실제 Defense 컴포넌트입니다.
+		UCFVehicleDefenseComp* DefenseComponent = nullptr;
+
+		// [v1.5.0] 이번 Fixture의 Shield·Armor·재생 설정을 제공하는 Transient 방어 데이터입니다.
+		UCFVehicleDefenseData* DefenseData = nullptr;
+	};
+
+	// [v1.5.0] 지정 최대 Shield와 공통 100 Armor를 가진 실제 ACFVehiclePawn 방어 Fixture를 준비합니다.
+	FCFHUDDefenseFixture CreateHUDDefenseFixture(UWorld* TestWorld, const FName PawnName, const float MaximumShield)
+	{
+		// [v1.5.0] 생성한 Pawn과 실제 방어 컴포넌트를 반환할 결과입니다.
+		FCFHUDDefenseFixture Fixture;
+		if (!TestWorld)
+		{
+			return Fixture;
+		}
+
+		// [v1.5.0] 테스트 Pawn에 안정적인 이름을 부여할 Spawn 설정입니다.
+		FActorSpawnParameters SpawnParameters;
+		SpawnParameters.Name = PawnName;
+		Fixture.VehiclePawn = TestWorld->SpawnActor<ACFVehiclePawn>(
+			ACFVehiclePawn::StaticClass(),
+			FVector::ZeroVector,
+			FRotator::ZeroRotator,
+			SpawnParameters);
+		if (!Fixture.VehiclePawn)
+		{
+			return Fixture;
+		}
+
+		Fixture.HealthComponent = Fixture.VehiclePawn->GetVehicleHealthComp();
+		Fixture.DefenseComponent = Fixture.VehiclePawn->GetVehicleDefenseComp();
+
+		// [v1.5.0] Fixture Pawn lifetime에 결합된 Transient VehicleDefenseData 이름입니다.
+		const FName DefenseDataName(*FString::Printf(TEXT("%s_DefenseData"), *PawnName.ToString()));
+		Fixture.DefenseData = NewObject<UCFVehicleDefenseData>(Fixture.VehiclePawn, DefenseDataName);
+		if (!Fixture.HealthComponent || !Fixture.DefenseComponent || !Fixture.DefenseData)
+		{
+			return Fixture;
+		}
+
+		Fixture.DefenseData->bUseShield = true;
+		Fixture.DefenseData->MaximumShield = MaximumShield;
+		Fixture.DefenseData->ShieldRegenerationDelaySeconds = 5.0f;
+		Fixture.DefenseData->ShieldRegenerationPerSecond = 10.0f;
+		Fixture.DefenseData->ArmorResistance = 100.0f;
+		Fixture.DefenseData->FrontArmorConfig.MaximumArmor = 100.0f;
+		Fixture.DefenseData->FrontArmorConfig.DamageMultiplier = 1.0f;
+		Fixture.DefenseData->LeftArmorConfig.MaximumArmor = 100.0f;
+		Fixture.DefenseData->LeftArmorConfig.DamageMultiplier = 1.0f;
+		Fixture.DefenseData->RightArmorConfig.MaximumArmor = 100.0f;
+		Fixture.DefenseData->RightArmorConfig.DamageMultiplier = 1.0f;
+		Fixture.DefenseData->RearArmorConfig.MaximumArmor = 100.0f;
+		Fixture.DefenseData->RearArmorConfig.DamageMultiplier = 1.0f;
+		Fixture.DefenseData->TopArmorConfig.MaximumArmor = 100.0f;
+		Fixture.DefenseData->TopArmorConfig.DamageMultiplier = 1.0f;
+		Fixture.DefenseData->BottomArmorConfig.MaximumArmor = 100.0f;
+		Fixture.DefenseData->BottomArmorConfig.DamageMultiplier = 1.0f;
+
+		Fixture.HealthComponent->InitializeFromVehicleData(nullptr);
+		Fixture.DefenseComponent->Activate(true);
+		Fixture.DefenseComponent->InitializeFromDefenseData(Fixture.DefenseData);
+		return Fixture;
+	}
+
+		// [v1.5.0] 실제 VehicleDefenseComp 정면 피해 진입점에 전달할 Blocking HitContext를 생성합니다.
+	FCFDamageHitContext BuildHUDDefenseHitContext(
+		ACFVehiclePawn* TargetPawn,
+		AActor* InstigatorActor,
+		UCFDamageData* DamageData)
+	{
+		// [v1.5.0] 정면 +X 위치를 사용하는 완성된 방어 피해 컨텍스트입니다.
+		FCFDamageHitContext DamageHitContext;
+		if (!TargetPawn)
+		{
+			return DamageHitContext;
+		}
+
+		DamageHitContext.DamageData = DamageData;
+		DamageHitContext.HitActor = TargetPawn;
+		DamageHitContext.InstigatorActor = InstigatorActor;
+		DamageHitContext.ImpactLocation = TargetPawn->GetActorLocation() + FVector(100.0f, 0.0f, 0.0f);
+		DamageHitContext.ImpactNormal = FVector::ForwardVector;
+		DamageHitContext.IncomingDirection = -FVector::ForwardVector;
+		DamageHitContext.bBlockingHit = true;
+		return DamageHitContext;
+	}
+
+	// [v1.6.0] 저장된 M_VehicleDefensePIE의 실제 PIE Defense SUV와 Provider 3층 ViewData를 검증합니다.
+	class FCFVerifyHUDDefensePIECommand final : public IAutomationLatentCommand
+	{
+	public:
+		// [v1.6.0] 결과를 기록할 Automation Test와 PIE 준비 제한 시간 시작점을 보존합니다.
+		explicit FCFVerifyHUDDefensePIECommand(FAutomationTestBase* InTest)
+			: Test(InTest)
+			, StartTimeSeconds(FPlatformTime::Seconds())
+		{
+		}
+
+		// [v1.6.0] 실제 PIE World의 저장 Defense SUV를 찾아 피해 전후 Provider ViewData를 검증합니다.
+		virtual bool Update() override
+		{
+			// [v1.6.0] 현재 Engine World Context에서 찾은 실제 PIE World입니다.
+			UWorld* PIEWorld = nullptr;
+			if (GEngine)
+			{
+				for (const FWorldContext& WorldContext : GEngine->GetWorldContexts())
+				{
+					if (WorldContext.WorldType == EWorldType::PIE && WorldContext.World())
+					{
+						PIEWorld = WorldContext.World();
+						break;
+					}
+				}
+			}
+
+			// [v1.6.0] PIE World 준비를 기다린 누적 시간입니다.
+			const double ElapsedSeconds = FPlatformTime::Seconds() - StartTimeSeconds;
+			// [v1.6.0] 맵 또는 PIE 시작 실패를 무한 대기하지 않을 제한 시간입니다.
+			constexpr double PIEWorldReadyTimeoutSeconds = 30.0;
+			if (!PIEWorld || !PIEWorld->AreActorsInitialized())
+			{
+				if (ElapsedSeconds >= PIEWorldReadyTimeoutSeconds)
+				{
+					Test->AddError(TEXT("UI-P0-03 DefensePIEViewData: 30초 안에 PIE World 초기화가 완료되지 않았습니다."));
+					return true;
+				}
+				return false;
+			}
+
+			// [v1.6.0] 유효한 정식 DefenseData가 준비된 맵 배치 차량 수입니다.
+			int32 InitializedDefenseVehicleCount = 0;
+			// [v1.6.0] M_VehicleDefensePIE에서 정식 Shield·Armor Runtime을 가진 저장 Defense SUV의 PIE 복제입니다.
+			ACFVehiclePawn* DefenseVehiclePawn = nullptr;
+			for (TActorIterator<ACFVehiclePawn> VehiclePawnIterator(PIEWorld); VehiclePawnIterator; ++VehiclePawnIterator)
+			{
+				// [v1.6.0] 현재 순회 중인 실제 PIE 차량 Pawn입니다.
+				ACFVehiclePawn* CandidateVehiclePawn = *VehiclePawnIterator;
+				if (!IsValid(CandidateVehiclePawn))
+				{
+					continue;
+				}
+
+				// [v1.6.0] 후보 차량의 실제 Shield·Armor Runtime 컴포넌트입니다.
+				UCFVehicleDefenseComp* CandidateDefenseComponent = CandidateVehiclePawn->GetVehicleDefenseComp();
+				if (CandidateDefenseComponent
+					&& CandidateDefenseComponent->IsDefenseInitialized()
+					&& CandidateDefenseComponent->GetActiveDefenseData())
+				{
+					++InitializedDefenseVehicleCount;
+					DefenseVehiclePawn = CandidateVehiclePawn;
+				}
+			}
+
+			Test->TestEqual(TEXT("PIE 정식 Defense 차량 정확히 1대"), InitializedDefenseVehicleCount, 1);
+			if (!Test->TestNotNull(TEXT("PIE 저장 Defense SUV 발견"), DefenseVehiclePawn))
+			{
+				return true;
+			}
+
+			// [v1.6.0] 저장 Defense SUV의 실제 Shield·Armor 컴포넌트입니다.
+			UCFVehicleDefenseComp* DefenseComponent = DefenseVehiclePawn->GetVehicleDefenseComp();
+			// [v1.6.0] 저장 Defense SUV의 실제 Integrity 컴포넌트입니다.
+			UCFVehicleHealthComp* HealthComponent = DefenseVehiclePawn->GetVehicleHealthComp();
+			if (!Test->TestNotNull(TEXT("PIE Defense Component"), DefenseComponent)
+				|| !Test->TestNotNull(TEXT("PIE Health Component"), HealthComponent))
+			{
+				return true;
+			}
+
+			// [v1.6.0] ULocalPlayer/UISubsystem ClassWithin 계약을 만족하는 PIE 기술검증용 Transient LocalPlayer입니다.
+			ULocalPlayer* TestLocalPlayer = GEngine ? NewObject<ULocalPlayer>(GEngine) : nullptr;
+			// [v1.6.0] OnCurrentPawnChanged를 실제 Provider에 전달할 PIE 기술검증용 Transient UISubsystem입니다.
+			UCFUISubsystem* UISubsystem = TestLocalPlayer ? NewObject<UCFUISubsystem>(TestLocalPlayer) : nullptr;
+			// [v1.6.0] 실제 PIE Defense/Health Runtime을 ViewData로 변환할 HUD Provider입니다.
+			UCFHUDDataProvider* DataProvider = NewObject<UCFHUDDataProvider>(GetTransientPackage());
+			if (!Test->TestNotNull(TEXT("PIE HUD LocalPlayer"), TestLocalPlayer)
+				|| !Test->TestNotNull(TEXT("PIE HUD UISubsystem"), UISubsystem)
+				|| !Test->TestNotNull(TEXT("PIE HUD DataProvider"), DataProvider))
+			{
+				return true;
+			}
+
+			Test->TestTrue(TEXT("PIE HUD Provider 초기화"), DataProvider->InitializeProvider(UISubsystem));
+			UISubsystem->OnCurrentPawnChanged.Broadcast(nullptr, DefenseVehiclePawn);
+
+			// [v1.6.0] 저장된 실제 Defense SUV의 피해 전 Provider ViewData입니다.
+			const FCFDefenseHUDData InitialDefenseViewData = DataProvider->GetCurrentViewData().Defense;
+			Test->TestEqual(TEXT("PIE 초기 Defense Availability Known"), InitialDefenseViewData.Availability, ECFUIViewAvailability::Known);
+			Test->TestTrue(TEXT("PIE 초기 Shield 100"), FMath::IsNearlyEqual(InitialDefenseViewData.CurrentShield, 100.0f));
+			Test->TestTrue(TEXT("PIE 초기 Front Armor Ratio 1"), FMath::IsNearlyEqual(InitialDefenseViewData.FrontArmorRatio, 1.0f));
+			Test->TestTrue(TEXT("PIE 초기 Integrity 100"), FMath::IsNearlyEqual(InitialDefenseViewData.CurrentIntegrity, 100.0f));
+
+			// [v1.6.0] 자기 피해 차단과 독립된 PIE 공격 주체입니다.
+			AActor* InstigatorActor = PIEWorld->SpawnActor<AActor>();
+			// [v1.6.0] Shield 100 소진 뒤 남은 100을 AP 50으로 Armor 50 / Integrity 50에 분배할 Transient 피해 데이터입니다.
+			UCFDamageData* DamageData = NewObject<UCFDamageData>(DefenseVehiclePawn, TEXT("HUDDefensePIEDamage"));
+			DamageData->BaseDamage = 200.0f;
+			DamageData->ArmorPenetration = 50.0f;
+			if (!Test->TestNotNull(TEXT("PIE HUD 공격 주체"), InstigatorActor))
+			{
+				DataProvider->ShutdownProvider();
+				return true;
+			}
+
+			// [v1.6.0] 실제 PIE Pawn에 정식 방어 진입점을 적용한 3층 피해 결과입니다.
+			FCFVehicleDamageResult DamageResult;
+			Test->TestTrue(
+				TEXT("PIE 실제 Defense 피해 적용"),
+				UCFVehicleDefenseComp::TryApplyDamageToActor(
+					BuildHUDDefenseHitContext(DefenseVehiclePawn, InstigatorActor, DamageData),
+					DamageResult));
+			Test->TestTrue(TEXT("PIE Shield 흡수 100"), FMath::IsNearlyEqual(DamageResult.DamageAbsorbedByShield, 100.0f));
+			Test->TestTrue(TEXT("PIE Armor 흡수 50"), FMath::IsNearlyEqual(DamageResult.DamageAbsorbedByArmor, 50.0f));
+			Test->TestTrue(TEXT("PIE Integrity 적용 50"), FMath::IsNearlyEqual(DamageResult.DamageAppliedToIntegrity, 50.0f));
+
+			// [v1.6.0] 실제 PIE Shield/Armor/Health 이벤트 직후 Provider가 보존한 손상 ViewData입니다.
+			const FCFDefenseHUDData DamagedDefenseViewData = DataProvider->GetCurrentViewData().Defense;
+			Test->TestEqual(TEXT("PIE Shield 0 KnownZero"), DamagedDefenseViewData.ShieldAvailability, ECFUIViewAvailability::KnownZero);
+			Test->TestTrue(TEXT("PIE 피해 후 Shield Ratio 0"), FMath::IsNearlyZero(DamagedDefenseViewData.ShieldRatio));
+			Test->TestTrue(TEXT("PIE 피해 후 Front Armor Ratio 0.5"), FMath::IsNearlyEqual(DamagedDefenseViewData.FrontArmorRatio, 0.5f));
+			Test->TestTrue(TEXT("PIE 피해 후 Integrity Ratio 0.5"), FMath::IsNearlyEqual(DamagedDefenseViewData.IntegrityRatio, 0.5f));
+
+			Test->AddInfo(FString::Printf(
+				TEXT("UI-P0-03 Defense Technical PIE | Pawn=%s | Shield=%.1f/%.1f | FrontArmorRatio=%.3f | Integrity=%.1f/%.1f | Revision=%d"),
+				*DefenseVehiclePawn->GetPathName(),
+				DamagedDefenseViewData.CurrentShield,
+				DamagedDefenseViewData.MaximumShield,
+				DamagedDefenseViewData.FrontArmorRatio,
+				DamagedDefenseViewData.CurrentIntegrity,
+				DamagedDefenseViewData.MaximumIntegrity,
+				DataProvider->GetCurrentViewData().Revision));
+
+			DataProvider->ShutdownProvider();
+			InstigatorActor->Destroy();
+			return true;
+		}
+
+	private:
+		// [v1.6.0] Latent PIE 검증 결과를 기록할 현재 Automation Test입니다.
+		FAutomationTestBase* Test = nullptr;
+		// [v1.6.0] PIE World 준비 제한 시간을 계산할 시작 시각입니다.
+		double StartTimeSeconds = 0.0;
+	};
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCFHUDViewDataAvailabilityTest,
@@ -46,10 +350,2270 @@ bool FCFHUDViewDataAvailabilityTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Target 기본 상태 Unavailable"), ViewData.Target.Availability, ECFUIViewAvailability::Unavailable);
 	TestEqual(TEXT("Radar 기본 상태 Unavailable"), ViewData.Radar.Availability, ECFUIViewAvailability::Unavailable);
 	TestEqual(TEXT("Alert 기본 상태 Unavailable"), ViewData.Alerts.Availability, ECFUIViewAvailability::Unavailable);
-	TestEqual(TEXT("Engine RPM 기본 상태 Unavailable"), ViewData.Vehicle.EngineRpmAvailability, ECFUIViewAvailability::Unavailable);
+				TestEqual(TEXT("Engine RPM 기본 상태 Unavailable"), ViewData.Vehicle.EngineRpmAvailability, ECFUIViewAvailability::Unavailable);
 	TestEqual(TEXT("Gear 기본 상태 Unavailable"), ViewData.Vehicle.GearAvailability, ECFUIViewAvailability::Unavailable);
 	TestEqual(TEXT("Ammo 기본 상태 Unavailable"), ViewData.Weapon.AmmoAvailability, ECFUIViewAvailability::Unavailable);
 	TestEqual(TEXT("Heat 기본 상태 Unavailable"), ViewData.Weapon.HeatAvailability, ECFUIViewAvailability::Unavailable);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP006MissingProviderAvailabilityTest,
+	"CarFight.UI.UI_P0_06.MissingProviderAvailability",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.7.0] UI-P0-06에서 실제 Provider 부재로 확정한 차량·무기 채널이 정적 설정이나 내부 ID만으로 Known 값으로 승격되지 않는지 검증합니다.
+bool FCFHUDP006MissingProviderAvailabilityTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.7.0] 실제 Gameplay Provider가 연결되지 않은 기본 HUD ViewData입니다.
+	const FCFInGameUIViewData ViewData;
+	TestEqual(TEXT("UI-P0-06 Engine RPM Provider 없음"), ViewData.Vehicle.EngineRpmAvailability, ECFUIViewAvailability::Unavailable);
+	TestEqual(TEXT("UI-P0-06 Gear Provider 없음"), ViewData.Vehicle.GearAvailability, ECFUIViewAvailability::Unavailable);
+			TestEqual(TEXT("UI-P0-06 기본 Weapon DisplayName Source 없음"), ViewData.Weapon.DisplayNameAvailability, ECFUIViewAvailability::Unavailable);
+	TestEqual(TEXT("UI-P0-06 Vehicle Battery Provider 없음"), ViewData.Weapon.VehicleBatteryAvailability, ECFUIViewAvailability::Unavailable);
+	TestEqual(TEXT("UI-P0-06 Weapon Charge Provider 없음"), ViewData.Weapon.WeaponChargeAvailability, ECFUIViewAvailability::Unavailable);
+				TestEqual(TEXT("UI-P0-06 Heat Runtime Provider 없음"), ViewData.Weapon.HeatAvailability, ECFUIViewAvailability::Unavailable);
+	TestEqual(TEXT("UI-P0-06 Provider 없는 기본 Resource Channel 0개"), ViewData.Weapon.ResourceChannels.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP006ResourceChannelProjectionTest,
+	"CarFight.UI.UI_P0_06.ResourceChannelProjection",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.9.0] 기존 실제 Weapon HUD 필드가 공통 Resource Channel로 값 손실 없이 투영되고 Runtime 없는 채널은 생성되지 않는지 검증합니다.
+bool FCFHUDP006ResourceChannelProjectionTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.9.0] 실제 finite Ammo·Cooldown·Reload·Launcher 값을 대표하도록 구성한 기존 Weapon ViewData입니다.
+	FCFWeaponHUDData WeaponViewData;
+	WeaponViewData.Availability = ECFUIViewAvailability::Known;
+	WeaponViewData.AmmoAvailability = ECFUIViewAvailability::Known;
+	WeaponViewData.LoadedAmmoCount = 5;
+	WeaponViewData.MagazineCapacity = 10;
+	WeaponViewData.ReserveAmmoCount = 7;
+	WeaponViewData.CurrentOnboardAmmoCount = 12;
+	WeaponViewData.CooldownAvailability = ECFUIViewAvailability::Known;
+	WeaponViewData.CooldownDurationSeconds = 2.0f;
+	WeaponViewData.RemainingCooldownSeconds = 0.5f;
+	WeaponViewData.ReloadState = ECFWeaponReloadState::Reloading;
+	WeaponViewData.ReloadDurationSeconds = 3.0f;
+	WeaponViewData.RemainingReloadTimeSeconds = 1.5f;
+	WeaponViewData.bWeaponActionLocked = true;
+	WeaponViewData.WeaponActionLockReason = ECFWeaponActionLockReason::Reloading;
+	WeaponViewData.LauncherAvailability = ECFUIViewAvailability::Known;
+	WeaponViewData.bLauncherSequenceActive = true;
+	WeaponViewData.LauncherTotalProjectileCount = 4;
+	WeaponViewData.LauncherAcceptedProjectileCount = 2;
+	WeaponViewData.LauncherRemainingProjectileCount = 2;
+	WeaponViewData.RebuildResourceChannelsFromCurrentFields();
+
+	TestEqual(TEXT("UI-P0-06 실제 Source 공통 Resource Channel 5개"), WeaponViewData.ResourceChannels.Num(), 5);
+	if (WeaponViewData.ResourceChannels.Num() != 5)
+	{
+		return false;
+	}
+
+	// [v1.9.0] 첫 번째 canonical 채널인 실제 장전/탄창 Ammo입니다.
+	const FCFWeaponResourceHUDData& AmmoChannel = WeaponViewData.ResourceChannels[0];
+	TestEqual(TEXT("UI-P0-06 Ammo Channel Type"), AmmoChannel.ChannelType, ECFWeaponResourceChannelType::Ammo);
+	TestEqual(TEXT("UI-P0-06 Ammo DisplayMode CountPair"), AmmoChannel.DisplayMode, ECFWeaponResourceDisplayMode::CountPair);
+	TestTrue(TEXT("UI-P0-06 Ammo Current 5"), FMath::IsNearlyEqual(AmmoChannel.CurrentValue, 5.0f));
+	TestTrue(TEXT("UI-P0-06 Ammo Maximum 10"), FMath::IsNearlyEqual(AmmoChannel.MaximumValue, 10.0f));
+	TestTrue(TEXT("UI-P0-06 Ammo Ratio 0.5"), FMath::IsNearlyEqual(AmmoChannel.NormalizedValue, 0.5f));
+	TestTrue(TEXT("UI-P0-06 Ammo Visible"), AmmoChannel.bIsVisible);
+
+	// [v1.9.0] 두 번째 canonical 채널인 실제 차량 공유 Reserve Ammo입니다.
+	const FCFWeaponResourceHUDData& ReserveAmmoChannel = WeaponViewData.ResourceChannels[1];
+	TestEqual(TEXT("UI-P0-06 Reserve Channel Type"), ReserveAmmoChannel.ChannelType, ECFWeaponResourceChannelType::ReserveAmmo);
+	TestTrue(TEXT("UI-P0-06 Reserve Current 7"), FMath::IsNearlyEqual(ReserveAmmoChannel.CurrentValue, 7.0f));
+	TestTrue(TEXT("UI-P0-06 Reserve Visible"), ReserveAmmoChannel.bIsVisible);
+
+	// [v1.9.0] 세 번째 canonical 채널인 실제 Weapon Cooldown입니다.
+	const FCFWeaponResourceHUDData& CooldownChannel = WeaponViewData.ResourceChannels[2];
+	TestEqual(TEXT("UI-P0-06 Cooldown Channel Type"), CooldownChannel.ChannelType, ECFWeaponResourceChannelType::Cooldown);
+	TestTrue(TEXT("UI-P0-06 Cooldown Remaining 0.5"), FMath::IsNearlyEqual(CooldownChannel.RemainingTimeSeconds, 0.5f));
+	TestTrue(TEXT("UI-P0-06 Cooldown Progress 0.75"), FMath::IsNearlyEqual(CooldownChannel.NormalizedValue, 0.75f));
+	TestTrue(TEXT("UI-P0-06 Cooldown Active"), CooldownChannel.bIsActive);
+	TestTrue(TEXT("UI-P0-06 Cooldown Blocks Fire"), CooldownChannel.bBlocksFire);
+
+	// [v1.9.0] 네 번째 canonical 채널인 실제 Ammo Reload 상태입니다.
+	const FCFWeaponResourceHUDData& ReloadChannel = WeaponViewData.ResourceChannels[3];
+	TestEqual(TEXT("UI-P0-06 Reload Channel Type"), ReloadChannel.ChannelType, ECFWeaponResourceChannelType::Reload);
+	TestTrue(TEXT("UI-P0-06 Reload Remaining 1.5"), FMath::IsNearlyEqual(ReloadChannel.RemainingTimeSeconds, 1.5f));
+	TestTrue(TEXT("UI-P0-06 Reload Progress 0.5"), FMath::IsNearlyEqual(ReloadChannel.NormalizedValue, 0.5f));
+	TestTrue(TEXT("UI-P0-06 Reload Visible"), ReloadChannel.bIsVisible);
+	TestTrue(TEXT("UI-P0-06 Reload actual ActionLock blocks fire"), ReloadChannel.bBlocksFire);
+
+	// [v1.9.0] 다섯 번째 canonical 채널인 실제 Launcher Sequence 상태입니다.
+	const FCFWeaponResourceHUDData& LauncherSequenceChannel = WeaponViewData.ResourceChannels[4];
+	TestEqual(TEXT("UI-P0-06 Launcher Channel Type"), LauncherSequenceChannel.ChannelType, ECFWeaponResourceChannelType::LauncherSequence);
+	TestTrue(TEXT("UI-P0-06 Launcher Accepted 2"), FMath::IsNearlyEqual(LauncherSequenceChannel.CurrentValue, 2.0f));
+	TestTrue(TEXT("UI-P0-06 Launcher Total 4"), FMath::IsNearlyEqual(LauncherSequenceChannel.MaximumValue, 4.0f));
+	TestTrue(TEXT("UI-P0-06 Launcher Progress 0.5"), FMath::IsNearlyEqual(LauncherSequenceChannel.NormalizedValue, 0.5f));
+	TestTrue(TEXT("UI-P0-06 Launcher Visible"), LauncherSequenceChannel.bIsVisible);
+	TestFalse(TEXT("UI-P0-06 Launcher는 Reload ActionLock을 발사 차단으로 오인하지 않음"), LauncherSequenceChannel.bBlocksFire);
+
+	for (const FCFWeaponResourceHUDData& ResourceChannel : WeaponViewData.ResourceChannels)
+	{
+		TestTrue(
+			TEXT("UI-P0-06 Runtime 없는 Battery/Charge/Heat 채널 생성 금지"),
+			ResourceChannel.ChannelType != ECFWeaponResourceChannelType::VehicleBattery
+				&& ResourceChannel.ChannelType != ECFWeaponResourceChannelType::WeaponCharge
+				&& ResourceChannel.ChannelType != ECFWeaponResourceChannelType::Heat);
+	}
+			return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP006ResourcePresenterParityTest,
+	"CarFight.UI.UI_P0_06.ResourcePresenterParity",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.11.0] Production Presenter가 legacy 개별 필드보다 ResourceChannels를 우선 소비하면서 기존 문구·우선순위를 유지하는지 검증합니다.
+bool FCFHUDP006ResourcePresenterParityTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.11.0] Resource Channel 우선 해석을 증명하기 위해 legacy 필드는 의도적으로 충돌 값으로 둔 Weapon ViewData입니다.
+	FCFWeaponHUDData WeaponViewData;
+	WeaponViewData.AmmoAvailability = ECFUIViewAvailability::Unavailable;
+	WeaponViewData.LoadedAmmoCount = 99;
+	WeaponViewData.MagazineCapacity = 99;
+	WeaponViewData.ReserveAmmoCount = 99;
+	WeaponViewData.CurrentOnboardAmmoCount = 99;
+	WeaponViewData.CooldownAvailability = ECFUIViewAvailability::Unavailable;
+	WeaponViewData.CooldownDurationSeconds = 99.0f;
+	WeaponViewData.RemainingCooldownSeconds = 99.0f;
+		WeaponViewData.ReloadState = ECFWeaponReloadState::Ready;
+	WeaponViewData.ReloadDurationSeconds = 99.0f;
+	WeaponViewData.RemainingReloadTimeSeconds = 99.0f;
+	WeaponViewData.LauncherAvailability = ECFUIViewAvailability::Unavailable;
+	WeaponViewData.bLauncherSequenceActive = false;
+	WeaponViewData.LauncherPattern = ECFLauncherFirePattern::Salvo;
+	WeaponViewData.LauncherTotalProjectileCount = 99;
+	WeaponViewData.LauncherAcceptedProjectileCount = 99;
+
+	// [v1.11.0] Presenter가 Primary Ammo `3 / 8`을 만들 실제 공통 Ammo 채널입니다.
+	FCFWeaponResourceHUDData AmmoChannel;
+	AmmoChannel.ChannelType = ECFWeaponResourceChannelType::Ammo;
+	AmmoChannel.DisplayMode = ECFWeaponResourceDisplayMode::CountPair;
+	AmmoChannel.Availability = ECFUIViewAvailability::Known;
+	AmmoChannel.bHasCurrentValue = true;
+	AmmoChannel.CurrentValue = 3.0f;
+	AmmoChannel.bHasMaximumValue = true;
+	AmmoChannel.MaximumValue = 8.0f;
+	AmmoChannel.bIsActive = true;
+	AmmoChannel.bIsVisible = true;
+	AmmoChannel.bBlocksFire = false;
+	WeaponViewData.ResourceChannels.Add(AmmoChannel);
+
+	// [v1.11.0] Presenter가 label-less Reserve `6`을 만들 실제 공통 ReserveAmmo 채널입니다.
+	FCFWeaponResourceHUDData ReserveAmmoChannel;
+	ReserveAmmoChannel.ChannelType = ECFWeaponResourceChannelType::ReserveAmmo;
+	ReserveAmmoChannel.DisplayMode = ECFWeaponResourceDisplayMode::Count;
+	ReserveAmmoChannel.Availability = ECFUIViewAvailability::Known;
+	ReserveAmmoChannel.bHasCurrentValue = true;
+	ReserveAmmoChannel.CurrentValue = 6.0f;
+	ReserveAmmoChannel.bIsActive = true;
+	ReserveAmmoChannel.bIsVisible = true;
+	WeaponViewData.ResourceChannels.Add(ReserveAmmoChannel);
+
+	// [v1.11.0] Presenter 우선순위 최상단 Reload를 검증할 실제 공통 Reload 채널입니다.
+	FCFWeaponResourceHUDData ReloadChannel;
+	ReloadChannel.ChannelType = ECFWeaponResourceChannelType::Reload;
+	ReloadChannel.DisplayMode = ECFWeaponResourceDisplayMode::TimeRemaining;
+	ReloadChannel.Availability = ECFUIViewAvailability::Known;
+	ReloadChannel.bHasMaximumValue = true;
+	ReloadChannel.MaximumValue = 4.0f;
+	ReloadChannel.bHasNormalizedValue = true;
+	ReloadChannel.NormalizedValue = 0.75f;
+	ReloadChannel.bHasRemainingTimeSeconds = true;
+	ReloadChannel.RemainingTimeSeconds = 1.0f;
+	ReloadChannel.bIsActive = true;
+	ReloadChannel.bIsVisible = true;
+	ReloadChannel.bBlocksFire = true;
+	WeaponViewData.ResourceChannels.Add(ReloadChannel);
+
+	// [v1.11.0] Reload가 끝난 뒤 Cooldown/READY를 검증할 실제 공통 Cooldown 채널입니다.
+	FCFWeaponResourceHUDData CooldownChannel;
+	CooldownChannel.ChannelType = ECFWeaponResourceChannelType::Cooldown;
+	CooldownChannel.DisplayMode = ECFWeaponResourceDisplayMode::TimeRemaining;
+	CooldownChannel.Availability = ECFUIViewAvailability::Known;
+	CooldownChannel.bHasMaximumValue = true;
+	CooldownChannel.MaximumValue = 2.0f;
+	CooldownChannel.bHasNormalizedValue = true;
+	CooldownChannel.NormalizedValue = 0.75f;
+	CooldownChannel.bHasRemainingTimeSeconds = true;
+	CooldownChannel.RemainingTimeSeconds = 0.5f;
+	CooldownChannel.bIsActive = true;
+	CooldownChannel.bIsVisible = true;
+	CooldownChannel.bBlocksFire = true;
+	WeaponViewData.ResourceChannels.Add(CooldownChannel);
+
+	// [v1.11.0] Launcher 문구와 진행률을 legacy 99/99 대신 2/4로 만들 실제 공통 LauncherSequence 채널입니다.
+	FCFWeaponResourceHUDData LauncherSequenceChannel;
+	LauncherSequenceChannel.ChannelType = ECFWeaponResourceChannelType::LauncherSequence;
+	LauncherSequenceChannel.DisplayMode = ECFWeaponResourceDisplayMode::Sequence;
+	LauncherSequenceChannel.Availability = ECFUIViewAvailability::Known;
+	LauncherSequenceChannel.bHasCurrentValue = true;
+	LauncherSequenceChannel.CurrentValue = 2.0f;
+	LauncherSequenceChannel.bHasMaximumValue = true;
+	LauncherSequenceChannel.MaximumValue = 4.0f;
+	LauncherSequenceChannel.bHasNormalizedValue = true;
+	LauncherSequenceChannel.NormalizedValue = 0.5f;
+	LauncherSequenceChannel.bIsActive = true;
+	LauncherSequenceChannel.bIsVisible = true;
+	WeaponViewData.ResourceChannels.Add(LauncherSequenceChannel);
+
+	// [v1.11.0] 공통 Ammo 채널에서 해석된 Primary Ammo 문구입니다.
+	FText AmmoText;
+	TestTrue(TEXT("UI-P0-06 Presenter Resource Ammo 표시"), UCFHUDPresenter::ResolveAmmoPresentation(WeaponViewData, AmmoText));
+	TestEqual(TEXT("UI-P0-06 Presenter Resource Ammo 3 / 8"), AmmoText.ToString(), FString(TEXT("3 / 8")));
+
+	// [v1.11.0] 공통 ReserveAmmo 채널에서 해석된 label-less Reserve 문구입니다.
+	FText ReserveAmmoText;
+	TestTrue(TEXT("UI-P0-06 Presenter Resource Reserve 표시"), UCFHUDPresenter::ResolveReserveAmmoPresentation(WeaponViewData, ReserveAmmoText));
+	TestEqual(TEXT("UI-P0-06 Presenter Resource Reserve 6"), ReserveAmmoText.ToString(), FString(TEXT("6")));
+
+	// [v1.11.0] Reload > NoAmmo > Cooldown 우선순위 첫 단계에서 해석된 상태 문구입니다.
+	FText WeaponStatusText;
+	// [v1.11.0] Reload Resource Channel이 제공한 실제 0~1 진행률입니다.
+	float WeaponStatusProgress = 0.0f;
+	TestTrue(TEXT("UI-P0-06 Presenter Resource Reload 표시"), UCFHUDPresenter::ResolveWeaponStatusPresentation(WeaponViewData, false, WeaponStatusText, WeaponStatusProgress));
+	TestEqual(TEXT("UI-P0-06 Presenter Resource Reload 문구"), WeaponStatusText.ToString(), FString(TEXT("RELOAD 1.0 / 4.0 s")));
+	TestTrue(TEXT("UI-P0-06 Presenter Resource Reload Progress 0.75"), FMath::IsNearlyEqual(WeaponStatusProgress, 0.75f));
+
+	// [v1.11.0] Reload 종료 뒤 NoAmmo를 검증하기 위해 공통 Reload 채널을 비활성화합니다.
+	WeaponViewData.ResourceChannels[2].bIsActive = false;
+	WeaponViewData.ResourceChannels[2].bIsVisible = false;
+	// [v1.11.0] 실제 Ammo Resource의 fire blocker를 켜 NoAmmo 상태를 만듭니다.
+	WeaponViewData.ResourceChannels[0].bBlocksFire = true;
+	TestTrue(TEXT("UI-P0-06 Presenter Resource NoAmmo 표시"), UCFHUDPresenter::ResolveWeaponStatusPresentation(WeaponViewData, false, WeaponStatusText, WeaponStatusProgress));
+	TestEqual(TEXT("UI-P0-06 Presenter Resource NoAmmo 문구"), WeaponStatusText.ToString(), FString(TEXT("NO AMMO")));
+
+	// [v1.11.0] NoAmmo 해제 뒤 Cooldown Resource가 상태를 소유하도록 실제 Ammo blocker를 해제합니다.
+	WeaponViewData.ResourceChannels[0].bBlocksFire = false;
+	TestTrue(TEXT("UI-P0-06 Presenter Resource Cooldown 표시"), UCFHUDPresenter::ResolveWeaponStatusPresentation(WeaponViewData, false, WeaponStatusText, WeaponStatusProgress));
+	TestEqual(TEXT("UI-P0-06 Presenter Resource Cooldown 문구"), WeaponStatusText.ToString(), FString(TEXT("0.5 s")));
+	TestTrue(TEXT("UI-P0-06 Presenter Resource Cooldown Progress 0.75"), FMath::IsNearlyEqual(WeaponStatusProgress, 0.75f));
+
+	// [v1.11.0] Resource Launcher current/max와 legacy FirePattern을 조합한 Player-facing Sequence 문구입니다.
+	FText LauncherSequenceText;
+	// [v1.11.0] Resource Launcher current/max에서 계산한 실제 Sequence 진행률입니다.
+	float LauncherSequenceProgress = 0.0f;
+	TestTrue(TEXT("UI-P0-06 Presenter Resource Launcher 표시"), UCFHUDPresenter::ResolveLauncherSequencePresentation(WeaponViewData, LauncherSequenceText, LauncherSequenceProgress));
+	TestEqual(TEXT("UI-P0-06 Presenter Resource Launcher SALVO 2 / 4"), LauncherSequenceText.ToString(), FString(TEXT("SALVO 2 / 4")));
+		TestTrue(TEXT("UI-P0-06 Presenter Resource Launcher Progress 0.5"), FMath::IsNearlyEqual(LauncherSequenceProgress, 0.5f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP006ResourcePresentationProjectionTest,
+	"CarFight.UI.UI_P0_06.ResourcePresentationProjection",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.12.0] raw ResourceChannels를 직접 Row로 만들지 않고 Compact Primary/Secondary/FireState Projection과 기존 Launcher lifecycle을 보존하는지 검증합니다.
+bool FCFHUDP006ResourcePresentationProjectionTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.12.0] LauncherSequenceRevision Presentation lifecycle을 실제 Stage A Projection에서 한 번씩 소비할 Presenter입니다.
+	UCFHUDPresenter* Presenter = NewObject<UCFHUDPresenter>(GetTransientPackage());
+	if (!TestNotNull(TEXT("UI-P0-06 Resource Projection Presenter"), Presenter))
+	{
+		return false;
+	}
+
+	// [v1.12.0] Ammo Primary, Header Reserve, Cooldown FireState와 후속 Launcher 전이를 함께 검증할 Weapon ViewData입니다.
+	FCFWeaponHUDData WeaponViewData;
+	WeaponViewData.Availability = ECFUIViewAvailability::Known;
+	WeaponViewData.WeaponId = FName(TEXT("ProjectionWeapon"));
+	WeaponViewData.LauncherPattern = ECFLauncherFirePattern::Salvo;
+
+	// [v1.12.0] 평상시 Compact Primary `3 / 8`을 제공하는 실제 공통 Ammo 채널입니다.
+	FCFWeaponResourceHUDData AmmoChannel;
+	AmmoChannel.ChannelType = ECFWeaponResourceChannelType::Ammo;
+	AmmoChannel.DisplayMode = ECFWeaponResourceDisplayMode::CountPair;
+	AmmoChannel.Availability = ECFUIViewAvailability::Known;
+	AmmoChannel.bHasCurrentValue = true;
+	AmmoChannel.CurrentValue = 3.0f;
+	AmmoChannel.bHasMaximumValue = true;
+	AmmoChannel.MaximumValue = 8.0f;
+	AmmoChannel.bIsActive = true;
+	AmmoChannel.bIsVisible = true;
+	AmmoChannel.bBlocksFire = false;
+	WeaponViewData.ResourceChannels.Add(AmmoChannel);
+
+	// [v1.12.0] Presentation Entry가 아니라 기존 Header 우측 label-less owner로 남아야 하는 ReserveAmmo 채널입니다.
+	FCFWeaponResourceHUDData ReserveAmmoChannel;
+	ReserveAmmoChannel.ChannelType = ECFWeaponResourceChannelType::ReserveAmmo;
+	ReserveAmmoChannel.DisplayMode = ECFWeaponResourceDisplayMode::Count;
+	ReserveAmmoChannel.Availability = ECFUIViewAvailability::Known;
+	ReserveAmmoChannel.bHasCurrentValue = true;
+	ReserveAmmoChannel.CurrentValue = 6.0f;
+	ReserveAmmoChannel.bIsActive = true;
+	ReserveAmmoChannel.bIsVisible = true;
+	WeaponViewData.ResourceChannels.Add(ReserveAmmoChannel);
+
+	// [v1.12.0] Launcher가 없을 때 기존 Weapon Status가 `0.5 s` FireState를 만들 Cooldown 채널입니다.
+	FCFWeaponResourceHUDData CooldownChannel;
+	CooldownChannel.ChannelType = ECFWeaponResourceChannelType::Cooldown;
+	CooldownChannel.DisplayMode = ECFWeaponResourceDisplayMode::TimeRemaining;
+	CooldownChannel.Availability = ECFUIViewAvailability::Known;
+	CooldownChannel.bHasMaximumValue = true;
+	CooldownChannel.MaximumValue = 2.0f;
+	CooldownChannel.bHasNormalizedValue = true;
+	CooldownChannel.NormalizedValue = 0.75f;
+	CooldownChannel.bHasRemainingTimeSeconds = true;
+	CooldownChannel.RemainingTimeSeconds = 0.5f;
+	CooldownChannel.bIsActive = true;
+	CooldownChannel.bIsVisible = true;
+	CooldownChannel.bBlocksFire = true;
+	WeaponViewData.ResourceChannels.Add(CooldownChannel);
+
+	// [v1.12.0] Stage A Presenter가 현재 ViewData에서 만든 Compact Presentation Entry 목록입니다.
+	TArray<FCFWeaponResourcePresentationEntry> PresentationEntries;
+	Presenter->BuildWeaponResourceEntries(WeaponViewData, PresentationEntries);
+
+	TestEqual(TEXT("UI-P0-06 Projection 평상시 Entry 2개"), PresentationEntries.Num(), 2);
+	if (PresentationEntries.Num() != 2)
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("UI-P0-06 Projection 평상시 Primary 역할"), PresentationEntries[0].Role, ECFWeaponResourcePresentationRole::Primary);
+	TestEqual(TEXT("UI-P0-06 Projection 평상시 Primary Ammo"), PresentationEntries[0].SourceChannelType, ECFWeaponResourceChannelType::Ammo);
+	TestEqual(TEXT("UI-P0-06 Projection 평상시 Ammo 3 / 8"), PresentationEntries[0].DisplayText.ToString(), FString(TEXT("3 / 8")));
+	TestFalse(TEXT("UI-P0-06 Projection Ammo Progress 없음"), PresentationEntries[0].bHasProgress);
+	TestEqual(TEXT("UI-P0-06 Projection 평상시 FireState 역할"), PresentationEntries[1].Role, ECFWeaponResourcePresentationRole::FireState);
+	TestEqual(TEXT("UI-P0-06 Projection 복합 FireState Source None"), PresentationEntries[1].SourceChannelType, ECFWeaponResourceChannelType::None);
+	TestEqual(TEXT("UI-P0-06 Projection Cooldown 0.5 s"), PresentationEntries[1].DisplayText.ToString(), FString(TEXT("0.5 s")));
+	TestTrue(TEXT("UI-P0-06 Projection Cooldown Progress 0.75"), FMath::IsNearlyEqual(PresentationEntries[1].Progress01, 0.75f));
+
+	// [v1.12.0] Reserve/Battery/Charge/Heat가 Compact Entry로 새지 않았는지 세는 현재 Secondary 개수입니다.
+	int32 SecondaryEntryCount = 0;
+	for (const FCFWeaponResourcePresentationEntry& PresentationEntry : PresentationEntries)
+	{
+		if (PresentationEntry.Role == ECFWeaponResourcePresentationRole::Secondary)
+		{
+			++SecondaryEntryCount;
+		}
+		TestTrue(
+			TEXT("UI-P0-06 Projection Reserve/Battery/Charge/Heat Entry 금지"),
+			PresentationEntry.SourceChannelType != ECFWeaponResourceChannelType::ReserveAmmo
+				&& PresentationEntry.SourceChannelType != ECFWeaponResourceChannelType::VehicleBattery
+				&& PresentationEntry.SourceChannelType != ECFWeaponResourceChannelType::WeaponCharge
+				&& PresentationEntry.SourceChannelType != ECFWeaponResourceChannelType::Heat);
+	}
+	TestTrue(TEXT("UI-P0-06 Projection Secondary 최대 2"), SecondaryEntryCount <= 2);
+
+	// [v1.12.0] Cooldown과 동시에 존재해도 기존 우선순위로 단일 FireState만 소유할 실제 Reload 채널입니다.
+	FCFWeaponResourceHUDData ReloadChannel;
+	ReloadChannel.ChannelType = ECFWeaponResourceChannelType::Reload;
+	ReloadChannel.DisplayMode = ECFWeaponResourceDisplayMode::TimeRemaining;
+	ReloadChannel.Availability = ECFUIViewAvailability::Known;
+	ReloadChannel.bHasMaximumValue = true;
+	ReloadChannel.MaximumValue = 4.0f;
+	ReloadChannel.bHasNormalizedValue = true;
+	ReloadChannel.NormalizedValue = 0.75f;
+	ReloadChannel.bHasRemainingTimeSeconds = true;
+	ReloadChannel.RemainingTimeSeconds = 1.0f;
+	ReloadChannel.bIsActive = true;
+	ReloadChannel.bIsVisible = true;
+	ReloadChannel.bBlocksFire = true;
+	WeaponViewData.ResourceChannels.Add(ReloadChannel);
+	Presenter->BuildWeaponResourceEntries(WeaponViewData, PresentationEntries);
+
+	TestEqual(TEXT("UI-P0-06 Projection Reload 동시 Entry 2개"), PresentationEntries.Num(), 2);
+	if (PresentationEntries.Num() != 2)
+	{
+		return false;
+	}
+	TestEqual(TEXT("UI-P0-06 Projection Reload 단일 FireState"), PresentationEntries[1].Role, ECFWeaponResourcePresentationRole::FireState);
+	TestEqual(TEXT("UI-P0-06 Projection Reload 우선 문구"), PresentationEntries[1].DisplayText.ToString(), FString(TEXT("RELOAD 1.0 / 4.0 s")));
+	TestTrue(TEXT("UI-P0-06 Projection Reload Progress 0.75"), FMath::IsNearlyEqual(PresentationEntries[1].Progress01, 0.75f));
+
+	// [v1.12.0] Launcher Active에서 기존 Sequence lifecycle을 Compact Primary로 승격할 실제 LauncherSequence 채널입니다.
+	FCFWeaponResourceHUDData LauncherSequenceChannel;
+	LauncherSequenceChannel.ChannelType = ECFWeaponResourceChannelType::LauncherSequence;
+	LauncherSequenceChannel.DisplayMode = ECFWeaponResourceDisplayMode::Sequence;
+	LauncherSequenceChannel.Availability = ECFUIViewAvailability::Known;
+	LauncherSequenceChannel.bHasCurrentValue = true;
+	LauncherSequenceChannel.CurrentValue = 2.0f;
+	LauncherSequenceChannel.bHasMaximumValue = true;
+	LauncherSequenceChannel.MaximumValue = 4.0f;
+	LauncherSequenceChannel.bHasNormalizedValue = true;
+	LauncherSequenceChannel.NormalizedValue = 0.5f;
+	LauncherSequenceChannel.bIsActive = true;
+	LauncherSequenceChannel.bIsVisible = true;
+	LauncherSequenceChannel.bBlocksFire = true;
+	WeaponViewData.ResourceChannels.Add(LauncherSequenceChannel);
+	WeaponViewData.LauncherSequenceRevision = 10;
+	Presenter->BuildWeaponResourceEntries(WeaponViewData, PresentationEntries);
+
+	TestEqual(TEXT("UI-P0-06 Projection Launcher Active Entry 2개"), PresentationEntries.Num(), 2);
+	if (PresentationEntries.Num() != 2)
+	{
+		return false;
+	}
+	TestEqual(TEXT("UI-P0-06 Projection Launcher Primary"), PresentationEntries[0].Role, ECFWeaponResourcePresentationRole::Primary);
+	TestEqual(TEXT("UI-P0-06 Projection Launcher Source"), PresentationEntries[0].SourceChannelType, ECFWeaponResourceChannelType::LauncherSequence);
+	TestEqual(TEXT("UI-P0-06 Projection Launcher SALVO 2 / 4"), PresentationEntries[0].DisplayText.ToString(), FString(TEXT("SALVO 2 / 4")));
+	TestTrue(TEXT("UI-P0-06 Projection Launcher Progress 0.5"), FMath::IsNearlyEqual(PresentationEntries[0].Progress01, 0.5f));
+	TestEqual(TEXT("UI-P0-06 Projection Launcher 중 Ammo Secondary"), PresentationEntries[1].Role, ECFWeaponResourcePresentationRole::Secondary);
+	TestEqual(TEXT("UI-P0-06 Projection Launcher 중 Ammo 유지"), PresentationEntries[1].SourceChannelType, ECFWeaponResourceChannelType::Ammo);
+	TestEqual(TEXT("UI-P0-06 Projection Launcher 중 Ammo 3 / 8"), PresentationEntries[1].DisplayText.ToString(), FString(TEXT("3 / 8")));
+
+	// [v1.12.0] Active 뒤 실제 terminal Revision에서 정확히 한 ViewData 주기 표시할 Launcher 채널 배열 인덱스입니다.
+	const int32 LauncherChannelIndex = WeaponViewData.ResourceChannels.Num() - 1;
+	WeaponViewData.ResourceChannels[LauncherChannelIndex].bIsActive = false;
+	WeaponViewData.ResourceChannels[LauncherChannelIndex].CurrentValue = 4.0f;
+	WeaponViewData.ResourceChannels[LauncherChannelIndex].NormalizedValue = 1.0f;
+	WeaponViewData.LauncherSequenceRevision = 11;
+	Presenter->BuildWeaponResourceEntries(WeaponViewData, PresentationEntries);
+
+	TestEqual(TEXT("UI-P0-06 Projection Launcher Terminal Entry 2개"), PresentationEntries.Num(), 2);
+	if (PresentationEntries.Num() != 2)
+	{
+		return false;
+	}
+	TestEqual(TEXT("UI-P0-06 Projection terminal SALVO 4 / 4"), PresentationEntries[0].DisplayText.ToString(), FString(TEXT("SALVO 4 / 4")));
+	TestTrue(TEXT("UI-P0-06 Projection terminal Progress 1"), FMath::IsNearlyEqual(PresentationEntries[0].Progress01, 1.0f));
+	TestEqual(TEXT("UI-P0-06 Projection terminal에서도 Ammo Secondary"), PresentationEntries[1].SourceChannelType, ECFWeaponResourceChannelType::Ammo);
+
+	// [v1.12.0] Terminal 한 주기 뒤 Cooldown 복귀를 확인하기 위해 Reload를 비활성화할 배열 인덱스입니다.
+	const int32 ReloadChannelIndex = LauncherChannelIndex - 1;
+	WeaponViewData.ResourceChannels[ReloadChannelIndex].bIsActive = false;
+	WeaponViewData.ResourceChannels[ReloadChannelIndex].bIsVisible = false;
+	WeaponViewData.ResourceChannels[ReloadChannelIndex].bBlocksFire = false;
+	Presenter->BuildWeaponResourceEntries(WeaponViewData, PresentationEntries);
+
+	TestEqual(TEXT("UI-P0-06 Projection terminal 다음 Entry 2개"), PresentationEntries.Num(), 2);
+	if (PresentationEntries.Num() != 2)
+	{
+		return false;
+	}
+	TestEqual(TEXT("UI-P0-06 Projection terminal 다음 Ammo Primary"), PresentationEntries[0].SourceChannelType, ECFWeaponResourceChannelType::Ammo);
+	TestEqual(TEXT("UI-P0-06 Projection terminal 다음 FireState"), PresentationEntries[1].Role, ECFWeaponResourcePresentationRole::FireState);
+	TestEqual(TEXT("UI-P0-06 Projection terminal 다음 Cooldown"), PresentationEntries[1].DisplayText.ToString(), FString(TEXT("0.5 s")));
+		TestTrue(TEXT("UI-P0-06 Projection terminal 다음 Cooldown Progress"), FMath::IsNearlyEqual(PresentationEntries[1].Progress01, 0.75f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP006HeatResourceTest,
+	"CarFight.UI.UI_P0_06.HeatRuntimeResourceContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.18.0] explicit Heat Runtime의 누적·냉각·과열과 실제 Resource Channel→Compact Presentation을 기존 Ammo/Reload/Cooldown/Launcher 계약 안에서 검증합니다.
+bool FCFHUDP006HeatResourceTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.18.0] 실제 WeaponComp와 같은 순수 상태 전이 계약을 검증할 Heat Runtime입니다.
+	FCFWeaponHeatRuntime HeatRuntime;
+	HeatRuntime.Configure(25.0f, 100.0f, 10.0f);
+	TestTrue(TEXT("UI-P0-06 Heat Runtime explicit config 활성"), HeatRuntime.IsEnabled());
+	TestTrue(TEXT("UI-P0-06 Heat Runtime 초기 발사 가능"), HeatRuntime.CanAcceptShot());
+	TestTrue(TEXT("UI-P0-06 Heat Runtime recovery threshold 75"), FMath::IsNearlyEqual(HeatRuntime.GetRecoveryHeatThreshold(), 75.0f));
+
+	HeatRuntime.RecordAcceptedShot();
+	HeatRuntime.RecordAcceptedShot();
+	HeatRuntime.RecordAcceptedShot();
+	TestTrue(TEXT("UI-P0-06 Heat 3발 누적 75"), FMath::IsNearlyEqual(HeatRuntime.GetCurrentHeat(), 75.0f));
+	TestFalse(TEXT("UI-P0-06 Heat 75는 아직 과열 아님"), HeatRuntime.IsOverheated());
+
+	HeatRuntime.RecordAcceptedShot();
+	TestTrue(TEXT("UI-P0-06 Heat 4발 Max 100"), FMath::IsNearlyEqual(HeatRuntime.GetCurrentHeat(), 100.0f));
+	TestTrue(TEXT("UI-P0-06 MaxHeat 도달 과열"), HeatRuntime.IsOverheated());
+	TestFalse(TEXT("UI-P0-06 과열 중 발사 차단"), HeatRuntime.CanAcceptShot());
+
+	HeatRuntime.RecordAcceptedShot();
+	TestTrue(TEXT("UI-P0-06 과열 중 추가 누적 없음"), FMath::IsNearlyEqual(HeatRuntime.GetCurrentHeat(), 100.0f));
+	HeatRuntime.AdvanceCooling(2.0f);
+	TestTrue(TEXT("UI-P0-06 2초 자연 냉각 80"), FMath::IsNearlyEqual(HeatRuntime.GetCurrentHeat(), 80.0f));
+	TestTrue(TEXT("UI-P0-06 recovery threshold 위에서는 과열 유지"), HeatRuntime.IsOverheated());
+	HeatRuntime.AdvanceCooling(0.5f);
+	TestTrue(TEXT("UI-P0-06 2.5초 자연 냉각 75"), FMath::IsNearlyEqual(HeatRuntime.GetCurrentHeat(), 75.0f));
+	TestFalse(TEXT("UI-P0-06 다음 한 발 headroom에서 과열 해제"), HeatRuntime.IsOverheated());
+	TestTrue(TEXT("UI-P0-06 냉각 후 재사용 가능"), HeatRuntime.CanAcceptShot());
+
+	// [v1.18.0] 기존 Asset처럼 냉각 입력이 0인 경우 Heat Runtime이 발사 결과를 바꾸지 않는 호환 상태입니다.
+	FCFWeaponHeatRuntime DisabledHeatRuntime;
+	DisabledHeatRuntime.Configure(25.0f, 100.0f, 0.0f);
+		TestFalse(TEXT("UI-P0-06 HeatDissipation 0은 Runtime 비활성"), DisabledHeatRuntime.IsEnabled());
+	TestTrue(TEXT("UI-P0-06 Heat Runtime 비활성은 발사 차단 안 함"), DisabledHeatRuntime.CanAcceptShot());
+
+	// [v1.18.1] 실제 ACFVehiclePawn accepted-fire 경로와 UCFVehicleWeaponComp Heat owner를 함께 검증할 transient Automation World입니다.
+	UWorld* HeatIntegrationWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("UI-P0-06 Heat Integration World"), HeatIntegrationWorld))
+	{
+		return false;
+	}
+
+	// [v1.18.1] 실제 WeaponComp와 Fire 실행 경로를 기본 서브오브젝트로 소유할 transient 차량입니다.
+	ACFVehiclePawn* HeatVehiclePawn = HeatIntegrationWorld->SpawnActor<ACFVehiclePawn>();
+	if (!TestNotNull(TEXT("UI-P0-06 Heat Integration Vehicle Pawn"), HeatVehiclePawn))
+	{
+		return false;
+	}
+
+	// [v1.18.1] 실제 per-weapon Heat 상태를 소유할 차량 무기 컴포넌트입니다.
+	UCFVehicleWeaponComp* HeatVehicleWeaponComp = HeatVehiclePawn->GetVehicleWeaponComp();
+	if (!TestNotNull(TEXT("UI-P0-06 Heat Integration WeaponComp"), HeatVehicleWeaponComp))
+	{
+		HeatVehiclePawn->Destroy();
+		return false;
+	}
+
+	// [v1.18.1] 테스트 무기를 활성 MountProfile의 단일 EquipmentPreset source로 연결할 transient Preset입니다.
+	UCFEquipmentPresetData* HeatEquipmentPresetData = NewObject<UCFEquipmentPresetData>(GetTransientPackage());
+	HeatEquipmentPresetData->EquipmentId = TEXT("UI_P006_HeatPreset");
+	HeatEquipmentPresetData->RequiredMountType = ECFVehicleMountType::Turret;
+	HeatEquipmentPresetData->RequiredWeaponSize = ECFVehicleWeaponSize::Large;
+
+	// [v1.18.1] 기존 Asset 값을 건드리지 않고 explicit Heat 25/100/10을 실제 WeaponComp에 공급할 transient WeaponData입니다.
+	UCFWeaponData* HeatWeaponData = NewObject<UCFWeaponData>(GetTransientPackage());
+	HeatWeaponData->WeaponId = TEXT("UI_P006_HeatWeapon");
+	HeatWeaponData->WeaponSize = ECFVehicleWeaponSize::Large;
+	HeatWeaponData->CompatibleMountTypes.Reset();
+	HeatWeaponData->CompatibleMountTypes.Add(ECFVehicleMountType::Turret);
+	HeatWeaponData->FireMode = ECFWeaponFireMode::HitScan;
+	HeatWeaponData->FireRatePerMinute = 0.0f;
+	HeatWeaponData->bUseInfiniteAmmoForDebug = true;
+	HeatWeaponData->HeatPerShot = 25.0f;
+	HeatWeaponData->MaxHeat = 100.0f;
+	HeatWeaponData->HeatDissipationPerSecond = 10.0f;
+	HeatEquipmentPresetData->DefaultWeaponData = HeatWeaponData;
+
+	// [v1.18.1] 활성 MountProfile이 참조할 최소 위치 슬롯과 WeaponData source를 제공할 transient VehicleData입니다.
+	UCFVehicleData* HeatVehicleData = NewObject<UCFVehicleData>(GetTransientPackage());
+	// [v1.18.1] 테스트 MountProfile이 사용할 최소 하드포인트 슬롯입니다.
+	FCFVehicleHardpointSlot HeatHardpointSlot;
+	HeatHardpointSlot.LocationSlotId = TEXT("Top_Heat_01");
+	HeatHardpointSlot.LocationCategory = TEXT("Top");
+	HeatHardpointSlot.LocalLocation = FVector::ZeroVector;
+	HeatVehicleData->HardpointSlots.Add(HeatHardpointSlot);
+
+	// [v1.18.1] WeaponComp 기본 활성 ID와 일치해 transient Heat WeaponData를 실제 활성 무기로 만드는 MountProfile입니다.
+	FCFVehicleMountProfile HeatMountProfile;
+	HeatMountProfile.MountProfileId = TEXT("RoofTurret_MediumOrLarge");
+	HeatMountProfile.LocationSlotRef = HeatHardpointSlot.LocationSlotId;
+	HeatMountProfile.MountType = ECFVehicleMountType::Turret;
+	HeatMountProfile.SizeLimit = ECFVehicleWeaponSize::Large;
+	HeatMountProfile.DefaultEquipmentPresetData = HeatEquipmentPresetData;
+	HeatVehicleData->MountProfiles.Add(HeatMountProfile);
+
+	TestTrue(TEXT("UI-P0-06 actual WeaponComp Heat Runtime 초기화"), HeatVehicleWeaponComp->InitializeWeaponRuntime(HeatVehiclePawn, HeatVehicleData));
+	TestTrue(TEXT("UI-P0-06 actual WeaponComp Heat Runtime 활성"), HeatVehicleWeaponComp->IsActiveWeaponHeatRuntimeEnabled());
+
+	for (int32 AcceptedShotIndex = 0; AcceptedShotIndex < 4; ++AcceptedShotIndex)
+	{
+		// [v1.18.1] 빈 Automation World에서 실제 HitScan Miss를 발생시키되 승인 발사로 처리할 요청입니다.
+		FCFVehicleFireRequest HeatFireRequest;
+		HeatFireRequest.FireRequestId = AcceptedShotIndex + 1;
+		HeatFireRequest.AimOrigin = FVector(0.0f, 0.0f, 2000.0f);
+		HeatFireRequest.AimDirection = FVector::ForwardVector;
+		HeatFireRequest.PredictedAimTargetLocation = FVector(5000.0f, 0.0f, 2000.0f);
+		HeatFireRequest.ClientFireTimeSeconds = static_cast<float>(AcceptedShotIndex + 1);
+		HeatFireRequest.WeaponGroupId = HeatMountProfile.MountProfileId;
+
+		// [v1.18.1] Validate 승인 직후와 같은 상태에서 Execute→Apply 실제 발사 후처리 경계를 검증할 결과입니다.
+		FCFVehicleFireResult HeatFireResult;
+		HeatFireResult.FireRequestId = HeatFireRequest.FireRequestId;
+		HeatFireResult.ValidationAimTargetLocation = HeatFireRequest.PredictedAimTargetLocation;
+		HeatFireResult.LocalHitLocation = HeatFireRequest.PredictedAimTargetLocation;
+		HeatFireResult.bAccepted = true;
+		HeatFireResult.RejectReason = ECFVehicleFireRejectReason::None;
+
+		TestTrue(TEXT("UI-P0-06 actual accepted HitScan 실행"), HeatVehiclePawn->ExecuteAcceptedFireCommand(HeatFireRequest, HeatFireResult, nullptr, true));
+		TestTrue(TEXT("UI-P0-06 actual accepted HitScan 결과 유지"), HeatFireResult.bAccepted);
+		HeatVehiclePawn->ApplyFireResult(HeatFireRequest, HeatFireResult);
+		TestTrue(
+			TEXT("UI-P0-06 actual accepted-fire Heat 누적"),
+			FMath::IsNearlyEqual(HeatVehicleWeaponComp->GetCurrentWeaponHeat(), 25.0f * static_cast<float>(AcceptedShotIndex + 1)));
+	}
+
+	TestTrue(TEXT("UI-P0-06 actual WeaponComp MaxHeat 과열"), HeatVehicleWeaponComp->IsActiveWeaponOverheated());
+	TestFalse(TEXT("UI-P0-06 actual WeaponComp 과열 발사 허용 안 함"), HeatVehicleWeaponComp->CanActiveWeaponAcceptHeatShot());
+	HeatVehicleWeaponComp->TickComponent(2.5f, LEVELTICK_All, nullptr);
+	TestTrue(TEXT("UI-P0-06 actual WeaponComp 2.5초 냉각 75"), FMath::IsNearlyEqual(HeatVehicleWeaponComp->GetCurrentWeaponHeat(), 75.0f));
+	TestFalse(TEXT("UI-P0-06 actual WeaponComp 냉각 후 과열 해제"), HeatVehicleWeaponComp->IsActiveWeaponOverheated());
+	TestTrue(TEXT("UI-P0-06 actual WeaponComp 냉각 후 재사용 가능"), HeatVehicleWeaponComp->CanActiveWeaponAcceptHeatShot());
+	HeatVehiclePawn->Destroy();
+
+	// [v1.18.0] Ammo/Cooldown과 실제 Heat를 동시에 가진 일반 무기의 통합 Weapon ViewData입니다.
+	FCFWeaponHUDData WeaponViewData;
+	WeaponViewData.Availability = ECFUIViewAvailability::Known;
+	WeaponViewData.WeaponId = FName(TEXT("HeatResourceWeapon"));
+	WeaponViewData.AmmoAvailability = ECFUIViewAvailability::Known;
+	WeaponViewData.LoadedAmmoCount = 3;
+	WeaponViewData.MagazineCapacity = 8;
+	WeaponViewData.ReserveAmmoCount = 6;
+	WeaponViewData.CurrentOnboardAmmoCount = 9;
+	WeaponViewData.CooldownAvailability = ECFUIViewAvailability::Known;
+	WeaponViewData.CooldownDurationSeconds = 2.0f;
+	WeaponViewData.RemainingCooldownSeconds = 0.5f;
+	WeaponViewData.HeatAvailability = ECFUIViewAvailability::Known;
+	WeaponViewData.CurrentHeat = 50.0f;
+	WeaponViewData.MaximumHeat = 100.0f;
+	WeaponViewData.HeatRatio = 0.5f;
+	WeaponViewData.bWeaponOverheated = false;
+	WeaponViewData.RebuildResourceChannelsFromCurrentFields();
+
+	// [v1.18.0] 실제 ResourceChannels에서 semantic Heat 채널을 찾은 포인터입니다.
+	const FCFWeaponResourceHUDData* HeatChannel = nullptr;
+	for (const FCFWeaponResourceHUDData& ResourceChannel : WeaponViewData.ResourceChannels)
+	{
+		if (ResourceChannel.ChannelType == ECFWeaponResourceChannelType::Heat)
+		{
+			HeatChannel = &ResourceChannel;
+			break;
+		}
+	}
+	if (!TestNotNull(TEXT("UI-P0-06 actual Heat Resource Channel 생성"), HeatChannel))
+	{
+		return false;
+	}
+	TestEqual(TEXT("UI-P0-06 Heat DisplayMode Percent"), HeatChannel->DisplayMode, ECFWeaponResourceDisplayMode::Percent);
+	TestTrue(TEXT("UI-P0-06 Heat current 50"), FMath::IsNearlyEqual(HeatChannel->CurrentValue, 50.0f));
+	TestTrue(TEXT("UI-P0-06 Heat max 100"), FMath::IsNearlyEqual(HeatChannel->MaximumValue, 100.0f));
+	TestTrue(TEXT("UI-P0-06 Heat ratio 0.5"), FMath::IsNearlyEqual(HeatChannel->NormalizedValue, 0.5f));
+	TestFalse(TEXT("UI-P0-06 normal Heat는 발사 비차단"), HeatChannel->bBlocksFire);
+
+	// [v1.18.0] 실제 Compact Projection이 raw 채널 순서가 아니라 Ammo Primary + Heat Secondary + 단일 Cooldown FireState를 만드는 Presenter입니다.
+	UCFHUDPresenter* Presenter = NewObject<UCFHUDPresenter>(GetTransientPackage());
+	if (!TestNotNull(TEXT("UI-P0-06 Heat Projection Presenter"), Presenter))
+	{
+		return false;
+	}
+	// [v1.18.0] 일반 Heat 상태에서 생성된 Compact Presentation Entry입니다.
+	TArray<FCFWeaponResourcePresentationEntry> PresentationEntries;
+	Presenter->BuildWeaponResourceEntries(WeaponViewData, PresentationEntries);
+	TestEqual(TEXT("UI-P0-06 Heat 일반 Compact Entry 3개"), PresentationEntries.Num(), 3);
+	if (PresentationEntries.Num() != 3)
+	{
+		return false;
+	}
+	TestEqual(TEXT("UI-P0-06 Heat 일반 Primary Ammo"), PresentationEntries[0].SourceChannelType, ECFWeaponResourceChannelType::Ammo);
+	TestEqual(TEXT("UI-P0-06 Heat 일반 Secondary Heat"), PresentationEntries[1].SourceChannelType, ECFWeaponResourceChannelType::Heat);
+	TestEqual(TEXT("UI-P0-06 Heat 일반 문구 50%"), PresentationEntries[1].DisplayText.ToString(), FString(TEXT("HEAT 50%")));
+	TestTrue(TEXT("UI-P0-06 Heat 일반 Progress 0.5"), FMath::IsNearlyEqual(PresentationEntries[1].Progress01, 0.5f));
+	TestEqual(TEXT("UI-P0-06 Heat 일반 FireState Cooldown"), PresentationEntries[2].DisplayText.ToString(), FString(TEXT("0.5 s")));
+
+	WeaponViewData.CurrentHeat = 100.0f;
+	WeaponViewData.HeatRatio = 1.0f;
+	WeaponViewData.bWeaponOverheated = true;
+	WeaponViewData.RebuildResourceChannelsFromCurrentFields();
+	Presenter->BuildWeaponResourceEntries(WeaponViewData, PresentationEntries);
+	TestEqual(TEXT("UI-P0-06 과열 FireState 유지 Entry 3개"), PresentationEntries.Num(), 3);
+	if (PresentationEntries.Num() != 3)
+	{
+		return false;
+	}
+	TestEqual(TEXT("UI-P0-06 과열 Heat Secondary 유지"), PresentationEntries[1].DisplayText.ToString(), FString(TEXT("HEAT 100%")));
+	TestEqual(TEXT("UI-P0-06 과열 FireState"), PresentationEntries[2].DisplayText.ToString(), FString(TEXT("OVERHEATED")));
+	TestTrue(TEXT("UI-P0-06 과열 FireState Progress 1"), FMath::IsNearlyEqual(PresentationEntries[2].Progress01, 1.0f));
+
+	WeaponViewData.ReloadState = ECFWeaponReloadState::Reloading;
+	WeaponViewData.ReloadDurationSeconds = 4.0f;
+	WeaponViewData.RemainingReloadTimeSeconds = 1.0f;
+	WeaponViewData.bWeaponActionLocked = true;
+	WeaponViewData.WeaponActionLockReason = ECFWeaponActionLockReason::Reloading;
+	WeaponViewData.RebuildResourceChannelsFromCurrentFields();
+	Presenter->BuildWeaponResourceEntries(WeaponViewData, PresentationEntries);
+	TestEqual(TEXT("UI-P0-06 Reload가 과열보다 우선"), PresentationEntries.Last().DisplayText.ToString(), FString(TEXT("RELOAD 1.0 / 4.0 s")));
+
+	WeaponViewData.ReloadState = ECFWeaponReloadState::Ready;
+	WeaponViewData.ReloadDurationSeconds = 0.0f;
+	WeaponViewData.RemainingReloadTimeSeconds = 0.0f;
+	WeaponViewData.bWeaponActionLocked = false;
+	WeaponViewData.WeaponActionLockReason = ECFWeaponActionLockReason::None;
+	WeaponViewData.CurrentHeat = 50.0f;
+	WeaponViewData.HeatRatio = 0.5f;
+	WeaponViewData.bWeaponOverheated = false;
+	WeaponViewData.LauncherAvailability = ECFUIViewAvailability::Known;
+	WeaponViewData.bLauncherSequenceActive = true;
+	WeaponViewData.LauncherPattern = ECFLauncherFirePattern::Salvo;
+	WeaponViewData.LauncherTotalProjectileCount = 4;
+	WeaponViewData.LauncherAcceptedProjectileCount = 2;
+	WeaponViewData.LauncherRemainingProjectileCount = 2;
+	WeaponViewData.LauncherSequenceRevision = 1;
+	WeaponViewData.RebuildResourceChannelsFromCurrentFields();
+	Presenter->BuildWeaponResourceEntries(WeaponViewData, PresentationEntries);
+	TestEqual(TEXT("UI-P0-06 Launcher+Ammo+Heat Compact Entry 3개"), PresentationEntries.Num(), 3);
+	if (PresentationEntries.Num() != 3)
+	{
+		return false;
+	}
+	TestEqual(TEXT("UI-P0-06 Launcher가 Primary 유지"), PresentationEntries[0].SourceChannelType, ECFWeaponResourceChannelType::LauncherSequence);
+	TestEqual(TEXT("UI-P0-06 Launcher 중 Ammo Secondary A"), PresentationEntries[1].SourceChannelType, ECFWeaponResourceChannelType::Ammo);
+	TestEqual(TEXT("UI-P0-06 Launcher 중 Heat Secondary B"), PresentationEntries[2].SourceChannelType, ECFWeaponResourceChannelType::Heat);
+	TestTrue(TEXT("UI-P0-06 Launcher 중 FireState 없음"), PresentationEntries[0].Role == ECFWeaponResourcePresentationRole::Primary
+		&& PresentationEntries[1].Role == ECFWeaponResourcePresentationRole::Secondary
+		&& PresentationEntries[2].Role == ECFWeaponResourcePresentationRole::Secondary);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP006WeaponChargeResourceTest,
+	"CarFight.UI.UI_P0_06.WeaponChargeRuntimeResourceContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.21.0] explicit WeaponCharge의 순수 상태·actual WeaponComp 승인 한 발 소비·회복과 HUD Resource/Compact Projection을 검증합니다.
+bool FCFHUDP006WeaponChargeResourceTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.21.0] 무기 자체 내부 Charge의 순수 상태 전이를 검증할 Runtime입니다.
+	FCFWeaponChargeRuntime ChargeRuntime;
+	ChargeRuntime.Configure(100.0f, 40.0f, 30.0f, 10.0f);
+	TestTrue(TEXT("UI-P0-06 Charge Runtime explicit config 활성"), ChargeRuntime.IsEnabled());
+	TestTrue(TEXT("UI-P0-06 Charge 초기값 40"), FMath::IsNearlyEqual(ChargeRuntime.GetCurrentCharge(), 40.0f));
+	TestTrue(TEXT("UI-P0-06 Charge 40에서 한 발 가능"), ChargeRuntime.CanAcceptShot());
+	ChargeRuntime.RecordAcceptedShot();
+	TestTrue(TEXT("UI-P0-06 Charge 한 발 소비 후 10"), FMath::IsNearlyEqual(ChargeRuntime.GetCurrentCharge(), 10.0f));
+	TestFalse(TEXT("UI-P0-06 Charge 10은 한 발 소비량 30보다 부족"), ChargeRuntime.CanAcceptShot());
+	ChargeRuntime.AdvanceRecovery(1.5f);
+	TestTrue(TEXT("UI-P0-06 Charge 1.5초 회복 25"), FMath::IsNearlyEqual(ChargeRuntime.GetCurrentCharge(), 25.0f));
+	TestFalse(TEXT("UI-P0-06 Charge 25는 아직 발사 불가"), ChargeRuntime.CanAcceptShot());
+	ChargeRuntime.AdvanceRecovery(0.5f);
+	TestTrue(TEXT("UI-P0-06 Charge 2초 회복 30"), FMath::IsNearlyEqual(ChargeRuntime.GetCurrentCharge(), 30.0f));
+	TestTrue(TEXT("UI-P0-06 Charge 30에서 발사 재허용"), ChargeRuntime.CanAcceptShot());
+	ChargeRuntime.RecordAcceptedShot();
+	TestTrue(TEXT("UI-P0-06 Charge 두 번째 소비 후 0"), FMath::IsNearlyEqual(ChargeRuntime.GetCurrentCharge(), 0.0f));
+	ChargeRuntime.AdvanceRecovery(10.0f);
+	TestTrue(TEXT("UI-P0-06 Charge 회복은 Max 100 clamp"), FMath::IsNearlyEqual(ChargeRuntime.GetCurrentCharge(), 100.0f));
+
+	// [v1.21.0] 기존 all-zero/incomplete Asset 호환처럼 Recovery 0이면 Charge Runtime이 비활성이고 발사를 막지 않습니다.
+	FCFWeaponChargeRuntime DisabledChargeRuntime;
+	DisabledChargeRuntime.Configure(100.0f, 40.0f, 30.0f, 0.0f);
+	TestFalse(TEXT("UI-P0-06 Charge Recovery 0은 Runtime 비활성"), DisabledChargeRuntime.IsEnabled());
+	TestTrue(TEXT("UI-P0-06 Charge Runtime 비활성은 발사 차단 안 함"), DisabledChargeRuntime.CanAcceptShot());
+
+	// [v1.21.0] 실제 ACFVehiclePawn accepted-fire 경로와 UCFVehicleWeaponComp Charge owner를 함께 검증할 transient Automation World입니다.
+	UWorld* ChargeIntegrationWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("UI-P0-06 Charge Integration World"), ChargeIntegrationWorld))
+	{
+		return false;
+	}
+
+	// [v1.21.0] 실제 WeaponComp와 Fire 실행 경로를 기본 서브오브젝트로 소유할 transient 차량입니다.
+	ACFVehiclePawn* ChargeVehiclePawn = ChargeIntegrationWorld->SpawnActor<ACFVehiclePawn>();
+	if (!TestNotNull(TEXT("UI-P0-06 Charge Integration Vehicle Pawn"), ChargeVehiclePawn))
+	{
+		return false;
+	}
+
+	// [v1.21.0] 실제 per-weapon Charge 상태를 소유할 차량 무기 컴포넌트입니다.
+	UCFVehicleWeaponComp* ChargeVehicleWeaponComp = ChargeVehiclePawn->GetVehicleWeaponComp();
+	if (!TestNotNull(TEXT("UI-P0-06 Charge Integration WeaponComp"), ChargeVehicleWeaponComp))
+	{
+		ChargeVehiclePawn->Destroy();
+		return false;
+	}
+
+	// [v1.21.0] 테스트 WeaponData를 활성 MountProfile의 single preset source로 연결할 transient Preset입니다.
+	UCFEquipmentPresetData* ChargeEquipmentPresetData = NewObject<UCFEquipmentPresetData>(GetTransientPackage());
+	ChargeEquipmentPresetData->EquipmentId = TEXT("UI_P006_ChargePreset");
+	ChargeEquipmentPresetData->RequiredMountType = ECFVehicleMountType::Turret;
+	ChargeEquipmentPresetData->RequiredWeaponSize = ECFVehicleWeaponSize::Large;
+
+	// [v1.21.0] 저장 Asset을 건드리지 않고 explicit Charge 100/60/30/10을 실제 WeaponComp에 공급할 transient WeaponData입니다.
+	UCFWeaponData* ChargeWeaponData = NewObject<UCFWeaponData>(GetTransientPackage());
+	ChargeWeaponData->WeaponId = TEXT("UI_P006_ChargeWeapon");
+	ChargeWeaponData->WeaponSize = ECFVehicleWeaponSize::Large;
+	ChargeWeaponData->CompatibleMountTypes.Reset();
+	ChargeWeaponData->CompatibleMountTypes.Add(ECFVehicleMountType::Turret);
+	ChargeWeaponData->FireMode = ECFWeaponFireMode::HitScan;
+	ChargeWeaponData->FireRatePerMinute = 0.0f;
+	ChargeWeaponData->bUseInfiniteAmmoForDebug = true;
+	ChargeWeaponData->MaximumWeaponCharge = 100.0f;
+	ChargeWeaponData->InitialWeaponCharge = 60.0f;
+	ChargeWeaponData->WeaponChargePerShot = 30.0f;
+	ChargeWeaponData->WeaponChargeRecoveryPerSecond = 10.0f;
+	ChargeEquipmentPresetData->DefaultWeaponData = ChargeWeaponData;
+
+	// [v1.21.0] 활성 MountProfile이 참조할 최소 위치 슬롯과 Charge WeaponData source를 제공할 transient VehicleData입니다.
+	UCFVehicleData* ChargeVehicleData = NewObject<UCFVehicleData>(GetTransientPackage());
+	// [v1.21.0] 테스트 MountProfile이 사용할 최소 하드포인트 슬롯입니다.
+	FCFVehicleHardpointSlot ChargeHardpointSlot;
+	ChargeHardpointSlot.LocationSlotId = TEXT("Top_Charge_01");
+	ChargeHardpointSlot.LocationCategory = TEXT("Top");
+	ChargeHardpointSlot.LocalLocation = FVector::ZeroVector;
+	ChargeVehicleData->HardpointSlots.Add(ChargeHardpointSlot);
+
+	// [v1.21.0] WeaponComp 기본 활성 ID와 일치해 transient Charge WeaponData를 실제 활성 무기로 만드는 MountProfile입니다.
+	FCFVehicleMountProfile ChargeMountProfile;
+	ChargeMountProfile.MountProfileId = TEXT("RoofTurret_MediumOrLarge");
+	ChargeMountProfile.LocationSlotRef = ChargeHardpointSlot.LocationSlotId;
+	ChargeMountProfile.MountType = ECFVehicleMountType::Turret;
+	ChargeMountProfile.SizeLimit = ECFVehicleWeaponSize::Large;
+	ChargeMountProfile.DefaultEquipmentPresetData = ChargeEquipmentPresetData;
+	ChargeVehicleData->MountProfiles.Add(ChargeMountProfile);
+
+	TestTrue(TEXT("UI-P0-06 actual WeaponComp Charge Runtime 초기화"), ChargeVehicleWeaponComp->InitializeWeaponRuntime(ChargeVehiclePawn, ChargeVehicleData));
+	TestTrue(TEXT("UI-P0-06 actual WeaponComp Charge Runtime 활성"), ChargeVehicleWeaponComp->IsActiveWeaponChargeRuntimeEnabled());
+	TestTrue(TEXT("UI-P0-06 actual WeaponComp Charge 초기값 60"), FMath::IsNearlyEqual(ChargeVehicleWeaponComp->GetCurrentWeaponCharge(), 60.0f));
+
+		for (int32 AcceptedShotIndex = 0; AcceptedShotIndex < 2; ++AcceptedShotIndex)
+	{
+		TestTrue(TEXT("UI-P0-06 actual WeaponComp 승인 전 Charge 충분"), ChargeVehicleWeaponComp->CanActiveWeaponAcceptChargeShot());
+		ChargeVehicleWeaponComp->RecordAcceptedWeaponShotCharge();
+		TestTrue(
+			TEXT("UI-P0-06 actual WeaponComp 승인 한 발 Charge 소비"),
+			FMath::IsNearlyEqual(ChargeVehicleWeaponComp->GetCurrentWeaponCharge(), 60.0f - 30.0f * static_cast<float>(AcceptedShotIndex + 1)));
+	}
+
+
+	TestFalse(TEXT("UI-P0-06 actual WeaponComp Charge 0 발사 불가"), ChargeVehicleWeaponComp->CanActiveWeaponAcceptChargeShot());
+	ChargeVehicleWeaponComp->TickComponent(3.0f, LEVELTICK_All, nullptr);
+	TestTrue(TEXT("UI-P0-06 actual WeaponComp 3초 Charge 회복 30"), FMath::IsNearlyEqual(ChargeVehicleWeaponComp->GetCurrentWeaponCharge(), 30.0f));
+	TestTrue(TEXT("UI-P0-06 actual WeaponComp Charge 회복 후 재사용 가능"), ChargeVehicleWeaponComp->CanActiveWeaponAcceptChargeShot());
+	ChargeVehiclePawn->Destroy();
+
+	// [v1.21.0] Charge 25/100 부족 상태와 Cooldown을 동시에 가진 synthetic Weapon ViewData입니다.
+	FCFWeaponHUDData ChargeWeaponViewData;
+	ChargeWeaponViewData.Availability = ECFUIViewAvailability::Known;
+	ChargeWeaponViewData.WeaponId = FName(TEXT("ChargeResourceWeapon"));
+	ChargeWeaponViewData.WeaponChargeAvailability = ECFUIViewAvailability::Known;
+	ChargeWeaponViewData.CurrentWeaponCharge = 25.0f;
+	ChargeWeaponViewData.MaximumWeaponCharge = 100.0f;
+	ChargeWeaponViewData.WeaponChargeRatio = 0.25f;
+	ChargeWeaponViewData.bWeaponChargeInsufficient = true;
+	ChargeWeaponViewData.CooldownAvailability = ECFUIViewAvailability::Known;
+	ChargeWeaponViewData.CooldownDurationSeconds = 2.0f;
+	ChargeWeaponViewData.RemainingCooldownSeconds = 0.5f;
+	ChargeWeaponViewData.RebuildResourceChannelsFromCurrentFields();
+
+	// [v1.21.0] 실제 ResourceChannels에서 semantic WeaponCharge 채널을 찾은 포인터입니다.
+	const FCFWeaponResourceHUDData* ChargeChannel = nullptr;
+	// [v1.21.0] VehicleBattery가 실제 Runtime 없이 실수로 생성되지 않았는지 확인하는 상태입니다.
+	bool bVehicleBatteryChannelFound = false;
+	for (const FCFWeaponResourceHUDData& ResourceChannel : ChargeWeaponViewData.ResourceChannels)
+	{
+		if (ResourceChannel.ChannelType == ECFWeaponResourceChannelType::WeaponCharge)
+		{
+			ChargeChannel = &ResourceChannel;
+		}
+		else if (ResourceChannel.ChannelType == ECFWeaponResourceChannelType::VehicleBattery)
+		{
+			bVehicleBatteryChannelFound = true;
+		}
+	}
+	if (!TestNotNull(TEXT("UI-P0-06 actual WeaponCharge Resource Channel 생성"), ChargeChannel))
+	{
+		return false;
+	}
+	TestEqual(TEXT("UI-P0-06 Charge DisplayMode Percent"), ChargeChannel->DisplayMode, ECFWeaponResourceDisplayMode::Percent);
+	TestTrue(TEXT("UI-P0-06 Charge current 25"), FMath::IsNearlyEqual(ChargeChannel->CurrentValue, 25.0f));
+	TestTrue(TEXT("UI-P0-06 Charge max 100"), FMath::IsNearlyEqual(ChargeChannel->MaximumValue, 100.0f));
+	TestTrue(TEXT("UI-P0-06 Charge ratio 0.25"), FMath::IsNearlyEqual(ChargeChannel->NormalizedValue, 0.25f));
+	TestTrue(TEXT("UI-P0-06 Charge 부족은 bBlocksFire"), ChargeChannel->bBlocksFire);
+	TestFalse(TEXT("UI-P0-06 VehicleBattery 가짜 Resource Channel 없음"), bVehicleBatteryChannelFound);
+
+	// [v1.21.0] 실제 Charge Compact Projection과 NO CHARGE 상태를 검증할 Presenter입니다.
+	UCFHUDPresenter* ChargePresenter = NewObject<UCFHUDPresenter>(GetTransientPackage());
+	if (!TestNotNull(TEXT("UI-P0-06 Charge Projection Presenter"), ChargePresenter))
+	{
+		return false;
+	}
+
+	// [v1.21.0] Ammo/Launcher가 없는 Charge 기반 무기의 Compact Presentation Entry입니다.
+	TArray<FCFWeaponResourcePresentationEntry> ChargePresentationEntries;
+	ChargePresenter->BuildWeaponResourceEntries(ChargeWeaponViewData, ChargePresentationEntries);
+	TestEqual(TEXT("UI-P0-06 Charge-only Compact Entry 2개"), ChargePresentationEntries.Num(), 2);
+	if (ChargePresentationEntries.Num() != 2)
+	{
+		return false;
+	}
+	TestEqual(TEXT("UI-P0-06 Charge-only Primary"), ChargePresentationEntries[0].SourceChannelType, ECFWeaponResourceChannelType::WeaponCharge);
+	TestEqual(TEXT("UI-P0-06 Charge-only Primary 문구"), ChargePresentationEntries[0].DisplayText.ToString(), FString(TEXT("CHARGE 25%")));
+	TestEqual(TEXT("UI-P0-06 Charge 부족 FireState"), ChargePresentationEntries[1].DisplayText.ToString(), FString(TEXT("NO CHARGE")));
+	TestTrue(TEXT("UI-P0-06 Charge 부족 Progress 0.25"), FMath::IsNearlyEqual(ChargePresentationEntries[1].Progress01, 0.25f));
+
+	// [v1.21.0] Heat와 Charge가 함께 있을 때 Charge Primary + Heat Secondary + NO CHARGE를 확인합니다.
+	ChargeWeaponViewData.HeatAvailability = ECFUIViewAvailability::Known;
+	ChargeWeaponViewData.CurrentHeat = 50.0f;
+	ChargeWeaponViewData.MaximumHeat = 100.0f;
+	ChargeWeaponViewData.HeatRatio = 0.5f;
+	ChargeWeaponViewData.bWeaponOverheated = true;
+	ChargeWeaponViewData.RebuildResourceChannelsFromCurrentFields();
+	ChargePresenter->BuildWeaponResourceEntries(ChargeWeaponViewData, ChargePresentationEntries);
+	TestEqual(TEXT("UI-P0-06 Charge+Heat Compact Entry 3개"), ChargePresentationEntries.Num(), 3);
+	if (ChargePresentationEntries.Num() != 3)
+	{
+		return false;
+	}
+	TestEqual(TEXT("UI-P0-06 Charge+Heat Primary Charge"), ChargePresentationEntries[0].SourceChannelType, ECFWeaponResourceChannelType::WeaponCharge);
+	TestEqual(TEXT("UI-P0-06 Charge+Heat Secondary Heat"), ChargePresentationEntries[1].SourceChannelType, ECFWeaponResourceChannelType::Heat);
+	TestEqual(TEXT("UI-P0-06 NoCharge가 Overheated보다 우선"), ChargePresentationEntries[2].DisplayText.ToString(), FString(TEXT("NO CHARGE")));
+
+	// [v1.21.0] Charge 부족을 해제하면 같은 상태에서 Overheated가 다음 우선순위로 노출됩니다.
+	ChargeWeaponViewData.CurrentWeaponCharge = 50.0f;
+	ChargeWeaponViewData.WeaponChargeRatio = 0.5f;
+	ChargeWeaponViewData.bWeaponChargeInsufficient = false;
+	ChargeWeaponViewData.RebuildResourceChannelsFromCurrentFields();
+	ChargePresenter->BuildWeaponResourceEntries(ChargeWeaponViewData, ChargePresentationEntries);
+	TestEqual(TEXT("UI-P0-06 Charge 충분 시 Overheated fallback"), ChargePresentationEntries.Last().DisplayText.ToString(), FString(TEXT("OVERHEATED")));
+
+	// [v1.21.0] Heat 차단을 해제하고 finite Ammo를 추가해 Ammo Primary + Charge/Heat Secondary 최대 2를 검증합니다.
+	ChargeWeaponViewData.bWeaponOverheated = false;
+	ChargeWeaponViewData.AmmoAvailability = ECFUIViewAvailability::Known;
+	ChargeWeaponViewData.LoadedAmmoCount = 3;
+	ChargeWeaponViewData.MagazineCapacity = 8;
+	ChargeWeaponViewData.ReserveAmmoCount = 6;
+	ChargeWeaponViewData.CurrentOnboardAmmoCount = 9;
+	ChargeWeaponViewData.RebuildResourceChannelsFromCurrentFields();
+	ChargePresenter->BuildWeaponResourceEntries(ChargeWeaponViewData, ChargePresentationEntries);
+	TestEqual(TEXT("UI-P0-06 Ammo+Charge+Heat Compact Entry 4개"), ChargePresentationEntries.Num(), 4);
+	if (ChargePresentationEntries.Num() != 4)
+	{
+		return false;
+	}
+	TestEqual(TEXT("UI-P0-06 Ammo Primary 유지"), ChargePresentationEntries[0].SourceChannelType, ECFWeaponResourceChannelType::Ammo);
+	TestEqual(TEXT("UI-P0-06 Charge Secondary A"), ChargePresentationEntries[1].SourceChannelType, ECFWeaponResourceChannelType::WeaponCharge);
+	TestEqual(TEXT("UI-P0-06 Heat Secondary B"), ChargePresentationEntries[2].SourceChannelType, ECFWeaponResourceChannelType::Heat);
+	TestEqual(TEXT("UI-P0-06 Charge 충분 시 FireState Cooldown"), ChargePresentationEntries[3].DisplayText.ToString(), FString(TEXT("0.5 s")));
+
+	// [v1.21.0] NoAmmo가 Charge 부족보다 우선하는 상태를 확인합니다.
+	ChargeWeaponViewData.LoadedAmmoCount = 0;
+	ChargeWeaponViewData.CurrentOnboardAmmoCount = 0;
+	ChargeWeaponViewData.CurrentWeaponCharge = 0.0f;
+	ChargeWeaponViewData.WeaponChargeRatio = 0.0f;
+	ChargeWeaponViewData.bWeaponChargeInsufficient = true;
+	ChargeWeaponViewData.RebuildResourceChannelsFromCurrentFields();
+	ChargePresenter->BuildWeaponResourceEntries(ChargeWeaponViewData, ChargePresentationEntries);
+	TestEqual(TEXT("UI-P0-06 NoAmmo가 NoCharge보다 우선"), ChargePresentationEntries.Last().DisplayText.ToString(), FString(TEXT("NO AMMO")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP006WeaponSelectionRuntimeTest,
+	"CarFight.UI.UI_P0_06.WeaponSelectionRuntimeContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.19.0] Applied Fitting 고정 순서가 실제 Weapon Selection Runtime과 HUD Player-facing 목록으로 이어지고 무기별 Cooldown/Heat가 섞이지 않는지 검증합니다.
+bool FCFHUDP006WeaponSelectionRuntimeTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	/**
+	 * Fitting Snapshot의 실제 Weapon Runtime 입력만 캡처하고 Defense/Sensor는 이번 UI 계약 밖에서 무변경 성공 처리하는 테스트 Adapter입니다.
+	 */
+	class FCFWeaponSelectionCaptureAdapter final : public ICFFittingRuntimeApplyAdapter
+	{
+	public:
+		// [v1.19.0] Fitting Commit이 Weapon Runtime 입력을 실제로 호출한 횟수입니다.
+		int32 WeaponApplyCallCount = 0;
+
+		// [v1.19.0] Applied Fitting이 생성한 마지막 실제 Weapon Runtime 입력입니다.
+		FCFFittingWeaponRuntimeInput LastWeaponInput;
+
+		// [v1.19.0] Fitting의 Weapon Runtime 입력을 캡처하고 실제 선택 목록 또는 legacy/single mount가 있으면 준비 완료로 판정합니다.
+		virtual bool ApplyWeaponRuntime(const FCFFittingWeaponRuntimeInput& WeaponInput, bool& bOutWeaponRuntimeReady) override
+		{
+			++WeaponApplyCallCount;
+			LastWeaponInput = WeaponInput;
+			bOutWeaponRuntimeReady = WeaponInput.UsesLegacyVehicleConfiguration()
+				|| !WeaponInput.SelectableWeapons.IsEmpty()
+				|| WeaponInput.bHasResolvedMount;
+			return true;
+		}
+
+		// [v1.19.0] Weapon Selection source 검증과 무관한 Defense Runtime 적용을 무변경 성공 처리합니다.
+		virtual bool ApplyDefenseRuntime(const FCFFittingDefenseRuntimeInput& DefenseInput, bool& bOutDefenseRuntimeReady) override
+		{
+			(void)DefenseInput;
+			bOutDefenseRuntimeReady = false;
+			return true;
+		}
+	};
+
+	// [v1.19.0] 실제 Pawn/WeaponComp 전환과 HUD Provider를 함께 검증할 transient Automation World입니다.
+	UWorld* SelectionWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("UI-P0-06 Weapon Selection World"), SelectionWorld))
+	{
+		return false;
+	}
+
+	// [v1.19.0] 실제 WeaponComp·Launcher·Ammo·Provider source를 보유할 transient 차량 Pawn입니다.
+	ACFVehiclePawn* SelectionVehiclePawn = SelectionWorld->SpawnActor<ACFVehiclePawn>();
+	if (!TestNotNull(TEXT("UI-P0-06 Weapon Selection Vehicle Pawn"), SelectionVehiclePawn))
+	{
+		return false;
+	}
+
+	// [v1.19.0] 실제 선택 Runtime과 per-weapon Cooldown/Heat를 소유할 WeaponComp입니다.
+	UCFVehicleWeaponComp* SelectionWeaponComp = SelectionVehiclePawn->GetVehicleWeaponComp();
+	if (!TestNotNull(TEXT("UI-P0-06 Weapon Selection WeaponComp"), SelectionWeaponComp))
+	{
+		SelectionVehiclePawn->Destroy();
+		return false;
+	}
+
+	// [v1.19.0] 실제 Fitting Snapshot→Weapon Runtime 입력 변환을 수행할 transient FittingComp입니다.
+	UCFVehicleFittingComp* SelectionFittingComp = NewObject<UCFVehicleFittingComp>(GetTransientPackage());
+	if (!TestNotNull(TEXT("UI-P0-06 Weapon Selection FittingComp"), SelectionFittingComp))
+	{
+		SelectionVehiclePawn->Destroy();
+		return false;
+	}
+
+	// [v1.19.0] 두 실제 weapon-bearing mount를 정의할 transient VehicleData입니다.
+	UCFVehicleData* SelectionVehicleData = NewObject<UCFVehicleData>(GetTransientPackage());
+	SelectionVehicleData->BaseVehicleMassKg = 1000.0f;
+	SelectionVehicleData->MaximumGrossMassKg = 2500.0f;
+
+	// [v1.19.0] 첫 번째 무기가 사용할 실제 하드포인트 위치 슬롯입니다.
+	FCFVehicleHardpointSlot PrimaryHardpointSlot;
+	PrimaryHardpointSlot.LocationSlotId = TEXT("Selection_Top_01");
+	PrimaryHardpointSlot.LocationCategory = TEXT("Top");
+	SelectionVehicleData->HardpointSlots.Add(PrimaryHardpointSlot);
+
+	// [v1.19.0] 두 번째 무기가 사용할 실제 하드포인트 위치 슬롯입니다.
+	FCFVehicleHardpointSlot SecondaryHardpointSlot;
+	SecondaryHardpointSlot.LocationSlotId = TEXT("Selection_Top_02");
+	SecondaryHardpointSlot.LocationCategory = TEXT("Top");
+	SelectionVehicleData->HardpointSlots.Add(SecondaryHardpointSlot);
+
+	// [v1.19.0] 첫 번째 실제 무기의 Player-facing Preset source입니다.
+	UCFEquipmentPresetData* PrimaryEquipmentPreset = NewObject<UCFEquipmentPresetData>(GetTransientPackage());
+	PrimaryEquipmentPreset->EquipmentId = TEXT("Selection_Primary_Preset");
+	PrimaryEquipmentPreset->DisplayName = FText::FromString(TEXT("PRIMARY CANNON"));
+	PrimaryEquipmentPreset->RequiredMountType = ECFVehicleMountType::Turret;
+	PrimaryEquipmentPreset->RequiredWeaponSize = ECFVehicleWeaponSize::Large;
+
+	// [v1.19.0] 첫 번째 Preset이 실제 단일 Turret Visual source로도 사용할 transient TurretMountData입니다.
+	UCFTurretMountData* PrimaryTurretMountData = NewObject<UCFTurretMountData>(GetTransientPackage());
+	PrimaryTurretMountData->TurretMountId = TEXT("Selection_Primary_MountData");
+	PrimaryEquipmentPreset->DefaultTurretMountData = PrimaryTurretMountData;
+
+	// [v1.19.0] 60 RPM, Heat 25/100/10을 가진 첫 번째 실제 WeaponData입니다.
+	UCFWeaponData* PrimaryWeaponData = NewObject<UCFWeaponData>(GetTransientPackage());
+	PrimaryWeaponData->WeaponId = TEXT("Selection_Primary_Weapon");
+	PrimaryWeaponData->WeaponSize = ECFVehicleWeaponSize::Large;
+	PrimaryWeaponData->CompatibleMountTypes.Reset();
+	PrimaryWeaponData->CompatibleMountTypes.Add(ECFVehicleMountType::Turret);
+	PrimaryWeaponData->FireMode = ECFWeaponFireMode::HitScan;
+	PrimaryWeaponData->FireRatePerMinute = 60.0f;
+	PrimaryWeaponData->bUseInfiniteAmmoForDebug = true;
+	PrimaryWeaponData->HeatPerShot = 25.0f;
+	PrimaryWeaponData->MaxHeat = 100.0f;
+	PrimaryWeaponData->HeatDissipationPerSecond = 10.0f;
+	PrimaryEquipmentPreset->DefaultWeaponData = PrimaryWeaponData;
+
+	// [v1.19.0] 두 번째 실제 무기의 Player-facing Preset source입니다.
+	UCFEquipmentPresetData* SecondaryEquipmentPreset = NewObject<UCFEquipmentPresetData>(GetTransientPackage());
+	SecondaryEquipmentPreset->EquipmentId = TEXT("Selection_Secondary_Preset");
+	SecondaryEquipmentPreset->DisplayName = FText::FromString(TEXT("SECONDARY CANNON"));
+	SecondaryEquipmentPreset->RequiredMountType = ECFVehicleMountType::Turret;
+	SecondaryEquipmentPreset->RequiredWeaponSize = ECFVehicleWeaponSize::Large;
+
+	// [v1.19.0] 두 번째 Preset이 실제 단일 Turret Visual source로도 사용할 transient TurretMountData입니다.
+	UCFTurretMountData* SecondaryTurretMountData = NewObject<UCFTurretMountData>(GetTransientPackage());
+	SecondaryTurretMountData->TurretMountId = TEXT("Selection_Secondary_MountData");
+	SecondaryEquipmentPreset->DefaultTurretMountData = SecondaryTurretMountData;
+
+	// [v1.19.0] 120 RPM, Heat 25/100/10을 가진 두 번째 실제 WeaponData입니다.
+	UCFWeaponData* SecondaryWeaponData = NewObject<UCFWeaponData>(GetTransientPackage());
+	SecondaryWeaponData->WeaponId = TEXT("Selection_Secondary_Weapon");
+	SecondaryWeaponData->WeaponSize = ECFVehicleWeaponSize::Large;
+	SecondaryWeaponData->CompatibleMountTypes.Reset();
+	SecondaryWeaponData->CompatibleMountTypes.Add(ECFVehicleMountType::Turret);
+	SecondaryWeaponData->FireMode = ECFWeaponFireMode::HitScan;
+	SecondaryWeaponData->FireRatePerMinute = 120.0f;
+	SecondaryWeaponData->bUseInfiniteAmmoForDebug = true;
+	SecondaryWeaponData->HeatPerShot = 25.0f;
+	SecondaryWeaponData->MaxHeat = 100.0f;
+	SecondaryWeaponData->HeatDissipationPerSecond = 10.0f;
+	SecondaryEquipmentPreset->DefaultWeaponData = SecondaryWeaponData;
+
+	// [v1.19.0] 첫 번째 내부 mount identity와 실제 Preset을 VehicleData에 연결하는 MountProfile입니다.
+	FCFVehicleMountProfile PrimaryMountProfile;
+	PrimaryMountProfile.MountProfileId = TEXT("SelectionMount_Primary");
+	PrimaryMountProfile.LocationSlotRef = PrimaryHardpointSlot.LocationSlotId;
+	PrimaryMountProfile.MountType = ECFVehicleMountType::Turret;
+	PrimaryMountProfile.SizeLimit = ECFVehicleWeaponSize::Large;
+	PrimaryMountProfile.DefaultEquipmentPresetData = PrimaryEquipmentPreset;
+	SelectionVehicleData->MountProfiles.Add(PrimaryMountProfile);
+
+	// [v1.19.0] 두 번째 내부 mount identity와 실제 Preset을 VehicleData에 연결하는 MountProfile입니다.
+	FCFVehicleMountProfile SecondaryMountProfile;
+	SecondaryMountProfile.MountProfileId = TEXT("SelectionMount_Secondary");
+	SecondaryMountProfile.LocationSlotRef = SecondaryHardpointSlot.LocationSlotId;
+	SecondaryMountProfile.MountType = ECFVehicleMountType::Turret;
+	SecondaryMountProfile.SizeLimit = ECFVehicleWeaponSize::Large;
+	SecondaryMountProfile.DefaultEquipmentPresetData = SecondaryEquipmentPreset;
+	SelectionVehicleData->MountProfiles.Add(SecondaryMountProfile);
+
+	// [v1.19.0] Applied Fitting source를 재현하는 유효 transient Snapshot입니다.
+	FCFVehicleFittingSnapshot SelectionSnapshot;
+	SelectionSnapshot.FittingId = TEXT("Selection_Fitting");
+	SelectionSnapshot.VehicleData = SelectionVehicleData;
+	SelectionSnapshot.ValidationState = ECFFittingValidationState::Valid;
+	SelectionSnapshot.BaseVehicleMassKg = 1000.0f;
+	SelectionSnapshot.TotalVehicleMassKg = 1500.0f;
+	SelectionSnapshot.MaximumGrossMassKg = 2500.0f;
+
+	// [v1.19.0] Fitting 고정 표시 순서 0에 위치할 첫 실제 weapon-bearing mount입니다.
+	FCFResolvedFittingMount PrimaryResolvedMount;
+	PrimaryResolvedMount.MountProfileId = PrimaryMountProfile.MountProfileId;
+	PrimaryResolvedMount.LocationSlotId = PrimaryHardpointSlot.LocationSlotId;
+	PrimaryResolvedMount.MountType = ECFVehicleMountType::Turret;
+	PrimaryResolvedMount.SizeLimit = ECFVehicleWeaponSize::Large;
+	PrimaryResolvedMount.EquipmentPresetData = PrimaryEquipmentPreset;
+	PrimaryResolvedMount.TurretMountData = PrimaryTurretMountData;
+	PrimaryResolvedMount.WeaponData = PrimaryWeaponData;
+	PrimaryResolvedMount.SelectionSource = ECFFittingSelectionSource::FittingOverride;
+	SelectionSnapshot.ResolvedMounts.Add(PrimaryResolvedMount);
+
+	// [v1.19.0] Fitting 고정 표시 순서 1에 위치할 두 번째 실제 weapon-bearing mount입니다.
+	FCFResolvedFittingMount SecondaryResolvedMount;
+	SecondaryResolvedMount.MountProfileId = SecondaryMountProfile.MountProfileId;
+	SecondaryResolvedMount.LocationSlotId = SecondaryHardpointSlot.LocationSlotId;
+	SecondaryResolvedMount.MountType = ECFVehicleMountType::Turret;
+	SecondaryResolvedMount.SizeLimit = ECFVehicleWeaponSize::Large;
+	SecondaryResolvedMount.EquipmentPresetData = SecondaryEquipmentPreset;
+	SecondaryResolvedMount.TurretMountData = SecondaryTurretMountData;
+	SecondaryResolvedMount.WeaponData = SecondaryWeaponData;
+	SecondaryResolvedMount.SelectionSource = ECFFittingSelectionSource::FittingOverride;
+	SelectionSnapshot.ResolvedMounts.Add(SecondaryResolvedMount);
+
+	TestTrue(
+		TEXT("UI-P0-06 Applied Fitting Snapshot Weapon Selection 준비"),
+		SelectionFittingComp->PrepareSortieFittingSnapshot(SelectionSnapshot, PrimaryMountProfile.MountProfileId));
+
+	// [v1.19.0] Fitting Commit이 생성한 실제 Weapon Runtime 입력을 수집할 Adapter입니다.
+	FCFWeaponSelectionCaptureAdapter SelectionCaptureAdapter;
+	TestTrue(TEXT("UI-P0-06 Applied Fitting Weapon Runtime 입력 Commit"), SelectionFittingComp->CommitPreparedSortieFitting(SelectionCaptureAdapter));
+	TestEqual(TEXT("UI-P0-06 Fitting Weapon Runtime 적용 1회"), SelectionCaptureAdapter.WeaponApplyCallCount, 1);
+	TestEqual(TEXT("UI-P0-06 Fitting selectable weapons 2개"), SelectionCaptureAdapter.LastWeaponInput.SelectableWeapons.Num(), 2);
+	TestEqual(TEXT("UI-P0-06 Fitting selected index 0"), SelectionCaptureAdapter.LastWeaponInput.SelectedWeaponIndex, 0);
+	if (SelectionCaptureAdapter.LastWeaponInput.SelectableWeapons.Num() != 2)
+	{
+		SelectionVehiclePawn->Destroy();
+		return false;
+	}
+	TestEqual(
+		TEXT("UI-P0-06 Fitting 고정 순서 Primary 내부 identity"),
+		SelectionCaptureAdapter.LastWeaponInput.SelectableWeapons[0].InternalMountProfileId,
+		PrimaryMountProfile.MountProfileId);
+	TestEqual(
+		TEXT("UI-P0-06 Fitting 고정 순서 Secondary 내부 identity"),
+		SelectionCaptureAdapter.LastWeaponInput.SelectableWeapons[1].InternalMountProfileId,
+		SecondaryMountProfile.MountProfileId);
+
+	TestTrue(
+		TEXT("UI-P0-06 실제 Weapon Selection Runtime 초기화"),
+		SelectionWeaponComp->InitializeWeaponSelectionRuntime(
+			SelectionVehiclePawn,
+			SelectionVehicleData,
+			SelectionCaptureAdapter.LastWeaponInput.SelectableWeapons,
+			SelectionCaptureAdapter.LastWeaponInput.SelectedWeaponIndex));
+	TestTrue(TEXT("UI-P0-06 Weapon Selection Runtime 활성"), SelectionWeaponComp->HasWeaponSelectionRuntime());
+	TestEqual(TEXT("UI-P0-06 Weapon Selection 실제 무기 수"), SelectionWeaponComp->GetSelectableWeaponCount(), 2);
+	TestEqual(TEXT("UI-P0-06 초기 Selected index"), SelectionWeaponComp->GetSelectedWeaponIndex(), 0);
+	TestEqual(TEXT("UI-P0-06 초기 Active WeaponData"), SelectionWeaponComp->GetActiveWeaponData(), PrimaryWeaponData);
+	TestEqual(TEXT("UI-P0-06 Primary Player-facing DisplayName"), SelectionWeaponComp->GetSelectableWeaponDisplayName(0).ToString(), FString(TEXT("PRIMARY CANNON")));
+	TestEqual(TEXT("UI-P0-06 Secondary Player-facing DisplayName"), SelectionWeaponComp->GetSelectableWeaponDisplayName(1).ToString(), FString(TEXT("SECONDARY CANNON")));
+
+	SelectionWeaponComp->RecordAcceptedFire(10.0f);
+	SelectionWeaponComp->RecordAcceptedWeaponShotHeat();
+	SelectionWeaponComp->RecordAcceptedWeaponShotHeat();
+	TestTrue(TEXT("UI-P0-06 Primary Heat 50"), FMath::IsNearlyEqual(SelectionWeaponComp->GetCurrentWeaponHeat(), 50.0f));
+
+	TestTrue(TEXT("UI-P0-06 Secondary 선택 요청 성공"), SelectionVehiclePawn->RequestSelectWeaponIndex(1));
+	TestEqual(TEXT("UI-P0-06 Secondary Selected index"), SelectionWeaponComp->GetSelectedWeaponIndex(), 1);
+	TestEqual(TEXT("UI-P0-06 Secondary Active WeaponData"), SelectionWeaponComp->GetActiveWeaponData(), SecondaryWeaponData);
+	TestTrue(TEXT("UI-P0-06 Secondary 초기 last fire 없음"), SelectionWeaponComp->GetLastAcceptedFireTimeSeconds() < 0.0f);
+	TestTrue(TEXT("UI-P0-06 Secondary 초기 Heat 0"), FMath::IsNearlyZero(SelectionWeaponComp->GetCurrentWeaponHeat()));
+
+	SelectionWeaponComp->RecordAcceptedFire(20.0f);
+	SelectionWeaponComp->RecordAcceptedWeaponShotHeat();
+	TestTrue(TEXT("UI-P0-06 Secondary Heat 25"), FMath::IsNearlyEqual(SelectionWeaponComp->GetCurrentWeaponHeat(), 25.0f));
+
+	SelectionWeaponComp->TickComponent(1.0f, LEVELTICK_All, nullptr);
+	TestTrue(TEXT("UI-P0-06 Primary 재선택 성공"), SelectionVehiclePawn->RequestSelectWeaponIndex(0));
+	TestTrue(TEXT("UI-P0-06 비선택 Primary Heat도 50→40 냉각"), FMath::IsNearlyEqual(SelectionWeaponComp->GetCurrentWeaponHeat(), 40.0f));
+	TestTrue(TEXT("UI-P0-06 Primary last fire 10 보존"), FMath::IsNearlyEqual(SelectionWeaponComp->GetLastAcceptedFireTimeSeconds(), 10.0f));
+	TestTrue(TEXT("UI-P0-06 Primary 60RPM 독립 Cooldown 0.5"), FMath::IsNearlyEqual(SelectionWeaponComp->GetRemainingCooldownSeconds(10.5f), 0.5f));
+
+	TestTrue(TEXT("UI-P0-06 Secondary 재선택 성공"), SelectionVehiclePawn->RequestSelectWeaponIndex(1));
+	TestTrue(TEXT("UI-P0-06 Secondary Heat 25→15 냉각"), FMath::IsNearlyEqual(SelectionWeaponComp->GetCurrentWeaponHeat(), 15.0f));
+	TestTrue(TEXT("UI-P0-06 Secondary last fire 20 보존"), FMath::IsNearlyEqual(SelectionWeaponComp->GetLastAcceptedFireTimeSeconds(), 20.0f));
+	TestTrue(TEXT("UI-P0-06 Secondary 120RPM 독립 Cooldown 0.25"), FMath::IsNearlyEqual(SelectionWeaponComp->GetRemainingCooldownSeconds(20.25f), 0.25f));
+	TestFalse(TEXT("UI-P0-06 범위 밖 무기 선택 거부"), SelectionVehiclePawn->RequestSelectWeaponIndex(2));
+	TestEqual(TEXT("UI-P0-06 잘못된 선택 뒤 Secondary 유지"), SelectionWeaponComp->GetSelectedWeaponIndex(), 1);
+
+	// [v1.19.0] 실제 WeaponComp Player-facing selection source가 HUD ViewData로 내부 ID 없이 전달되는지 검증할 Provider입니다.
+	UCFHUDDataProvider* SelectionHUDProvider = NewObject<UCFHUDDataProvider>(GetTransientPackage());
+	if (!TestNotNull(TEXT("UI-P0-06 Weapon Selection HUD Provider"), SelectionHUDProvider))
+	{
+		SelectionVehiclePawn->Destroy();
+		return false;
+	}
+	SelectionHUDProvider->RebindCurrentPawn(SelectionVehiclePawn);
+	SelectionHUDProvider->RefreshViewData();
+
+	// [v1.19.0] Secondary가 선택된 시점의 실제 Player-facing Weapon HUD ViewData입니다.
+	FCFWeaponHUDData SelectionWeaponViewData = SelectionHUDProvider->GetCurrentViewData().Weapon;
+	TestEqual(TEXT("UI-P0-06 HUD Weapon Selection Known"), SelectionWeaponViewData.WeaponSelectionAvailability, ECFUIViewAvailability::Known);
+	TestEqual(TEXT("UI-P0-06 HUD 선택 가능 무기 2개"), SelectionWeaponViewData.SelectableWeapons.Num(), 2);
+	TestEqual(TEXT("UI-P0-06 HUD Selected index 1"), SelectionWeaponViewData.SelectedWeaponIndex, 1);
+	if (SelectionWeaponViewData.SelectableWeapons.Num() != 2)
+	{
+		SelectionHUDProvider->ShutdownProvider();
+		SelectionVehiclePawn->Destroy();
+		return false;
+	}
+	TestEqual(TEXT("UI-P0-06 HUD Primary DisplayName"), SelectionWeaponViewData.SelectableWeapons[0].DisplayName.ToString(), FString(TEXT("PRIMARY CANNON")));
+	TestEqual(TEXT("UI-P0-06 HUD Secondary DisplayName"), SelectionWeaponViewData.SelectableWeapons[1].DisplayName.ToString(), FString(TEXT("SECONDARY CANNON")));
+	TestFalse(TEXT("UI-P0-06 HUD Primary 비선택"), SelectionWeaponViewData.SelectableWeapons[0].bSelected);
+	TestTrue(TEXT("UI-P0-06 HUD Secondary 선택"), SelectionWeaponViewData.SelectableWeapons[1].bSelected);
+
+	TestTrue(TEXT("UI-P0-06 Provider 관측 중 Primary 선택"), SelectionVehiclePawn->RequestSelectWeaponIndex(0));
+	SelectionHUDProvider->RefreshViewData();
+	SelectionWeaponViewData = SelectionHUDProvider->GetCurrentViewData().Weapon;
+	TestEqual(TEXT("UI-P0-06 HUD Selected index 0 갱신"), SelectionWeaponViewData.SelectedWeaponIndex, 0);
+	TestTrue(TEXT("UI-P0-06 HUD Primary 선택 갱신"), SelectionWeaponViewData.SelectableWeapons[0].bSelected);
+	TestFalse(TEXT("UI-P0-06 HUD Secondary 비선택 갱신"), SelectionWeaponViewData.SelectableWeapons[1].bSelected);
+
+		SelectionHUDProvider->ShutdownProvider();
+	SelectionVehiclePawn->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP006WeaponRailVisualTest,
+	"CarFight.UI.UI_P0_06.WeaponRailVisualContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.20.0] 저장 Production WeaponPanel이 실제 selection ViewData의 비선택 무기만 이름 기반 Rail로 표시하고 fake icon/selected duplicate를 만들지 않는지 검증합니다.
+bool FCFHUDP006WeaponRailVisualTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.20.0] 저장 Production HUD를 실제 인스턴스화해 Rail slot 적용을 확인할 Automation World입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("UI-P0-06 Weapon Rail Automation World"), TestWorld))
+	{
+		return false;
+	}
+
+	// [v1.20.0] DefaultGame.ini와 동일한 저장 Production HUD Generated Class입니다.
+	UClass* ProductionHUDClass = LoadClass<UCFStyledWidgetBase>(
+		nullptr,
+		TEXT("/Game/CarFight/UI/HUD/WBP_CFInGameHUD.WBP_CFInGameHUD_C"));
+	if (!TestNotNull(TEXT("UI-P0-06 Weapon Rail Production HUD Class"), ProductionHUDClass))
+	{
+		return false;
+	}
+
+	// [v1.20.0] 저장 Production HUD Class로 만든 테스트 전용 Widget 인스턴스입니다.
+	UCFStyledWidgetBase* ProductionHUDWidget = CreateWidget<UCFStyledWidgetBase>(TestWorld, ProductionHUDClass);
+	if (!TestNotNull(TEXT("UI-P0-06 Weapon Rail Production HUD Widget"), ProductionHUDWidget))
+	{
+		return false;
+	}
+
+	// [v1.20.0] 저장 Production Root 아래 실제 WeaponPanel 자식 Widget입니다.
+	UUserWidget* WeaponPanelWidget = Cast<UUserWidget>(ProductionHUDWidget->GetWidgetFromName(FName(TEXT("WBP_CFWeaponPanel"))));
+	if (!TestNotNull(TEXT("UI-P0-06 Weapon Rail Production WeaponPanel"), WeaponPanelWidget))
+	{
+		return false;
+	}
+
+	// [v1.20.0] 실제 비선택 무기가 하나 이상일 때 Presenter가 열 Rail 전체 행입니다.
+	UWidget* WeaponRail = WeaponPanelWidget->GetWidgetFromName(FName(TEXT("HorizontalBox_WeaponRail")));
+	// [v1.20.0] 첫 번째 fixed Rail Text Tile Container입니다.
+	UWidget* WeaponRailTile1 = WeaponPanelWidget->GetWidgetFromName(FName(TEXT("SizeBox_WeaponRail1")));
+	// [v1.20.0] 두 번째 fixed Rail Text Tile Container입니다.
+	UWidget* WeaponRailTile2 = WeaponPanelWidget->GetWidgetFromName(FName(TEXT("SizeBox_WeaponRail2")));
+	// [v1.20.0] 세 번째 fixed Rail Text Tile 또는 overflow Container입니다.
+	UWidget* WeaponRailTile3 = WeaponPanelWidget->GetWidgetFromName(FName(TEXT("SizeBox_WeaponRail3")));
+	// [v1.20.0] 첫 Rail Tile의 Presenter 최종 문자열입니다.
+	UTextBlock* WeaponRailText1 = Cast<UTextBlock>(WeaponPanelWidget->GetWidgetFromName(FName(TEXT("Text_WeaponRail1"))));
+	// [v1.20.0] 두 번째 Rail Tile의 Presenter 최종 문자열입니다.
+	UTextBlock* WeaponRailText2 = Cast<UTextBlock>(WeaponPanelWidget->GetWidgetFromName(FName(TEXT("Text_WeaponRail2"))));
+	// [v1.20.0] 세 번째 Rail Tile 또는 +N overflow의 Presenter 최종 문자열입니다.
+	UTextBlock* WeaponRailText3 = Cast<UTextBlock>(WeaponPanelWidget->GetWidgetFromName(FName(TEXT("Text_WeaponRail3"))));
+	if (!TestNotNull(TEXT("UI-P0-06 Weapon Rail Row"), WeaponRail)
+		|| !TestNotNull(TEXT("UI-P0-06 Weapon Rail Tile1"), WeaponRailTile1)
+		|| !TestNotNull(TEXT("UI-P0-06 Weapon Rail Tile2"), WeaponRailTile2)
+		|| !TestNotNull(TEXT("UI-P0-06 Weapon Rail Tile3"), WeaponRailTile3)
+		|| !TestNotNull(TEXT("UI-P0-06 Weapon Rail Text1"), WeaponRailText1)
+		|| !TestNotNull(TEXT("UI-P0-06 Weapon Rail Text2"), WeaponRailText2)
+		|| !TestNotNull(TEXT("UI-P0-06 Weapon Rail Text3"), WeaponRailText3))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("UI-P0-06 Weapon Rail Designer default Collapsed"), WeaponRail->GetVisibility(), ESlateVisibility::Collapsed);
+	TestNull(TEXT("UI-P0-06 fake Turret Rail Image 제거"), WeaponPanelWidget->GetWidgetFromName(FName(TEXT("Image_WeaponRail1"))));
+	TestNull(TEXT("UI-P0-06 fake Ammo Rail Image 제거"), WeaponPanelWidget->GetWidgetFromName(FName(TEXT("Image_WeaponRail2"))));
+	TestNull(TEXT("UI-P0-06 fake Reload Rail Image 제거"), WeaponPanelWidget->GetWidgetFromName(FName(TEXT("Image_WeaponRail3"))));
+
+	// [v1.20.0] actual EquipmentPresetData.DisplayName이 알려진 Player-facing selection HUD 항목을 만드는 Helper입니다.
+	auto MakeNamedSelectionItem = [](const TCHAR* DisplayName, const bool bSelected)
+	{
+		// [v1.20.0] 내부 ID 필드 없이 DisplayName과 selected 의미만 가진 결과 항목입니다.
+		FCFWeaponSelectionHUDItem SelectionItem;
+		SelectionItem.DisplayNameAvailability = ECFUIViewAvailability::Known;
+		SelectionItem.DisplayName = FText::FromString(DisplayName);
+		SelectionItem.bSelected = bSelected;
+		return SelectionItem;
+	};
+
+	// [v1.20.0] 세 실제 selectable weapon 중 첫 번째가 선택된 대표 Player-facing ViewData입니다.
+	FCFWeaponHUDData ThreeWeaponViewData;
+	ThreeWeaponViewData.Availability = ECFUIViewAvailability::Known;
+	ThreeWeaponViewData.DisplayNameAvailability = ECFUIViewAvailability::Known;
+	ThreeWeaponViewData.DisplayName = FText::FromString(TEXT("PRIMARY CANNON"));
+	ThreeWeaponViewData.WeaponSelectionAvailability = ECFUIViewAvailability::Known;
+	ThreeWeaponViewData.SelectedWeaponIndex = 0;
+	ThreeWeaponViewData.SelectableWeapons.Add(MakeNamedSelectionItem(TEXT("PRIMARY CANNON"), true));
+	ThreeWeaponViewData.SelectableWeapons.Add(MakeNamedSelectionItem(TEXT("SECONDARY CANNON"), false));
+	ThreeWeaponViewData.SelectableWeapons.Add(MakeNamedSelectionItem(TEXT("MISSILE POD"), false));
+
+	// [v1.20.0] pure projection에서 선택 무기가 제거되고 Provider fixed order가 유지되는지 확인할 Rail 결과입니다.
+	TArray<FCFWeaponRailPresentationEntry> RailEntries;
+	UCFHUDPresenter::BuildWeaponRailEntries(ThreeWeaponViewData, RailEntries);
+	TestEqual(TEXT("UI-P0-06 selected 제외 후 Rail 2개"), RailEntries.Num(), 2);
+	if (RailEntries.Num() != 2)
+	{
+		return false;
+	}
+	TestEqual(TEXT("UI-P0-06 Rail 첫 비선택 순번+이름"), RailEntries[0].DisplayText.ToString(), FString(TEXT("02  SECONDARY CANNON")));
+	TestEqual(TEXT("UI-P0-06 Rail 둘째 비선택 순번+이름"), RailEntries[1].DisplayText.ToString(), FString(TEXT("03  MISSILE POD")));
+
+	// [v1.20.0] 실제 Production Widget에 synthetic ViewData를 적용할 Presenter입니다.
+	UCFHUDPresenter* Presenter = NewObject<UCFHUDPresenter>(GetTransientPackage());
+	if (!TestNotNull(TEXT("UI-P0-06 Weapon Rail Presenter"), Presenter))
+	{
+		return false;
+	}
+	Presenter->SetProductionWidget(ProductionHUDWidget);
+
+	// [v1.20.0] private UFUNCTION HandleHUDViewDataChanged를 실제 Provider delegate 경로와 동일하게 호출할 Reflection 함수입니다.
+	UFunction* HandleViewDataFunction = Presenter->FindFunction(FName(TEXT("HandleHUDViewDataChanged")));
+	if (!TestNotNull(TEXT("UI-P0-06 Weapon Rail HandleHUDViewDataChanged"), HandleViewDataFunction))
+	{
+		return false;
+	}
+
+	// [v1.20.0] Reflection UFUNCTION의 단일 ViewData 인자를 전달할 파라미터 구조입니다.
+	struct FHandleHUDViewDataChangedParams
+	{
+		// [v1.20.0] Presenter에 적용할 전체 HUD ViewData입니다.
+		FCFInGameUIViewData ViewData;
+	};
+
+	// [v1.20.0] Rail 관련 ViewData를 Production Presenter에 정확히 한 번 적용하는 Helper입니다.
+	auto ApplyWeaponViewDataOnce = [Presenter, HandleViewDataFunction](const FCFWeaponHUDData& WeaponViewData)
+	{
+		// [v1.20.0] 이번 한 번의 Presenter 적용에 사용할 전체 ViewData 파라미터입니다.
+		FHandleHUDViewDataChangedParams Params;
+		Params.ViewData.Weapon = WeaponViewData;
+		Presenter->ProcessEvent(HandleViewDataFunction, &Params);
+	};
+
+	ApplyWeaponViewDataOnce(ThreeWeaponViewData);
+	TestEqual(TEXT("UI-P0-06 actual Rail visible"), WeaponRail->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("UI-P0-06 actual Rail Tile1 visible"), WeaponRailTile1->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("UI-P0-06 actual Rail Tile2 visible"), WeaponRailTile2->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("UI-P0-06 actual Rail Tile3 collapsed"), WeaponRailTile3->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-06 actual Rail Text1"), WeaponRailText1->GetText().ToString(), FString(TEXT("02  SECONDARY CANNON")));
+	TestEqual(TEXT("UI-P0-06 actual Rail Text2"), WeaponRailText2->GetText().ToString(), FString(TEXT("03  MISSILE POD")));
+
+	// [v1.20.0] 선택이 가운데 무기로 바뀌었을 때 기존 selected가 Rail로 복귀하고 새 selected가 Rail에서 빠지는 ViewData입니다.
+	ThreeWeaponViewData.SelectedWeaponIndex = 1;
+	ThreeWeaponViewData.DisplayName = FText::FromString(TEXT("SECONDARY CANNON"));
+	ThreeWeaponViewData.SelectableWeapons[0].bSelected = false;
+	ThreeWeaponViewData.SelectableWeapons[1].bSelected = true;
+	ApplyWeaponViewDataOnce(ThreeWeaponViewData);
+	TestEqual(TEXT("UI-P0-06 selection change Rail Text1"), WeaponRailText1->GetText().ToString(), FString(TEXT("01  PRIMARY CANNON")));
+	TestEqual(TEXT("UI-P0-06 selection change Rail Text2"), WeaponRailText2->GetText().ToString(), FString(TEXT("03  MISSILE POD")));
+
+	// [v1.20.0] DisplayName이 없는 실제 selection 항목도 내부 identity 대신 일반 WEAPON으로만 표시할 ViewData입니다.
+	ThreeWeaponViewData.SelectableWeapons[2].DisplayNameAvailability = ECFUIViewAvailability::Unavailable;
+	ThreeWeaponViewData.SelectableWeapons[2].DisplayName = FText::GetEmpty();
+	ApplyWeaponViewDataOnce(ThreeWeaponViewData);
+	TestEqual(TEXT("UI-P0-06 missing name generic fallback only"), WeaponRailText2->GetText().ToString(), FString(TEXT("03  WEAPON")));
+
+	// [v1.20.0] 선택 1개 + 비선택 4개에서 앞 2개 + +2 overflow를 검증할 5무기 ViewData입니다.
+	FCFWeaponHUDData FiveWeaponViewData;
+	FiveWeaponViewData.Availability = ECFUIViewAvailability::Known;
+	FiveWeaponViewData.DisplayNameAvailability = ECFUIViewAvailability::Known;
+	FiveWeaponViewData.DisplayName = FText::FromString(TEXT("A"));
+	FiveWeaponViewData.WeaponSelectionAvailability = ECFUIViewAvailability::Known;
+	FiveWeaponViewData.SelectedWeaponIndex = 0;
+	FiveWeaponViewData.SelectableWeapons.Add(MakeNamedSelectionItem(TEXT("A"), true));
+	FiveWeaponViewData.SelectableWeapons.Add(MakeNamedSelectionItem(TEXT("B"), false));
+	FiveWeaponViewData.SelectableWeapons.Add(MakeNamedSelectionItem(TEXT("C"), false));
+	FiveWeaponViewData.SelectableWeapons.Add(MakeNamedSelectionItem(TEXT("D"), false));
+	FiveWeaponViewData.SelectableWeapons.Add(MakeNamedSelectionItem(TEXT("E"), false));
+	UCFHUDPresenter::BuildWeaponRailEntries(FiveWeaponViewData, RailEntries);
+	TestEqual(TEXT("UI-P0-06 overflow Rail fixed 3 slots"), RailEntries.Num(), 3);
+	if (RailEntries.Num() != 3)
+	{
+		return false;
+	}
+	TestEqual(TEXT("UI-P0-06 overflow first fixed order"), RailEntries[0].DisplayText.ToString(), FString(TEXT("02  B")));
+	TestEqual(TEXT("UI-P0-06 overflow second fixed order"), RailEntries[1].DisplayText.ToString(), FString(TEXT("03  C")));
+	TestEqual(TEXT("UI-P0-06 overflow +2"), RailEntries[2].DisplayText.ToString(), FString(TEXT("+2")));
+	TestTrue(TEXT("UI-P0-06 third slot overflow semantic"), RailEntries[2].bOverflow);
+	ApplyWeaponViewDataOnce(FiveWeaponViewData);
+	TestEqual(TEXT("UI-P0-06 overflow Tile3 visible"), WeaponRailTile3->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("UI-P0-06 overflow Production +2"), WeaponRailText3->GetText().ToString(), FString(TEXT("+2")));
+
+	// [v1.20.0] 실제 선택 가능한 무기가 하나뿐이면 selected duplicate 없이 Rail 전체가 사라져야 하는 ViewData입니다.
+	FCFWeaponHUDData SingleWeaponViewData;
+	SingleWeaponViewData.Availability = ECFUIViewAvailability::Known;
+	SingleWeaponViewData.DisplayNameAvailability = ECFUIViewAvailability::Known;
+	SingleWeaponViewData.DisplayName = FText::FromString(TEXT("ONLY WEAPON"));
+	SingleWeaponViewData.WeaponSelectionAvailability = ECFUIViewAvailability::Known;
+	SingleWeaponViewData.SelectedWeaponIndex = 0;
+	SingleWeaponViewData.SelectableWeapons.Add(MakeNamedSelectionItem(TEXT("ONLY WEAPON"), true));
+	ApplyWeaponViewDataOnce(SingleWeaponViewData);
+	TestEqual(TEXT("UI-P0-06 selected-only Rail collapsed"), WeaponRail->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-06 selected-only Tile1 collapsed"), WeaponRailTile1->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-06 selected-only Tile2 collapsed"), WeaponRailTile2->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-06 selected-only Tile3 collapsed"), WeaponRailTile3->GetVisibility(), ESlateVisibility::Collapsed);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP006RpmGaugePresentationTest,
+	"CarFight.UI.UI_P0_06.RpmGaugePresentationContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.15.0] 실제 Chaos Current RPM을 explicit RedlineStartRPM=0.85 / EngineMaxRPM=1.0 화면 위치로 변환하고 fallback 추정을 하지 않는지 검증합니다.
+bool FCFHUDP006RpmGaugePresentationTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.15.0] 실제 Runtime current RPM과 explicit authored Redline/Maximum 계약을 표현할 Vehicle HUD ViewData입니다.
+	FCFVehicleHUDData VehicleViewData;
+	VehicleViewData.EngineRpmAvailability = ECFUIViewAvailability::KnownZero;
+	VehicleViewData.EngineRedlineStartRpmAvailability = ECFUIViewAvailability::Known;
+	VehicleViewData.EngineMaximumRpmAvailability = ECFUIViewAvailability::Known;
+	VehicleViewData.EngineRedlineStartRpm = 6000.0f;
+	VehicleViewData.EngineMaximumRpm = 7000.0f;
+
+	// [v1.15.0] Presenter가 계산한 승인 Tachometer 0~1 화면 비율입니다.
+	float GaugeRatio = -1.0f;
+	TestTrue(TEXT("UI-P0-06 RPM 0 mapping available"), UCFHUDPresenter::ResolveEngineRpmGaugePresentation(VehicleViewData, GaugeRatio));
+	TestTrue(TEXT("UI-P0-06 RPM 0 -> 0.0"), FMath::IsNearlyEqual(GaugeRatio, 0.0f));
+
+	VehicleViewData.EngineRpmAvailability = ECFUIViewAvailability::Known;
+	VehicleViewData.EngineRpm = 3000.0f;
+	TestTrue(TEXT("UI-P0-06 RPM half redline mapping available"), UCFHUDPresenter::ResolveEngineRpmGaugePresentation(VehicleViewData, GaugeRatio));
+	TestTrue(TEXT("UI-P0-06 RPM 3000 -> 0.425"), FMath::IsNearlyEqual(GaugeRatio, 0.425f));
+
+	VehicleViewData.EngineRpm = 6000.0f;
+	TestTrue(TEXT("UI-P0-06 Redline mapping available"), UCFHUDPresenter::ResolveEngineRpmGaugePresentation(VehicleViewData, GaugeRatio));
+	TestTrue(TEXT("UI-P0-06 Redline 6000 -> 0.85"), FMath::IsNearlyEqual(GaugeRatio, 0.85f));
+
+	VehicleViewData.EngineRpm = 6500.0f;
+	TestTrue(TEXT("UI-P0-06 post-redline mapping available"), UCFHUDPresenter::ResolveEngineRpmGaugePresentation(VehicleViewData, GaugeRatio));
+	TestTrue(TEXT("UI-P0-06 RPM 6500 -> 0.925"), FMath::IsNearlyEqual(GaugeRatio, 0.925f));
+
+	VehicleViewData.EngineRpm = 7000.0f;
+	TestTrue(TEXT("UI-P0-06 maximum mapping available"), UCFHUDPresenter::ResolveEngineRpmGaugePresentation(VehicleViewData, GaugeRatio));
+	TestTrue(TEXT("UI-P0-06 Maximum 7000 -> 1.0"), FMath::IsNearlyEqual(GaugeRatio, 1.0f));
+
+	VehicleViewData.EngineRpm = 8000.0f;
+	TestTrue(TEXT("UI-P0-06 overrun mapping available"), UCFHUDPresenter::ResolveEngineRpmGaugePresentation(VehicleViewData, GaugeRatio));
+	TestTrue(TEXT("UI-P0-06 overrun clamps -> 1.0"), FMath::IsNearlyEqual(GaugeRatio, 1.0f));
+
+	VehicleViewData.EngineRedlineStartRpmAvailability = ECFUIViewAvailability::Unavailable;
+	TestFalse(TEXT("UI-P0-06 Redline 미설정은 EngineMaxRPM fallback 금지"), UCFHUDPresenter::ResolveEngineRpmGaugePresentation(VehicleViewData, GaugeRatio));
+
+	VehicleViewData.EngineRedlineStartRpmAvailability = ECFUIViewAvailability::Known;
+	VehicleViewData.EngineRedlineStartRpm = 0.0f;
+	TestFalse(TEXT("UI-P0-06 explicit Redline 0은 mapping 불가"), UCFHUDPresenter::ResolveEngineRpmGaugePresentation(VehicleViewData, GaugeRatio));
+
+		VehicleViewData.EngineRedlineStartRpm = 7000.0f;
+	TestFalse(TEXT("UI-P0-06 Redline >= Maximum fail-closed"), UCFHUDPresenter::ResolveEngineRpmGaugePresentation(VehicleViewData, GaugeRatio));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP006RpmGaugeVisualBindingTest,
+	"CarFight.UI.UI_P0_06.RpmGaugeVisualBindingContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.17.0] 저장 Production SpeedGauge 21 Tick이 explicit RPM ratio를 소비하고 unconfigured Redline에서 stale/fallback fill을 남기지 않는지 검증합니다.
+bool FCFHUDP006RpmGaugeVisualBindingTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.17.0] 저장 Production HUD Widget을 실제 생성해 RPM Tick binding을 검증할 Automation World입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("UI-P0-06 RPM Visual Automation World"), TestWorld))
+	{
+		return false;
+	}
+
+	// [v1.17.0] DefaultGame.ini와 동일한 저장 Production HUD Generated Class입니다.
+	UClass* ProductionHUDClass = LoadClass<UCFStyledWidgetBase>(
+		nullptr,
+		TEXT("/Game/CarFight/UI/HUD/WBP_CFInGameHUD.WBP_CFInGameHUD_C"));
+	if (!TestNotNull(TEXT("UI-P0-06 RPM Visual Production HUD Class"), ProductionHUDClass))
+	{
+		return false;
+	}
+
+	// [v1.17.0] 저장 Production HUD Class로 만든 테스트 전용 Widget 인스턴스입니다.
+	UCFStyledWidgetBase* ProductionHUDWidget = CreateWidget<UCFStyledWidgetBase>(TestWorld, ProductionHUDClass);
+	if (!TestNotNull(TEXT("UI-P0-06 RPM Visual Production HUD Widget"), ProductionHUDWidget))
+	{
+		return false;
+	}
+
+	// [v1.17.0] Production VehiclePanel 자식 Widget 인스턴스입니다.
+	UUserWidget* VehiclePanelWidget = Cast<UUserWidget>(ProductionHUDWidget->GetWidgetFromName(FName(TEXT("WBP_CFVehiclePanel"))));
+	if (!TestNotNull(TEXT("UI-P0-06 RPM Visual VehiclePanel"), VehiclePanelWidget))
+	{
+		return false;
+	}
+
+	// [v1.17.0] 21 RPM Tick과 Speed/Gear를 소유하는 저장 Production SpeedGauge입니다.
+	UUserWidget* SpeedGaugeWidget = Cast<UUserWidget>(VehiclePanelWidget->GetWidgetFromName(FName(TEXT("WBP_CFSpeedGauge"))));
+	if (!TestNotNull(TEXT("UI-P0-06 RPM Visual SpeedGauge"), SpeedGaugeWidget))
+	{
+		return false;
+	}
+
+	// [v1.17.0] 저장 SpeedGauge에 존재해야 하는 고정 RPM Tick 개수입니다.
+	constexpr int32 EngineRpmGaugeTickCount = 21;
+	// [v1.17.0] 저장 Production SpeedGauge에서 찾은 21개 Tick Widget 포인터입니다.
+	TArray<UProgressBar*> EngineRpmGaugeTicks;
+	EngineRpmGaugeTicks.Reserve(EngineRpmGaugeTickCount);
+	// [v1.17.0] 저장 Production Tick 이름을 00~20까지 순서대로 조회할 인덱스입니다.
+	int32 TickIndex = 0;
+	for (; TickIndex < EngineRpmGaugeTickCount; ++TickIndex)
+	{
+		// [v1.17.0] 현재 저장 Production Tick의 고유 Widget 이름입니다.
+		const FName TickWidgetName(*FString::Printf(TEXT("ProgressBar_RPMTick%02d"), TickIndex));
+		// [v1.17.0] Presenter가 runtime Percent를 적용할 실제 저장 ProgressBar Tick입니다.
+		UProgressBar* TickWidget = Cast<UProgressBar>(SpeedGaugeWidget->GetWidgetFromName(TickWidgetName));
+		if (!TestNotNull(*FString::Printf(TEXT("UI-P0-06 RPM Visual Tick %02d"), TickIndex), TickWidget))
+		{
+			return false;
+		}
+		EngineRpmGaugeTicks.Add(TickWidget);
+	}
+	TestEqual(TEXT("UI-P0-06 RPM Visual Tick 정확히 21개"), EngineRpmGaugeTicks.Num(), EngineRpmGaugeTickCount);
+
+	// [v1.17.0] 실제 Production Widget에 ViewData를 적용할 Presenter입니다.
+	UCFHUDPresenter* Presenter = NewObject<UCFHUDPresenter>(GetTransientPackage());
+	if (!TestNotNull(TEXT("UI-P0-06 RPM Visual Presenter"), Presenter))
+	{
+		return false;
+	}
+	Presenter->SetProductionWidget(ProductionHUDWidget);
+
+	// [v1.17.0] private UFUNCTION HandleHUDViewDataChanged를 실제 delegate와 동일한 경로로 호출할 Reflection 함수입니다.
+	UFunction* HandleViewDataFunction = Presenter->FindFunction(FName(TEXT("HandleHUDViewDataChanged")));
+	if (!TestNotNull(TEXT("UI-P0-06 RPM Visual HandleHUDViewDataChanged"), HandleViewDataFunction))
+	{
+		return false;
+	}
+
+	// [v1.17.0] Reflection UFUNCTION의 단일 ViewData 인자를 전달할 파라미터 구조입니다.
+	struct FHandleHUDViewDataChangedParams
+	{
+		// [v1.17.0] Presenter에 적용할 전체 HUD ViewData입니다.
+		FCFInGameUIViewData ViewData;
+	};
+
+	// [v1.17.0] 한 ViewData를 Presenter에 한 번 전달해 Production RPM Tick을 갱신하는 테스트 Helper입니다.
+	auto ApplyViewDataOnce = [Presenter, HandleViewDataFunction](const FCFInGameUIViewData& ViewData)
+	{
+		// [v1.17.0] 현재 한 번 적용할 Reflection 호출 파라미터입니다.
+		FHandleHUDViewDataChangedParams Params;
+		Params.ViewData = ViewData;
+		Presenter->ProcessEvent(HandleViewDataFunction, &Params);
+	};
+
+	// [v1.17.0] 21개 Tick이 모두 지정 Percent인지 검증하는 반복 Helper입니다.
+		auto TestAllTickPercent = [this, &EngineRpmGaugeTicks](const TCHAR* TickPercentTestLabel, const float ExpectedPercent)
+	{
+		// [v1.17.0] 모든 저장 Production Tick을 순회할 인덱스입니다.
+		int32 CurrentTickIndex = 0;
+		for (; CurrentTickIndex < EngineRpmGaugeTicks.Num(); ++CurrentTickIndex)
+		{
+			// [v1.17.0] 현재 Tick의 실제 Runtime Percent입니다.
+			const float CurrentTickPercent = EngineRpmGaugeTicks[CurrentTickIndex]->GetPercent();
+			TestTrue(
+				*FString::Printf(TEXT("%s Tick%02d"), TickPercentTestLabel, CurrentTickIndex),
+				FMath::IsNearlyEqual(CurrentTickPercent, ExpectedPercent));
+		}
+	};
+
+	// [v1.17.0] 대표 VehicleData처럼 Max는 있지만 Redline은 0/Unavailable인 현재 Production 입력을 재현하는 전체 HUD ViewData입니다.
+	FCFInGameUIViewData ViewData;
+	ViewData.Vehicle.EngineRpmAvailability = ECFUIViewAvailability::Known;
+	ViewData.Vehicle.EngineRpm = 6500.0f;
+	ViewData.Vehicle.EngineMaximumRpmAvailability = ECFUIViewAvailability::Known;
+	ViewData.Vehicle.EngineMaximumRpm = 6500.0f;
+	ViewData.Vehicle.EngineRedlineStartRpmAvailability = ECFUIViewAvailability::Unavailable;
+	ViewData.Vehicle.EngineRedlineStartRpm = 0.0f;
+	ApplyViewDataOnce(ViewData);
+	TestAllTickPercent(TEXT("UI-P0-06 Redline Unconfigured는 Max fallback 없이 fill 0"), 0.0f);
+
+	// [v1.17.0] Visual binding만 검증하기 위한 synthetic explicit Redline 계약이며 저장 VehicleData Asset에는 쓰지 않습니다.
+	ViewData.Vehicle.EngineRedlineStartRpmAvailability = ECFUIViewAvailability::Known;
+	ViewData.Vehicle.EngineRedlineStartRpm = 6000.0f;
+	ViewData.Vehicle.EngineMaximumRpm = 7000.0f;
+	ViewData.Vehicle.EngineRpm = 6000.0f;
+	ApplyViewDataOnce(ViewData);
+	TestTrue(TEXT("UI-P0-06 Redline에서 Tick00 full"), FMath::IsNearlyEqual(EngineRpmGaugeTicks[0]->GetPercent(), 1.0f));
+	TestTrue(TEXT("UI-P0-06 Redline에서 Tick16 full"), FMath::IsNearlyEqual(EngineRpmGaugeTicks[16]->GetPercent(), 1.0f));
+	TestTrue(TEXT("UI-P0-06 Redline 0.85 위치 Tick17 full"), FMath::IsNearlyEqual(EngineRpmGaugeTicks[17]->GetPercent(), 1.0f));
+	TestTrue(TEXT("UI-P0-06 Redline 다음 Tick18 empty"), FMath::IsNearlyZero(EngineRpmGaugeTicks[18]->GetPercent()));
+
+	ViewData.Vehicle.EngineRpm = 6500.0f;
+	ApplyViewDataOnce(ViewData);
+	TestTrue(TEXT("UI-P0-06 0.925에서 Tick18 full"), FMath::IsNearlyEqual(EngineRpmGaugeTicks[18]->GetPercent(), 1.0f));
+	TestTrue(TEXT("UI-P0-06 0.925에서 Tick19 half"), FMath::IsNearlyEqual(EngineRpmGaugeTicks[19]->GetPercent(), 0.5f));
+	TestTrue(TEXT("UI-P0-06 0.925에서 Tick20 empty"), FMath::IsNearlyZero(EngineRpmGaugeTicks[20]->GetPercent()));
+
+	ViewData.Vehicle.EngineRpm = 7000.0f;
+	ApplyViewDataOnce(ViewData);
+	TestAllTickPercent(TEXT("UI-P0-06 Maximum에서 21 Tick full"), 1.0f);
+
+	ViewData.Vehicle.EngineRedlineStartRpmAvailability = ECFUIViewAvailability::Unavailable;
+	ViewData.Vehicle.EngineRedlineStartRpm = 0.0f;
+	ApplyViewDataOnce(ViewData);
+	TestAllTickPercent(TEXT("UI-P0-06 Redline 제거 후 stale fill reset"), 0.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP006ResourceVisualSlotContractTest,
+	"CarFight.UI.UI_P0_06.ResourceVisualSlotContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.13.0] Stage B Production WeaponPanel이 Compact Presentation을 ViewData 적용당 정확히 한 번 소비하고 legacy 고정 Row와 중복하지 않는지 검증합니다.
+bool FCFHUDP006ResourceVisualSlotContractTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.13.0] 저장 Production HUD Widget을 실제 생성해 Presenter 의미 슬롯 적용을 검증할 Automation World입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("UI-P0-06 Stage B Automation World"), TestWorld))
+	{
+		return false;
+	}
+
+	// [v1.13.0] DefaultGame.ini와 동일한 저장 Production HUD Generated Class입니다.
+	UClass* ProductionHUDClass = LoadClass<UCFStyledWidgetBase>(
+		nullptr,
+		TEXT("/Game/CarFight/UI/HUD/WBP_CFInGameHUD.WBP_CFInGameHUD_C"));
+	if (!TestNotNull(TEXT("UI-P0-06 Stage B Production HUD Class"), ProductionHUDClass))
+	{
+		return false;
+	}
+
+	// [v1.13.0] 저장 Production HUD Class로 만든 테스트 전용 Widget 인스턴스입니다.
+	UCFStyledWidgetBase* ProductionHUDWidget = CreateWidget<UCFStyledWidgetBase>(TestWorld, ProductionHUDClass);
+	if (!TestNotNull(TEXT("UI-P0-06 Stage B Production HUD Widget"), ProductionHUDWidget))
+	{
+		return false;
+	}
+
+	// [v1.13.0] 실제 Production WeaponPanel 자식 Widget 인스턴스입니다.
+	UUserWidget* WeaponPanelWidget = Cast<UUserWidget>(ProductionHUDWidget->GetWidgetFromName(FName(TEXT("WBP_CFWeaponPanel"))));
+	if (!TestNotNull(TEXT("UI-P0-06 Stage B Production WeaponPanel"), WeaponPanelWidget))
+	{
+		return false;
+	}
+
+	// [v1.13.0] Stage B 새 Compact Resource Presentation 전체 Container입니다.
+	UWidget* ResourcePresentationWidget = WeaponPanelWidget->GetWidgetFromName(FName(TEXT("VerticalBox_ResourcePresentation")));
+	// [v1.13.0] Stage B Primary 의미 Row입니다.
+	UWidget* PrimaryResourceRow = WeaponPanelWidget->GetWidgetFromName(FName(TEXT("HorizontalBox_PrimaryResource")));
+	// [v1.13.0] Stage B Primary Player-facing 문자열 Widget입니다.
+	UTextBlock* PrimaryResourceText = Cast<UTextBlock>(WeaponPanelWidget->GetWidgetFromName(FName(TEXT("Text_WeaponPrimaryResource"))));
+	// [v1.13.0] Stage B Primary 선택적 진행률 Widget입니다.
+	UProgressBar* PrimaryResourceProgress = Cast<UProgressBar>(WeaponPanelWidget->GetWidgetFromName(FName(TEXT("ProgressBar_PrimaryResource"))));
+	// [v1.13.0] Stage B Secondary A/B 전체 Row입니다.
+	UWidget* SecondaryResourcesRow = WeaponPanelWidget->GetWidgetFromName(FName(TEXT("HorizontalBox_SecondaryResources")));
+	// [v1.13.0] Stage B 첫 번째 Secondary Container입니다.
+	UWidget* SecondaryResourceA = WeaponPanelWidget->GetWidgetFromName(FName(TEXT("VerticalBox_SecondaryResourceA")));
+	// [v1.13.0] Stage B 첫 번째 Secondary 문자열 Widget입니다.
+	UTextBlock* SecondaryResourceTextA = Cast<UTextBlock>(WeaponPanelWidget->GetWidgetFromName(FName(TEXT("Text_WeaponSecondaryResourceA"))));
+	// [v1.13.0] Stage B 두 번째 Secondary Container입니다.
+	UWidget* SecondaryResourceB = WeaponPanelWidget->GetWidgetFromName(FName(TEXT("VerticalBox_SecondaryResourceB")));
+	// [v1.13.0] Stage B FireState Row입니다.
+	UWidget* FireStateRow = WeaponPanelWidget->GetWidgetFromName(FName(TEXT("HorizontalBox_FireState")));
+	// [v1.13.0] Stage B FireState Player-facing 문자열 Widget입니다.
+	UTextBlock* FireStateText = Cast<UTextBlock>(WeaponPanelWidget->GetWidgetFromName(FName(TEXT("Text_WeaponFireState"))));
+	// [v1.13.0] Stage B FireState 선택적 진행률 Widget입니다.
+	UProgressBar* FireStateProgress = Cast<UProgressBar>(WeaponPanelWidget->GetWidgetFromName(FName(TEXT("ProgressBar_FireState"))));
+	// [v1.13.0] Header 우측 label-less Reserve 숫자 Widget입니다.
+	UTextBlock* ReserveAmmoText = Cast<UTextBlock>(WeaponPanelWidget->GetWidgetFromName(FName(TEXT("Text_WeaponReserveAmmo"))));
+	// [v1.13.0] Player-facing WeaponGroup Runtime 전 기본 숨김을 유지할 Compact Rail입니다.
+	UWidget* WeaponRail = WeaponPanelWidget->GetWidgetFromName(FName(TEXT("HorizontalBox_WeaponRail")));
+
+	if (!TestNotNull(TEXT("UI-P0-06 Stage B Resource Container"), ResourcePresentationWidget)
+		|| !TestNotNull(TEXT("UI-P0-06 Stage B Primary Row"), PrimaryResourceRow)
+		|| !TestNotNull(TEXT("UI-P0-06 Stage B Primary Text"), PrimaryResourceText)
+		|| !TestNotNull(TEXT("UI-P0-06 Stage B Primary Progress"), PrimaryResourceProgress)
+		|| !TestNotNull(TEXT("UI-P0-06 Stage B Secondary Row"), SecondaryResourcesRow)
+		|| !TestNotNull(TEXT("UI-P0-06 Stage B Secondary A"), SecondaryResourceA)
+		|| !TestNotNull(TEXT("UI-P0-06 Stage B Secondary A Text"), SecondaryResourceTextA)
+		|| !TestNotNull(TEXT("UI-P0-06 Stage B Secondary B"), SecondaryResourceB)
+		|| !TestNotNull(TEXT("UI-P0-06 Stage B FireState Row"), FireStateRow)
+		|| !TestNotNull(TEXT("UI-P0-06 Stage B FireState Text"), FireStateText)
+		|| !TestNotNull(TEXT("UI-P0-06 Stage B FireState Progress"), FireStateProgress)
+		|| !TestNotNull(TEXT("UI-P0-06 Stage B Header Reserve"), ReserveAmmoText)
+		|| !TestNotNull(TEXT("UI-P0-06 Stage B Weapon Rail"), WeaponRail))
+	{
+		return false;
+	}
+
+	// [v1.13.0] Stage B 저장 Asset에서 제거되어 새 의미 슬롯과 동시에 존재하면 안 되는 legacy Launcher Row입니다.
+	TestNull(TEXT("UI-P0-06 Stage B legacy Launcher Row 제거"), WeaponPanelWidget->GetWidgetFromName(FName(TEXT("HorizontalBox_LauncherSequence"))));
+	// [v1.13.0] Stage B 저장 Asset에서 제거되어야 하는 legacy Ammo Row입니다.
+	TestNull(TEXT("UI-P0-06 Stage B legacy Ammo Row 제거"), WeaponPanelWidget->GetWidgetFromName(FName(TEXT("HorizontalBox_Ammo"))));
+	// [v1.13.0] 실제 Heat Runtime이 없으므로 Stage B 저장 Asset에서 제거되어야 하는 legacy Heat Row입니다.
+	TestNull(TEXT("UI-P0-06 Stage B legacy Heat Row 제거"), WeaponPanelWidget->GetWidgetFromName(FName(TEXT("HorizontalBox_Heat"))));
+	// [v1.13.0] Stage B FireState 의미 슬롯으로 치환되어야 하는 legacy Cooldown Row입니다.
+	TestNull(TEXT("UI-P0-06 Stage B legacy Cooldown Row 제거"), WeaponPanelWidget->GetWidgetFromName(FName(TEXT("HorizontalBox_Cooldown"))));
+
+	// [v1.13.0] 실제 Production Widget에 ViewData를 적용할 Presenter입니다.
+	UCFHUDPresenter* Presenter = NewObject<UCFHUDPresenter>(GetTransientPackage());
+	if (!TestNotNull(TEXT("UI-P0-06 Stage B Presenter"), Presenter))
+	{
+		return false;
+	}
+	Presenter->SetProductionWidget(ProductionHUDWidget);
+
+	// [v1.13.0] private UFUNCTION HandleHUDViewDataChanged를 실제 delegate와 동일한 경로로 호출할 Reflection 함수입니다.
+	UFunction* HandleViewDataFunction = Presenter->FindFunction(FName(TEXT("HandleHUDViewDataChanged")));
+	if (!TestNotNull(TEXT("UI-P0-06 Stage B HandleHUDViewDataChanged"), HandleViewDataFunction))
+	{
+		return false;
+	}
+
+	// [v1.13.0] Reflection UFUNCTION의 단일 ViewData 인자를 전달할 파라미터 구조입니다.
+	struct FHandleHUDViewDataChangedParams
+	{
+		// [v1.13.0] Presenter에 적용할 전체 HUD ViewData입니다.
+		FCFInGameUIViewData ViewData;
+	};
+
+	// [v1.13.0] 한 ViewData를 Presenter에 정확히 한 번 전달해 Production 의미 슬롯을 갱신하는 테스트 Helper입니다.
+	auto ApplyViewDataOnce = [Presenter, HandleViewDataFunction](const FCFInGameUIViewData& ViewData)
+	{
+		// [v1.13.0] 현재 한 번 적용할 Reflection 호출 파라미터입니다.
+		FHandleHUDViewDataChangedParams Params;
+		Params.ViewData = ViewData;
+		Presenter->ProcessEvent(HandleViewDataFunction, &Params);
+	};
+
+	// [v1.13.0] Ammo Primary, Reserve Header와 Cooldown FireState를 포함하는 평상시 Production HUD 입력입니다.
+	FCFInGameUIViewData ViewData;
+	ViewData.Weapon.Availability = ECFUIViewAvailability::Known;
+	ViewData.Weapon.DisplayNameAvailability = ECFUIViewAvailability::Known;
+	ViewData.Weapon.DisplayName = FText::FromString(TEXT("STAGE B TEST WEAPON"));
+	ViewData.Weapon.LauncherPattern = ECFLauncherFirePattern::Salvo;
+
+	// [v1.13.0] 평상시 Primary `3 / 8`과 Launcher 중 Secondary를 제공할 실제 Ammo Resource입니다.
+	FCFWeaponResourceHUDData AmmoChannel;
+	AmmoChannel.ChannelType = ECFWeaponResourceChannelType::Ammo;
+	AmmoChannel.DisplayMode = ECFWeaponResourceDisplayMode::CountPair;
+	AmmoChannel.Availability = ECFUIViewAvailability::Known;
+	AmmoChannel.bHasCurrentValue = true;
+	AmmoChannel.CurrentValue = 3.0f;
+	AmmoChannel.bHasMaximumValue = true;
+	AmmoChannel.MaximumValue = 8.0f;
+	AmmoChannel.bIsActive = true;
+	AmmoChannel.bIsVisible = true;
+	ViewData.Weapon.ResourceChannels.Add(AmmoChannel);
+
+	// [v1.13.0] Resource Container가 아니라 Header 우측 `6`으로 표시할 실제 ReserveAmmo Resource입니다.
+	FCFWeaponResourceHUDData ReserveChannel;
+	ReserveChannel.ChannelType = ECFWeaponResourceChannelType::ReserveAmmo;
+	ReserveChannel.DisplayMode = ECFWeaponResourceDisplayMode::Count;
+	ReserveChannel.Availability = ECFUIViewAvailability::Known;
+	ReserveChannel.bHasCurrentValue = true;
+	ReserveChannel.CurrentValue = 6.0f;
+	ReserveChannel.bIsActive = true;
+	ReserveChannel.bIsVisible = true;
+	ViewData.Weapon.ResourceChannels.Add(ReserveChannel);
+
+	// [v1.13.0] 평상시 FireState `0.5 s`와 0.75 진행률을 제공할 실제 Cooldown Resource입니다.
+	FCFWeaponResourceHUDData CooldownChannel;
+	CooldownChannel.ChannelType = ECFWeaponResourceChannelType::Cooldown;
+	CooldownChannel.DisplayMode = ECFWeaponResourceDisplayMode::TimeRemaining;
+	CooldownChannel.Availability = ECFUIViewAvailability::Known;
+	CooldownChannel.bHasMaximumValue = true;
+	CooldownChannel.MaximumValue = 2.0f;
+	CooldownChannel.bHasNormalizedValue = true;
+	CooldownChannel.NormalizedValue = 0.75f;
+	CooldownChannel.bHasRemainingTimeSeconds = true;
+	CooldownChannel.RemainingTimeSeconds = 0.5f;
+	CooldownChannel.bIsActive = true;
+	CooldownChannel.bIsVisible = true;
+	CooldownChannel.bBlocksFire = true;
+	ViewData.Weapon.ResourceChannels.Add(CooldownChannel);
+
+	ApplyViewDataOnce(ViewData);
+	TestEqual(TEXT("UI-P0-06 Stage B 평상시 Primary Ammo"), PrimaryResourceText->GetText().ToString(), FString(TEXT("3 / 8")));
+	TestEqual(TEXT("UI-P0-06 Stage B Header Reserve 6"), ReserveAmmoText->GetText().ToString(), FString(TEXT("6")));
+	TestEqual(TEXT("UI-P0-06 Stage B 평상시 FireState Cooldown"), FireStateText->GetText().ToString(), FString(TEXT("0.5 s")));
+	TestEqual(TEXT("UI-P0-06 Stage B 평상시 Secondary Row Collapsed"), SecondaryResourcesRow->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-06 Stage B 평상시 Primary Progress Collapsed"), PrimaryResourceProgress->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-06 Stage B 평상시 FireState Progress 표시"), FireStateProgress->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestTrue(TEXT("UI-P0-06 Stage B 평상시 FireState Progress 0.75"), FMath::IsNearlyEqual(FireStateProgress->GetPercent(), 0.75f));
+	TestEqual(TEXT("UI-P0-06 Stage B Weapon Rail Collapsed"), WeaponRail->GetVisibility(), ESlateVisibility::Collapsed);
+
+	// [v1.13.0] Launcher Active에서 Primary `SALVO 2 / 4`, Ammo Secondary, FireState 숨김을 만들 실제 Launcher Resource입니다.
+	FCFWeaponResourceHUDData LauncherChannel;
+	LauncherChannel.ChannelType = ECFWeaponResourceChannelType::LauncherSequence;
+	LauncherChannel.DisplayMode = ECFWeaponResourceDisplayMode::Sequence;
+	LauncherChannel.Availability = ECFUIViewAvailability::Known;
+	LauncherChannel.bHasCurrentValue = true;
+	LauncherChannel.CurrentValue = 2.0f;
+	LauncherChannel.bHasMaximumValue = true;
+	LauncherChannel.MaximumValue = 4.0f;
+	LauncherChannel.bHasNormalizedValue = true;
+	LauncherChannel.NormalizedValue = 0.5f;
+	LauncherChannel.bIsActive = true;
+	LauncherChannel.bIsVisible = true;
+	ViewData.Weapon.ResourceChannels.Add(LauncherChannel);
+	ViewData.Weapon.LauncherSequenceRevision = 10;
+	ApplyViewDataOnce(ViewData);
+
+	TestEqual(TEXT("UI-P0-06 Stage B Launcher Primary"), PrimaryResourceText->GetText().ToString(), FString(TEXT("SALVO 2 / 4")));
+	TestEqual(TEXT("UI-P0-06 Stage B Launcher Primary Progress 표시"), PrimaryResourceProgress->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestTrue(TEXT("UI-P0-06 Stage B Launcher Primary Progress 0.5"), FMath::IsNearlyEqual(PrimaryResourceProgress->GetPercent(), 0.5f));
+	TestEqual(TEXT("UI-P0-06 Stage B Launcher 중 Secondary A Ammo"), SecondaryResourceTextA->GetText().ToString(), FString(TEXT("3 / 8")));
+	TestEqual(TEXT("UI-P0-06 Stage B Launcher 중 Secondary Row 표시"), SecondaryResourcesRow->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("UI-P0-06 Stage B Launcher 중 Secondary A 표시"), SecondaryResourceA->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("UI-P0-06 Stage B Launcher 중 Secondary B Collapsed"), SecondaryResourceB->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-06 Stage B Launcher 중 FireState Collapsed"), FireStateRow->GetVisibility(), ESlateVisibility::Collapsed);
+
+	// [v1.13.0] Active 뒤 새 Revision에서 한 ViewData 주기만 보여야 할 terminal Launcher Resource의 배열 인덱스입니다.
+	const int32 LauncherChannelIndex = ViewData.Weapon.ResourceChannels.Num() - 1;
+	ViewData.Weapon.ResourceChannels[LauncherChannelIndex].bIsActive = false;
+	ViewData.Weapon.ResourceChannels[LauncherChannelIndex].CurrentValue = 4.0f;
+	ViewData.Weapon.ResourceChannels[LauncherChannelIndex].NormalizedValue = 1.0f;
+	ViewData.Weapon.LauncherSequenceRevision = 11;
+	ApplyViewDataOnce(ViewData);
+	TestEqual(TEXT("UI-P0-06 Stage B terminal 정확히 첫 적용에서 유지"), PrimaryResourceText->GetText().ToString(), FString(TEXT("SALVO 4 / 4")));
+	TestTrue(TEXT("UI-P0-06 Stage B terminal Progress 1"), FMath::IsNearlyEqual(PrimaryResourceProgress->GetPercent(), 1.0f));
+	TestEqual(TEXT("UI-P0-06 Stage B terminal Ammo Secondary 유지"), SecondaryResourceTextA->GetText().ToString(), FString(TEXT("3 / 8")));
+
+	// [v1.13.0] 같은 terminal Revision의 다음 ViewData 적용에서는 terminal Snapshot이 재소비되지 않고 Ammo/Cooldown으로 복귀해야 합니다.
+	ApplyViewDataOnce(ViewData);
+	TestEqual(TEXT("UI-P0-06 Stage B terminal 다음 Ammo Primary 복귀"), PrimaryResourceText->GetText().ToString(), FString(TEXT("3 / 8")));
+	TestEqual(TEXT("UI-P0-06 Stage B terminal 다음 Secondary Row Collapsed"), SecondaryResourcesRow->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-06 Stage B terminal 다음 Cooldown FireState"), FireStateText->GetText().ToString(), FString(TEXT("0.5 s")));
+	TestEqual(TEXT("UI-P0-06 Stage B terminal 다음 FireState 표시"), FireStateRow->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP006WeaponDisplayNameTest,
+	"CarFight.UI.UI_P0_06.WeaponDisplayNameRuntimeViewData",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.10.0] 호환되는 실제 활성 EquipmentPresetData.DisplayName만 HUD Weapon DisplayName으로 전달하고 내부 ID fallback을 만들지 않는지 검증합니다.
+bool FCFHUDP006WeaponDisplayNameTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.10.0] 실제 VehicleWeaponComp와 HUD Provider를 함께 실행할 Automation World입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("UI-P0-06 Weapon DisplayName Automation World"), TestWorld))
+	{
+		return false;
+	}
+
+	// [v1.10.0] 실제 VehicleWeaponComp 기본 서브오브젝트를 보유한 테스트 차량 Pawn입니다.
+	ACFVehiclePawn* VehiclePawn = TestWorld->SpawnActor<ACFVehiclePawn>();
+	if (!TestNotNull(TEXT("UI-P0-06 Weapon DisplayName Vehicle Pawn"), VehiclePawn))
+	{
+		return false;
+	}
+
+	// [v1.10.0] 실제 Weapon Runtime이 활성 MountProfile과 Hardpoint를 해석할 Transient VehicleData입니다.
+	UCFVehicleData* VehicleData = NewObject<UCFVehicleData>(VehiclePawn, TEXT("HUDDisplayNameVehicleData"));
+	// [v1.10.0] Player-facing 표시 이름을 제공할 Transient EquipmentPresetData입니다.
+	UCFEquipmentPresetData* EquipmentPresetData = NewObject<UCFEquipmentPresetData>(VehiclePawn, TEXT("HUDDisplayNameEquipmentPreset"));
+	// [v1.10.0] EquipmentPresetData 무장 패키지 완성도를 만족할 실제 Transient TurretMountData입니다.
+	UCFTurretMountData* TurretMountData = NewObject<UCFTurretMountData>(VehiclePawn, TEXT("HUDDisplayNameTurretMount"));
+	// [v1.10.0] EquipmentPresetData 무장 패키지와 활성 WeaponData를 제공할 실제 Transient WeaponData입니다.
+	UCFWeaponData* WeaponData = NewObject<UCFWeaponData>(VehiclePawn, TEXT("HUDDisplayNameWeaponData"));
+	// [v1.10.0] 현재 활성 장비 선택을 소유할 실제 차량 Weapon Runtime 컴포넌트입니다.
+	UCFVehicleWeaponComp* WeaponComponent = VehiclePawn->GetVehicleWeaponComp();
+	if (!TestNotNull(TEXT("UI-P0-06 VehicleData"), VehicleData)
+		|| !TestNotNull(TEXT("UI-P0-06 EquipmentPresetData"), EquipmentPresetData)
+		|| !TestNotNull(TEXT("UI-P0-06 TurretMountData"), TurretMountData)
+		|| !TestNotNull(TEXT("UI-P0-06 WeaponData"), WeaponData)
+		|| !TestNotNull(TEXT("UI-P0-06 VehicleWeaponComp"), WeaponComponent))
+	{
+		VehiclePawn->Destroy();
+		return false;
+	}
+
+	// [v1.10.0] Weapon Runtime이 참조할 실제 하드포인트 위치 ID입니다.
+	const FName HardpointSlotId(TEXT("HUD_DisplayName_Slot"));
+	// [v1.10.0] Weapon Runtime이 선택할 실제 MountProfile ID입니다.
+	const FName MountProfileId(TEXT("HUD_DisplayName_Profile"));
+
+	// [v1.10.0] MountProfile이 참조할 최소 실제 Hardpoint 계약입니다.
+	FCFVehicleHardpointSlot HardpointSlot;
+	HardpointSlot.LocationSlotId = HardpointSlotId;
+	VehicleData->HardpointSlots.Add(HardpointSlot);
+
+	// [v1.10.0] Transient EquipmentPresetData를 실제 현재 장비로 해석할 MountProfile입니다.
+	FCFVehicleMountProfile MountProfile;
+	MountProfile.MountProfileId = MountProfileId;
+	MountProfile.LocationSlotRef = HardpointSlotId;
+	MountProfile.MountType = ECFVehicleMountType::Turret;
+	MountProfile.SizeLimit = ECFVehicleWeaponSize::Large;
+	VehicleData->MountProfiles.Add(MountProfile);
+
+	EquipmentPresetData->EquipmentId = TEXT("Internal_Equipment_Id_Must_Not_Render");
+	EquipmentPresetData->DisplayName = FText::FromString(TEXT("HUD Test Cannon"));
+	EquipmentPresetData->RequiredMountType = ECFVehicleMountType::Turret;
+	EquipmentPresetData->RequiredWeaponSize = ECFVehicleWeaponSize::Large;
+	EquipmentPresetData->DefaultTurretMountData = TurretMountData;
+	EquipmentPresetData->DefaultWeaponData = WeaponData;
+	WeaponData->WeaponId = TEXT("Internal_Weapon_Id_Must_Not_Render");
+
+	TestTrue(
+		TEXT("UI-P0-06 실제 Fitting-style EquipmentPreset Runtime 초기화"),
+		WeaponComponent->InitializeWeaponRuntimeFromFitting(VehiclePawn, VehicleData, MountProfileId, EquipmentPresetData));
+	TestTrue(TEXT("UI-P0-06 활성 EquipmentPreset 호환"), WeaponComponent->IsActiveEquipmentPresetCompatible());
+	TestEqual(TEXT("UI-P0-06 활성 EquipmentPreset 일치"), WeaponComponent->GetActiveEquipmentPresetData(), EquipmentPresetData);
+
+	// [v1.10.0] 실제 차량 Weapon Runtime을 Player-facing HUD ViewData로 변환할 Provider입니다.
+	UCFHUDDataProvider* DataProvider = NewObject<UCFHUDDataProvider>(GetTransientPackage());
+	if (!TestNotNull(TEXT("UI-P0-06 Weapon DisplayName HUD Data Provider"), DataProvider))
+	{
+		VehiclePawn->Destroy();
+		return false;
+	}
+	DataProvider->RebindCurrentPawn(VehiclePawn);
+
+	// [v1.10.0] 호환되는 현재 EquipmentPresetData의 Player-facing 이름이 반영된 첫 ViewData입니다.
+	const FCFWeaponHUDData NamedWeaponViewData = DataProvider->GetCurrentViewData().Weapon;
+	TestEqual(TEXT("UI-P0-06 Weapon DisplayName Availability Known"), NamedWeaponViewData.DisplayNameAvailability, ECFUIViewAvailability::Known);
+	TestEqual(TEXT("UI-P0-06 Weapon DisplayName 실제 EquipmentPreset 값"), NamedWeaponViewData.DisplayName.ToString(), FString(TEXT("HUD Test Cannon")));
+	TestNotEqual(TEXT("UI-P0-06 내부 WeaponId 비노출"), NamedWeaponViewData.DisplayName.ToString(), FString(TEXT("Internal_Weapon_Id_Must_Not_Render")));
+	TestNotEqual(TEXT("UI-P0-06 내부 EquipmentId 비노출"), NamedWeaponViewData.DisplayName.ToString(), FString(TEXT("Internal_Equipment_Id_Must_Not_Render")));
+
+	EquipmentPresetData->DisplayName = FText::GetEmpty();
+	DataProvider->RefreshViewData();
+
+	// [v1.10.0] 공개 이름을 지운 뒤 내부 ID fallback 없이 Unavailable로 복귀한 ViewData입니다.
+	const FCFWeaponHUDData EmptyNameWeaponViewData = DataProvider->GetCurrentViewData().Weapon;
+	TestEqual(TEXT("UI-P0-06 빈 DisplayName은 Unavailable"), EmptyNameWeaponViewData.DisplayNameAvailability, ECFUIViewAvailability::Unavailable);
+	TestTrue(TEXT("UI-P0-06 빈 DisplayName에서 내부 ID fallback 없음"), EmptyNameWeaponViewData.DisplayName.IsEmpty());
+
+	DataProvider->ShutdownProvider();
+	VehiclePawn->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP006RpmGaugeRuntimeSourceTest,
+	"CarFight.UI.UI_P0_06.RpmGaugeRuntimeSourceContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.16.0] Current RPM은 Chaos Runtime, Redline/Maximum은 Current Pawn VehicleData의 explicit authored 값에서만 오는지 검증합니다.
+bool FCFHUDP006RpmGaugeRuntimeSourceTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.16.0] 실제 ACFVehiclePawn과 Chaos Movement를 생성할 Automation World입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("UI-P0-06 RPM Source Automation World"), TestWorld))
+	{
+		return false;
+	}
+
+	// [v1.16.0] Chaos current RPM과 Current VehicleData를 함께 제공할 실제 차량 Pawn입니다.
+	ACFVehiclePawn* VehiclePawn = TestWorld->SpawnActor<ACFVehiclePawn>();
+	if (!TestNotNull(TEXT("UI-P0-06 RPM Source Vehicle Pawn"), VehiclePawn))
+	{
+		return false;
+	}
+
+	// [v1.16.0] HUD Maximum/Redline source를 명시할 Transient VehicleData입니다.
+	UCFVehicleData* VehicleData = NewObject<UCFVehicleData>(VehiclePawn, TEXT("HUDRpmSourceVehicleData"));
+	if (!TestNotNull(TEXT("UI-P0-06 RPM Source VehicleData"), VehicleData))
+	{
+		VehiclePawn->Destroy();
+		return false;
+	}
+	VehicleData->VehicleMovementConfig.EngineIdleRPM = 1000.0f;
+	VehicleData->VehicleMovementConfig.RedlineStartRPM = 6000.0f;
+	VehicleData->VehicleMovementConfig.EngineMaxRPM = 7000.0f;
+	VehiclePawn->VehicleData = VehicleData;
+
+	// [v1.16.0] 차량이 소유한 실제 Drive Runtime입니다.
+	UCFVehicleDriveComp* VehicleDriveComponent = VehiclePawn->GetVehicleDriveComp();
+	if (!TestNotNull(TEXT("UI-P0-06 RPM Source Drive Component"), VehicleDriveComponent))
+	{
+		VehiclePawn->Destroy();
+		return false;
+	}
+	VehicleDriveComponent->CacheVehicleMovementComponent();
+
+	// [v1.16.0] Current Engine RPM의 유일한 Runtime source인 실제 UE 5.8 Chaos Movement입니다.
+	UChaosWheeledVehicleMovementComponent* VehicleMovementComponent = VehicleDriveComponent->GetVehicleMovementComponent();
+	if (!TestNotNull(TEXT("UI-P0-06 RPM Source Chaos Movement"), VehicleMovementComponent))
+	{
+		VehiclePawn->Destroy();
+		return false;
+	}
+
+	// [v1.16.0] Provider 결과와 비교할 실제 Chaos current Engine RPM입니다.
+	const float ExpectedCurrentEngineRpm = FMath::Max(0.0f, VehicleMovementComponent->GetEngineRotationSpeed());
+	// [v1.16.0] 실제 Runtime과 authored VehicleData를 HUD ViewData로 분리 투영할 Provider입니다.
+	UCFHUDDataProvider* DataProvider = NewObject<UCFHUDDataProvider>(GetTransientPackage());
+	if (!TestNotNull(TEXT("UI-P0-06 RPM Source HUD Provider"), DataProvider))
+	{
+		VehiclePawn->Destroy();
+		return false;
+	}
+	DataProvider->RebindCurrentPawn(VehiclePawn);
+
+	// [v1.16.0] explicit Redline이 설정된 첫 Vehicle HUD ViewData입니다.
+	const FCFVehicleHUDData ConfiguredViewData = DataProvider->GetCurrentViewData().Vehicle;
+	TestTrue(TEXT("UI-P0-06 Current RPM은 실제 Chaos 값"), FMath::IsNearlyEqual(ConfiguredViewData.EngineRpm, ExpectedCurrentEngineRpm));
+	TestEqual(
+		TEXT("UI-P0-06 Current RPM availability는 Chaos 값 기준"),
+		ConfiguredViewData.EngineRpmAvailability,
+		ExpectedCurrentEngineRpm <= KINDA_SMALL_NUMBER ? ECFUIViewAvailability::KnownZero : ECFUIViewAvailability::Known);
+	TestEqual(TEXT("UI-P0-06 Redline explicit source Known"), ConfiguredViewData.EngineRedlineStartRpmAvailability, ECFUIViewAvailability::Known);
+	TestTrue(TEXT("UI-P0-06 Redline VehicleData 6000"), FMath::IsNearlyEqual(ConfiguredViewData.EngineRedlineStartRpm, 6000.0f));
+	TestEqual(TEXT("UI-P0-06 Maximum explicit source Known"), ConfiguredViewData.EngineMaximumRpmAvailability, ECFUIViewAvailability::Known);
+	TestTrue(TEXT("UI-P0-06 Maximum VehicleData 7000"), FMath::IsNearlyEqual(ConfiguredViewData.EngineMaximumRpm, 7000.0f));
+
+	VehicleData->VehicleMovementConfig.RedlineStartRPM = 0.0f;
+	DataProvider->RefreshViewData();
+
+	// [v1.16.0] Redline 미설정으로 전환한 뒤 EngineMaxRPM fallback이 없는 Vehicle HUD ViewData입니다.
+	const FCFVehicleHUDData UnconfiguredViewData = DataProvider->GetCurrentViewData().Vehicle;
+	TestEqual(TEXT("UI-P0-06 Redline 0은 Unavailable"), UnconfiguredViewData.EngineRedlineStartRpmAvailability, ECFUIViewAvailability::Unavailable);
+	TestTrue(TEXT("UI-P0-06 Redline 0 값 유지"), FMath::IsNearlyZero(UnconfiguredViewData.EngineRedlineStartRpm));
+	TestEqual(TEXT("UI-P0-06 Redline 미설정이어도 Maximum source 유지"), UnconfiguredViewData.EngineMaximumRpmAvailability, ECFUIViewAvailability::Known);
+	TestTrue(TEXT("UI-P0-06 Redline 미설정이어도 Maximum 7000"), FMath::IsNearlyEqual(UnconfiguredViewData.EngineMaximumRpm, 7000.0f));
+
+	DataProvider->ShutdownProvider();
+	VehiclePawn->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP006VehicleDriveRuntimeTest,
+	"CarFight.UI.UI_P0_06.VehicleDriveRuntimeViewData",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.8.0] 실제 ACFVehiclePawn의 UE 5.8 Chaos Engine RPM과 Current Gear가 추정 없이 HUD Vehicle ViewData에 전달되는지 검증합니다.
+bool FCFHUDP006VehicleDriveRuntimeTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.8.0] 실제 ACFVehiclePawn과 Chaos Vehicle Movement를 생성할 Automation World입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("UI-P0-06 Vehicle Runtime Automation World"), TestWorld))
+	{
+		return false;
+	}
+
+	// [v1.8.0] HUD Provider의 실제 Vehicle Runtime Source로 사용할 차량 Pawn입니다.
+	ACFVehiclePawn* VehiclePawn = TestWorld->SpawnActor<ACFVehiclePawn>();
+	if (!TestNotNull(TEXT("UI-P0-06 Vehicle Pawn"), VehiclePawn))
+	{
+		return false;
+	}
+
+	// [v1.8.0] 차량이 소유한 실제 Drive Runtime입니다.
+	UCFVehicleDriveComp* VehicleDriveComponent = VehiclePawn->GetVehicleDriveComp();
+	if (!TestNotNull(TEXT("UI-P0-06 Vehicle Drive Component"), VehicleDriveComponent))
+	{
+		VehiclePawn->Destroy();
+		return false;
+	}
+	VehicleDriveComponent->CacheVehicleMovementComponent();
+
+	// [v1.8.0] 실제 Engine RPM과 Current Gear의 원본인 UE 5.8 Chaos Movement입니다.
+	UChaosWheeledVehicleMovementComponent* VehicleMovementComponent = VehicleDriveComponent->GetVehicleMovementComponent();
+	if (!TestNotNull(TEXT("UI-P0-06 Chaos Wheeled Vehicle Movement"), VehicleMovementComponent))
+	{
+		VehiclePawn->Destroy();
+		return false;
+	}
+
+	// [v1.8.0] Provider 결과와 직접 비교할 실제 Chaos Engine RPM입니다.
+	const float ExpectedEngineRpm = FMath::Max(0.0f, VehicleMovementComponent->GetEngineRotationSpeed());
+	// [v1.8.0] Provider 결과와 직접 비교할 실제 Chaos Current Gear입니다.
+	const int32 ExpectedCurrentGear = VehicleMovementComponent->GetCurrentGear();
+	// [v1.8.0] Current Gear의 공식 음수/0/양수 의미를 HUD R/N/전진 단수 Text로 변환한 기대값입니다.
+	const FString ExpectedGearText = ExpectedCurrentGear < 0
+		? TEXT("R")
+		: (ExpectedCurrentGear == 0 ? TEXT("N") : FString::FromInt(ExpectedCurrentGear));
+
+	// [v1.8.0] 실제 차량 Runtime을 읽기 전용 HUD ViewData로 변환할 Provider입니다.
+	UCFHUDDataProvider* DataProvider = NewObject<UCFHUDDataProvider>(GetTransientPackage());
+	if (!TestNotNull(TEXT("UI-P0-06 HUD Data Provider"), DataProvider))
+	{
+		VehiclePawn->Destroy();
+		return false;
+	}
+	DataProvider->RebindCurrentPawn(VehiclePawn);
+
+	// [v1.8.0] 실제 Chaos Vehicle Runtime에서 생성된 Vehicle HUD ViewData입니다.
+	const FCFVehicleHUDData VehicleViewData = DataProvider->GetCurrentViewData().Vehicle;
+	TestTrue(
+		TEXT("UI-P0-06 Engine RPM 실제 Chaos 값 일치"),
+		FMath::IsNearlyEqual(VehicleViewData.EngineRpm, ExpectedEngineRpm));
+	TestEqual(
+		TEXT("UI-P0-06 Engine RPM Availability 실제 Provider 사용"),
+		VehicleViewData.EngineRpmAvailability,
+		ExpectedEngineRpm <= KINDA_SMALL_NUMBER ? ECFUIViewAvailability::KnownZero : ECFUIViewAvailability::Known);
+	TestEqual(TEXT("UI-P0-06 Gear Availability Known"), VehicleViewData.GearAvailability, ECFUIViewAvailability::Known);
+	TestEqual(TEXT("UI-P0-06 Gear Text 실제 Current Gear 변환"), VehicleViewData.GearText.ToString(), ExpectedGearText);
+
+	DataProvider->ShutdownProvider();
+	VehiclePawn->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDDefenseRuntimeViewDataTest,
+	"CarFight.UI.UI_P0_03.DefenseRuntimeViewData",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.5.0] 실제 Shield·Armor·Integrity 피해와 Shield 재생이 Provider Defense ViewData에 즉시 반영되는지 검증합니다.
+bool FCFHUDDefenseRuntimeViewDataTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.5.0] 실제 Pawn Defense Runtime과 Provider 이벤트를 연결할 Automation World입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("Defense HUD Runtime Automation World"), TestWorld))
+	{
+		return false;
+	}
+
+	// [v1.5.0] 최대 Shield 40, 6방향 Armor 100, Integrity 100의 실제 차량 Fixture입니다.
+	FCFHUDDefenseFixture DefenseFixture = CreateHUDDefenseFixture(TestWorld, TEXT("HUDDefenseRuntimePawn"), 40.0f);
+	// [v1.5.0] 자기 피해 차단과 독립된 실제 공격 주체입니다.
+	AActor* InstigatorActor = TestWorld->SpawnActor<AActor>();
+	if (!TestNotNull(TEXT("Defense HUD 차량 Pawn"), DefenseFixture.VehiclePawn)
+		|| !TestNotNull(TEXT("Defense HUD Health Component"), DefenseFixture.HealthComponent)
+		|| !TestNotNull(TEXT("Defense HUD Defense Component"), DefenseFixture.DefenseComponent)
+		|| !TestNotNull(TEXT("Defense HUD 공격 주체"), InstigatorActor))
+	{
+		return false;
+	}
+
+	// [v1.5.0] ULocalPlayer와 UISubsystem의 ClassWithin 계약을 만족하는 Transient LocalPlayer입니다.
+	ULocalPlayer* TestLocalPlayer = GEngine ? NewObject<ULocalPlayer>(GEngine) : nullptr;
+	// [v1.5.0] 실제 OnCurrentPawnChanged 경로를 제공할 Transient UI Subsystem입니다.
+	UCFUISubsystem* UISubsystem = TestLocalPlayer ? NewObject<UCFUISubsystem>(TestLocalPlayer) : nullptr;
+	// [v1.5.0] 실제 VehicleDefense/Health 이벤트를 Defense ViewData로 변환할 Provider입니다.
+	UCFHUDDataProvider* DataProvider = NewObject<UCFHUDDataProvider>(GetTransientPackage());
+	if (!TestNotNull(TEXT("Defense HUD Transient LocalPlayer"), TestLocalPlayer)
+		|| !TestNotNull(TEXT("Defense HUD Transient UISubsystem"), UISubsystem)
+		|| !TestNotNull(TEXT("Defense HUD DataProvider"), DataProvider))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("Defense HUD Provider 초기화"), DataProvider->InitializeProvider(UISubsystem));
+	UISubsystem->OnCurrentPawnChanged.Broadcast(nullptr, DefenseFixture.VehiclePawn);
+
+	// [v1.5.0] 실제 피해 전 Provider가 읽은 초기 Defense ViewData입니다.
+	const FCFDefenseHUDData InitialDefenseViewData = DataProvider->GetCurrentViewData().Defense;
+	TestEqual(TEXT("초기 Defense Availability Known"), InitialDefenseViewData.Availability, ECFUIViewAvailability::Known);
+	TestEqual(TEXT("초기 Shield Availability Known"), InitialDefenseViewData.ShieldAvailability, ECFUIViewAvailability::Known);
+	TestTrue(TEXT("초기 Shield 40"), FMath::IsNearlyEqual(InitialDefenseViewData.CurrentShield, 40.0f));
+	TestTrue(TEXT("초기 Shield Ratio 1"), FMath::IsNearlyEqual(InitialDefenseViewData.ShieldRatio, 1.0f));
+	TestTrue(TEXT("초기 Front Armor Ratio 1"), FMath::IsNearlyEqual(InitialDefenseViewData.FrontArmorRatio, 1.0f));
+	TestTrue(TEXT("초기 Integrity 100"), FMath::IsNearlyEqual(InitialDefenseViewData.CurrentIntegrity, 100.0f));
+	TestTrue(TEXT("초기 Integrity Ratio 1"), FMath::IsNearlyEqual(InitialDefenseViewData.IntegrityRatio, 1.0f));
+
+	// [v1.5.0] Shield 40을 소진한 뒤 남은 40을 AP 50으로 Armor 20 / Integrity 20에 분배할 피해 데이터입니다.
+	UCFDamageData* DamageData = NewObject<UCFDamageData>(DefenseFixture.VehiclePawn, TEXT("HUDDefenseRuntimeDamage"));
+	DamageData->BaseDamage = 80.0f;
+	DamageData->ArmorPenetration = 50.0f;
+
+	// [v1.5.0] Production HitScan/Projectile과 같은 정식 Actor 방어 진입점 결과입니다.
+	FCFVehicleDamageResult DamageResult;
+	TestTrue(
+		TEXT("Defense HUD 실제 방어 피해 적용"),
+		UCFVehicleDefenseComp::TryApplyDamageToActor(
+			BuildHUDDefenseHitContext(DefenseFixture.VehiclePawn, InstigatorActor, DamageData),
+			DamageResult));
+	TestTrue(TEXT("실제 피해 Shield 흡수 40"), FMath::IsNearlyEqual(DamageResult.DamageAbsorbedByShield, 40.0f));
+	TestTrue(TEXT("실제 피해 Armor 흡수 20"), FMath::IsNearlyEqual(DamageResult.DamageAbsorbedByArmor, 20.0f));
+	TestTrue(TEXT("실제 피해 Integrity 적용 20"), FMath::IsNearlyEqual(DamageResult.DamageAppliedToIntegrity, 20.0f));
+
+	// [v1.5.0] 실제 Shield/Armor/Health 이벤트 직후 Provider가 보존한 손상 Defense ViewData입니다.
+	const FCFDefenseHUDData DamagedDefenseViewData = DataProvider->GetCurrentViewData().Defense;
+	TestEqual(TEXT("Shield 0은 KnownZero"), DamagedDefenseViewData.ShieldAvailability, ECFUIViewAvailability::KnownZero);
+	TestTrue(TEXT("피해 후 Shield 0"), FMath::IsNearlyZero(DamagedDefenseViewData.CurrentShield));
+	TestTrue(TEXT("피해 후 Shield Ratio 0"), FMath::IsNearlyZero(DamagedDefenseViewData.ShieldRatio));
+	TestTrue(TEXT("피해 후 Front Armor Ratio 0.8"), FMath::IsNearlyEqual(DamagedDefenseViewData.FrontArmorRatio, 0.8f));
+	TestTrue(TEXT("피해 후 Right Armor Ratio 유지 1"), FMath::IsNearlyEqual(DamagedDefenseViewData.RightArmorRatio, 1.0f));
+	TestTrue(TEXT("피해 후 Rear Armor Ratio 유지 1"), FMath::IsNearlyEqual(DamagedDefenseViewData.RearArmorRatio, 1.0f));
+	TestTrue(TEXT("피해 후 Left Armor Ratio 유지 1"), FMath::IsNearlyEqual(DamagedDefenseViewData.LeftArmorRatio, 1.0f));
+	TestTrue(TEXT("피해 후 Top Armor Ratio 유지 1"), FMath::IsNearlyEqual(DamagedDefenseViewData.TopArmorRatio, 1.0f));
+	TestTrue(TEXT("피해 후 Bottom Armor Ratio 유지 1"), FMath::IsNearlyEqual(DamagedDefenseViewData.BottomArmorRatio, 1.0f));
+	TestTrue(TEXT("피해 후 Integrity 80"), FMath::IsNearlyEqual(DamagedDefenseViewData.CurrentIntegrity, 80.0f));
+	TestTrue(TEXT("피해 후 Integrity Ratio 0.8"), FMath::IsNearlyEqual(DamagedDefenseViewData.IntegrityRatio, 0.8f));
+
+	DefenseFixture.DefenseComponent->TickComponent(6.0f, LEVELTICK_All, nullptr);
+
+	// [v1.5.0] 5초 지연 뒤 1초간 초당 10 Shield가 실제 재생된 Provider ViewData입니다.
+	const FCFDefenseHUDData RegeneratingDefenseViewData = DataProvider->GetCurrentViewData().Defense;
+	TestEqual(TEXT("재생 Shield Availability Known"), RegeneratingDefenseViewData.ShieldAvailability, ECFUIViewAvailability::Known);
+	TestTrue(TEXT("재생 후 Shield 10"), FMath::IsNearlyEqual(RegeneratingDefenseViewData.CurrentShield, 10.0f));
+	TestTrue(TEXT("재생 후 Shield Ratio 0.25"), FMath::IsNearlyEqual(RegeneratingDefenseViewData.ShieldRatio, 0.25f));
+	TestTrue(TEXT("재생 중 상태 전달"), RegeneratingDefenseViewData.bShieldRegenerating);
+	TestTrue(TEXT("재생 중 Armor는 0.8 유지"), FMath::IsNearlyEqual(RegeneratingDefenseViewData.FrontArmorRatio, 0.8f));
+	TestTrue(TEXT("재생 중 Integrity는 0.8 유지"), FMath::IsNearlyEqual(RegeneratingDefenseViewData.IntegrityRatio, 0.8f));
+
+	DataProvider->ShutdownProvider();
+	DefenseFixture.VehiclePawn->Destroy();
+	InstigatorActor->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDDefensePIEViewDataTest,
+	"CarFight.UI.UI_P0_03.DefensePIEViewData",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.6.0] 저장된 M_VehicleDefensePIE를 실제 PIE로 실행해 Defense Runtime→Provider ViewData 기술 경로를 검증합니다.
+bool FCFHUDDefensePIEViewDataTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.6.0] CF-FQ-033에서 USER/Automation 방어 fixture로 사용하는 저장 테스트 맵입니다.
+	const FString VehicleDefensePIEMapPath = TEXT("/Game/Maps/M_VehicleDefensePIE");
+	ADD_LATENT_AUTOMATION_COMMAND(FEditorLoadMap(VehicleDefensePIEMapPath));
+	ADD_LATENT_AUTOMATION_COMMAND(FStartPIECommand(false));
+	ADD_LATENT_AUTOMATION_COMMAND(FCFVerifyHUDDefensePIECommand(this));
+	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
 	return true;
 }
 
@@ -58,7 +2622,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"CarFight.UI.UI_P0_03.ProviderPawnRebind",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-// [v1.0.0] UISubsystem OnCurrentPawnChanged가 Provider의 Old Pawn 해제와 새 Pawn Rebind를 정확히 수행하는지 검증합니다.
+// [v1.5.0] UISubsystem OnCurrentPawnChanged가 Provider의 Old Pawn 이벤트를 해제하고 새 Pawn Runtime만 소비하는지 검증합니다.
 bool FCFHUDProviderPawnRebindTest::RunTest(const FString& Parameters)
 {
 	(void)Parameters;
@@ -70,12 +2634,15 @@ bool FCFHUDProviderPawnRebindTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
-	// [v1.0.0] 첫 번째 Provider Source 차량입니다.
-	ACFVehiclePawn* FirstVehiclePawn = TestWorld->SpawnActor<ACFVehiclePawn>();
-	// [v1.0.0] 두 번째 Provider Source 차량입니다.
-	ACFVehiclePawn* SecondVehiclePawn = TestWorld->SpawnActor<ACFVehiclePawn>();
-	if (!TestNotNull(TEXT("첫 번째 HUD Source 차량"), FirstVehiclePawn)
-		|| !TestNotNull(TEXT("두 번째 HUD Source 차량"), SecondVehiclePawn))
+	// [v1.5.0] 첫 번째 Provider Source로 사용할 Shield 40 차량 Fixture입니다.
+	FCFHUDDefenseFixture FirstFixture = CreateHUDDefenseFixture(TestWorld, TEXT("HUDRebindFirstPawn"), 40.0f);
+	// [v1.5.0] 두 번째 Provider Source로 사용할 Shield 80 차량 Fixture입니다.
+	FCFHUDDefenseFixture SecondFixture = CreateHUDDefenseFixture(TestWorld, TEXT("HUDRebindSecondPawn"), 80.0f);
+	// [v1.5.0] 두 Pawn의 실제 방어 이벤트를 발생시킬 독립 공격 Actor입니다.
+	AActor* InstigatorActor = TestWorld->SpawnActor<AActor>();
+	if (!TestNotNull(TEXT("첫 번째 HUD Source 차량"), FirstFixture.VehiclePawn)
+		|| !TestNotNull(TEXT("두 번째 HUD Source 차량"), SecondFixture.VehiclePawn)
+		|| !TestNotNull(TEXT("HUD Rebind 공격 주체"), InstigatorActor))
 	{
 		return false;
 	}
@@ -97,23 +2664,60 @@ bool FCFHUDProviderPawnRebindTest::RunTest(const FString& Parameters)
 	// [v1.0.0] 초기 Null Source 다음 첫 차량 Rebind 직전 Generation입니다.
 	const int32 InitialGeneration = DataProvider->GetBindingGeneration();
 
-	UISubsystem->OnCurrentPawnChanged.Broadcast(nullptr, FirstVehiclePawn);
-	TestTrue(TEXT("첫 차량 Rebind"), DataProvider->GetBoundVehiclePawn() == FirstVehiclePawn);
+	UISubsystem->OnCurrentPawnChanged.Broadcast(nullptr, FirstFixture.VehiclePawn);
+	TestTrue(TEXT("첫 차량 Rebind"), DataProvider->GetBoundVehiclePawn() == FirstFixture.VehiclePawn);
 	TestTrue(TEXT("첫 차량 Rebind Generation 증가"), DataProvider->GetBindingGeneration() > InitialGeneration);
+	TestTrue(TEXT("첫 차량 Shield 40 반영"), FMath::IsNearlyEqual(DataProvider->GetCurrentViewData().Defense.CurrentShield, 40.0f));
 
 	// [v1.0.0] 두 번째 차량 Rebind 직전 Generation입니다.
 	const int32 FirstPawnGeneration = DataProvider->GetBindingGeneration();
-	UISubsystem->OnCurrentPawnChanged.Broadcast(FirstVehiclePawn, SecondVehiclePawn);
-	TestTrue(TEXT("두 번째 차량 Rebind"), DataProvider->GetBoundVehiclePawn() == SecondVehiclePawn);
+	UISubsystem->OnCurrentPawnChanged.Broadcast(FirstFixture.VehiclePawn, SecondFixture.VehiclePawn);
+	TestTrue(TEXT("두 번째 차량 Rebind"), DataProvider->GetBoundVehiclePawn() == SecondFixture.VehiclePawn);
 	TestTrue(TEXT("두 번째 차량 Rebind Generation 증가"), DataProvider->GetBindingGeneration() > FirstPawnGeneration);
+	TestTrue(TEXT("두 번째 차량 Shield 80 반영"), FMath::IsNearlyEqual(DataProvider->GetCurrentViewData().Defense.CurrentShield, 80.0f));
 
-	UISubsystem->OnCurrentPawnChanged.Broadcast(SecondVehiclePawn, nullptr);
+	// [v1.5.0] Old Pawn 구독 해제 여부를 검사하기 직전 Provider ViewData Revision입니다.
+	const int32 RevisionBeforeOldPawnDamage = DataProvider->GetCurrentViewData().Revision;
+	// [v1.5.0] Rebind 후 첫 차량에 실제 Shield 이벤트를 발생시킬 피해 데이터입니다.
+	UCFDamageData* FirstPawnDamageData = NewObject<UCFDamageData>(FirstFixture.VehiclePawn, TEXT("HUDRebindOldPawnDamage"));
+	FirstPawnDamageData->BaseDamage = 20.0f;
+	FirstPawnDamageData->ArmorPenetration = 0.0f;
+	// [v1.5.0] Old Pawn에 실제로 적용된 방어 피해 결과입니다.
+	FCFVehicleDamageResult FirstPawnDamageResult;
+	TestTrue(
+		TEXT("Rebind 후 Old Pawn 실제 피해 적용"),
+		UCFVehicleDefenseComp::TryApplyDamageToActor(
+			BuildHUDDefenseHitContext(FirstFixture.VehiclePawn, InstigatorActor, FirstPawnDamageData),
+			FirstPawnDamageResult));
+	TestTrue(TEXT("Old Pawn 자체 Shield는 20으로 감소"), FMath::IsNearlyEqual(FirstFixture.DefenseComponent->GetCurrentShield(), 20.0f));
+	TestEqual(TEXT("Old Pawn 이벤트로 Provider Revision 증가 없음"), DataProvider->GetCurrentViewData().Revision, RevisionBeforeOldPawnDamage);
+	TestTrue(TEXT("Old Pawn 이벤트 후 Provider는 두 번째 Shield 80 유지"), FMath::IsNearlyEqual(DataProvider->GetCurrentViewData().Defense.CurrentShield, 80.0f));
+
+	// [v1.5.0] 현재 Bound Pawn 이벤트가 Provider를 즉시 갱신하는지 검사할 직전 Revision입니다.
+	const int32 RevisionBeforeCurrentPawnDamage = DataProvider->GetCurrentViewData().Revision;
+	// [v1.5.0] 현재 두 번째 차량에 실제 Shield 이벤트를 발생시킬 피해 데이터입니다.
+	UCFDamageData* SecondPawnDamageData = NewObject<UCFDamageData>(SecondFixture.VehiclePawn, TEXT("HUDRebindCurrentPawnDamage"));
+	SecondPawnDamageData->BaseDamage = 20.0f;
+	SecondPawnDamageData->ArmorPenetration = 0.0f;
+	// [v1.5.0] 현재 Bound Pawn에 실제로 적용된 방어 피해 결과입니다.
+	FCFVehicleDamageResult SecondPawnDamageResult;
+	TestTrue(
+		TEXT("Current Pawn 실제 피해 적용"),
+		UCFVehicleDefenseComp::TryApplyDamageToActor(
+			BuildHUDDefenseHitContext(SecondFixture.VehiclePawn, InstigatorActor, SecondPawnDamageData),
+			SecondPawnDamageResult));
+	TestTrue(TEXT("Current Pawn 이벤트로 Provider Revision 증가"), DataProvider->GetCurrentViewData().Revision > RevisionBeforeCurrentPawnDamage);
+	TestTrue(TEXT("Current Pawn Shield 60 즉시 반영"), FMath::IsNearlyEqual(DataProvider->GetCurrentViewData().Defense.CurrentShield, 60.0f));
+
+	UISubsystem->OnCurrentPawnChanged.Broadcast(SecondFixture.VehiclePawn, nullptr);
 	TestNull(TEXT("Pawn 해제 후 Provider Source 없음"), DataProvider->GetBoundVehiclePawn());
 	TestEqual(TEXT("Pawn 해제 후 Vehicle ViewData Unavailable"), DataProvider->GetCurrentViewData().Vehicle.Availability, ECFUIViewAvailability::Unavailable);
+	TestEqual(TEXT("Pawn 해제 후 Defense ViewData Unavailable"), DataProvider->GetCurrentViewData().Defense.Availability, ECFUIViewAvailability::Unavailable);
 
 	DataProvider->ShutdownProvider();
-	FirstVehiclePawn->Destroy();
-	SecondVehiclePawn->Destroy();
+	FirstFixture.VehiclePawn->Destroy();
+	SecondFixture.VehiclePawn->Destroy();
+	InstigatorActor->Destroy();
 	return true;
 }
 

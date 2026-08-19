@@ -1,12 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-07-24
-// Description: TS-P0-06 후보 및 선택 타겟 HUD용 C++ 부모 위젯
+// Version: 1.1.0
+// Date: 2026-08-18
+// Description: UI-P0-05 후보 및 선택 Target World Marker용 C++ 부모 위젯
 // Changelog:
+// - v1.1.0: UISubsystem Game Layer 수명에 맞춰 VehiclePawnRef를 Weak Reference로 전환하고 이름·거리·관계·TrackState 의미 텍스트를 Marker에서 제거.
 // - v1.0.0: TargetSelectComp 이벤트 구독, 후보·선택 캐시, 월드 위치 투영, 거리·관계·추적 상태 표시를 추가.
 // Migration:
-// - 실제 배치와 스타일은 WBP_TargetSelect가 담당하고 C++는 상태와 투영만 담당한다.
+// - v1.1.0부터 WBP_TargetSelect는 World Marker 표현만 담당하며 Target 의미 정보는 Production TargetPanel의 Provider/Presenter ViewData가 담당한다.
+// - 내부 Actor Name을 Player-facing 이름으로 fallback하지 않는다.
 // - 후보와 선택은 각각 ◇와 ▣ 형태로 구분하며 가림 상태는 ▧ 형태로 표시한다.
 // - 화면 밖 대상은 P0에서 마커만 숨기고 선택 상태는 유지한다.
 
@@ -32,7 +34,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category="CarFight|TargetSelect|HUD", meta=(DisplayName="차량 Pawn 참조 설정", ToolTip="후보와 선택 상태를 읽을 차량 Pawn을 설정하고 TargetSelectComp 이벤트를 다시 연결합니다."))
 	void SetVehiclePawnRef(ACFVehiclePawn* InVehiclePawnRef);
 
-	UFUNCTION(BlueprintCallable, Category="CarFight|TargetSelect|HUD", meta=(DisplayName="타겟 HUD 갱신", ToolTip="현재 TargetSelectComp 상태를 다시 읽고 후보와 선택 마커의 텍스트, 위치와 가시성을 갱신합니다."))
+		UFUNCTION(BlueprintCallable, Category="CarFight|TargetSelect|HUD", meta=(DisplayName="타겟 HUD 갱신", ToolTip="현재 TargetSelectComp 상태를 다시 읽고 후보와 선택 World Marker의 상태, 위치와 가시성을 갱신합니다. 이름·거리·관계·Knowledge 텍스트는 Production TargetPanel이 담당합니다."))
 	void RefreshFromTargetSelect();
 
 	UFUNCTION(BlueprintPure, Category="CarFight|TargetSelect|HUD|Debug")
@@ -85,8 +87,9 @@ protected:
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_SelectedTrackState = nullptr;
 
-	UPROPERTY(BlueprintReadOnly, Category="CarFight|TargetSelect|HUD")
-	TObjectPtr<ACFVehiclePawn> VehiclePawnRef = nullptr;
+		// [v1.1.0] Target Marker가 상태를 읽되 이전 Pawn lifetime을 소유하지 않는 현재 차량 Pawn 약한 참조입니다.
+	UPROPERTY(BlueprintReadOnly, Category="CarFight|TargetSelect|HUD", meta=(DisplayName="차량 Pawn 약한 참조", ToolTip="현재 Target Marker가 읽을 차량 Pawn의 약한 참조입니다. Pawn 수명을 소유하지 않으며 Rebind 또는 Pawn 소멸 시 안전하게 무효화됩니다."))
+	TWeakObjectPtr<ACFVehiclePawn> VehiclePawnRef;
 
 	UPROPERTY(BlueprintReadOnly, Category="CarFight|TargetSelect|HUD")
 	FCFTargetCandidate CachedCandidateData;
@@ -118,7 +121,8 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="CarFight|TargetSelect|HUD|Style")
 	FLinearColor InvalidSelectedMarkerColor = FLinearColor(1.0f, 0.20f, 0.20f, 1.0f);
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|TargetSelect|HUD")
+		// [v1.1.0] 후보·선택 의미 상태를 재계산하지 않고 World Marker 화면 투영만 매 프레임 갱신할지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|TargetSelect|HUD", meta=(DisplayName="Marker 투영 매 프레임 갱신", ToolTip="True이면 후보·선택 의미 상태는 이벤트 캐시를 유지하고 현재 TargetPoint의 화면 좌표 투영만 매 프레임 갱신합니다."))
 	bool bAutoRefreshEveryTick = true;
 
 private:
@@ -128,10 +132,7 @@ private:
 	void RefreshCachedTargetState();
 	void RefreshWidgetTextAndStyle();
 	void RefreshMarkerProjection();
-	bool ProjectMarkerRoot(UVerticalBox* MarkerRoot, const FVector& WorldLocation) const;
-	FText BuildTargetInfoText(const TCHAR* Prefix, AActor* TargetActor, const FCFTargetDisplayInfo& DisplayInfo, float DistanceCm) const;
-	FText GetRelationDisplayText(ECFTargetRelation Relation) const;
-	FText GetTrackStateDisplayText(ECFTargetTrackState TrackState) const;
+		bool ProjectMarkerRoot(UVerticalBox* MarkerRoot, const FVector& WorldLocation) const;
 
 	UFUNCTION()
 	void HandleTargetCandidateChanged(AActor* PreviousCandidate, AActor* NewCandidate, FCFTargetCandidate CandidateData);

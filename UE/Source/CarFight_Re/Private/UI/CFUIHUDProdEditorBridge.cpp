@@ -1,10 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.5.1
-// Date: 2026-08-13
-// Description: CF-FQ-032 D1-11 Production HUD 의미 단위 UMG Editor Bridge 구현
-// Scope: Root Canvas는 Slot 배치만, Panel/Element는 Image·TextBlock·ProgressBar·Box Layout 중심으로 생성합니다.
+// Version: 1.8.0
+// Date: 2026-08-19
+// Description: CF-FQ-032 UI-P0-06 truthful Weapon Rail + Dynamic Resource Visual Stage B + RPM Gauge Runtime Sink Production HUD Editor Bridge 구현
+// Scope: WeaponPanel Compact Resource 의미 슬롯을 보존하면서 기존 가짜 Rail semantic Image 3개를 fixed Text Tile 3개로 교체하고 실제 Runtime Presenter만 Visibility/Text를 소유합니다.
 // Changelog:
+// - v1.8.0: WeaponRail Turret/Ammo/Reload Image 3개 제거, 112x68 Text Tile 3개 + 8px gap으로 교체. Header icon 1개만 Image 계약에 남기고 old Rail Image 잔존을 Validator가 거부.
+// - v1.7.0: SpeedGauge ProgressBar_RPMTick00~20의 저장 100% 값은 Designer Scale Preview이고 Runtime Presenter가 Percent를 덮어쓰는 의미를 명시. 구조/배치/색/Validator count는 그대로 유지.
+// - v1.6.0: WeaponPanel의 Launcher/Ammo/Heat/Cooldown 전용 고정 Row를 Compact Resource Presentation 의미 슬롯으로 원자 교체. ReserveAmmo Header owner와 Compact Rail 구조는 유지하고 Rail은 다중 무기 Runtime 전 기본 Collapsed. Validator가 새 의미 슬롯을 요구하고 구형 전용 Row 잔존을 거부하도록 갱신.
 // - v1.5.1: Header가 Root Tree에 붙기 전 제목을 WidgetTree에서 찾던 생성 순서 결함을 제거하고 Header 직접 자식에서 Title Slot을 해석.
 // - v1.5.0: WeaponPanel Reserve가 고정 Spacer 때문에 실제 패널 밖으로 클리핑되던 결함을 제거하고 제목 Fill + 우측 Reserve Slot으로 교정. Reserve 0도 같은 슬롯에 표시.
 // - v1.4.0: WeaponPanel에 Loaded/Capacity Primary Ammo와 Header의 label-less Reserve 숫자 슬롯을 추가하고 의미 슬롯 Validator를 확장.
@@ -17,6 +20,10 @@
 // - SpeedGauge, ArmorBodyMap과 Radar의 공간 배치에는 의미 좌표가 필요한 내부 CanvasPanel만 사용합니다.
 // - SpeedArcTrack은 실제 HUDVisualData Texture만 사용하며 비어 있거나 Load 실패하면 Image_RPMTrackArt 슬롯은 유지하되 Collapsed로 저장합니다.
 // - Vehicle/Armor처럼 의미가 동일한 시각 슬롯은 HUDVisualData가 비어 있을 때 기존 StyleData Semantic Icon Texture를 Editor Preview Fallback으로 사용할 수 있습니다.
+// - WeaponPanel Resource Presentation은 raw ResourceChannels 개수에 따라 Widget을 생성하지 않습니다. Primary/SecondaryA/SecondaryB/FireState의 고정 의미 슬롯만 만들고 Runtime Presenter가 역할별 Visibility/Text/Progress를 적용합니다.
+// - VehicleBattery·WeaponCharge·Heat Runtime 부재를 Designer Preview 값으로 위조하지 않으며 구형 Heat 전용 Row는 Stage B에서 제거합니다.
+// - SpeedGauge의 21 Tick 저장 Percent=1은 눈금 자체의 Designer Preview이며 실제 Runtime 값이 아닙니다. Runtime에서는 UCFHUDPresenter가 explicit Redline/Maximum 계약에 따라 0~1 Percent를 갱신하고 계약이 없으면 fill=0으로 reset합니다.
+// - v1.8.0 Weapon Rail은 실제 weapon icon source가 없으므로 Image를 만들지 않고 Text Tile만 소유합니다. 비선택 무기의 자원 상태도 현재 HUD ViewData에 없으므로 Designer에서 summary 값을 만들지 않습니다.
 
 #include "UI/CFUIHUDProdEditorBridge.h"
 
@@ -343,7 +350,7 @@ namespace CFUIHUDProdEditorBridge
 			// [v1.1.0] SpeedGauge에서도 공간 배치 helper를 사용할 수 있도록 구현 앞에 선언합니다.
 	bool AddCanvasChild(UCanvasPanel* Canvas, UWidget* Child, const FVector2D& Position, const FVector2D& Size, const int32 ZOrder);
 
-	// [v1.1.0] SpeedGauge Element를 실제 RPM 의미의 정적 Track/Tick과 디지털 속도·단일 Gear Slot 구조로 생성합니다.
+		// [v1.7.0] SpeedGauge Element를 실제 RPM 의미의 고정 Track/Tick runtime sink와 디지털 속도·단일 Gear Slot 구조로 생성합니다.
 	bool BuildSpeedGauge(UWidgetTree* WidgetTree, const UCFUIStyleData* StyleData, const UCFHUDLayoutData* LayoutData, const UCFHUDVisualData* HUDVisualData)
 	{
 		// [v1.1.0] 비대칭 RPM Tick과 속도/단위를 정확한 의미 위치에 배치할 Root Canvas입니다.
@@ -400,7 +407,7 @@ namespace CFUIHUDProdEditorBridge
 			const float TickThickness = bMajorTick || bRedZoneStartTick ? 3.0f : 2.0f;
 			// [v1.1.0] Red Zone과 일반 Tick을 분리하는 현재 Tick 색상 Token입니다.
 			const ECFUIColorToken TickColor = bRedZoneTick ? ECFUIColorToken::StateDanger : ECFUIColorToken::TextMuted;
-			// [v1.1.0] 실제 RPM 값과 무관하게 고정 Scale 눈금만 표시하는 100% 채움 Tick입니다.
+						// [v1.7.0] 저장 Asset에서는 Scale 눈금 Preview를 위해 100%이며 Runtime Presenter가 explicit RPM Gauge ratio에 맞게 Percent를 덮어쓸 Tick sink입니다.
 			UProgressBar* Tick = CreateProgress(WidgetTree, *TickName, 1.0f, StyleData, TickColor);
 			if (!Tick)
 			{
@@ -663,15 +670,17 @@ namespace CFUIHUDProdEditorBridge
 			&& AddCanvasChild(RadarField, Selected, FVector2D(214.0f, 82.0f), FVector2D(48.0f, 48.0f), 2);
 	}
 
-		// [v1.5.0] Weapon Panel을 Loaded/Capacity, 우측 Reserve, Heat/Cooldown/Reload 의미 Image와 Compact Rail로 생성합니다.
+			// [v1.6.0] Weapon Panel을 Header Reserve와 Compact Primary/Secondary/FireState 의미 슬롯으로 생성합니다.
 	bool BuildWeaponPanel(UWidgetTree* WidgetTree, const UCFUIStyleData* StyleData, const UCFHUDLayoutData* LayoutData)
 	{
+		// [v1.6.0] WeaponPanel의 단일 Surface 안에 Header, Resource Presentation, Rail을 세로 배치할 Content입니다.
 		UVerticalBox* Content = BuildPanelSurface(WidgetTree, StyleData);
 		if (!Content)
 		{
 			return false;
 		}
-						// [v1.4.0] 기존 검증된 Header 제작 경로를 재사용해 무기 아이콘·제목의 Style 계약을 보존합니다.
+
+		// [v1.6.0] 기존 검증된 Header 제작 경로를 재사용해 무기 아이콘·제목의 Style 계약을 보존합니다.
 		UHorizontalBox* WeaponHeader = BuildHeader(
 			WidgetTree,
 			TEXT("HorizontalBox_Header"),
@@ -687,25 +696,25 @@ namespace CFUIHUDProdEditorBridge
 			return false;
 		}
 
-						// [v1.5.1] Header가 아직 Root Tree에 붙기 전에도 안전하게 가져올 수 있는 BuildHeader의 세 번째 직접 자식인 무기 제목 Widget입니다.
+		// [v1.6.0] Header가 아직 Root Tree에 붙기 전에도 안전하게 가져올 수 있는 BuildHeader의 세 번째 직접 자식인 무기 제목 Widget입니다.
 		UTextBlock* WeaponTitleText = WeaponHeader->GetChildrenCount() > 2
 			? Cast<UTextBlock>(WeaponHeader->GetChildAt(2))
 			: nullptr;
 
-		// [v1.5.0] 제목을 Fill 규칙으로 바꿔 고정 픽셀 Spacer 없이 Header 폭을 안전하게 분배할 Slot입니다.
+		// [v1.6.0] 제목을 Fill 규칙으로 바꿔 고정 픽셀 Spacer 없이 Header 폭을 안전하게 분배할 Slot입니다.
 		UHorizontalBoxSlot* WeaponTitleSlot = WeaponTitleText ? Cast<UHorizontalBoxSlot>(WeaponTitleText->Slot) : nullptr;
 		if (!WeaponTitleSlot)
 		{
 			return false;
 		}
 
-		// [v1.5.0] 현재 무기 제목이 Reserve 앞까지 남는 가로 공간을 모두 사용하도록 하는 Fill 크기 규칙입니다.
+		// [v1.6.0] 현재 무기 제목이 Reserve 앞까지 남는 가로 공간을 모두 사용하도록 하는 Fill 크기 규칙입니다.
 		FSlateChildSize WeaponTitleSize;
 		WeaponTitleSize.SizeRule = ESlateSizeRule::Fill;
 		WeaponTitleSlot->SetSize(WeaponTitleSize);
 		WeaponTitleSlot->SetVerticalAlignment(VAlign_Center);
 
-		// [v1.5.0] 실제 Reserve가 없을 때도 0을 표시할 수 있도록 기본 Preview도 0으로 생성하는 숫자 Text입니다.
+		// [v1.6.0] 실제 Reserve가 없을 때도 KnownZero를 같은 슬롯에 표시할 수 있는 Header 숫자 Text입니다.
 		UTextBlock* ReserveAmmoText = CreateText(
 			WidgetTree,
 			TEXT("Text_WeaponReserveAmmo"),
@@ -716,7 +725,7 @@ namespace CFUIHUDProdEditorBridge
 			ECFUITypographyRole::ValueS,
 			ECFUIColorToken::TextSecondary);
 
-		// [v1.5.0] Reserve 숫자를 Header의 실제 마지막 자식으로 두고 우측 정렬하는 Slot입니다.
+		// [v1.6.0] Reserve 숫자를 Header의 실제 마지막 자식으로 두고 우측 정렬하는 Slot입니다.
 		UHorizontalBoxSlot* ReserveAmmoSlot = ReserveAmmoText ? WeaponHeader->AddChildToHorizontalBox(ReserveAmmoText) : nullptr;
 		if (!ReserveAmmoSlot)
 		{
@@ -726,39 +735,130 @@ namespace CFUIHUDProdEditorBridge
 		ReserveAmmoSlot->SetVerticalAlignment(VAlign_Center);
 		Content->AddChild(WeaponHeader);
 
-		// [v1.3.0] 정상 Ripple/Salvo 진행을 WeaponPanel의 Primary Action으로 표시할 전용 Row입니다.
-		UHorizontalBox* LauncherSequenceRow = CreateWidget<UHorizontalBox>(WidgetTree, TEXT("HorizontalBox_LauncherSequence"));
-		LauncherSequenceRow->AddChild(CreateText(WidgetTree, TEXT("Text_WeaponLauncherSequence"), TEXT("RIPPLE 2 / 4"), StyleData, LayoutData, ECFUIFontFamilyRole::Numeric, ECFUITypographyRole::ValueM, ECFUIColorToken::AccentTactical));
-		Content->AddChild(LauncherSequenceRow);
-		Content->AddChild(CreateProgress(WidgetTree, TEXT("ProgressBar_LauncherSequence"), 0.5f, StyleData, ECFUIColorToken::AccentTactical));
+		// [v1.6.0] Stage A Projection의 최대 cardinality만 소유하고 raw ResourceChannels 개수와 독립적인 Resource Presentation Container입니다.
+		UVerticalBox* ResourcePresentation = CreateWidget<UVerticalBox>(WidgetTree, TEXT("VerticalBox_ResourcePresentation"));
+		if (!ResourcePresentation)
+		{
+			return false;
+		}
+		Content->AddChild(ResourcePresentation);
 
-		// [v1.0.0] Ammo 상태 Row입니다.
-		UHorizontalBox* AmmoRow = CreateWidget<UHorizontalBox>(WidgetTree, TEXT("HorizontalBox_Ammo"));
-		AmmoRow->AddChild(CreateImage(WidgetTree, TEXT("Image_Ammo"), StyleData, FName(TEXT("Ammo")), ECFUIColorToken::TextPrimary));
-				AmmoRow->AddChild(CreateText(WidgetTree, TEXT("Text_WeaponAmmo"), TEXT("5 / 10"), StyleData, LayoutData, ECFUIFontFamilyRole::Numeric, ECFUITypographyRole::ValueM, ECFUIColorToken::TextPrimary));
-		Content->AddChild(AmmoRow);
+		// [v1.6.0] Launcher 또는 Ammo가 차지하는 Compact Primary 최대 한 개의 의미 Row입니다.
+		UHorizontalBox* PrimaryResourceRow = CreateWidget<UHorizontalBox>(WidgetTree, TEXT("HorizontalBox_PrimaryResource"));
+		// [v1.6.0] Primary Player-facing 문자열을 크게 표시할 Text입니다.
+		UTextBlock* PrimaryResourceText = CreateText(WidgetTree, TEXT("Text_WeaponPrimaryResource"), TEXT("SALVO 2 / 4"), StyleData, LayoutData, ECFUIFontFamilyRole::Numeric, ECFUITypographyRole::ValueM, ECFUIColorToken::AccentTactical);
+		// [v1.6.0] Sequence 같은 Primary Entry가 실제 진행률을 가질 때만 Runtime에서 노출할 ProgressBar입니다.
+		UProgressBar* PrimaryResourceProgress = CreateProgress(WidgetTree, TEXT("ProgressBar_PrimaryResource"), 0.5f, StyleData, ECFUIColorToken::AccentTactical);
+		if (!PrimaryResourceRow || !PrimaryResourceText || !PrimaryResourceProgress)
+		{
+			return false;
+		}
+		PrimaryResourceRow->AddChild(PrimaryResourceText);
+		ResourcePresentation->AddChild(PrimaryResourceRow);
+		ResourcePresentation->AddChild(PrimaryResourceProgress);
 
-		// [v1.0.0] Heat 상태 Row입니다.
-		UHorizontalBox* HeatRow = CreateWidget<UHorizontalBox>(WidgetTree, TEXT("HorizontalBox_Heat"));
-		HeatRow->AddChild(CreateImage(WidgetTree, TEXT("Image_Heat"), StyleData, FName(TEXT("Heat")), ECFUIColorToken::StateCaution));
-		HeatRow->AddChild(CreateText(WidgetTree, TEXT("Text_WeaponHeat"), TEXT("38%"), StyleData, LayoutData, ECFUIFontFamilyRole::Numeric, ECFUITypographyRole::ValueS, ECFUIColorToken::StateCaution));
-		Content->AddChild(HeatRow);
-		Content->AddChild(CreateProgress(WidgetTree, TEXT("ProgressBar_Heat"), 0.38f, StyleData, ECFUIColorToken::StateCaution));
+		// [v1.6.0] Secondary 최대 두 개를 0개/1개/2개 계약으로 배치할 의미 Row입니다.
+		UHorizontalBox* SecondaryResourcesRow = CreateWidget<UHorizontalBox>(WidgetTree, TEXT("HorizontalBox_SecondaryResources"));
+		// [v1.6.0] 첫 번째 Secondary Entry의 Text와 선택적 Progress를 함께 소유하는 의미 Container입니다.
+		UVerticalBox* SecondaryResourceA = CreateWidget<UVerticalBox>(WidgetTree, TEXT("VerticalBox_SecondaryResourceA"));
+		// [v1.6.0] 두 번째 Secondary Entry의 Text와 선택적 Progress를 함께 소유하는 의미 Container입니다.
+		UVerticalBox* SecondaryResourceB = CreateWidget<UVerticalBox>(WidgetTree, TEXT("VerticalBox_SecondaryResourceB"));
+		// [v1.6.0] Launcher Primary 중에도 보존되는 Ammo 같은 첫 번째 보조 문자열입니다.
+		UTextBlock* SecondaryResourceTextA = CreateText(WidgetTree, TEXT("Text_WeaponSecondaryResourceA"), TEXT("5 / 10"), StyleData, LayoutData, ECFUIFontFamilyRole::Numeric, ECFUITypographyRole::ValueS, ECFUIColorToken::TextPrimary);
+		// [v1.6.0] 향후 실제 Secondary Entry가 진행률을 가질 때만 Runtime에서 노출할 첫 번째 보조 ProgressBar입니다.
+		UProgressBar* SecondaryResourceProgressA = CreateProgress(WidgetTree, TEXT("ProgressBar_SecondaryResourceA"), 0.0f, StyleData, ECFUIColorToken::TextSecondary);
+		// [v1.6.0] 두 번째 Secondary Entry의 Player-facing 문자열 슬롯입니다.
+		UTextBlock* SecondaryResourceTextB = CreateText(WidgetTree, TEXT("Text_WeaponSecondaryResourceB"), TEXT(""), StyleData, LayoutData, ECFUIFontFamilyRole::Numeric, ECFUITypographyRole::ValueS, ECFUIColorToken::TextSecondary);
+		// [v1.6.0] 향후 실제 Secondary Entry가 진행률을 가질 때만 Runtime에서 노출할 두 번째 보조 ProgressBar입니다.
+		UProgressBar* SecondaryResourceProgressB = CreateProgress(WidgetTree, TEXT("ProgressBar_SecondaryResourceB"), 0.0f, StyleData, ECFUIColorToken::TextSecondary);
+		if (!SecondaryResourcesRow || !SecondaryResourceA || !SecondaryResourceB
+			|| !SecondaryResourceTextA || !SecondaryResourceProgressA
+			|| !SecondaryResourceTextB || !SecondaryResourceProgressB)
+		{
+			return false;
+		}
+		SecondaryResourceA->AddChild(SecondaryResourceTextA);
+		SecondaryResourceA->AddChild(SecondaryResourceProgressA);
+		SecondaryResourceB->AddChild(SecondaryResourceTextB);
+		SecondaryResourceB->AddChild(SecondaryResourceProgressB);
+		// [v1.6.0] Secondary A가 혼자일 때 전체 폭, A/B 둘일 때 동일 비율로 분배되게 할 첫 번째 Fill Slot입니다.
+		UHorizontalBoxSlot* SecondarySlotA = SecondaryResourcesRow->AddChildToHorizontalBox(SecondaryResourceA);
+		// [v1.6.0] 두 번째 Secondary가 실제 표시될 때 A와 동일 비율로 공간을 나눌 Fill Slot입니다.
+		UHorizontalBoxSlot* SecondarySlotB = SecondaryResourcesRow->AddChildToHorizontalBox(SecondaryResourceB);
+		if (!SecondarySlotA || !SecondarySlotB)
+		{
+			return false;
+		}
+		// [v1.6.0] Secondary A/B가 같은 가중치로 남는 가로 공간을 나눠 쓰는 Fill 크기 규칙입니다.
+		FSlateChildSize SecondaryFillSize;
+		SecondaryFillSize.SizeRule = ESlateSizeRule::Fill;
+		SecondarySlotA->SetSize(SecondaryFillSize);
+		SecondarySlotB->SetSize(SecondaryFillSize);
+		SecondaryResourceProgressA->SetVisibility(ESlateVisibility::Collapsed);
+		SecondaryResourceB->SetVisibility(ESlateVisibility::Collapsed);
+		SecondaryResourceProgressB->SetVisibility(ESlateVisibility::Collapsed);
+		ResourcePresentation->AddChild(SecondaryResourcesRow);
 
-		// [v1.0.0] Cooldown 상태 Row입니다.
-		UHorizontalBox* CooldownRow = CreateWidget<UHorizontalBox>(WidgetTree, TEXT("HorizontalBox_Cooldown"));
-		CooldownRow->AddChild(CreateImage(WidgetTree, TEXT("Image_Cooldown"), StyleData, FName(TEXT("Cooldown")), ECFUIColorToken::AccentTactical));
-		CooldownRow->AddChild(CreateText(WidgetTree, TEXT("Text_WeaponCooldown"), TEXT("0.8 s"), StyleData, LayoutData, ECFUIFontFamilyRole::Numeric, ECFUITypographyRole::ValueS, ECFUIColorToken::TextSecondary));
-		Content->AddChild(CooldownRow);
-		Content->AddChild(CreateProgress(WidgetTree, TEXT("ProgressBar_Cooldown"), 0.42f, StyleData, ECFUIColorToken::AccentTactical));
+		// [v1.6.0] Reload > NoAmmo > Cooldown/READY 중 정확히 한 상태만 표시할 FireState 의미 Row입니다.
+		UHorizontalBox* FireStateRow = CreateWidget<UHorizontalBox>(WidgetTree, TEXT("HorizontalBox_FireState"));
+		// [v1.6.0] FireState Resolver가 완성한 Player-facing 상태 문자열을 표시할 Text입니다.
+		UTextBlock* FireStateText = CreateText(WidgetTree, TEXT("Text_WeaponFireState"), TEXT(""), StyleData, LayoutData, ECFUIFontFamilyRole::Numeric, ECFUITypographyRole::ValueS, ECFUIColorToken::TextSecondary);
+		// [v1.6.0] Reload/Cooldown처럼 실제 진행률이 있는 FireState에서만 Runtime이 노출할 ProgressBar입니다.
+		UProgressBar* FireStateProgress = CreateProgress(WidgetTree, TEXT("ProgressBar_FireState"), 0.0f, StyleData, ECFUIColorToken::AccentTactical);
+		if (!FireStateRow || !FireStateText || !FireStateProgress)
+		{
+			return false;
+		}
+		FireStateRow->AddChild(FireStateText);
+		FireStateRow->SetVisibility(ESlateVisibility::Collapsed);
+		FireStateProgress->SetVisibility(ESlateVisibility::Collapsed);
+		ResourcePresentation->AddChild(FireStateRow);
+		ResourcePresentation->AddChild(FireStateProgress);
 
-		// [v1.0.0] 선택/비선택 Weapon Compact Rail을 Image 중심으로 표시할 Row입니다.
+				// [v1.8.0] 실제 비선택 Weapon Selection만 최대 3개 표시할 fixed-cardinality Compact Rail입니다.
 		UHorizontalBox* Rail = CreateWidget<UHorizontalBox>(WidgetTree, TEXT("HorizontalBox_WeaponRail"));
-		Rail->AddChild(CreateImage(WidgetTree, TEXT("Image_WeaponRail1"), StyleData, FName(TEXT("Turret")), ECFUIColorToken::AccentTactical));
-		Rail->AddChild(CreateSpacer(WidgetTree, TEXT("Spacer_WeaponRailGap1"), FVector2D(16.0f, 1.0f)));
-		Rail->AddChild(CreateImage(WidgetTree, TEXT("Image_WeaponRail2"), StyleData, FName(TEXT("Ammo")), ECFUIColorToken::TextMuted));
-		Rail->AddChild(CreateSpacer(WidgetTree, TEXT("Spacer_WeaponRailGap2"), FVector2D(16.0f, 1.0f)));
-		Rail->AddChild(CreateImage(WidgetTree, TEXT("Image_WeaponRail3"), StyleData, FName(TEXT("Reload")), ECFUIColorToken::TextMuted));
+		if (!Rail)
+		{
+			return false;
+		}
+
+		// [v1.8.0] Rail 첫 번째 fixed 112x68 Text Tile입니다. 실제 문자열은 Runtime Presenter가 순번+DisplayName으로 덮어씁니다.
+		USizeBox* RailTile1 = CreateWidget<USizeBox>(WidgetTree, TEXT("SizeBox_WeaponRail1"));
+		// [v1.8.0] Rail 두 번째 fixed 112x68 Text Tile입니다.
+		USizeBox* RailTile2 = CreateWidget<USizeBox>(WidgetTree, TEXT("SizeBox_WeaponRail2"));
+		// [v1.8.0] Rail 세 번째 fixed 112x68 Text Tile 또는 +N overflow 슬롯입니다.
+		USizeBox* RailTile3 = CreateWidget<USizeBox>(WidgetTree, TEXT("SizeBox_WeaponRail3"));
+		// [v1.8.0] 첫 Rail Tile의 비선택 무기 순번+DisplayName 문자열입니다.
+		UTextBlock* RailText1 = CreateText(WidgetTree, TEXT("Text_WeaponRail1"), TEXT("02  WEAPON"), StyleData, LayoutData, ECFUIFontFamilyRole::UI, ECFUITypographyRole::Caption, ECFUIColorToken::TextSecondary);
+		// [v1.8.0] 두 번째 Rail Tile의 비선택 무기 순번+DisplayName 문자열입니다.
+		UTextBlock* RailText2 = CreateText(WidgetTree, TEXT("Text_WeaponRail2"), TEXT("03  WEAPON"), StyleData, LayoutData, ECFUIFontFamilyRole::UI, ECFUITypographyRole::Caption, ECFUIColorToken::TextSecondary);
+		// [v1.8.0] 세 번째 Rail Tile의 비선택 무기 문자열 또는 overflow +N 문자열입니다.
+		UTextBlock* RailText3 = CreateText(WidgetTree, TEXT("Text_WeaponRail3"), TEXT("+2"), StyleData, LayoutData, ECFUIFontFamilyRole::UI, ECFUITypographyRole::Caption, ECFUIColorToken::TextSecondary);
+		if (!RailTile1 || !RailTile2 || !RailTile3 || !RailText1 || !RailText2 || !RailText3)
+		{
+			return false;
+		}
+
+		RailTile1->SetWidthOverride(112.0f);
+		RailTile1->SetHeightOverride(68.0f);
+		RailTile1->SetContent(RailText1);
+		RailTile2->SetWidthOverride(112.0f);
+		RailTile2->SetHeightOverride(68.0f);
+		RailTile2->SetContent(RailText2);
+		RailTile3->SetWidthOverride(112.0f);
+		RailTile3->SetHeightOverride(68.0f);
+		RailTile3->SetContent(RailText3);
+
+		// [v1.8.0] Saved Designer 상태에서 fake selectable weapon을 노출하지 않도록 Tile과 Rail 모두 기본 Collapsed입니다.
+		RailTile1->SetVisibility(ESlateVisibility::Collapsed);
+		RailTile2->SetVisibility(ESlateVisibility::Collapsed);
+		RailTile3->SetVisibility(ESlateVisibility::Collapsed);
+		Rail->AddChild(RailTile1);
+		Rail->AddChild(CreateSpacer(WidgetTree, TEXT("Spacer_WeaponRailGap1"), FVector2D(8.0f, 1.0f)));
+		Rail->AddChild(RailTile2);
+		Rail->AddChild(CreateSpacer(WidgetTree, TEXT("Spacer_WeaponRailGap2"), FVector2D(8.0f, 1.0f)));
+		Rail->AddChild(RailTile3);
+		Rail->SetVisibility(ESlateVisibility::Collapsed);
 		Content->AddChild(Rail);
 		return true;
 	}
@@ -880,34 +980,108 @@ namespace CFUIHUDProdEditorBridge
 		else if (WidgetRole == FName(TEXT("ArmorBodyMap"))) RequiredImageCount = 7;
 		else if (WidgetRole == FName(TEXT("VehiclePanel"))) RequiredImageCount = 2;
 		else if (WidgetRole == FName(TEXT("RadarPanel"))) RequiredImageCount = 6;
-		else if (WidgetRole == FName(TEXT("WeaponPanel"))) RequiredImageCount = 7;
+								else if (WidgetRole == FName(TEXT("WeaponPanel"))) RequiredImageCount = 1;
 				if (ImageCount < RequiredImageCount)
 		{
 			OutFailureReason = FString::Printf(TEXT("Production Image slot contract failed: role=%s actual=%d required=%d"), *WidgetRole.ToString(), ImageCount, RequiredImageCount);
 			return false;
 		}
 
-				if (WidgetRole == FName(TEXT("WeaponPanel")))
+						if (WidgetRole == FName(TEXT("WeaponPanel")))
 		{
-			// [v1.3.0] 정상 Launcher Sequence를 WeaponPanel에 표시하기 위한 의미 슬롯 세 개가 모두 존재해야 합니다.
-			const bool bHasLauncherSequenceSlots = WidgetTree->FindWidget(FName(TEXT("HorizontalBox_LauncherSequence")))
-				&& WidgetTree->FindWidget(FName(TEXT("Text_WeaponLauncherSequence")))
-				&& WidgetTree->FindWidget(FName(TEXT("ProgressBar_LauncherSequence")));
-			if (!bHasLauncherSequenceSlots)
+			// [v1.6.0] Stage B Compact Resource Presentation이 반드시 소유해야 하는 고정 의미 슬롯 이름입니다.
+			const FName RequiredWeaponResourceSlots[] =
 			{
-				OutFailureReason = TEXT("WeaponPanel Launcher Sequence semantic slots are missing");
+				FName(TEXT("VerticalBox_ResourcePresentation")),
+				FName(TEXT("HorizontalBox_PrimaryResource")),
+				FName(TEXT("Text_WeaponPrimaryResource")),
+				FName(TEXT("ProgressBar_PrimaryResource")),
+				FName(TEXT("HorizontalBox_SecondaryResources")),
+				FName(TEXT("VerticalBox_SecondaryResourceA")),
+				FName(TEXT("Text_WeaponSecondaryResourceA")),
+				FName(TEXT("ProgressBar_SecondaryResourceA")),
+				FName(TEXT("VerticalBox_SecondaryResourceB")),
+				FName(TEXT("Text_WeaponSecondaryResourceB")),
+				FName(TEXT("ProgressBar_SecondaryResourceB")),
+				FName(TEXT("HorizontalBox_FireState")),
+				FName(TEXT("Text_WeaponFireState")),
+				FName(TEXT("ProgressBar_FireState")),
+								FName(TEXT("Text_WeaponReserveAmmo")),
+				FName(TEXT("HorizontalBox_WeaponRail")),
+				FName(TEXT("SizeBox_WeaponRail1")),
+				FName(TEXT("Text_WeaponRail1")),
+				FName(TEXT("Spacer_WeaponRailGap1")),
+				FName(TEXT("SizeBox_WeaponRail2")),
+				FName(TEXT("Text_WeaponRail2")),
+				FName(TEXT("Spacer_WeaponRailGap2")),
+				FName(TEXT("SizeBox_WeaponRail3")),
+				FName(TEXT("Text_WeaponRail3"))
+			};
+			for (const FName RequiredWeaponResourceSlot : RequiredWeaponResourceSlots)
+			{
+				if (!WidgetTree->FindWidget(RequiredWeaponResourceSlot))
+				{
+					OutFailureReason = FString::Printf(TEXT("WeaponPanel Stage B semantic slot is missing: %s"), *RequiredWeaponResourceSlot.ToString());
+					return false;
+				}
+			}
+
+			// [v1.6.0] Stage B에서 새 의미 슬롯과 동시에 존재하면 중복 렌더링이 되는 구형 전용 Row/Widget 이름입니다.
+			const FName ForbiddenLegacyWeaponResourceSlots[] =
+			{
+				FName(TEXT("HorizontalBox_LauncherSequence")),
+				FName(TEXT("Text_WeaponLauncherSequence")),
+				FName(TEXT("ProgressBar_LauncherSequence")),
+				FName(TEXT("HorizontalBox_Ammo")),
+				FName(TEXT("Image_Ammo")),
+				FName(TEXT("Text_WeaponAmmo")),
+				FName(TEXT("HorizontalBox_Heat")),
+				FName(TEXT("Image_Heat")),
+				FName(TEXT("Text_WeaponHeat")),
+				FName(TEXT("ProgressBar_Heat")),
+				FName(TEXT("HorizontalBox_Cooldown")),
+				FName(TEXT("Image_Cooldown")),
+				FName(TEXT("Text_WeaponCooldown")),
+				FName(TEXT("ProgressBar_Cooldown"))
+			};
+			for (const FName ForbiddenLegacyWeaponResourceSlot : ForbiddenLegacyWeaponResourceSlots)
+			{
+				if (WidgetTree->FindWidget(ForbiddenLegacyWeaponResourceSlot))
+				{
+					OutFailureReason = FString::Printf(TEXT("WeaponPanel legacy fixed resource slot is forbidden after Stage B: %s"), *ForbiddenLegacyWeaponResourceSlot.ToString());
+					return false;
+				}
+			}
+
+			// [v1.6.0] Header Reserve는 label-less 우측 owner 하나만 유지하고 별도 Label/고정 Gap을 만들지 않습니다.
+			if (WidgetTree->FindWidget(FName(TEXT("Text_WeaponReserveLabel")))
+				|| WidgetTree->FindWidget(FName(TEXT("Spacer_WeaponReserveGap"))))
+			{
+				OutFailureReason = TEXT("WeaponPanel label-less Reserve semantic/right-edge slot contract failed");
 				return false;
 			}
 
-			// [v1.4.0] Primary Loaded/Capacity와 Header Reserve 숫자를 서로 다른 의미 슬롯으로 유지합니다.
-			const bool bHasAmmoDisplaySlots = WidgetTree->FindWidget(FName(TEXT("HorizontalBox_Ammo")))
-				&& WidgetTree->FindWidget(FName(TEXT("Text_WeaponAmmo")))
-				&& WidgetTree->FindWidget(FName(TEXT("Text_WeaponReserveAmmo")));
-						if (!bHasAmmoDisplaySlots
-				|| WidgetTree->FindWidget(FName(TEXT("Text_WeaponReserveLabel")))
-				|| WidgetTree->FindWidget(FName(TEXT("Spacer_WeaponReserveGap"))))
+						// [v1.8.0] 구형 Rail의 Turret/Ammo/Reload semantic Image는 실제 weapon identity가 아니므로 새 Text Rail과 공존할 수 없습니다.
+			const FName ForbiddenLegacyWeaponRailImages[] =
 			{
-				OutFailureReason = TEXT("WeaponPanel Loaded/Capacity or label-less Reserve semantic/right-edge slot contract failed");
+				FName(TEXT("Image_WeaponRail1")),
+				FName(TEXT("Image_WeaponRail2")),
+				FName(TEXT("Image_WeaponRail3"))
+			};
+			for (const FName ForbiddenLegacyWeaponRailImage : ForbiddenLegacyWeaponRailImages)
+			{
+				if (WidgetTree->FindWidget(ForbiddenLegacyWeaponRailImage))
+				{
+					OutFailureReason = FString::Printf(TEXT("WeaponPanel fake semantic Rail image is forbidden: %s"), *ForbiddenLegacyWeaponRailImage.ToString());
+					return false;
+				}
+			}
+
+			// [v1.8.0] Saved Designer는 Runtime 무기 목록을 가정하지 않으므로 Rail은 기본 Collapsed이고 Presenter만 actual nonselected selection에서 엽니다.
+			const UWidget* WeaponRail = WidgetTree->FindWidget(FName(TEXT("HorizontalBox_WeaponRail")));
+			if (!WeaponRail || WeaponRail->GetVisibility() != ESlateVisibility::Collapsed)
+			{
+				OutFailureReason = TEXT("WeaponPanel truthful Rail must be Designer-default Collapsed and runtime-presented only");
 				return false;
 			}
 		}

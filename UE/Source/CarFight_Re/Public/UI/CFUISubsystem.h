@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.5.0
-// Date: 2026-08-13
-// Description: CarFight LocalPlayer UI 수명·레이어·Pause·Production HUD Runtime 연결 Subsystem
-// Scope: 기존 Root·Pause·Style 수명을 보존하면서 UI-P0-03 HUD Provider/Presenter와 Production WBP 수명을 소유합니다.
+// Version: 1.7.0
+// Date: 2026-08-18
+// Description: CarFight LocalPlayer UI 수명·레이어·Pause·Production HUD·AimReticle·Target Marker Runtime 연결 Subsystem
+// Scope: 기존 Root·Pause·Style·Production HUD·AimReticle 수명을 보존하면서 UI-P0-05 TargetSelect World Marker를 Game Layer의 단일 UISubsystem 소유 수명으로 관리합니다.
 // Changelog:
+// - v1.7.0: UI-P0-05 WBP_TargetSelect Config Class, Game Layer 단일 인스턴스, Current Pawn Rebind와 World Cleanup 수명을 UISubsystem으로 이전.
+// - v1.6.0: UI-P0-04 WBP_AimReticle Config Class, HUD Layer 단일 인스턴스, Current Pawn Rebind와 World Cleanup 수명을 UISubsystem으로 이전.
 // - v1.5.0: UI-P0-03 HUDDataProvider/HUDPresenter와 Config Production WBP_CFInGameHUD 생성·HUD Layer 연결 수명을 추가.
 // - v1.4.0: Config 기반 Style·Density·HUD Layout Soft Reference, 1회 해석 Cache와 Native CDO Fallback Getter를 추가.
 // - v1.3.0: UI Root를 Legacy Pawn HUD와 동일한 AddToViewport 계층에 등록해 실제 ZOrder·Hit Test 우선권을 보장.
@@ -21,6 +23,8 @@
 // - 기존 Pawn 소유 HUD는 UI-P0-04~05 전까지 그대로 유지하되 싱글플레이 UI Root는 동일한 AddToViewport 계층의 더 높은 ZOrder를 사용한다.
 // - D1-09B Config가 비었거나 Asset 검증에 실패하면 Style·Density·Layout 각각의 Native CDO Fallback을 반환합니다.
 // - Production HUD는 WBP_CFInGameHUD의 기존 CFStyledWidgetBase Parent를 유지하며 Gameplay Runtime은 Provider/Presenter를 통해서만 전달합니다.
+// - v1.6.0부터 AimReticle 생성·레이어·Pawn Rebind 수명은 UISubsystem이 소유하며, ACFVehiclePawn의 기존 Reticle Class/API는 직렬화·호환 경계로만 남깁니다.
+// - v1.7.0부터 TargetSelect Marker 생성·Game Layer·Pawn Rebind 수명도 UISubsystem이 소유하며 Pawn의 기존 TargetSelect HUD Class/API는 직렬화·호환 경계로만 남깁니다.
 
 #pragma once
 
@@ -32,6 +36,8 @@
 class ACFPlayerController;
 class APawn;
 class UCanvasPanel;
+class UCFAimReticleWidget;
+class UCFTargetSelectWidget;
 class UCFHUDDataProvider;
 class UCFHUDLayoutData;
 class UCFHUDPresenter;
@@ -171,9 +177,27 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|UI|HUD", meta=(DisplayName="HUD 데이터 Provider 반환 (Get HUD Data Provider)", ToolTip="현재 LocalPlayer의 Gameplay Runtime을 ViewData로 변환하는 HUD Provider를 반환합니다. Production Widget은 Pawn 대신 이 Provider 데이터를 소비합니다."))
 	UCFHUDDataProvider* GetHUDDataProvider() const { return HUDDataProvider; }
 
-	// [v1.5.0] 현재 HUD Layer에 표시 중인 Production WBP_CFInGameHUD 인스턴스를 반환합니다.
+		// [v1.5.0] 현재 HUD Layer에 표시 중인 Production WBP_CFInGameHUD 인스턴스를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|UI|HUD", meta=(DisplayName="Production HUD Widget 반환 (Get Production HUD Widget)", ToolTip="현재 World HUD Layer에 생성된 Production WBP_CFInGameHUD 인스턴스를 반환합니다. 없으면 Null입니다."))
 	UCFStyledWidgetBase* GetInGameHUDWidget() const { return InGameHUDWidget; }
+
+	// [v1.6.0] 현재 HUD Layer에 표시 중인 UISubsystem 소유 Aim Reticle 인스턴스를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|UI|HUD", meta=(DisplayName="Aim Reticle Widget 반환 (Get Aim Reticle Widget)", ToolTip="현재 World HUD Layer에 UISubsystem이 단일 생성한 WBP_AimReticle 인스턴스를 반환합니다. 없으면 Null입니다."))
+	UCFAimReticleWidget* GetAimReticleWidget() const { return AimReticleWidget; }
+
+		// [v1.6.0] Production HUD보다 위에 배치되는 Aim Reticle의 HUD Layer 내부 ZOrder를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|UI|HUD", meta=(DisplayName="Aim Reticle HUD Layer ZOrder 반환", ToolTip="HUD Layer 안에서 Production HUD보다 Aim Reticle을 위에 배치하는 로컬 ZOrder입니다."))
+	int32 GetAimReticleHUDLayerZOrder() const { return AimReticleHUDLayerZOrder; }
+
+	// [v1.7.0] 현재 Game Layer에 표시 중인 UISubsystem 소유 TargetSelect World Marker 인스턴스를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|UI|Game", meta=(DisplayName="Target Marker Widget 반환", ToolTip="현재 World Game Layer에 UISubsystem이 단일 생성한 WBP_TargetSelect World Marker 인스턴스를 반환합니다. 없으면 Null입니다."))
+	UCFTargetSelectWidget* GetTargetSelectWidget() const { return TargetSelectWidget; }
+
+	// [v1.7.0] TargetSelect World Marker의 Game Layer 내부 ZOrder를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|UI|Game", meta=(DisplayName="Target Marker Game Layer ZOrder 반환", ToolTip="Game Layer 안에서 TargetSelect World Marker에 적용하는 로컬 ZOrder입니다."))
+	int32 GetTargetSelectGameLayerZOrder() const { return TargetSelectGameLayerZOrder; }
+
+
 
 		// [v1.0.0] 현재 화면 상태를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|UI|Screen", meta=(DisplayName="현재 UI 화면 상태 반환 (Get UI Screen State)", ToolTip="현재 LocalPlayer UI의 화면 상태를 반환합니다."))
@@ -224,8 +248,28 @@ private:
 	// [v1.5.0] Config Production Widget Class로 WBP_CFInGameHUD를 만들고 HUD Layer와 Presenter에 연결합니다.
 	bool CreateInGameHUDWidget();
 
-	// [v1.5.0] Presenter 연결을 먼저 해제하고 현재 Production HUD Widget을 제거합니다.
+		// [v1.5.0] Presenter 연결을 먼저 해제하고 현재 Production HUD Widget을 제거합니다.
 	void DestroyInGameHUDWidget();
+
+	// [v1.6.0] Config Aim Reticle Class로 단일 Widget을 만들고 HUD Layer에 연결합니다.
+	bool CreateAimReticleWidget();
+
+	// [v1.6.0] 현재 Reticle의 Pawn 참조를 먼저 비운 뒤 HUD Layer에서 제거합니다.
+	void DestroyAimReticleWidget();
+
+		// [v1.6.0] 현재 Possessed Pawn만 Reticle Source로 연결하고 표시 토글을 갱신합니다.
+	void RebindAimReticleToCurrentPawn();
+
+	// [v1.7.0] Config TargetSelect Class로 단일 World Marker Widget을 만들고 Game Layer에 연결합니다.
+	bool CreateTargetSelectWidget();
+
+	// [v1.7.0] 현재 Target Marker의 Pawn 참조와 Delegate를 먼저 비운 뒤 Game Layer에서 제거합니다.
+	void DestroyTargetSelectWidget();
+
+	// [v1.7.0] 현재 Possessed Pawn만 Target Marker Source로 연결하고 표시 토글을 갱신합니다.
+	void RebindTargetSelectToCurrentPawn();
+
+
 
 	// [v1.1.0] Pause 해제 후 Primary Screen 또는 인게임 입력 모드와 화면 상태를 복원합니다.
 	void RestoreInputModeAfterPause();
@@ -252,9 +296,19 @@ private:
 	UPROPERTY(Config, EditDefaultsOnly, Category="CarFight|UI|Default Data", meta=(DisplayName="기본 HUD Layout Data Asset (Default HUD Layout Data Asset)", ToolTip="D1-09B DA_CFHUDLayout_1080_16을 연결합니다."))
 	TSoftObjectPtr<UCFHUDLayoutData> DefaultHUDLayoutDataAsset;
 
-	// [v1.5.0] 현재 World HUD Layer에 생성할 Production WBP_CFInGameHUD Class Soft Reference입니다.
+		// [v1.5.0] 현재 World HUD Layer에 생성할 Production WBP_CFInGameHUD Class Soft Reference입니다.
 	UPROPERTY(Config, EditDefaultsOnly, Category="CarFight|UI|Default Data", meta=(DisplayName="기본 인게임 HUD Widget Class (Default InGame HUD Widget Class)", ToolTip="D1-11 Production WBP_CFInGameHUD Class를 연결합니다. Widget은 Gameplay Pawn을 직접 조회하지 않습니다."))
 	TSoftClassPtr<UCFStyledWidgetBase> DefaultInGameHUDWidgetClass;
+
+		// [v1.6.0] UISubsystem이 HUD Layer에서 단일 소유할 기존 WBP_AimReticle Class Soft Reference입니다.
+	UPROPERTY(Config, EditDefaultsOnly, Category="CarFight|UI|Default Data", meta=(DisplayName="기본 Aim Reticle Widget Class (Default Aim Reticle Widget Class)", ToolTip="기존 WBP_AimReticle Class를 UISubsystem HUD Layer 수명으로 생성합니다. Gameplay 계산과 Reticle 시각 의미는 변경하지 않습니다."))
+	TSoftClassPtr<UCFAimReticleWidget> DefaultAimReticleWidgetClass;
+
+	// [v1.7.0] UISubsystem이 Game Layer에서 단일 소유할 기존 WBP_TargetSelect Class Soft Reference입니다.
+	UPROPERTY(Config, EditDefaultsOnly, Category="CarFight|UI|Default Data", meta=(DisplayName="기본 Target Marker Widget Class", ToolTip="기존 WBP_TargetSelect Class를 UISubsystem Game Layer의 World Marker 수명으로 생성합니다. TargetSelect Gameplay 선택 상태는 변경하지 않습니다."))
+	TSoftClassPtr<UCFTargetSelectWidget> DefaultTargetSelectWidgetClass;
+
+
 
 	// [v1.4.0] 현재 Subsystem 수명에서 한 번 해석된 Style Data 강한 Cache입니다.
 	UPROPERTY(Transient)
@@ -268,9 +322,19 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UCFHUDLayoutData> ResolvedHUDLayoutData = nullptr;
 
-	// [v1.5.0] Config Soft Class에서 한 번 해석한 Production InGame HUD Class입니다.
+		// [v1.5.0] Config Soft Class에서 한 번 해석한 Production InGame HUD Class입니다.
 	UPROPERTY(Transient)
 	TSubclassOf<UCFStyledWidgetBase> ResolvedInGameHUDWidgetClass;
+
+		// [v1.6.0] Config Soft Class에서 한 번 해석한 Aim Reticle Class입니다.
+	UPROPERTY(Transient)
+	TSubclassOf<UCFAimReticleWidget> ResolvedAimReticleWidgetClass;
+
+	// [v1.7.0] Config Soft Class에서 한 번 해석한 TargetSelect World Marker Class입니다.
+	UPROPERTY(Transient)
+	TSubclassOf<UCFTargetSelectWidget> ResolvedTargetSelectWidgetClass;
+
+
 
 	// [v1.5.0] Current Pawn Gameplay Runtime을 통합 ViewData로 변환하는 LocalPlayer HUD Provider입니다.
 	UPROPERTY(Transient)
@@ -280,9 +344,19 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UCFHUDPresenter> HUDPresenter = nullptr;
 
-	// [v1.5.0] 현재 World HUD Layer에 표시 중인 Production WBP_CFInGameHUD 강한 참조입니다.
+		// [v1.5.0] 현재 World HUD Layer에 표시 중인 Production WBP_CFInGameHUD 강한 참조입니다.
 	UPROPERTY(Transient)
 	TObjectPtr<UCFStyledWidgetBase> InGameHUDWidget = nullptr;
+
+		// [v1.6.0] 현재 World HUD Layer에 표시 중인 UISubsystem 소유 Aim Reticle 강한 참조입니다.
+	UPROPERTY(Transient)
+	TObjectPtr<UCFAimReticleWidget> AimReticleWidget = nullptr;
+
+	// [v1.7.0] 현재 World Game Layer에 표시 중인 UISubsystem 소유 TargetSelect World Marker 강한 참조입니다.
+	UPROPERTY(Transient)
+	TObjectPtr<UCFTargetSelectWidget> TargetSelectWidget = nullptr;
+
+
 
 	// [v1.0.0] 현재 LocalPlayer를 소유하는 CarFight PlayerController입니다.
 	TWeakObjectPtr<ACFPlayerController> ActivePlayerController;
@@ -318,8 +392,16 @@ private:
 	// [v1.0.0] 현재 LocalPlayer UI 화면 상태입니다.
 	ECFUIScreenState ScreenState = ECFUIScreenState::None;
 
-		// [v1.2.0] Legacy Aim Reticle 10과 TargetSelect HUD 20보다 위에 Root를 추가할 Viewport ZOrder입니다.
+				// [v1.7.0] 표준 UI Root를 게임 Viewport에 추가할 Viewport ZOrder입니다.
 	int32 RootViewportZOrder = 100;
+
+	// [v1.6.0] 같은 HUD Layer의 Production HUD ZOrder 0보다 위에 Aim Reticle을 배치할 로컬 ZOrder입니다.
+	int32 AimReticleHUDLayerZOrder = 10;
+
+	// [v1.7.0] Game Layer 안에서 TargetSelect World Marker에 적용할 로컬 ZOrder입니다.
+	int32 TargetSelectGameLayerZOrder = 0;
+
+
 
 	// [v1.0.0] 전역 World Cleanup Delegate 등록 핸들입니다.
 	FDelegateHandle WorldCleanupDelegateHandle;
