@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.3.0
-// Date: 2026-08-18
-// Description: CF-FQ-032 UI-P0-01A~05 기반 Automation 테스트
-// Scope: PlayerController 기본 소유 상태, C++ UI Root 레이어 계약, AimReticle HUD Layer와 TargetSelect Game Layer Marker 계약을 검증합니다.
+// Version: 1.5.0
+// Date: 2026-08-21
+// Description: CF-FQ-032 UI-P0-01A~05 기반 + UI-P0-08 Screen-edge 방향·관계색·가독성 Automation 테스트
+// Scope: 기존 UI Root/Target Marker 수명 계약과 Camera View Space 기반 Screen-edge 방향·Safe Region 배치·관계색 매핑·48×36 Bounds를 검증합니다.
 // Changelog:
+// - v1.5.0: USER 가독성 교정의 Friendly=파랑, Hostile=빨강, Neutral/Unknown=회색 관계색 매핑과 Screen-edge Bounds 48×36 Safe Region 배치 계약을 추가.
+// - v1.4.0: UI-P0-08 Selected Target Screen-edge의 Camera View Space 방향 안정화, BehindCamera 특이점 보존, 1920×1080 Safe Region Ray Intersection과 2-Corner Source Art 회전 기준 계약을 추가.
 // - v1.3.0: UI-P0-05 TargetSelect Marker의 Game Layer ZOrder, 동일 Widget 중복 추가 방지, Null Rebind 시 Marker-only 캐시 정리 계약을 추가.
 // - v1.2.0: UI-P0-04 AimReticle이 Production HUD와 같은 HUD Layer에서 더 높은 로컬 ZOrder를 사용하는 계약을 추가.
 // - v1.1.0: UI Root가 Legacy Aim·Target HUD보다 높은 Viewport ZOrder를 사용하는 계약을 추가.
@@ -150,16 +152,98 @@ bool FCFUITargetMarkerLayerContractTest::RunTest(const FString& Parameters)
 
 	TargetMarkerWidget->SetVehiclePawnRef(nullptr);
 	TargetMarkerWidget->RefreshFromTargetSelect();
-	TestFalse(TEXT("Null Rebind 후 후보 Marker 비표시"), TargetMarkerWidget->IsCandidateMarkerVisible());
+		TestFalse(TEXT("Null Rebind 후 후보 Marker 비표시"), TargetMarkerWidget->IsCandidateMarkerVisible());
 	TestFalse(TEXT("Null Rebind 후 선택 Marker 비표시"), TargetMarkerWidget->IsSelectedMarkerVisible());
+	TestFalse(TEXT("Null Rebind 후 선택 Screen-edge Marker 비표시"), TargetMarkerWidget->IsSelectedEdgeMarkerVisible());
 	TestNull(TEXT("Null Rebind 후 후보 Actor 캐시 없음"), TargetMarkerWidget->GetCachedCandidateActor());
 	TestNull(TEXT("Null Rebind 후 선택 Actor 캐시 없음"), TargetMarkerWidget->GetCachedSelectedActor());
 	TestTrue(TEXT("Marker-only 후보 의미 텍스트 비어 있음"), TargetMarkerWidget->GetCandidateInfoText().IsEmpty());
 	TestTrue(TEXT("Marker-only 선택 의미 텍스트 비어 있음"), TargetMarkerWidget->GetSelectedInfoText().IsEmpty());
 	TestTrue(TEXT("Marker-only Track 의미 텍스트 비어 있음"), TargetMarkerWidget->GetSelectedTrackStateText().IsEmpty());
 
-	RootWidget->ClearLayer(ECFUILayer::Game);
+		RootWidget->ClearLayer(ECFUILayer::Game);
 	TestNull(TEXT("Game Layer 정리 뒤 Target Marker 부모 없음"), TargetMarkerWidget->GetParent());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFUIScreenEdgeTargetMarkerContractTest,
+	"CarFight.UI.UI_P0_08.ScreenEdgeTargetMarkerContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.5.0] Camera View Space 방향·48×36 Safe Region 배치·관계색이 USER 승인 Screen-edge 계약으로 변환되는지 검증합니다.
+bool FCFUIScreenEdgeTargetMarkerContractTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.4.0] 오른쪽 앞 Target의 Camera View Space 방향을 Screen +X로 변환한 결과입니다.
+	const FVector2D RightEdgeDirection = UCFTargetSelectWidget::ResolveCameraViewEdgeDirection(FVector(100.0f, 100.0f, 0.0f), FVector2D::ZeroVector);
+	TestTrue(TEXT("Camera +Right는 Screen +X 방향"), RightEdgeDirection.Equals(FVector2D(1.0f, 0.0f), KINDA_SMALL_NUMBER));
+
+	// [v1.4.0] 위쪽 앞 Target의 Camera View Space 방향을 Screen -Y로 변환한 결과입니다.
+	const FVector2D UpEdgeDirection = UCFTargetSelectWidget::ResolveCameraViewEdgeDirection(FVector(100.0f, 0.0f, 100.0f), FVector2D::ZeroVector);
+	TestTrue(TEXT("Camera +Up은 Screen -Y 방향"), UpEdgeDirection.Equals(FVector2D(0.0f, -1.0f), KINDA_SMALL_NUMBER));
+
+	// [v1.4.0] BehindCamera 오른쪽 Target이 화면 중심을 가로질러 반전되지 않고 같은 오른쪽 Edge를 유지하는 방향입니다.
+	const FVector2D BehindRightDirection = UCFTargetSelectWidget::ResolveCameraViewEdgeDirection(FVector(-100.0f, 100.0f, 0.0f), FVector2D::ZeroVector);
+	TestTrue(TEXT("BehindCamera +Right도 Screen +X Edge 유지"), BehindRightDirection.Equals(FVector2D(1.0f, 0.0f), KINDA_SMALL_NUMBER));
+
+	// [v1.4.0] 정확한 정후방 특이점에서 이전 안정 방향으로 사용할 왼쪽 방향입니다.
+	const FVector2D PreviousLeftDirection(-1.0f, 0.0f);
+	// [v1.4.0] 정후방 Target이 이전 Edge 방향을 보존한 결과입니다.
+	const FVector2D StableBehindDirection = UCFTargetSelectWidget::ResolveCameraViewEdgeDirection(FVector(-100.0f, 0.0f, 0.0f), PreviousLeftDirection);
+	TestTrue(TEXT("정후방 특이점은 이전 안정 Edge 방향 보존"), StableBehindDirection.Equals(PreviousLeftDirection, KINDA_SMALL_NUMBER));
+
+	// [v1.4.0] 이전 방향이 없는 최초 정후방 프레임의 결정론적 Screen 하단 fallback입니다.
+	const FVector2D InitialBehindDirection = UCFTargetSelectWidget::ResolveCameraViewEdgeDirection(FVector(-100.0f, 0.0f, 0.0f), FVector2D::ZeroVector);
+	TestTrue(TEXT("최초 정후방은 결정론적 Screen 하단 fallback"), InitialBehindDirection.Equals(FVector2D(0.0f, 1.0f), KINDA_SMALL_NUMBER));
+
+	// [v1.4.0] StyleSpec 대표 16:9 배치 수학을 검증할 1920×1080 Viewport 크기입니다.
+	const FVector2D ViewportSize(1920.0f, 1080.0f);
+	// [v1.4.0] 현재 StyleData 기본 Safe Region Inset입니다.
+	const float SafeInset = 64.0f;
+		// [v1.5.0] USER 가독성 피드백을 반영한 Screen-edge Bracket Bounds입니다.
+	const FVector2D MarkerBounds(48.0f, 36.0f);
+
+	// [v1.4.0] 오른쪽 Edge Bracket의 계산된 중심 좌표입니다.
+	FVector2D RightEdgePosition = FVector2D::ZeroVector;
+	// [v1.4.0] 오른쪽 Edge에서 T_UI_RadarEdge 기준축에 적용할 회전각입니다.
+	float RightEdgeAngleDegrees = 0.0f;
+	TestTrue(TEXT("오른쪽 Safe Region Edge 배치 계산 성공"), UCFTargetSelectWidget::ResolveScreenEdgePlacement(FVector2D(1.0f, 0.0f), ViewportSize, SafeInset, MarkerBounds, RightEdgePosition, RightEdgeAngleDegrees));
+		TestTrue(TEXT("오른쪽 Edge 중심은 48×36 Bracket 전체 Bounds까지 Safe Region 내부"), RightEdgePosition.Equals(FVector2D(1832.0f, 540.0f), KINDA_SMALL_NUMBER));
+	TestTrue(TEXT("오른쪽 Edge Source Art 상대 회전 -45도"), FMath::IsNearlyEqual(RightEdgeAngleDegrees, -45.0f, KINDA_SMALL_NUMBER));
+
+	// [v1.4.0] 위쪽 Edge Bracket의 계산된 중심 좌표입니다.
+	FVector2D UpEdgePosition = FVector2D::ZeroVector;
+	// [v1.4.0] 위쪽 Edge의 Source Art 상대 회전각입니다.
+	float UpEdgeAngleDegrees = 0.0f;
+	TestTrue(TEXT("위쪽 Safe Region Edge 배치 계산 성공"), UCFTargetSelectWidget::ResolveScreenEdgePlacement(FVector2D(0.0f, -1.0f), ViewportSize, SafeInset, MarkerBounds, UpEdgePosition, UpEdgeAngleDegrees));
+		TestTrue(TEXT("위쪽 Edge 중심은 48×36 Bracket 전체 Bounds까지 Safe Region 내부"), UpEdgePosition.Equals(FVector2D(960.0f, 82.0f), KINDA_SMALL_NUMBER));
+
+	// [v1.4.0] 아래쪽 Edge Bracket의 계산된 중심 좌표입니다.
+	FVector2D DownEdgePosition = FVector2D::ZeroVector;
+	// [v1.4.0] 아래쪽 Edge의 Source Art 상대 회전각입니다.
+	float DownEdgeAngleDegrees = 0.0f;
+	TestTrue(TEXT("아래쪽 Safe Region Edge 배치 계산 성공"), UCFTargetSelectWidget::ResolveScreenEdgePlacement(FVector2D(0.0f, 1.0f), ViewportSize, SafeInset, MarkerBounds, DownEdgePosition, DownEdgeAngleDegrees));
+		TestTrue(TEXT("아래쪽 Edge 중심은 48×36 Bracket 전체 Bounds까지 Safe Region 내부"), DownEdgePosition.Equals(FVector2D(960.0f, 998.0f), KINDA_SMALL_NUMBER));
+	TestTrue(TEXT("아래쪽 Edge Source Art 상대 회전 45도"), FMath::IsNearlyEqual(DownEdgeAngleDegrees, 45.0f, KINDA_SMALL_NUMBER));
+
+		// [v1.5.0] 관계색 매핑의 입력과 출력을 명확히 구분하기 위한 Friendly 테스트 색입니다.
+	const FLinearColor FriendlyTestColor(0.10f, 0.20f, 0.30f, 1.0f);
+	// [v1.5.0] 관계색 매핑의 Hostile 분기를 검증할 테스트 색입니다.
+	const FLinearColor HostileTestColor(0.40f, 0.50f, 0.60f, 1.0f);
+	// [v1.5.0] Neutral과 Unknown이 Screen-edge에서 공통 사용해야 할 회색 역할의 테스트 색입니다.
+	const FLinearColor UnknownTestColor(0.70f, 0.80f, 0.90f, 1.0f);
+	TestTrue(TEXT("Friendly Screen-edge는 Friendly 색 사용"), UCFTargetSelectWidget::ResolveScreenEdgeRelationColor(ECFTargetRelation::Friendly, FriendlyTestColor, HostileTestColor, UnknownTestColor).Equals(FriendlyTestColor));
+	TestTrue(TEXT("Hostile Screen-edge는 Hostile 색 사용"), UCFTargetSelectWidget::ResolveScreenEdgeRelationColor(ECFTargetRelation::Hostile, FriendlyTestColor, HostileTestColor, UnknownTestColor).Equals(HostileTestColor));
+	TestTrue(TEXT("Neutral Screen-edge는 Unknown 회색 공유"), UCFTargetSelectWidget::ResolveScreenEdgeRelationColor(ECFTargetRelation::Neutral, FriendlyTestColor, HostileTestColor, UnknownTestColor).Equals(UnknownTestColor));
+	TestTrue(TEXT("Unknown Screen-edge는 Unknown 회색 사용"), UCFTargetSelectWidget::ResolveScreenEdgeRelationColor(ECFTargetRelation::Unknown, FriendlyTestColor, HostileTestColor, UnknownTestColor).Equals(UnknownTestColor));
+
+	// [v1.4.0] 영벡터 방향이 잘못된 화면 가장자리 위치를 만들지 않는지 확인할 출력 좌표입니다.
+	FVector2D InvalidEdgePosition = FVector2D::ZeroVector;
+	// [v1.4.0] 영벡터 방향 실패 시 변경되지 않을 출력 회전각입니다.
+	float InvalidEdgeAngleDegrees = 0.0f;
+	TestFalse(TEXT("0 방향은 Screen-edge 배치 실패"), UCFTargetSelectWidget::ResolveScreenEdgePlacement(FVector2D::ZeroVector, ViewportSize, SafeInset, MarkerBounds, InvalidEdgePosition, InvalidEdgeAngleDegrees));
 	return true;
 }
 

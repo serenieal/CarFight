@@ -1,10 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.7.0
-// Date: 2026-08-19
-// Description: CF-FQ-032 HUD Provider + CF-FQ-036 SEN-P0-06 Public Sensor Snapshot Integration
-// Scope: UCFUISubsystem OnCurrentPawnChanged를 구독하고 차량 Gameplay Runtime, finite Ammo, WeaponCharge/Heat와 Actor-free Sensor Snapshot을 Player-facing ViewData로 변환합니다.
+// Version: 1.10.0
+// Date: 2026-08-22
+// Description: CF-FQ-032 HUD Provider + post-closure hot-path copy/snapshot 교정
+// Scope: Current Pawn Gameplay Runtime과 actor-free Sensor Snapshot을 ViewData로 변환하며 기존 Camera/Aim Runtime을 읽기 전용 ViewMode 데이터로 투영합니다.
 // Changelog:
+// - v1.10.0: C++ hot-path용 const ViewData 참조 getter를 추가하고 한 Refresh 안에서 Sensor Snapshot/Radar Range Profile을 한 번만 해석해 Target/Radar filler가 공유할 수 있도록 내부 계약을 확장.
+// - v1.9.0: VehicleCameraComp/AimComp의 기존 public Runtime을 재계산 없이 읽어 Camera Mode, 차량 Heading, 카메라·터렛 상대 Yaw/Pitch를 FCFViewModeHUDData로 전달.
+// - v1.8.0: 적용 Scanner Radar Range Preset을 읽어 Provider-local RangePresetIndex, Zoom In/Out command와 Heading-Up normalized Contact/selected edge 방향 ViewData를 추가. Sensor 탐지 성능 mutation 0.
 // - v1.7.0: UI-P0-06 Technical Complete 범위 교정에 맞춰 Current 주석을 동기화. WeaponCharge/Heat는 실제 Runtime Provider가 존재하며 VehicleBattery만 미구현 shared-power Gameplay 기능으로 분리.
 // - v1.6.0: UI-P0-06 기존 실제 Weapon 필드를 additive 공통 ResourceChannels로 투영. 당시 실제 Runtime 없던 Battery·Charge·Heat는 생성하지 않음. Chaos RPM/Gear 실제 Provider 상태를 Current 계약에 반영.
 // - v1.5.0: TargetSelect는 선택/TrackState만, Sensor Snapshot은 Target Knowledge/Radar Contact만 제공하도록 read-only 소비 경계를 확정.
@@ -18,9 +21,12 @@
 // - Launcher 계산을 UI에서 재구현하지 않고 UCFLauncherComp의 public 상태 변경 이벤트를 읽기 전용으로 소비합니다.
 // - v1.5.0부터 Target Knowledge와 Radar는 FCFSensorSnapshot만 읽으며 TargetSelectable 원본 InformationLevel/이름을 Player Knowledge로 사용하지 않습니다.
 // - TargetSelect는 선택 기록·유효성·TrackState owner로 유지하고 Sensor Contact lifecycle을 재계산하지 않습니다.
-// - Radar Range/Zoom 정규화는 별도 UI 계약 전까지 추정하지 않으며 Snapshot 상대 위치·거리만 ViewData에 제공합니다.
+// - v1.8.0 Radar Range/Zoom은 Scanner가 명시한 RadarDisplayRangePresetsCm만 사용합니다. Provider가 현재 Preset 선택을 소유하며 Sensor 탐지/Active Scan 성능은 변경하지 않습니다.
+// - Range Profile이 비어 있으면 기존처럼 DisplayRange/NormalizedPosition은 Unavailable이며 Passive/Active 거리로 임의 fallback하지 않습니다.
 // - Engine RPM과 Gear는 실제 UE 5.8 Chaos Vehicle Runtime을 읽고, RPM Gauge Redline은 별도 명시 계약 전 추정하지 않습니다.
 // - 실제 Gameplay Runtime Provider가 없는 VehicleBattery는 Unavailable로 유지하고 ResourceChannels 항목도 생성하지 않습니다. WeaponCharge와 Heat는 실제 Runtime Provider가 있을 때만 actual ResourceChannel로 전달합니다.
+// - v1.10.0 C++ per-frame 소비자는 GetCurrentViewDataRef()로 최신 cache를 읽어 동적 배열을 포함한 전체 FCFInGameUIViewData 복사를 피할 수 있습니다. Blueprint용 GetCurrentViewData() by-value 계약은 그대로 유지합니다.
+// - v1.10.0 RefreshViewData는 Sensor Snapshot과 Radar Range Profile을 각각 한 번만 캡처한 뒤 Target/Radar에 같은 read-only 입력을 전달합니다.
 
 #pragma once
 
@@ -44,6 +50,8 @@ class UCFUISubsystem;
 class UCFVehicleDefenseComp;
 class UCFVehicleHealthComp;
 class UWorld;
+struct FCFSensorSnapshot;
+
 
 /**
  * Provider가 새 통합 ViewData를 만들었음을 알리는 이벤트입니다.
@@ -71,13 +79,25 @@ public:
 	UFUNCTION(BlueprintCallable, Category="CarFight|UI|HUD|Provider", meta=(DisplayName="현재 HUD Pawn 재연결", ToolTip="Old Pawn 이벤트와 Timer를 제거한 뒤 새 Pawn이 CFVehiclePawn이면 Gameplay ViewData Source로 연결합니다."))
 	void RebindCurrentPawn(APawn* NewPawn);
 
-	// [v1.0.0] 현재 Bound Pawn의 실제 Runtime에서 통합 ViewData를 다시 계산하고 Broadcast합니다.
+			// [v1.0.0] 현재 Bound Pawn의 실제 Runtime에서 통합 ViewData를 다시 계산하고 Broadcast합니다.
 	UFUNCTION(BlueprintCallable, Category="CarFight|UI|HUD|Provider", meta=(DisplayName="HUD ViewData 새로고침", ToolTip="현재 차량 Runtime의 실제 값을 Vehicle, Weapon, Defense, Target, Radar, Alert ViewData로 다시 계산합니다."))
 	void RefreshViewData();
 
-	// [v1.0.0] 마지막으로 계산된 통합 ViewData를 반환합니다.
+	// [v1.8.0] 현재 Scanner Range Profile에서 한 단계 작은 Radar 표시 범위로 이동합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|UI|HUD|Radar", meta=(DisplayName="Radar Zoom In 요청", ToolTip="현재 Scanner가 명시한 Radar 표시 Range Preset 중 한 단계 작은 범위로 이동합니다. Sensor 탐지 거리와 Active Scan 성능은 변경하지 않습니다."))
+	bool RequestRadarZoomIn();
+
+	// [v1.8.0] 현재 Scanner Range Profile에서 한 단계 큰 Radar 표시 범위로 이동합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|UI|HUD|Radar", meta=(DisplayName="Radar Zoom Out 요청", ToolTip="현재 Scanner가 명시한 Radar 표시 Range Preset 중 한 단계 큰 범위로 이동합니다. Sensor 탐지 거리와 Active Scan 성능은 변경하지 않습니다."))
+	bool RequestRadarZoomOut();
+
+		// [v1.0.0] 마지막으로 계산된 통합 ViewData를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|UI|HUD|Provider", meta=(DisplayName="현재 HUD ViewData 반환", ToolTip="가장 최근 Provider 갱신에서 생성한 전체 HUD ViewData 사본을 반환합니다."))
 	FCFInGameUIViewData GetCurrentViewData() const { return CurrentViewData; }
+
+	// [v1.10.0] C++ hot-path가 동적 배열을 포함한 전체 ViewData 복사 없이 최신 읽기 전용 Cache를 참조합니다.
+	const FCFInGameUIViewData& GetCurrentViewDataRef() const { return CurrentViewData; }
+
 
 	// [v1.0.0] 현재 Provider가 연결한 차량 Pawn을 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|UI|HUD|Provider", meta=(DisplayName="현재 HUD 차량 Pawn 반환", ToolTip="Provider 내부 Gameplay Source 진단용입니다. Production Widget은 이 Getter를 사용하지 말고 ViewData만 소비합니다."))
@@ -112,7 +132,7 @@ private:
 	UFUNCTION()
 	void HandleArmorChanged(ECFArmorDirection ArmorDirection, float PreviousArmor, float CurrentArmor, float MaximumArmor);
 
-					// [v1.2.0] Launcher Sequence 시작·진행·완료·취소 상태를 즉시 Weapon ViewData로 반영합니다.
+						// [v1.2.0] Launcher Sequence 시작·진행·완료·취소 상태를 즉시 Weapon ViewData로 반영합니다.
 	UFUNCTION()
 	void HandleLauncherSequenceChanged(FCFLauncherSequenceRuntime SequenceRuntime);
 
@@ -151,17 +171,26 @@ private:
 	// [v1.0.0] 현재 차량의 주행 ViewData를 채웁니다.
 	void FillVehicleViewData(FCFVehicleHUDData& OutVehicleViewData) const;
 
+		// [v1.9.0] 현재 차량의 Camera/Aim Runtime을 외부 3인칭 View Mode 방향 ViewData로 변환합니다.
+	void FillViewModeViewData(FCFViewModeHUDData& OutViewModeViewData) const;
+
 	// [v1.0.0] 현재 차량의 Defense/Integrity ViewData를 채웁니다.
 	void FillDefenseViewData(FCFDefenseHUDData& OutDefenseViewData) const;
 
 	// [v1.0.0] 현재 활성 Weapon과 Launcher ViewData를 채웁니다.
 	void FillWeaponViewData(FCFWeaponHUDData& OutWeaponViewData) const;
 
-			// [v1.5.0] TargetSelect의 선택/TrackState와 Sensor Snapshot의 Player Knowledge를 중복 판정 없이 합성합니다.
-	void FillTargetViewData(FCFTargetHUDData& OutTargetViewData) const;
+				// [v1.10.0] TargetSelect의 선택/TrackState와 이번 Refresh에서 한 번 캡처한 Sensor Snapshot의 Player Knowledge를 중복 판정 없이 합성합니다.
+	void FillTargetViewData(FCFTargetHUDData& OutTargetViewData, const FCFSensorSnapshot* SensorSnapshot) const;
 
-	// [v1.5.0] Actor-free Sensor Snapshot Contact를 Radar ViewData로 읽기 전용 변환합니다.
-	void FillRadarViewData(FCFRadarHUDData& OutRadarViewData) const;
+	// [v1.10.0] 이번 Refresh에서 한 번 캡처한 Sensor Snapshot과 Radar Range Profile을 Radar ViewData로 읽기 전용 변환합니다.
+	void FillRadarViewData(FCFRadarHUDData& OutRadarViewData, const FCFSensorSnapshot* SensorSnapshot, const TArray<float>& RadarRangePresetsMeters) const;
+
+	// [v1.8.0] 현재 적용 Scanner의 Radar Range Preset을 cm→m Player-facing 표시 단위로 해석합니다.
+	bool ResolveRadarRangeProfile(TArray<float>& OutRadarRangePresetsMeters, int32& OutDefaultPresetIndex) const;
+
+		// [v1.10.0] 이미 해석된 Scanner Range Profile로 현재 Radar RangePresetIndex를 검증하고 명시 Default로 초기화합니다.
+	void ReconcileRadarRangePresetSelection(const TArray<float>& RadarRangePresetsMeters, int32 DefaultPresetIndex);
 
 	// [v1.0.0] 실제 Destroyed, Shield Down, Armor Breach, Launcher Active 상태로 현재 Alert 목록을 만듭니다.
 	void FillAlertViewData(FCFCombatAlertViewData& OutAlertViewData) const;
@@ -206,8 +235,11 @@ private:
 	// [v1.0.0] 실제 Pawn Rebind 횟수입니다.
 	int32 BindingGeneration = 0;
 
-		// [v1.4.0] 현재 Pawn Binding에서 실제 Launcher 상태 이벤트가 발생한 누적 Revision입니다.
+					// [v1.4.0] 현재 Pawn Binding에서 실제 Launcher 상태 이벤트가 발생한 누적 Revision입니다.
 	int32 LauncherSequenceRevision = 0;
+
+	// [v1.8.0] 현재 LocalPlayer HUD가 선택한 Scanner Radar 표시 Range Preset의 0-based 인덱스입니다.
+	int32 RadarRangePresetIndex = INDEX_NONE;
 
 	// [v1.0.0] Provider가 ViewData를 생성한 누적 Revision입니다.
 	int32 ViewDataRevision = 0;

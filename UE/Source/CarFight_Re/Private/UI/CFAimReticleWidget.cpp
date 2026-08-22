@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.9.0
-// Date: 2026-08-18
-// Description: Aim Reticle UI용 C++ 부모 위젯 클래스 구현입니다.
+// Version: 1.10.0
+// Date: 2026-08-22
+// Description: Aim Reticle UI용 C++ 부모 위젯 클래스 / post-closure per-frame refresh 중복 제거입니다.
 // Changelog:
+// - v1.10.0: 자동 Pawn Refresh 경로에서 FireFeedback/Reticle setter를 연속 호출하던 중복 Text/Style 갱신과 외부 Visibility 재호출을 제거. Cache를 한 번에 갱신한 뒤 Text/Style/Visibility를 각각 한 번 적용하며 공개 Apply API 의미는 유지.
 // - v1.9.0: UI-P0-04 Weak Pawn Binding을 적용하고 Refresh 시점마다 약한 참조를 안전하게 해석해 Old Pawn lifetime 비소유를 보장.
 // - v1.8.0: Image_WeaponReticle을 탄종별 Weapon Preview가 아닌 CurrentMuzzleDirection 기반 터렛 레티클 지점에 투영.
 // - v1.7.1: Weapon Reticle Canvas Slot의 앵커를 좌측 상단으로 고정해 뷰포트 좌표가 중복 오프셋되지 않도록 수정.
@@ -17,6 +18,7 @@
 // - v1.2.0: Reticle enum 값 이름을 FirePending / FireRejected 싱글플레이 명칭으로 교체.
 // - v1.1.0: 싱글플레이 전환에 맞춰 서버 대기/거부 표시 문구를 로컬 발사 처리/거부 문구로 변경.
 // Migration:
+// - v1.10.0부터 bAutoRefreshEveryTick 경로는 Cache를 직접 일괄 갱신해 RefreshTextBlocks/RefreshVisualStyle/UpdateReticleVisibility를 각각 한 번만 호출합니다. 외부 Blueprint/C++ ApplyReticleState/ApplyFireFeedbackViewData 호출 계약은 그대로 유지합니다.
 // - v1.9.0부터 Pawn이 소멸하거나 Rebind에서 해제되면 VehiclePawnRef.Get()이 Null이 되고 Reticle은 Hidden fallback으로 전환한다.
 // - Image_WeaponReticle은 bHasValidTurretReticlePoint와 TurretReticleWorldLocation만 소비하며 Legacy Weapon Preview 모드와 착탄 정보에는 의존하지 않는다.
 // - Image_WeaponReticle의 디자이너 앵커 값과 관계없이 런타임에는 좌측 상단 앵커를 사용한다.
@@ -37,42 +39,43 @@
 #include "Components/TextBlock.h"
 #include "GameFramework/PlayerController.h"
 
-// [v1.0.0] Reticle이 읽을 차량 Pawn 참조를 설정하고 즉시 갱신합니다.
+// [v1.10.0] Reticle이 읽을 차량 Pawn 참조를 설정하고 단일 통합 Refresh로 즉시 갱신합니다.
 void UCFAimReticleWidget::SetVehiclePawnRef(ACFVehiclePawn* InVehiclePawnRef)
 {
 	// [v1.0.0] Reticle이 읽을 차량 Pawn 참조입니다.
 	VehiclePawnRef = InVehiclePawnRef;
 
 	RefreshFromPawn();
-	UpdateReticleVisibility();
 }
 
-// [v1.0.0] 현재 Pawn의 VehicleAimComp에서 최신 Reticle 상태를 읽어 갱신합니다.
+// [v1.10.0] 현재 Pawn의 VehicleAimComp에서 최신 Reticle/FireFeedback Cache를 한 번에 갱신하고 Visual Refresh를 한 번씩 수행합니다.
 void UCFAimReticleWidget::RefreshFromPawn()
 {
 	// [v1.0.0] 유효한 Pawn이 없을 때 적용할 안전한 fallback 상태입니다.
 	const ECFVehicleReticleState FallbackReticleState = ECFVehicleReticleState::Hidden;
 
-		// [v1.9.0] Weak Pawn Reference에서 이번 갱신 동안만 사용할 안전한 차량 Pawn입니다.
+	// [v1.9.0] Weak Pawn Reference에서 이번 갱신 동안만 사용할 안전한 차량 Pawn입니다.
 	ACFVehiclePawn* CurrentVehiclePawn = VehiclePawnRef.Get();
 	if (!IsValid(CurrentVehiclePawn))
 	{
 		bCachedCanFire = false;
+		CachedFireFeedbackViewData = FCFVehicleFireFeedbackViewData();
+		CachedReticleState = FallbackReticleState;
 		HideWeaponReticle();
-		ApplyFireFeedbackViewData(FCFVehicleFireFeedbackViewData());
-		ApplyReticleState(FallbackReticleState);
+		RefreshTextBlocks();
 		UpdateReticleVisibility();
 		return;
 	}
 
 	// [v1.0.0] 현재 Pawn에서 읽은 Aim 컴포넌트입니다.
-		const UCFVehicleAimComp* VehicleAimComp = CurrentVehiclePawn->GetVehicleAimComp();
+	const UCFVehicleAimComp* VehicleAimComp = CurrentVehiclePawn->GetVehicleAimComp();
 	if (!IsValid(VehicleAimComp))
 	{
 		bCachedCanFire = false;
+		CachedFireFeedbackViewData = FCFVehicleFireFeedbackViewData();
+		CachedReticleState = FallbackReticleState;
 		HideWeaponReticle();
-		ApplyFireFeedbackViewData(FCFVehicleFireFeedbackViewData());
-		ApplyReticleState(FallbackReticleState);
+		RefreshTextBlocks();
 		UpdateReticleVisibility();
 		return;
 	}
@@ -87,12 +90,13 @@ void UCFAimReticleWidget::RefreshFromPawn()
 	// [v1.3.0] VehicleAimComp가 계산한 기본 Reticle 상태입니다.
 	const ECFVehicleReticleState BaseReticleState = VehicleAimComp->GetReticleState();
 
-		ApplyFireFeedbackViewData(CurrentVehiclePawn->BuildFireFeedbackViewData());
+	CachedFireFeedbackViewData = CurrentVehiclePawn->BuildFireFeedbackViewData();
 
 	// [v1.3.0] FireFeedback 오버레이 정책이 반영된 최종 Reticle 상태입니다.
 	const ECFVehicleReticleState FinalReticleState = ResolveReticleStateFromFireFeedback(CachedFireFeedbackViewData, BaseReticleState);
+	CachedReticleState = FinalReticleState;
 
-	ApplyReticleState(FinalReticleState);
+	RefreshTextBlocks();
 	RefreshWeaponReticle(WeaponAimSolution);
 	UpdateReticleVisibility();
 }
@@ -148,16 +152,15 @@ FText UCFAimReticleWidget::GetCanFireDisplayText() const
 	return bCachedCanFire ? FText::FromString(TEXT("발사 가능")) : FText::FromString(TEXT("발사 불가"));
 }
 
-// [v1.0.0] 위젯 생성 직후 현재 참조 기준으로 첫 Reticle 갱신을 수행합니다.
+// [v1.10.0] 위젯 생성 직후 현재 참조 기준으로 단일 통합 Reticle 갱신을 수행합니다.
 void UCFAimReticleWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
 	RefreshFromPawn();
-	UpdateReticleVisibility();
 }
 
-// [v1.0.0] 옵션이 켜져 있으면 매 프레임 Pawn 기준 Reticle 갱신을 수행합니다.
+// [v1.10.0] 옵션이 켜져 있으면 매 프레임 Pawn 기준 단일 통합 Reticle 갱신을 수행합니다.
 void UCFAimReticleWidget::NativeTick(const FGeometry& MyGeometry, const float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
@@ -168,8 +171,8 @@ void UCFAimReticleWidget::NativeTick(const FGeometry& MyGeometry, const float In
 		return;
 	}
 
+		
 	RefreshFromPawn();
-	UpdateReticleVisibility();
 }
 
 // [v1.3.0] FireFeedback 표시 데이터를 캐시에 저장하고 선택적 TextBlock에 반영합니다.

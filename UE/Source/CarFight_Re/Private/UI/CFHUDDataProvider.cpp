@@ -1,10 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.13.0
-// Date: 2026-08-19
-// Description: CF-FQ-032 HUD Provider + Player-facing Weapon Selection + actual Weapon Charge/Heat + explicit RPM source + Sensor Snapshot Integration 구현
-// Scope: Current Pawn Rebind, Gameplay·Ammo·Charge·Heat·Applied Fitting Weapon Selection 상태와 Actor-free Sensor Snapshot을 10Hz Game-Time ViewData로 변환합니다.
+// Version: 1.16.0
+// Date: 2026-08-22
+// Description: CF-FQ-032 HUD Provider + post-closure Refresh hot-path 중복 해석 교정
+// Scope: Current Pawn Runtime과 actor-free Sensor Snapshot을 ViewData로 변환하고 기존 Camera/Aim Runtime을 외부 3인칭 방향 ViewData로 읽기 전용 투영합니다.
 // Changelog:
+// - v1.16.0: 한 Refresh에서 Sensor Snapshot과 Radar Range Profile을 각각 1회만 캡처해 Target/Radar filler가 같은 immutable 입력을 공유. Radar Zoom command도 Profile 1회 해석 결과로 reconcile하여 중복 복사를 제거.
+// - v1.15.0: VehicleCameraComp의 Camera Mode/현재 시선과 VehicleAimComp의 CurrentMuzzleDirection을 기존 Pawn Forward 기준 Heading·상대 Yaw/Pitch로 변환해 FCFViewModeHUDData에 전달. Gameplay Camera/Aim mutation 0.
+// - v1.14.0: Applied Scanner Radar Range Preset 기반 Display/Maximum Range, Provider-local Zoom In/Out, Heading-Up normalized Contact, range-out selected edge 방향을 구현. Sensor 탐지 성능 mutation 없음.
 // - v1.13.0: UI-P0-06 활성 WeaponComp의 실제 WeaponCharge Runtime Current/Maximum/Ratio/Insufficient를 Weapon ViewData에 연결. VehicleBattery나 정적 설정 fallback 없음.
 // - v1.12.0: WeaponComp의 Applied Fitting 고정 표시 순서와 SelectedWeaponIndex를 HUD에 연결. 선택 항목은 EquipmentPresetData.DisplayName만 전달하며 내부 MountProfileId/WeaponId/AssetName 노출 0.
 // - v1.11.0: UI-P0-06 활성 WeaponComp의 실제 Heat Runtime Current/Maximum/Ratio/Overheated를 Weapon ViewData에 연결. Runtime 비활성은 Unavailable이며 정적 설정 fallback 없음.
@@ -26,23 +29,27 @@
 // - Gameplay 계산을 변경하지 않으며 모든 값은 기존 public Getter/Event/Snapshot의 읽기 전용 소비입니다.
 // - TargetSelect는 선택 기록·유효성·TrackState만 제공하고 Relation/Category/InformationLevel/Identity/거리와 Radar Contact는 FCFSensorSnapshot만 제공합니다.
 // - 선택 Actor는 UCFVehicleSensorComp::TryGetContactIdForActor로 ContactId만 연결하며 Actor metadata/현재 위치를 HUD data로 읽지 않습니다.
-// - Radar Range/Zoom 계약이 없으므로 Snapshot 상대 위치·거리는 제공하지만 NormalizedPosition은 추정하지 않습니다.
+// - v1.14.0 Radar Range/Zoom은 UCFVehicleSensorComp가 공개한 Applied RadarDisplayRangePresetsCm만 사용합니다. Range Profile이 없으면 기존처럼 DisplayRange/NormalizedPosition을 Unavailable로 유지합니다.
+// - Radar Zoom은 Provider-local UI 표시 상태이며 SensorConfig, Contact detection, Active Scan range를 변경하지 않습니다.
 // - finite Ammo Runtime Snapshot이 없으면 AmmoAvailability를 Unavailable로 유지하며 MagazineSize나 MaximumLoadableAmmoCount를 현재 탄약으로 사용하지 않습니다.
 // - Widget 또는 Presenter에서 Gameplay Actor/Component를 찾지 않습니다.
+// - v1.16.0 Refresh 내부 Target/Radar는 같은 FCFSensorSnapshot 사본과 같은 Radar Range Preset 배열을 공유합니다. Gameplay Sensor state나 Range 선택 의미는 변경하지 않습니다.
 
 #include "UI/CFHUDDataProvider.h"
 
 #include "CFEquipmentPresetData.h"
 #include "CFLauncherComp.h"
-#include "CFVehicleData.h"
 #include "CFTargetSelectComp.h"
+#include "CFVehicleAimComp.h"
 #include "CFVehicleAmmoComp.h"
+#include "CFVehicleCameraComp.h"
+#include "CFVehicleData.h"
 #include "CFVehicleDefenseComp.h"
+#include "CFVehicleDriveComp.h"
 #include "CFVehicleHealthComp.h"
 #include "CFVehiclePawn.h"
-#include "CFVehicleDriveComp.h"
-#include "CFVehicleWeaponComp.h"
 #include "CFVehicleSensorComp.h"
+#include "CFVehicleWeaponComp.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
 #include "Engine/World.h"
 #include "UI/CFUISubsystem.h"
@@ -164,9 +171,10 @@ void UCFHUDDataProvider::ShutdownProvider()
 		UISubsystem->OnCurrentPawnChanged.RemoveDynamic(this, &UCFHUDDataProvider::HandleCurrentPawnChanged);
 	}
 
-	UISubsystem = nullptr;
+		UISubsystem = nullptr;
 	BoundVehiclePawn.Reset();
 	BoundWorld.Reset();
+	RadarRangePresetIndex = INDEX_NONE;
 	++BindingGeneration;
 	RefreshViewData();
 }
@@ -182,33 +190,105 @@ void UCFHUDDataProvider::RebindCurrentPawn(APawn* NewPawn)
 		return;
 	}
 
-	StopContinuousRefreshTimer();
+		StopContinuousRefreshTimer();
 	UnbindGameplayEvents();
-		BoundVehiclePawn = NewVehiclePawn;
+	BoundVehiclePawn = NewVehiclePawn;
 	BoundWorld = NewVehiclePawn ? NewVehiclePawn->GetWorld() : nullptr;
 	// [v1.5.0] Launcher 의미 Revision은 Pawn Binding 수명 안에서만 비교합니다.
 	LauncherSequenceRevision = 0;
+	// [v1.14.0] 다른 Pawn/Scanner로 Rebind될 때 이전 차량의 UI Range 선택이 새 Profile에 누출되지 않도록 초기화합니다.
+	RadarRangePresetIndex = INDEX_NONE;
 	++BindingGeneration;
 	BindGameplayEvents();
 	StartContinuousRefreshTimer();
 	RefreshViewData();
 }
 
-// [v1.0.0] 현재 Bound Pawn의 실제 Runtime에서 통합 ViewData를 다시 계산하고 Broadcast합니다.
+// [v1.16.0] 현재 Bound Pawn의 실제 Runtime에서 Sensor/Profile을 한 번씩 캡처해 통합 ViewData를 다시 계산하고 Broadcast합니다.
 void UCFHUDDataProvider::RefreshViewData()
 {
+	// [v1.16.0] 이번 Refresh의 Target/Radar가 함께 사용할 Scanner Radar 표시 Range Preset 목록입니다.
+	TArray<float> RadarRangePresetsMeters;
+	// [v1.16.0] 이번 Refresh의 Scanner Profile이 명시한 기본 Radar Range Preset 인덱스입니다.
+	int32 DefaultRadarRangePresetIndex = INDEX_NONE;
+	ResolveRadarRangeProfile(RadarRangePresetsMeters, DefaultRadarRangePresetIndex);
+	ReconcileRadarRangePresetSelection(RadarRangePresetsMeters, DefaultRadarRangePresetIndex);
+
+	// [v1.16.0] 이번 Refresh의 Target/Radar가 공유할 단일 Actor-free Sensor Snapshot 사본입니다.
+	FCFSensorSnapshot SensorSnapshot;
+	// [v1.16.0] Sensor Component가 존재할 때만 단일 Snapshot 사본을 filler에 전달할 읽기 전용 포인터입니다.
+	const FCFSensorSnapshot* SensorSnapshotPtr = nullptr;
+	if (const ACFVehiclePawn* VehiclePawn = BoundVehiclePawn.Get())
+	{
+		// [v1.16.0] 이번 Refresh에서 Sensor Snapshot을 정확히 한 번 읽을 현재 차량 Sensor Component입니다.
+		const UCFVehicleSensorComp* SensorComponent = VehiclePawn->GetVehicleSensorComp();
+		if (SensorComponent)
+		{
+			SensorSnapshot = SensorComponent->GetSensorSnapshot();
+			SensorSnapshotPtr = &SensorSnapshot;
+		}
+	}
+
 	// [v1.0.0] 이번 갱신에서 새로 만드는 전체 HUD ViewData입니다.
 	FCFInGameUIViewData NewViewData;
 	NewViewData.Revision = ++ViewDataRevision;
 	NewViewData.BindingGeneration = BindingGeneration;
 	FillVehicleViewData(NewViewData.Vehicle);
+	FillViewModeViewData(NewViewData.ViewMode);
 	FillDefenseViewData(NewViewData.Defense);
 	FillWeaponViewData(NewViewData.Weapon);
-	FillTargetViewData(NewViewData.Target);
-	FillRadarViewData(NewViewData.Radar);
+	FillTargetViewData(NewViewData.Target, SensorSnapshotPtr);
+	FillRadarViewData(NewViewData.Radar, SensorSnapshotPtr, RadarRangePresetsMeters);
 	FillAlertViewData(NewViewData.Alerts);
 	CurrentViewData = NewViewData;
 	OnHUDViewDataChanged.Broadcast(CurrentViewData);
+}
+
+// [v1.16.0] 현재 Scanner Range Profile을 한 번 해석해 한 단계 작은 Radar 표시 범위로 이동합니다.
+bool UCFHUDDataProvider::RequestRadarZoomIn()
+{
+	// [v1.16.0] 현재 Scanner가 제공하는 Radar 표시 Range Preset 목록입니다.
+	TArray<float> RadarRangePresetsMeters;
+	// [v1.16.0] 현재 Scanner Profile이 명시한 초기 Radar Range Preset 인덱스입니다.
+	int32 DefaultPresetIndex = INDEX_NONE;
+	if (!ResolveRadarRangeProfile(RadarRangePresetsMeters, DefaultPresetIndex))
+	{
+		RadarRangePresetIndex = INDEX_NONE;
+		return false;
+	}
+	ReconcileRadarRangePresetSelection(RadarRangePresetsMeters, DefaultPresetIndex);
+	if (!RadarRangePresetsMeters.IsValidIndex(RadarRangePresetIndex) || RadarRangePresetIndex <= 0)
+	{
+		return false;
+	}
+
+	--RadarRangePresetIndex;
+	RefreshViewData();
+	return true;
+}
+
+// [v1.16.0] 현재 Scanner Range Profile을 한 번 해석해 한 단계 큰 Radar 표시 범위로 이동합니다.
+bool UCFHUDDataProvider::RequestRadarZoomOut()
+{
+	// [v1.16.0] 현재 Scanner가 제공하는 Radar 표시 Range Preset 목록입니다.
+	TArray<float> RadarRangePresetsMeters;
+	// [v1.16.0] 현재 Scanner Profile이 명시한 초기 Radar Range Preset 인덱스입니다.
+	int32 DefaultPresetIndex = INDEX_NONE;
+	if (!ResolveRadarRangeProfile(RadarRangePresetsMeters, DefaultPresetIndex))
+	{
+		RadarRangePresetIndex = INDEX_NONE;
+		return false;
+	}
+	ReconcileRadarRangePresetSelection(RadarRangePresetsMeters, DefaultPresetIndex);
+	if (!RadarRangePresetsMeters.IsValidIndex(RadarRangePresetIndex)
+		|| RadarRangePresetIndex >= RadarRangePresetsMeters.Num() - 1)
+	{
+		return false;
+	}
+
+	++RadarRangePresetIndex;
+	RefreshViewData();
+	return true;
 }
 
 // [v1.0.0] UISubsystem OnCurrentPawnChanged를 Provider Rebind로 변환합니다.
@@ -495,7 +575,72 @@ void UCFHUDDataProvider::FillVehicleViewData(FCFVehicleHUDData& OutVehicleViewDa
 	}
 
 	OutVehicleViewData.bVehicleCoreRuntimeReady = VehiclePawn->bVehicleCoreRuntimeReady;
-	OutVehicleViewData.bVehicleCombatRuntimeReady = VehiclePawn->bVehicleCombatRuntimeReady;
+		OutVehicleViewData.bVehicleCombatRuntimeReady = VehiclePawn->bVehicleCombatRuntimeReady;
+}
+
+// [v1.15.0] 기존 Camera/Aim Runtime을 차체 기준 외부 3인칭 방향 ViewData로 읽기 전용 변환합니다.
+void UCFHUDDataProvider::FillViewModeViewData(FCFViewModeHUDData& OutViewModeViewData) const
+{
+	// [v1.15.0] ViewMode source로 사용할 현재 Bound 차량 Pawn입니다.
+	ACFVehiclePawn* VehiclePawn = BoundVehiclePawn.Get();
+	if (!VehiclePawn)
+	{
+		return;
+	}
+
+	// [v1.15.0] Camera Mode와 실제 현재 시선을 제공하는 기존 VehicleCameraComp입니다.
+	const UCFVehicleCameraComp* VehicleCameraComponent = VehiclePawn->GetVehicleCameraComp();
+	if (!VehicleCameraComponent)
+	{
+		return;
+	}
+
+	// [v1.15.0] 차체 전방 기준이 되는 현재 차량 Actor의 0~360도 Heading입니다.
+	const float VehicleHeadingDegrees = FRotator::ClampAxis(VehiclePawn->GetActorRotation().Yaw);
+	// [v1.15.0] CameraComp가 이미 계산한 현재 Camera Mode와 Aim 상태 Snapshot입니다.
+	const FCFVehicleCameraRuntimeState CameraRuntimeState = VehicleCameraComponent->GetCameraRuntimeState();
+	// [v1.15.0] 실제 FollowCamera 또는 CameraComp fallback이 제공하는 현재 시선 방향입니다.
+	const FVector CameraForwardDirection = VehicleCameraComponent->GetCurrentAimDirection().GetSafeNormal();
+	if (CameraForwardDirection.ContainsNaN() || CameraForwardDirection.IsNearlyZero())
+	{
+		return;
+	}
+
+	// [v1.15.0] 현재 카메라 시선을 UI용 Yaw/Pitch 각도로 해석한 회전입니다.
+	const FRotator CameraDirectionRotation = CameraForwardDirection.Rotation();
+	OutViewModeViewData.Availability = ECFUIViewAvailability::Known;
+	OutViewModeViewData.CameraMode = CameraRuntimeState.CurrentCameraMode;
+	OutViewModeViewData.VehicleHeadingDegrees = VehicleHeadingDegrees;
+	OutViewModeViewData.CameraRelativeYawDegrees = FMath::FindDeltaAngleDegrees(VehicleHeadingDegrees, FRotator::ClampAxis(CameraDirectionRotation.Yaw));
+	OutViewModeViewData.CameraPitchDegrees = FRotator::NormalizeAxis(CameraDirectionRotation.Pitch);
+
+	// [v1.15.0] 이미 계산된 Weapon Aim Solution과 CurrentMuzzleDirection을 제공하는 기존 VehicleAimComp입니다.
+	const UCFVehicleAimComp* VehicleAimComponent = VehiclePawn->GetVehicleAimComp();
+	if (!VehicleAimComponent)
+	{
+		return;
+	}
+
+	// [v1.15.0] 터렛 정렬 상태와 현재 Muzzle 방향을 이미 소유하는 실제 Weapon Aim Solution입니다.
+	const FCFVehicleWeaponAimSolution WeaponAimSolution = VehicleAimComponent->GetWeaponAimSolution();
+	OutViewModeViewData.bTurretAligning = WeaponAimSolution.bTurretAligning;
+	if (!WeaponAimSolution.bHasValidSolution)
+	{
+		return;
+	}
+
+	// [v1.15.0] 실제 현재 Muzzle Socket X축에서 나온 정규화 터렛 방향입니다.
+	const FVector TurretForwardDirection = WeaponAimSolution.CurrentMuzzleDirection.GetSafeNormal();
+	if (TurretForwardDirection.ContainsNaN() || TurretForwardDirection.IsNearlyZero())
+	{
+		return;
+	}
+
+	// [v1.15.0] 현재 Muzzle 방향을 차체 기준 상대각으로 변환할 월드 회전입니다.
+	const FRotator TurretDirectionRotation = TurretForwardDirection.Rotation();
+	OutViewModeViewData.bTurretDirectionAvailable = true;
+	OutViewModeViewData.TurretRelativeYawDegrees = FMath::FindDeltaAngleDegrees(VehicleHeadingDegrees, FRotator::ClampAxis(TurretDirectionRotation.Yaw));
+	OutViewModeViewData.TurretPitchDegrees = FRotator::NormalizeAxis(TurretDirectionRotation.Pitch);
 }
 
 // [v1.0.0] 현재 차량의 Defense/Integrity ViewData를 채웁니다.
@@ -695,8 +840,8 @@ void UCFHUDDataProvider::FillWeaponViewData(FCFWeaponHUDData& OutWeaponViewData)
 	OutWeaponViewData.RebuildResourceChannelsFromCurrentFields();
 }
 
-// [v1.6.0] TargetSelect의 선택/TrackState와 Sensor Snapshot의 Player Knowledge를 중복 판정 없이 합성합니다.
-void UCFHUDDataProvider::FillTargetViewData(FCFTargetHUDData& OutTargetViewData) const
+// [v1.16.0] TargetSelect의 선택/TrackState와 이번 Refresh에서 한 번 캡처한 Sensor Snapshot의 Player Knowledge를 중복 판정 없이 합성합니다.
+void UCFHUDDataProvider::FillTargetViewData(FCFTargetHUDData& OutTargetViewData, const FCFSensorSnapshot* SensorSnapshot) const
 {
 	ACFVehiclePawn* VehiclePawn = BoundVehiclePawn.Get();
 	if (!VehiclePawn)
@@ -730,9 +875,7 @@ void UCFHUDDataProvider::FillTargetViewData(FCFTargetHUDData& OutTargetViewData)
 		return;
 	}
 
-	// [v1.6.0] Target Knowledge를 읽을 유일한 Actor-free Sensor Snapshot 사본입니다.
-	const FCFSensorSnapshot SensorSnapshot = SensorComponent->GetSensorSnapshot();
-	if (!SensorSnapshot.bRuntimeReady || !SensorSnapshot.IsPublicContractValid())
+		if (!SensorSnapshot || !SensorSnapshot->bRuntimeReady || !SensorSnapshot->IsPublicContractValid())
 	{
 		OutTargetViewData.SensorContactAvailability = ECFUIViewAvailability::Unavailable;
 		return;
@@ -755,7 +898,7 @@ void UCFHUDDataProvider::FillTargetViewData(FCFTargetHUDData& OutTargetViewData)
 	}
 
 	// [v1.6.0] Player-facing Knowledge를 실제로 읽을 선택 대상의 Actor-free Snapshot Contact입니다.
-	const FCFSensorContact* SelectedSensorContact = FindHUDSensorContactById(SensorSnapshot, SelectedContactId);
+		const FCFSensorContact* SelectedSensorContact = FindHUDSensorContactById(*SensorSnapshot, SelectedContactId);
 	if (!SelectedSensorContact)
 	{
 		OutTargetViewData.SensorContactAvailability = ECFUIViewAvailability::Unknown;
@@ -791,15 +934,82 @@ void UCFHUDDataProvider::FillTargetViewData(FCFTargetHUDData& OutTargetViewData)
 	// [v1.6.0] Target 거리 역시 Actor 현재 위치가 아니라 Snapshot origin과 마지막 신뢰 위치만으로 계산합니다.
 	FVector2D RelativePositionMeters;
 	float DistanceMeters = 0.0f;
-	if (BuildHUDSensorRelativePositionMeters(SensorSnapshot, *SelectedSensorContact, RelativePositionMeters, DistanceMeters))
+		if (BuildHUDSensorRelativePositionMeters(*SensorSnapshot, *SelectedSensorContact, RelativePositionMeters, DistanceMeters))
 	{
 		OutTargetViewData.DistanceMeters = DistanceMeters;
 		OutTargetViewData.DistanceAvailability = ResolveKnownNumericAvailability(true, DistanceMeters);
 	}
 }
 
-// [v1.6.0] Actor-free Sensor Snapshot Contact를 Radar ViewData로 읽기 전용 변환합니다.
-void UCFHUDDataProvider::FillRadarViewData(FCFRadarHUDData& OutRadarViewData) const
+// [v1.14.0] 현재 적용 Scanner의 Radar Range Preset을 cm→m Player-facing 표시 단위로 해석합니다.
+bool UCFHUDDataProvider::ResolveRadarRangeProfile(TArray<float>& OutRadarRangePresetsMeters, int32& OutDefaultPresetIndex) const
+{
+	OutRadarRangePresetsMeters.Reset();
+	OutDefaultPresetIndex = INDEX_NONE;
+
+	ACFVehiclePawn* VehiclePawn = BoundVehiclePawn.Get();
+	if (!VehiclePawn)
+	{
+		return false;
+	}
+
+	// [v1.14.0] Runtime Ready 상태의 Applied Radar Range Profile을 공개하는 현재 차량 Sensor Component입니다.
+	const UCFVehicleSensorComp* SensorComponent = VehiclePawn->GetVehicleSensorComp();
+	if (!SensorComponent || !SensorComponent->IsSensorRuntimeReady())
+	{
+		return false;
+	}
+
+	// [v1.14.0] Scanner Profile이 오름차순 cm 단위로 명시한 실제 적용 Radar 표시 범위 목록입니다.
+	const TArray<float> RadarRangePresetsCm = SensorComponent->GetResolvedRadarDisplayRangePresetsCm();
+		if (RadarRangePresetsCm.IsEmpty())
+	{
+		return false;
+	}
+
+	OutRadarRangePresetsMeters.Reserve(RadarRangePresetsCm.Num());
+	// [v1.14.0] 현재 Scanner Profile에서 m 단위로 변환할 한 Radar 표시 Range 값입니다.
+	for (const float RadarRangeCm : RadarRangePresetsCm)
+	{
+		if (!FMath::IsFinite(RadarRangeCm) || RadarRangeCm <= KINDA_SMALL_NUMBER)
+		{
+			OutRadarRangePresetsMeters.Reset();
+			return false;
+		}
+
+		OutRadarRangePresetsMeters.Add(RadarRangeCm / 100.0f);
+	}
+
+	OutDefaultPresetIndex = SensorComponent->GetResolvedDefaultRadarDisplayRangePresetIndex();
+	if (!OutRadarRangePresetsMeters.IsValidIndex(OutDefaultPresetIndex))
+	{
+		OutRadarRangePresetsMeters.Reset();
+		OutDefaultPresetIndex = INDEX_NONE;
+		return false;
+	}
+	return true;
+}
+
+// [v1.16.0] 이미 해석된 Scanner Range Profile로 현재 Radar RangePresetIndex를 검증하고 Scanner가 명시한 Default로 초기화합니다.
+void UCFHUDDataProvider::ReconcileRadarRangePresetSelection(const TArray<float>& RadarRangePresetsMeters, const int32 DefaultPresetIndex)
+{
+	if (RadarRangePresetsMeters.IsEmpty() || !RadarRangePresetsMeters.IsValidIndex(DefaultPresetIndex))
+	{
+		RadarRangePresetIndex = INDEX_NONE;
+		return;
+	}
+
+	if (!RadarRangePresetsMeters.IsValidIndex(RadarRangePresetIndex))
+	{
+		RadarRangePresetIndex = DefaultPresetIndex;
+	}
+}
+
+// [v1.16.0] 이번 Refresh에서 공유된 Sensor Snapshot/Range Profile로 Radar ViewData를 읽기 전용 변환하고 Heading-Up 표시 위치를 계산합니다.
+void UCFHUDDataProvider::FillRadarViewData(
+	FCFRadarHUDData& OutRadarViewData,
+	const FCFSensorSnapshot* SensorSnapshot,
+	const TArray<float>& RadarRangePresetsMeters) const
 {
 	OutRadarViewData.Contacts.Reset();
 
@@ -816,16 +1026,37 @@ void UCFHUDDataProvider::FillRadarViewData(FCFRadarHUDData& OutRadarViewData) co
 		return;
 	}
 
-	// [v1.6.0] Radar adapter가 읽을 Actor-free Sensor Snapshot 사본입니다.
-	const FCFSensorSnapshot SensorSnapshot = SensorComponent->GetSensorSnapshot();
-	if (!SensorSnapshot.bRuntimeReady || !SensorSnapshot.IsPublicContractValid())
+		if (!SensorSnapshot || !SensorSnapshot->bRuntimeReady || !SensorSnapshot->IsPublicContractValid())
 	{
 		return;
 	}
 
-	OutRadarViewData.Availability = SensorSnapshot.Contacts.IsEmpty()
+	// [v1.16.0] 이번 Refresh에서 Target/Radar가 함께 사용하는 단일 Sensor Snapshot의 읽기 전용 별칭입니다.
+	const FCFSensorSnapshot& CurrentSensorSnapshot = *SensorSnapshot;
+	OutRadarViewData.Availability = CurrentSensorSnapshot.Contacts.IsEmpty()
 		? ECFUIViewAvailability::KnownZero
 		: ECFUIViewAvailability::Known;
+
+	// [v1.14.0] 실제 적용 Active Scan 성능 상한은 Radar 현재 표시 범위와 분리해 MaximumDetectionRangeMeters로 전달합니다.
+	const FCFSensorConfig ResolvedSensorConfig = SensorComponent->GetResolvedSensorConfig();
+	if (FMath::IsFinite(ResolvedSensorConfig.ActiveScanRangeCm)
+		&& ResolvedSensorConfig.ActiveScanRangeCm > KINDA_SMALL_NUMBER)
+	{
+		OutRadarViewData.MaximumDetectionRangeAvailability = ECFUIViewAvailability::Known;
+		OutRadarViewData.MaximumDetectionRangeMeters = ResolvedSensorConfig.ActiveScanRangeCm / 100.0f;
+	}
+
+			// [v1.16.0] 현재 Provider RangePresetIndex까지 포함해 이번 Refresh의 공유 Range Profile을 실제 정규화에 사용할 수 있는지 나타냅니다.
+	const bool bHasRadarRangeProfile = RadarRangePresetsMeters.IsValidIndex(RadarRangePresetIndex);
+	if (bHasRadarRangeProfile)
+	{
+		OutRadarViewData.DisplayRangeAvailability = ECFUIViewAvailability::Known;
+		OutRadarViewData.DisplayRangeMeters = RadarRangePresetsMeters[RadarRangePresetIndex];
+		OutRadarViewData.RangePresetIndex = RadarRangePresetIndex;
+		OutRadarViewData.RangePresetCount = RadarRangePresetsMeters.Num();
+		OutRadarViewData.bCanZoomIn = RadarRangePresetIndex > 0;
+		OutRadarViewData.bCanZoomOut = RadarRangePresetIndex < RadarRangePresetsMeters.Num() - 1;
+	}
 
 	// [v1.6.0] Radar의 bSelected 표시만 연결할 현재 선택 ContactId입니다. 선택 자체는 TargetSelect가 계속 소유합니다.
 	FName SelectedContactId = NAME_None;
@@ -840,8 +1071,8 @@ void UCFHUDDataProvider::FillRadarViewData(FCFRadarHUDData& OutRadarViewData) co
 		}
 	}
 
-	OutRadarViewData.Contacts.Reserve(SensorSnapshot.Contacts.Num());
-	for (const FCFSensorContact& SensorContact : SensorSnapshot.Contacts)
+		OutRadarViewData.Contacts.Reserve(CurrentSensorSnapshot.Contacts.Num());
+	for (const FCFSensorContact& SensorContact : CurrentSensorSnapshot.Contacts)
 	{
 		// [v1.6.0] Snapshot Contact 한 건을 Gameplay 재판정 없이 복사·좌표 변환할 Radar ViewData 항목입니다.
 		FCFRadarContactHUDData RadarContact;
@@ -850,20 +1081,45 @@ void UCFHUDDataProvider::FillRadarViewData(FCFRadarHUDData& OutRadarViewData) co
 		RadarContact.Category = SensorContact.TargetCategory;
 		RadarContact.InformationLevel = SensorContact.InformationLevel;
 		RadarContact.ContactState = SensorContact.ContactState;
-		RadarContact.FreshnessSeconds = SensorContact.FreshnessSeconds;
+				RadarContact.FreshnessSeconds = SensorContact.FreshnessSeconds;
 		RadarContact.AnalysisProgress01 = SensorContact.AnalysisProgress01;
 		RadarContact.bDestroyedConfirmed = SensorContact.bDestroyedConfirmed;
 		RadarContact.bSelected = !SelectedContactId.IsNone() && SensorContact.ContactId == SelectedContactId;
 		RadarContact.NormalizedPositionAvailability = ECFUIViewAvailability::Unavailable;
 
-		// [v1.6.0] Radar Range/Zoom을 추정하지 않고 Snapshot 기반 실제 상대 위치·거리만 계산합니다.
+		// [v1.6.0] Snapshot 기반 실제 Heading-Up 상대 위치와 3D 거리를 계산합니다.
 		FVector2D RelativePositionMeters;
 		float DistanceMeters = 0.0f;
-		if (BuildHUDSensorRelativePositionMeters(SensorSnapshot, SensorContact, RelativePositionMeters, DistanceMeters))
+				if (BuildHUDSensorRelativePositionMeters(CurrentSensorSnapshot, SensorContact, RelativePositionMeters, DistanceMeters))
 		{
 			RadarContact.RelativePositionAvailability = ECFUIViewAvailability::Known;
 			RadarContact.RelativePositionMeters = RelativePositionMeters;
 			RadarContact.DistanceMeters = DistanceMeters;
+
+			if (bHasRadarRangeProfile && OutRadarViewData.DisplayRangeMeters > KINDA_SMALL_NUMBER)
+			{
+				// [v1.14.0] 현재 Radar 표시 반경에 대한 전방/우측 Heading-Up 정규화 좌표입니다.
+				const FVector2D RawNormalizedPosition = RelativePositionMeters / OutRadarViewData.DisplayRangeMeters;
+				// [v1.14.0] UI Range 포함 여부는 고도와 무관한 Radar 평면 거리로 판정합니다.
+				const float PlanarNormalizedDistance = RawNormalizedPosition.Size();
+				RadarContact.bInsideDisplayRange = FMath::IsFinite(PlanarNormalizedDistance)
+					&& PlanarNormalizedDistance <= 1.0f + KINDA_SMALL_NUMBER;
+				if (FMath::IsFinite(RawNormalizedPosition.X) && FMath::IsFinite(RawNormalizedPosition.Y))
+				{
+					RadarContact.NormalizedPositionAvailability = ECFUIViewAvailability::Known;
+					RadarContact.NormalizedPosition = RadarContact.bInsideDisplayRange
+						? RawNormalizedPosition
+						: RawNormalizedPosition.GetSafeNormal();
+				}
+
+				RadarContact.bShowSelectedEdgeMarker = RadarContact.bSelected
+					&& !RadarContact.bInsideDisplayRange
+					&& RadarContact.NormalizedPositionAvailability == ECFUIViewAvailability::Known;
+				if (RadarContact.bShowSelectedEdgeMarker)
+				{
+					RadarContact.SelectedEdgeDirection = RadarContact.NormalizedPosition;
+				}
+			}
 		}
 
 		OutRadarViewData.Contacts.Add(RadarContact);

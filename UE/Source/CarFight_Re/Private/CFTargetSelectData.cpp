@@ -1,20 +1,21 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-07-23
+// Version: 1.0.1
+// Date: 2026-08-20
 // Description: CarFight 타겟 선택 설정 DataAsset 구현
 // Scope: 설정값의 NaN, 무한대와 허용 범위를 검사하고 디버그 요약 문자열을 생성합니다.
 // Changelog:
+// - v1.0.1: Unity Build에서 CFSensorTypes.cpp의 동일 anonymous helper 이름과 충돌하지 않도록 TargetSelect 전용 로컬 함수명으로 한정. 검증 동작 변경 없음.
 // - v1.0.0: TS-P0-01 설정 검증과 요약 생성을 추가.
 // Migration:
-// - 유효하지 않은 DataAsset 설정은 TargetSelectComp에서 Fallback 설정으로 대체한다.
+// - 외부 API와 DataAsset 계약은 변경하지 않는다. 유효하지 않은 설정은 기존처럼 TargetSelectComp에서 Fallback 설정으로 대체한다.
 
 #include "CFTargetSelectData.h"
 
 namespace
 {
-	// [v1.0.0] 부동소수점 값이 유한하고 0 이상인지 반환합니다.
-	bool IsFiniteNonNegative(const float Value)
+		// [v1.0.1] TargetSelect 검증용 부동소수점 값이 유한하고 0 이상인지 반환하며 Unity Build의 다른 로컬 helper와 이름 충돌하지 않습니다.
+	bool IsTargetSelectFiniteNonNegative(const float Value)
 	{
 		return FMath::IsFinite(Value) && Value >= 0.0f;
 	}
@@ -24,10 +25,10 @@ namespace
 bool UCFTargetSelectData::IsTargetSelectConfigValid() const
 {
 	// [v1.0.0] 직접 선택 최대 거리가 유효한지 여부입니다.
-	const bool bDirectDistanceValid = IsFiniteNonNegative(TargetSelectConfig.DirectSelectMaxDistanceCm);
+	const bool bDirectDistanceValid = IsTargetSelectFiniteNonNegative(TargetSelectConfig.DirectSelectMaxDistanceCm);
 
 	// [v1.0.0] 근접 선택 최대 거리가 유효한지 여부입니다.
-	const bool bProximityDistanceValid = IsFiniteNonNegative(TargetSelectConfig.ProximitySelectMaxDistanceCm);
+	const bool bProximityDistanceValid = IsTargetSelectFiniteNonNegative(TargetSelectConfig.ProximitySelectMaxDistanceCm);
 
 	// [v1.0.0] 근접 후보 반각이 0 초과 180 이하인지 여부입니다.
 	const bool bProximityAngleValid = FMath::IsFinite(TargetSelectConfig.ProximityHalfAngleDeg)
@@ -39,7 +40,7 @@ bool UCFTargetSelectData::IsTargetSelectConfigValid() const
 		&& TargetSelectConfig.CandidateRefreshIntervalSec > 0.0f;
 
 	// [v1.0.0] 가림 유예 시간이 유한하고 0 이상인지 여부입니다.
-	const bool bOcclusionGraceValid = IsFiniteNonNegative(TargetSelectConfig.OcclusionGracePeriodSec);
+	const bool bOcclusionGraceValid = IsTargetSelectFiniteNonNegative(TargetSelectConfig.OcclusionGracePeriodSec);
 
 	// [v1.0.0] 후보 전환 우위 비율이 유한하고 0~1 범위인지 여부입니다.
 	const bool bSwitchRatioValid = FMath::IsFinite(TargetSelectConfig.CandidateSwitchAdvantageRatio)

@@ -1,8 +1,9 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 // File: CarFight_ReEditor.Build.cs
-// Version: v1.2.0
+// Version: v1.3.0
 // Changelog:
+// - v1.3.0: CF-FQ-032 VehiclePanel P2 Source Art의 deterministic Texture import를 위한 Editor-only AssetTools 의존성을 추가.
 // - v1.2.0: DAUTH-P0-08J deterministic .cfbatch.json writer를 위해 Editor-only Json 의존성을 추가.
 // - v1.1.1: Data Authoring dependency block의 들여쓰기만 교정. 의미 변경 없음.
 // - v1.1.0: Data Authoring Profile의 ChaosVehicle enum/class reflection 링크를 위해 ChaosVehicles 의존성을 추가.
@@ -32,6 +33,7 @@ public class CarFight_ReEditor : ModuleRules
 		{
 			"ApplicationCore",
 			"AssetRegistry",
+			"AssetTools",
 			"ContentBrowser",
 			"ChaosVehicles",
 						"InputCore",

@@ -1,10 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.15.0
-// Date: 2026-08-19
-// Description: CF-FQ-032 UI-P0-06 truthful Weapon Rail + actual Weapon Charge/Heat + Dynamic Resource Visual Stage B + RPM Gauge Production Presenter
-// Scope: Gameplay 참조 없이 FCFInGameUIViewData만 소비하고 실제 선택 무기는 Header/Selected Card에 유지하며 비선택 무기만 최대 3개의 이름 기반 Compact Rail로 Projection합니다.
+// Version: 1.23.0
+// Date: 2026-08-22
+// Description: CF-FQ-032 Runtime HUD Presenter + post-closure Alert Suppression Lifecycle 교정
+// Scope: Gameplay 참조 없이 FCFInGameUIViewData와 Root Style Data만 소비하며 ViewMode와 Alert의 Player-facing Presentation lifecycle을 적용합니다.
 // Changelog:
+// - v1.23.0: 유한 Alert duration 시작점을 Active 진입이 아니라 실제 첫 Presentation 시각으로 교정. 높은 Priority Alert에 가려진 Alert는 표시 전에 시간을 소모하지 않으며, 한번 만료된 AlertKey는 상태 해제 전 재표시하지 않음.
+// - v1.22.0: 기존 AlertKey/Priority ViewData와 UI Style AlertStyle을 연결해 Notice/Warning의 자동 제거 시간과 Critical persistent lifecycle을 구현. 같은 AlertKey의 반복 Refresh는 시간을 리셋하지 않고 상태 해제 후 재발생할 때만 새 lifecycle을 시작.
+// - v1.21.0: FCFViewModeHUDData.CameraRelativeYawDegrees와 CameraMode만 소비해 ReticleLayer의 Vehicle Semantic Image를 Designer-owned Track 내부 좌우 Anchor로 표시. 기존 Command/Turret Reticle과 Gameplay Camera/Aim은 변경하지 않음.
+// - v1.20.0: Radar Contact runtime pool을 Text glyph에서 전용 UImage Brush Template 방식으로 교정하고 Display Range Text, Player/Frame visibility, selected range-out 2-Corner Edge Bracket 소비를 추가. ArtSpec의 문자기호 아이콘 금지 계약을 준수.
+// - v1.19.0: UI-P0-08B에서 FCFRadarHUDData의 in-range Contact를 기존 Radar Canvas에 runtime pooled `◆/▼/●` Blip으로 투영하고 selected in-range bracket을 같은 normalized anchor에 배치하는 초기 기능 계약을 반영. v1.20.0에서 전용 Image 자산 방식으로 교체.
+// - v1.18.0: UI-P0-07 Production TargetPanel이 FCFTargetHUDData의 공개 Identity·Distance·AnalysisProgress를 소비하고 source 없는 Target Armor는 숨기는 계약을 반영.
+// - v1.17.0: RPM Visual sink를 21개 ProgressBar에서 `Image_RPMGauge` UI Material의 `RPMRatio` 단일 스칼라로 전환. Resolver 계약은 그대로 유지.
+// - v1.16.0: ArmorBodyMap이 WBP_CFArmorSector 6개를 재사용하도록 Presenter 구현 계약을 동기화. Defense ViewData와 6방향 의미/비율 계산은 변경 없음.
 // - v1.15.0: UI-P0-06 Technical Complete 범위 교정에 맞춰 Current 주석을 동기화. WeaponCharge/Heat actual Resource를 소비하고 VehicleBattery만 future shared-power Runtime으로 남김.
 // - v1.14.0: Applied Fitting 기반 SelectableWeapons fixed order에서 현재 선택을 제외한 비선택 무기만 Rail에 Projection. 1~3개는 순번+DisplayName, 4개 이상은 앞 2개 + `+N`이며 내부 ID/가짜 icon/resource summary를 사용하지 않음.
 // - v1.13.0: 실제 Heat Resource Channel을 Compact Secondary와 Overheated FireState로 소비하는 계약을 추가. Battery·Charge 미구현, Launcher 단일 소비와 기존 Ammo/Reload/Cooldown 계약은 유지.
@@ -32,15 +40,24 @@
 // - VehicleBattery는 실제 shared-power Runtime Provider가 생기기 전 Presentation Entry를 만들지 않습니다. WeaponCharge와 Heat는 actual Runtime Resource Channel이 있을 때만 Compact Resource/FireState로 Projection합니다.
 // - BuildWeaponResourceEntries는 LauncherSequenceRevision lifecycle을 소비하는 C++ 전용 단일-적용 함수이며 Blueprint에서 별도 반복 호출하지 않습니다.
 // - v1.10.0부터 ApplyWeaponViewData는 Resource Visual을 만들 때 BuildWeaponResourceEntries만 호출하고 Launcher/Ammo/Status Resolver를 별도로 다시 호출하지 않습니다.
-// - v1.12.0부터 기존 SpeedGauge 21 Tick은 구조를 늘리지 않고 Runtime RPM fill sink로 사용합니다. RedlineStartRPM 미설정/invalid에서는 Tick 구조는 보존하되 fill=0으로 reset하며 EngineMaxRPM 비율 fallback을 만들지 않습니다.
+// - v1.17.0부터 SpeedGauge는 UI Material Image 하나만 Runtime RPM sink로 사용합니다. RedlineStartRPM 미설정/invalid에서는 `RPMRatio=0`으로 reset하며 EngineMaxRPM 비율 fallback을 만들지 않습니다.
+// - v1.16.0부터 ArmorBodyMap의 여섯 방향 값은 WBP_ArmorFront~Bottom 재사용 Sector를 찾아 각 Sector의 실제 ProgressBar_Armor에 적용합니다.
 // - ReserveAmmo는 계속 Header 우측 label-less owner입니다.
 // - v1.14.0부터 Weapon Rail은 WeaponSelectionAvailability가 Known이고 SelectedWeaponIndex가 유효할 때만 비선택 무기를 표시합니다. 현재 선택 무기는 Rail에 중복하지 않습니다.
 // - Rail은 실제 weapon icon source와 비선택 무기별 resource summary source가 없으므로 순번+EquipmentPresetData.DisplayName만 사용합니다. DisplayName이 없으면 내부 ID fallback 없이 일반 `WEAPON`만 표시합니다.
+// - v1.18.0부터 TargetPanel은 TargetSelect 선택 상태와 Sensor Snapshot Knowledge가 이미 합성된 FCFTargetHUDData만 소비합니다. Sensor Contact가 Known이 아니면 Distance/Scan을 fail-closed하고 Armor Intelligence는 authoritative source 전까지 숨깁니다.
+// - v1.20.0부터 Radar Contact 위치는 FCFRadarContactHUDData.NormalizedPosition만 사용하고 Canvas 0~1 Anchor로 변환합니다. World Actor/TargetPoint를 조회하지 않으며 기존 정적 Preview Image는 Brush/크기 Template로만 사용합니다.
+// - runtime Contact pool은 UImage로 필요 수만큼 증가하며 고정 5개 상한을 두지 않습니다. 범위 밖 일반 Contact와 선택 Contact edge visual은 bInsideDisplayRange/bShowSelectedEdgeMarker 계약으로 분리합니다.
+// - Display Range Text와 range-out selected edge는 Provider가 이미 계산한 FCFRadarHUDData/FCFRadarContactHUDData만 소비하며 Widget에서 Sensor Range나 방향을 재계산하지 않습니다.
+// - v1.21.0 Vehicle Direction은 Provider가 이미 계산한 CameraRelativeYawDegrees의 부호만 반전해 카메라 기준 차체 좌우 방향으로 표시합니다. 세계 Compass, Vehicle Pitch, Camera/Turret Gameplay 계산을 새로 만들지 않습니다.
+// - v1.23.0부터 Notice/Warning의 duration은 Alert가 ActiveAlerts에 들어온 때가 아니라 실제 Primary로 처음 선택된 시각부터 계산합니다. 상위 Priority에 가려진 시간은 소비하지 않으며, 완료된 AlertKey는 Gameplay 상태가 한번 해제되어야 새 lifecycle을 시작합니다.
+
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "UI/CFHUDViewData.h"
+#include "UI/CFUIStyleData.h"
 #include "UObject/Object.h"
 #include "CFHUDPresenter.generated.h"
 
@@ -197,8 +214,11 @@ private:
 	// [v1.0.0] 전체 ViewData를 Vehicle/Weapon/Target/Radar/Alert 영역별로 적용합니다.
 	void ApplyViewData(const FCFInGameUIViewData& ViewData);
 
-	// [v1.0.0] Vehicle 속도와 Defense 상태를 Production VehiclePanel에 적용합니다.
+			// [v1.0.0] Vehicle 속도와 Defense 상태를 Production VehiclePanel에 적용합니다.
 	void ApplyVehicleAndDefenseViewData(UUserWidget* RootWidget, const FCFVehicleHUDData& VehicleViewData, const FCFDefenseHUDData& DefenseViewData) const;
+
+	// [v1.21.0] Camera 기준 차체 좌우 방향을 ReticleLayer의 Designer-owned Vehicle Direction Track에 적용합니다.
+	void ApplyViewModeViewData(UUserWidget* RootWidget, const FCFViewModeHUDData& ViewModeViewData) const;
 
 			// [v1.14.0] Header Reserve, 한 번 Projection한 Compact Resource Presentation과 truthful 비선택 Weapon Rail을 Production WeaponPanel 의미 슬롯에 적용합니다.
 	void ApplyWeaponViewData(UUserWidget* RootWidget, const FCFWeaponHUDData& WeaponViewData);
@@ -209,11 +229,20 @@ private:
 	// [v1.0.0] 선택 Target 공개 정보를 Production TargetPanel에 적용합니다.
 	void ApplyTargetViewData(UUserWidget* RootWidget, const FCFTargetHUDData& TargetViewData) const;
 
-	// [v1.0.0] Sensor Provider 부재 또는 Contact 상태를 Production RadarPanel에 적용합니다.
+			// [v1.19.0] Radar ViewData의 in-range Contact와 선택 강조를 저장 Production RadarPanel의 runtime presentation layer에 적용합니다.
 	void ApplyRadarViewData(UUserWidget* RootWidget, const FCFRadarHUDData& RadarViewData) const;
 
-	// [v1.2.0] 현재 상태 기반 전역 Warning/Critical Alert를 Production AlertFeed에 적용합니다.
-	void ApplyAlertViewData(UUserWidget* RootWidget, const FCFCombatAlertViewData& AlertViewData) const;
+			// [v1.22.0] 현재 상태 기반 전역 Alert에 Style duration/persistent lifecycle을 적용해 Production AlertFeed에 표시합니다.
+	void ApplyAlertViewData(UUserWidget* RootWidget, const FCFCombatAlertViewData& AlertViewData);
+
+		// [v1.23.0] AlertKey별 실제 첫 표시 시각과 완료 상태를 정리하고 현재 시각에 표시할 최고 우선순위 Alert를 반환합니다.
+	const FCFHUDAlertItem* ResolveAlertForPresentation(const FCFCombatAlertViewData& AlertViewData, const UCFUIStyleData& StyleData, double CurrentGameTimeSeconds);
+
+	// [v1.22.0] Alert 우선순위를 기존 UI Style의 Notice/Warning/Critical Severity Style로 해석합니다.
+	static const FCFUIAlertSeverityStyle& ResolveAlertSeverityStyle(const UCFUIStyleData& StyleData, ECFHUDAlertPriority Priority);
+
+		// [v1.23.0] Pawn/Widget/Presenter 수명이 바뀔 때 이전 AlertKey의 첫 표시 시각과 완료 상태를 전부 폐기합니다.
+	void ResetAlertPresentationLifecycle();
 
 	// [v1.0.0] 지정 UserWidget의 WidgetTree에서 이름으로 자식 Widget을 찾습니다.
 	static UWidget* FindNamedWidget(UUserWidget* ParentWidget, FName WidgetName);
@@ -255,6 +284,17 @@ private:
 	// [v1.7.0] 마지막 Active 또는 terminal Launcher 진행률 Cache입니다.
 	float LastLauncherSequenceProgress = 0.0f;
 
-	// [v1.7.0] Pawn Rebind 시 이전 차량의 Launcher Presentation lifecycle을 즉시 폐기하기 위한 마지막 BindingGeneration입니다.
+			// [v1.7.0] Pawn Rebind 시 이전 차량의 Launcher Presentation lifecycle을 즉시 폐기하기 위한 마지막 BindingGeneration입니다.
 	int32 LastAppliedBindingGeneration = INDEX_NONE;
+
+		// [v1.23.0] 유한 AlertKey가 실제 Primary로 처음 표시된 Game-Time을 보존해 suppression 시간을 duration에서 제외하고 반복 Refresh reset을 막습니다.
+	TMap<FName, double> AlertFirstPresentedGameTimeSeconds;
+
+	// [v1.23.0] 현재 활성 수명에서 이미 Style duration을 모두 소비해 상태 해제 전 다시 표시하면 안 되는 AlertKey 집합입니다.
+	TSet<FName> CompletedAlertPresentationKeys;
+
+#if WITH_DEV_AUTOMATION_TESTS
+	// [v1.23.0] UI-P0-09C Alert duration/suppression lifecycle을 실제 시간 대기 없이 검증할 Automation Test입니다.
+	friend class FCFHUDP009AlertStyleTest;
+#endif
 };

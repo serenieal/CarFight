@@ -1,10 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.7.0
-// Date: 2026-08-18
-// Description: CarFight LocalPlayer UI 수명·레이어·Pause·Production HUD·AimReticle·Target Marker Runtime 연결 Subsystem 구현
-// Scope: 기존 Pause·Root·Production HUD·AimReticle 동작을 보존하면서 UI-P0-05 TargetSelect 생성·Game Layer·Current Pawn Rebind 수명을 UISubsystem으로 이전합니다.
+// Version: 1.10.0
+// Date: 2026-08-21
+// Description: CarFight LocalPlayer UI 수명·레이어·Pause·Production HUD·Target Marker·Radar Zoom·Screen-edge Relation Visual 연결 Subsystem 구현
+// Scope: 기존 UI 수명을 보존하면서 UI-P0-08 Screen-Off Selected Target Edge Marker에 공용 HUD Visual/Style Data를 주입합니다.
 // Changelog:
+// - v1.10.0: USER 가독성 피드백에 따라 HUDDataProvider와 Friendly/Hostile/Unknown Style 색을 TargetSelect Screen-edge에 주입. Neutral은 Edge에서만 Unknown 회색을 공유하며 전역 NeutralColor는 보존.
+// - v1.9.0: DefaultHUDVisualDataAsset을 해석하고 T_UI_RadarEdge 기반 RadarSelectedEdgeBracket·AccentTactical·SafeMargin을 TargetSelect Widget에 주입. WBP_TargetSelect 저장 구조와 Gameplay 선택 상태는 변경하지 않음.
+// - v1.8.0: RequestRadarZoomIn/Out을 추가해 Pawn Mouse Wheel 입력이 HUDDataProvider의 Provider-local Range Preset 선택만 변경하도록 연결. Sensor/Scanner Gameplay Range는 수정하지 않음.
 // - v1.7.0: Config WBP_TargetSelect을 Game Layer ZOrder 0에 단일 생성하고 Possess·UnPossess·World Cleanup에서 같은 Marker 인스턴스를 현재 Pawn에 재바인딩.
 // - v1.6.0: Config WBP_AimReticle을 HUD Layer ZOrder 10에 단일 생성하고 Possess·UnPossess·World Cleanup에서 같은 인스턴스를 현재 Pawn에 재바인딩.
 // - v1.5.0: HUDDataProvider/HUDPresenter 생성, Production WBP_CFInGameHUD Config Class 해석과 HUD Layer 수명을 추가.
@@ -21,6 +24,9 @@
 // - Production HUD Asset은 재부모화하지 않으며 CFStyledWidgetBase를 유지하고 Provider/Presenter가 Runtime ViewData만 주입합니다.
 // - v1.6.0 AimReticle은 기존 WBP_AimReticle/UCFAimReticleWidget 시각·Gameplay 읽기 계약을 그대로 사용하고, 생성·Parent·Pawn Source 수명만 UISubsystem이 소유합니다.
 // - v1.7.0 TargetSelect은 기존 후보·선택·TrackState Gameplay 소유권을 유지하고 WBP_TargetSelect의 생성·Game Layer·Pawn Source 수명만 UISubsystem이 소유합니다.
+// - v1.8.0 Radar Zoom은 UISubsystem이 새 Range 상태를 소유하지 않고 기존 HUDDataProvider API에만 위임합니다.
+// - v1.9.0 Screen-edge World Marker는 UISubsystem이 Visual/Style Data를 해석해 주입하고 TargetSelect Widget은 콘텐츠 경로를 직접 Load하지 않습니다.
+// - v1.10.0 관계색은 HUDDataProvider가 이미 판정한 Target.Relation을 소비하며 Friendly/Hostile/Unknown Style Token만 주입합니다. Neutral은 Screen-edge에서만 Unknown 회색을 사용합니다.
 
 #include "UI/CFUISubsystem.h"
 
@@ -37,6 +43,7 @@
 #include "UI/CFHUDDataProvider.h"
 #include "UI/CFHUDLayoutData.h"
 #include "UI/CFHUDPresenter.h"
+#include "UI/CFHUDVisualData.h"
 #include "UI/CFPauseMenuWidget.h"
 #include "UI/CFStyledWidgetBase.h"
 #include "UI/CFTargetSelectWidget.h"
@@ -89,16 +96,17 @@ void UCFUISubsystem::Deinitialize()
 
 	ActivePlayerController.Reset();
 	CurrentPawn.Reset();
-	ResolvedStyleData = nullptr;
+		ResolvedStyleData = nullptr;
 	ResolvedDensityData = nullptr;
 	ResolvedHUDLayoutData = nullptr;
+	ResolvedHUDVisualData = nullptr;
 		ResolvedInGameHUDWidgetClass = nullptr;
 	ResolvedAimReticleWidgetClass = nullptr;
 	ResolvedTargetSelectWidgetClass = nullptr;
 	Super::Deinitialize();
 }
 
-// [v1.4.0] Config Soft Reference의 Style·Density·HUD Layout을 Subsystem 수명에서 한 번 Load·검증해 Cache합니다.
+// [v1.9.0] Config Soft Reference의 Style·Density·HUD Layout·HUD Visual을 Subsystem 수명에서 한 번 Load·검증해 Cache합니다.
 void UCFUISubsystem::ResolveDefaultUIDataAssets()
 {
 	ResolvedStyleData = DefaultStyleDataAsset.IsNull() ? nullptr : DefaultStyleDataAsset.LoadSynchronous();
@@ -123,7 +131,7 @@ void UCFUISubsystem::ResolveDefaultUIDataAssets()
 		}
 	}
 
-	ResolvedHUDLayoutData = DefaultHUDLayoutDataAsset.IsNull() ? nullptr : DefaultHUDLayoutDataAsset.LoadSynchronous();
+		ResolvedHUDLayoutData = DefaultHUDLayoutDataAsset.IsNull() ? nullptr : DefaultHUDLayoutDataAsset.LoadSynchronous();
 	if (ResolvedHUDLayoutData)
 	{
 		// [v1.4.0] 잘못된 Layout DataAsset을 Native Fallback으로 내릴 때 제공할 검증 실패 사유입니다.
@@ -133,6 +141,9 @@ void UCFUISubsystem::ResolveDefaultUIDataAssets()
 			ResolvedHUDLayoutData = nullptr;
 		}
 		}
+
+	// [v1.9.0] Production HUD와 World Marker가 공유할 공용 HUD Visual DataAsset입니다.
+	ResolvedHUDVisualData = DefaultHUDVisualDataAsset.IsNull() ? nullptr : DefaultHUDVisualDataAsset.LoadSynchronous();
 
 	ResolvedInGameHUDWidgetClass = DefaultInGameHUDWidgetClass.IsNull() ? nullptr : DefaultInGameHUDWidgetClass.LoadSynchronous();
 	if (ResolvedInGameHUDWidgetClass && !ResolvedInGameHUDWidgetClass->IsChildOf(UCFStyledWidgetBase::StaticClass()))
@@ -169,6 +180,18 @@ UCFUIDensityData* UCFUISubsystem::GetResolvedDensityData() const
 UCFHUDLayoutData* UCFUISubsystem::GetResolvedHUDLayoutData() const
 {
 	return ResolvedHUDLayoutData ? ResolvedHUDLayoutData.Get() : GetMutableDefault<UCFHUDLayoutData>();
+}
+
+// [v1.8.0] 현재 LocalPlayer Radar 표시 범위를 한 단계 작은 Provider Preset으로 요청합니다.
+bool UCFUISubsystem::RequestRadarZoomIn()
+{
+	return HUDDataProvider && HUDDataProvider->RequestRadarZoomIn();
+}
+
+// [v1.8.0] 현재 LocalPlayer Radar 표시 범위를 한 단계 큰 Provider Preset으로 요청합니다.
+bool UCFUISubsystem::RequestRadarZoomOut()
+{
+	return HUDDataProvider && HUDDataProvider->RequestRadarZoomOut();
 }
 
 // [v1.0.0] 현재 LocalPlayer Controller를 등록하고 해당 World용 Root를 보장합니다.
@@ -727,8 +750,9 @@ void UCFUISubsystem::RebindAimReticleToCurrentPawn()
 // [v1.7.0] Config TargetSelect Class로 단일 World Marker Widget을 만들고 Game Layer에 연결합니다.
 bool UCFUISubsystem::CreateTargetSelectWidget()
 {
-	if (TargetSelectWidget && TargetSelectWidget->GetParent() == GetLayerWidget(ECFUILayer::Game))
+		if (TargetSelectWidget && TargetSelectWidget->GetParent() == GetLayerWidget(ECFUILayer::Game))
 	{
+		ConfigureTargetSelectScreenEdgePresentation();
 		RebindTargetSelectToCurrentPawn();
 		return true;
 	}
@@ -758,7 +782,8 @@ bool UCFUISubsystem::CreateTargetSelectWidget()
 		return false;
 	}
 
-	TargetSelectWidget = CreatedTargetSelectWidget;
+		TargetSelectWidget = CreatedTargetSelectWidget;
+	ConfigureTargetSelectScreenEdgePresentation();
 	RebindTargetSelectToCurrentPawn();
 	return true;
 }
@@ -791,6 +816,41 @@ void UCFUISubsystem::RebindTargetSelectToCurrentPawn()
 		CurrentVehiclePawn && CurrentVehiclePawn->ShouldShowTargetSelectHud()
 			? ESlateVisibility::HitTestInvisible
 			: ESlateVisibility::Collapsed);
+}
+
+// [v1.10.0] 공용 HUD Visual/Style Data와 Provider를 Screen-edge 관계색 Presentation 입력으로 주입합니다.
+void UCFUISubsystem::ConfigureTargetSelectScreenEdgePresentation()
+{
+	if (!TargetSelectWidget)
+	{
+		return;
+	}
+
+	// [v1.9.0] Screen-edge 2-Corner Bracket에 사용할 공용 Radar Edge Texture입니다.
+	UTexture2D* EdgeBracketTexture = nullptr;
+	if (ResolvedHUDVisualData && !ResolvedHUDVisualData->RadarSelectedEdgeBracket.IsNull())
+	{
+		EdgeBracketTexture = ResolvedHUDVisualData->RadarSelectedEdgeBracket.LoadSynchronous();
+	}
+
+	// [v1.10.0] Friendly/Hostile/Unknown 관계색과 Safe Region을 제공하는 현재 Style Data입니다.
+	UCFUIStyleData* StyleData = GetResolvedStyleData();
+	// [v1.10.0] Friendly Screen-edge Marker에 사용할 기존 Style Token의 파란색입니다.
+	const FLinearColor FriendlyEdgeColor = StyleData ? StyleData->ResolveColor(ECFUIColorToken::Friendly) : FLinearColor(0.325f, 0.663f, 1.0f, 1.0f);
+	// [v1.10.0] Hostile Screen-edge Marker에 사용할 기존 Style Token의 빨간색입니다.
+	const FLinearColor HostileEdgeColor = StyleData ? StyleData->ResolveColor(ECFUIColorToken::Hostile) : FLinearColor(1.0f, 0.392f, 0.310f, 1.0f);
+	// [v1.10.0] Unknown과 Neutral Screen-edge Marker가 공통으로 사용할 기존 Unknown 회색입니다.
+	const FLinearColor UnknownEdgeColor = StyleData ? StyleData->ResolveColor(ECFUIColorToken::Unknown) : FLinearColor(0.655f, 0.678f, 0.702f, 1.0f);
+	// [v1.9.0] Screen-edge Bracket이 HUD Safe Region 바깥으로 나가지 않도록 적용할 Style Safe Margin입니다.
+	const float EdgeSafeInset = StyleData ? StyleData->Spacing.SafeMargin : 0.0f;
+
+	TargetSelectWidget->ConfigureScreenEdgePresentation(
+		EdgeBracketTexture,
+		HUDDataProvider,
+		FriendlyEdgeColor,
+		HostileEdgeColor,
+		UnknownEdgeColor,
+		EdgeSafeInset);
 }
 
 // [v1.1.0] Pause 해제 후 Primary Screen 또는 인게임 입력 모드와 화면 상태를 복원합니다.

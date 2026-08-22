@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.6.0
-// Date: 2026-08-16
-// Description: CF-FQ-037 차량 Scanner Runtime Config Apply / SCAN-P0-02 구현
-// Scope: Config fallback, non-destructive SensorData apply, private Runtime Contact, bounded Passive/Active Detection, Contact lifetime, DestroyedHold, Tactical Analysis와 Actor-free Snapshot 게시를 구현합니다.
+// Version: 1.7.0
+// Date: 2026-08-20
+// Description: CF-FQ-037 Scanner Runtime + CF-FQ-032 UI-P0-08 Radar Range Profile Applied Source 구현
+// Scope: Config fallback, non-destructive SensorData apply, 적용 Radar Range Profile 사본, Sensor Contact/Knowledge와 Actor-free Snapshot 게시를 구현합니다.
 // Changelog:
+// - v1.7.0: 전체 SensorData 계약 검증을 Runtime Source 선택에 적용하고 RadarDisplayRangePresetsCm/Default index를 Applied copy로 고정·공개하는 read-only Getter를 추가.
 // - v1.6.0: ApplySensorData, 적용 Config 사본, 탐지 성능 감소 lifecycle reconcile과 Active Scan remaining clamp를 구현.
 // - v1.5.0: 외부 adapter가 선택 Actor를 Snapshot ContactId에만 연결할 수 있는 read-only Actor→ContactId bridge를 추가.
 // - v1.4.0: VehicleHealthComp OnVehicleDestroyed/IsDestroyed 기반 DestroyedHold, 독립 보존 타이머, 이벤트 binding 정리와 weak-invalid 비파괴 계약을 구현.
@@ -24,6 +25,7 @@
 // - v1.6.0부터 Runtime Ready 상태는 AppliedSensorConfig 사본을 소비하며 Source UObject의 후속 값 변경만으로 Runtime 의미가 바뀌지 않습니다.
 // - ApplySensorData는 invalid explicit Source를 원자적으로 거부하고, null은 검증된 Fallback Source로 적용합니다.
 // - 탐지 능력 감소는 Contact를 삭제하지 않고 LastKnown으로 넘기며 Active Scan은 새 장비 적용으로 남은 시간이 늘어나지 않습니다.
+// - v1.7.0 Radar Range Profile은 탐지 성능을 변경하지 않는 UI 표시 Source이며 Runtime Ready 상태에서는 Applied copy만 공개합니다. 기존 Scanner-less Fallback은 빈 Profile을 유지합니다.
 
 #include "CFVehicleSensorComp.h"
 
@@ -185,23 +187,33 @@ bool UCFVehicleSensorComp::InitializeSensorRuntime()
 
 	UnbindAllContactDestroyedEvents();
 	RuntimeContacts.Reset();
-	bActiveScanRunning = false;
+		bActiveScanRunning = false;
 	ActiveScanRemainingSeconds = 0.0f;
 	PassiveUpdateElapsedSeconds = 0.0f;
 	ResetPassiveScanCursor();
 
-		if (!ResolvedConfig.IsValid())
+	if (!ResolvedConfig.IsValid())
 	{
 		bHasAppliedSensorConfig = false;
 		AppliedSensorConfig = FCFSensorConfig();
+		AppliedRadarDisplayRangePresetsCm.Reset();
+		AppliedDefaultRadarDisplayRangePresetIndex = INDEX_NONE;
 		bSensorRuntimeReady = false;
 		SetComponentTickEnabled(false);
 		RebuildFoundationSnapshot(false);
-		LastSensorRuntimeSummary = TEXT("SensorRuntime: InvalidConfig");
+				LastSensorRuntimeSummary = TEXT("SensorRuntime: InvalidConfig");
 		return false;
 	}
 
-		AppliedSensorConfig = ResolvedConfig;
+	AppliedSensorConfig = ResolvedConfig;
+	// [v1.7.0] 전체 계약이 유효한 실제 SensorData에서만 Radar 표시 Profile을 Runtime 사본으로 고정합니다.
+	const bool bUsingValidSensorData = IsValid(SensorData) && SensorData->IsSensorDataContractValid();
+	AppliedRadarDisplayRangePresetsCm = bUsingValidSensorData
+		? SensorData->RadarDisplayRangePresetsCm
+		: TArray<float>();
+	AppliedDefaultRadarDisplayRangePresetIndex = bUsingValidSensorData
+		? SensorData->DefaultRadarDisplayRangePresetIndex
+		: INDEX_NONE;
 	bHasAppliedSensorConfig = true;
 	bSensorRuntimeReady = true;
 	RebuildFoundationSnapshot(true);
@@ -210,8 +222,8 @@ bool UCFVehicleSensorComp::InitializeSensorRuntime()
 	const bool bPassiveUpdatesEnabled = HasConfiguredPassiveWork(ResolvedConfig);
 	SetComponentTickEnabled(bPassiveUpdatesEnabled);
 
-	// [v1.0.0] 실제 설정이 SensorData에서 왔는지 Fallback에서 왔는지 표시할 출처 문자열입니다.
-	const TCHAR* ConfigSource = IsValid(SensorData) && SensorData->IsSensorConfigValid()
+			// [v1.0.0] 실제 설정이 SensorData에서 왔는지 Fallback에서 왔는지 표시할 출처 문자열입니다.
+	const TCHAR* ConfigSource = IsValid(SensorData) && SensorData->IsSensorDataContractValid()
 		? TEXT("SensorData")
 		: TEXT("Fallback");
 	LastSensorRuntimeSummary = FString::Printf(
@@ -228,7 +240,7 @@ bool UCFVehicleSensorComp::InitializeSensorRuntime()
 bool UCFVehicleSensorComp::ApplySensorData(UCFVehicleSensorData* NewSensorData)
 {
 	if (NewSensorData != nullptr
-		&& (!IsValid(NewSensorData) || !NewSensorData->IsSensorConfigValid()))
+		&& (!IsValid(NewSensorData) || !NewSensorData->IsSensorDataContractValid()))
 	{
 		return false;
 	}
@@ -237,17 +249,27 @@ bool UCFVehicleSensorComp::ApplySensorData(UCFVehicleSensorData* NewSensorData)
 	const FCFSensorConfig RequestedSensorConfig = IsValid(NewSensorData)
 		? NewSensorData->SensorConfig
 		: FallbackSensorConfig;
+	// [v1.7.0] 요청된 Scanner가 명시한 Radar 표시 Range Preset 적용 후보 사본입니다.
+	const TArray<float> RequestedRadarDisplayRangePresetsCm = IsValid(NewSensorData)
+		? NewSensorData->RadarDisplayRangePresetsCm
+		: TArray<float>();
+	// [v1.7.0] 요청된 Scanner가 명시한 Radar 초기 표시 Range Preset 인덱스입니다.
+	const int32 RequestedDefaultRadarDisplayRangePresetIndex = IsValid(NewSensorData)
+		? NewSensorData->DefaultRadarDisplayRangePresetIndex
+		: INDEX_NONE;
 	if (!RequestedSensorConfig.IsValid())
 	{
 		return false;
 	}
 
-	// [v1.6.0] 초기화 전 Source 선택은 Runtime을 암묵적으로 시작하지 않고 다음 InitializeSensorRuntime의 입력만 교체합니다.
+		// [v1.6.0] 초기화 전 Source 선택은 Runtime을 암묵적으로 시작하지 않고 다음 InitializeSensorRuntime의 입력만 교체합니다.
 	if (!bSensorRuntimeReady)
 	{
 		SensorData = NewSensorData;
 		bHasAppliedSensorConfig = false;
 		AppliedSensorConfig = FCFSensorConfig();
+		AppliedRadarDisplayRangePresetsCm.Reset();
+		AppliedDefaultRadarDisplayRangePresetIndex = INDEX_NONE;
 
 		// [v1.6.0] 초기화 전 적용 결과를 구분해 표시할 Config Source 문자열입니다.
 		const TCHAR* ConfigSource = IsValid(NewSensorData) ? TEXT("SensorData") : TEXT("Fallback");
@@ -265,11 +287,13 @@ bool UCFVehicleSensorComp::ApplySensorData(UCFVehicleSensorData* NewSensorData)
 	const bool bBaselineDetectionReduced = RequestedSensorConfig.PassiveDetectionRangeCm + KINDA_SMALL_NUMBER < PreviousSensorConfig.PassiveDetectionRangeCm
 		|| RequestedSensorConfig.VisualDetectionRangeCm + KINDA_SMALL_NUMBER < PreviousSensorConfig.VisualDetectionRangeCm;
 
-	// [v1.6.0] 실행 중 Active-only Contact를 이전 범위 그대로 신뢰할 수 없게 만드는 Active 거리 감소 여부입니다.
+		// [v1.6.0] 실행 중 Active-only Contact를 이전 범위 그대로 신뢰할 수 없게 만드는 Active 거리 감소 여부입니다.
 	const bool bActiveDetectionReduced = RequestedSensorConfig.ActiveScanRangeCm + KINDA_SMALL_NUMBER < PreviousSensorConfig.ActiveScanRangeCm;
 
 	SensorData = NewSensorData;
 	AppliedSensorConfig = RequestedSensorConfig;
+	AppliedRadarDisplayRangePresetsCm = RequestedRadarDisplayRangePresetsCm;
+	AppliedDefaultRadarDisplayRangePresetIndex = RequestedDefaultRadarDisplayRangePresetIndex;
 	bHasAppliedSensorConfig = true;
 	PassiveUpdateElapsedSeconds = 0.0f;
 
@@ -324,9 +348,11 @@ bool UCFVehicleSensorComp::ApplySensorData(UCFVehicleSensorData* NewSensorData)
 void UCFVehicleSensorComp::ResetSensorRuntime()
 {
 	SetComponentTickEnabled(false);
-		bSensorRuntimeReady = false;
+	bSensorRuntimeReady = false;
 	bHasAppliedSensorConfig = false;
 	AppliedSensorConfig = FCFSensorConfig();
+	AppliedRadarDisplayRangePresetsCm.Reset();
+	AppliedDefaultRadarDisplayRangePresetIndex = INDEX_NONE;
 	bActiveScanRunning = false;
 	ActiveScanRemainingSeconds = 0.0f;
 	UnbindAllContactDestroyedEvents();
@@ -396,10 +422,36 @@ FCFSensorConfig UCFVehicleSensorComp::GetResolvedSensorConfig() const
 		: ResolveConfiguredSensorConfig();
 }
 
-// [v1.6.0] 현재 SensorData가 유효하면 해당 설정을, 아니면 FallbackSensorConfig를 반환하는 Source 해석 전용 함수입니다.
+// [v1.7.0] Runtime에 실제 적용됐거나 초기화 전 유효 Source가 제공하는 Radar 표시 Range Preset 사본을 반환합니다.
+TArray<float> UCFVehicleSensorComp::GetResolvedRadarDisplayRangePresetsCm() const
+{
+	if (bHasAppliedSensorConfig)
+	{
+		return AppliedRadarDisplayRangePresetsCm;
+	}
+
+	return IsValid(SensorData) && SensorData->IsSensorDataContractValid()
+		? SensorData->RadarDisplayRangePresetsCm
+		: TArray<float>();
+}
+
+// [v1.7.0] Runtime에 실제 적용됐거나 초기화 전 유효 Source가 제공하는 Radar 기본 표시 Range Preset 인덱스를 반환합니다.
+int32 UCFVehicleSensorComp::GetResolvedDefaultRadarDisplayRangePresetIndex() const
+{
+	if (bHasAppliedSensorConfig)
+	{
+		return AppliedDefaultRadarDisplayRangePresetIndex;
+	}
+
+	return IsValid(SensorData) && SensorData->IsSensorDataContractValid()
+		? SensorData->DefaultRadarDisplayRangePresetIndex
+		: INDEX_NONE;
+}
+
+// [v1.7.0] 현재 전체 SensorData 계약이 유효하면 해당 설정을, 아니면 FallbackSensorConfig를 반환하는 Source 해석 전용 함수입니다.
 FCFSensorConfig UCFVehicleSensorComp::ResolveConfiguredSensorConfig() const
 {
-	if (IsValid(SensorData) && SensorData->IsSensorConfigValid())
+	if (IsValid(SensorData) && SensorData->IsSensorDataContractValid())
 	{
 		return SensorData->SensorConfig;
 	}

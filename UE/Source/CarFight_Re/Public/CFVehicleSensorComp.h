@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.6.0
-// Date: 2026-08-16
-// Description: CF-FQ-037 차량 Scanner Runtime Config Apply / SCAN-P0-02
-// Scope: Sensor 설정 해석, non-destructive SensorData 적용, private Runtime Contact, bounded Passive/Active Detection, Contact 수명, DestroyedHold, Tactical Analysis와 Actor-free Snapshot 소유권을 제공합니다.
+// Version: 1.7.0
+// Date: 2026-08-20
+// Description: CF-FQ-037 Scanner Runtime + CF-FQ-032 UI-P0-08 Radar Range Profile Applied Source
+// Scope: Sensor 설정 해석, non-destructive SensorData 적용, 적용 Radar Range Profile 사본, Contact/Knowledge와 Actor-free Snapshot 소유권을 제공합니다.
 // Changelog:
+// - v1.7.0: Runtime Ready 상태에 RadarDisplayRangePresetsCm/Default index를 Applied copy로 고정하고 read-only Getter를 추가. invalid Radar Profile SensorData는 Config와 함께 fail-closed 거부.
 // - v1.6.0: ApplySensorData non-destructive config apply, 적용 Config 사본, range 감소 Contact reconcile과 Active Scan remaining clamp를 추가.
 // - v1.5.0: HUD/Target adapter가 Actor truth를 읽지 않고 Snapshot Contact를 찾을 수 있도록 기존 Actor→ContactId read-only bridge를 추가.
 // - v1.4.0: VehicleHealthComp 파괴 확정 이벤트/상태를 독립 소비하는 DestroyedHold, 보존 타이머와 안전한 이벤트 해제를 추가.
@@ -26,6 +27,7 @@
 // - v1.6.0부터 Runtime Ready 상태의 SensorData 교체는 ApplySensorData를 사용합니다. 직접 Source 변경은 현재 적용 Config를 즉시 바꾸지 않습니다.
 // - ApplySensorData는 ContactId, AnalysisProgress와 획득 Knowledge를 지우지 않습니다. 탐지 능력 감소는 Live Contact를 LastKnown으로 넘겨 기존 lifecycle에서 재획득 또는 Lost 처리합니다.
 // - 실행 중 Active Scan은 새 장비 적용으로 남은 시간이 늘어나지 않으며 새 Config가 Active Scan을 지원하지 않으면 기존 Stop 의미로 안전 종료됩니다.
+// - v1.7.0 Radar 표시 Range는 Sensor 탐지 판정을 바꾸지 않는 Scanner Profile 데이터입니다. Runtime Ready 이후에는 Source UObject 후속 편집이 아니라 Applied Radar Profile 사본만 UI Provider에 공개합니다.
 
 #pragma once
 
@@ -58,7 +60,8 @@ class CARFIGHT_RE_API UCFVehicleSensorComp : public UActorComponent
 		friend class FCFSensorAnalysisDecayTest;
 	friend class FCFSensorDestroyedHoldTest;
 		friend class FCFSensorDestroyedInvalidActorTest;
-		friend class FCFSensorHUDSnapshotTest;
+					friend class FCFSensorHUDSnapshotTest;
+	friend class FCFRadarRangeFoundationTest;
 	friend class FCFScannerRuntimeConfigTest;
 
 
@@ -93,9 +96,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category="CarFight|Sensor|ActiveScan", meta=(DisplayName="Active Scan 중단", ToolTip="현재 실행 중인 Active Scan을 즉시 중단합니다. 분석 진행률은 초기화하지 않고 이후 Sensor update에서 설정된 감소율로 서서히 감소합니다."))
 	bool StopActiveScan();
 
-		// [v1.6.0] Runtime Ready이면 실제 적용된 Sensor Config를, 초기화 전이면 현재 Source 또는 Fallback 설정을 반환합니다.
-	UFUNCTION(BlueprintPure, Category="CarFight|Sensor|Config", meta=(DisplayName="해석된 센서 설정 반환", ToolTip="Runtime Ready 상태에서는 ApplySensorData 또는 초기화로 실제 적용된 SensorConfig를 반환합니다. 초기화 전에는 현재 SensorData가 유효하면 해당 설정을, 아니면 FallbackSensorConfig를 반환합니다."))
+					// [v1.6.0] Runtime Ready이면 실제 적용된 Sensor Config를, 초기화 전이면 현재 Source 또는 Fallback 설정을 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Sensor|Config", meta=(DisplayName="해석된 센서 설정 반환", ToolTip="Runtime Ready 상태에서는 ApplySensorData 또는 초기화로 실제 적용된 SensorConfig를 반환합니다. 초기화 전에는 현재 전체 SensorData 계약이 유효하면 해당 설정을, 아니면 FallbackSensorConfig를 반환합니다."))
 	FCFSensorConfig GetResolvedSensorConfig() const;
+
+	// [v1.7.0] Runtime에 실제 적용된 Scanner Radar 표시 범위 Preset 사본을 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Sensor|Radar", meta=(DisplayName="해석된 Radar 표시 범위 프리셋 반환", ToolTip="Runtime Ready 상태에서는 실제 적용된 Scanner Profile의 Radar 표시 범위 Preset 사본을 반환합니다. Scanner-less Fallback 또는 미설정 Profile이면 빈 배열입니다."))
+	TArray<float> GetResolvedRadarDisplayRangePresetsCm() const;
+
+	// [v1.7.0] Runtime에 실제 적용된 Scanner Radar 기본 표시 범위 Preset 인덱스를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Sensor|Radar", meta=(DisplayName="해석된 기본 Radar 범위 인덱스 반환", ToolTip="Runtime Ready 상태에서 실제 적용된 Scanner Profile의 기본 Radar 표시 범위 0-based 인덱스를 반환합니다. Profile이 없으면 -1입니다."))
+	int32 GetResolvedDefaultRadarDisplayRangePresetIndex() const;
 
 		// [v1.0.0] 현재 Actor-free Sensor Snapshot 사본을 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|Sensor|Snapshot", meta=(DisplayName="센서 Snapshot 반환", ToolTip="현재 Sensor Runtime이 게시한 Actor 포인터 없는 Snapshot 사본을 반환합니다."))
@@ -194,8 +205,14 @@ private:
 	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|Sensor|Debug", meta=(AllowPrivateAccess="true", DisplayName="마지막 센서 런타임 요약"))
 	FString LastSensorRuntimeSummary = TEXT("SensorRuntime: NotInitialized");
 
-	// [v1.6.0] Runtime Ready 상태에서 Source UObject의 후속 변경과 분리해 실제 Sensor가 소비하는 적용 Config 사본입니다.
+			// [v1.6.0] Runtime Ready 상태에서 Source UObject의 후속 변경과 분리해 실제 Sensor가 소비하는 적용 Config 사본입니다.
 	FCFSensorConfig AppliedSensorConfig;
+
+	// [v1.7.0] Runtime Ready 상태에서 Source UObject 후속 편집과 분리한 Radar 표시 Range Preset 적용 사본입니다.
+	TArray<float> AppliedRadarDisplayRangePresetsCm;
+
+	// [v1.7.0] AppliedRadarDisplayRangePresetsCm에서 초기 UI 표시 범위를 지시하는 적용 기본 인덱스입니다.
+	int32 AppliedDefaultRadarDisplayRangePresetIndex = INDEX_NONE;
 
 	// [v1.6.0] AppliedSensorConfig가 현재 Runtime에 실제 적용된 유효 설정인지 여부입니다.
 	bool bHasAppliedSensorConfig = false;
@@ -233,7 +250,7 @@ private:
 		// [v1.0.0] TargetId와 독립된 새 ContactId를 증가형 serial로 발급합니다.
 	FName AllocateContactId();
 
-	// [v1.6.0] 현재 SensorData가 유효하면 해당 설정을, 아니면 FallbackSensorConfig를 반환하는 Source 해석 전용 함수입니다.
+		// [v1.7.0] 현재 전체 SensorData 계약이 유효하면 해당 설정을, 아니면 FallbackSensorConfig를 반환하는 Source 해석 전용 함수입니다.
 	FCFSensorConfig ResolveConfiguredSensorConfig() const;
 
 	// [v1.1.0] Passive 또는 Visual 탐지 거리가 실제로 설정돼 기본 bounded update가 필요한지 반환합니다.

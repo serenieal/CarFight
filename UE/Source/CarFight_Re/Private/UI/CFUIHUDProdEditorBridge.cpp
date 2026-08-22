@@ -1,10 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.8.0
-// Date: 2026-08-19
-// Description: CF-FQ-032 UI-P0-06 truthful Weapon Rail + Dynamic Resource Visual Stage B + RPM Gauge Runtime Sink Production HUD Editor Bridge 구현
-// Scope: WeaponPanel Compact Resource 의미 슬롯을 보존하면서 기존 가짜 Rail semantic Image 3개를 fixed Text Tile 3개로 교체하고 실제 Runtime Presenter만 Visibility/Text를 소유합니다.
+// Version: 1.14.0
+// Date: 2026-08-21
+// Description: CF-FQ-032 Designer Layout Ownership + UI-P0-09B View Mode additive migration 구현
+// Scope: 저장된 Production UMG의 기존 Slot Layout을 보존하면서 Radar Visual과 Root ReticleLayer의 Vehicle Direction 의미 Widget만 누락 시 추가합니다.
 // Changelog:
+// - v1.14.0: 기존 WBP_CFInGameHUD Root 7-child 구조와 ReticleLayer Slot을 보존하고 ReticleLayer 내부에 `CanvasPanel_ViewDirection` + `Image_ViewVehicleDirection`만 additive 추가하는 ApplyViewModeVisualMigrationResult를 구현. Vehicle Semantic Icon·TextSecondary·Style IconLarge를 재사용.
+// - v1.13.0: RadarPanel Scaffold/Validator를 Frame+Range+Player+SelectedEdge 구조로 확장하고 기존 Designer Tree용 ApplyRadarVisualMigrationResult를 추가. 기존 Radar Widget Slot은 수정하지 않고 Brush/Color만 갱신.
+// - v1.12.0: Production Child/Root Build를 RootWidget 없는 최초 Scaffold 전용으로 fail-closed하고 기존 Designer Tree 교체를 차단. Root Validator의 Position/Size/Alignment/ZOrder 비교를 제거해 persisted Designer Layout ownership을 보존.
+
+// - v1.11.0: SpeedGauge의 ProgressBar_RPMTick00~20과 Image_RPMTrackArt를 제거하고 `Image_RPMGauge` 단일 UI Material Image로 교체. Validator가 Material Brush를 요구하고 구형 21 Tick 잔존을 명시적으로 거부.
+// - v1.10.0: WBP_CFArmorSector를 방향 Label + Plate Image + 실제 Armor ProgressBar 재사용 Element로 추가. ArmorBodyMap의 18개 직접 방향 자식을 제거하고 6개 Sector 인스턴스 배치로 교체.
+// - v1.9.1: 512x256 P2 Frame의 48x24px 내부 경계와 일치하도록 9-Slice UV Margin을 0.09375로 교정. Runtime 의미 변경 없음.
+// - v1.9.0: VehiclePanelFrame을 단일 Surface Border의 9-Slice Brush로 소비. ArmorBodyMap에 FRONT/RIGHT/REAR/LEFT/TOP/BOTTOM Text Label을 additive 추가하고 차량 좌향 기준 Front←/Right↑/Rear→/Left↓ + Top 좌상단 + Bottom 우하단 공간 계약으로 배치/Validator 갱신.
 // - v1.8.0: WeaponRail Turret/Ammo/Reload Image 3개 제거, 112x68 Text Tile 3개 + 8px gap으로 교체. Header icon 1개만 Image 계약에 남기고 old Rail Image 잔존을 Validator가 거부.
 // - v1.7.0: SpeedGauge ProgressBar_RPMTick00~20의 저장 100% 값은 Designer Scale Preview이고 Runtime Presenter가 Percent를 덮어쓰는 의미를 명시. 구조/배치/색/Validator count는 그대로 유지.
 // - v1.6.0: WeaponPanel의 Launcher/Ammo/Heat/Cooldown 전용 고정 Row를 Compact Resource Presentation 의미 슬롯으로 원자 교체. ReserveAmmo Header owner와 Compact Rail 구조는 유지하고 Rail은 다중 무기 Runtime 전 기본 Collapsed. Validator가 새 의미 슬롯을 요구하고 구형 전용 Row 잔존을 거부하도록 갱신.
@@ -18,15 +26,23 @@
 // Migration:
 // - Border는 Panel Surface 한 장에만 허용하며 차체·장갑·원호·아이콘·장식선을 작은 Border 조각으로 그리지 않습니다.
 // - SpeedGauge, ArmorBodyMap과 Radar의 공간 배치에는 의미 좌표가 필요한 내부 CanvasPanel만 사용합니다.
-// - SpeedArcTrack은 실제 HUDVisualData Texture만 사용하며 비어 있거나 Load 실패하면 Image_RPMTrackArt 슬롯은 유지하되 Collapsed로 저장합니다.
+// - SpeedArcTrack Texture는 RPM UI Material의 데이터/형상 입력으로 사용합니다. WBP_CFSpeedGauge는 Texture를 직접 그리지 않고 HUDVisualData.SpeedArcMaterial을 `Image_RPMGauge` Brush로 사용합니다.
 // - Vehicle/Armor처럼 의미가 동일한 시각 슬롯은 HUDVisualData가 비어 있을 때 기존 StyleData Semantic Icon Texture를 Editor Preview Fallback으로 사용할 수 있습니다.
 // - WeaponPanel Resource Presentation은 raw ResourceChannels 개수에 따라 Widget을 생성하지 않습니다. Primary/SecondaryA/SecondaryB/FireState의 고정 의미 슬롯만 만들고 Runtime Presenter가 역할별 Visibility/Text/Progress를 적용합니다.
 // - VehicleBattery·WeaponCharge·Heat Runtime 부재를 Designer Preview 값으로 위조하지 않으며 구형 Heat 전용 Row는 Stage B에서 제거합니다.
-// - SpeedGauge의 21 Tick 저장 Percent=1은 눈금 자체의 Designer Preview이며 실제 Runtime 값이 아닙니다. Runtime에서는 UCFHUDPresenter가 explicit Redline/Maximum 계약에 따라 0~1 Percent를 갱신하고 계약이 없으면 fill=0으로 reset합니다.
+// - v1.11.0부터 RPM 눈금/Track은 Texture+UI Material 한 장이 담당하고 Runtime UCFHUDPresenter는 `RPMRatio` 스칼라 하나만 갱신합니다. ProgressBar_RPMTick00~20 구조는 금지합니다.
 // - v1.8.0 Weapon Rail은 실제 weapon icon source가 없으므로 Image를 만들지 않고 Text Tile만 소유합니다. 비선택 무기의 자원 상태도 현재 HUD ViewData에 없으므로 Designer에서 summary 값을 만들지 않습니다.
+// - v1.9.1 VehiclePanel Frame 9-Slice는 SourceArt P2 Frame의 48/512 = 24/256 = 0.09375 UV 경계를 사용합니다.
+// - v1.10.0 ArmorBodyMap은 Vehicle Silhouette + 재사용 ArmorSector 6개만 직접 배치합니다. Sector 내부 ProgressBar는 장식이 아니라 실제 방향 Armor Ratio를 표시합니다.
+// - v1.12.0부터 아래 Position/Size/SizeBox/Padding 값은 신규 Asset 최초 Scaffold 기본값일 뿐 저장 Asset의 재적용 계약이 아닙니다. 기존 Asset은 Validate-only 경로를 사용합니다.
+// - v1.13.0 Radar Visual migration은 기존 Widget의 Position/Size/Anchor/Alignment/AutoSize를 변경하지 않습니다. 누락된 새 의미 Widget에만 최초 배치값을 적용하며 이후 Layout SSOT는 Designer Asset입니다.
+// - v1.14.0 ViewMode migration도 같은 ownership을 따릅니다. `CanvasPanel_Slot_ReticleLayer` 자체는 수정하지 않고 새 Direction Track/Image의 최초 Scaffold Slot만 설정합니다.
+
+
 
 #include "UI/CFUIHUDProdEditorBridge.h"
 
+#include "UI/CFArmorSectorWidget.h"
 #include "UI/CFHUDLayoutData.h"
 #include "UI/CFHUDVisualData.h"
 #include "UI/CFStyledWidgetBase.h"
@@ -43,6 +59,7 @@
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Image.h"
 #include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "Components/ProgressBar.h"
 #include "Components/SizeBox.h"
 #include "Components/Spacer.h"
@@ -53,6 +70,8 @@
 #include "EdGraph/EdGraphPin.h"
 #include "Engine/Texture2D.h"
 #include "Kismet2/BlueprintEditorUtils.h"
+#include "Materials/MaterialInterface.h"
+#include "Styling/SlateBrush.h"
 #include "Styling/SlateColor.h"
 #include "WidgetBlueprint.h"
 #endif
@@ -304,8 +323,41 @@ namespace CFUIHUDProdEditorBridge
 		return Image;
 	}
 
-	// [v1.0.0] Production Panel의 유일한 Surface Border와 Content VerticalBox를 생성합니다.
-	UVerticalBox* BuildPanelSurface(UWidgetTree* WidgetTree, const UCFUIStyleData* StyleData)
+					// [v1.11.0] HUDVisualData의 UI Material만 Brush로 사용하는 Image를 만들고 Material 누락 시 빈 사각형을 렌더링하지 않습니다.
+	UImage* CreatePreferredMaterialImage(
+		UWidgetTree* WidgetTree,
+		const TCHAR* WidgetName,
+		const TSoftObjectPtr<UMaterialInterface>& PreferredMaterial)
+	{
+		// [v1.11.0] RPM Gauge Material을 표시할 단일 의미 Image Widget입니다.
+		UImage* Image = CreateWidget<UImage>(WidgetTree, WidgetName);
+		if (!Image)
+		{
+			return nullptr;
+		}
+
+		// [v1.11.0] HUDVisualData에 연결된 실제 UI Domain Material입니다.
+		UMaterialInterface* Material = PreferredMaterial.IsNull() ? nullptr : PreferredMaterial.LoadSynchronous();
+		if (!Material)
+		{
+			Image->SetVisibility(ESlateVisibility::Collapsed);
+			return Image;
+		}
+
+		Image->SetBrushFromMaterial(Material);
+		Image->SetColorAndOpacity(FLinearColor::White);
+		Image->SetVisibility(ESlateVisibility::HitTestInvisible);
+		return Image;
+	}
+
+	// [v1.9.1] P2 VehiclePanelFrame의 48px horizontal / 24px vertical 내부 경계에 대응하는 normalized 9-Slice UV Margin입니다.
+	constexpr float VehiclePanelFrameSliceMargin = 0.09375f;
+
+	// [v1.9.0] Production Panel의 유일한 Surface Border와 Content VerticalBox를 생성하고 선택적 9-Slice Frame을 적용합니다.
+	UVerticalBox* BuildPanelSurface(
+		UWidgetTree* WidgetTree,
+		const UCFUIStyleData* StyleData,
+		const TSoftObjectPtr<UTexture2D>& PreferredFrame = TSoftObjectPtr<UTexture2D>())
 	{
 		// [v1.0.0] Panel 배경 Surface를 담당하는 유일한 Border입니다.
 		UBorder* Surface = CreateWidget<UBorder>(WidgetTree, TEXT("Border_Surface"));
@@ -315,7 +367,25 @@ namespace CFUIHUDProdEditorBridge
 		{
 			return nullptr;
 		}
-		Surface->SetBrushColor(StyleData->ResolveColor(ECFUIColorToken::SurfaceBase));
+
+		// [v1.9.0] VehiclePanel처럼 전용 Frame이 연결됐을 때 단일 Border를 그대로 9-Slice Brush로 사용하는 실제 Texture입니다.
+		UTexture2D* FrameTexture = PreferredFrame.IsNull() ? nullptr : PreferredFrame.LoadSynchronous();
+		if (FrameTexture)
+		{
+			// [v1.9.0] Corner 두께를 유지하며 중앙/Edge만 늘어나도록 설정할 9-Slice Slate Brush입니다.
+			FSlateBrush FrameBrush;
+			FrameBrush.SetResourceObject(FrameTexture);
+			FrameBrush.DrawAs = ESlateBrushDrawType::Box;
+									FrameBrush.Margin = FMargin(VehiclePanelFrameSliceMargin);
+			FrameBrush.TintColor = FSlateColor(FLinearColor::White);
+			Surface->SetBrush(FrameBrush);
+			Surface->SetBrushColor(FLinearColor::White);
+		}
+		else
+		{
+			Surface->SetBrushColor(StyleData->ResolveColor(ECFUIColorToken::SurfaceBase));
+		}
+
 		Surface->SetPadding(FMargin(16.0f));
 		Surface->SetVisibility(ESlateVisibility::HitTestInvisible);
 		Surface->SetContent(Content);
@@ -350,74 +420,24 @@ namespace CFUIHUDProdEditorBridge
 			// [v1.1.0] SpeedGauge에서도 공간 배치 helper를 사용할 수 있도록 구현 앞에 선언합니다.
 	bool AddCanvasChild(UCanvasPanel* Canvas, UWidget* Child, const FVector2D& Position, const FVector2D& Size, const int32 ZOrder);
 
-		// [v1.7.0] SpeedGauge Element를 실제 RPM 의미의 고정 Track/Tick runtime sink와 디지털 속도·단일 Gear Slot 구조로 생성합니다.
+			// [v1.11.0] SpeedGauge Element를 단일 동적 RPM UI Material Image와 디지털 속도·단일 Gear Slot 구조로 생성합니다.
 	bool BuildSpeedGauge(UWidgetTree* WidgetTree, const UCFUIStyleData* StyleData, const UCFHUDLayoutData* LayoutData, const UCFHUDVisualData* HUDVisualData)
 	{
-		// [v1.1.0] 비대칭 RPM Tick과 속도/단위를 정확한 의미 위치에 배치할 Root Canvas입니다.
+		// [v1.11.0] 동적 RPM Gauge와 속도/단위/Gear의 의미 위치만 담당하는 Root Canvas입니다.
 		UCanvasPanel* Root = CreateWidget<UCanvasPanel>(WidgetTree, TEXT("CanvasPanel_Root"));
-		// [v1.1.0] 전용 RPM Track Texture가 실제 연결됐을 때만 표시하고 다른 Semantic Icon을 대체 사용하지 않는 Image입니다.
-		UImage* RPMTrackImage = CreatePreferredTextureImage(WidgetTree, TEXT("Image_RPMTrackArt"), StyleData, ECFUIColorToken::AccentTactical, HUDVisualData ? HUDVisualData->SpeedArcTrack : TSoftObjectPtr<UTexture2D>());
-		if (!Root || !RPMTrackImage)
+		// [v1.11.0] Track·21 Tick·Red Zone 표현을 Texture/Material 한 장에서 처리하는 단일 RPM Gauge Image입니다.
+		UImage* RPMGaugeImage = CreatePreferredMaterialImage(
+			WidgetTree,
+			TEXT("Image_RPMGauge"),
+			HUDVisualData ? HUDVisualData->SpeedArcMaterial : TSoftObjectPtr<UMaterialInterface>());
+		if (!Root || !RPMGaugeImage)
 		{
 			return false;
 		}
 		WidgetTree->RootWidget = Root;
-		if (!AddCanvasChild(Root, RPMTrackImage, FVector2D(8.0f, 14.0f), FVector2D(220.0f, 154.0f), 0))
+		if (!AddCanvasChild(Root, RPMGaugeImage, FVector2D(8.0f, 14.0f), FVector2D(220.0f, 154.0f), 0))
 		{
 			return false;
-		}
-
-		// [v1.1.0] 21 Tick이 좌측 세로→곡선→상단 수평으로 이어지는 비대칭 RPM 경로를 만들기 위한 위치/회전 설정입니다.
-		struct FRPMTickSpec
-		{
-			// [v1.1.0] 현재 Tick의 SpeedGauge 내부 위치입니다.
-			FVector2D Position;
-			// [v1.1.0] 세로 구간의 수평 Tick에서 상단 구간의 수직 Tick으로 전환할 회전 각도입니다.
-			float AngleDegrees;
-		};
-
-		// [v1.1.0] 0%~100%를 5% 간격으로 나타내는 정확한 21개 RPM Tick Preview 위치입니다.
-		const FRPMTickSpec TickSpecs[] =
-		{
-			{FVector2D(18.0f, 158.0f), 0.0f}, {FVector2D(18.0f, 145.0f), 0.0f},
-			{FVector2D(18.0f, 132.0f), 0.0f}, {FVector2D(18.0f, 119.0f), 0.0f},
-			{FVector2D(18.0f, 106.0f), 0.0f}, {FVector2D(18.0f, 93.0f), 0.0f},
-			{FVector2D(18.0f, 80.0f), 0.0f}, {FVector2D(19.0f, 68.0f), 0.0f},
-			{FVector2D(22.0f, 56.0f), 15.0f}, {FVector2D(28.0f, 45.0f), 30.0f},
-			{FVector2D(38.0f, 36.0f), 45.0f}, {FVector2D(50.0f, 29.0f), 60.0f},
-			{FVector2D(64.0f, 25.0f), 75.0f}, {FVector2D(80.0f, 22.0f), 90.0f},
-			{FVector2D(99.0f, 22.0f), 90.0f}, {FVector2D(118.0f, 22.0f), 90.0f},
-			{FVector2D(137.0f, 22.0f), 90.0f}, {FVector2D(156.0f, 22.0f), 90.0f},
-			{FVector2D(175.0f, 22.0f), 90.0f}, {FVector2D(194.0f, 22.0f), 90.0f},
-			{FVector2D(213.0f, 22.0f), 90.0f}
-		};
-		for (int32 TickIndex = 0; TickIndex < UE_ARRAY_COUNT(TickSpecs); ++TickIndex)
-		{
-			// [v1.1.0] 10% 간격 Tick을 더 길게 표시할 Major Tick 여부입니다.
-			const bool bMajorTick = (TickIndex % 2) == 0;
-			// [v1.1.0] 85% Tick부터 Gauge 끝까지 고정 Red Zone으로 표시할 여부입니다.
-			const bool bRedZoneTick = TickIndex >= 17;
-			// [v1.1.0] 85% Red Zone 시작 Tick을 일반 Major보다 한 단계 더 길게 표시할 여부입니다.
-			const bool bRedZoneStartTick = TickIndex == 17;
-			// [v1.1.0] 현재 Tick의 고유 Widget 이름입니다.
-			const FString TickName = FString::Printf(TEXT("ProgressBar_RPMTick%02d"), TickIndex);
-			// [v1.1.0] Major/Minor/Red Zone 시작 의미에 따라 결정한 현재 Tick 길이입니다.
-			const float TickLength = bRedZoneStartTick ? 15.0f : (bMajorTick ? 12.0f : 8.0f);
-			// [v1.1.0] Major/Minor 의미에 따라 결정한 현재 Tick 두께입니다.
-			const float TickThickness = bMajorTick || bRedZoneStartTick ? 3.0f : 2.0f;
-			// [v1.1.0] Red Zone과 일반 Tick을 분리하는 현재 Tick 색상 Token입니다.
-			const ECFUIColorToken TickColor = bRedZoneTick ? ECFUIColorToken::StateDanger : ECFUIColorToken::TextMuted;
-						// [v1.7.0] 저장 Asset에서는 Scale 눈금 Preview를 위해 100%이며 Runtime Presenter가 explicit RPM Gauge ratio에 맞게 Percent를 덮어쓸 Tick sink입니다.
-			UProgressBar* Tick = CreateProgress(WidgetTree, *TickName, 1.0f, StyleData, TickColor);
-			if (!Tick)
-			{
-				return false;
-			}
-			Tick->SetRenderTransformAngle(TickSpecs[TickIndex].AngleDegrees);
-			if (!AddCanvasChild(Root, Tick, TickSpecs[TickIndex].Position, FVector2D(TickLength, TickThickness), 1))
-			{
-				return false;
-			}
 		}
 
 		// [v1.1.0] RPM Gauge 내부에서 가장 먼저 읽히는 3자리 정적 Designer Preview 속도 숫자입니다.
@@ -451,60 +471,125 @@ namespace CFUIHUDProdEditorBridge
 		return true;
 	}
 
-		// [v1.1.0] Armor Body Map을 Vehicle/6방향 Armor Image + 우측 세로 NormalizedArmor Bar 공간 구조로 생성합니다.
-	bool BuildArmorBodyMap(UWidgetTree* WidgetTree, const UCFUIStyleData* StyleData, const UCFHUDLayoutData* LayoutData, const UCFHUDVisualData* HUDVisualData)
+			// [v1.10.0] 한 방향 Armor의 Label, Plate Image와 실제 Armor Ratio Bar를 재사용 가능한 의미 Element로 생성합니다.
+	bool BuildArmorSector(UWidgetTree* WidgetTree, const UCFUIStyleData* StyleData, const UCFHUDLayoutData* LayoutData)
 	{
-		(void)LayoutData;
-		// [v1.1.0] 차체와 방향별 Armor를 공간적으로 겹쳐 배치할 허용된 Root Canvas입니다.
+		// [v1.10.0] 한 Sector의 고정 68x58 Designer 크기를 소유하는 Root SizeBox입니다.
+		USizeBox* Root = CreateWidget<USizeBox>(WidgetTree, TEXT("SizeBox_Root"));
+		// [v1.10.0] Plate 묶음과 실제 Armor Bar를 좌우로 배치하는 Content Row입니다.
+		UHorizontalBox* Content = CreateWidget<UHorizontalBox>(WidgetTree, TEXT("HorizontalBox_Content"));
+		// [v1.10.0] 방향별 Plate Image와 작은 방향 Label을 겹치는 58x58 영역입니다.
+		USizeBox* PlateBox = CreateWidget<USizeBox>(WidgetTree, TEXT("SizeBox_Plate"));
+		// [v1.10.0] Plate Image와 방향 Label만 겹치는 시각 Overlay입니다.
+		UOverlay* PlateOverlay = CreateWidget<UOverlay>(WidgetTree, TEXT("Overlay_Plate"));
+		// [v1.10.0] 실제 방향별 Armor Art를 표시하며 Sector 인스턴스 설정이 있으면 Texture가 교체되는 Image입니다.
+		UImage* ArmorImage = CreateImage(WidgetTree, TEXT("Image_ArmorPlate"), StyleData, FName(TEXT("Armor")), ECFUIColorToken::Armor);
+		// [v1.10.0] 방향 Art를 가리지 않도록 Caption 크기로 낮춘 보조 방향 Label입니다.
+		UTextBlock* DirectionText = CreateText(WidgetTree, TEXT("Text_Direction"), TEXT("ARMOR"), StyleData, LayoutData, ECFUIFontFamilyRole::UI, ECFUITypographyRole::Caption, ECFUIColorToken::TextSecondary);
+		// [v1.10.0] Plate와 실제 Armor Bar 사이의 작은 구조적 간격입니다.
+		USpacer* ArmorGap = CreateSpacer(WidgetTree, TEXT("Spacer_ArmorGap"), FVector2D(2.0f, 1.0f));
+		// [v1.10.0] 실제 Armor Bar의 8x58 크기를 고정하는 SizeBox입니다.
+		USizeBox* ProgressBox = CreateWidget<USizeBox>(WidgetTree, TEXT("SizeBox_ArmorProgress"));
+		// [v1.10.0] 실제 방향 Armor Ratio를 아래에서 위로 채우는 단일 ProgressBar입니다.
+		UProgressBar* ArmorBar = CreateVerticalProgress(WidgetTree, TEXT("ProgressBar_Armor"), 1.0f, StyleData, ECFUIColorToken::Armor);
+		if (!Root || !Content || !PlateBox || !PlateOverlay || !ArmorImage || !DirectionText || !ArmorGap || !ProgressBox || !ArmorBar)
+		{
+			return false;
+		}
+
+		Root->SetWidthOverride(68.0f);
+		Root->SetHeightOverride(58.0f);
+		PlateBox->SetWidthOverride(58.0f);
+		PlateBox->SetHeightOverride(58.0f);
+		ProgressBox->SetWidthOverride(8.0f);
+		ProgressBox->SetHeightOverride(58.0f);
+		DirectionText->SetJustification(ETextJustify::Center);
+
+		// [v1.10.0] Plate Image를 58x58 Overlay 전체에 채우는 Slot입니다.
+		UOverlaySlot* ArmorImageSlot = PlateOverlay->AddChildToOverlay(ArmorImage);
+		// [v1.10.0] 작은 방향 Label을 Plate 상단 중앙에 두는 Slot입니다.
+		UOverlaySlot* DirectionTextSlot = PlateOverlay->AddChildToOverlay(DirectionText);
+		if (!ArmorImageSlot || !DirectionTextSlot)
+		{
+			return false;
+		}
+		ArmorImageSlot->SetHorizontalAlignment(HAlign_Fill);
+		ArmorImageSlot->SetVerticalAlignment(VAlign_Fill);
+		DirectionTextSlot->SetHorizontalAlignment(HAlign_Center);
+		DirectionTextSlot->SetVerticalAlignment(VAlign_Top);
+		DirectionTextSlot->SetPadding(FMargin(0.0f, 1.0f, 0.0f, 0.0f));
+
+		PlateBox->SetContent(PlateOverlay);
+		ProgressBox->SetContent(ArmorBar);
+		Content->AddChild(PlateBox);
+		Content->AddChild(ArmorGap);
+		Content->AddChild(ProgressBox);
+		Root->SetContent(Content);
+		WidgetTree->RootWidget = Root;
+		return true;
+	}
+
+	// [v1.10.0] Armor Body Map을 중앙 Vehicle + 완성된 재사용 ArmorSector 6개의 공간 배치 구조로 생성합니다.
+	bool BuildArmorBodyMap(
+		UWidgetTree* WidgetTree,
+		const UCFUIStyleData* StyleData,
+		const UCFHUDVisualData* HUDVisualData,
+		UClass* ArmorSectorClass)
+	{
+		// [v1.10.0] 차체와 완성된 방향 Sector의 공간 관계만 담당하는 Root Canvas입니다.
 		UCanvasPanel* Root = CreateWidget<UCanvasPanel>(WidgetTree, TEXT("CanvasPanel_Root"));
-		if (!Root)
+		if (!Root || !ArmorSectorClass || !ArmorSectorClass->IsChildOf(UCFArmorSectorWidget::StaticClass()))
 		{
 			return false;
 		}
 		WidgetTree->RootWidget = Root;
 
-		// [v1.1.0] HUDVisualData가 없을 때 동일 의미의 Semantic Vehicle Texture로 대체할 중앙 차량 실루엣 Image입니다.
+		// [v1.10.0] HUDVisualData가 없을 때 동일 의미 Semantic Vehicle Texture로 대체할 중앙 좌향 차량 실루엣 Image입니다.
 		UImage* VehicleImage = CreateImage(WidgetTree, TEXT("Image_VehicleSilhouette"), StyleData, FName(TEXT("Vehicle")), ECFUIColorToken::TextSecondary, HUDVisualData ? HUDVisualData->VehicleSilhouette : TSoftObjectPtr<UTexture2D>());
-		if (!AddCanvasChild(Root, VehicleImage, FVector2D(108.0f, 62.0f), FVector2D(148.0f, 72.0f), 1))
+		if (!AddCanvasChild(Root, VehicleImage, FVector2D(112.0f, 57.0f), FVector2D(154.0f, 76.0f), 1))
 		{
 			return false;
 		}
 
-		// [v1.1.0] 6방향 Armor의 Plate/Badge Image와 우측 세로 Bar를 함께 정의하는 Designer Preview 설정입니다.
-		struct FArmorVisualSpec
+		// [v1.10.0] 한 방향 Sector 인스턴스의 이름, 정적 방향 정보, Preview 비율과 BodyMap 위치를 묶습니다.
+		struct FArmorSectorSpec
 		{
-			// [v1.1.0] 현재 방향 Armor Plate/Badge Image Widget 이름입니다.
-			const TCHAR* ImageName;
-			// [v1.1.0] 현재 방향 NormalizedArmor 세로 ProgressBar Widget 이름입니다.
-			const TCHAR* ProgressName;
-			// [v1.1.0] D1-11 정적 Visual Prototype에서 방향별 남은 비율을 판독하기 위한 Mock NormalizedArmor입니다.
-			float NormalizedArmor;
-			// [v1.1.0] 현재 방향 Armor Plate/Badge Image 위치입니다.
-			FVector2D ImagePosition;
-			// [v1.1.0] Plate/Badge 바로 우측에 붙는 세로 Bar 위치입니다.
-			FVector2D BarPosition;
-			// [v1.1.0] 실제 HUDVisualData에 연결된 현재 방향 전용 Texture입니다.
+			// [v1.10.0] ArmorBodyMap에서 Presenter와 Validator가 찾는 재사용 Sector 인스턴스 이름입니다.
+			const TCHAR* WidgetName;
+			// [v1.10.0] 차량 로컬 방향을 즉시 읽을 수 있게 표시할 짧은 방향 문자열입니다.
+			const TCHAR* DirectionText;
+			// [v1.10.0] 저장 Asset Designer에서 방향별 Bar 형태를 구분하기 위한 Preview 비율입니다.
+			float DesignerArmorPercent;
+			// [v1.10.0] ArmorBodyMap Canvas 안에서 완성된 Sector 전체의 위치입니다.
+			FVector2D Position;
+			// [v1.10.0] 실제 HUDVisualData에 연결된 현재 방향 전용 Texture입니다.
 			TSoftObjectPtr<UTexture2D> PreferredTexture;
 		};
 
-		// [v1.1.0] D1-07 승인 의미 위치 좌=Front·상=Right·우=Rear·하=Left·좌상단=Top·우하단=Bottom입니다.
-		const FArmorVisualSpec ArmorSpecs[] =
+		// [v1.10.0] 사용자 확정 공간 계약: Front=좌←, Right=상↑, Rear=우→, Left=하↓, Top=좌상단, Bottom=우하단입니다.
+		const FArmorSectorSpec ArmorSpecs[] =
 		{
-			{TEXT("Image_ArmorFront"), TEXT("ProgressBar_ArmorFront"), 0.30f, FVector2D(18.0f, 75.0f), FVector2D(68.0f, 75.0f), HUDVisualData ? HUDVisualData->ArmorPlates.FrontPlate : TSoftObjectPtr<UTexture2D>()},
-			{TEXT("Image_ArmorRight"), TEXT("ProgressBar_ArmorRight"), 0.70f, FVector2D(150.0f, 10.0f), FVector2D(200.0f, 10.0f), HUDVisualData ? HUDVisualData->ArmorPlates.RightPlate : TSoftObjectPtr<UTexture2D>()},
-			{TEXT("Image_ArmorRear"), TEXT("ProgressBar_ArmorRear"), 0.75f, FVector2D(300.0f, 75.0f), FVector2D(350.0f, 75.0f), HUDVisualData ? HUDVisualData->ArmorPlates.RearPlate : TSoftObjectPtr<UTexture2D>()},
-			{TEXT("Image_ArmorLeft"), TEXT("ProgressBar_ArmorLeft"), 0.63f, FVector2D(150.0f, 144.0f), FVector2D(200.0f, 144.0f), HUDVisualData ? HUDVisualData->ArmorPlates.LeftPlate : TSoftObjectPtr<UTexture2D>()},
-			{TEXT("Image_ArmorTop"), TEXT("ProgressBar_ArmorTop"), 0.84f, FVector2D(36.0f, 14.0f), FVector2D(86.0f, 14.0f), HUDVisualData ? HUDVisualData->ArmorPlates.TopPlate : TSoftObjectPtr<UTexture2D>()},
-			{TEXT("Image_ArmorBottom"), TEXT("ProgressBar_ArmorBottom"), 0.72f, FVector2D(286.0f, 144.0f), FVector2D(336.0f, 144.0f), HUDVisualData ? HUDVisualData->ArmorPlates.BottomPlate : TSoftObjectPtr<UTexture2D>()}
+			{TEXT("WBP_ArmorFront"), TEXT("FRONT"), 0.30f, FVector2D(8.0f, 66.0f), HUDVisualData ? HUDVisualData->ArmorPlates.FrontPlate : TSoftObjectPtr<UTexture2D>()},
+			{TEXT("WBP_ArmorRight"), TEXT("RIGHT"), 0.70f, FVector2D(184.0f, 2.0f), HUDVisualData ? HUDVisualData->ArmorPlates.RightPlate : TSoftObjectPtr<UTexture2D>()},
+			{TEXT("WBP_ArmorRear"), TEXT("REAR"), 0.75f, FVector2D(308.0f, 66.0f), HUDVisualData ? HUDVisualData->ArmorPlates.RearPlate : TSoftObjectPtr<UTexture2D>()},
+			{TEXT("WBP_ArmorLeft"), TEXT("LEFT"), 0.63f, FVector2D(184.0f, 130.0f), HUDVisualData ? HUDVisualData->ArmorPlates.LeftPlate : TSoftObjectPtr<UTexture2D>()},
+			{TEXT("WBP_ArmorTop"), TEXT("TOP"), 0.84f, FVector2D(78.0f, 2.0f), HUDVisualData ? HUDVisualData->ArmorPlates.TopPlate : TSoftObjectPtr<UTexture2D>()},
+			{TEXT("WBP_ArmorBottom"), TEXT("BOTTOM"), 0.72f, FVector2D(286.0f, 130.0f), HUDVisualData ? HUDVisualData->ArmorPlates.BottomPlate : TSoftObjectPtr<UTexture2D>()}
 		};
-		for (const FArmorVisualSpec& Spec : ArmorSpecs)
+
+		for (const FArmorSectorSpec& Spec : ArmorSpecs)
 		{
-			// [v1.1.0] 실제 방향별 Texture 또는 동일 의미 Semantic Armor Fallback을 표시할 Plate/Badge Image입니다.
-			UImage* ArmorImage = CreateImage(WidgetTree, Spec.ImageName, StyleData, FName(TEXT("Armor")), ECFUIColorToken::Armor, Spec.PreferredTexture);
-			// [v1.1.0] 숫자 없이 현재 방향의 Mock NormalizedArmor만 아래→위 Fill로 표현하는 세로 Bar입니다.
-			UProgressBar* ArmorBar = CreateVerticalProgress(WidgetTree, Spec.ProgressName, Spec.NormalizedArmor, StyleData, ECFUIColorToken::Armor);
-			if (!AddCanvasChild(Root, ArmorImage, Spec.ImagePosition, FVector2D(46.0f, 46.0f), 2)
-				|| !AddCanvasChild(Root, ArmorBar, Spec.BarPosition, FVector2D(8.0f, 46.0f), 3))
+			// [v1.10.0] 동일 WBP_CFArmorSector Generated Class를 재사용하는 현재 방향 Sector 인스턴스입니다.
+			UCFArmorSectorWidget* ArmorSector = WidgetTree->ConstructWidget<UCFArmorSectorWidget>(ArmorSectorClass, FName(Spec.WidgetName));
+			if (!ArmorSector)
+			{
+				return false;
+			}
+
+			// [v1.10.0] 현재 방향에 연결된 P2 Plate Texture이며 없으면 ArmorSector 기본 Semantic Image를 그대로 사용합니다.
+			UTexture2D* ArmorTexture = Spec.PreferredTexture.IsNull() ? nullptr : Spec.PreferredTexture.LoadSynchronous();
+			ArmorSector->ConfigureSector(FText::FromString(Spec.DirectionText), ArmorTexture, Spec.DesignerArmorPercent);
+			if (!AddCanvasChild(Root, ArmorSector, Spec.Position, FVector2D(68.0f, 58.0f), 2))
 			{
 				return false;
 			}
@@ -580,14 +665,15 @@ namespace CFUIHUDProdEditorBridge
 	}
 
 	// [v1.0.0] Vehicle Panel을 SpeedGauge + ArmorBodyMap 의미 Element와 Shield/Integrity 상태 Row로 조립합니다.
-	bool BuildVehiclePanel(
+			bool BuildVehiclePanel(
 		UWidgetTree* WidgetTree,
 		const UCFUIStyleData* StyleData,
 		const UCFHUDLayoutData* LayoutData,
+		const UCFHUDVisualData* HUDVisualData,
 		UClass* SpeedGaugeClass,
 		UClass* ArmorBodyMapClass)
 	{
-		UVerticalBox* Content = BuildPanelSurface(WidgetTree, StyleData);
+		UVerticalBox* Content = BuildPanelSurface(WidgetTree, StyleData, HUDVisualData ? HUDVisualData->VehiclePanelFrame : TSoftObjectPtr<UTexture2D>());
 		// [v1.0.0] SpeedGauge와 ArmorBodyMap을 한 행에 배치할 주요 Vehicle Row입니다.
 		UHorizontalBox* MainRow = CreateWidget<UHorizontalBox>(WidgetTree, TEXT("HorizontalBox_Main"));
 		// [v1.0.0] SpeedGauge 실제 Production Element 인스턴스입니다.
@@ -632,7 +718,7 @@ namespace CFUIHUDProdEditorBridge
 		return true;
 	}
 
-	// [v1.0.0] Radar Panel을 Semantic RadarContact Image의 공간 Field로 생성합니다.
+		// [v1.13.0] Radar Panel을 전용 Frame/Blip/Player/Selection Image와 Range Text의 공간 Field로 생성합니다. 이 위치값은 신규 Asset 최초 Scaffold 시작값입니다.
 	bool BuildRadarPanel(UWidgetTree* WidgetTree, const UCFUIStyleData* StyleData, const UCFHUDLayoutData* LayoutData, const UCFHUDVisualData* HUDVisualData)
 	{
 		UVerticalBox* Content = BuildPanelSurface(WidgetTree, StyleData);
@@ -641,9 +727,10 @@ namespace CFUIHUDProdEditorBridge
 			return false;
 		}
 		Content->AddChild(BuildHeader(WidgetTree, TEXT("HorizontalBox_Header"), TEXT("Image_RadarHeader"), FName(TEXT("RadarContact")), TEXT("Text_RadarTitle"), TEXT("RADAR"), StyleData, LayoutData, ECFUIColorToken::AccentTactical));
-		// [v1.0.0] Radar Contact의 2D 공간 관계만 담당하는 제한된 Canvas Field입니다.
+
+		// [v1.13.0] Radar Contact의 Heading-Up 공간 관계와 runtime Blip을 담당하는 제한된 Canvas Field입니다.
 		UCanvasPanel* RadarField = CreateWidget<UCanvasPanel>(WidgetTree, TEXT("CanvasPanel_RadarContacts"));
-		// [v1.0.0] Radar Field의 고정 Preview 크기를 제공할 SizeBox입니다.
+		// [v1.13.0] 신규 Scaffold에서 Radar Field의 시작 높이만 제공하는 SizeBox입니다.
 		USizeBox* RadarBox = CreateWidget<USizeBox>(WidgetTree, TEXT("SizeBox_RadarField"));
 		if (!RadarField || !RadarBox)
 		{
@@ -653,21 +740,39 @@ namespace CFUIHUDProdEditorBridge
 		RadarBox->SetContent(RadarField);
 		Content->AddChild(RadarBox);
 
-		// [v1.0.0] Friendly Contact Image입니다.
-		UImage* Friendly = CreateImage(WidgetTree, TEXT("Image_RadarFriendly"), StyleData, FName(TEXT("RadarContact")), ECFUIColorToken::Friendly);
-		// [v1.0.0] Neutral Contact Image입니다.
-		UImage* Neutral = CreateImage(WidgetTree, TEXT("Image_RadarNeutral"), StyleData, FName(TEXT("RadarContact")), ECFUIColorToken::Neutral);
-		// [v1.0.0] Hostile Contact Image입니다.
-		UImage* Hostile = CreateImage(WidgetTree, TEXT("Image_RadarHostile"), StyleData, FName(TEXT("RadarContact")), ECFUIColorToken::Hostile);
-		// [v1.0.0] Unknown Contact Image입니다.
-		UImage* Unknown = CreateImage(WidgetTree, TEXT("Image_RadarUnknown"), StyleData, FName(TEXT("RadarContact")), ECFUIColorToken::Unknown);
-		// [v1.0.0] 선택 대상 Contact를 더 크게 표시할 Target Image입니다.
+		// [v1.13.0] Grid·3 Range Ring·외곽 Frame을 한 장으로 표시하는 Radar 배경 Image입니다.
+		UImage* RadarFrame = CreateImage(WidgetTree, TEXT("Image_RadarFrame"), StyleData, FName(TEXT("RadarContact")), ECFUIColorToken::AccentTactical, HUDVisualData ? HUDVisualData->RadarFrame : TSoftObjectPtr<UTexture2D>());
+		// [v1.13.0] Friendly 원형 Blip의 숨겨진 Designer Brush/Size Template입니다.
+		UImage* Friendly = CreateImage(WidgetTree, TEXT("Image_RadarFriendly"), StyleData, FName(TEXT("RadarContact")), ECFUIColorToken::Friendly, HUDVisualData ? HUDVisualData->RadarFriendlyBlip : TSoftObjectPtr<UTexture2D>());
+		// [v1.13.0] Neutral은 Unknown 마름모 Texture를 재사용하고 관계색만 Neutral로 유지하는 Template입니다.
+		UImage* Neutral = CreateImage(WidgetTree, TEXT("Image_RadarNeutral"), StyleData, FName(TEXT("RadarContact")), ECFUIColorToken::Neutral, HUDVisualData ? HUDVisualData->RadarUnknownBlip : TSoftObjectPtr<UTexture2D>());
+		// [v1.13.0] Hostile 하향 삼각형 Blip의 숨겨진 Designer Brush/Size Template입니다.
+		UImage* Hostile = CreateImage(WidgetTree, TEXT("Image_RadarHostile"), StyleData, FName(TEXT("RadarContact")), ECFUIColorToken::Hostile, HUDVisualData ? HUDVisualData->RadarHostileBlip : TSoftObjectPtr<UTexture2D>());
+		// [v1.13.0] Unknown 마름모 Blip의 숨겨진 Designer Brush/Size Template입니다.
+		UImage* Unknown = CreateImage(WidgetTree, TEXT("Image_RadarUnknown"), StyleData, FName(TEXT("RadarContact")), ECFUIColorToken::Unknown, HUDVisualData ? HUDVisualData->RadarUnknownBlip : TSoftObjectPtr<UTexture2D>());
+		// [v1.13.0] Heading-Up Radar 중앙에 고정되는 Player 상향 삼각형 Image입니다.
+		UImage* Player = CreateImage(WidgetTree, TEXT("Image_RadarPlayer"), StyleData, FName(TEXT("Vehicle")), ECFUIColorToken::AccentTactical, HUDVisualData ? HUDVisualData->RadarPlayerMarker : TSoftObjectPtr<UTexture2D>());
+		// [v1.13.0] 표시 Range 안에서 선택 Contact를 감싸는 4-Corner Bracket입니다.
 		UImage* Selected = CreateImage(WidgetTree, TEXT("Image_RadarSelected"), StyleData, FName(TEXT("Target")), ECFUIColorToken::AccentTactical, HUDVisualData ? HUDVisualData->SelectedTargetBracket : TSoftObjectPtr<UTexture2D>());
-		return AddCanvasChild(RadarField, Friendly, FVector2D(54.0f, 86.0f), FVector2D(20.0f, 20.0f), 1)
+		// [v1.13.0] 표시 Range 밖 선택 Contact 방향에만 표시하는 2-Corner Open Edge Bracket입니다.
+		UImage* SelectedEdge = CreateImage(WidgetTree, TEXT("Image_RadarSelectedEdge"), StyleData, FName(TEXT("Target")), ECFUIColorToken::AccentTactical, HUDVisualData ? HUDVisualData->RadarSelectedEdgeBracket : TSoftObjectPtr<UTexture2D>());
+		// [v1.13.0] 현재 단계식 Radar Display Range를 실제 Runtime Text로 표시할 의미 슬롯입니다.
+		UTextBlock* RangeText = CreateText(WidgetTree, TEXT("Text_RadarRange"), TEXT("RANGE —"), StyleData, LayoutData, ECFUIFontFamilyRole::Numeric, ECFUITypographyRole::Caption, ECFUIColorToken::TextSecondary);
+		if (!RadarFrame || !Friendly || !Neutral || !Hostile || !Unknown || !Player || !Selected || !SelectedEdge || !RangeText)
+		{
+			return false;
+		}
+
+		SelectedEdge->SetVisibility(ESlateVisibility::Collapsed);
+		return AddCanvasChild(RadarField, RadarFrame, FVector2D(0.0f, 0.0f), FVector2D(288.0f, 166.0f), 0)
+			&& AddCanvasChild(RadarField, Friendly, FVector2D(54.0f, 86.0f), FVector2D(20.0f, 20.0f), 1)
 			&& AddCanvasChild(RadarField, Neutral, FVector2D(174.0f, 48.0f), FVector2D(20.0f, 20.0f), 1)
 			&& AddCanvasChild(RadarField, Hostile, FVector2D(228.0f, 96.0f), FVector2D(20.0f, 20.0f), 1)
 			&& AddCanvasChild(RadarField, Unknown, FVector2D(112.0f, 122.0f), FVector2D(20.0f, 20.0f), 1)
-			&& AddCanvasChild(RadarField, Selected, FVector2D(214.0f, 82.0f), FVector2D(48.0f, 48.0f), 2);
+			&& AddCanvasChild(RadarField, Player, FVector2D(134.0f, 73.0f), FVector2D(20.0f, 20.0f), 2)
+			&& AddCanvasChild(RadarField, Selected, FVector2D(214.0f, 82.0f), FVector2D(48.0f, 48.0f), 3)
+			&& AddCanvasChild(RadarField, SelectedEdge, FVector2D(124.0f, 63.0f), FVector2D(40.0f, 40.0f), 3)
+			&& AddCanvasChild(RadarField, RangeText, FVector2D(196.0f, 6.0f), FVector2D(84.0f, 20.0f), 4);
 	}
 
 			// [v1.6.0] Weapon Panel을 Header Reserve와 Compact Primary/Secondary/FireState 의미 슬롯으로 생성합니다.
@@ -864,7 +969,7 @@ namespace CFUIHUDProdEditorBridge
 	}
 
 	// [v1.0.0] 역할 이름에 따라 정확한 Production Child Tree를 생성합니다.
-	bool BuildRoleTree(
+		bool BuildRoleTree(
 		UWidgetTree* WidgetTree,
 		const FName WidgetRole,
 		const UCFHUDLayoutData* LayoutData,
@@ -872,10 +977,20 @@ namespace CFUIHUDProdEditorBridge
 		const UCFHUDVisualData* HUDVisualData,
 		UClass* SpeedGaugeClass,
 		UClass* ArmorBodyMapClass,
+		UClass* ArmorSectorClass,
 		FString& OutFailureReason)
 	{
 		if (WidgetRole == FName(TEXT("SpeedGauge"))) return BuildSpeedGauge(WidgetTree, StyleData, LayoutData, HUDVisualData);
-		if (WidgetRole == FName(TEXT("ArmorBodyMap"))) return BuildArmorBodyMap(WidgetTree, StyleData, LayoutData, HUDVisualData);
+		if (WidgetRole == FName(TEXT("ArmorSector"))) return BuildArmorSector(WidgetTree, StyleData, LayoutData);
+		if (WidgetRole == FName(TEXT("ArmorBodyMap")))
+		{
+			if (!ArmorSectorClass)
+			{
+				OutFailureReason = TEXT("ArmorBodyMap requires compiled ArmorSector class");
+				return false;
+			}
+			return BuildArmorBodyMap(WidgetTree, StyleData, HUDVisualData, ArmorSectorClass);
+		}
 		if (WidgetRole == FName(TEXT("MissionPanel"))) return BuildMissionPanel(WidgetTree, StyleData, LayoutData);
 		if (WidgetRole == FName(TEXT("AlertFeed"))) return BuildAlertFeed(WidgetTree, StyleData, LayoutData);
 		if (WidgetRole == FName(TEXT("TargetPanel"))) return BuildTargetPanel(WidgetTree, StyleData, LayoutData);
@@ -886,7 +1001,7 @@ namespace CFUIHUDProdEditorBridge
 				OutFailureReason = TEXT("VehiclePanel requires compiled SpeedGauge and ArmorBodyMap classes");
 				return false;
 			}
-			return BuildVehiclePanel(WidgetTree, StyleData, LayoutData, SpeedGaugeClass, ArmorBodyMapClass);
+									return BuildVehiclePanel(WidgetTree, StyleData, LayoutData, HUDVisualData, SpeedGaugeClass, ArmorBodyMapClass);
 		}
 		if (WidgetRole == FName(TEXT("RadarPanel"))) return BuildRadarPanel(WidgetTree, StyleData, LayoutData, HUDVisualData);
 		if (WidgetRole == FName(TEXT("WeaponPanel"))) return BuildWeaponPanel(WidgetTree, StyleData, LayoutData);
@@ -934,7 +1049,7 @@ namespace CFUIHUDProdEditorBridge
 	}
 
 	// [v1.0.0] Production Child Tree가 Border Mosaic 없이 Image 중심 구조를 유지하는지 검증합니다.
-	bool ValidateRoleTree(UWidgetTree* WidgetTree, const FName WidgetRole, UClass* SpeedGaugeClass, UClass* ArmorBodyMapClass, FString& OutFailureReason)
+		bool ValidateRoleTree(UWidgetTree* WidgetTree, const FName WidgetRole, UClass* SpeedGaugeClass, UClass* ArmorBodyMapClass, UClass* ArmorSectorClass, FString& OutFailureReason)
 	{
 		if (!WidgetTree || !WidgetTree->RootWidget)
 		{
@@ -961,7 +1076,9 @@ namespace CFUIHUDProdEditorBridge
 			if (Widget->IsA<UImage>()) ++ImageCount;
 		}
 
-		const bool bPanelRole = WidgetRole != FName(TEXT("SpeedGauge")) && WidgetRole != FName(TEXT("ArmorBodyMap"));
+				const bool bPanelRole = WidgetRole != FName(TEXT("SpeedGauge"))
+			&& WidgetRole != FName(TEXT("ArmorBodyMap"))
+			&& WidgetRole != FName(TEXT("ArmorSector"));
 		if (bPanelRole && BorderCount != 1)
 		{
 			OutFailureReason = FString::Printf(TEXT("Production Panel must use exactly one surface Border: role=%s count=%d"), *WidgetRole.ToString(), BorderCount);
@@ -973,13 +1090,14 @@ namespace CFUIHUDProdEditorBridge
 			return false;
 		}
 
-				// [v1.1.0] 역할별 최소 실제 Image 슬롯 개수입니다. SpeedGauge는 전용 Track 1개 + ProgressBar Tick 21개 구조를 사용합니다.
+						// [v1.11.0] 역할별 최소 실제 Image 슬롯 개수입니다. SpeedGauge는 Track/Tick을 포함한 단일 UI Material Image를 사용합니다.
 		int32 RequiredImageCount = 1;
 		if (WidgetRole == FName(TEXT("AlertFeed"))) RequiredImageCount = 2;
-		else if (WidgetRole == FName(TEXT("SpeedGauge"))) RequiredImageCount = 1;
-		else if (WidgetRole == FName(TEXT("ArmorBodyMap"))) RequiredImageCount = 7;
+				else if (WidgetRole == FName(TEXT("SpeedGauge"))) RequiredImageCount = 1;
+		else if (WidgetRole == FName(TEXT("ArmorSector"))) RequiredImageCount = 1;
+		else if (WidgetRole == FName(TEXT("ArmorBodyMap"))) RequiredImageCount = 1;
 		else if (WidgetRole == FName(TEXT("VehiclePanel"))) RequiredImageCount = 2;
-		else if (WidgetRole == FName(TEXT("RadarPanel"))) RequiredImageCount = 6;
+				else if (WidgetRole == FName(TEXT("RadarPanel"))) RequiredImageCount = 9;
 								else if (WidgetRole == FName(TEXT("WeaponPanel"))) RequiredImageCount = 1;
 				if (ImageCount < RequiredImageCount)
 		{
@@ -1086,72 +1204,109 @@ namespace CFUIHUDProdEditorBridge
 			}
 		}
 
-				if (WidgetRole == FName(TEXT("SpeedGauge")))
+						if (WidgetRole == FName(TEXT("SpeedGauge")))
 		{
-			// [v1.1.0] SpeedGauge에서 실제 표시해야 하는 단일 Gear Slot Text입니다.
+			// [v1.11.0] SpeedGauge에서 실제 표시해야 하는 단일 Gear Slot Text입니다.
 			const UTextBlock* GearText = Cast<UTextBlock>(WidgetTree->FindWidget(FName(TEXT("Text_Gear"))));
-			// [v1.2.0] 미래 전용 RPM Track Texture 교체 지점을 유지하는 Image 슬롯입니다.
-			const UImage* RPMTrackImage = Cast<UImage>(WidgetTree->FindWidget(FName(TEXT("Image_RPMTrackArt"))));
-			// [v1.2.0] RPM Track Image에 실제 Texture/Resource가 연결되어 있는지 나타냅니다.
-			const bool bRPMTrackHasResource = RPMTrackImage && RPMTrackImage->GetBrush().GetResourceObject() != nullptr;
-			// [v1.2.0] Resource 유무와 Image Visibility가 빈 Brush 렌더링 방지 계약에 맞는지 나타냅니다.
-			const bool bRPMTrackVisibilityValid = RPMTrackImage
-				&& (bRPMTrackHasResource
-					? RPMTrackImage->GetVisibility() != ESlateVisibility::Collapsed
-					: RPMTrackImage->GetVisibility() == ESlateVisibility::Collapsed);
-			// [v1.1.0] 고정 21 Tick 계약이 실제 Tree에 존재하는지 세는 Tick 개수입니다.
-			int32 RPMTickCount = 0;
+			// [v1.11.0] Track·Tick·Red Zone을 모두 Material이 표현하는 단일 RPM Gauge Image입니다.
+			const UImage* RPMGaugeImage = Cast<UImage>(WidgetTree->FindWidget(FName(TEXT("Image_RPMGauge"))));
+			// [v1.11.0] RPM Gauge Brush에 실제 Material Resource가 연결됐는지 나타냅니다.
+			const UMaterialInterface* RPMGaugeMaterial = RPMGaugeImage
+				? Cast<UMaterialInterface>(RPMGaugeImage->GetBrush().GetResourceObject())
+				: nullptr;
+			// [v1.11.0] 구형 ProgressBar RPM Tick이 한 개라도 남아 있는지 세는 회귀 검출 값입니다.
+			int32 LegacyRPMTickCount = 0;
 			for (const UWidget* Widget : AllWidgets)
 			{
 				if (Widget && Widget->GetName().StartsWith(TEXT("ProgressBar_RPMTick")))
 				{
-					++RPMTickCount;
+					++LegacyRPMTickCount;
 				}
 			}
+
 			if (!GearText || GearText->GetText().ToString() == TEXT("D")
 				|| WidgetTree->FindWidget(FName(TEXT("ProgressBar_SpeedFallback")))
 				|| WidgetTree->FindWidget(FName(TEXT("Image_SpeedArcArt")))
-				|| !RPMTrackImage
-				|| !bRPMTrackVisibilityValid
-				|| RPMTickCount != 21)
+				|| WidgetTree->FindWidget(FName(TEXT("Image_RPMTrackArt")))
+				|| !RPMGaugeImage
+				|| !RPMGaugeMaterial
+				|| RPMGaugeImage->GetVisibility() == ESlateVisibility::Collapsed
+				|| LegacyRPMTickCount != 0)
 			{
-				OutFailureReason = FString::Printf(TEXT("SpeedGauge latest vehicle-panel contract failed: gear=%s rpm_ticks=%d rpm_track_resource=%s rpm_track_visibility_valid=%s"),
+				OutFailureReason = FString::Printf(
+					TEXT("SpeedGauge dynamic material contract failed: gear=%s legacy_rpm_ticks=%d material=%s"),
 					GearText ? *GearText->GetText().ToString() : TEXT("missing"),
-					RPMTickCount,
-					bRPMTrackHasResource ? TEXT("true") : TEXT("false"),
-					bRPMTrackVisibilityValid ? TEXT("true") : TEXT("false"));
+					LegacyRPMTickCount,
+					RPMGaugeMaterial ? *RPMGaugeMaterial->GetPathName() : TEXT("missing"));
+				return false;
+			}
+		}
+
+				if (WidgetRole == FName(TEXT("ArmorSector")))
+		{
+			// [v1.10.0] 재사용 ArmorSector가 반드시 소유하는 실제 그림, 보조 방향 Label과 실제 Armor Ratio ProgressBar입니다.
+			const UImage* ArmorImage = Cast<UImage>(WidgetTree->FindWidget(FName(TEXT("Image_ArmorPlate"))));
+			const UTextBlock* DirectionText = Cast<UTextBlock>(WidgetTree->FindWidget(FName(TEXT("Text_Direction"))));
+			const UProgressBar* ArmorProgress = Cast<UProgressBar>(WidgetTree->FindWidget(FName(TEXT("ProgressBar_Armor"))));
+			if (!ArmorImage || !DirectionText || !ArmorProgress)
+			{
+				OutFailureReason = TEXT("ArmorSector Image/Text/real Armor Progress contract failed");
 				return false;
 			}
 		}
 
 		if (WidgetRole == FName(TEXT("ArmorBodyMap")))
 		{
-			// [v1.1.0] 여섯 방향 Armor Bar가 모두 존재하는지 검증할 안정적인 Widget 이름 목록입니다.
-			const FName RequiredArmorBars[] =
+			if (!ArmorSectorClass || !ArmorSectorClass->IsChildOf(UCFArmorSectorWidget::StaticClass()))
 			{
-				FName(TEXT("ProgressBar_ArmorFront")), FName(TEXT("ProgressBar_ArmorRight")),
-				FName(TEXT("ProgressBar_ArmorRear")), FName(TEXT("ProgressBar_ArmorLeft")),
-				FName(TEXT("ProgressBar_ArmorTop")), FName(TEXT("ProgressBar_ArmorBottom"))
+				OutFailureReason = TEXT("ArmorBodyMap ArmorSector class contract failed");
+				return false;
+			}
+
+			// [v1.10.0] BodyMap이 직접 소유하지 않아야 하는 구형 방향별 Image/Text/ProgressBar 이름입니다.
+			const FName ForbiddenLegacyArmorWidgets[] =
+			{
+				FName(TEXT("Image_ArmorFront")), FName(TEXT("Image_ArmorRight")), FName(TEXT("Image_ArmorRear")),
+				FName(TEXT("Image_ArmorLeft")), FName(TEXT("Image_ArmorTop")), FName(TEXT("Image_ArmorBottom")),
+				FName(TEXT("Text_ArmorFrontLabel")), FName(TEXT("Text_ArmorRightLabel")), FName(TEXT("Text_ArmorRearLabel")),
+				FName(TEXT("Text_ArmorLeftLabel")), FName(TEXT("Text_ArmorTopLabel")), FName(TEXT("Text_ArmorBottomLabel")),
+				FName(TEXT("ProgressBar_ArmorFront")), FName(TEXT("ProgressBar_ArmorRight")), FName(TEXT("ProgressBar_ArmorRear")),
+				FName(TEXT("ProgressBar_ArmorLeft")), FName(TEXT("ProgressBar_ArmorTop")), FName(TEXT("ProgressBar_ArmorBottom"))
 			};
-			for (const FName ArmorBarName : RequiredArmorBars)
+			for (const FName ForbiddenLegacyArmorWidget : ForbiddenLegacyArmorWidgets)
 			{
-				if (!Cast<UProgressBar>(WidgetTree->FindWidget(ArmorBarName)))
+				if (WidgetTree->FindWidget(ForbiddenLegacyArmorWidget))
 				{
-					OutFailureReason = FString::Printf(TEXT("ArmorBodyMap vertical bar is missing: %s"), *ArmorBarName.ToString());
+					OutFailureReason = FString::Printf(TEXT("ArmorBodyMap direct legacy direction widget is forbidden: %s"), *ForbiddenLegacyArmorWidget.ToString());
 					return false;
 				}
 			}
-			for (const UWidget* Widget : AllWidgets)
+
+			// [v1.10.0] 여섯 재사용 Sector 인스턴스와 각 인스턴스가 보존해야 하는 차량 로컬 방향 Label입니다.
+			const TPair<FName, FString> RequiredArmorSectors[] =
 			{
-				if (Widget && Widget->GetName().StartsWith(TEXT("Text_Armor")))
+				{FName(TEXT("WBP_ArmorFront")), TEXT("FRONT")},
+				{FName(TEXT("WBP_ArmorRight")), TEXT("RIGHT")},
+				{FName(TEXT("WBP_ArmorRear")), TEXT("REAR")},
+				{FName(TEXT("WBP_ArmorLeft")), TEXT("LEFT")},
+				{FName(TEXT("WBP_ArmorTop")), TEXT("TOP")},
+				{FName(TEXT("WBP_ArmorBottom")), TEXT("BOTTOM")}
+			};
+			for (const TPair<FName, FString>& RequiredArmorSector : RequiredArmorSectors)
+			{
+				// [v1.10.0] 현재 방향에 배치된 실제 재사용 ArmorSector 인스턴스입니다.
+				const UCFArmorSectorWidget* ArmorSector = Cast<UCFArmorSectorWidget>(WidgetTree->FindWidget(RequiredArmorSector.Key));
+				if (!ArmorSector
+					|| ArmorSector->GetClass() != ArmorSectorClass
+					|| ArmorSector->GetConfiguredDirectionLabel().ToString() != RequiredArmorSector.Value)
 				{
-					OutFailureReason = FString::Printf(TEXT("ArmorBodyMap numeric/direction text is forbidden: %s"), *Widget->GetName());
+					OutFailureReason = FString::Printf(TEXT("ArmorBodyMap reusable Sector contract failed: %s"), *RequiredArmorSector.Key.ToString());
 					return false;
 				}
 			}
 		}
 
-		if (WidgetRole == FName(TEXT("VehiclePanel")))
+				if (WidgetRole == FName(TEXT("VehiclePanel")))
 		{
 			const UUserWidget* SpeedGauge = Cast<UUserWidget>(WidgetTree->FindWidget(FName(TEXT("WBP_CFSpeedGauge"))));
 			const UUserWidget* ArmorBodyMap = Cast<UUserWidget>(WidgetTree->FindWidget(FName(TEXT("WBP_CFArmorBodyMap"))));
@@ -1159,6 +1314,47 @@ namespace CFUIHUDProdEditorBridge
 			{
 				OutFailureReason = TEXT("VehiclePanel semantic child widget class contract failed");
 				return false;
+			}
+		}
+
+		if (WidgetRole == FName(TEXT("RadarPanel")))
+		{
+			// [v1.13.0] UI-P0-08B Radar presentation이 저장 Designer Tree에 반드시 소유해야 하는 의미 Widget입니다.
+			const FName RequiredRadarImageNames[] =
+			{
+				FName(TEXT("Image_RadarHeader")),
+				FName(TEXT("Image_RadarFrame")),
+				FName(TEXT("Image_RadarFriendly")),
+				FName(TEXT("Image_RadarNeutral")),
+				FName(TEXT("Image_RadarHostile")),
+				FName(TEXT("Image_RadarUnknown")),
+				FName(TEXT("Image_RadarPlayer")),
+				FName(TEXT("Image_RadarSelected")),
+				FName(TEXT("Image_RadarSelectedEdge"))
+			};
+			for (const FName RequiredRadarImageName : RequiredRadarImageNames)
+			{
+				if (!Cast<UImage>(WidgetTree->FindWidget(RequiredRadarImageName)))
+				{
+					OutFailureReason = FString::Printf(TEXT("RadarPanel required Image is missing: %s"), *RequiredRadarImageName.ToString());
+					return false;
+				}
+			}
+
+			if (!Cast<UCanvasPanel>(WidgetTree->FindWidget(FName(TEXT("CanvasPanel_RadarContacts"))))
+				|| !Cast<UTextBlock>(WidgetTree->FindWidget(FName(TEXT("Text_RadarRange")))))
+			{
+				OutFailureReason = TEXT("RadarPanel Contact Canvas or Range Text semantic slot is missing");
+				return false;
+			}
+
+			for (const UWidget* Widget : AllWidgets)
+			{
+				if (Widget && Widget->GetName().StartsWith(TEXT("Text_RadarRuntimeContact_")))
+				{
+					OutFailureReason = TEXT("RadarPanel Text glyph Contact is forbidden; runtime Contact must use Image visual art");
+					return false;
+				}
 			}
 		}
 		return true;
@@ -1216,35 +1412,19 @@ namespace CFUIHUDProdEditorBridge
 		return ApplyRootCanvasLayout(RootCanvas, SlotBox, SlotLayout);
 	}
 
-	// [v1.0.0] Root Layout의 실제 Canvas Slot이 승인 Data와 같은지 검증합니다.
-	bool ValidateRootCanvasLayout(const UWidget* Widget, const FCFHUDSlotLayout& Layout, FString& OutFailureReason)
+		// [v1.12.0] Root 의미 Widget이 실제 Canvas Slot에 속하는지만 검증합니다. Position/Size/Anchor/Alignment/ZOrder/AutoSize는 persisted Designer Layout이 소유합니다.
+	bool ValidateRootCanvasSlot(const UWidget* Widget, FString& OutFailureReason)
 	{
-		const UCanvasPanelSlot* Slot = Widget ? Cast<UCanvasPanelSlot>(Widget->Slot) : nullptr;
-		if (!Slot)
+		// [v1.12.0] 의미 Widget이 Root Canvas의 실제 Child인지 확인할 Slot입니다.
+		const UCanvasPanelSlot* CanvasSlot = Widget ? Cast<UCanvasPanelSlot>(Widget->Slot) : nullptr;
+		if (!CanvasSlot)
 		{
 			OutFailureReason = FString::Printf(TEXT("Root Canvas slot missing: %s"), Widget ? *Widget->GetName() : TEXT("null"));
 			return false;
 		}
-		if (!FMath::IsNearlyEqual(Slot->GetAlignment().X, Layout.Alignment.X, 0.01f)
-			|| !FMath::IsNearlyEqual(Slot->GetAlignment().Y, Layout.Alignment.Y, 0.01f)
-			|| Slot->GetZOrder() != Layout.ZOrder)
-		{
-			OutFailureReason = FString::Printf(TEXT("Root Canvas alignment/z-order mismatch: %s"), *Widget->GetName());
-			return false;
-		}
-		if (Layout.SlotId != ECFHUDSlotId::ReticleLayer)
-		{
-			if (!FMath::IsNearlyEqual(Slot->GetPosition().X, Layout.PixelOffset.X, 0.01f)
-				|| !FMath::IsNearlyEqual(Slot->GetPosition().Y, Layout.PixelOffset.Y, 0.01f)
-				|| !FMath::IsNearlyEqual(Slot->GetSize().X, Layout.DesiredSize.X, 0.01f)
-				|| !FMath::IsNearlyEqual(Slot->GetSize().Y, Layout.DesiredSize.Y, 0.01f))
-			{
-				OutFailureReason = FString::Printf(TEXT("Root Canvas position/size mismatch: %s"), *Widget->GetName());
-				return false;
-			}
-		}
 		return true;
 	}
+
 #endif
 }
 
@@ -1258,7 +1438,8 @@ bool UCFUIHUDProdEditorBridge::BuildProductionWidgetResult(
 	UCFUIDensityData* CompactDensityData,
 	UCFHUDVisualData* HUDVisualData,
 	UObject* SpeedGaugeBlueprintObject,
-	UObject* ArmorBodyMapBlueprintObject)
+	UObject* ArmorBodyMapBlueprintObject,
+	UObject* ArmorSectorBlueprintObject)
 {
 #if WITH_EDITOR
 	// [v1.0.0] Production Build 선행 조건과 Class 해석의 상세 실패 사유입니다.
@@ -1267,15 +1448,28 @@ bool UCFUIHUDProdEditorBridge::BuildProductionWidgetResult(
 	{
 		return CFUIHUDProdEditorBridge::Fail(FailureReason);
 	}
-	// [v1.0.0] Python에서 전달된 실제 Production Child Widget Blueprint입니다.
+		// [v1.10.0] Python에서 전달된 실제 Production Child Widget Blueprint입니다.
 	UWidgetBlueprint* WidgetBlueprint = Cast<UWidgetBlueprint>(WidgetBlueprintObject);
-	if (!WidgetBlueprint || WidgetBlueprint->ParentClass != UCFStyledWidgetBase::StaticClass())
+	// [v1.10.0] 재사용 ArmorSector만 전용 Native Presentation Base를 사용하고 다른 Production 역할은 기존 CFStyledWidgetBase를 그대로 사용합니다.
+	UClass* ExpectedParentClass = WidgetRole == FName(TEXT("ArmorSector"))
+		? UCFArmorSectorWidget::StaticClass()
+		: UCFStyledWidgetBase::StaticClass();
+	if (!WidgetBlueprint || WidgetBlueprint->ParentClass != ExpectedParentClass)
 	{
-		return CFUIHUDProdEditorBridge::Fail(TEXT("Production child Widget Blueprint must inherit exactly CFStyledWidgetBase"));
+		return CFUIHUDProdEditorBridge::Fail(FString::Printf(TEXT("Production child Widget Blueprint parent mismatch: role=%s"), *WidgetRole.ToString()));
 	}
 
 	UClass* SpeedGaugeClass = nullptr;
 	UClass* ArmorBodyMapClass = nullptr;
+	UClass* ArmorSectorClass = nullptr;
+	if (WidgetRole == FName(TEXT("ArmorBodyMap")))
+	{
+		ArmorSectorClass = CFUIHUDProdEditorBridge::ResolveGeneratedWidgetClass(ArmorSectorBlueprintObject, TEXT("ArmorSector"), FailureReason);
+		if (!ArmorSectorClass || !ArmorSectorClass->IsChildOf(UCFArmorSectorWidget::StaticClass()))
+		{
+			return CFUIHUDProdEditorBridge::Fail(FailureReason.IsEmpty() ? TEXT("ArmorBodyMap requires ArmorSector generated class") : FailureReason);
+		}
+	}
 	if (WidgetRole == FName(TEXT("VehiclePanel")))
 	{
 		SpeedGaugeClass = CFUIHUDProdEditorBridge::ResolveGeneratedWidgetClass(SpeedGaugeBlueprintObject, TEXT("SpeedGauge"), FailureReason);
@@ -1286,8 +1480,15 @@ bool UCFUIHUDProdEditorBridge::BuildProductionWidgetResult(
 		}
 	}
 
+		// [v1.12.0] 저장된 Designer Tree는 Layout SSOT이므로 Build 경로가 기존 RootWidget을 교체하지 못하게 fail-closed합니다.
+	if (WidgetBlueprint->WidgetTree && WidgetBlueprint->WidgetTree->RootWidget)
+	{
+		return CFUIHUDProdEditorBridge::Fail(FString::Printf(TEXT("Production Widget Build is scaffold-only; existing Designer Tree must use Validate: role=%s"), *WidgetRole.ToString()));
+	}
+
 	UWidgetTree* WidgetTree = CFUIHUDProdEditorBridge::ReplaceWidgetTree(WidgetBlueprint, FailureReason);
-	if (!WidgetTree || !CFUIHUDProdEditorBridge::BuildRoleTree(WidgetTree, WidgetRole, LayoutData, StyleData, HUDVisualData, SpeedGaugeClass, ArmorBodyMapClass, FailureReason))
+	if (!WidgetTree || !CFUIHUDProdEditorBridge::BuildRoleTree(WidgetTree, WidgetRole, LayoutData, StyleData, HUDVisualData, SpeedGaugeClass, ArmorBodyMapClass, ArmorSectorClass, FailureReason))
+
 	{
 		return CFUIHUDProdEditorBridge::Fail(FailureReason.IsEmpty() ? TEXT("Production role tree construction failed") : FailureReason);
 	}
@@ -1308,23 +1509,40 @@ bool UCFUIHUDProdEditorBridge::ValidateProductionWidgetResult(
 	UCFUIDensityData* CompactDensityData,
 	UCFHUDVisualData* HUDVisualData,
 	UObject* SpeedGaugeBlueprintObject,
-	UObject* ArmorBodyMapBlueprintObject)
+	UObject* ArmorBodyMapBlueprintObject,
+	UObject* ArmorSectorBlueprintObject)
 {
 #if WITH_EDITOR
-	(void)HUDVisualData;
 	// [v1.0.0] Production Readback 검증의 상세 실패 사유입니다.
 	FString FailureReason;
 	if (!CFUIHUDProdEditorBridge::ValidateInputData(LayoutData, StyleData, StandardDensityData, CompactDensityData, FailureReason))
 	{
 		return CFUIHUDProdEditorBridge::Fail(FailureReason);
 	}
-	const UWidgetBlueprint* WidgetBlueprint = Cast<UWidgetBlueprint>(WidgetBlueprintObject);
-	if (!WidgetBlueprint || !WidgetBlueprint->WidgetTree || WidgetBlueprint->ParentClass != UCFStyledWidgetBase::StaticClass())
+		const UWidgetBlueprint* WidgetBlueprint = Cast<UWidgetBlueprint>(WidgetBlueprintObject);
+	// [v1.10.0] 재사용 ArmorSector만 전용 Native Presentation Base를 사용하고 나머지는 기존 CFStyledWidgetBase Parent 계약을 유지합니다.
+	UClass* ExpectedParentClass = WidgetRole == FName(TEXT("ArmorSector"))
+		? UCFArmorSectorWidget::StaticClass()
+		: UCFStyledWidgetBase::StaticClass();
+		if (!WidgetBlueprint || !WidgetBlueprint->WidgetTree || WidgetBlueprint->ParentClass != ExpectedParentClass)
 	{
 		return CFUIHUDProdEditorBridge::Fail(TEXT("Production child Blueprint/Tree/Parent validation failed"));
 	}
+	if (WidgetRole == FName(TEXT("RadarPanel")) && (!HUDVisualData || !HUDVisualData->HasCompleteRadarPresentationArt()))
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("RadarPanel requires complete UI-P0-08B Radar presentation art before validation"));
+	}
 	UClass* SpeedGaugeClass = nullptr;
 	UClass* ArmorBodyMapClass = nullptr;
+	UClass* ArmorSectorClass = nullptr;
+	if (WidgetRole == FName(TEXT("ArmorBodyMap")))
+	{
+		ArmorSectorClass = CFUIHUDProdEditorBridge::ResolveGeneratedWidgetClass(ArmorSectorBlueprintObject, TEXT("ArmorSector"), FailureReason);
+		if (!ArmorSectorClass || !ArmorSectorClass->IsChildOf(UCFArmorSectorWidget::StaticClass()))
+		{
+			return CFUIHUDProdEditorBridge::Fail(FailureReason.IsEmpty() ? TEXT("ArmorBodyMap requires ArmorSector generated class") : FailureReason);
+		}
+	}
 	if (WidgetRole == FName(TEXT("VehiclePanel")))
 	{
 		SpeedGaugeClass = CFUIHUDProdEditorBridge::ResolveGeneratedWidgetClass(SpeedGaugeBlueprintObject, TEXT("SpeedGauge"), FailureReason);
@@ -1334,10 +1552,316 @@ bool UCFUIHUDProdEditorBridge::ValidateProductionWidgetResult(
 			return CFUIHUDProdEditorBridge::Fail(FailureReason);
 		}
 	}
-	if (!CFUIHUDProdEditorBridge::ValidateRoleTree(WidgetBlueprint->WidgetTree, WidgetRole, SpeedGaugeClass, ArmorBodyMapClass, FailureReason)
+		if (!CFUIHUDProdEditorBridge::ValidateRoleTree(WidgetBlueprint->WidgetTree, WidgetRole, SpeedGaugeClass, ArmorBodyMapClass, ArmorSectorClass, FailureReason)
 		|| !CFUIHUDProdEditorBridge::ValidateGraphHasNoRuntimeLogic(WidgetBlueprint, FailureReason))
 	{
 		return CFUIHUDProdEditorBridge::Fail(FailureReason);
+	}
+		return true;
+#else
+	return false;
+#endif
+}
+
+// [v1.13.0] 저장 RadarPanel의 기존 Designer Layout을 보존하면서 UI-P0-08B 정적 Visual Widget과 Texture Brush만 additive 갱신합니다.
+bool UCFUIHUDProdEditorBridge::ApplyRadarVisualMigrationResult(
+	UObject* RadarPanelBlueprintObject,
+	UCFHUDLayoutData* LayoutData,
+	UCFUIStyleData* StyleData,
+	UCFUIDensityData* StandardDensityData,
+	UCFUIDensityData* CompactDensityData,
+	UCFHUDVisualData* HUDVisualData)
+{
+#if WITH_EDITOR
+	// [v1.13.0] Radar targeted migration의 입력/구조 실패 사유입니다.
+	FString FailureReason;
+	if (!CFUIHUDProdEditorBridge::ValidateInputData(LayoutData, StyleData, StandardDensityData, CompactDensityData, FailureReason))
+	{
+		return CFUIHUDProdEditorBridge::Fail(FailureReason);
+	}
+	if (!HUDVisualData || !HUDVisualData->HasCompleteRadarPresentationArt())
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("Radar visual migration requires complete Radar presentation art"));
+	}
+
+	// [v1.13.0] 기존 persisted Designer Tree를 직접 보존 갱신할 정확한 RadarPanel Widget Blueprint입니다.
+	UWidgetBlueprint* RadarPanelBlueprint = Cast<UWidgetBlueprint>(RadarPanelBlueprintObject);
+	if (!RadarPanelBlueprint || RadarPanelBlueprint->ParentClass != UCFStyledWidgetBase::StaticClass()
+		|| !RadarPanelBlueprint->WidgetTree || !RadarPanelBlueprint->WidgetTree->RootWidget)
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("Radar visual migration requires an existing CFStyledWidgetBase RadarPanel Designer Tree"));
+	}
+
+	// [v1.13.0] 기존 RadarPanel WidgetTree이며 이 객체 자체를 교체하지 않습니다.
+	UWidgetTree* WidgetTree = RadarPanelBlueprint->WidgetTree;
+	// [v1.13.0] 기존 Contact Preview와 runtime Contact가 같은 좌표계를 공유하는 Designer-owned Canvas입니다.
+	UCanvasPanel* RadarCanvas = Cast<UCanvasPanel>(WidgetTree->FindWidget(FName(TEXT("CanvasPanel_RadarContacts"))));
+	if (!RadarCanvas)
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("Radar visual migration requires existing CanvasPanel_RadarContacts"));
+	}
+
+	RadarPanelBlueprint->Modify();
+	WidgetTree->Modify();
+	RadarCanvas->Modify();
+
+	// [v1.13.0] Soft Radar Texture를 실제 Image Brush에 연결하고 Style Token 색을 적용하는 layout-neutral helper입니다.
+	auto ApplyRadarTexture = [StyleData](UImage* Image, const TSoftObjectPtr<UTexture2D>& TextureReference, const ECFUIColorToken ColorToken) -> bool
+	{
+		if (!Image || TextureReference.IsNull())
+		{
+			return false;
+		}
+		// [v1.13.0] 현재 Radar VisualData Soft Reference에서 동기 로드한 전용 UI Texture입니다.
+		UTexture2D* Texture = TextureReference.LoadSynchronous();
+		if (!Texture)
+		{
+			return false;
+		}
+		Image->Modify();
+		Image->SetBrushFromTexture(Texture, false);
+		Image->SetColorAndOpacity(StyleData->ResolveColor(ColorToken));
+		return true;
+	};
+
+	// [v1.13.0] 기존 Designer Preview의 Friendly 원형 Blip Template입니다.
+	UImage* FriendlyImage = Cast<UImage>(WidgetTree->FindWidget(FName(TEXT("Image_RadarFriendly"))));
+	// [v1.13.0] 기존 Designer Preview의 Neutral 마름모 Blip Template입니다.
+	UImage* NeutralImage = Cast<UImage>(WidgetTree->FindWidget(FName(TEXT("Image_RadarNeutral"))));
+	// [v1.13.0] 기존 Designer Preview의 Hostile 하향 삼각형 Blip Template입니다.
+	UImage* HostileImage = Cast<UImage>(WidgetTree->FindWidget(FName(TEXT("Image_RadarHostile"))));
+	// [v1.13.0] 기존 Designer Preview의 Unknown 마름모 Blip Template입니다.
+	UImage* UnknownImage = Cast<UImage>(WidgetTree->FindWidget(FName(TEXT("Image_RadarUnknown"))));
+	// [v1.13.0] 기존 in-range 선택 Contact의 4-Corner Bracket Template입니다.
+	UImage* SelectedImage = Cast<UImage>(WidgetTree->FindWidget(FName(TEXT("Image_RadarSelected"))));
+	if (!FriendlyImage || !NeutralImage || !HostileImage || !UnknownImage || !SelectedImage)
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("Radar visual migration requires existing Friendly/Neutral/Hostile/Unknown/Selected Image templates"));
+	}
+
+	if (!ApplyRadarTexture(FriendlyImage, HUDVisualData->RadarFriendlyBlip, ECFUIColorToken::Friendly)
+		|| !ApplyRadarTexture(NeutralImage, HUDVisualData->RadarUnknownBlip, ECFUIColorToken::Neutral)
+		|| !ApplyRadarTexture(HostileImage, HUDVisualData->RadarHostileBlip, ECFUIColorToken::Hostile)
+		|| !ApplyRadarTexture(UnknownImage, HUDVisualData->RadarUnknownBlip, ECFUIColorToken::Unknown)
+		|| !ApplyRadarTexture(SelectedImage, HUDVisualData->SelectedTargetBracket, ECFUIColorToken::AccentTactical))
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("Radar visual migration failed to apply existing Contact/Selected Texture brushes"));
+	}
+
+	// [v1.13.0] 이번 실행에서 새 Designer 의미 Widget을 실제로 추가했는지 나타냅니다.
+	bool bAddedNewRadarWidget = false;
+
+	// [v1.13.0] Grid·3 Ring·Frame을 표시하는 Radar 배경 Image입니다. 기존 Widget이면 Slot을 절대 수정하지 않습니다.
+	UImage* RadarFrameImage = Cast<UImage>(WidgetTree->FindWidget(FName(TEXT("Image_RadarFrame"))));
+	if (!RadarFrameImage)
+	{
+		RadarFrameImage = CFUIHUDProdEditorBridge::CreateWidget<UImage>(WidgetTree, TEXT("Image_RadarFrame"));
+		// [v1.13.0] 새 Frame이 현재 Radar Canvas 전체를 최초로 채우도록 설정할 Canvas Slot입니다.
+		UCanvasPanelSlot* RadarFrameSlot = RadarFrameImage ? RadarCanvas->AddChildToCanvas(RadarFrameImage) : nullptr;
+		if (!RadarFrameSlot)
+		{
+			return CFUIHUDProdEditorBridge::Fail(TEXT("Radar Frame additive Widget creation failed"));
+		}
+		RadarFrameSlot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+		RadarFrameSlot->SetOffsets(FMargin(0.0f));
+		RadarFrameSlot->SetAlignment(FVector2D::ZeroVector);
+		RadarFrameSlot->SetZOrder(0);
+		RadarFrameSlot->SetAutoSize(false);
+		bAddedNewRadarWidget = true;
+	}
+	if (!ApplyRadarTexture(RadarFrameImage, HUDVisualData->RadarFrame, ECFUIColorToken::AccentTactical))
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("Radar Frame Texture apply failed"));
+	}
+
+	// [v1.13.0] Heading-Up Radar 중앙에 고정되는 Player 상향 삼각형 Image입니다. 기존 Widget이면 Slot을 보존합니다.
+	UImage* RadarPlayerImage = Cast<UImage>(WidgetTree->FindWidget(FName(TEXT("Image_RadarPlayer"))));
+	if (!RadarPlayerImage)
+	{
+		RadarPlayerImage = CFUIHUDProdEditorBridge::CreateWidget<UImage>(WidgetTree, TEXT("Image_RadarPlayer"));
+		// [v1.13.0] 새 Player Marker의 최초 중앙 배치만 정의하는 Canvas Slot입니다.
+		UCanvasPanelSlot* RadarPlayerSlot = RadarPlayerImage ? RadarCanvas->AddChildToCanvas(RadarPlayerImage) : nullptr;
+		if (!RadarPlayerSlot)
+		{
+			return CFUIHUDProdEditorBridge::Fail(TEXT("Radar Player additive Widget creation failed"));
+		}
+		RadarPlayerSlot->SetAnchors(FAnchors(0.5f, 0.5f));
+		RadarPlayerSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+		RadarPlayerSlot->SetPosition(FVector2D::ZeroVector);
+		RadarPlayerSlot->SetSize(FVector2D(20.0f, 20.0f));
+		RadarPlayerSlot->SetZOrder(2);
+		RadarPlayerSlot->SetAutoSize(false);
+		bAddedNewRadarWidget = true;
+	}
+	if (!ApplyRadarTexture(RadarPlayerImage, HUDVisualData->RadarPlayerMarker, ECFUIColorToken::AccentTactical))
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("Radar Player Texture apply failed"));
+	}
+
+	// [v1.13.0] 표시 Range 밖 선택 Contact의 방향을 나타내는 2-Corner Open Edge Bracket Image입니다. 기존 Widget이면 Slot을 보존합니다.
+	UImage* SelectedEdgeImage = Cast<UImage>(WidgetTree->FindWidget(FName(TEXT("Image_RadarSelectedEdge"))));
+	if (!SelectedEdgeImage)
+	{
+		SelectedEdgeImage = CFUIHUDProdEditorBridge::CreateWidget<UImage>(WidgetTree, TEXT("Image_RadarSelectedEdge"));
+		// [v1.13.0] 새 Edge Bracket의 최초 중앙 대기 위치와 크기만 정의하는 Canvas Slot입니다.
+		UCanvasPanelSlot* SelectedEdgeSlot = SelectedEdgeImage ? RadarCanvas->AddChildToCanvas(SelectedEdgeImage) : nullptr;
+		if (!SelectedEdgeSlot)
+		{
+			return CFUIHUDProdEditorBridge::Fail(TEXT("Radar Selected Edge additive Widget creation failed"));
+		}
+		SelectedEdgeSlot->SetAnchors(FAnchors(0.5f, 0.5f));
+		SelectedEdgeSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+		SelectedEdgeSlot->SetPosition(FVector2D::ZeroVector);
+		SelectedEdgeSlot->SetSize(FVector2D(40.0f, 40.0f));
+		SelectedEdgeSlot->SetZOrder(3);
+		SelectedEdgeSlot->SetAutoSize(false);
+		SelectedEdgeImage->SetVisibility(ESlateVisibility::Collapsed);
+		bAddedNewRadarWidget = true;
+	}
+	if (!ApplyRadarTexture(SelectedEdgeImage, HUDVisualData->RadarSelectedEdgeBracket, ECFUIColorToken::AccentTactical))
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("Radar Selected Edge Texture apply failed"));
+	}
+
+	// [v1.13.0] 현재 단계식 Display Range를 표시하는 Text 슬롯입니다. 기존 Widget이면 Designer Layout을 보존합니다.
+	UTextBlock* RadarRangeText = Cast<UTextBlock>(WidgetTree->FindWidget(FName(TEXT("Text_RadarRange"))));
+	if (!RadarRangeText)
+	{
+		RadarRangeText = CFUIHUDProdEditorBridge::CreateText(
+			WidgetTree,
+			TEXT("Text_RadarRange"),
+			TEXT("RANGE —"),
+			StyleData,
+			LayoutData,
+			ECFUIFontFamilyRole::Numeric,
+			ECFUITypographyRole::Caption,
+			ECFUIColorToken::TextSecondary);
+		// [v1.13.0] 새 Range Text의 최초 우상단 배치만 정의하는 Canvas Slot입니다.
+		UCanvasPanelSlot* RadarRangeSlot = RadarRangeText ? RadarCanvas->AddChildToCanvas(RadarRangeText) : nullptr;
+		if (!RadarRangeSlot)
+		{
+			return CFUIHUDProdEditorBridge::Fail(TEXT("Radar Range Text additive Widget creation failed"));
+		}
+		RadarRangeSlot->SetAnchors(FAnchors(1.0f, 0.0f));
+		RadarRangeSlot->SetAlignment(FVector2D(1.0f, 0.0f));
+		RadarRangeSlot->SetPosition(FVector2D(-8.0f, 8.0f));
+		RadarRangeSlot->SetZOrder(4);
+		RadarRangeSlot->SetAutoSize(true);
+		bAddedNewRadarWidget = true;
+	}
+	CFUIHUDProdEditorBridge::ApplyTextStyle(RadarRangeText, StyleData, LayoutData, ECFUIFontFamilyRole::Numeric, ECFUITypographyRole::Caption, ECFUIColorToken::TextSecondary);
+
+	if (bAddedNewRadarWidget)
+	{
+		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(RadarPanelBlueprint);
+	}
+	else
+	{
+		FBlueprintEditorUtils::MarkBlueprintAsModified(RadarPanelBlueprint);
+	}
+	return true;
+#else
+	return false;
+#endif
+}
+
+// [v1.14.0] 저장 Production Root의 기존 7-child Layout을 보존하면서 ReticleLayer 내부에 Vehicle Direction 의미 Widget만 additive 추가합니다.
+bool UCFUIHUDProdEditorBridge::ApplyViewModeVisualMigrationResult(
+	UObject* RootWidgetBlueprintObject,
+	UCFUIStyleData* StyleData)
+{
+#if WITH_EDITOR
+	if (!StyleData)
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("ViewMode visual migration requires UI Style Data"));
+	}
+
+	// [v1.14.0] 기존 persisted Designer Tree를 직접 보존 갱신할 정확한 Production Root Widget Blueprint입니다.
+	UWidgetBlueprint* RootWidgetBlueprint = Cast<UWidgetBlueprint>(RootWidgetBlueprintObject);
+	if (!RootWidgetBlueprint || RootWidgetBlueprint->ParentClass != UCFStyledWidgetBase::StaticClass()
+		|| !RootWidgetBlueprint->WidgetTree || !RootWidgetBlueprint->WidgetTree->RootWidget)
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("ViewMode visual migration requires an existing CFStyledWidgetBase Production Root Designer Tree"));
+	}
+
+	// [v1.14.0] 기존 Root WidgetTree이며 이 객체 자체를 교체하지 않습니다.
+	UWidgetTree* WidgetTree = RootWidgetBlueprint->WidgetTree;
+	// [v1.14.0] D1-07부터 예약돼 있던 기존 full-screen Reticle presentation Canvas입니다.
+	UCanvasPanel* ReticleLayer = Cast<UCanvasPanel>(WidgetTree->FindWidget(FName(TEXT("CanvasPanel_Slot_ReticleLayer"))));
+	if (!ReticleLayer)
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("ViewMode visual migration requires existing CanvasPanel_Slot_ReticleLayer"));
+	}
+
+	// [v1.14.0] 차체 방향 아이콘의 Designer-owned 이동 범위를 정의하는 비시각 Canvas Track입니다.
+	UCanvasPanel* ViewDirectionCanvas = Cast<UCanvasPanel>(WidgetTree->FindWidget(FName(TEXT("CanvasPanel_ViewDirection"))));
+	// [v1.14.0] 차체 진행 방향을 카메라 기준 좌우 위치로 표시할 기존 Vehicle Semantic Image입니다.
+	UImage* VehicleDirectionImage = Cast<UImage>(WidgetTree->FindWidget(FName(TEXT("Image_ViewVehicleDirection"))));
+	// [v1.14.0] 이번 실행에서 실제로 새 Designer 의미 Widget을 추가했는지 나타냅니다.
+	bool bAddedViewModeWidget = false;
+
+	if (!ViewDirectionCanvas)
+	{
+		ViewDirectionCanvas = CFUIHUDProdEditorBridge::CreateWidget<UCanvasPanel>(WidgetTree, TEXT("CanvasPanel_ViewDirection"));
+		// [v1.14.0] 화면 중앙 하단 쪽의 20% 폭을 최초 Track으로 제안하되 이후 UMG Designer가 소유할 ReticleLayer Slot입니다.
+		UCanvasPanelSlot* ViewDirectionCanvasSlot = ViewDirectionCanvas ? ReticleLayer->AddChildToCanvas(ViewDirectionCanvas) : nullptr;
+		if (!ViewDirectionCanvasSlot)
+		{
+			return CFUIHUDProdEditorBridge::Fail(TEXT("ViewMode Direction Track additive Widget creation failed"));
+		}
+		ViewDirectionCanvasSlot->SetAnchors(FAnchors(0.40f, 0.66f, 0.60f, 0.66f));
+		ViewDirectionCanvasSlot->SetOffsets(FMargin(0.0f, -18.0f, 0.0f, 36.0f));
+		ViewDirectionCanvasSlot->SetAlignment(FVector2D::ZeroVector);
+		ViewDirectionCanvasSlot->SetZOrder(1);
+		ViewDirectionCanvasSlot->SetAutoSize(false);
+		bAddedViewModeWidget = true;
+	}
+	else if (ViewDirectionCanvas->GetParent() != ReticleLayer)
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("CanvasPanel_ViewDirection must remain a direct child of CanvasPanel_Slot_ReticleLayer"));
+	}
+
+	if (!VehicleDirectionImage)
+	{
+		VehicleDirectionImage = CFUIHUDProdEditorBridge::CreateImage(
+			WidgetTree,
+			TEXT("Image_ViewVehicleDirection"),
+			StyleData,
+			FName(TEXT("Vehicle")),
+			ECFUIColorToken::TextSecondary);
+		// [v1.14.0] Style IconLarge를 사용해 Track 중앙에 최초 대기시킬 Vehicle Direction Image Slot입니다.
+		UCanvasPanelSlot* VehicleDirectionSlot = VehicleDirectionImage ? ViewDirectionCanvas->AddChildToCanvas(VehicleDirectionImage) : nullptr;
+		if (!VehicleDirectionSlot)
+		{
+			return CFUIHUDProdEditorBridge::Fail(TEXT("ViewMode Vehicle Direction Image additive Widget creation failed"));
+		}
+		// [v1.14.0] Designer에서 편집 가능한 Style IconLarge 값으로 초기 정사각 표시 크기를 결정합니다.
+		const float VehicleDirectionIconSize = FMath::Max(StyleData->IconSet.IconLarge, 1.0f);
+		VehicleDirectionSlot->SetAnchors(FAnchors(0.5f, 0.5f));
+		VehicleDirectionSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+		VehicleDirectionSlot->SetPosition(FVector2D::ZeroVector);
+		VehicleDirectionSlot->SetSize(FVector2D(VehicleDirectionIconSize, VehicleDirectionIconSize));
+		VehicleDirectionSlot->SetZOrder(1);
+		VehicleDirectionSlot->SetAutoSize(false);
+		VehicleDirectionImage->SetVisibility(ESlateVisibility::Collapsed);
+		bAddedViewModeWidget = true;
+	}
+	else if (VehicleDirectionImage->GetParent() != ViewDirectionCanvas)
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("Image_ViewVehicleDirection must remain a direct child of CanvasPanel_ViewDirection"));
+	}
+
+	if (!VehicleDirectionImage->GetBrush().GetResourceObject())
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("ViewMode Vehicle Direction Image requires resolved Vehicle Semantic Icon brush"));
+	}
+
+	if (bAddedViewModeWidget)
+	{
+		RootWidgetBlueprint->Modify();
+		WidgetTree->Modify();
+		ReticleLayer->Modify();
+		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(RootWidgetBlueprint);
 	}
 	return true;
 #else
@@ -1381,8 +1905,15 @@ bool UCFUIHUDProdEditorBridge::BuildProductionRootResult(
 		return CFUIHUDProdEditorBridge::Fail(FailureReason);
 	}
 
+		// [v1.12.0] 저장된 Root Designer Tree는 Layout SSOT이므로 기존 RootWidget이 있으면 Scaffold Build를 차단합니다.
+	if (RootBlueprint->WidgetTree && RootBlueprint->WidgetTree->RootWidget)
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("Production Root Build is scaffold-only; existing Designer Tree must use Validate"));
+	}
+
 	UWidgetTree* WidgetTree = CFUIHUDProdEditorBridge::ReplaceWidgetTree(RootBlueprint, FailureReason);
-	// [v1.0.0] D1-07 화면 Slot 배치만 담당하는 Root Canvas입니다.
+	// [v1.12.0] D1-07 값은 신규 Root의 최초 Scaffold 시작 배치에만 사용합니다.
+
 	UCanvasPanel* RootCanvas = CFUIHUDProdEditorBridge::CreateWidget<UCanvasPanel>(WidgetTree, TEXT("CanvasPanel_Root"));
 	if (!WidgetTree || !RootCanvas)
 	{
@@ -1483,11 +2014,12 @@ bool UCFUIHUDProdEditorBridge::ValidateProductionRootResult(
 		USizeBox* SlotBox = Cast<USizeBox>(RootBlueprint->WidgetTree->FindWidget(FName(Expected.SizeBoxName)));
 		UUserWidget* PanelWidget = Cast<UUserWidget>(RootBlueprint->WidgetTree->FindWidget(FName(Expected.PanelWidgetName)));
 		const FCFHUDSlotLayout* LayoutEntry = LayoutData->FindSlotLayout(Expected.SlotId);
-		if (!SlotBox || !PanelWidget || PanelWidget->GetClass() != Expected.PanelClass || !LayoutEntry
-			|| !CFUIHUDProdEditorBridge::ValidateRootCanvasLayout(SlotBox, *LayoutEntry, FailureReason))
+				if (!SlotBox || !PanelWidget || PanelWidget->GetClass() != Expected.PanelClass || !LayoutEntry
+			|| !CFUIHUDProdEditorBridge::ValidateRootCanvasSlot(SlotBox, FailureReason))
 		{
-			return CFUIHUDProdEditorBridge::Fail(FailureReason.IsEmpty() ? FString::Printf(TEXT("Production root slot class/layout failed: %s"), Expected.SizeBoxName) : FailureReason);
+			return CFUIHUDProdEditorBridge::Fail(FailureReason.IsEmpty() ? FString::Printf(TEXT("Production root semantic slot/class failed: %s"), Expected.SizeBoxName) : FailureReason);
 		}
+
 	}
 	if (!RootBlueprint->WidgetTree->FindWidget(FName(TEXT("CanvasPanel_Slot_ReticleLayer"))))
 	{

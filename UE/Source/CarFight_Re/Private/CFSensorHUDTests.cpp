@@ -1,12 +1,15 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-08-15
-// Description: CF-FQ-036 SEN-P0-06 Public Sensor Snapshot → HUD Provider asset-free Automation
-// Scope: TargetSelect 선택 소유권, Sensor Knowledge/Radar Snapshot 소비, Detected identity 비누출, 상대 위치·거리와 DestroyedHold 독립 수명을 검증합니다.
+// Version: 1.1.0
+// Date: 2026-08-20
+// Description: CF-FQ-036 Sensor Snapshot HUD + CF-FQ-032 UI-P0-08 Radar Range Foundation asset-free Automation
+// Scope: Sensor Knowledge/Radar Snapshot, DestroyedHold와 Scanner Range Profile 기반 Display Range/Zoom/normalized selected-edge 계약을 검증합니다.
 // Changelog:
+// - v1.1.0: RadarRangeFoundationContract를 추가해 transient Scanner Range Profile의 explicit default, 50m→25m Zoom In, 선택 Contact range-out edge direction, Zoom Out, Applied-copy source isolation을 검증.
 // - v1.0.0: HUDSnapshot 단일 계약 Automation을 최초 추가.
 // Migration:
+// - UI-P0-08 테스트 Range 수치는 transient Automation 전용이며 Production SensorData/Scanner Asset에 저장하지 않습니다.
+// - 기존 HUDSnapshot의 scanner-less 빈 Radar Range Profile은 NormalizedPosition Unavailable 회귀를 그대로 검증합니다.
 // - transient Editor World, C++ ACFVehiclePawn/ACFMissileTestTarget, transient Health/DamageData만 사용하며 Content Asset을 생성·수정·저장하지 않습니다.
 // - TargetSelect는 선택·TrackState owner로 그대로 사용하고 Relation/Category/InformationLevel/Identity/거리와 Radar Contact는 Sensor Snapshot 결과만 검증합니다.
 // - DestroyedHold 검증은 실제 VehicleHealth 파괴 이벤트를 사용하고 TargetSelect의 Destroyed 즉시 clear와 Sensor Radar 보존이 동시에 성립하는지 확인합니다.
@@ -19,6 +22,7 @@
 #include "CFVehicleHealthComp.h"
 #include "CFVehiclePawn.h"
 #include "CFVehicleSensorComp.h"
+#include "CFVehicleSensorData.h"
 
 #include "Engine/World.h"
 #include "Misc/AutomationTest.h"
@@ -352,7 +356,183 @@ bool FCFSensorHUDSnapshotTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("선택은 clear됐으므로 DestroyedHold bSelected false"), !DestroyedRadarContact.bSelected);
 		TestTrue(TEXT("DestroyedHold 마지막 신뢰 전방 위치 약 30m"), FMath::IsNearlyEqual(DestroyedRadarContact.RelativePositionMeters.X, 30.0f, 0.05f));
 		TestTrue(TEXT("DestroyedHold 마지막 신뢰 우측 위치 약 10m"), FMath::IsNearlyEqual(DestroyedRadarContact.RelativePositionMeters.Y, 10.0f, 0.05f));
+		}
+
+	HUDDataProvider->ShutdownProvider();
+	TargetActor->Destroy();
+	VehiclePawn->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFRadarRangeFoundationTest,
+	"CarFight.UI.UI_P0_08.RadarRangeFoundationContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.1.0] Scanner-owned Range Profile이 Sensor 탐지 성능과 분리된 Provider-local Radar Zoom/정규화 ViewData로 변환되는지 검증합니다.
+bool FCFRadarRangeFoundationTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.1.0] Content Asset 없이 차량, Sensor, TargetSelect와 HUD Provider를 함께 검증할 transient Editor World입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("UI-P0-08 Radar Range 테스트 World 생성"), TestWorld))
+	{
+		return false;
 	}
+
+	// [v1.1.0] Radar Range Profile과 실제 Sensor Runtime을 소유할 transient 차량 Pawn Spawn 설정입니다.
+	FActorSpawnParameters PawnSpawnParameters;
+	PawnSpawnParameters.Name = TEXT("RadarRangeVehiclePawn");
+
+	// [v1.1.0] Heading-Up Radar 원점과 전방 방향을 제공할 transient 차량 Pawn입니다.
+	ACFVehiclePawn* VehiclePawn = TestWorld->SpawnActor<ACFVehiclePawn>(
+		ACFVehiclePawn::StaticClass(),
+		FVector::ZeroVector,
+		FRotator::ZeroRotator,
+		PawnSpawnParameters);
+
+	// [v1.1.0] 전방 30m·우측 10m에 배치해 50m 범위 안/25m 범위 밖을 모두 검증할 Target입니다.
+	ACFMissileTestTarget* TargetActor = SpawnSensorHUDTarget(
+		TestWorld,
+		TEXT("RadarRangeTargetActor"),
+		FVector(3000.0f, 1000.0f, 0.0f),
+		TEXT("RadarRangeTarget"),
+		FText::FromString(TEXT("RADAR RANGE TARGET")));
+	if (!TestNotNull(TEXT("UI-P0-08 Radar 차량 Pawn 생성"), VehiclePawn)
+		|| !TestNotNull(TEXT("UI-P0-08 Radar Target 생성"), TargetActor))
+	{
+		return false;
+	}
+
+	// [v1.1.0] 실제 Sensor Contact Runtime과 Applied Radar Range Profile을 소유할 차량 기본 Sensor Component입니다.
+	UCFVehicleSensorComp* SensorComponent = VehiclePawn->GetVehicleSensorComp();
+	// [v1.1.0] 현재 선택 Contact를 Radar bSelected 의미에 연결할 기존 TargetSelect Component입니다.
+	UCFTargetSelectComp* TargetSelectComponent = VehiclePawn->GetTargetSelectComp();
+	if (!TestNotNull(TEXT("UI-P0-08 Radar Sensor Component"), SensorComponent)
+		|| !TestNotNull(TEXT("UI-P0-08 Radar TargetSelect Component"), TargetSelectComponent))
+	{
+		return false;
+	}
+
+	// [v1.1.0] Production Asset을 건드리지 않고 Range Profile 전체 계약을 검증할 transient Scanner Data입니다.
+	UCFVehicleSensorData* RadarSensorData = NewObject<UCFVehicleSensorData>(
+		GetTransientPackage(),
+		TEXT("DA_RadarRangeFoundationTransient"));
+	if (!TestNotNull(TEXT("UI-P0-08 transient Radar SensorData"), RadarSensorData))
+	{
+		return false;
+	}
+
+	RadarSensorData->SensorConfig.PassiveDetectionRangeCm = 5000.0f;
+	RadarSensorData->SensorConfig.ActiveScanRangeCm = 10000.0f;
+	RadarSensorData->SensorConfig.VisualDetectionRangeCm = 0.0f;
+	RadarSensorData->SensorConfig.UpdateIntervalSec = 0.1f;
+	RadarSensorData->SensorConfig.MaxActorScansPerUpdate = 64;
+	RadarSensorData->SensorConfig.ContactMemoryTimeSec = 5.0f;
+	RadarSensorData->SensorConfig.DestroyedHoldTimeSec = 2.0f;
+	RadarSensorData->SensorConfig.ActiveScanDurationSec = 1.0f;
+	RadarSensorData->SensorConfig.AnalysisGainPerSec = 0.0f;
+	RadarSensorData->SensorConfig.AnalysisDecayPerSec = 0.0f;
+	RadarSensorData->SensorConfig.IdentifiedThreshold = 0.5f;
+	RadarSensorData->SensorConfig.DetailedScanThreshold = 1.0f;
+	RadarSensorData->RadarDisplayRangePresetsCm.Add(2500.0f);
+	RadarSensorData->RadarDisplayRangePresetsCm.Add(5000.0f);
+	RadarSensorData->RadarDisplayRangePresetsCm.Add(10000.0f);
+	RadarSensorData->DefaultRadarDisplayRangePresetIndex = 1;
+	TestTrue(TEXT("UI-P0-08 transient Radar Range Profile 전체 계약 유효"), RadarSensorData->IsSensorDataContractValid());
+
+	SensorComponent->ResetSensorRuntime();
+	TestTrue(TEXT("UI-P0-08 Radar SensorData pre-runtime 적용"), SensorComponent->ApplySensorData(RadarSensorData));
+	TestTrue(TEXT("UI-P0-08 Radar Sensor Runtime 초기화"), SensorComponent->InitializeSensorRuntime());
+	TestEqual(TEXT("UI-P0-08 Applied Radar Range Preset 3개"), SensorComponent->GetResolvedRadarDisplayRangePresetsCm().Num(), 3);
+	TestEqual(TEXT("UI-P0-08 Applied 기본 Radar Range Index 1"), SensorComponent->GetResolvedDefaultRadarDisplayRangePresetIndex(), 1);
+
+	// [v1.1.0] Target을 실제 Sensor Contact로 만들 때 사용할 현재 Applied Sensor Config입니다.
+	const FCFSensorConfig AppliedSensorConfigBeforeZoom = SensorComponent->GetResolvedSensorConfig();
+	TestTrue(TEXT("UI-P0-08 Target 실제 Passive Contact 탐지"), SensorComponent->ProcessPassiveScanActor(TargetActor, AppliedSensorConfigBeforeZoom));
+	SensorComponent->PublishRuntimeSnapshot();
+
+	TargetSelectComponent->bAutoRefreshCandidate = false;
+	// [v1.1.0] 기존 TargetSelect public selection API가 사용할 현재 기본 선택 Context입니다.
+	const FCFTargetSelectionContext SelectionContext = TargetSelectComponent->GetDefaultSelectionContext();
+	TestTrue(TEXT("UI-P0-08 TargetSelect가 Radar 선택 Contact 소유"), TargetSelectComponent->SetSelectedTarget(TargetActor, SelectionContext));
+
+	// [v1.1.0] Scanner Range Profile 선택과 Radar ViewData 정규화를 소유할 transient HUD Provider입니다.
+	UCFHUDDataProvider* HUDDataProvider = NewObject<UCFHUDDataProvider>(
+		GetTransientPackage(),
+		TEXT("HUDDataProvider_RadarRangeAutomation"));
+	if (!TestNotNull(TEXT("UI-P0-08 Radar HUD Provider"), HUDDataProvider))
+	{
+		return false;
+	}
+	HUDDataProvider->RebindCurrentPawn(VehiclePawn);
+
+	// [v1.1.0] Scanner가 명시한 기본 Index 1=50m를 처음 적용한 Radar ViewData입니다.
+	const FCFInGameUIViewData DefaultRangeViewData = HUDDataProvider->GetCurrentViewData();
+	TestEqual(TEXT("UI-P0-08 기본 Radar Display Range Known"), DefaultRangeViewData.Radar.DisplayRangeAvailability, ECFUIViewAvailability::Known);
+	TestTrue(TEXT("UI-P0-08 기본 Radar Display Range 50m"), FMath::IsNearlyEqual(DefaultRangeViewData.Radar.DisplayRangeMeters, 50.0f));
+	TestEqual(TEXT("UI-P0-08 Radar 최대 탐지 Range Known"), DefaultRangeViewData.Radar.MaximumDetectionRangeAvailability, ECFUIViewAvailability::Known);
+	TestTrue(TEXT("UI-P0-08 Radar 최대 탐지 Range 100m"), FMath::IsNearlyEqual(DefaultRangeViewData.Radar.MaximumDetectionRangeMeters, 100.0f));
+	TestEqual(TEXT("UI-P0-08 기본 Radar Preset Index 1"), DefaultRangeViewData.Radar.RangePresetIndex, 1);
+	TestEqual(TEXT("UI-P0-08 Radar Preset Count 3"), DefaultRangeViewData.Radar.RangePresetCount, 3);
+	TestTrue(TEXT("UI-P0-08 기본 Range에서 Zoom In 가능"), DefaultRangeViewData.Radar.bCanZoomIn);
+	TestTrue(TEXT("UI-P0-08 기본 Range에서 Zoom Out 가능"), DefaultRangeViewData.Radar.bCanZoomOut);
+	TestEqual(TEXT("UI-P0-08 기본 Radar Contact 1개"), DefaultRangeViewData.Radar.Contacts.Num(), 1);
+	if (DefaultRangeViewData.Radar.Contacts.Num() != 1)
+	{
+		HUDDataProvider->ShutdownProvider();
+		return false;
+	}
+
+	// [v1.1.0] 50m 기본 Range 안에서 실제 30m 전방·10m 우측 Contact의 정규화 결과입니다.
+	const FCFRadarContactHUDData& DefaultRangeContact = DefaultRangeViewData.Radar.Contacts[0];
+	TestEqual(TEXT("UI-P0-08 기본 Contact Normalized Known"), DefaultRangeContact.NormalizedPositionAvailability, ECFUIViewAvailability::Known);
+	TestTrue(TEXT("UI-P0-08 기본 Contact Range 안"), DefaultRangeContact.bInsideDisplayRange);
+	TestTrue(TEXT("UI-P0-08 기본 Contact Normalized Forward 0.6"), FMath::IsNearlyEqual(DefaultRangeContact.NormalizedPosition.X, 0.6f, 0.001f));
+	TestTrue(TEXT("UI-P0-08 기본 Contact Normalized Right 0.2"), FMath::IsNearlyEqual(DefaultRangeContact.NormalizedPosition.Y, 0.2f, 0.001f));
+	TestTrue(TEXT("UI-P0-08 기본 Contact Selected"), DefaultRangeContact.bSelected);
+	TestTrue(TEXT("UI-P0-08 기본 Contact Edge Marker 없음"), !DefaultRangeContact.bShowSelectedEdgeMarker);
+
+	TestTrue(TEXT("UI-P0-08 Radar Zoom In 50m→25m"), HUDDataProvider->RequestRadarZoomIn());
+	// [v1.1.0] Zoom In 뒤 25m 표시 범위에서 같은 선택 Contact가 범위 밖으로 나간 ViewData입니다.
+	const FCFInGameUIViewData ZoomedInViewData = HUDDataProvider->GetCurrentViewData();
+	TestTrue(TEXT("UI-P0-08 Zoom In Display Range 25m"), FMath::IsNearlyEqual(ZoomedInViewData.Radar.DisplayRangeMeters, 25.0f));
+	TestEqual(TEXT("UI-P0-08 Zoom In Preset Index 0"), ZoomedInViewData.Radar.RangePresetIndex, 0);
+	TestTrue(TEXT("UI-P0-08 최소 Range에서 추가 Zoom In 불가"), !ZoomedInViewData.Radar.bCanZoomIn);
+	TestEqual(TEXT("UI-P0-08 Zoom In Contact 1개"), ZoomedInViewData.Radar.Contacts.Num(), 1);
+	if (ZoomedInViewData.Radar.Contacts.Num() != 1)
+	{
+		HUDDataProvider->ShutdownProvider();
+		return false;
+	}
+
+	// [v1.1.0] 범위 밖 선택 Contact가 Radar unit edge에 유지할 방향 계약입니다.
+	const FCFRadarContactHUDData& ZoomedInContact = ZoomedInViewData.Radar.Contacts[0];
+	TestTrue(TEXT("UI-P0-08 25m에서 Contact Range 밖"), !ZoomedInContact.bInsideDisplayRange);
+	TestTrue(TEXT("UI-P0-08 범위 밖 선택 Contact Edge Marker 필요"), ZoomedInContact.bShowSelectedEdgeMarker);
+	TestTrue(TEXT("UI-P0-08 Edge Forward 방향 약 0.9487"), FMath::IsNearlyEqual(ZoomedInContact.SelectedEdgeDirection.X, 0.948683f, 0.001f));
+	TestTrue(TEXT("UI-P0-08 Edge Right 방향 약 0.3162"), FMath::IsNearlyEqual(ZoomedInContact.SelectedEdgeDirection.Y, 0.316228f, 0.001f));
+	TestTrue(TEXT("UI-P0-08 range-out Normalized unit edge"), FMath::IsNearlyEqual(ZoomedInContact.NormalizedPosition.Size(), 1.0f, 0.001f));
+
+	// [v1.1.0] Radar Zoom은 UI 표시만 바꾸고 실제 Sensor Active Scan 성능을 변경하면 안 됩니다.
+	const FCFSensorConfig AppliedSensorConfigAfterZoom = SensorComponent->GetResolvedSensorConfig();
+	TestTrue(TEXT("UI-P0-08 Zoom 뒤 ActiveScanRange 100m 유지"), FMath::IsNearlyEqual(AppliedSensorConfigAfterZoom.ActiveScanRangeCm, 10000.0f));
+
+	TestTrue(TEXT("UI-P0-08 Radar Zoom Out 25m→50m"), HUDDataProvider->RequestRadarZoomOut());
+	// [v1.1.0] 50m로 복귀한 현재 Radar ViewData입니다.
+	const FCFInGameUIViewData ZoomedOutViewData = HUDDataProvider->GetCurrentViewData();
+	TestTrue(TEXT("UI-P0-08 Zoom Out Display Range 50m 복귀"), FMath::IsNearlyEqual(ZoomedOutViewData.Radar.DisplayRangeMeters, 50.0f));
+	TestTrue(TEXT("UI-P0-08 Zoom Out 뒤 Contact 다시 Range 안"), ZoomedOutViewData.Radar.Contacts.Num() == 1 && ZoomedOutViewData.Radar.Contacts[0].bInsideDisplayRange);
+
+	// [v1.1.0] Runtime Ready 뒤 Source UObject를 직접 바꿔도 Applied Radar Profile 사본이 즉시 변하지 않는지 확인합니다.
+	RadarSensorData->RadarDisplayRangePresetsCm[1] = 4000.0f;
+	RadarSensorData->SensorConfig.ActiveScanRangeCm = 20000.0f;
+	HUDDataProvider->RefreshViewData();
+	// [v1.1.0] Source 직접 편집 뒤에도 기존 Applied 50m/100m 계약을 유지한 ViewData입니다.
+	const FCFInGameUIViewData AppliedCopyViewData = HUDDataProvider->GetCurrentViewData();
+	TestTrue(TEXT("UI-P0-08 Source 직접 편집 뒤 Applied Display Range 50m 유지"), FMath::IsNearlyEqual(AppliedCopyViewData.Radar.DisplayRangeMeters, 50.0f));
+	TestTrue(TEXT("UI-P0-08 Source 직접 편집 뒤 Applied Maximum 100m 유지"), FMath::IsNearlyEqual(AppliedCopyViewData.Radar.MaximumDetectionRangeMeters, 100.0f));
 
 	HUDDataProvider->ShutdownProvider();
 	TargetActor->Destroy();

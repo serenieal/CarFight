@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.0
-// Date: 2026-08-06
-// Description: CF-FQ-032 UI-P0-02 싱글플레이 Pause 자동화 테스트
-// Scope: C++ Pause Menu 상호작용, 차량 입력 중립화와 Launcher·Projectile·Timer 게임 시간 정지 전제 계약을 검증합니다.
+// Version: 1.2.0
+// Date: 2026-08-21
+// Description: CF-FQ-032 UI-P0-02/P0-10 싱글플레이 Pause 자동화 테스트
+// Scope: C++ Pause Menu 상호작용, 차량 입력 중립화와 Launcher·Weapon Resource·Projectile·Timer 게임 시간 정지 전제 계약을 검증합니다.
 // Changelog:
+// - v1.2.0: UI-P0-10 Integration에서 P0-06 이후 추가된 WeaponComp의 Heat 냉각·Charge 회복·TargetUse 재평가가 Pause 중 진행되지 않도록 Component Tick이 bTickEvenWhenPaused=false임을 ProgressFreezeContract에 추가 검증.
 // - v1.1.0: Continue 버튼의 활성·표시·콘텐츠 계약을 추가.
 // - v1.0.0: PauseMenuContract, InputNeutralContract와 ProgressFreezeContract를 최초 추가.
 // Migration:
@@ -17,6 +18,7 @@
 #include "CFProjectileActor.h"
 #include "CFProjectileMotorComp.h"
 #include "CFVehicleDriveComp.h"
+#include "CFVehicleWeaponComp.h"
 #include "UI/CFPauseMenuWidget.h"
 
 #include "Components/Button.h"
@@ -103,7 +105,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"CarFight.UI.UI_P0_02.ProgressFreezeContract",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-// [v1.0.0] Launcher·Projectile·Motor가 Pause 중 별도 Tick을 허용하지 않고 Projectile 수명이 표준 World Timer를 사용하는지 검증합니다.
+// [v1.2.0] Launcher·Weapon Resource·Projectile·Motor가 Pause 중 별도 Tick을 허용하지 않고 게임 진행이 World Time에 종속되는지 검증합니다.
 bool FCFUIPauseProgressFreezeTest::RunTest(const FString& Parameters)
 {
 	(void)Parameters;
@@ -114,7 +116,15 @@ bool FCFUIPauseProgressFreezeTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
-	TestFalse(TEXT("LauncherComp는 Pause 중 Tick하지 않음"), LauncherDefaults->PrimaryComponentTick.bTickEvenWhenPaused);
+		TestFalse(TEXT("LauncherComp는 Pause 중 Tick하지 않음"), LauncherDefaults->PrimaryComponentTick.bTickEvenWhenPaused);
+
+	// [v1.2.0] Heat 냉각·Charge 회복·선택 대상 주기 재평가를 같은 Game-Time Tick에서 수행하는 WeaponComp CDO입니다.
+	const UCFVehicleWeaponComp* WeaponDefaults = GetDefault<UCFVehicleWeaponComp>();
+	if (!TestNotNull(TEXT("WeaponComp CDO"), WeaponDefaults))
+	{
+		return false;
+	}
+	TestFalse(TEXT("WeaponComp Heat/Charge/TargetUse는 Pause 중 Tick하지 않음"), WeaponDefaults->PrimaryComponentTick.bTickEvenWhenPaused);
 
 	// [v1.0.0] Projectile Actor와 기본 서브오브젝트 Tick 정책을 확인할 Automation 월드입니다.
 	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();

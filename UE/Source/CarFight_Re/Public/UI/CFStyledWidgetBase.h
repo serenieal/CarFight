@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-08-10
-// Description: CarFight 공통 Base Widget의 외부 Visual Context Bridge
-// Scope: D1-10A Style·Density·Geometry/Typography Scale·Typography Floor를 외부에서 주입받아 Blueprint Visual Layer에 전달합니다.
+// Version: 1.1.0
+// Date: 2026-08-21
+// Description: CarFight 공통 Base Widget의 외부 Visual Context Bridge + 중첩 Production Widget 전파
+// Scope: D1-10A Style·Density·Geometry/Typography Scale·Typography Floor를 외부에서 주입받아 자신과 중첩 CFStyledWidgetBase Visual Layer에 전달합니다.
 // Changelog:
+// - v1.1.0: Root가 해석한 Visual Context를 WidgetTree 내부의 중첩 CFStyledWidgetBase에 재귀적으로 전달. 자식 Widget은 Content 경로나 Gameplay를 탐색하지 않고 동일 Context 중복 적용 방지 계약을 재사용.
 // - v1.0.0: 외부 Visual Context 저장, 중복 적용 방지, Geometry/Typography 해석과 Blueprint Refresh Event를 최초 추가.
 // Migration:
 // - Widget은 Gameplay Actor를 탐색하거나 DataAsset 경로를 직접 Load하지 않습니다.
@@ -69,8 +70,11 @@ private:
 	// [v1.0.0] 두 Typography Floor 구조가 모든 Role에서 같은지 비교합니다.
 	bool IsSameTypographyFloor(const FCFUITypographyFloor& Left, const FCFUITypographyFloor& Right) const;
 
-	// [v1.0.0] 지정 Typography Role의 현재 최소 실효 Font Size를 반환합니다.
+			// [v1.0.0] 지정 Typography Role의 현재 최소 실효 Font Size를 반환합니다.
 	int32 ResolveMinimumTypographySize(ECFUITypographyRole TypographyRole) const;
+
+	// [v1.1.0] 현재 WidgetTree의 중첩 CFStyledWidgetBase에 이미 해석된 동일 Visual Context를 전달합니다.
+	void PropagateUIVisualContextToChildren();
 
 	// [v1.0.0] 외부에서 주입받은 현재 Style Data 참조입니다.
 	UPROPERTY(Transient)

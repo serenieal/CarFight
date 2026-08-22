@@ -1,10 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.7.0
-// Date: 2026-08-18
-// Description: CarFight LocalPlayer UI 수명·레이어·Pause·Production HUD·AimReticle·Target Marker Runtime 연결 Subsystem
-// Scope: 기존 Root·Pause·Style·Production HUD·AimReticle 수명을 보존하면서 UI-P0-05 TargetSelect World Marker를 Game Layer의 단일 UISubsystem 소유 수명으로 관리합니다.
+// Version: 1.10.0
+// Date: 2026-08-21
+// Description: CarFight LocalPlayer UI 수명·레이어·Pause·Production HUD·Target Marker·Radar Zoom·Screen-edge Relation Visual 연결 Subsystem
+// Scope: 기존 UI 수명을 보존하면서 UI-P0-08 Screen-Off Selected Target Edge Marker가 공용 HUD Visual/Style Data를 주입받도록 연결합니다.
 // Changelog:
+// - v1.10.0: USER 가독성 피드백에 따라 HUDDataProvider와 Friendly/Hostile/Unknown Style 색을 TargetSelect Screen-edge에 주입. Neutral은 Edge에서만 Unknown 회색을 공유하고 전역 NeutralColor는 변경하지 않음.
+// - v1.9.0: DefaultHUDVisualDataAsset을 Subsystem 수명에서 해석하고 RadarSelectedEdgeBracket·AccentTactical·SafeMargin만 TargetSelect Widget에 주입. WBP_TargetSelect 저장 구조와 TargetSelect Gameplay ownership은 변경하지 않음.
+// - v1.8.0: Pawn 입력 계층이 Provider 구현에 직접 결합되지 않도록 RequestRadarZoomIn/Out C++ wrapper를 추가. Scanner/Sensor detection range와 Profile은 변경하지 않음.
 // - v1.7.0: UI-P0-05 WBP_TargetSelect Config Class, Game Layer 단일 인스턴스, Current Pawn Rebind와 World Cleanup 수명을 UISubsystem으로 이전.
 // - v1.6.0: UI-P0-04 WBP_AimReticle Config Class, HUD Layer 단일 인스턴스, Current Pawn Rebind와 World Cleanup 수명을 UISubsystem으로 이전.
 // - v1.5.0: UI-P0-03 HUDDataProvider/HUDPresenter와 Config Production WBP_CFInGameHUD 생성·HUD Layer 연결 수명을 추가.
@@ -25,6 +28,9 @@
 // - Production HUD는 WBP_CFInGameHUD의 기존 CFStyledWidgetBase Parent를 유지하며 Gameplay Runtime은 Provider/Presenter를 통해서만 전달합니다.
 // - v1.6.0부터 AimReticle 생성·레이어·Pawn Rebind 수명은 UISubsystem이 소유하며, ACFVehiclePawn의 기존 Reticle Class/API는 직렬화·호환 경계로만 남깁니다.
 // - v1.7.0부터 TargetSelect Marker 생성·Game Layer·Pawn Rebind 수명도 UISubsystem이 소유하며 Pawn의 기존 TargetSelect HUD Class/API는 직렬화·호환 경계로만 남깁니다.
+// - v1.8.0 Radar Zoom wrapper는 현재 HUDDataProvider의 UI-local Range Preset 선택에만 위임합니다. Sensor detection 범위·Scanner Profile·Gameplay Runtime을 수정하지 않습니다.
+// - v1.9.0 Target Screen-edge 표현은 UISubsystem이 HUD Visual/Style Data를 해석해 주입하며 TargetSelect Widget은 콘텐츠 경로를 직접 Load하지 않습니다.
+// - v1.10.0 Screen-edge 관계색은 Provider가 이미 판정한 Target.Relation을 소비하며 Friendly/Hostile/Unknown Style Token만 주입합니다. Neutral은 Screen-edge에서만 Unknown 회색으로 표시하고 전역 Palette는 보존합니다.
 
 #pragma once
 
@@ -41,6 +47,7 @@ class UCFTargetSelectWidget;
 class UCFHUDDataProvider;
 class UCFHUDLayoutData;
 class UCFHUDPresenter;
+class UCFHUDVisualData;
 class UCFPauseMenuWidget;
 class UCFStyledWidgetBase;
 class UCFUIDensityData;
@@ -169,13 +176,19 @@ public:
 	// [v1.0.0] Controller의 Possession 변경을 약한 Pawn 참조와 UI 이벤트에 반영합니다.
 	void NotifyPossessedPawnChanged(APawn* PreviousPawn, APawn* NewPawn);
 
-	// [v1.0.0] 현재 UI가 참조하는 Pawn을 반환합니다.
+		// [v1.0.0] 현재 UI가 참조하는 Pawn을 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|UI|Lifecycle", meta=(DisplayName="현재 UI Pawn 반환 (Get Current UI Pawn)", ToolTip="현재 LocalPlayer UI가 데이터 소스로 연결할 Pawn을 반환합니다. Pawn 파괴 후에는 Null일 수 있습니다."))
 		APawn* GetCurrentPawn() const { return CurrentPawn.Get(); }
 
 	// [v1.5.0] 현재 LocalPlayer의 HUD Gameplay Runtime → ViewData Provider를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|UI|HUD", meta=(DisplayName="HUD 데이터 Provider 반환 (Get HUD Data Provider)", ToolTip="현재 LocalPlayer의 Gameplay Runtime을 ViewData로 변환하는 HUD Provider를 반환합니다. Production Widget은 Pawn 대신 이 Provider 데이터를 소비합니다."))
 	UCFHUDDataProvider* GetHUDDataProvider() const { return HUDDataProvider; }
+
+	// [v1.8.0] 현재 LocalPlayer Radar 표시 범위를 한 단계 작은 Preset으로 요청합니다.
+	bool RequestRadarZoomIn();
+
+	// [v1.8.0] 현재 LocalPlayer Radar 표시 범위를 한 단계 큰 Preset으로 요청합니다.
+	bool RequestRadarZoomOut();
 
 		// [v1.5.0] 현재 HUD Layer에 표시 중인 Production WBP_CFInGameHUD 인스턴스를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|UI|HUD", meta=(DisplayName="Production HUD Widget 반환 (Get Production HUD Widget)", ToolTip="현재 World HUD Layer에 생성된 Production WBP_CFInGameHUD 인스턴스를 반환합니다. 없으면 Null입니다."))
@@ -236,7 +249,7 @@ public:
 	FCFUIPauseStateChangedSignature OnPauseStateChanged;
 
 private:
-	// [v1.4.0] Config Soft Reference의 Style·Density·HUD Layout을 Subsystem 수명에서 한 번 Load·검증해 Cache합니다.
+	// [v1.9.0] Config Soft Reference의 Style·Density·HUD Layout·HUD Visual을 Subsystem 수명에서 한 번 Load·검증해 Cache합니다.
 	void ResolveDefaultUIDataAssets();
 
 	// [v1.1.0] C++ Pause Menu를 생성하고 Menu 레이어에 단일 인스턴스로 추가합니다.
@@ -266,8 +279,11 @@ private:
 	// [v1.7.0] 현재 Target Marker의 Pawn 참조와 Delegate를 먼저 비운 뒤 Game Layer에서 제거합니다.
 	void DestroyTargetSelectWidget();
 
-	// [v1.7.0] 현재 Possessed Pawn만 Target Marker Source로 연결하고 표시 토글을 갱신합니다.
+		// [v1.7.0] 현재 Possessed Pawn만 Target Marker Source로 연결하고 표시 토글을 갱신합니다.
 	void RebindTargetSelectToCurrentPawn();
+
+	// [v1.9.0] 공용 HUD Visual/Style Data에서 Screen-edge Texture·Tint·SafeInset을 해석해 현재 Target Marker에 주입합니다.
+	void ConfigureTargetSelectScreenEdgePresentation();
 
 
 
@@ -292,9 +308,13 @@ private:
 	UPROPERTY(Config, EditDefaultsOnly, Category="CarFight|UI|Default Data", meta=(DisplayName="기본 Density Data Asset (Default Density Data Asset)", ToolTip="D1-09B 기본 Standard Density DataAsset을 연결합니다."))
 	TSoftObjectPtr<UCFUIDensityData> DefaultDensityDataAsset;
 
-		// [v1.4.0] 프로젝트 기본 HUD Layout DataAsset을 한 곳에서 소유하는 Config Soft Reference입니다.
+				// [v1.4.0] 프로젝트 기본 HUD Layout DataAsset을 한 곳에서 소유하는 Config Soft Reference입니다.
 	UPROPERTY(Config, EditDefaultsOnly, Category="CarFight|UI|Default Data", meta=(DisplayName="기본 HUD Layout Data Asset (Default HUD Layout Data Asset)", ToolTip="D1-09B DA_CFHUDLayout_1080_16을 연결합니다."))
 	TSoftObjectPtr<UCFHUDLayoutData> DefaultHUDLayoutDataAsset;
+
+	// [v1.9.0] Production HUD와 World Marker가 공유할 기본 HUD Visual DataAsset을 한 곳에서 소유하는 Config Soft Reference입니다.
+	UPROPERTY(Config, EditDefaultsOnly, Category="CarFight|UI|Default Data", meta=(DisplayName="기본 HUD Visual Data Asset (Default HUD Visual Data Asset)", ToolTip="DA_CFHUDVisual_Default의 Radar/Target 시각 자산을 UISubsystem에서 해석합니다. 개별 Widget은 콘텐츠 경로를 직접 Load하지 않습니다."))
+	TSoftObjectPtr<UCFHUDVisualData> DefaultHUDVisualDataAsset;
 
 		// [v1.5.0] 현재 World HUD Layer에 생성할 Production WBP_CFInGameHUD Class Soft Reference입니다.
 	UPROPERTY(Config, EditDefaultsOnly, Category="CarFight|UI|Default Data", meta=(DisplayName="기본 인게임 HUD Widget Class (Default InGame HUD Widget Class)", ToolTip="D1-11 Production WBP_CFInGameHUD Class를 연결합니다. Widget은 Gameplay Pawn을 직접 조회하지 않습니다."))
@@ -318,9 +338,13 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UCFUIDensityData> ResolvedDensityData = nullptr;
 
-		// [v1.4.0] 현재 Subsystem 수명에서 한 번 해석된 HUD Layout Data 강한 Cache입니다.
+				// [v1.4.0] 현재 Subsystem 수명에서 한 번 해석된 HUD Layout Data 강한 Cache입니다.
 	UPROPERTY(Transient)
 	TObjectPtr<UCFHUDLayoutData> ResolvedHUDLayoutData = nullptr;
+
+	// [v1.9.0] 현재 Subsystem 수명에서 한 번 해석된 HUD Visual Data 강한 Cache입니다.
+	UPROPERTY(Transient)
+	TObjectPtr<UCFHUDVisualData> ResolvedHUDVisualData = nullptr;
 
 		// [v1.5.0] Config Soft Class에서 한 번 해석한 Production InGame HUD Class입니다.
 	UPROPERTY(Transient)

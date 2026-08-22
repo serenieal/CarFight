@@ -1,14 +1,15 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.0
-// Date: 2026-08-19
+// Version: 1.2.0
+// Date: 2026-08-21
 // Description: CF-FQ-032 UI-P0-06 Player-facing Weapon Select Input persisted setup + contract Automation
 // Scope: IA_SelectWeapon과 IMC_Vehicle_Default의 숫자 1~9 ordinal mapping을 idempotent하게 생성·저장하는 setup 1건과 이후 read-only exact contract를 분리합니다.
 // Changelog:
+// - v1.2.0: persisted Asset을 실제 저장하는 WeaponSelectInputAssetSetup을 `CarFight.Setup` namespace로 이동해 broad `CarFight.UI` regression에서 mutation setup이 자동 실행되지 않도록 격리. read-only WeaponSelectInputContract 경로는 유지.
 // - v1.1.0: fresh key-conflict preflight 후 IA_SelectWeapon Axis1D와 숫자 1~9 direct ordinal mapping만 생성·보정·저장하는 WeaponSelectInputAssetSetup 추가. Mouse Wheel·게임패드·기존 다른 mapping 변경0.
 // - v1.0.0: Axis1D IA_SelectWeapon + keyboard 1~9 direct ordinal mapping과 Radar Zoom용 Mouse Wheel 비점유 exact contract 추가.
 // Migration:
-// - WeaponSelectInputAssetSetup은 현재 P0 Production Input Asset 제작 진입으로 정확히 IA_SelectWeapon + IMC_Vehicle_Default만 변경합니다. 기존 숫자키 충돌이 발견되면 mutation 전 fail-closed합니다.
+// - WeaponSelectInputAssetSetup은 `CarFight.Setup.UI_P0_06.WeaponSelectInputAssetSetup`으로만 명시 실행합니다. 현재 P0 Production Input Asset 제작 진입으로 정확히 IA_SelectWeapon + IMC_Vehicle_Default만 변경하며 기존 숫자키 충돌이 발견되면 mutation 전 fail-closed합니다.
 // - WeaponSelectInputContract는 기존 Weapon Selection Runtime/HUD Source 또는 truthful Rail lifecycle을 재검증하지 않고 Input Asset 계약만 읽기 전용으로 검증합니다.
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -207,7 +208,7 @@ namespace
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCFWeaponSelectInputAssetSetupTest,
-	"CarFight.UI.UI_P0_06.WeaponSelectInputAssetSetup",
+	"CarFight.Setup.UI_P0_06.WeaponSelectInputAssetSetup",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 // [v1.1.0] fresh conflict preflight 뒤 Production IA_SelectWeapon과 IMC 숫자 1~9 mapping만 생성·보정·저장합니다.

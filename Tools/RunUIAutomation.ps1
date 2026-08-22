@@ -1,15 +1,17 @@
 # CarFight CF-FQ-032 UI targeted Automation 작업 전용 runner.
-# Version: v1.1.0
-# Date: 2026-08-18
+# Version: v1.2.0
+# Date: 2026-08-21
 # Changelog:
+# - v1.2.0: UI-P0-10 cross-system Integration 회귀를 위해 TestFilter 허용 범위를 CarFight.UI / CarFight.Ammo / CarFight.Sensor로 제한 확장하고, caller filter 기반 결과 파서로 일반화. CarFight.Setup과 상위 CarFight filter는 fail-closed해 mutation setup 자동 실행을 금지합니다.
 # - v1.1.0: 결과 파서를 UI_P0_03 고정 경로에서 호출자가 지정한 CarFight.UI TestFilter prefix 기준으로 일반화해 UI-P0-04 이후 focused 검증도 같은 runner에서 정확히 판독합니다.
 # - v1.0.3: 절대 Automation 로그 경로가 실제 파일로 생성되도록 Unreal의 -abslog 인자를 사용합니다.
 # - v1.0.2: GUI UnrealEditor.exe를 Start-Process -Wait -PassThru로 실행해 실제 종료 코드를 회수하고 공백이 있는 ExecCmds/TestExit 인자를 명시적으로 인용하도록 교정했습니다.
 # - v1.0.1: CarFight 직접 실행 강제 규칙에 맞춰 실행 파일을 공식 D:\UnrealEngine_Source의 UnrealEditor.exe로 교정했습니다.
 # - v1.0.0: Unreal Automation RunTests + TestExit를 사용해 지정 filter를 실행하고 실제 Test Completed Success/Fail 로그를 JSON으로 기록합니다.
 # Migration:
-# - 이 스크립트는 CF-FQ-032 UI 작업 전용 실행 수단이며 별도 공용화 결정 전 프로젝트 범용 Automation Tool로 해석하지 않습니다.
+# - 이 스크립트는 CF-FQ-032 UI 작업 전용 실행 수단이며 UI-P0-10이 소비하는 Ammo/Sensor read-only 회귀까지만 허용합니다. 프로젝트 범용 Automation Tool로 해석하지 않습니다.
 # - Product Source/Config/Asset을 저장하지 않으며 결과는 UE/Saved/CarFight/UIAutomationResult.json에만 기록합니다.
+# - CarFight.Setup 및 상위 CarFight filter는 허용하지 않으므로 persisted Asset setup Automation을 이 runner로 실행할 수 없습니다.
 
 [CmdletBinding()]
 param(
@@ -19,6 +21,17 @@ param(
 
 # PowerShell 오류를 즉시 실패로 처리하는 실행 정책입니다.
 $ErrorActionPreference = 'Stop'
+
+# UI-P0-10 Integration이 read-only 회귀로 소비할 수 있는 Automation namespace allowlist입니다.
+$AllowedTestFilterPrefixes = @('CarFight.UI', 'CarFight.Ammo', 'CarFight.Sensor')
+# caller filter가 허용된 namespace 자체 또는 그 하위 exact/prefix 경로인지 나타냅니다.
+$IsAllowedTestFilter = @($AllowedTestFilterPrefixes | Where-Object {
+    $TestFilter.Equals($_, [System.StringComparison]::OrdinalIgnoreCase) -or
+    $TestFilter.StartsWith(($_ + '.'), [System.StringComparison]::OrdinalIgnoreCase)
+}).Count -gt 0
+if (-not $IsAllowedTestFilter) {
+    throw "UI Automation runner가 허용하지 않는 TestFilter입니다: $TestFilter. Allowed: CarFight.UI / CarFight.Ammo / CarFight.Sensor"
+}
 
 # 현재 저장소의 절대 루트입니다.
 $RepositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
@@ -75,18 +88,20 @@ if (-not (Test-Path -LiteralPath $AutomationLogPath -PathType Leaf)) {
 
 # UE 로그를 Windows PowerShell 기본 인코딩 추측 없이 UTF-8로 읽은 전체 문자열입니다.
 $AutomationLogText = [System.IO.File]::ReadAllText($AutomationLogPath, [System.Text.UTF8Encoding]::new($false))
-# Test Completed 라인에서 성공 상태와 CarFight UI 테스트 전체 경로를 추출하는 정규식입니다.
-$SuccessRegex = [regex]'Test Completed\. Result=\{Success\}.*?Path=\{(?<path>CarFight\.UI\.[^}]+)\}'
-# Test Completed 라인에서 실패 상태와 CarFight UI 테스트 전체 경로를 추출하는 정규식입니다.
-$FailureRegex = [regex]'Test Completed\. Result=\{(?:Fail|Failed)\}.*?Path=\{(?<path>CarFight\.UI\.[^}]+)\}'
+# caller가 요청한 exact/prefix TestFilter를 결과 marker에 안전하게 사용할 정규식 문자열입니다.
+$EscapedTestFilter = [regex]::Escape($TestFilter)
+# Test Completed 라인에서 성공 상태와 caller filter 하위 실제 테스트 전체 경로를 추출하는 정규식입니다.
+$SuccessRegex = [regex]('Test Completed\. Result=\{Success\}.*?Path=\{(?<path>' + $EscapedTestFilter + '(?:\.[^}]+)?)\}')
+# Test Completed 라인에서 실패 상태와 caller filter 하위 실제 테스트 전체 경로를 추출하는 정규식입니다.
+$FailureRegex = [regex]('Test Completed\. Result=\{(?:Fail|Failed)\}.*?Path=\{(?<path>' + $EscapedTestFilter + '(?:\.[^}]+)?)\}')
 # 실제 성공 완료 marker 전체 목록입니다.
 $SuccessMatches = $SuccessRegex.Matches($AutomationLogText)
 # 실제 실패 완료 marker 전체 목록입니다.
 $FailureMatches = $FailureRegex.Matches($AutomationLogText)
 # 호출자가 요청한 TestFilter prefix에 실제로 포함되는 성공 테스트 Path 목록입니다.
-$SuccessfulTestPaths = @($SuccessMatches | ForEach-Object { $_.Groups['path'].Value } | Where-Object { $_.StartsWith($TestFilter, [System.StringComparison]::OrdinalIgnoreCase) })
+$SuccessfulTestPaths = @($SuccessMatches | ForEach-Object { $_.Groups['path'].Value })
 # 호출자가 요청한 TestFilter prefix에 실제로 포함되는 실패 테스트 Path 목록입니다.
-$FailedTestPaths = @($FailureMatches | ForEach-Object { $_.Groups['path'].Value } | Where-Object { $_.StartsWith($TestFilter, [System.StringComparison]::OrdinalIgnoreCase) })
+$FailedTestPaths = @($FailureMatches | ForEach-Object { $_.Groups['path'].Value })
 # 같은 테스트의 중복 로그가 있을 때 path 단위로 중복을 제거한 성공 목록입니다.
 $UniqueSuccessfulTestPaths = @($SuccessfulTestPaths | Sort-Object -Unique)
 # 같은 테스트의 중복 로그가 있을 때 path 단위로 중복을 제거한 실패 목록입니다.
@@ -121,7 +136,7 @@ $UniqueFailedTestPaths | ForEach-Object { Write-Output "FAIL=$_" }
 if (-not $AutomationPassed) {
     # 실패 시 진단에 필요한 Automation 관련 마지막 로그만 bounded하게 출력합니다.
     $DiagnosticLines = @($AutomationLogText -split "`r?`n" | Where-Object {
-                $_ -match 'LogAutomation|Test Completed|CarFight\.UI\.|Error:'
+                                $_ -match 'LogAutomation|Test Completed|CarFight\.(?:UI|Ammo|Sensor)\.|Error:'
     } | Select-Object -Last 80)
     $DiagnosticLines | ForEach-Object { Write-Output $_ }
     exit 1

@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.12.0
-// Date: 2026-08-19
-// Description: CF-FQ-032 HUD ViewData + Player-facing Weapon Selection + Weapon Charge/Heat + explicit RPM Redline/Maximum Presentation 계약
-// Scope: Vehicle, Weapon·Ammo·Reload·Charge·Heat·Selection, Defense, Target, Radar, Alert의 플레이어 표시용 데이터와 Unknown/Unavailable/KnownZero 구분을 제공합니다.
+// Version: 1.14.0
+// Date: 2026-08-21
+// Description: CF-FQ-032 HUD ViewData + UI-P0-09A View Mode / Direction Foundation
+// Scope: Vehicle, ViewMode, Weapon, Defense, Target, Radar Range·Contact 표시 상태와 Alert의 Player-facing ViewData 계약을 제공합니다.
 // Changelog:
+// - v1.14.0: 기존 VehicleCamera/Aim Runtime을 재계산하지 않고 Camera Mode, 차량 Heading, 카메라·터렛의 차량 기준 상대 Yaw/Pitch를 전달하는 ViewMode HUD 계약을 추가.
+// - v1.13.0: Radar에 Display/Maximum Range, Preset index/count/zoom 가능 상태와 Contact의 range-inside/selected-edge 방향 계약을 추가. NormalizedPosition은 명시 Range가 있을 때만 사용.
 // - v1.12.0: UI-P0-06 실제 WeaponCharge Runtime의 Current/Maximum/Ratio/Insufficient를 ViewData로 전달하는 계약을 추가. VehicleBattery는 계속 Unavailable.
 // - v1.11.0: Applied Fitting 고정 표시 순서 기반 Player-facing Weapon Selection 목록과 SelectedWeaponIndex를 추가. 각 항목은 EquipmentPresetData.DisplayName만 노출하고 내부 MountProfileId/WeaponId를 포함하지 않음.
 // - v1.10.0: UI-P0-06 실제 Weapon Heat Runtime의 Current/Maximum/Ratio/Overheated를 ViewData로 전달하는 계약을 추가. Battery·Charge는 계속 Unavailable.
@@ -24,7 +26,8 @@
 // - v1.10.0 HeatAvailability이 Known/KnownZero일 때만 CurrentHeat/MaximumHeat/HeatRatio/bWeaponOverheated를 소비하며 정적 WeaponData만으로 현재 Heat를 만들지 않습니다.
 // - Gameplay Runtime 타입을 Widget에서 직접 읽지 않고 UCFHUDDataProvider가 이 타입으로 변환합니다.
 // - v1.4.0부터 Target Knowledge와 Radar Contact는 FCFSensorSnapshot만 의미 source로 사용합니다. TargetSelect는 선택 상태와 TrackState만 제공합니다.
-// - Radar 표시 반경/Zoom 계약이 아직 없으므로 상대 위치·거리는 실제 Snapshot 값으로 제공하되 NormalizedPosition은 명시적으로 Unavailable 상태를 가집니다.
+// - v1.13.0부터 Radar 표시 Range는 Scanner가 명시한 Range Preset만 사용합니다. Preset이 없으면 기존처럼 Range/NormalizedPosition을 Unavailable로 유지하며 Sensor 탐지 거리로 임의 대체하지 않습니다.
+// - Radar NormalizedPosition은 차량 Heading-Up 평면의 `X=전방, Y=우측` 의미를 보존합니다. 범위 밖 Contact는 unit edge로 clamp하되 bInsideDisplayRange로 구분하고 선택 Contact만 bShowSelectedEdgeMarker를 사용할 수 있습니다.
 // - EngineRpm은 Chaos Runtime 현재값이고 EngineRedlineStartRpm/EngineMaximumRpm은 VehicleData의 명시 authored 값입니다. RedlineStartRPM=0은 Unavailable이며 EngineMaxRPM 또는 변속값으로 추정하지 않습니다.
 // - Heat처럼 실제 Runtime Provider가 없는 채널은 값을 추정하지 않고 Unavailable로 유지하며 finite Ammo는 VehicleAmmoComp Snapshot만 사용합니다.
 // - Target Actor 이름이나 Component 이름 같은 내부 식별자는 Player-facing Text로 사용하지 않습니다.
@@ -35,6 +38,7 @@
 #include "CFAmmoTypes.h"
 #include "CFLauncherTypes.h"
 #include "CFSensorTypes.h"
+#include "CFVehicleCameraTypes.h"
 #include "CFTargetSelectTypes.h"
 #include "CFHUDViewData.generated.h"
 
@@ -219,6 +223,51 @@ struct CARFIGHT_RE_API FCFVehicleHUDData
 	// [v1.0.0] 차량 전투 Runtime 준비 여부입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Vehicle", meta=(DisplayName="차량 전투 Runtime 준비", ToolTip="Aim, Weapon, Launcher와 TargetSelect를 포함한 전투 Runtime이 준비됐는지 나타냅니다."))
 	bool bVehicleCombatRuntimeReady = false;
+};
+
+/**
+ * 외부 3인칭 HUD가 차체·카메라·터렛 방향을 같은 기준으로 표시할 수 있게 하는 읽기 전용 View Mode 데이터입니다.
+ */
+USTRUCT(BlueprintType, meta=(DisplayName="뷰 모드 HUD 데이터 (View Mode HUD Data)", ToolTip="기존 VehicleCamera/Aim Runtime이 계산한 카메라 모드와 차체 기준 방향 차이를 UI에 전달합니다. 새 카메라 모드나 터렛 동작을 만들지 않습니다."))
+struct CARFIGHT_RE_API FCFViewModeHUDData
+{
+	GENERATED_BODY()
+
+	// [v1.14.0] 현재 View Mode 방향 데이터의 가용 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|ViewMode", meta=(DisplayName="뷰 모드 데이터 상태", ToolTip="현재 차량과 VehicleCameraComp에서 실제 방향 정보를 읽을 수 있을 때 Known입니다."))
+	ECFUIViewAvailability Availability = ECFUIViewAvailability::Unavailable;
+
+	// [v1.14.0] VehicleCameraComp가 이미 판정한 현재 대표 카메라 모드입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|ViewMode", meta=(DisplayName="현재 카메라 모드", ToolTip="Normal, Combat, Reverse, Airborne, Destroyed 또는 Spectate 중 VehicleCameraComp가 실제 판정한 현재 모드입니다."))
+	ECFVehicleCameraMode CameraMode = ECFVehicleCameraMode::Normal;
+
+	// [v1.14.0] 월드 +X를 0도로 한 현재 차량 차체의 수평 Heading입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|ViewMode", meta=(Units="deg", DisplayName="차량 Heading", ToolTip="현재 차량 Actor Forward의 월드 수평 Heading을 0~360도로 정규화한 값입니다."))
+	float VehicleHeadingDegrees = 0.0f;
+
+	// [v1.14.0] 차체 전방을 0도로 한 실제 카메라 시선의 좌우 상대각입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|ViewMode", meta=(Units="deg", DisplayName="카메라 상대 Yaw", ToolTip="차체 전방 대비 현재 VehicleCameraComp 시선의 좌우 상대각입니다. 음수는 좌측, 양수는 우측입니다."))
+	float CameraRelativeYawDegrees = 0.0f;
+
+	// [v1.14.0] 현재 VehicleCameraComp 시선의 수평 기준 상하 각도입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|ViewMode", meta=(Units="deg", DisplayName="카메라 Pitch", ToolTip="현재 카메라 시선의 상하 각도입니다. 양수는 위쪽입니다."))
+	float CameraPitchDegrees = 0.0f;
+
+	// [v1.14.0] 현재 활성 Weapon Aim Solution이 실제 Muzzle 방향을 제공하는지 나타냅니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|ViewMode", meta=(DisplayName="터렛 방향 사용 가능", ToolTip="유효한 Weapon Aim Solution의 CurrentMuzzleDirection을 읽을 수 있을 때 True입니다."))
+	bool bTurretDirectionAvailable = false;
+
+	// [v1.14.0] 차체 전방을 0도로 한 현재 Muzzle/터렛의 좌우 상대각입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|ViewMode", meta=(Units="deg", DisplayName="터렛 상대 Yaw", ToolTip="차체 전방 대비 현재 Muzzle 방향의 좌우 상대각입니다. bTurretDirectionAvailable이 True일 때만 유효합니다."))
+	float TurretRelativeYawDegrees = 0.0f;
+
+	// [v1.14.0] 현재 Muzzle/터렛 방향의 수평 기준 상하 각도입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|ViewMode", meta=(Units="deg", DisplayName="터렛 Pitch", ToolTip="현재 Muzzle 방향의 상하 각도입니다. bTurretDirectionAvailable이 True일 때만 유효합니다."))
+	float TurretPitchDegrees = 0.0f;
+
+	// [v1.14.0] 기존 Weapon Aim Solution이 터렛 정렬 진행 중으로 판정했는지 나타냅니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|ViewMode", meta=(DisplayName="터렛 정렬 중", ToolTip="VehicleAimComp가 제공한 bTurretAligning을 그대로 전달합니다. UI가 정렬 여부를 재계산하지 않습니다."))
+	bool bTurretAligning = false;
 };
 
 /**
@@ -644,9 +693,21 @@ struct CARFIGHT_RE_API FCFRadarContactHUDData
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Radar", meta=(DisplayName="Radar 정규화 위치 상태", ToolTip="Radar 표시 반경/Zoom 계약이 확정되기 전에는 Unavailable이며 Sensor 사거리로 임의 추정하지 않습니다."))
 	ECFUIViewAvailability NormalizedPositionAvailability = ECFUIViewAvailability::Unavailable;
 
-	// [v1.0.0] Radar 중심 기준 -1~1 정규화 평면 위치입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Radar", meta=(DisplayName="Radar 정규화 위치", ToolTip="명시적 Radar Range/Zoom 계약이 있을 때만 사용하는 -1~1 표시 위치입니다. NormalizedPositionAvailability를 함께 확인합니다."))
-		FVector2D NormalizedPosition = FVector2D::ZeroVector;
+			// [v1.13.0] Radar 중심 기준 unit disk 안의 Heading-Up 정규화 평면 위치입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Radar", meta=(DisplayName="Radar 정규화 위치", ToolTip="명시적 DisplayRangeMeters가 있을 때 사용하는 위치입니다. X는 차량 전방, Y는 차량 우측이며 범위 밖 Contact는 방향을 보존한 unit edge 위치로 clamp됩니다."))
+	FVector2D NormalizedPosition = FVector2D::ZeroVector;
+
+	// [v1.13.0] 현재 Contact가 선택된 Radar 표시 범위 안에 있는지 나타냅니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Radar", meta=(DisplayName="Radar 표시 범위 안", ToolTip="실제 평면 상대 거리가 현재 DisplayRangeMeters 이하이면 True입니다. Range Profile이 없으면 False이며 NormalizedPositionAvailability가 Unavailable입니다."))
+	bool bInsideDisplayRange = false;
+
+	// [v1.13.0] 선택 Contact가 현재 Radar 표시 범위 밖이라 Radar 외곽 방향 표식이 필요한지 나타냅니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Radar", meta=(DisplayName="선택 Contact Radar 외곽 표식", ToolTip="현재 선택 Contact가 DisplayRangeMeters 밖에 있을 때만 True입니다. 일반 Contact는 범위 밖에서 숨기고 이 표식을 만들지 않습니다."))
+	bool bShowSelectedEdgeMarker = false;
+
+	// [v1.13.0] 범위 밖 선택 Contact가 위치한 Heading-Up Radar 외곽 방향입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Radar", meta=(DisplayName="선택 Contact 외곽 방향", ToolTip="X는 차량 전방, Y는 차량 우측인 unit 방향 벡터입니다. bShowSelectedEdgeMarker가 True일 때 2-Corner Open Edge Bracket 방향에 사용합니다."))
+	FVector2D SelectedEdgeDirection = FVector2D::ZeroVector;
 
 	// [v1.0.0] 현재 선택 Target과 같은 Contact인지 나타냅니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Radar", meta=(DisplayName="선택 Contact", ToolTip="현재 TargetSelect의 선택 대상과 같은 Sensor Contact이면 True입니다."))
@@ -661,12 +722,44 @@ struct CARFIGHT_RE_API FCFRadarHUDData
 {
 	GENERATED_BODY()
 
-	// [v1.0.0] 실제 Sensor/Radar Provider 가용 상태입니다.
+			// [v1.0.0] 실제 Sensor/Radar Provider 가용 상태입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Radar", meta=(DisplayName="레이더 데이터 상태", ToolTip="Sensor Runtime Provider가 없으면 Unavailable이며 Target 후보로 가짜 Contact를 만들지 않습니다."))
 	ECFUIViewAvailability Availability = ECFUIViewAvailability::Unavailable;
 
+	// [v1.13.0] 현재 Radar UI 표시 범위의 가용 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Radar", meta=(DisplayName="Radar 현재 표시 범위 상태", ToolTip="적용 Scanner Profile에 유효 Radar Range Preset이 있을 때만 Known입니다. Sensor 탐지 거리로 임의 추정하지 않습니다."))
+	ECFUIViewAvailability DisplayRangeAvailability = ECFUIViewAvailability::Unavailable;
+
+	// [v1.13.0] 현재 선택된 Radar 표시 범위입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Radar", meta=(Units="m", DisplayName="Radar 현재 표시 범위 m", ToolTip="현재 Radar Range Preset이 정의한 UI 표시 반경입니다. 이 값은 Passive/Active Sensor 탐지 성능을 변경하지 않습니다."))
+	float DisplayRangeMeters = 0.0f;
+
+		// [v1.13.0] 현재 Scanner의 실제 최대 탐지거리 채널 가용 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Radar", meta=(DisplayName="Radar 최대 탐지 범위 상태", ToolTip="현재 적용 SensorConfig의 ActiveScanRangeCm이 0보다 큰 실제 Scanner 최대 탐지거리로 제공될 때 Known입니다. Radar 표시 Range Profile 존재 여부와는 독립입니다."))
+	ECFUIViewAvailability MaximumDetectionRangeAvailability = ECFUIViewAvailability::Unavailable;
+
+	// [v1.13.0] 현재 Scanner가 Active Scan으로 도달 가능한 실제 최대 탐지거리입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Radar", meta=(Units="m", DisplayName="Radar 최대 탐지 범위 m", ToolTip="현재 적용 SensorConfig의 ActiveScanRangeCm을 m로 변환한 Scanner/Sensor 실제 성능 상한입니다. 현재 DisplayRangeMeters와 별개이며 Radar Zoom이 이 값을 변경하지 않습니다."))
+	float MaximumDetectionRangeMeters = 0.0f;
+
+	// [v1.13.0] 현재 선택된 Scanner Radar Range Preset의 0-based 인덱스입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Radar", meta=(DisplayName="Radar 범위 프리셋 인덱스", ToolTip="현재 UI가 선택한 RadarDisplayRangePresetsCm의 0-based 인덱스입니다. Range Profile이 없으면 -1입니다."))
+	int32 RangePresetIndex = INDEX_NONE;
+
+	// [v1.13.0] 현재 Scanner가 제공하는 Radar 표시 Range Preset 개수입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Radar", meta=(DisplayName="Radar 범위 프리셋 개수", ToolTip="현재 적용 Scanner Profile이 제공하는 단계식 Radar 표시 범위 개수입니다."))
+	int32 RangePresetCount = 0;
+
+	// [v1.13.0] 현재 Preset에서 한 단계 더 작은 표시 범위로 Zoom In할 수 있는지 나타냅니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Radar", meta=(DisplayName="Radar Zoom In 가능", ToolTip="현재 RangePresetIndex보다 작은 범위 Preset이 존재할 때 True입니다."))
+	bool bCanZoomIn = false;
+
+	// [v1.13.0] 현재 Preset에서 한 단계 더 큰 표시 범위로 Zoom Out할 수 있는지 나타냅니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Radar", meta=(DisplayName="Radar Zoom Out 가능", ToolTip="현재 RangePresetIndex보다 큰 범위 Preset이 존재할 때 True입니다."))
+	bool bCanZoomOut = false;
+
 	// [v1.0.0] 실제 Sensor Provider가 공개한 Contact 목록입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Radar", meta=(DisplayName="레이더 Contact 목록", ToolTip="Sensor Provider가 만든 Contact만 포함합니다."))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Radar", meta=(DisplayName="레이더 Contact 목록", ToolTip="Sensor Provider가 만든 Contact만 포함합니다. 범위 밖 일반 Contact도 lifecycle 데이터로 남을 수 있으므로 bInsideDisplayRange를 확인해 표시 여부를 결정합니다."))
 	TArray<FCFRadarContactHUDData> Contacts;
 };
 
@@ -715,7 +808,7 @@ struct CARFIGHT_RE_API FCFCombatAlertViewData
 /**
  * Production HUD 한 프레임이 소비할 전체 표시 데이터입니다.
  */
-USTRUCT(BlueprintType, meta=(DisplayName="인게임 UI ViewData (InGame UI View Data)", ToolTip="Vehicle, Weapon, Defense, Target, Radar와 Alert ViewData를 한 번에 전달합니다."))
+USTRUCT(BlueprintType, meta=(DisplayName="인게임 UI ViewData (InGame UI View Data)", ToolTip="Vehicle, ViewMode, Weapon, Defense, Target, Radar와 Alert ViewData를 한 번에 전달합니다."))
 struct CARFIGHT_RE_API FCFInGameUIViewData
 {
 	GENERATED_BODY()
@@ -730,7 +823,11 @@ struct CARFIGHT_RE_API FCFInGameUIViewData
 
 	// [v1.0.0] 플레이어 차량 주행 ViewData입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD", meta=(DisplayName="차량 HUD 데이터"))
-	FCFVehicleHUDData Vehicle;
+		FCFVehicleHUDData Vehicle;
+
+	// [v1.14.0] 외부 3인칭 차체·카메라·터렛 방향 ViewData입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD", meta=(DisplayName="뷰 모드 HUD 데이터"))
+	FCFViewModeHUDData ViewMode;
 
 	// [v1.0.0] 플레이어 차량 무기 ViewData입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD", meta=(DisplayName="무기 HUD 데이터"))

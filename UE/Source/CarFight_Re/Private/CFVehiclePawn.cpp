@@ -1,9 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.153.0
-// Date: 2026-08-19
-// Description: CarFight 싱글플레이 차량 Pawn 구현 / CF-FQ-032 UI-P0-06 WeaponCharge 발사 검증·승인 소비 통합
+// Version: 2.156.0
+// Date: 2026-08-22
+// Description: CarFight 싱글플레이 차량 Pawn 구현 / CF-FQ-032 post-closure Target Identity 안정화
 // Changelog:
+// - v2.156.0: VehicleData의 유효한 PrimaryAssetId.PrimaryAssetName을 차량 안정 TargetId로 사용. Actor instance GetFName/GetName은 Identity source에서 제외하고 Player-facing DisplayName은 명시 source가 없으면 Empty 유지. VehicleData/PrimaryAssetId가 없으면 TargetId=None으로 fail-closed.
+// - v2.155.0: 차량 기본 TargetDisplayInfo에서 런타임 UObject Actor 이름을 안정 TargetId/Player-facing DisplayName으로 공개하던 fallback을 제거. 명시 Identity source가 생기기 전에는 ID/이름을 비워 Sensor/HUD 내부 이름 누출을 차단.
+// - v2.154.0: IA_RadarZoom을 기본 로드하고 Started Axis1D의 양수/음수를 현재 LocalPlayer UISubsystem의 Radar Zoom In/Out으로 전달. Pawn은 Sensor Range/Profile 계산을 소유하지 않음.
 // - v2.153.0: explicit WeaponCharge Runtime의 충전 부족을 발사 검증에서 별도 차단하고 실제 승인된 각 발사 결과마다 Charge를 정확히 한 번 소비. 기존 Heat/Ammo/Launcher/Cooldown 순서를 보존.
 // - v2.152.0: IA_SelectWeapon Axis1D를 기본 로드하고 Started 입력을 1-based ordinal→0-based RequestSelectWeaponIndex로 전달. 숫자키 직접 선택 외 cycle state·WeaponGroup ID·내부 MountProfileId 입력 의미는 추가하지 않음.
 // - v2.151.0: Applied Fitting 고정 순번의 Weapon Selection 요청을 구현. 유효 순번 검증 후 Launcher active는 WeaponChanged로 정상 취소하고 WeaponComp 선택·단일 활성 Turret Visual을 같은 순번으로 전환.
@@ -100,6 +103,9 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth Visual/Shell 적용 전 기준선을 깨끗하게 만들기 위해 차량 진단 로그와 Owner 표시 안정화 기본값을 False로 통일.
 // Migration:
+// - v2.156.0부터 차량 TargetDisplayInfo.TargetId는 VehicleData의 유효한 PrimaryAssetId.PrimaryAssetName을 사용한다. VehicleData가 없거나 PrimaryAssetId가 invalid면 None으로 유지하고 Actor GetFName/GetName fallback은 사용하지 않는다. DisplayName은 별도 Player-facing 이름 source가 생기기 전 Empty를 유지한다.
+// - v2.155.0의 TargetId=None-only 임시 교정은 Sensor Identified 공개 계약과 충돌할 수 있어 v2.156.0의 VehicleData PrimaryAssetId 기반 안정 ID로 대체한다.
+// - v2.154.0부터 `/Game/CarFight/Input/IA_RadarZoom` Axis1D를 기본 로드한다. MouseScrollUp=양수는 Zoom In, MouseScrollDown=음수는 Zoom Out으로 UISubsystem에만 전달하며 Sensor detection range와 Scanner Profile은 변경하지 않는다.
 // - v2.152.0부터 `/Game/CarFight/Input/IA_SelectWeapon` Axis1D를 Pawn Gameplay Input으로 사용한다. 숫자키 1~9가 실제 SelectableWeapons의 1-based ordinal을 전달하며 Mouse Wheel은 Radar Range/Zoom 예약을 보존하고 게임패드 선택키는 이번 P0에서 지정하지 않는다.
 // - v2.152.0 handler는 정수 1~9 ordinal만 수락해 `RequestSelectWeaponIndex(Ordinal - 1)`에 위임한다. 실제 목록 범위·Launcher cancel·WeaponComp/Turret 전환은 기존 검증된 Gameplay command가 계속 소유한다.
 // - v2.148.0부터 AimReticle은 Pawn에서 CreateWidget/AddToViewport하지 않는다. UISubsystem이 HUD Layer 단일 인스턴스를 소유하고 Possess 변경마다 현재 Pawn만 SetVehiclePawnRef로 연결한다.
@@ -1254,7 +1260,7 @@ ACFVehiclePawn::ACFVehiclePawn()
 		InputAction_Look = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_LookAround.IA_LookAround"));
 	}
 
-	if (!InputAction_SelectTarget)
+		if (!InputAction_SelectTarget)
 	{
 		InputAction_SelectTarget = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_SelectTarget.IA_SelectTarget"));
 	}
@@ -1268,6 +1274,12 @@ ACFVehiclePawn::ACFVehiclePawn()
 	if (!InputAction_SelectWeapon)
 	{
 		InputAction_SelectWeapon = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_SelectWeapon.IA_SelectWeapon"));
+	}
+
+	// [v2.154.0] Mouse Scroll Up/Down이 Provider-local Radar Range Preset 변경을 전달할 기본 Axis1D Input Action입니다.
+	if (!InputAction_RadarZoom)
+	{
+		InputAction_RadarZoom = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_RadarZoom.IA_RadarZoom"));
 	}
 
 	// [v2.147.0] P0의 1회 입력→ActiveScanDurationSec 자동 실행에 사용할 기본 Active Scan Input Action입니다.
@@ -1293,16 +1305,26 @@ bool ACFVehiclePawn::IsTargetSelectable_Implementation(const FCFTargetSelectionC
 		&& !VehicleHealthComp->IsDestroyed();
 }
 
-// [v2.118.0] 타겟 HUD와 장비가 사용할 차량 기본 표시 정보를 반환합니다.
+// [v2.156.0] 타겟 HUD와 Sensor Knowledge가 사용할 차량 표시 정보를 VehicleData의 안정 PrimaryAssetId에서 만들고 내부 Actor 이름은 공개하지 않습니다.
 FCFTargetDisplayInfo ACFVehiclePawn::GetTargetDisplayInfo_Implementation() const
 {
+	// [v2.156.0] Vehicle category/tag와 Player-facing 이름 비공개 계약을 유지하면서 안정 TargetId를 선택적으로 채울 표시 정보입니다.
 	FCFTargetDisplayInfo DisplayInfo;
-	DisplayInfo.TargetId = GetFName();
-	DisplayInfo.DisplayName = FText::FromString(GetName());
 	DisplayInfo.TargetCategory = ECFTargetCategory::Vehicle;
 	DisplayInfo.Relation = ECFTargetRelation::Unknown;
 	DisplayInfo.InformationLevel = ECFTargetInfoLevel::Identified;
 	DisplayInfo.AttributeTags.Add(FName(TEXT("Vehicle")));
+
+	if (IsValid(VehicleData))
+	{
+		// [v2.156.0] Pawn instance 이름과 무관하게 같은 VehicleData가 같은 TargetId를 제공하도록 사용할 Primary Asset 식별자입니다.
+		const FPrimaryAssetId VehiclePrimaryAssetId = VehicleData->GetPrimaryAssetId();
+		if (VehiclePrimaryAssetId.IsValid())
+		{
+			DisplayInfo.TargetId = VehiclePrimaryAssetId.PrimaryAssetName;
+		}
+	}
+
 	return DisplayInfo;
 }
 
@@ -1560,7 +1582,7 @@ void ACFVehiclePawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 	{
 		EnhancedInputComponent->BindAction(InputAction_Fire, ETriggerEvent::Started, this, &ACFVehiclePawn::HandleFireStarted);
 	}
-	if (InputAction_SelectTarget)
+		if (InputAction_SelectTarget)
 	{
 		EnhancedInputComponent->BindAction(InputAction_SelectTarget, ETriggerEvent::Started, this, &ACFVehiclePawn::HandleSelectTargetStarted);
 	}
@@ -1572,6 +1594,11 @@ void ACFVehiclePawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 	if (InputAction_SelectWeapon)
 	{
 		EnhancedInputComponent->BindAction(InputAction_SelectWeapon, ETriggerEvent::Started, this, &ACFVehiclePawn::HandleSelectWeaponStarted);
+	}
+	// [v2.154.0] Mouse Scroll의 1회 디지털 입력값을 Radar 표시 Range 단계 변경으로 전달합니다.
+	if (InputAction_RadarZoom)
+	{
+		EnhancedInputComponent->BindAction(InputAction_RadarZoom, ETriggerEvent::Started, this, &ACFVehiclePawn::HandleRadarZoomStarted);
 	}
 	if (InputAction_StartActiveScan)
 	{
@@ -6258,6 +6285,46 @@ void ACFVehiclePawn::HandleSelectWeaponStarted(const FInputActionValue& InputAct
 	}
 
 	RequestSelectWeaponIndex(RequestedWeaponOrdinal - 1);
+}
+
+// [v2.154.0] Axis1D Radar Zoom 부호를 현재 LocalPlayer UISubsystem의 Provider-local Range 요청으로 변환합니다.
+void ACFVehiclePawn::HandleRadarZoomStarted(const FInputActionValue& InputActionValue)
+{
+	// [v2.154.0] Mouse Scroll mapping이 전달한 명시적 +1/-1 Radar Zoom 방향 값입니다.
+	const float RadarZoomDirection = InputActionValue.Get<float>();
+	if (!FMath::IsFinite(RadarZoomDirection) || FMath::IsNearlyZero(RadarZoomDirection, KINDA_SMALL_NUMBER))
+	{
+		return;
+	}
+
+	// [v2.154.0] 현재 입력 Pawn을 실제로 소유하는 LocalPlayer를 확인할 PlayerController입니다.
+	APlayerController* OwningPlayerController = Cast<APlayerController>(GetController());
+	if (!OwningPlayerController)
+	{
+		return;
+	}
+
+	// [v2.154.0] Radar Zoom UI state를 소유하는 UISubsystem의 LocalPlayer입니다.
+	ULocalPlayer* LocalPlayer = OwningPlayerController->GetLocalPlayer();
+	if (!LocalPlayer)
+	{
+		return;
+	}
+
+	// [v2.154.0] 현재 Pawn과 HUDDataProvider 수명을 연결하는 LocalPlayer UI Subsystem입니다.
+	UCFUISubsystem* UISubsystem = LocalPlayer->GetSubsystem<UCFUISubsystem>();
+	if (!UISubsystem || UISubsystem->GetCurrentPawn() != this)
+	{
+		return;
+	}
+
+	if (RadarZoomDirection > 0.0f)
+	{
+		UISubsystem->RequestRadarZoomIn();
+		return;
+	}
+
+	UISubsystem->RequestRadarZoomOut();
 }
 
 // [v2.146.0] optional Start Active Scan InputAction을 Sensor Gameplay command로 변환합니다.

@@ -1,9 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.152.0
-// Date: 2026-08-19
-// Description: CarFight 싱글플레이 차량 Pawn 기준 클래스 / CF-FQ-032 UI-P0-06 Player-facing Weapon Selection 직접 순번 입력 통합
+// Version: 2.154.0
+// Date: 2026-08-22
+// Description: CarFight 싱글플레이 차량 Pawn 기준 클래스 / post-closure Target Identity 안정화
 // Changelog:
+// - v2.154.0: Vehicle TargetSelectable의 안정 TargetId source를 VehicleData PrimaryAssetId로 고정하고 Actor instance 이름은 Identity source에서 제외. Player-facing DisplayName은 명시 source가 생기기 전 Empty를 유지.
+// - v2.153.0: IA_RadarZoom Axis1D 슬롯과 Started handler를 추가. 양수는 UISubsystem Radar Zoom In, 음수는 Zoom Out으로만 전달하고 Scanner/Sensor Range 계산은 Pawn에 추가하지 않음.
 // - v2.152.0: 실제 SelectableWeapons의 1-based 순번을 받는 Axis1D InputAction 슬롯과 Started handler를 추가. 숫자키 ordinal 값만 0-based RequestSelectWeaponIndex로 변환하며 새 WeaponGroup ID, cycle state, 내부 MountProfileId 입력 의미를 만들지 않음.
 // - v2.151.0: Applied Fitting 고정 표시 순서의 Weapon Selection 요청 API를 추가. Launcher active 시 WeaponChanged 정상 취소 후 WeaponComp를 전환하고 기존 단일 활성 Turret Visual을 같은 선택으로 재구성.
 // - v2.150.0: Weapon Heat accepted-fire 통합 Automation이 실제 ExecuteAcceptedFireCommand→ApplyFireResult 경계를 검증할 수 있도록 전용 friend만 추가. Runtime public API 확대 없음.
@@ -80,6 +82,7 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth 적용 전 기준선 정리를 위해 차량 NetDebug/OwnerVisual/OwnerBodyVisual 실험 플래그 기본값을 False로 통일.
 // Migration:
+// - v2.154.0부터 차량 TargetId는 VehicleData의 유효한 PrimaryAssetId.PrimaryAssetName을 사용한다. VehicleData가 없거나 PrimaryAssetId가 invalid면 TargetId=None으로 fail-closed하며 Actor GetFName/GetName을 fallback으로 사용하지 않는다. DisplayName은 별도 Player-facing 이름 source가 생기기 전 Empty를 유지한다.
 // - v2.152.0부터 InputAction_SelectWeapon은 `/Game/CarFight/Input/IA_SelectWeapon` Axis1D를 기본 로드한다. P0 키보드 매핑은 숫자 1~9가 각각 실제 1-based selectable weapon 순번 1~9를 전달한다. Mouse Wheel은 Radar Range/Zoom 예약을 보존하고 게임패드 키는 이번 slice에서 임의 지정하지 않는다.
 // - v2.152.0 입력 값은 ordinal→index 변환 외 Gameplay 의미를 갖지 않으며 범위 밖 순번은 기존 RequestSelectWeaponIndex fail-closed 검증에 맡긴다. 새 WeaponGroup ID나 cycle cursor를 만들지 않는다.
 // - v2.151.0 Weapon Selection은 Applied Fitting이 실제 제공한 고정 순번만 받으며 별도 입력 키나 WeaponGroup ID를 만들지 않는다. 진행 중 Launcher는 기존 WeaponChanged cancel contract로 종료하고 Ammo 예약/Action Lock 정리를 재사용한다.
@@ -1054,7 +1057,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="발사 입력 액션 (InputAction_Fire)", ToolTip="Aim 기반 로컬 발사 명령을 시작할 Input Action입니다. 비어 있으면 발사 입력 바인딩을 건너뜁니다."))
 				TObjectPtr<UInputAction> InputAction_Fire = nullptr;
 
-	// 현재 후보를 지속 선택 대상으로 확정할 입력 액션입니다.
+		// 현재 후보를 지속 선택 대상으로 확정할 입력 액션입니다.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="타겟 선택 입력 액션 (InputAction_SelectTarget)", ToolTip="현재 TargetSelectComp 후보를 지속 선택 대상으로 확정하는 Boolean Input Action입니다. 후보가 없으면 기존 선택을 유지합니다."))
 	TObjectPtr<UInputAction> InputAction_SelectTarget = nullptr;
 
@@ -1065,6 +1068,10 @@ public:
 	// [v2.152.0] 실제 SelectableWeapons의 1-based 순번을 직접 선택할 Axis1D Input Action입니다.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input|Weapon", meta=(DisplayName="무기 순번 선택 입력 액션 (InputAction_SelectWeapon)", ToolTip="숫자키가 전달한 1~9 값을 실제 Applied Fitting SelectableWeapons의 1-based 순번으로 해석합니다. 내부 MountProfileId나 WeaponGroup ID를 입력 의미로 사용하지 않습니다."))
 	TObjectPtr<UInputAction> InputAction_SelectWeapon = nullptr;
+
+	// [v2.153.0] Mouse Scroll 방향을 LocalPlayer Radar 표시 범위 변경으로 전달할 Axis1D Input Action입니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input|UI", meta=(DisplayName="레이더 줌 입력 액션 (InputAction_RadarZoom)", ToolTip="Mouse Scroll Up은 Radar 표시 범위를 한 단계 줄이고, Mouse Scroll Down은 한 단계 늘립니다. 실제 Sensor 탐지 범위는 변경하지 않습니다."))
+	TObjectPtr<UInputAction> InputAction_RadarZoom = nullptr;
 
 		// [v2.147.0] P0 단발 Active Scan을 시작할 기본 Input Action입니다.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input|Sensor", meta=(DisplayName="Active Scan 입력 액션 (InputAction_StartActiveScan)", ToolTip="P0 기본 IA_ActiveScan Boolean + Pressed 입력입니다. 한 번 누르면 VehicleSensorComp가 ActiveScanDurationSec 동안 Active Scan을 실행하고 자동 종료합니다. 기본 키는 V입니다."))
@@ -1807,7 +1814,7 @@ protected:
 	// [v2.136.0] LauncherComp가 예약한 후속 발사를 첫 발사 순간 위치·Actor Snapshot과 다음 Muzzle로 실행합니다.
 	bool ExecuteScheduledLauncherShot(int32 VolleyId, int32 SequenceShotIndex, const FVector& CommandTargetLocation, AActor* GuidanceTargetActorSnapshot);
 
-	// [v2.17.0] 클라이언트 또는 서버 로컬 입력에서 발사 요청을 시작합니다.
+		// [v2.17.0] 클라이언트 또는 서버 로컬 입력에서 발사 요청을 시작합니다.
 				void HandleFireStarted(const FInputActionValue& InputActionValue);
 
 	// 현재 후보 선택 입력을 처리합니다.
@@ -1818,6 +1825,9 @@ protected:
 
 	// [v2.152.0] Axis1D의 1-based weapon ordinal 입력을 기존 0-based Weapon Selection Gameplay command로 변환합니다.
 	void HandleSelectWeaponStarted(const FInputActionValue& InputActionValue);
+
+	// [v2.153.0] Axis1D Radar Zoom 부호를 현재 LocalPlayer UISubsystem의 Provider-local Zoom 요청으로 변환합니다.
+	void HandleRadarZoomStarted(const FInputActionValue& InputActionValue);
 
 	// [v2.146.0] optional Active Scan 시작 InputAction을 Pawn Gameplay command로 변환합니다.
 	void HandleStartActiveScanStarted(const FInputActionValue& InputActionValue);

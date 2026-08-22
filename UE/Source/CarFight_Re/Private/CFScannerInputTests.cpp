@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.0
-// Date: 2026-08-16
+// Version: 1.1.1
+// Date: 2026-08-19
 // Description: CF-FQ-037 SCAN-P0-03 Pawn Sensor Gameplay command와 실제 IA_ActiveScan/V Enhanced Input 계약 테스트
 // Changelog:
+// - v1.1.1: CFTargetInputTests와 Unity TU에 합쳐질 때 충돌하던 anonymous-namespace helper 3개의 이름만 Scanner 전용으로 변경. 테스트 동작·Asset mutation 의미는 변경하지 않음.
 // - v1.1.0: IA_ActiveScan Boolean + Pressed 자산과 IMC_Vehicle_Default V 매핑을 생성/검증하는 InputAsset 테스트를 추가하고 Pawn 기본 로드 계약을 검증.
 // - v1.0.0: 실제 InputAction/IMC 자산을 생성하거나 저장하지 않고 Pawn Start/Stop wrapper의 Runtime 미준비, 중복 요청, 정상 Start/Stop과 scanner-less 미지원 안전 처리를 검증.
 // Migration:
@@ -38,13 +39,13 @@ namespace
 	const TCHAR* ActiveScanAssetName = TEXT("IA_ActiveScan");
 
 	// 기존 차량 기본 Enhanced Input Mapping Context 경로입니다.
-	const TCHAR* DefaultMappingContextPath = TEXT("/Game/CarFight/Input/IMC_Vehicle_Default.IMC_Vehicle_Default");
+		const TCHAR* ScannerMappingContextPath = TEXT("/Game/CarFight/Input/IMC_Vehicle_Default.IMC_Vehicle_Default");
 
 	// P0 Active Scan의 단일 키보드 기본 키입니다.
 	const FKey ActiveScanDefaultKey = EKeys::V;
 
 	// InputAction 또는 InputMappingContext package를 현재 Content 경로에 저장합니다.
-	bool SaveInputAsset(UObject* AssetObject)
+		bool SaveScannerInputAsset(UObject* AssetObject)
 	{
 		if (!AssetObject)
 		{
@@ -136,7 +137,7 @@ namespace
 		if (bInputActionChanged)
 		{
 			ActiveScanInputAction->MarkPackageDirty();
-			if (!SaveInputAsset(ActiveScanInputAction))
+						if (!SaveScannerInputAsset(ActiveScanInputAction))
 			{
 				return nullptr;
 			}
@@ -146,7 +147,7 @@ namespace
 	}
 
 	// 지정 InputAction과 Key 조합이 현재 Mapping Context에 이미 존재하는지 반환합니다.
-	bool HasInputMapping(const UInputMappingContext* MappingContext, const UInputAction* InputAction, const FKey& MappingKey)
+		bool HasScannerInputMapping(const UInputMappingContext* MappingContext, const UInputAction* InputAction, const FKey& MappingKey)
 	{
 		if (!MappingContext || !InputAction)
 		{
@@ -180,7 +181,7 @@ namespace
 			}
 		}
 
-		if (HasInputMapping(MappingContext, ActiveScanInputAction, ActiveScanDefaultKey))
+				if (HasScannerInputMapping(MappingContext, ActiveScanInputAction, ActiveScanDefaultKey))
 		{
 			return true;
 		}
@@ -188,7 +189,7 @@ namespace
 		MappingContext->Modify();
 		MappingContext->MapKey(ActiveScanInputAction, ActiveScanDefaultKey);
 		MappingContext->MarkPackageDirty();
-		return SaveInputAsset(MappingContext);
+				return SaveScannerInputAsset(MappingContext);
 	}
 }
 
@@ -211,7 +212,7 @@ bool FCFScannerInputAssetTest::RunTest(const FString& Parameters)
 	}
 
 	// 기존 차량 기본 Enhanced Input Mapping Context입니다.
-	UInputMappingContext* DefaultMappingContext = LoadObject<UInputMappingContext>(nullptr, DefaultMappingContextPath);
+		UInputMappingContext* DefaultMappingContext = LoadObject<UInputMappingContext>(nullptr, ScannerMappingContextPath);
 	TestNotNull(TEXT("IMC_Vehicle_Default 로드"), DefaultMappingContext);
 	if (!DefaultMappingContext)
 	{
@@ -234,7 +235,7 @@ bool FCFScannerInputAssetTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("IA_ActiveScan Pressed Trigger 존재"), bHasPressedTrigger);
 
 	TestTrue(TEXT("IA_ActiveScan V 매핑 저장"), EnsureActiveScanInputMapping(DefaultMappingContext, ActiveScanInputAction));
-	TestTrue(TEXT("IA_ActiveScan 기본 키 V"), HasInputMapping(DefaultMappingContext, ActiveScanInputAction, ActiveScanDefaultKey));
+		TestTrue(TEXT("IA_ActiveScan 기본 키 V"), HasScannerInputMapping(DefaultMappingContext, ActiveScanInputAction, ActiveScanDefaultKey));
 
 	// BP 조립 없이 C++ 기본 Pawn을 생성할 transient Editor World입니다.
 	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();

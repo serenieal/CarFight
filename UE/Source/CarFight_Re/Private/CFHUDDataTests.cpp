@@ -1,10 +1,22 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.21.0
-// Date: 2026-08-19
-// Description: CF-FQ-032 UI-P0-03 HUD ViewData/Provider Automation + UI-P0-06 Weapon Selection·truthful Rail·Resource·Charge·Heat·RPM Production 계약 검증
-// Scope: 실제 Defense/Drive/Weapon Runtime 계약과 저장 Production HUD의 이름 기반 비선택 Weapon Rail 구조·Projection·Visibility/Text 적용을 검증합니다.
+// Version: 1.32.0
+// Date: 2026-08-22
+// Description: CF-FQ-032 HUD Runtime Automation + post-closure Code Review Remediation 회귀 검증
+// Scope: 실제 Runtime 계약과 저장 Production HUD의 ViewMode·Alert·Style Context·다중 해상도 Root Layout 의미 Presentation을 검증합니다.
 // Changelog:
+// - v1.32.0: Vehicle Target Identity 테스트가 Production TargetCandidate resolver와 동일하게 native ICFTargetSelectable의 GetTargetDisplayInfo_Implementation 경로를 사용하도록 fixture를 교정. Product Identity 의미는 변경하지 않음.
+// - v1.31.0: Vehicle Target Identity를 VehicleData PrimaryAssetId 기반 안정 TargetId로 검증하고 Actor instance 이름 비노출, DisplayName fail-closed와 Identified Sensor Contact public contract 유효성을 함께 확인.
+// - v1.30.0: Vehicle Target Identity fail-closed 회귀와 Critical suppression 중 Warning duration 비소모/첫 표시부터 3초 lifecycle 회귀를 추가.
+// - v1.29.0: 저장 WBP_CFInGameHUD의 Designer-owned Root Slot을 현재 UUserInterfaceSettings DPI Scale로 환산한 1920×1080 / 2560×1440 / 3440×1440 / 5120×1440 logical Viewport에 해석해 6 Panel 화면내 유지·상호 비겹침과 ReticleLayer full-stretch를 검증하는 ResolutionLayoutContract 추가.
+// - v1.28.0: AlertStyleLifecycleContract와 NestedStyleContextContract를 추가해 Style Alert duration/persistent, non-reset lifecycle, Priority와 Root→중첩 Production Styled Widget Context 전파를 검증.
+// - v1.27.0: 저장 WBP_CFInGameHUD의 ReticleLayer Vehicle Semantic Image가 Camera 상대 Yaw를 차체 상대 화면 방향으로 소비하고 ±90도 clamp, Spectate/Destroyed/Unavailable hide, Designer Track ownership을 지키는 ViewModeProductionConsumerContract 추가.
+// - v1.26.1: transient Pawn에 Production FollowCamera가 없는 Automation 환경에서는 Camera Runtime 초기화를 강제하지 않고 VehicleCameraComp의 공식 GetCurrentAimDirection fallback 계약을 사용하도록 Fixture를 교정.
+// - v1.26.0: 기존 VehicleCameraComp/AimComp source로 Camera Mode·Vehicle Heading·Camera 상대 방향·CurrentMuzzleDirection 기반 Turret 상대 방향을 ViewMode에 전달하고 Null Rebind에서 fail-closed하는 계약을 추가.
+// - v1.25.0: RadarContactConsumerContract를 전용 UImage Blip/Brush Template, Display Range Text, Frame/Player, selected range-out 2-Corner Edge 검증으로 교정하고 Text glyph icon 부재를 명시적으로 확인.
+// - v1.24.0: RadarContactConsumerContract 초기 기능 slice에서 7개 actual Contact pool, normalized Canvas Anchor, in-range selected bracket과 range-out 4-corner 오용 방지를 검증. Text glyph 기대는 v1.25.0에서 제거.
+// - v1.23.0: UI-P0-07 TargetKnowledgePanelContract를 추가해 NO TARGET, Detected Unknown, Identified, Sensor Contact Unknown fail-closed와 Clear 복귀를 저장 Production TargetPanel에서 검증.
+// - v1.22.0: RpmGaugeVisualBindingContract를 구형 21 ProgressBar Tick 검증에서 단일 UI Material Image + `RPMRatio` 0/.85/.925/1/reset0 검증으로 전환하고 legacy RPM Tick 부재를 명시적으로 확인.
 // - v1.21.0: explicit WeaponCharge의 초기값·승인 한 발 소비·Game-Time 회복·충전 부족 차단 가능 상태, 실제 WeaponComp 연계, HUD Charge Channel과 Compact Primary/Secondary/NO CHARGE 우선순위를 검증하는 WeaponChargeRuntimeResourceContract 추가. Pawn protected fire helper는 테스트 편의로 노출하지 않음.
 // - v1.20.0: saved Production WeaponPanel의 truthful Text Rail 구조, selected exclusion, fixed order, DisplayName-only/generic fallback, 2+overflow와 실제 Presenter slot 적용을 검증하는 WeaponRailVisualContract 추가.
 // - v1.19.0: Applied Fitting ResolvedMounts 고정 순서→Weapon Selection Runtime→per-weapon Cooldown/Heat 격리→HUD DisplayName/SelectedIndex를 transient-only로 검증하는 WeaponSelectionRuntimeContract 추가. Production Rail/Asset mutation 0.
@@ -36,18 +48,33 @@
 // - Defense 검증은 Production 계산을 복제하지 않고 실제 UCFVehicleDefenseComp::TryApplyDamageToActor와 Shield 재생 Tick을 사용합니다.
 // - FirePattern은 RIPPLE/SALVO 문구 선택에만 사용하며 Presentation 수명 전이는 LauncherSequenceRevision과 Active 상태로 검증합니다.
 // - v1.13.0 Stage B 테스트는 저장 Production HUD를 읽기만 하며 Asset을 생성·수정·저장하지 않습니다. 새 의미 슬롯 Asset 적용 전에는 의도적으로 통과 조건이 성립하지 않습니다.
-// - v1.17.0 RPM Visual Binding 테스트도 저장 Production HUD를 읽기만 하며 대표 VehicleData의 RedlineStartRPM을 작성하거나 Asset을 저장하지 않습니다.
+// - v1.22.0 RPM Visual Binding 테스트도 저장 Production HUD를 읽기만 하며 대표 VehicleData의 RedlineStartRPM을 작성하거나 Asset을 저장하지 않습니다. UI Material의 Runtime MID 스칼라만 transient Widget에서 검증합니다.
 // - v1.18.0 Heat 검증은 transient 순수 Runtime/ViewData만 사용하고 WeaponData/Production Asset을 생성·수정·저장하지 않습니다.
 // - v1.19.0 Weapon Selection 검증은 transient Fitting Snapshot·Pawn·DataAsset UObject만 사용하고 실제 Content/Production Rail/Input Asset을 생성·수정·저장하지 않습니다.
 // - v1.20.0 Weapon Rail 검증은 저장 Production HUD를 읽기만 하고 Presenter synthetic ViewData를 적용합니다. Runtime ID, weapon icon, 비선택 resource summary를 생성하지 않으며 Asset을 저장하지 않습니다. 내부 MountProfileId는 Fitting→WeaponComp identity 검증에만 사용하고 HUD ViewData에는 노출하지 않습니다.
 // - v1.21.0 WeaponCharge 검증은 transient Runtime/Pawn/ViewData만 사용하고 저장 WeaponData/Production Asset을 생성·수정·저장하지 않습니다. VehicleBattery, Heat tuning, Redline authoring은 변경하지 않습니다.
+// - v1.23.0 Target Knowledge 검증은 저장 Production HUD를 읽기만 하고 synthetic FCFTargetHUDData를 Presenter에 적용합니다. TargetPanel Asset, Sensor Runtime과 TargetSelect Runtime은 생성·수정·저장하지 않습니다.
+// - v1.25.0 Radar Contact Consumer 검증은 B2 targeted migration이 끝난 저장 RadarPanel을 읽고 Presenter가 transient UImage pool만 추가합니다. Frame/Blip/Player/Selection Texture는 저장 Asset Brush를 검증하며 Content Asset을 저장하지 않습니다.
+// - v1.26.0 ViewMode 검증은 transient Map/Pawn의 기존 Camera/Aim Runtime만 사용하며 Content/Blueprint/DataAsset을 생성·수정·저장하지 않습니다.
+// - v1.28.0 Alert/Style 검증은 Native Style CDO와 저장 Production HUD를 읽기만 하며 Asset을 생성·수정·저장하지 않습니다. Alert 시간은 synthetic Game-Time 인자로 결정론적으로 검증합니다.
+// - v1.29.0 Resolution 검증은 저장 Production Root의 기존 UCanvasPanelSlot Anchor/Offset/Alignment와 현재 Project UUserInterfaceSettings의 DPI Scale을 읽어 synthetic logical Viewport에 계산만 하며 Product Layout·Asset·Viewport Runtime을 변경하지 않습니다.
+// - v1.32.0 Identity fixture는 Production CFTargetCandidateSearch의 native interface resolver branch와 동일한 GetTargetDisplayInfo_Implementation 호출을 사용합니다. Raw Execute dispatch를 native C++ override 검증 수단으로 해석하지 않습니다.
+// - v1.31.0 Identity 검증은 transient UCFVehicleData의 PrimaryAssetId만 사용하며 실제 VehicleData Asset을 생성·수정·저장하지 않습니다. Actor instance 이름을 TargetId/DisplayName fallback으로 사용하지 않고 Identified Sensor Contact 계약까지 확인합니다.
+// - v1.30.0 Identity/Alert remediation 검증은 transient VehiclePawn과 synthetic Alert Game-Time만 사용하며 Content Asset을 생성·수정·저장하지 않습니다.
+
+
 
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "CFDamageData.h"
 #include "CFEquipmentPresetData.h"
+#include "CFSensorTypes.h"
+#include "CFTargetSelectable.h"
 #include "CFTurretMountData.h"
+#include "CFVehicleAimComp.h"
+#include "CFVehicleAimTypes.h"
+#include "CFVehicleCameraComp.h"
 #include "CFVehicleData.h"
 #include "CFVehicleDefenseComp.h"
 #include "CFVehicleDefenseData.h"
@@ -61,12 +88,17 @@
 #include "CFWeaponHeatRuntime.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
 #include "Blueprint/UserWidget.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Components/Image.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Components/Widget.h"
 #include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/UserInterfaceSettings.h"
 #include "EngineUtils.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/AutomationEditorCommon.h"
 #include "UI/CFHUDDataProvider.h"
@@ -1849,19 +1881,19 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"CarFight.UI.UI_P0_06.RpmGaugeVisualBindingContract",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-// [v1.17.0] 저장 Production SpeedGauge 21 Tick이 explicit RPM ratio를 소비하고 unconfigured Redline에서 stale/fallback fill을 남기지 않는지 검증합니다.
+// [v1.22.0] 저장 Production SpeedGauge의 단일 UI Material이 explicit RPM ratio를 소비하고 unconfigured Redline에서 stale/fallback 값을 남기지 않는지 검증합니다.
 bool FCFHUDP006RpmGaugeVisualBindingTest::RunTest(const FString& Parameters)
 {
 	(void)Parameters;
 
-	// [v1.17.0] 저장 Production HUD Widget을 실제 생성해 RPM Tick binding을 검증할 Automation World입니다.
+	// [v1.22.0] 저장 Production HUD Widget을 실제 생성해 RPM Material binding을 검증할 Automation World입니다.
 	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
 	if (!TestNotNull(TEXT("UI-P0-06 RPM Visual Automation World"), TestWorld))
 	{
 		return false;
 	}
 
-	// [v1.17.0] DefaultGame.ini와 동일한 저장 Production HUD Generated Class입니다.
+	// [v1.22.0] DefaultGame.ini와 동일한 저장 Production HUD Generated Class입니다.
 	UClass* ProductionHUDClass = LoadClass<UCFStyledWidgetBase>(
 		nullptr,
 		TEXT("/Game/CarFight/UI/HUD/WBP_CFInGameHUD.WBP_CFInGameHUD_C"));
@@ -1870,49 +1902,51 @@ bool FCFHUDP006RpmGaugeVisualBindingTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
-	// [v1.17.0] 저장 Production HUD Class로 만든 테스트 전용 Widget 인스턴스입니다.
+	// [v1.22.0] 저장 Production HUD Class로 만든 테스트 전용 Widget 인스턴스입니다.
 	UCFStyledWidgetBase* ProductionHUDWidget = CreateWidget<UCFStyledWidgetBase>(TestWorld, ProductionHUDClass);
 	if (!TestNotNull(TEXT("UI-P0-06 RPM Visual Production HUD Widget"), ProductionHUDWidget))
 	{
 		return false;
 	}
 
-	// [v1.17.0] Production VehiclePanel 자식 Widget 인스턴스입니다.
+	// [v1.22.0] Production VehiclePanel 자식 Widget 인스턴스입니다.
 	UUserWidget* VehiclePanelWidget = Cast<UUserWidget>(ProductionHUDWidget->GetWidgetFromName(FName(TEXT("WBP_CFVehiclePanel"))));
 	if (!TestNotNull(TEXT("UI-P0-06 RPM Visual VehiclePanel"), VehiclePanelWidget))
 	{
 		return false;
 	}
 
-	// [v1.17.0] 21 RPM Tick과 Speed/Gear를 소유하는 저장 Production SpeedGauge입니다.
+	// [v1.22.0] 단일 동적 RPM Material Image와 Speed/Gear를 소유하는 저장 Production SpeedGauge입니다.
 	UUserWidget* SpeedGaugeWidget = Cast<UUserWidget>(VehiclePanelWidget->GetWidgetFromName(FName(TEXT("WBP_CFSpeedGauge"))));
 	if (!TestNotNull(TEXT("UI-P0-06 RPM Visual SpeedGauge"), SpeedGaugeWidget))
 	{
 		return false;
 	}
 
-	// [v1.17.0] 저장 SpeedGauge에 존재해야 하는 고정 RPM Tick 개수입니다.
-	constexpr int32 EngineRpmGaugeTickCount = 21;
-	// [v1.17.0] 저장 Production SpeedGauge에서 찾은 21개 Tick Widget 포인터입니다.
-	TArray<UProgressBar*> EngineRpmGaugeTicks;
-	EngineRpmGaugeTicks.Reserve(EngineRpmGaugeTickCount);
-	// [v1.17.0] 저장 Production Tick 이름을 00~20까지 순서대로 조회할 인덱스입니다.
-	int32 TickIndex = 0;
-	for (; TickIndex < EngineRpmGaugeTickCount; ++TickIndex)
+	// [v1.22.0] Track·21 Tick·Red Zone을 한 Material에서 렌더링하는 실제 Production RPM Gauge Image입니다.
+	UImage* RpmGaugeImage = Cast<UImage>(SpeedGaugeWidget->GetWidgetFromName(FName(TEXT("Image_RPMGauge"))));
+	if (!TestNotNull(TEXT("UI-P0-06 RPM Visual 단일 Material Image"), RpmGaugeImage))
 	{
-		// [v1.17.0] 현재 저장 Production Tick의 고유 Widget 이름입니다.
-		const FName TickWidgetName(*FString::Printf(TEXT("ProgressBar_RPMTick%02d"), TickIndex));
-		// [v1.17.0] Presenter가 runtime Percent를 적용할 실제 저장 ProgressBar Tick입니다.
-		UProgressBar* TickWidget = Cast<UProgressBar>(SpeedGaugeWidget->GetWidgetFromName(TickWidgetName));
-		if (!TestNotNull(*FString::Printf(TEXT("UI-P0-06 RPM Visual Tick %02d"), TickIndex), TickWidget))
-		{
-			return false;
-		}
-		EngineRpmGaugeTicks.Add(TickWidget);
+		return false;
 	}
-	TestEqual(TEXT("UI-P0-06 RPM Visual Tick 정확히 21개"), EngineRpmGaugeTicks.Num(), EngineRpmGaugeTickCount);
 
-	// [v1.17.0] 실제 Production Widget에 ViewData를 적용할 Presenter입니다.
+	// [v1.22.0] 구형 UMG 그림 구조의 대표 첫 Tick은 저장 Production Tree에 더 이상 존재하면 안 됩니다.
+	TestNull(
+		TEXT("UI-P0-06 RPM Visual legacy ProgressBar Tick 제거"),
+		SpeedGaugeWidget->GetWidgetFromName(FName(TEXT("ProgressBar_RPMTick00"))));
+	// [v1.22.0] 구형 정적 Track 전용 Image도 새 Material Image와 중복하면 안 됩니다.
+	TestNull(
+		TEXT("UI-P0-06 RPM Visual legacy Track Image 제거"),
+		SpeedGaugeWidget->GetWidgetFromName(FName(TEXT("Image_RPMTrackArt"))));
+
+	// [v1.22.0] RPM Gauge Brush Material에서 만들어져 Presenter가 RPMRatio를 갱신할 Widget 전용 MID입니다.
+	UMaterialInstanceDynamic* RpmGaugeMaterial = RpmGaugeImage->GetDynamicMaterial();
+	if (!TestNotNull(TEXT("UI-P0-06 RPM Visual Dynamic Material"), RpmGaugeMaterial))
+	{
+		return false;
+	}
+
+	// [v1.22.0] 실제 Production Widget에 ViewData를 적용할 Presenter입니다.
 	UCFHUDPresenter* Presenter = NewObject<UCFHUDPresenter>(GetTransientPackage());
 	if (!TestNotNull(TEXT("UI-P0-06 RPM Visual Presenter"), Presenter))
 	{
@@ -1920,45 +1954,38 @@ bool FCFHUDP006RpmGaugeVisualBindingTest::RunTest(const FString& Parameters)
 	}
 	Presenter->SetProductionWidget(ProductionHUDWidget);
 
-	// [v1.17.0] private UFUNCTION HandleHUDViewDataChanged를 실제 delegate와 동일한 경로로 호출할 Reflection 함수입니다.
+	// [v1.22.0] private UFUNCTION HandleHUDViewDataChanged를 실제 delegate와 동일한 경로로 호출할 Reflection 함수입니다.
 	UFunction* HandleViewDataFunction = Presenter->FindFunction(FName(TEXT("HandleHUDViewDataChanged")));
 	if (!TestNotNull(TEXT("UI-P0-06 RPM Visual HandleHUDViewDataChanged"), HandleViewDataFunction))
 	{
 		return false;
 	}
 
-	// [v1.17.0] Reflection UFUNCTION의 단일 ViewData 인자를 전달할 파라미터 구조입니다.
+	// [v1.22.0] Reflection UFUNCTION의 단일 ViewData 인자를 전달할 파라미터 구조입니다.
 	struct FHandleHUDViewDataChangedParams
 	{
-		// [v1.17.0] Presenter에 적용할 전체 HUD ViewData입니다.
+		// [v1.22.0] Presenter에 적용할 전체 HUD ViewData입니다.
 		FCFInGameUIViewData ViewData;
 	};
 
-	// [v1.17.0] 한 ViewData를 Presenter에 한 번 전달해 Production RPM Tick을 갱신하는 테스트 Helper입니다.
+	// [v1.22.0] 한 ViewData를 Presenter에 한 번 전달해 Production RPM Material Parameter를 갱신하는 테스트 Helper입니다.
 	auto ApplyViewDataOnce = [Presenter, HandleViewDataFunction](const FCFInGameUIViewData& ViewData)
 	{
-		// [v1.17.0] 현재 한 번 적용할 Reflection 호출 파라미터입니다.
+		// [v1.22.0] 현재 한 번 적용할 Reflection 호출 파라미터입니다.
 		FHandleHUDViewDataChangedParams Params;
 		Params.ViewData = ViewData;
 		Presenter->ProcessEvent(HandleViewDataFunction, &Params);
 	};
 
-	// [v1.17.0] 21개 Tick이 모두 지정 Percent인지 검증하는 반복 Helper입니다.
-		auto TestAllTickPercent = [this, &EngineRpmGaugeTicks](const TCHAR* TickPercentTestLabel, const float ExpectedPercent)
+	// [v1.22.0] 현재 MID의 RPMRatio가 기대 0~1 값인지 검증하는 Helper입니다.
+	auto TestRpmRatio = [this, RpmGaugeMaterial](const TCHAR* TestLabel, const float ExpectedRatio)
 	{
-		// [v1.17.0] 모든 저장 Production Tick을 순회할 인덱스입니다.
-		int32 CurrentTickIndex = 0;
-		for (; CurrentTickIndex < EngineRpmGaugeTicks.Num(); ++CurrentTickIndex)
-		{
-			// [v1.17.0] 현재 Tick의 실제 Runtime Percent입니다.
-			const float CurrentTickPercent = EngineRpmGaugeTicks[CurrentTickIndex]->GetPercent();
-			TestTrue(
-				*FString::Printf(TEXT("%s Tick%02d"), TickPercentTestLabel, CurrentTickIndex),
-				FMath::IsNearlyEqual(CurrentTickPercent, ExpectedPercent));
-		}
+		// [v1.22.0] Presenter가 현재 Widget 전용 MID에 적용한 실제 RPMRatio 값입니다.
+		const float ActualRpmRatio = RpmGaugeMaterial->K2_GetScalarParameterValue(FName(TEXT("RPMRatio")));
+		TestTrue(TestLabel, FMath::IsNearlyEqual(ActualRpmRatio, ExpectedRatio, 0.0001f));
 	};
 
-	// [v1.17.0] 대표 VehicleData처럼 Max는 있지만 Redline은 0/Unavailable인 현재 Production 입력을 재현하는 전체 HUD ViewData입니다.
+	// [v1.22.0] 대표 VehicleData처럼 Max는 있지만 Redline은 0/Unavailable인 현재 Production 입력을 재현하는 전체 HUD ViewData입니다.
 	FCFInGameUIViewData ViewData;
 	ViewData.Vehicle.EngineRpmAvailability = ECFUIViewAvailability::Known;
 	ViewData.Vehicle.EngineRpm = 6500.0f;
@@ -1967,33 +1994,28 @@ bool FCFHUDP006RpmGaugeVisualBindingTest::RunTest(const FString& Parameters)
 	ViewData.Vehicle.EngineRedlineStartRpmAvailability = ECFUIViewAvailability::Unavailable;
 	ViewData.Vehicle.EngineRedlineStartRpm = 0.0f;
 	ApplyViewDataOnce(ViewData);
-	TestAllTickPercent(TEXT("UI-P0-06 Redline Unconfigured는 Max fallback 없이 fill 0"), 0.0f);
+	TestRpmRatio(TEXT("UI-P0-06 Redline Unconfigured는 Max fallback 없이 RPMRatio 0"), 0.0f);
 
-	// [v1.17.0] Visual binding만 검증하기 위한 synthetic explicit Redline 계약이며 저장 VehicleData Asset에는 쓰지 않습니다.
+	// [v1.22.0] Visual binding만 검증하기 위한 synthetic explicit Redline 계약이며 저장 VehicleData Asset에는 쓰지 않습니다.
 	ViewData.Vehicle.EngineRedlineStartRpmAvailability = ECFUIViewAvailability::Known;
 	ViewData.Vehicle.EngineRedlineStartRpm = 6000.0f;
 	ViewData.Vehicle.EngineMaximumRpm = 7000.0f;
 	ViewData.Vehicle.EngineRpm = 6000.0f;
 	ApplyViewDataOnce(ViewData);
-	TestTrue(TEXT("UI-P0-06 Redline에서 Tick00 full"), FMath::IsNearlyEqual(EngineRpmGaugeTicks[0]->GetPercent(), 1.0f));
-	TestTrue(TEXT("UI-P0-06 Redline에서 Tick16 full"), FMath::IsNearlyEqual(EngineRpmGaugeTicks[16]->GetPercent(), 1.0f));
-	TestTrue(TEXT("UI-P0-06 Redline 0.85 위치 Tick17 full"), FMath::IsNearlyEqual(EngineRpmGaugeTicks[17]->GetPercent(), 1.0f));
-	TestTrue(TEXT("UI-P0-06 Redline 다음 Tick18 empty"), FMath::IsNearlyZero(EngineRpmGaugeTicks[18]->GetPercent()));
+	TestRpmRatio(TEXT("UI-P0-06 Redline에서 RPMRatio 0.85"), 0.85f);
 
 	ViewData.Vehicle.EngineRpm = 6500.0f;
 	ApplyViewDataOnce(ViewData);
-	TestTrue(TEXT("UI-P0-06 0.925에서 Tick18 full"), FMath::IsNearlyEqual(EngineRpmGaugeTicks[18]->GetPercent(), 1.0f));
-	TestTrue(TEXT("UI-P0-06 0.925에서 Tick19 half"), FMath::IsNearlyEqual(EngineRpmGaugeTicks[19]->GetPercent(), 0.5f));
-	TestTrue(TEXT("UI-P0-06 0.925에서 Tick20 empty"), FMath::IsNearlyZero(EngineRpmGaugeTicks[20]->GetPercent()));
+	TestRpmRatio(TEXT("UI-P0-06 Redline-Max 중간에서 RPMRatio 0.925"), 0.925f);
 
 	ViewData.Vehicle.EngineRpm = 7000.0f;
 	ApplyViewDataOnce(ViewData);
-	TestAllTickPercent(TEXT("UI-P0-06 Maximum에서 21 Tick full"), 1.0f);
+	TestRpmRatio(TEXT("UI-P0-06 Maximum에서 RPMRatio 1.0"), 1.0f);
 
 	ViewData.Vehicle.EngineRedlineStartRpmAvailability = ECFUIViewAvailability::Unavailable;
 	ViewData.Vehicle.EngineRedlineStartRpm = 0.0f;
 	ApplyViewDataOnce(ViewData);
-	TestAllTickPercent(TEXT("UI-P0-06 Redline 제거 후 stale fill reset"), 0.0f);
+	TestRpmRatio(TEXT("UI-P0-06 Redline 제거 후 stale RPMRatio reset"), 0.0f);
 	return true;
 }
 
@@ -2854,8 +2876,1229 @@ bool FCFHUDWeaponLauncherPresentationTest::RunTest(const FString& Parameters)
 			false,
 			WeaponStatusText,
 			WeaponStatusProgress));
-	TestEqual(TEXT("HeavyCannon READY 문구"), WeaponStatusText.ToString(), FString(TEXT("READY")));
+		TestEqual(TEXT("HeavyCannon READY 문구"), WeaponStatusText.ToString(), FString(TEXT("READY")));
 	TestTrue(TEXT("HeavyCannon READY 진행률 1.0"), FMath::IsNearlyEqual(WeaponStatusProgress, 1.0f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP007TargetIdentityFailClosedTest,
+	"CarFight.UI.UI_P0_07.TargetIdentityFailClosedContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.31.0] VehiclePawn Target Identity가 VehicleData PrimaryAssetId를 사용하고 Actor instance 이름과 Player-facing 이름 fallback을 노출하지 않는지 검증합니다.
+bool FCFHUDP007TargetIdentityFailClosedTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.31.0] Content Asset 없이 실제 VehiclePawn TargetSelectable override를 검증할 transient Automation World입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("UI-P0-07 Identity Automation World"), TestWorld))
+	{
+		return false;
+	}
+
+	// [v1.31.0] Target Identity로 절대 사용되면 안 되는 결정적 내부 Actor instance 이름을 지정할 Spawn 설정입니다.
+	FActorSpawnParameters SpawnParameters;
+	SpawnParameters.Name = TEXT("InternalVehicleActorName");
+
+	// [v1.31.0] 처음에는 VehicleData가 없어 TargetId가 fail-closed여야 하는 실제 기본 VehiclePawn입니다.
+	ACFVehiclePawn* VehiclePawn = TestWorld->SpawnActor<ACFVehiclePawn>(
+		ACFVehiclePawn::StaticClass(),
+		FVector::ZeroVector,
+		FRotator::ZeroRotator,
+		SpawnParameters);
+	if (!TestNotNull(TEXT("UI-P0-07 Identity Vehicle Pawn"), VehiclePawn))
+	{
+		return false;
+	}
+
+		// [v1.32.0] Production TargetCandidate resolver의 native interface branch와 동일하게 사용할 차량 TargetSelectable 구현입니다.
+	const ICFTargetSelectable* NativeTargetSelectable = Cast<ICFTargetSelectable>(VehiclePawn);
+	if (!TestNotNull(TEXT("UI-P0-07 native Vehicle TargetSelectable"), NativeTargetSelectable))
+	{
+		VehiclePawn->Destroy();
+		return false;
+	}
+
+	// [v1.32.0] VehicleData 미지정 상태에서 native Production resolver 경로가 반환한 fail-closed 표시 정보입니다.
+	const FCFTargetDisplayInfo MissingVehicleDataDisplayInfo = NativeTargetSelectable->GetTargetDisplayInfo_Implementation();
+	TestEqual(TEXT("UI-P0-07 VehicleData 없음 TargetId fail-closed"), MissingVehicleDataDisplayInfo.TargetId, NAME_None);
+	TestTrue(TEXT("UI-P0-07 VehicleData 없음 DisplayName fail-closed"), MissingVehicleDataDisplayInfo.DisplayName.IsEmpty());
+
+	// [v1.31.0] 실제 Content Asset을 만들지 않고 안정 PrimaryAssetId source를 제공할 transient VehicleData입니다.
+	UCFVehicleData* StableVehicleData = NewObject<UCFVehicleData>(GetTransientPackage(), TEXT("DA_AutomationStableVehicle"));
+	if (!TestNotNull(TEXT("UI-P0-07 transient VehicleData"), StableVehicleData))
+	{
+		VehiclePawn->Destroy();
+		return false;
+	}
+	VehiclePawn->VehicleData = StableVehicleData;
+
+	// [v1.31.0] Pawn instance 수명/이름과 독립된 VehicleData의 안정 Primary Asset 식별자입니다.
+	const FPrimaryAssetId StableVehiclePrimaryAssetId = StableVehicleData->GetPrimaryAssetId();
+	if (!TestTrue(TEXT("UI-P0-07 VehicleData PrimaryAssetId valid"), StableVehiclePrimaryAssetId.IsValid()))
+	{
+		VehiclePawn->Destroy();
+		return false;
+	}
+
+		// [v1.32.0] VehicleData 지정 뒤 native Production resolver 경로가 반환한 안정 Target Identity 표시 정보입니다.
+	const FCFTargetDisplayInfo StableDisplayInfo = NativeTargetSelectable->GetTargetDisplayInfo_Implementation();
+	TestEqual(TEXT("UI-P0-07 TargetId는 VehicleData PrimaryAssetName"), StableDisplayInfo.TargetId, StableVehiclePrimaryAssetId.PrimaryAssetName);
+	TestNotEqual(TEXT("UI-P0-07 TargetId는 Actor instance 이름이 아님"), StableDisplayInfo.TargetId, VehiclePawn->GetFName());
+	TestTrue(TEXT("UI-P0-07 Player-facing DisplayName은 명시 source 전까지 Empty"), StableDisplayInfo.DisplayName.IsEmpty());
+	TestEqual(TEXT("UI-P0-07 Vehicle Category 유지"), StableDisplayInfo.TargetCategory, ECFTargetCategory::Vehicle);
+	TestEqual(TEXT("UI-P0-07 Identified source 의미 유지"), StableDisplayInfo.InformationLevel, ECFTargetInfoLevel::Identified);
+
+	// [v1.31.0] Identified Sensor 공개 계약이 새 안정 TargetId를 정상 수용하는지 검증할 Actor-free Contact입니다.
+	FCFSensorContact IdentifiedSensorContact;
+	IdentifiedSensorContact.ContactId = TEXT("Contact_IdentityContract");
+	IdentifiedSensorContact.KnownTargetId = StableDisplayInfo.TargetId;
+	IdentifiedSensorContact.InformationLevel = ECFTargetInfoLevel::Identified;
+	IdentifiedSensorContact.ContactState = ECFSensorContactState::Live;
+	TestTrue(TEXT("UI-P0-07 안정 TargetId는 Identified Sensor public contract 유효"), IdentifiedSensorContact.IsPublicContractValid());
+
+	VehiclePawn->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP007TargetKnowledgePanelTest,
+	"CarFight.UI.UI_P0_07.TargetKnowledgePanelContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.23.0] 저장 Production TargetPanel이 TargetSelect 선택 상태와 Sensor Snapshot Knowledge를 ViewData 경계에서만 소비하는지 검증합니다.
+bool FCFHUDP007TargetKnowledgePanelTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.23.0] 저장 Production HUD를 실제 인스턴스화해 TargetPanel Presenter 적용을 확인할 Automation World입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("UI-P0-07 Target Knowledge Automation World"), TestWorld))
+	{
+		return false;
+	}
+
+	// [v1.23.0] DefaultGame.ini와 동일한 저장 Production HUD Generated Class입니다.
+	UClass* ProductionHUDClass = LoadClass<UCFStyledWidgetBase>(
+		nullptr,
+		TEXT("/Game/CarFight/UI/HUD/WBP_CFInGameHUD.WBP_CFInGameHUD_C"));
+	if (!TestNotNull(TEXT("UI-P0-07 Production HUD Class"), ProductionHUDClass))
+	{
+		return false;
+	}
+
+	// [v1.23.0] 저장 Production HUD Class로 만든 테스트 전용 Widget 인스턴스입니다.
+	UCFStyledWidgetBase* ProductionHUDWidget = CreateWidget<UCFStyledWidgetBase>(TestWorld, ProductionHUDClass);
+	if (!TestNotNull(TEXT("UI-P0-07 Production HUD Widget"), ProductionHUDWidget))
+	{
+		return false;
+	}
+
+	// [v1.23.0] 저장 Production Root 아래 Target Knowledge 의미 Widget입니다.
+	UUserWidget* TargetPanelWidget = Cast<UUserWidget>(ProductionHUDWidget->GetWidgetFromName(FName(TEXT("WBP_CFTargetPanel"))));
+	if (!TestNotNull(TEXT("UI-P0-07 TargetPanel"), TargetPanelWidget))
+	{
+		return false;
+	}
+
+	// [v1.23.0] 선택 없음/Unknown/Identified 상태를 표시할 Target 제목입니다.
+	UTextBlock* TargetTitleText = Cast<UTextBlock>(TargetPanelWidget->GetWidgetFromName(FName(TEXT("Text_TargetTitle"))));
+	// [v1.23.0] Sensor Snapshot 기반 실제 거리 표시입니다.
+	UTextBlock* TargetDistanceText = Cast<UTextBlock>(TargetPanelWidget->GetWidgetFromName(FName(TEXT("Text_TargetDistance"))));
+	// [v1.23.0] Sensor Knowledge Identity 공개 상태 표시입니다.
+	UTextBlock* TargetIdentityText = Cast<UTextBlock>(TargetPanelWidget->GetWidgetFromName(FName(TEXT("Text_TargetIdentity"))));
+	// [v1.23.0] 아직 authoritative Target Armor source가 없어 숨김을 유지할 Mock Row입니다.
+	UTextBlock* TargetArmorText = Cast<UTextBlock>(TargetPanelWidget->GetWidgetFromName(FName(TEXT("Text_TargetArmor"))));
+	// [v1.23.0] Sensor Analysis 진행률의 Player-facing Text입니다.
+	UTextBlock* TargetScanText = Cast<UTextBlock>(TargetPanelWidget->GetWidgetFromName(FName(TEXT("Text_TargetScan"))));
+	// [v1.23.0] Sensor Analysis 진행률의 0~1 Bar입니다.
+	UProgressBar* TargetScanProgressBar = Cast<UProgressBar>(TargetPanelWidget->GetWidgetFromName(FName(TEXT("ProgressBar_TargetScan"))));
+	if (!TestNotNull(TEXT("UI-P0-07 Target Title"), TargetTitleText)
+		|| !TestNotNull(TEXT("UI-P0-07 Target Distance"), TargetDistanceText)
+		|| !TestNotNull(TEXT("UI-P0-07 Target Identity"), TargetIdentityText)
+		|| !TestNotNull(TEXT("UI-P0-07 Target Armor"), TargetArmorText)
+		|| !TestNotNull(TEXT("UI-P0-07 Target Scan Text"), TargetScanText)
+		|| !TestNotNull(TEXT("UI-P0-07 Target Scan Progress"), TargetScanProgressBar))
+	{
+		return false;
+	}
+
+	// [v1.23.0] synthetic Target ViewData를 실제 Production Widget에 적용할 Presenter입니다.
+	UCFHUDPresenter* Presenter = NewObject<UCFHUDPresenter>(GetTransientPackage());
+	if (!TestNotNull(TEXT("UI-P0-07 Presenter"), Presenter))
+	{
+		return false;
+	}
+	Presenter->SetProductionWidget(ProductionHUDWidget);
+
+	// [v1.23.0] private UFUNCTION HandleHUDViewDataChanged를 실제 Provider delegate 경로와 동일하게 호출할 Reflection 함수입니다.
+	UFunction* HandleViewDataFunction = Presenter->FindFunction(FName(TEXT("HandleHUDViewDataChanged")));
+	if (!TestNotNull(TEXT("UI-P0-07 HandleHUDViewDataChanged"), HandleViewDataFunction))
+	{
+		return false;
+	}
+
+	// [v1.23.0] Reflection UFUNCTION의 단일 ViewData 인자를 전달할 파라미터 구조입니다.
+	struct FHandleHUDViewDataChangedParams
+	{
+		// [v1.23.0] Presenter에 적용할 전체 HUD ViewData입니다.
+		FCFInGameUIViewData ViewData;
+	};
+
+	// [v1.23.0] Target 관련 ViewData를 Production Presenter에 정확히 한 번 적용하는 Helper입니다.
+	auto ApplyTargetViewDataOnce = [Presenter, HandleViewDataFunction](const FCFTargetHUDData& TargetViewData)
+	{
+		// [v1.23.0] 이번 한 번의 Presenter 적용에 사용할 전체 ViewData 파라미터입니다.
+		FHandleHUDViewDataChangedParams Params;
+		Params.ViewData.Target = TargetViewData;
+		Presenter->ProcessEvent(HandleViewDataFunction, &Params);
+	};
+
+	// [v1.23.0] 선택 Target이 없는 기본 상태입니다.
+	FCFTargetHUDData NoTargetViewData;
+	NoTargetViewData.Availability = ECFUIViewAvailability::KnownZero;
+	ApplyTargetViewDataOnce(NoTargetViewData);
+	TestEqual(TEXT("UI-P0-07 no target title"), TargetTitleText->GetText().ToString(), FString(TEXT("NO TARGET")));
+	TestEqual(TEXT("UI-P0-07 no target distance collapsed"), TargetDistanceText->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-07 no target identity collapsed"), TargetIdentityText->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-07 no target armor collapsed"), TargetArmorText->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-07 no target scan text collapsed"), TargetScanText->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-07 no target scan bar collapsed"), TargetScanProgressBar->GetVisibility(), ESlateVisibility::Collapsed);
+
+	// [v1.23.0] Sensor가 Contact와 거리/분석 진행률은 알고 있지만 Identity는 아직 공개하지 않은 Detected 상태입니다.
+	FCFTargetHUDData DetectedTargetViewData;
+	DetectedTargetViewData.Availability = ECFUIViewAvailability::Known;
+	DetectedTargetViewData.bHasSelectedTarget = true;
+	DetectedTargetViewData.bSelectedTargetValid = true;
+	DetectedTargetViewData.SensorContactAvailability = ECFUIViewAvailability::Known;
+	DetectedTargetViewData.IdentityAvailability = ECFUIViewAvailability::Unknown;
+	DetectedTargetViewData.InformationLevel = ECFTargetInfoLevel::Detected;
+	DetectedTargetViewData.DistanceAvailability = ECFUIViewAvailability::Known;
+	DetectedTargetViewData.DistanceMeters = 842.0f;
+	DetectedTargetViewData.AnalysisProgress01 = 0.35f;
+	ApplyTargetViewDataOnce(DetectedTargetViewData);
+	TestEqual(TEXT("UI-P0-07 detected unknown title"), TargetTitleText->GetText().ToString(), FString(TEXT("UNKNOWN CONTACT")));
+	TestEqual(TEXT("UI-P0-07 detected identity unknown"), TargetIdentityText->GetText().ToString(), FString(TEXT("식별  ???")));
+	TestEqual(TEXT("UI-P0-07 detected distance"), TargetDistanceText->GetText().ToString(), FString(TEXT("거리  842 m")));
+	TestEqual(TEXT("UI-P0-07 detected scan text"), TargetScanText->GetText().ToString(), FString(TEXT("스캔  35%")));
+	TestTrue(TEXT("UI-P0-07 detected scan progress 0.35"), FMath::IsNearlyEqual(TargetScanProgressBar->GetPercent(), 0.35f));
+	TestEqual(TEXT("UI-P0-07 detected distance visible"), TargetDistanceText->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("UI-P0-07 detected identity visible"), TargetIdentityText->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("UI-P0-07 detected scan visible"), TargetScanText->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("UI-P0-07 target armor remains collapsed"), TargetArmorText->GetVisibility(), ESlateVisibility::Collapsed);
+
+	// [v1.23.0] Sensor Knowledge가 Identified로 승격해 Player-facing DisplayName을 공개한 상태입니다.
+	FCFTargetHUDData IdentifiedTargetViewData = DetectedTargetViewData;
+	IdentifiedTargetViewData.IdentityAvailability = ECFUIViewAvailability::Known;
+	IdentifiedTargetViewData.DisplayName = FText::FromString(TEXT("적대 차량"));
+	IdentifiedTargetViewData.InformationLevel = ECFTargetInfoLevel::Identified;
+	IdentifiedTargetViewData.AnalysisProgress01 = 0.60f;
+	ApplyTargetViewDataOnce(IdentifiedTargetViewData);
+	TestEqual(TEXT("UI-P0-07 identified title"), TargetTitleText->GetText().ToString(), FString(TEXT("적대 차량")));
+	TestEqual(TEXT("UI-P0-07 identified identity"), TargetIdentityText->GetText().ToString(), FString(TEXT("식별  적대 차량")));
+	TestEqual(TEXT("UI-P0-07 identified scan text"), TargetScanText->GetText().ToString(), FString(TEXT("스캔  60%")));
+	TestTrue(TEXT("UI-P0-07 identified scan progress 0.60"), FMath::IsNearlyEqual(TargetScanProgressBar->GetPercent(), 0.60f));
+
+	// [v1.23.0] 선택 기록은 남아 있어도 현재 Sensor Contact가 Unknown이면 stale 거리/분석 숫자를 노출하지 않는 fail-closed 상태입니다.
+	FCFTargetHUDData UnknownContactViewData = DetectedTargetViewData;
+	UnknownContactViewData.SensorContactAvailability = ECFUIViewAvailability::Unknown;
+	UnknownContactViewData.DistanceMeters = 999.0f;
+	UnknownContactViewData.AnalysisProgress01 = 0.95f;
+	ApplyTargetViewDataOnce(UnknownContactViewData);
+	TestEqual(TEXT("UI-P0-07 unknown contact title"), TargetTitleText->GetText().ToString(), FString(TEXT("UNKNOWN CONTACT")));
+	TestEqual(TEXT("UI-P0-07 unknown contact distance collapsed"), TargetDistanceText->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-07 unknown contact scan text collapsed"), TargetScanText->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-07 unknown contact scan bar collapsed"), TargetScanProgressBar->GetVisibility(), ESlateVisibility::Collapsed);
+
+		ApplyTargetViewDataOnce(NoTargetViewData);
+	TestEqual(TEXT("UI-P0-07 clear returns NO TARGET"), TargetTitleText->GetText().ToString(), FString(TEXT("NO TARGET")));
+	TestEqual(TEXT("UI-P0-07 clear distance collapsed"), TargetDistanceText->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-07 clear identity collapsed"), TargetIdentityText->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-07 clear scan collapsed"), TargetScanText->GetVisibility(), ESlateVisibility::Collapsed);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP008RadarContactConsumerTest,
+	"CarFight.UI.UI_P0_08.RadarContactConsumerContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.25.0] 저장 Production RadarPanel이 전용 Image Template와 FCFRadarHUDData만으로 runtime Contact·Range·selected edge를 확장·배치하는지 검증합니다.
+bool FCFHUDP008RadarContactConsumerTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.25.0] 저장 Production HUD 인스턴스에 synthetic Radar ViewData를 적용할 Automation World입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("UI-P0-08B Radar Consumer Automation World"), TestWorld))
+	{
+		return false;
+	}
+
+	// [v1.25.0] DefaultGame.ini와 동일한 저장 Production HUD Generated Class입니다.
+	UClass* ProductionHUDClass = LoadClass<UCFStyledWidgetBase>(
+		nullptr,
+		TEXT("/Game/CarFight/UI/HUD/WBP_CFInGameHUD.WBP_CFInGameHUD_C"));
+	if (!TestNotNull(TEXT("UI-P0-08B Production HUD Class"), ProductionHUDClass))
+	{
+		return false;
+	}
+
+	// [v1.25.0] 실제 저장 RadarPanel Tree를 포함하는 transient Production HUD Widget 인스턴스입니다.
+	UCFStyledWidgetBase* ProductionHUDWidget = CreateWidget<UCFStyledWidgetBase>(TestWorld, ProductionHUDClass);
+	if (!TestNotNull(TEXT("UI-P0-08B Production HUD Widget"), ProductionHUDWidget))
+	{
+		return false;
+	}
+
+	// [v1.25.0] 저장 Production Root 아래 Radar 의미 Widget입니다.
+	UUserWidget* RadarPanelWidget = Cast<UUserWidget>(ProductionHUDWidget->GetWidgetFromName(FName(TEXT("WBP_CFRadarPanel"))));
+	if (!TestNotNull(TEXT("UI-P0-08B RadarPanel"), RadarPanelWidget))
+	{
+		return false;
+	}
+
+	// [v1.25.0] Designer가 크기·위치를 소유하고 runtime Contact만 추가하는 Radar 공간 Canvas입니다.
+	UCanvasPanel* RadarCanvas = Cast<UCanvasPanel>(RadarPanelWidget->GetWidgetFromName(FName(TEXT("CanvasPanel_RadarContacts"))));
+	// [v1.25.0] Radar Grid·3 Ring·Frame을 표시할 저장 전용 Image입니다.
+	UImage* RadarFrameImage = Cast<UImage>(RadarPanelWidget->GetWidgetFromName(FName(TEXT("Image_RadarFrame"))));
+	// [v1.25.0] Radar 중앙 Player 상향 삼각형 전용 Image입니다.
+	UImage* RadarPlayerImage = Cast<UImage>(RadarPanelWidget->GetWidgetFromName(FName(TEXT("Image_RadarPlayer"))));
+	// [v1.25.0] in-range 선택 Contact에 사용할 저장 4-Corner Bracket Image입니다.
+	UImage* SelectedBracketImage = Cast<UImage>(RadarPanelWidget->GetWidgetFromName(FName(TEXT("Image_RadarSelected"))));
+	// [v1.25.0] range-out 선택 Contact에 사용할 저장 2-Corner Edge Bracket Image입니다.
+	UImage* SelectedEdgeImage = Cast<UImage>(RadarPanelWidget->GetWidgetFromName(FName(TEXT("Image_RadarSelectedEdge"))));
+	// [v1.25.0] 현재 단계식 Display Range를 표시할 저장 Text 의미 슬롯입니다.
+	UTextBlock* RadarRangeText = Cast<UTextBlock>(RadarPanelWidget->GetWidgetFromName(FName(TEXT("Text_RadarRange"))));
+	if (!TestNotNull(TEXT("UI-P0-08B Radar Canvas"), RadarCanvas)
+		|| !TestNotNull(TEXT("UI-P0-08B Radar Frame"), RadarFrameImage)
+		|| !TestNotNull(TEXT("UI-P0-08B Radar Player"), RadarPlayerImage)
+		|| !TestNotNull(TEXT("UI-P0-08B Selected Bracket"), SelectedBracketImage)
+		|| !TestNotNull(TEXT("UI-P0-08B Selected Edge"), SelectedEdgeImage)
+		|| !TestNotNull(TEXT("UI-P0-08B Radar Range Text"), RadarRangeText))
+	{
+		return false;
+	}
+	TestNotNull(TEXT("UI-P0-08B Radar Frame dedicated Brush"), RadarFrameImage->GetBrush().GetResourceObject());
+	TestNotNull(TEXT("UI-P0-08B Radar Player dedicated Brush"), RadarPlayerImage->GetBrush().GetResourceObject());
+	TestNotNull(TEXT("UI-P0-08B Selected 4-corner dedicated Brush"), SelectedBracketImage->GetBrush().GetResourceObject());
+	TestNotNull(TEXT("UI-P0-08B Selected Edge dedicated Brush"), SelectedEdgeImage->GetBrush().GetResourceObject());
+
+	// [v1.25.0] Friendly runtime Image의 Brush/색/크기를 소유하는 숨겨진 저장 Template입니다.
+	UImage* FriendlyTemplate = Cast<UImage>(RadarPanelWidget->GetWidgetFromName(FName(TEXT("Image_RadarFriendly"))));
+	// [v1.25.0] Neutral runtime Image의 Unknown diamond Brush와 Neutral 색/크기를 소유하는 숨겨진 저장 Template입니다.
+	UImage* NeutralTemplate = Cast<UImage>(RadarPanelWidget->GetWidgetFromName(FName(TEXT("Image_RadarNeutral"))));
+	// [v1.25.0] Hostile runtime Image의 Brush/색/크기를 소유하는 숨겨진 저장 Template입니다.
+	UImage* HostileTemplate = Cast<UImage>(RadarPanelWidget->GetWidgetFromName(FName(TEXT("Image_RadarHostile"))));
+	// [v1.25.0] Unknown runtime Image의 Brush/색/크기를 소유하는 숨겨진 저장 Template입니다.
+	UImage* UnknownTemplate = Cast<UImage>(RadarPanelWidget->GetWidgetFromName(FName(TEXT("Image_RadarUnknown"))));
+	if (!TestNotNull(TEXT("UI-P0-08B Friendly Template"), FriendlyTemplate)
+		|| !TestNotNull(TEXT("UI-P0-08B Neutral Template"), NeutralTemplate)
+		|| !TestNotNull(TEXT("UI-P0-08B Hostile Template"), HostileTemplate)
+		|| !TestNotNull(TEXT("UI-P0-08B Unknown Template"), UnknownTemplate))
+	{
+		return false;
+	}
+	TestNotNull(TEXT("UI-P0-08B Friendly dedicated Brush"), FriendlyTemplate->GetBrush().GetResourceObject());
+	TestNotNull(TEXT("UI-P0-08B Neutral dedicated Brush"), NeutralTemplate->GetBrush().GetResourceObject());
+	TestNotNull(TEXT("UI-P0-08B Hostile dedicated Brush"), HostileTemplate->GetBrush().GetResourceObject());
+	TestNotNull(TEXT("UI-P0-08B Unknown dedicated Brush"), UnknownTemplate->GetBrush().GetResourceObject());
+
+	// [v1.25.0] synthetic Radar ViewData를 실제 Production Widget에 적용할 Presenter입니다.
+	UCFHUDPresenter* Presenter = NewObject<UCFHUDPresenter>(GetTransientPackage());
+	if (!TestNotNull(TEXT("UI-P0-08B Presenter"), Presenter))
+	{
+		return false;
+	}
+	Presenter->SetProductionWidget(ProductionHUDWidget);
+
+	// [v1.25.0] private UFUNCTION HandleHUDViewDataChanged를 실제 Provider delegate와 같은 경로로 호출할 Reflection 함수입니다.
+	UFunction* HandleViewDataFunction = Presenter->FindFunction(FName(TEXT("HandleHUDViewDataChanged")));
+	if (!TestNotNull(TEXT("UI-P0-08B HandleHUDViewDataChanged"), HandleViewDataFunction))
+	{
+		return false;
+	}
+
+	// [v1.25.0] Reflection UFUNCTION의 단일 ViewData 인자를 전달할 파라미터 구조입니다.
+	struct FHandleHUDViewDataChangedParams
+	{
+		// [v1.25.0] Presenter에 적용할 전체 HUD ViewData입니다.
+		FCFInGameUIViewData ViewData;
+	};
+
+	// [v1.25.0] Radar 관련 ViewData를 Production Presenter에 정확히 한 번 적용하는 Helper입니다.
+	auto ApplyRadarViewDataOnce = [Presenter, HandleViewDataFunction](const FCFRadarHUDData& RadarViewData)
+	{
+		// [v1.25.0] 이번 한 번의 Presenter 적용에 사용할 전체 ViewData 파라미터입니다.
+		FHandleHUDViewDataChangedParams Params;
+		Params.ViewData.Radar = RadarViewData;
+		Presenter->ProcessEvent(HandleViewDataFunction, &Params);
+	};
+
+	// [v1.25.0] runtime pool 이름으로 현재 Canvas에 존재하는 Image Blip을 찾는 Helper입니다.
+	auto FindRuntimeBlip = [RadarCanvas](const int32 PoolIndex) -> UImage*
+	{
+		// [v1.25.0] Presenter와 동일한 안정 runtime Image Blip 이름입니다.
+		const FName RuntimeBlipName(*FString::Printf(TEXT("Image_RadarRuntimeContact_%03d"), PoolIndex));
+		for (int32 ChildIndex = 0; ChildIndex < RadarCanvas->GetChildrenCount(); ++ChildIndex)
+		{
+			// [v1.25.0] 현재 Radar Canvas의 한 runtime/static Image 자식입니다.
+			UImage* RuntimeBlip = Cast<UImage>(RadarCanvas->GetChildAt(ChildIndex));
+			if (RuntimeBlip && RuntimeBlip->GetFName() == RuntimeBlipName)
+			{
+				return RuntimeBlip;
+			}
+		}
+		return nullptr;
+	};
+
+	// [v1.25.0] 5개 Preview보다 많은 실제 Contact도 고정 상한 없이 표시하는 첫 Radar ViewData입니다.
+	FCFRadarHUDData InRangeRadarViewData;
+	InRangeRadarViewData.Availability = ECFUIViewAvailability::Known;
+	InRangeRadarViewData.DisplayRangeAvailability = ECFUIViewAvailability::Known;
+	InRangeRadarViewData.DisplayRangeMeters = 50.0f;
+	InRangeRadarViewData.MaximumDetectionRangeAvailability = ECFUIViewAvailability::Known;
+	InRangeRadarViewData.MaximumDetectionRangeMeters = 100.0f;
+
+	// [v1.25.0] Forward +0.6 / Right +0.2 위치의 Friendly Contact입니다.
+	FCFRadarContactHUDData FriendlyContact;
+	FriendlyContact.Relation = ECFTargetRelation::Friendly;
+	FriendlyContact.NormalizedPositionAvailability = ECFUIViewAvailability::Known;
+	FriendlyContact.NormalizedPosition = FVector2D(0.6f, 0.2f);
+	FriendlyContact.bInsideDisplayRange = true;
+	InRangeRadarViewData.Contacts.Add(FriendlyContact);
+
+	// [v1.25.0] Forward -0.2 / Right +0.5 위치의 선택 Hostile Contact입니다.
+	FCFRadarContactHUDData SelectedHostileContact;
+	SelectedHostileContact.Relation = ECFTargetRelation::Hostile;
+	SelectedHostileContact.NormalizedPositionAvailability = ECFUIViewAvailability::Known;
+	SelectedHostileContact.NormalizedPosition = FVector2D(-0.2f, 0.5f);
+	SelectedHostileContact.bInsideDisplayRange = true;
+	SelectedHostileContact.bSelected = true;
+	InRangeRadarViewData.Contacts.Add(SelectedHostileContact);
+
+	// [v1.25.0] Neutral이 Unknown diamond Texture를 관계색만 바꿔 재사용하는 in-range Contact입니다.
+	FCFRadarContactHUDData NeutralContact;
+	NeutralContact.Relation = ECFTargetRelation::Neutral;
+	NeutralContact.NormalizedPositionAvailability = ECFUIViewAvailability::Known;
+	NeutralContact.NormalizedPosition = FVector2D(0.1f, -0.3f);
+	NeutralContact.bInsideDisplayRange = true;
+	InRangeRadarViewData.Contacts.Add(NeutralContact);
+
+	for (int32 ExtraContactIndex = 0; ExtraContactIndex < 4; ++ExtraContactIndex)
+	{
+		// [v1.25.0] 고정 Preview 5개 상한을 넘기기 위해 추가하는 실제 synthetic Unknown Contact입니다.
+		FCFRadarContactHUDData ExtraContact;
+		ExtraContact.Relation = ECFTargetRelation::Unknown;
+		ExtraContact.NormalizedPositionAvailability = ECFUIViewAvailability::Known;
+		ExtraContact.NormalizedPosition = FVector2D(-0.30f + (0.12f * ExtraContactIndex), -0.20f + (0.08f * ExtraContactIndex));
+		ExtraContact.bInsideDisplayRange = true;
+		InRangeRadarViewData.Contacts.Add(ExtraContact);
+	}
+
+	ApplyRadarViewDataOnce(InRangeRadarViewData);
+	TestEqual(TEXT("UI-P0-08B Radar Canvas visible"), RadarCanvas->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("UI-P0-08B Radar Frame visible"), RadarFrameImage->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("UI-P0-08B Radar Player visible"), RadarPlayerImage->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("UI-P0-08B Range text"), RadarRangeText->GetText().ToString(), FString(TEXT("RANGE 50 m")));
+	TestEqual(TEXT("UI-P0-08B Range text visible"), RadarRangeText->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("UI-P0-08B static Friendly preview hidden"), FriendlyTemplate->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-08B static Neutral preview hidden"), NeutralTemplate->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-08B static Hostile preview hidden"), HostileTemplate->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-08B static Unknown preview hidden"), UnknownTemplate->GetVisibility(), ESlateVisibility::Collapsed);
+	TestNull(TEXT("UI-P0-08B legacy Text glyph runtime Blip 없음"), RadarPanelWidget->GetWidgetFromName(FName(TEXT("Text_RadarRuntimeContact_000"))));
+
+	for (int32 ExpectedBlipIndex = 0; ExpectedBlipIndex < 7; ++ExpectedBlipIndex)
+	{
+		// [v1.25.0] 이번 ViewData의 각 in-range Contact에 대응해야 하는 runtime pooled Image입니다.
+		UImage* RuntimeBlip = FindRuntimeBlip(ExpectedBlipIndex);
+		TestNotNull(*FString::Printf(TEXT("UI-P0-08B runtime Image Blip %d 존재"), ExpectedBlipIndex), RuntimeBlip);
+		if (RuntimeBlip)
+		{
+			TestEqual(*FString::Printf(TEXT("UI-P0-08B runtime Image Blip %d visible"), ExpectedBlipIndex), RuntimeBlip->GetVisibility(), ESlateVisibility::HitTestInvisible);
+			TestNotNull(*FString::Printf(TEXT("UI-P0-08B runtime Image Blip %d Brush"), ExpectedBlipIndex), RuntimeBlip->GetBrush().GetResourceObject());
+		}
+	}
+
+	// [v1.25.0] 관계별 Brush Template를 확인할 첫 세 runtime Image Blip입니다.
+	UImage* FriendlyBlip = FindRuntimeBlip(0);
+	UImage* HostileBlip = FindRuntimeBlip(1);
+	UImage* NeutralBlip = FindRuntimeBlip(2);
+	if (!TestNotNull(TEXT("UI-P0-08B Friendly Blip"), FriendlyBlip)
+		|| !TestNotNull(TEXT("UI-P0-08B Hostile Blip"), HostileBlip)
+		|| !TestNotNull(TEXT("UI-P0-08B Neutral Blip"), NeutralBlip))
+	{
+		return false;
+	}
+	TestTrue(TEXT("UI-P0-08B Friendly Brush Template 일치"), FriendlyBlip->GetBrush().GetResourceObject() == FriendlyTemplate->GetBrush().GetResourceObject());
+	TestTrue(TEXT("UI-P0-08B Hostile Brush Template 일치"), HostileBlip->GetBrush().GetResourceObject() == HostileTemplate->GetBrush().GetResourceObject());
+	TestTrue(TEXT("UI-P0-08B Neutral diamond Brush Template 일치"), NeutralBlip->GetBrush().GetResourceObject() == NeutralTemplate->GetBrush().GetResourceObject());
+	TestTrue(TEXT("UI-P0-08B Friendly relation color 일치"), FriendlyBlip->GetColorAndOpacity().Equals(FriendlyTemplate->GetColorAndOpacity()));
+	TestTrue(TEXT("UI-P0-08B Hostile relation color 일치"), HostileBlip->GetColorAndOpacity().Equals(HostileTemplate->GetColorAndOpacity()));
+	TestTrue(TEXT("UI-P0-08B Neutral relation color 일치"), NeutralBlip->GetColorAndOpacity().Equals(NeutralTemplate->GetColorAndOpacity()));
+
+	// [v1.25.0] Friendly normalized Forward/Right를 Canvas 0~1 Anchor로 변환한 실제 Slot입니다.
+	UCanvasPanelSlot* FriendlyBlipSlot = Cast<UCanvasPanelSlot>(FriendlyBlip->Slot);
+	// [v1.25.0] 선택 Hostile normalized 위치를 같은 방식으로 변환한 실제 Slot입니다.
+	UCanvasPanelSlot* HostileBlipSlot = Cast<UCanvasPanelSlot>(HostileBlip->Slot);
+	// [v1.25.0] Friendly runtime 크기의 Designer owner인 Template Slot입니다.
+	UCanvasPanelSlot* FriendlyTemplateSlot = Cast<UCanvasPanelSlot>(FriendlyTemplate->Slot);
+	// [v1.25.0] 기존 Designer 4-Corner Bracket의 runtime 위치 Slot입니다.
+	UCanvasPanelSlot* SelectedBracketSlot = Cast<UCanvasPanelSlot>(SelectedBracketImage->Slot);
+	if (!TestNotNull(TEXT("UI-P0-08B Friendly Canvas Slot"), FriendlyBlipSlot)
+		|| !TestNotNull(TEXT("UI-P0-08B Hostile Canvas Slot"), HostileBlipSlot)
+		|| !TestNotNull(TEXT("UI-P0-08B Friendly Template Slot"), FriendlyTemplateSlot)
+		|| !TestNotNull(TEXT("UI-P0-08B Selected Canvas Slot"), SelectedBracketSlot))
+	{
+		return false;
+	}
+	TestTrue(TEXT("UI-P0-08B Friendly anchor X 0.60"), FMath::IsNearlyEqual(FriendlyBlipSlot->GetAnchors().Minimum.X, 0.60f, 0.001f));
+	TestTrue(TEXT("UI-P0-08B Friendly anchor Y 0.20"), FMath::IsNearlyEqual(FriendlyBlipSlot->GetAnchors().Minimum.Y, 0.20f, 0.001f));
+	TestTrue(TEXT("UI-P0-08B Hostile anchor X 0.75"), FMath::IsNearlyEqual(HostileBlipSlot->GetAnchors().Minimum.X, 0.75f, 0.001f));
+	TestTrue(TEXT("UI-P0-08B Hostile anchor Y 0.60"), FMath::IsNearlyEqual(HostileBlipSlot->GetAnchors().Minimum.Y, 0.60f, 0.001f));
+	TestTrue(TEXT("UI-P0-08B runtime Blip 크기는 Designer Template 소유"), FriendlyBlipSlot->GetSize().Equals(FriendlyTemplateSlot->GetSize(), 0.001f));
+	TestTrue(TEXT("UI-P0-08B selected bracket follows hostile X"), FMath::IsNearlyEqual(SelectedBracketSlot->GetAnchors().Minimum.X, 0.75f, 0.001f));
+	TestTrue(TEXT("UI-P0-08B selected bracket follows hostile Y"), FMath::IsNearlyEqual(SelectedBracketSlot->GetAnchors().Minimum.Y, 0.60f, 0.001f));
+	TestEqual(TEXT("UI-P0-08B selected in-range bracket visible"), SelectedBracketImage->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("UI-P0-08B selected in-range edge hidden"), SelectedEdgeImage->GetVisibility(), ESlateVisibility::Collapsed);
+
+	// [v1.25.0] 선택 Contact가 표시 범위 밖으로 나갔지만 08A가 Edge Direction을 제공하는 상태입니다.
+	FCFRadarHUDData RangeOutRadarViewData = InRangeRadarViewData;
+	RangeOutRadarViewData.Contacts.Reset();
+	// [v1.25.0] 승인된 2-Corner Edge Bracket이 필요한 range-out selected Contact입니다.
+	FCFRadarContactHUDData RangeOutSelectedContact;
+	RangeOutSelectedContact.Relation = ECFTargetRelation::Hostile;
+	RangeOutSelectedContact.NormalizedPositionAvailability = ECFUIViewAvailability::Known;
+	RangeOutSelectedContact.NormalizedPosition = FVector2D(0.948683f, 0.316228f);
+	RangeOutSelectedContact.bInsideDisplayRange = false;
+	RangeOutSelectedContact.bSelected = true;
+	RangeOutSelectedContact.bShowSelectedEdgeMarker = true;
+	RangeOutSelectedContact.SelectedEdgeDirection = RangeOutSelectedContact.NormalizedPosition;
+	RangeOutRadarViewData.Contacts.Add(RangeOutSelectedContact);
+	ApplyRadarViewDataOnce(RangeOutRadarViewData);
+	TestEqual(TEXT("UI-P0-08B range-out ordinary Blip hidden"), FriendlyBlip->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-08B range-out에 4-corner bracket 오용 금지"), SelectedBracketImage->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-08B range-out 2-corner edge visible"), SelectedEdgeImage->GetVisibility(), ESlateVisibility::HitTestInvisible);
+
+	// [v1.25.0] selected edge direction을 Radar circumference Anchor로 변환한 실제 Slot입니다.
+	UCanvasPanelSlot* SelectedEdgeSlot = Cast<UCanvasPanelSlot>(SelectedEdgeImage->Slot);
+	if (!TestNotNull(TEXT("UI-P0-08B Selected Edge Canvas Slot"), SelectedEdgeSlot))
+	{
+		return false;
+	}
+	TestTrue(TEXT("UI-P0-08B selected edge anchor X"), FMath::IsNearlyEqual(SelectedEdgeSlot->GetAnchors().Minimum.X, 0.658114f, 0.001f));
+	TestTrue(TEXT("UI-P0-08B selected edge anchor Y"), FMath::IsNearlyEqual(SelectedEdgeSlot->GetAnchors().Minimum.Y, 0.025659f, 0.001f));
+
+	// [v1.25.0] Sensor Runtime은 준비됐지만 Contact가 0개인 정상 KnownZero Radar 상태입니다.
+	FCFRadarHUDData EmptyRadarViewData;
+	EmptyRadarViewData.Availability = ECFUIViewAvailability::KnownZero;
+	ApplyRadarViewDataOnce(EmptyRadarViewData);
+	TestEqual(TEXT("UI-P0-08B KnownZero Radar Canvas 유지"), RadarCanvas->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("UI-P0-08B KnownZero Frame 유지"), RadarFrameImage->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("UI-P0-08B KnownZero Player 유지"), RadarPlayerImage->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("UI-P0-08B KnownZero Range unknown이면 collapsed"), RadarRangeText->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-08B KnownZero runtime Blip hidden"), FriendlyBlip->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-08B KnownZero selected edge hidden"), SelectedEdgeImage->GetVisibility(), ESlateVisibility::Collapsed);
+
+	// [v1.25.0] Sensor/Radar Provider 자체가 없는 fail-closed 상태입니다.
+	FCFRadarHUDData UnavailableRadarViewData;
+	UnavailableRadarViewData.Availability = ECFUIViewAvailability::Unavailable;
+	ApplyRadarViewDataOnce(UnavailableRadarViewData);
+			TestEqual(TEXT("UI-P0-08B unavailable Radar Canvas collapsed"), RadarCanvas->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-08B unavailable Frame collapsed"), RadarFrameImage->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-08B unavailable Player collapsed"), RadarPlayerImage->GetVisibility(), ESlateVisibility::Collapsed);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP009ViewModeDirectionTest,
+	"CarFight.UI.UI_P0_09.ViewModeDirectionFoundation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.26.0] 실제 VehicleCameraComp/AimComp의 기존 상태가 차체 기준 ViewMode ViewData로 전달되고 Null Rebind에서 제거되는지 검증합니다.
+bool FCFHUDP009ViewModeDirectionTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.26.0] Asset 저장 없이 실제 Vehicle Pawn과 Component 수명을 제공할 transient Automation World입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("UI-P0-09A transient World 생성"), TestWorld))
+	{
+		return false;
+	}
+
+	// [v1.26.0] 차체 Heading 30도를 명시해 카메라·터렛 상대각 기준을 고정할 Spawn 설정입니다.
+	FActorSpawnParameters SpawnParameters;
+	SpawnParameters.Name = FName(TEXT("UI_P0_09_ViewModePawn"));
+	// [v1.26.0] 실제 Camera/Aim Component를 기본 소유하는 테스트 차량 Pawn입니다.
+	ACFVehiclePawn* VehiclePawn = TestWorld->SpawnActor<ACFVehiclePawn>(
+		ACFVehiclePawn::StaticClass(),
+		FVector::ZeroVector,
+		FRotator(0.0f, 30.0f, 0.0f),
+		SpawnParameters);
+	if (!TestNotNull(TEXT("UI-P0-09A Vehicle Pawn 생성"), VehiclePawn))
+	{
+		return false;
+	}
+
+	// [v1.26.0] 현재 Camera Mode와 실제 시선 방향을 제공할 기존 VehicleCameraComp입니다.
+	UCFVehicleCameraComp* VehicleCameraComponent = VehiclePawn->GetVehicleCameraComp();
+	// [v1.26.0] CurrentMuzzleDirection과 정렬 상태를 제공할 기존 VehicleAimComp입니다.
+	UCFVehicleAimComp* VehicleAimComponent = VehiclePawn->GetVehicleAimComp();
+	if (!TestNotNull(TEXT("UI-P0-09A VehicleCameraComp 존재"), VehicleCameraComponent)
+		|| !TestNotNull(TEXT("UI-P0-09A VehicleAimComp 존재"), VehicleAimComponent))
+	{
+		return false;
+	}
+
+			// [v1.26.1] Transient Pawn에는 Production FollowCamera 참조가 없으므로 초기화를 강제하지 않고 CameraComp의 공식 fallback 시선 계약을 사용합니다.
+	VehicleCameraComponent->ResetAimToVehicleForward();
+
+	// [v1.26.0] 차체 Yaw 30도에서 월드 Yaw 60도·Pitch 10도로 향하도록 만든 실제 Weapon Aim Solution 입력입니다.
+	FCFVehicleWeaponAimSolution WeaponAimSolution;
+	WeaponAimSolution.bHasValidSolution = true;
+	WeaponAimSolution.bTurretAligning = true;
+	WeaponAimSolution.CurrentMuzzleDirection = FRotator(10.0f, 60.0f, 0.0f).Vector();
+	WeaponAimSolution.AimDirection = WeaponAimSolution.CurrentMuzzleDirection;
+	WeaponAimSolution.DesiredAimDirection = WeaponAimSolution.CurrentMuzzleDirection;
+	VehicleAimComponent->SetWeaponAimSolution(WeaponAimSolution);
+
+	// [v1.26.0] 실제 Pawn Runtime을 UI ViewData로 변환할 transient HUD Provider입니다.
+	UCFHUDDataProvider* DataProvider = NewObject<UCFHUDDataProvider>();
+	if (!TestNotNull(TEXT("UI-P0-09A HUD Provider 생성"), DataProvider))
+	{
+		return false;
+	}
+	DataProvider->RebindCurrentPawn(VehiclePawn);
+
+	// [v1.26.0] Provider가 Camera/Aim Runtime에서 만든 현재 ViewMode 결과입니다.
+	const FCFViewModeHUDData& ViewModeData = DataProvider->GetCurrentViewData().ViewMode;
+	TestEqual(TEXT("UI-P0-09A ViewMode Known"), ViewModeData.Availability, ECFUIViewAvailability::Known);
+	TestEqual(TEXT("UI-P0-09A 기본 Camera Mode Normal"), ViewModeData.CameraMode, ECFVehicleCameraMode::Normal);
+	TestTrue(TEXT("UI-P0-09A Vehicle Heading 30도"), FMath::IsNearlyEqual(ViewModeData.VehicleHeadingDegrees, 30.0f, 0.1f));
+	TestTrue(TEXT("UI-P0-09A Camera 상대 Yaw finite"), FMath::IsFinite(ViewModeData.CameraRelativeYawDegrees));
+	TestTrue(TEXT("UI-P0-09A Camera 상대 Yaw -180~180"), ViewModeData.CameraRelativeYawDegrees >= -180.0f && ViewModeData.CameraRelativeYawDegrees <= 180.0f);
+	TestTrue(TEXT("UI-P0-09A Camera Pitch finite"), FMath::IsFinite(ViewModeData.CameraPitchDegrees));
+	TestTrue(TEXT("UI-P0-09A Turret 방향 사용 가능"), ViewModeData.bTurretDirectionAvailable);
+	TestTrue(TEXT("UI-P0-09A Turret 상대 Yaw +30도"), FMath::IsNearlyEqual(ViewModeData.TurretRelativeYawDegrees, 30.0f, 0.1f));
+	TestTrue(TEXT("UI-P0-09A Turret Pitch +10도"), FMath::IsNearlyEqual(ViewModeData.TurretPitchDegrees, 10.0f, 0.1f));
+	TestTrue(TEXT("UI-P0-09A Turret Aligning 원본 전달"), ViewModeData.bTurretAligning);
+
+	DataProvider->RebindCurrentPawn(nullptr);
+	// [v1.26.0] Null Rebind 뒤 이전 차량의 ViewMode 방향이 남지 않았는지 확인할 새 ViewData입니다.
+	const FCFViewModeHUDData& ClearedViewModeData = DataProvider->GetCurrentViewData().ViewMode;
+	TestEqual(TEXT("UI-P0-09A Null Rebind ViewMode Unavailable"), ClearedViewModeData.Availability, ECFUIViewAvailability::Unavailable);
+			TestFalse(TEXT("UI-P0-09A Null Rebind Turret 방향 제거"), ClearedViewModeData.bTurretDirectionAvailable);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP009ViewModeConsumerTest,
+	"CarFight.UI.UI_P0_09.ViewModeProductionConsumerContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.27.0] 저장 Production Root의 Vehicle Direction Image가 ViewMode ViewData만 소비해 Camera 기준 차체 좌우 방향을 표시하는지 검증합니다.
+bool FCFHUDP009ViewModeConsumerTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.27.0] 저장 Production HUD를 실제 인스턴스화해 ViewMode Presenter 적용을 확인할 Automation World입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("UI-P0-09B Production Consumer Automation World"), TestWorld))
+	{
+		return false;
+	}
+
+	// [v1.27.0] DefaultGame.ini와 동일한 저장 Production HUD Generated Class입니다.
+	UClass* ProductionHUDClass = LoadClass<UCFStyledWidgetBase>(
+		nullptr,
+		TEXT("/Game/CarFight/UI/HUD/WBP_CFInGameHUD.WBP_CFInGameHUD_C"));
+	if (!TestNotNull(TEXT("UI-P0-09B Production HUD Class"), ProductionHUDClass))
+	{
+		return false;
+	}
+
+	// [v1.27.0] 저장 ReticleLayer와 ViewDirection 의미 Widget을 포함하는 테스트 전용 Production HUD 인스턴스입니다.
+	UCFStyledWidgetBase* ProductionHUDWidget = CreateWidget<UCFStyledWidgetBase>(TestWorld, ProductionHUDClass);
+	if (!TestNotNull(TEXT("UI-P0-09B Production HUD Widget"), ProductionHUDWidget))
+	{
+		return false;
+	}
+
+	// [v1.27.0] 기존 Production Root의 full-screen Reticle presentation owner입니다.
+	UCanvasPanel* ReticleLayer = Cast<UCanvasPanel>(ProductionHUDWidget->GetWidgetFromName(FName(TEXT("CanvasPanel_Slot_ReticleLayer"))));
+	// [v1.27.0] 위치·크기를 UMG Designer가 소유할 Vehicle Direction Track입니다.
+	UCanvasPanel* ViewDirectionCanvas = Cast<UCanvasPanel>(ProductionHUDWidget->GetWidgetFromName(FName(TEXT("CanvasPanel_ViewDirection"))));
+	// [v1.27.0] Camera 기준 차체 좌우 방향을 표시할 Vehicle Semantic Image입니다.
+	UImage* VehicleDirectionImage = Cast<UImage>(ProductionHUDWidget->GetWidgetFromName(FName(TEXT("Image_ViewVehicleDirection"))));
+	if (!TestNotNull(TEXT("UI-P0-09B ReticleLayer"), ReticleLayer)
+		|| !TestNotNull(TEXT("UI-P0-09B ViewDirection Track"), ViewDirectionCanvas)
+		|| !TestNotNull(TEXT("UI-P0-09B Vehicle Direction Image"), VehicleDirectionImage))
+	{
+		return false;
+	}
+	TestTrue(TEXT("UI-P0-09B Track은 ReticleLayer 직접 자식"), ViewDirectionCanvas->GetParent() == ReticleLayer);
+	TestTrue(TEXT("UI-P0-09B Vehicle Image는 Track 직접 자식"), VehicleDirectionImage->GetParent() == ViewDirectionCanvas);
+	TestNotNull(TEXT("UI-P0-09B Vehicle Semantic Brush"), VehicleDirectionImage->GetBrush().GetResourceObject());
+	TestNull(TEXT("UI-P0-09B Text glyph 방향 표시는 만들지 않음"), ProductionHUDWidget->GetWidgetFromName(FName(TEXT("Text_ViewVehicleDirection"))));
+
+	// [v1.27.0] Presenter가 runtime에는 건드리지 않아야 하는 Designer-owned Track Canvas Slot입니다.
+	UCanvasPanelSlot* ViewDirectionTrackSlot = Cast<UCanvasPanelSlot>(ViewDirectionCanvas->Slot);
+	// [v1.27.0] Presenter가 ViewData에 따라 X Anchor만 갱신할 Vehicle Image Canvas Slot입니다.
+	UCanvasPanelSlot* VehicleDirectionSlot = Cast<UCanvasPanelSlot>(VehicleDirectionImage->Slot);
+	if (!TestNotNull(TEXT("UI-P0-09B Track Canvas Slot"), ViewDirectionTrackSlot)
+		|| !TestNotNull(TEXT("UI-P0-09B Vehicle Direction Canvas Slot"), VehicleDirectionSlot))
+	{
+		return false;
+	}
+	// [v1.27.0] Presenter 적용 전 Designer Track Anchor를 보존 여부 비교용으로 저장합니다.
+	const FAnchors InitialTrackAnchors = ViewDirectionTrackSlot->GetAnchors();
+	// [v1.27.0] Presenter 적용 전 Designer Track Offset을 보존 여부 비교용으로 저장합니다.
+	const FMargin InitialTrackOffsets = ViewDirectionTrackSlot->GetOffsets();
+
+	// [v1.27.0] synthetic ViewMode ViewData를 저장 Production Widget에 적용할 Presenter입니다.
+	UCFHUDPresenter* Presenter = NewObject<UCFHUDPresenter>(GetTransientPackage());
+	if (!TestNotNull(TEXT("UI-P0-09B Presenter"), Presenter))
+	{
+		return false;
+	}
+	Presenter->SetProductionWidget(ProductionHUDWidget);
+
+	// [v1.27.0] private UFUNCTION HandleHUDViewDataChanged를 실제 Provider delegate와 같은 경로로 호출할 Reflection 함수입니다.
+	UFunction* HandleViewDataFunction = Presenter->FindFunction(FName(TEXT("HandleHUDViewDataChanged")));
+	if (!TestNotNull(TEXT("UI-P0-09B HandleHUDViewDataChanged"), HandleViewDataFunction))
+	{
+		return false;
+	}
+
+	// [v1.27.0] Reflection UFUNCTION의 단일 ViewData 인자를 전달할 파라미터 구조입니다.
+	struct FHandleHUDViewDataChangedParams
+	{
+		// [v1.27.0] Presenter에 적용할 전체 HUD ViewData입니다.
+		FCFInGameUIViewData ViewData;
+	};
+
+	// [v1.27.0] ViewMode ViewData를 Production Presenter에 정확히 한 번 적용하는 Helper입니다.
+	auto ApplyViewModeOnce = [Presenter, HandleViewDataFunction](const FCFViewModeHUDData& ViewModeViewData)
+	{
+		// [v1.27.0] 이번 한 번의 Presenter 적용에 사용할 전체 ViewData 파라미터입니다.
+		FHandleHUDViewDataChangedParams Params;
+		Params.ViewData.ViewMode = ViewModeViewData;
+		Presenter->ProcessEvent(HandleViewDataFunction, &Params);
+	};
+
+	// [v1.27.0] Camera와 차체 정면이 일치해 Vehicle Direction이 Track 중앙에 있어야 하는 기본 상태입니다.
+	FCFViewModeHUDData CenterViewMode;
+	CenterViewMode.Availability = ECFUIViewAvailability::Known;
+	CenterViewMode.CameraMode = ECFVehicleCameraMode::Normal;
+	CenterViewMode.CameraRelativeYawDegrees = 0.0f;
+	ApplyViewModeOnce(CenterViewMode);
+	TestEqual(TEXT("UI-P0-09B 중앙 Vehicle Direction visible"), VehicleDirectionImage->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestTrue(TEXT("UI-P0-09B 중앙 anchor X 0.5"), FMath::IsNearlyEqual(VehicleDirectionSlot->GetAnchors().Minimum.X, 0.5f, 0.001f));
+
+	// [v1.27.0] Camera가 차체보다 오른쪽 45도를 보면 차체 방향은 화면 왼쪽 25% 지점에 있어야 합니다.
+	FCFViewModeHUDData CameraRightViewMode = CenterViewMode;
+	CameraRightViewMode.CameraRelativeYawDegrees = 45.0f;
+	ApplyViewModeOnce(CameraRightViewMode);
+	TestTrue(TEXT("UI-P0-09B Camera +45 => Vehicle anchor X 0.25"), FMath::IsNearlyEqual(VehicleDirectionSlot->GetAnchors().Minimum.X, 0.25f, 0.001f));
+
+	// [v1.27.0] Camera가 차체보다 왼쪽 90도를 보면 차체 방향은 Track 오른쪽 끝에 있어야 합니다.
+	FCFViewModeHUDData CameraLeftViewMode = CenterViewMode;
+	CameraLeftViewMode.CameraRelativeYawDegrees = -90.0f;
+	ApplyViewModeOnce(CameraLeftViewMode);
+	TestTrue(TEXT("UI-P0-09B Camera -90 => Vehicle anchor X 1.0"), FMath::IsNearlyEqual(VehicleDirectionSlot->GetAnchors().Minimum.X, 1.0f, 0.001f));
+
+	// [v1.27.0] Camera가 차체보다 오른쪽 135도여도 presentation 범위를 넘지 않고 왼쪽 끝으로 clamp되어야 합니다.
+	FCFViewModeHUDData CameraFarRightViewMode = CenterViewMode;
+	CameraFarRightViewMode.CameraRelativeYawDegrees = 135.0f;
+	ApplyViewModeOnce(CameraFarRightViewMode);
+	TestTrue(TEXT("UI-P0-09B Camera +135 => Vehicle anchor X clamp 0.0"), FMath::IsNearlyEqual(VehicleDirectionSlot->GetAnchors().Minimum.X, 0.0f, 0.001f));
+
+	// [v1.27.0] Player vehicle 방향을 표현하면 안 되는 Spectate 상태입니다.
+	FCFViewModeHUDData SpectateViewMode = CenterViewMode;
+	SpectateViewMode.CameraMode = ECFVehicleCameraMode::Spectate;
+	ApplyViewModeOnce(SpectateViewMode);
+	TestEqual(TEXT("UI-P0-09B Spectate Vehicle Direction hidden"), VehicleDirectionImage->GetVisibility(), ESlateVisibility::Collapsed);
+
+	// [v1.27.0] 파괴 Camera에서 이전 차체 방향을 남기지 않아야 하는 상태입니다.
+	FCFViewModeHUDData DestroyedViewMode = CenterViewMode;
+	DestroyedViewMode.CameraMode = ECFVehicleCameraMode::Destroyed;
+	ApplyViewModeOnce(DestroyedViewMode);
+	TestEqual(TEXT("UI-P0-09B Destroyed Vehicle Direction hidden"), VehicleDirectionImage->GetVisibility(), ESlateVisibility::Collapsed);
+
+	// [v1.27.0] Pawn/Rebind source가 없어 ViewMode 자체가 Unavailable인 fail-closed 상태입니다.
+	FCFViewModeHUDData UnavailableViewMode;
+	UnavailableViewMode.Availability = ECFUIViewAvailability::Unavailable;
+	ApplyViewModeOnce(UnavailableViewMode);
+	TestEqual(TEXT("UI-P0-09B Unavailable Vehicle Direction hidden"), VehicleDirectionImage->GetVisibility(), ESlateVisibility::Collapsed);
+
+	TestTrue(TEXT("UI-P0-09B Presenter는 Designer Track Anchor를 변경하지 않음"), ViewDirectionTrackSlot->GetAnchors() == InitialTrackAnchors);
+		TestTrue(TEXT("UI-P0-09B Presenter는 Designer Track Offset을 변경하지 않음"), ViewDirectionTrackSlot->GetOffsets() == InitialTrackOffsets);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP009AlertStyleTest,
+	"CarFight.UI.UI_P0_09.AlertStyleLifecycleContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.30.0] Alert duration이 반복 Refresh에 의해 리셋되지 않고 suppression 시간은 소비하지 않으며 Critical은 상태 해제까지 유지되는지 검증합니다.
+bool FCFHUDP009AlertStyleTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.28.0] private Alert lifecycle resolver를 직접 검증할 transient Presenter입니다.
+	UCFHUDPresenter* Presenter = NewObject<UCFHUDPresenter>(GetTransientPackage());
+	if (!TestNotNull(TEXT("UI-P0-09C Alert Presenter"), Presenter))
+	{
+		return false;
+	}
+
+	// [v1.28.0] Production Root가 Context 미주입 시에도 사용하는 Native Style CDO입니다.
+	const UCFUIStyleData* StyleData = GetDefault<UCFUIStyleData>();
+	if (!TestNotNull(TEXT("UI-P0-09C Native Style Data"), StyleData))
+	{
+		return false;
+	}
+	TestTrue(TEXT("UI-P0-09C Notice 기본 2초"), FMath::IsNearlyEqual(StyleData->AlertStyle.Notice.DefaultDurationSeconds, 2.0f));
+	TestTrue(TEXT("UI-P0-09C Warning 기본 3초"), FMath::IsNearlyEqual(StyleData->AlertStyle.Warning.DefaultDurationSeconds, 3.0f));
+	TestTrue(TEXT("UI-P0-09C Critical Persistent"), StyleData->AlertStyle.Critical.bPersistentByDefault);
+
+	// [v1.28.0] 반복 ViewData Refresh에서 최초 시각이 유지되는지 검증할 Warning 상태입니다.
+	FCFCombatAlertViewData WarningAlerts;
+	WarningAlerts.Availability = ECFUIViewAvailability::Known;
+	// [v1.28.0] Caution Priority가 Warning Style 3초 계약을 소비할 실제 테스트 Alert입니다.
+	FCFHUDAlertItem WarningAlert;
+	WarningAlert.AlertKey = FName(TEXT("Test.Warning"));
+	WarningAlert.Priority = ECFHUDAlertPriority::Caution;
+	WarningAlert.Title = FText::FromString(TEXT("WARNING"));
+	WarningAlerts.ActiveAlerts.Add(WarningAlert);
+
+	// [v1.28.0] Warning 최초 활성 시각 10초에서 선택된 Alert입니다.
+	const FCFHUDAlertItem* WarningAtStart = Presenter->ResolveAlertForPresentation(WarningAlerts, *StyleData, 10.0);
+	TestNotNull(TEXT("UI-P0-09C Warning 시작 시 표시"), WarningAtStart);
+	// [v1.28.0] 같은 AlertKey 반복 Refresh를 일부러 넣어 최초 시각이 리셋되지 않는지 확인할 중간 결과입니다.
+	const FCFHUDAlertItem* WarningAtRefresh = Presenter->ResolveAlertForPresentation(WarningAlerts, *StyleData, 11.5);
+	TestNotNull(TEXT("UI-P0-09C Warning 1.5초 반복 Refresh 후 표시"), WarningAtRefresh);
+	// [v1.28.0] 최초 10초 기준 3초를 넘긴 뒤 같은 상태가 계속 존재해도 다시 보이면 안 되는 결과입니다.
+	const FCFHUDAlertItem* WarningAfterExpiry = Presenter->ResolveAlertForPresentation(WarningAlerts, *StyleData, 13.1);
+	TestNull(TEXT("UI-P0-09C Warning 반복 Refresh가 3초를 리셋하지 않음"), WarningAfterExpiry);
+
+	// [v1.28.0] 실제 Gameplay 상태에서 Warning AlertKey가 사라진 해제 ViewData입니다.
+	FCFCombatAlertViewData ClearedAlerts;
+	ClearedAlerts.Availability = ECFUIViewAvailability::KnownZero;
+	// [v1.28.0] 상태 해제가 기존 AlertKey lifecycle을 제거하는지 확인할 결과입니다.
+	const FCFHUDAlertItem* ClearedPresentation = Presenter->ResolveAlertForPresentation(ClearedAlerts, *StyleData, 14.0);
+	TestNull(TEXT("UI-P0-09C 상태 해제 시 Alert 없음"), ClearedPresentation);
+		
+	TestEqual(TEXT("UI-P0-09C 상태 해제 시 first-presented cache 비움"), Presenter->AlertFirstPresentedGameTimeSeconds.Num(), 0);
+	TestEqual(TEXT("UI-P0-09C 상태 해제 시 completed cache 비움"), Presenter->CompletedAlertPresentationKeys.Num(), 0);
+
+	// [v1.28.0] 같은 AlertKey가 실제 상태 해제 뒤 재발생했을 때 새 3초 lifecycle이 시작되는 결과입니다.
+	const FCFHUDAlertItem* WarningAfterReentry = Presenter->ResolveAlertForPresentation(WarningAlerts, *StyleData, 20.0);
+	TestNotNull(TEXT("UI-P0-09C Warning 재발생 시 다시 표시"), WarningAfterReentry);
+	// [v1.28.0] 재발생 기준 2.9초에서는 Warning이 아직 표시되어야 하는 결과입니다.
+	const FCFHUDAlertItem* WarningBeforeSecondExpiry = Presenter->ResolveAlertForPresentation(WarningAlerts, *StyleData, 22.9);
+	TestNotNull(TEXT("UI-P0-09C 재발생 Warning 2.9초 표시"), WarningBeforeSecondExpiry);
+	// [v1.28.0] 재발생 기준 3초를 넘긴 뒤 다시 제거되는 결과입니다.
+	const FCFHUDAlertItem* WarningAfterSecondExpiry = Presenter->ResolveAlertForPresentation(WarningAlerts, *StyleData, 23.1);
+	TestNull(TEXT("UI-P0-09C 재발생 Warning 3초 후 제거"), WarningAfterSecondExpiry);
+
+	Presenter->ResetAlertPresentationLifecycle();
+	// [v1.28.0] 배열 순서와 무관하게 가장 높은 Priority가 선택되는지 검증할 혼합 Alert 상태입니다.
+	FCFCombatAlertViewData MixedPriorityAlerts;
+	MixedPriorityAlerts.Availability = ECFUIViewAvailability::Known;
+	// [v1.28.0] 혼합 상태의 낮은 Info 후보입니다.
+	FCFHUDAlertItem InfoAlert;
+	InfoAlert.AlertKey = FName(TEXT("Test.Info"));
+	InfoAlert.Priority = ECFHUDAlertPriority::Info;
+	InfoAlert.Title = FText::FromString(TEXT("INFO"));
+	// [v1.28.0] 혼합 상태의 중간 Caution 후보입니다.
+	FCFHUDAlertItem CautionAlert;
+	CautionAlert.AlertKey = FName(TEXT("Test.Caution"));
+	CautionAlert.Priority = ECFHUDAlertPriority::Caution;
+	CautionAlert.Title = FText::FromString(TEXT("CAUTION"));
+	// [v1.28.0] 혼합 상태의 최고 Critical 후보이며 Persistent 계약을 검증합니다.
+	FCFHUDAlertItem CriticalAlert;
+	CriticalAlert.AlertKey = FName(TEXT("Test.Critical"));
+	CriticalAlert.Priority = ECFHUDAlertPriority::Critical;
+	CriticalAlert.Title = FText::FromString(TEXT("CRITICAL"));
+	MixedPriorityAlerts.ActiveAlerts.Add(InfoAlert);
+	MixedPriorityAlerts.ActiveAlerts.Add(CriticalAlert);
+	MixedPriorityAlerts.ActiveAlerts.Add(CautionAlert);
+
+	// [v1.28.0] 정렬되지 않은 혼합 배열에서 실제 최고 Priority로 선택된 첫 결과입니다.
+	const FCFHUDAlertItem* HighestPriorityAlert = Presenter->ResolveAlertForPresentation(MixedPriorityAlerts, *StyleData, 30.0);
+	if (TestNotNull(TEXT("UI-P0-09C 혼합 Priority Alert 선택"), HighestPriorityAlert))
+	{
+		TestEqual(TEXT("UI-P0-09C 배열 순서와 무관하게 Critical 우선"), HighestPriorityAlert->AlertKey, CriticalAlert.AlertKey);
+	}
+	// [v1.28.0] 매우 긴 시간이 지나도 상태가 유지되는 Critical Persistent 결과입니다.
+		
+	const FCFHUDAlertItem* CriticalAfterLongDuration = Presenter->ResolveAlertForPresentation(MixedPriorityAlerts, *StyleData, 3000.0);
+	if (TestNotNull(TEXT("UI-P0-09C Critical 장시간 후에도 Persistent"), CriticalAfterLongDuration))
+	{
+		TestEqual(TEXT("UI-P0-09C 장시간 후 Critical 유지"), CriticalAfterLongDuration->AlertKey, CriticalAlert.AlertKey);
+	}
+
+	Presenter->ResetAlertPresentationLifecycle();
+	// [v1.30.0] Critical에 가려진 Caution이 화면에 나오기 전에는 3초 duration을 소비하지 않는지 검증할 혼합 상태입니다.
+	FCFCombatAlertViewData SuppressedAlerts;
+	SuppressedAlerts.Availability = ECFUIViewAvailability::Known;
+	SuppressedAlerts.ActiveAlerts.Add(CautionAlert);
+	SuppressedAlerts.ActiveAlerts.Add(CriticalAlert);
+
+	// [v1.30.0] suppression 시작 시 실제 화면을 소유해야 하는 Persistent Critical입니다.
+	const FCFHUDAlertItem* SuppressionStartAlert = Presenter->ResolveAlertForPresentation(SuppressedAlerts, *StyleData, 100.0);
+	if (TestNotNull(TEXT("UI-P0-09C suppression 시작 Critical 표시"), SuppressionStartAlert))
+	{
+		TestEqual(TEXT("UI-P0-09C suppression 시작 Critical 우선"), SuppressionStartAlert->AlertKey, CriticalAlert.AlertKey);
+	}
+	// [v1.30.0] Warning 기본 duration보다 훨씬 긴 10초 suppression 뒤에도 Caution first-presented 시간이 없어야 하는 결과입니다.
+	const FCFHUDAlertItem* SuppressionAfterTenSeconds = Presenter->ResolveAlertForPresentation(SuppressedAlerts, *StyleData, 110.0);
+	if (TestNotNull(TEXT("UI-P0-09C 10초 suppression 후 Critical 유지"), SuppressionAfterTenSeconds))
+	{
+		TestEqual(TEXT("UI-P0-09C 10초 suppression 후에도 Critical 우선"), SuppressionAfterTenSeconds->AlertKey, CriticalAlert.AlertKey);
+	}
+	TestFalse(
+		TEXT("UI-P0-09C suppressed Caution은 표시 전 duration 미시작"),
+		Presenter->AlertFirstPresentedGameTimeSeconds.Contains(CautionAlert.AlertKey));
+
+	// [v1.30.0] Critical 상태가 해제되고 동일 Caution만 계속 활성인 첫 실제 Presentation 상태입니다.
+	FCFCombatAlertViewData CautionOnlyAlerts;
+	CautionOnlyAlerts.Availability = ECFUIViewAvailability::Known;
+	CautionOnlyAlerts.ActiveAlerts.Add(CautionAlert);
+	// [v1.30.0] Critical 해제 직후 Caution이 처음 화면을 소유해야 하는 결과입니다.
+	const FCFHUDAlertItem* CautionFirstPresented = Presenter->ResolveAlertForPresentation(CautionOnlyAlerts, *StyleData, 110.1);
+	if (TestNotNull(TEXT("UI-P0-09C suppression 해제 후 Caution 첫 표시"), CautionFirstPresented))
+	{
+		TestEqual(TEXT("UI-P0-09C suppression 해제 후 Caution 선택"), CautionFirstPresented->AlertKey, CautionAlert.AlertKey);
+	}
+	// [v1.30.0] Caution이 실제로 처음 표시된 Game-Time을 확인할 cache 값입니다.
+	const double* CautionFirstPresentedTime = Presenter->AlertFirstPresentedGameTimeSeconds.Find(CautionAlert.AlertKey);
+	if (TestNotNull(TEXT("UI-P0-09C Caution first-presented time 기록"), CautionFirstPresentedTime))
+	{
+		TestTrue(TEXT("UI-P0-09C Caution duration은 110.1부터 시작"), FMath::IsNearlyEqual(*CautionFirstPresentedTime, 110.1));
+	}
+
+	// [v1.30.0] 실제 첫 표시 후 2.8초에는 Caution이 아직 표시되어야 하는 결과입니다.
+	const FCFHUDAlertItem* CautionBeforeExpiry = Presenter->ResolveAlertForPresentation(CautionOnlyAlerts, *StyleData, 112.9);
+	TestNotNull(TEXT("UI-P0-09C Caution 첫 표시 후 2.8초 유지"), CautionBeforeExpiry);
+	// [v1.30.0] 실제 첫 표시 후 3초를 넘긴 같은 활성 상태에서는 완료되어 사라져야 하는 결과입니다.
+	const FCFHUDAlertItem* CautionAfterExpiry = Presenter->ResolveAlertForPresentation(CautionOnlyAlerts, *StyleData, 113.2);
+	TestNull(TEXT("UI-P0-09C Caution 첫 표시 후 3초 초과 제거"), CautionAfterExpiry);
+	TestTrue(TEXT("UI-P0-09C 만료 Caution completed 기록"), Presenter->CompletedAlertPresentationKeys.Contains(CautionAlert.AlertKey));
+
+	// [v1.30.0] Gameplay 상태 해제가 first-presented/completed lifecycle을 모두 비우는 최종 상태입니다.
+	const FCFHUDAlertItem* CautionCleared = Presenter->ResolveAlertForPresentation(ClearedAlerts, *StyleData, 114.0);
+	TestNull(TEXT("UI-P0-09C suppression 회귀 상태 해제 후 Alert 없음"), CautionCleared);
+	TestEqual(TEXT("UI-P0-09C suppression 회귀 first-presented cache 비움"), Presenter->AlertFirstPresentedGameTimeSeconds.Num(), 0);
+	TestEqual(TEXT("UI-P0-09C suppression 회귀 completed cache 비움"), Presenter->CompletedAlertPresentationKeys.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP009NestedStyleTest,
+	"CarFight.UI.UI_P0_09.NestedStyleContextContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.28.0] Production Root에 주입한 Style·Density·Scale Context가 중첩 Styled Panel까지 동일하게 전파되는지 검증합니다.
+bool FCFHUDP009NestedStyleTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.28.0] 저장 Production HUD를 실제 인스턴스화해 중첩 Context 전파를 확인할 Automation World입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("UI-P0-09D Production Style Automation World"), TestWorld))
+	{
+		return false;
+	}
+
+	// [v1.28.0] DefaultGame.ini와 동일한 저장 Production HUD Generated Class입니다.
+	UClass* ProductionHUDClass = LoadClass<UCFStyledWidgetBase>(
+		nullptr,
+		TEXT("/Game/CarFight/UI/HUD/WBP_CFInGameHUD.WBP_CFInGameHUD_C"));
+	if (!TestNotNull(TEXT("UI-P0-09D Production HUD Class"), ProductionHUDClass))
+	{
+		return false;
+	}
+
+	// [v1.28.0] 중첩 Styled Panel을 포함하는 실제 저장 Production HUD 인스턴스입니다.
+	UCFStyledWidgetBase* ProductionHUDWidget = CreateWidget<UCFStyledWidgetBase>(TestWorld, ProductionHUDClass);
+	if (!TestNotNull(TEXT("UI-P0-09D Production HUD Widget"), ProductionHUDWidget))
+	{
+		return false;
+	}
+
+	// [v1.28.0] Root WidgetTree의 실제 Production VehiclePanel Styled Widget입니다.
+	UCFStyledWidgetBase* VehiclePanelWidget = Cast<UCFStyledWidgetBase>(ProductionHUDWidget->GetWidgetFromName(FName(TEXT("WBP_CFVehiclePanel"))));
+	// [v1.28.0] Root WidgetTree의 실제 Production AlertFeed Styled Widget입니다.
+	UCFStyledWidgetBase* AlertFeedWidget = Cast<UCFStyledWidgetBase>(ProductionHUDWidget->GetWidgetFromName(FName(TEXT("WBP_CFAlertFeed"))));
+	if (!TestNotNull(TEXT("UI-P0-09D VehiclePanel Styled Widget"), VehiclePanelWidget)
+		|| !TestNotNull(TEXT("UI-P0-09D AlertFeed Styled Widget"), AlertFeedWidget))
+	{
+		return false;
+	}
+
+	// [v1.28.0] Root가 해석했다고 가정해 주입할 테스트 전용 Style Data입니다.
+	UCFUIStyleData* InjectedStyleData = NewObject<UCFUIStyleData>(GetTransientPackage());
+	// [v1.28.0] Root가 해석했다고 가정해 주입할 테스트 전용 Density Data입니다.
+	UCFUIDensityData* InjectedDensityData = NewObject<UCFUIDensityData>(GetTransientPackage());
+	if (!TestNotNull(TEXT("UI-P0-09D Injected Style Data"), InjectedStyleData)
+		|| !TestNotNull(TEXT("UI-P0-09D Injected Density Data"), InjectedDensityData))
+	{
+		return false;
+	}
+
+	// [v1.28.0] Typography Scale까지 자식이 동일하게 소비하는지 확인할 기본 Typography Floor입니다.
+	FCFUITypographyFloor InjectedTypographyFloor;
+	// [v1.28.0] 기본 1.0과 구분되는 Geometry Scale 테스트 값입니다.
+	constexpr float InjectedGeometryScale = 1.25f;
+	// [v1.28.0] 기본 1.0과 구분되는 Typography Scale 테스트 값입니다.
+	constexpr float InjectedTypographyScale = 1.15f;
+	ProductionHUDWidget->SetUIVisualContext(
+		InjectedStyleData,
+		InjectedDensityData,
+		InjectedGeometryScale,
+		InjectedTypographyScale,
+		InjectedTypographyFloor);
+
+	TestTrue(TEXT("UI-P0-09D VehiclePanel Style 동일 참조"), VehiclePanelWidget->GetUIStyleData() == InjectedStyleData);
+	TestTrue(TEXT("UI-P0-09D AlertFeed Style 동일 참조"), AlertFeedWidget->GetUIStyleData() == InjectedStyleData);
+	TestTrue(TEXT("UI-P0-09D VehiclePanel Density 동일 참조"), VehiclePanelWidget->GetUIDensityData() == InjectedDensityData);
+	TestTrue(TEXT("UI-P0-09D AlertFeed Density 동일 참조"), AlertFeedWidget->GetUIDensityData() == InjectedDensityData);
+	TestTrue(TEXT("UI-P0-09D VehiclePanel Geometry Scale 전파"), FMath::IsNearlyEqual(VehiclePanelWidget->GetResolvedGeometryScale(), InjectedGeometryScale));
+	TestTrue(TEXT("UI-P0-09D AlertFeed Geometry Scale 전파"), FMath::IsNearlyEqual(AlertFeedWidget->GetResolvedGeometryScale(), InjectedGeometryScale));
+
+	// [v1.28.0] 동일 Typography Context가 Root와 VehiclePanel에서 같은 실효 Body Font Size로 해석되는지 비교할 Root Font입니다.
+	const FSlateFontInfo RootBodyFont = ProductionHUDWidget->ResolveTypographyFont(ECFUIFontFamilyRole::UI, ECFUITypographyRole::Body);
+	// [v1.28.0] Root와 같은 Typography Context를 전달받은 VehiclePanel의 실효 Body Font입니다.
+	const FSlateFontInfo VehiclePanelBodyFont = VehiclePanelWidget->ResolveTypographyFont(ECFUIFontFamilyRole::UI, ECFUITypographyRole::Body);
+	// [v1.28.0] Root와 같은 Typography Context를 전달받은 AlertFeed의 실효 Body Font입니다.
+	const FSlateFontInfo AlertFeedBodyFont = AlertFeedWidget->ResolveTypographyFont(ECFUIFontFamilyRole::UI, ECFUITypographyRole::Body);
+	TestEqual(TEXT("UI-P0-09D VehiclePanel Typography Size 전파"), VehiclePanelBodyFont.Size, RootBodyFont.Size);
+	TestEqual(TEXT("UI-P0-09D AlertFeed Typography Size 전파"), AlertFeedBodyFont.Size, RootBodyFont.Size);
+
+	// [v1.28.0] 첫 Context 적용 뒤 실제 Refresh가 발생한 VehiclePanel revision입니다.
+	const int32 VehiclePanelRevisionAfterFirstApply = VehiclePanelWidget->GetVisualContextRevision();
+	// [v1.28.0] 첫 Context 적용 뒤 실제 Refresh가 발생한 AlertFeed revision입니다.
+	const int32 AlertFeedRevisionAfterFirstApply = AlertFeedWidget->GetVisualContextRevision();
+	TestTrue(TEXT("UI-P0-09D VehiclePanel 첫 Refresh 발생"), VehiclePanelRevisionAfterFirstApply > 0);
+	TestTrue(TEXT("UI-P0-09D AlertFeed 첫 Refresh 발생"), AlertFeedRevisionAfterFirstApply > 0);
+
+	ProductionHUDWidget->SetUIVisualContext(
+		InjectedStyleData,
+		InjectedDensityData,
+		InjectedGeometryScale,
+		InjectedTypographyScale,
+		InjectedTypographyFloor);
+	TestEqual(TEXT("UI-P0-09D 동일 Context VehiclePanel 중복 Refresh 없음"), VehiclePanelWidget->GetVisualContextRevision(), VehiclePanelRevisionAfterFirstApply);
+		TestEqual(TEXT("UI-P0-09D 동일 Context AlertFeed 중복 Refresh 없음"), AlertFeedWidget->GetVisualContextRevision(), AlertFeedRevisionAfterFirstApply);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP010ResolutionLayoutTest,
+	"CarFight.UI.UI_P0_10.ResolutionLayoutContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.29.0] 저장 Production Root의 Designer Slot이 P0 필수 4개 해상도에서 화면내·비겹침을 유지하고 ReticleLayer가 full-stretch인지 검증합니다.
+bool FCFHUDP010ResolutionLayoutTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.29.0] 저장 Production HUD를 실제 인스턴스화해 Designer Slot 값을 읽을 Automation World입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("UI-P0-10 Resolution Automation World"), TestWorld))
+	{
+		return false;
+	}
+
+	// [v1.29.0] 실제 게임에서 사용하는 저장 Production HUD Generated Class입니다.
+	UClass* ProductionHUDClass = LoadClass<UCFStyledWidgetBase>(
+		nullptr,
+		TEXT("/Game/CarFight/UI/HUD/WBP_CFInGameHUD.WBP_CFInGameHUD_C"));
+	if (!TestNotNull(TEXT("UI-P0-10 Production HUD Class"), ProductionHUDClass))
+	{
+		return false;
+	}
+
+	// [v1.29.0] 저장 Designer Root와 7 direct child Slot을 보유한 실제 Production HUD 인스턴스입니다.
+	UCFStyledWidgetBase* ProductionHUDWidget = CreateWidget<UCFStyledWidgetBase>(TestWorld, ProductionHUDClass);
+	if (!TestNotNull(TEXT("UI-P0-10 Production HUD Widget"), ProductionHUDWidget))
+	{
+		return false;
+	}
+
+	// [v1.29.0] Production HUD의 저장 Root Canvas입니다.
+	UCanvasPanel* RootCanvas = Cast<UCanvasPanel>(ProductionHUDWidget->GetWidgetFromName(FName(TEXT("CanvasPanel_Root"))));
+	if (!TestNotNull(TEXT("UI-P0-10 Root Canvas"), RootCanvas))
+	{
+		return false;
+	}
+	TestEqual(TEXT("UI-P0-10 Root direct child 7개 유지"), RootCanvas->GetChildrenCount(), 7);
+
+	// [v1.29.0] 여섯 고정 Production Panel의 Root SizeBox 의미 이름입니다.
+	const FName ProductionPanelSlotNames[] =
+	{
+		FName(TEXT("SizeBox_Slot_MissionSummary")),
+		FName(TEXT("SizeBox_Slot_AlertFeed")),
+		FName(TEXT("SizeBox_Slot_TargetPanel")),
+		FName(TEXT("SizeBox_Slot_VehiclePanel")),
+		FName(TEXT("SizeBox_Slot_RadarPanel")),
+		FName(TEXT("SizeBox_Slot_WeaponPanel"))
+	};
+
+		// [v1.29.0] P0 Integration Validation에서 직접 검증할 필수 네 물리 Viewport 해상도입니다.
+	const FVector2D IntegrationViewportSizes[] =
+	{
+		FVector2D(1920.0f, 1080.0f),
+		FVector2D(2560.0f, 1440.0f),
+		FVector2D(3440.0f, 1440.0f),
+		FVector2D(5120.0f, 1440.0f)
+	};
+
+	// [v1.29.0] AimReticle·Target Marker·ViewDirection이 공유하는 기존 full-screen Reticle Layer입니다.
+	UCanvasPanel* ReticleLayer = Cast<UCanvasPanel>(ProductionHUDWidget->GetWidgetFromName(FName(TEXT("CanvasPanel_Slot_ReticleLayer"))));
+	// [v1.29.0] ReticleLayer의 persisted Root Canvas Slot입니다.
+	UCanvasPanelSlot* ReticleLayerSlot = ReticleLayer ? Cast<UCanvasPanelSlot>(ReticleLayer->Slot) : nullptr;
+	if (!TestNotNull(TEXT("UI-P0-10 Reticle Layer"), ReticleLayer)
+		|| !TestNotNull(TEXT("UI-P0-10 Reticle Layer Canvas Slot"), ReticleLayerSlot))
+	{
+		return false;
+	}
+
+	// [v1.29.0] ReticleLayer가 전체 Viewport를 stretch하도록 저장된 Anchor입니다.
+	const FAnchors ReticleAnchors = ReticleLayerSlot->GetAnchors();
+	// [v1.29.0] ReticleLayer full-stretch에서 추가 여백이 없어야 하는 저장 Offset입니다.
+	const FMargin ReticleOffsets = ReticleLayerSlot->GetOffsets();
+	TestTrue(TEXT("UI-P0-10 Reticle Anchor Min 0,0"), ReticleAnchors.Minimum.Equals(FVector2D::ZeroVector, KINDA_SMALL_NUMBER));
+	TestTrue(TEXT("UI-P0-10 Reticle Anchor Max 1,1"), ReticleAnchors.Maximum.Equals(FVector2D(1.0f, 1.0f), KINDA_SMALL_NUMBER));
+	TestTrue(TEXT("UI-P0-10 Reticle full-stretch Offset 0"),
+		FMath::IsNearlyZero(ReticleOffsets.Left)
+		&& FMath::IsNearlyZero(ReticleOffsets.Top)
+		&& FMath::IsNearlyZero(ReticleOffsets.Right)
+		&& FMath::IsNearlyZero(ReticleOffsets.Bottom));
+
+		// [v1.29.0] 현재 Project Settings의 실제 DPI Scale 정책을 제공하는 Engine UI Settings입니다.
+	const UUserInterfaceSettings* UserInterfaceSettings = GetDefault<UUserInterfaceSettings>();
+	if (!TestNotNull(TEXT("UI-P0-10 UserInterfaceSettings"), UserInterfaceSettings))
+	{
+		return false;
+	}
+
+	// [v1.29.0] 네 필수 Viewport를 순회할 인덱스입니다.
+	int32 ViewportIndex = 0;
+	for (; ViewportIndex < UE_ARRAY_COUNT(IntegrationViewportSizes); ++ViewportIndex)
+	{
+				// [v1.29.0] 현재 검증 대상의 실제 물리 Viewport 해상도입니다.
+		const FVector2D PhysicalViewportSize = IntegrationViewportSizes[ViewportIndex];
+		// [v1.29.0] 현재 Project DPI Curve/Rule이 이 물리 해상도에 적용하는 실제 Slate/UMG Scale입니다.
+		const float ViewportDpiScale = UserInterfaceSettings->GetDPIScaleBasedOnSize(FIntPoint(
+			FMath::RoundToInt(PhysicalViewportSize.X),
+			FMath::RoundToInt(PhysicalViewportSize.Y)));
+		TestTrue(
+			FString::Printf(TEXT("UI-P0-10 %.0fx%.0f DPI Scale 유효"), PhysicalViewportSize.X, PhysicalViewportSize.Y),
+			FMath::IsFinite(ViewportDpiScale) && ViewportDpiScale > 0.0f);
+		if (!FMath::IsFinite(ViewportDpiScale) || ViewportDpiScale <= 0.0f)
+		{
+			return false;
+		}
+
+		// [v1.29.0] 실제 UMG Root Canvas가 배치 계산에 사용하는 DPI 적용 후 logical Viewport 크기입니다.
+		const FVector2D ViewportSize = PhysicalViewportSize / ViewportDpiScale;
+		// [v1.29.0] 현재 Viewport에서 계산된 여섯 Panel의 MinX/MinY/MaxX/MaxY Rect 목록입니다.
+		TArray<FVector4> ResolvedPanelRects;
+		ResolvedPanelRects.Reserve(UE_ARRAY_COUNT(ProductionPanelSlotNames));
+
+		// [v1.29.0] 여섯 Production Panel Slot을 순회할 인덱스입니다.
+		int32 PanelSlotIndex = 0;
+		for (; PanelSlotIndex < UE_ARRAY_COUNT(ProductionPanelSlotNames); ++PanelSlotIndex)
+		{
+			// [v1.29.0] 현재 해상도에서 geometry를 검증할 저장 Root SizeBox입니다.
+			UWidget* PanelSlotWidget = ProductionHUDWidget->GetWidgetFromName(ProductionPanelSlotNames[PanelSlotIndex]);
+			// [v1.29.0] 현재 SizeBox의 Designer-owned Anchor/Offset/Alignment를 제공하는 Canvas Slot입니다.
+			UCanvasPanelSlot* PanelCanvasSlot = PanelSlotWidget ? Cast<UCanvasPanelSlot>(PanelSlotWidget->Slot) : nullptr;
+			if (!TestNotNull(FString::Printf(TEXT("UI-P0-10 %s Widget"), *ProductionPanelSlotNames[PanelSlotIndex].ToString()), PanelSlotWidget)
+				|| !TestNotNull(FString::Printf(TEXT("UI-P0-10 %s Canvas Slot"), *ProductionPanelSlotNames[PanelSlotIndex].ToString()), PanelCanvasSlot))
+			{
+				return false;
+			}
+
+			// [v1.29.0] 현재 Production Panel이 사용 중인 고정 Anchor입니다.
+			const FAnchors PanelAnchors = PanelCanvasSlot->GetAnchors();
+			TestTrue(
+				FString::Printf(TEXT("UI-P0-10 %s fixed-anchor 유지"), *ProductionPanelSlotNames[PanelSlotIndex].ToString()),
+				PanelAnchors.Minimum.Equals(PanelAnchors.Maximum, KINDA_SMALL_NUMBER));
+
+			// [v1.29.0] 고정 Anchor 기준 위치와 Width/Height를 담는 persisted Canvas Offset입니다.
+			const FMargin PanelOffsets = PanelCanvasSlot->GetOffsets();
+			// [v1.29.0] 고정 Anchor 기준점에 적용할 Designer Alignment입니다.
+			const FVector2D PanelAlignment = PanelCanvasSlot->GetAlignment();
+			// [v1.29.0] 현재 synthetic Viewport에서 Anchor가 가리키는 실제 Pixel 위치입니다.
+			const FVector2D AnchorPosition(
+				ViewportSize.X * PanelAnchors.Minimum.X,
+				ViewportSize.Y * PanelAnchors.Minimum.Y);
+			// [v1.29.0] 고정 Canvas Slot에서 Right/Bottom이 소유하는 실제 Panel Width/Height입니다.
+			const FVector2D PanelSize(PanelOffsets.Right, PanelOffsets.Bottom);
+			TestTrue(
+				FString::Printf(TEXT("UI-P0-10 %s positive size"), *ProductionPanelSlotNames[PanelSlotIndex].ToString()),
+				PanelSize.X > 0.0f && PanelSize.Y > 0.0f);
+
+			// [v1.29.0] Anchor + PixelOffset - Alignment 보정을 적용한 현재 Panel의 화면 좌상단입니다.
+			const FVector2D PanelMinimum = AnchorPosition
+				+ FVector2D(PanelOffsets.Left, PanelOffsets.Top)
+				- (PanelSize * PanelAlignment);
+			// [v1.29.0] 현재 Panel의 화면 우하단입니다.
+			const FVector2D PanelMaximum = PanelMinimum + PanelSize;
+			// [v1.29.0] 부동소수 계산 오차만 허용하면서 전체 Panel이 현재 Viewport 안에 들어오는지 나타냅니다.
+			const bool bPanelInsideViewport = PanelMinimum.X >= -0.5f
+				&& PanelMinimum.Y >= -0.5f
+				&& PanelMaximum.X <= ViewportSize.X + 0.5f
+				&& PanelMaximum.Y <= ViewportSize.Y + 0.5f;
+			TestTrue(
+				FString::Printf(
+										TEXT("UI-P0-10 %s physical %.0fx%.0f / logical %.1fx%.1f 화면 내부"),
+					*ProductionPanelSlotNames[PanelSlotIndex].ToString(),
+					PhysicalViewportSize.X,
+					PhysicalViewportSize.Y,
+					ViewportSize.X,
+					ViewportSize.Y),
+				bPanelInsideViewport);
+
+			ResolvedPanelRects.Add(FVector4(PanelMinimum.X, PanelMinimum.Y, PanelMaximum.X, PanelMaximum.Y));
+		}
+
+		// [v1.29.0] 현재 Viewport에서 Panel pairwise overlap을 검사할 첫 번째 Rect 인덱스입니다.
+		int32 FirstRectIndex = 0;
+		for (; FirstRectIndex < ResolvedPanelRects.Num(); ++FirstRectIndex)
+		{
+			// [v1.29.0] 현재 첫 번째 Panel과 비교할 뒤쪽 Rect 인덱스입니다.
+			int32 SecondRectIndex = FirstRectIndex + 1;
+			for (; SecondRectIndex < ResolvedPanelRects.Num(); ++SecondRectIndex)
+			{
+				// [v1.29.0] pairwise overlap 판정의 첫 번째 Root Panel Rect입니다.
+				const FVector4& FirstRect = ResolvedPanelRects[FirstRectIndex];
+				// [v1.29.0] pairwise overlap 판정의 두 번째 Root Panel Rect입니다.
+				const FVector4& SecondRect = ResolvedPanelRects[SecondRectIndex];
+				// [v1.29.0] 경계선 접촉은 허용하고 실제 양의 면적이 겹칠 때만 True가 되는 Root Panel overlap입니다.
+				const bool bPanelsOverlap = FirstRect.X < SecondRect.Z
+					&& FirstRect.Z > SecondRect.X
+					&& FirstRect.Y < SecondRect.W
+					&& FirstRect.W > SecondRect.Y;
+				TestFalse(
+					FString::Printf(
+												TEXT("UI-P0-10 physical %.0fx%.0f %s / %s Root Panel 비겹침"),
+						PhysicalViewportSize.X,
+						PhysicalViewportSize.Y,
+						*ProductionPanelSlotNames[FirstRectIndex].ToString(),
+						*ProductionPanelSlotNames[SecondRectIndex].ToString()),
+					bPanelsOverlap);
+			}
+		}
+	}
 	return true;
 }
 

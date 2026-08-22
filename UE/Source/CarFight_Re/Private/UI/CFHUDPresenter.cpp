@@ -1,10 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.16.0
-// Date: 2026-08-19
-// Description: CF-FQ-032 UI-P0-06 truthful Weapon Rail + actual Weapon Charge/Heat + Dynamic Resource Visual Stage B + RPM Gauge Production Presenter
-// Scope: Provider ViewData만 사용해 선택 무기 Resource와 비선택 실제 무기 Rail을 Compact 계약으로 표시합니다.
+// Version: 1.24.0
+// Date: 2026-08-22
+// Description: CF-FQ-032 Runtime HUD Presenter + post-closure Alert Suppression Lifecycle 교정
+// Scope: Provider ViewData와 Root UI Style Data만 사용해 기존 HUD·ViewMode와 Alert의 Priority·Duration·Persistent Presentation을 적용합니다.
 // Changelog:
+// - v1.24.0: 유한 Alert duration을 최초 Active 시각이 아니라 실제 Primary로 처음 표시된 시각부터 계산. 상위 Priority에 가려진 Alert는 표시 전 duration을 소모하지 않고, 만료된 같은 AlertKey는 상태 해제 전 재표시하지 않도록 완료 집합을 추가.
+// - v1.23.0: AlertKey별 최초 활성 Game-Time을 보존하고 Style AlertStyle의 Notice 2초/Warning 3초/Critical Persistent 기본값을 실제 소비. 반복 ViewData Refresh는 duration을 리셋하지 않으며 상태 해제 후 재발생만 새 lifecycle로 취급.
+// - v1.22.0: FCFViewModeHUDData.CameraRelativeYawDegrees를 카메라 기준 차체 방향으로 변환해 `CanvasPanel_ViewDirection` 내부 `Image_ViewVehicleDirection` X Anchor에 적용. ±90° presentation clamp, Spectate/Destroyed/Unavailable hide, 기존 Command/Turret Reticle·Gameplay 조회 0.
+// - v1.21.0: ArtSpec의 Text glyph icon 금지에 맞춰 Radar runtime pool을 UImage로 교체하고 Designer Preview Image의 Brush/색/크기를 Template로 복제. Frame/Player/Range visibility와 selected range-out 2-Corner Edge Bracket 소비를 추가.
+// - v1.20.0: UI-P0-08B 초기 기능 slice에서 CanvasPanel_RadarContacts를 runtime presentation container로 전환하고 dynamic Contact/selected in-range anchor 계약을 도입. Text glyph 표현은 v1.21.0에서 전용 Image 자산으로 교정.
+// - v1.19.0: UI-P0-07에서 FCFTargetHUDData의 실제 Sensor Contact 식별·거리·AnalysisProgress를 Production TargetPanel에 fail-closed 적용. Target Armor는 authoritative Knowledge source가 없어 계속 숨김.
+// - v1.18.0: ProgressBar_RPMTick00~20 개별 갱신을 제거하고 UImage::GetDynamicMaterial()로 얻은 RPM Gauge MID에 `RPMRatio` 하나만 적용. Resolver fail-closed에서는 0으로 reset.
+// - v1.17.0: ArmorBodyMap의 방향별 직접 ProgressBar 이름 의존을 제거하고 WBP_ArmorFront~Bottom 재사용 ArmorSector의 단일 ProgressBar_Armor에 기존 Defense Ratio를 전달.
 // - v1.16.0: 실제 WeaponCharge Percent를 Ammo/Launcher 유무에 따라 Primary 또는 Secondary로 Projection하고 `NO CHARGE`를 Reload > NoAmmo > NoCharge > Overheated > Cooldown/Ready 우선순위에 추가. Secondary 최대 2 계약 보존.
 // - v1.15.0: WeaponSelection ViewData에서 선택 무기를 제외한 fixed-order Rail을 1~3개 또는 2+overflow로 Projection하고 Production Rail Text 슬롯에 적용. 내부 ID, 가짜 icon, 비선택 resource summary는 사용하지 않음.
 // - v1.14.0: 실제 Heat Resource Channel을 HEAT Percent Secondary로 Projection하고 과열 시 Reload > NoAmmo > Overheated > Cooldown/Ready 단일 FireState 우선순위를 적용. Launcher 단일 소비 계약 유지.
@@ -36,23 +44,36 @@
 // - v1.11.0부터 Production WeaponPanel은 BuildWeaponResourceEntries 결과만 Resource Visual에 사용합니다. ApplyWeaponViewData 안에서 Launcher/Ammo/Status Resolver를 별도로 다시 호출하지 않습니다.
 // - ReserveAmmo는 Resource Presentation Container 밖의 Header 우측 owner를 계속 사용합니다.
 // - VehicleBattery는 실제 Gameplay Runtime이 없어 Production Visual 슬롯에 가짜 값이나 전용 Row를 만들지 않습니다. WeaponCharge/Heat는 실제 Resource Channel만 기존 Compact 슬롯에 투영합니다.
-// - v1.13.0 Production RPM Visual Binding은 저장 SpeedGauge 구조를 바꾸지 않고 ProgressBar_RPMTick00~20의 Percent만 갱신합니다. Resolver fail-closed에서는 모든 Tick fill을 0으로 reset하며 EngineMaxRPM 비율 fallback을 만들지 않습니다.
+// - v1.18.0 Production RPM Visual Binding은 `Image_RPMGauge`의 UI Material에 `RPMRatio` 하나만 전달합니다. Resolver fail-closed에서는 0으로 reset하며 EngineMaxRPM 비율 fallback을 만들지 않습니다.
 // - v1.15.0 Weapon Rail은 실제 WeaponSelectionAvailability/SelectedWeaponIndex만 소비합니다. 선택 무기는 Rail에서 제외하고 DisplayName 부재 시 내부 ID fallback 없이 `WEAPON`을 사용하며 비선택 자원 상태는 추정하지 않습니다.
+// - v1.19.0 TargetPanel은 SensorContactAvailability가 Known일 때만 Snapshot 기반 Distance/Analysis를 표시합니다. Identity는 Identified 이상에서만 공개하며 Target Armor는 실제 Knowledge source가 생기기 전 숨깁니다.
+// - v1.21.0 Radar Contact는 FCFRadarContactHUDData.NormalizedPosition만 소비하고 Canvas Anchor로 위치를 적용합니다. Friendly/Neutral/Hostile/Unknown Preview Image는 Brush/관계색/Designer 크기 Template로만 읽고 runtime에서는 항상 숨깁니다.
+// - v1.21.0 범위 밖 일반 Contact는 숨기고 selected range-out은 bShowSelectedEdgeMarker/SelectedEdgeDirection으로 전용 2-Corner Edge Image만 표시합니다. Range/Frame/Player는 저장 Designer Widget을 재배치하지 않고 Visibility/Text만 갱신합니다.
+// - v1.22.0 Vehicle Direction은 세계 Compass가 아닙니다. 기존 Command Reticle을 Camera/User Aim 기준으로 두고 차체의 상대 Yaw만 조용한 Vehicle Semantic Image 위치로 표시하며 Vehicle Pitch를 추정하지 않습니다.
+// - v1.23.0 Alert duration은 Gameplay 상태 수명이 아니라 Presentation lifecycle입니다. Style Data의 Severity 기본값을 소비하며 같은 AlertKey가 계속 활성이라고 Timer를 재시작하지 않습니다.
+// - v1.24.0 유한 Alert duration은 실제 Primary 첫 표시부터 시작합니다. suppression 중에는 시간을 소모하지 않고, 한번 만료된 AlertKey는 Gameplay 상태가 해제되기 전 다시 표시하지 않습니다.
+
+
 
 
 #include "UI/CFHUDPresenter.h"
 
+#include "UI/CFArmorSectorWidget.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Components/Image.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Components/Widget.h"
 #include "Engine/World.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "UI/CFHUDDataProvider.h"
 #include "UI/CFStyledWidgetBase.h"
 
 namespace
 {
 	// [v1.9.0] 지정 종류의 additive Weapon Resource Channel을 찾고 없으면 nullptr를 반환합니다.
-	const FCFWeaponResourceHUDData* FindWeaponResourceChannel(
+			const FCFWeaponResourceHUDData* FindWeaponResourceChannel(
 		const FCFWeaponHUDData& WeaponViewData,
 		const ECFWeaponResourceChannelType ChannelType)
 	{
@@ -65,6 +86,131 @@ namespace
 		}
 
 		return nullptr;
+	}
+
+	// [v1.20.0] Radar normalized 위치가 NaN/Inf 없이 Canvas Anchor로 안전하게 변환 가능한지 반환합니다.
+	bool IsFiniteRadarPosition(const FVector2D& NormalizedPosition)
+	{
+		return FMath::IsFinite(NormalizedPosition.X)
+			&& FMath::IsFinite(NormalizedPosition.Y);
+	}
+
+			// [v1.21.0] 저장 RadarPanel의 기존 Preview Image에서 전용 Brush·관계색·Designer 크기 Template를 읽고 actual Contact 표시에는 Preview Image 자체를 사용하지 않습니다.
+	UImage* FindRadarRelationColorTemplate(UUserWidget* RadarPanel, const ECFTargetRelation Relation)
+	{
+		if (!RadarPanel)
+		{
+			return nullptr;
+		}
+
+		// [v1.20.0] 현재 Contact 관계에 대응하는 저장 Preview Image 이름입니다.
+		FName TemplateWidgetName = FName(TEXT("Image_RadarUnknown"));
+		switch (Relation)
+		{
+		case ECFTargetRelation::Friendly:
+			TemplateWidgetName = FName(TEXT("Image_RadarFriendly"));
+			break;
+		case ECFTargetRelation::Neutral:
+			TemplateWidgetName = FName(TEXT("Image_RadarNeutral"));
+			break;
+		case ECFTargetRelation::Hostile:
+			TemplateWidgetName = FName(TEXT("Image_RadarHostile"));
+			break;
+		case ECFTargetRelation::Unknown:
+		default:
+			break;
+		}
+
+		return Cast<UImage>(RadarPanel->GetWidgetFromName(TemplateWidgetName));
+	}
+
+	// [v1.20.0] Heading-Up normalized 위치를 Designer 크기와 독립적인 Canvas 0~1 Anchor로 적용합니다.
+	bool ApplyRadarNormalizedAnchor(UWidget* Widget, const FVector2D& NormalizedPosition)
+	{
+		if (!Widget || !IsFiniteRadarPosition(NormalizedPosition))
+		{
+			return false;
+		}
+
+		// [v1.20.0] runtime Radar Blip 또는 선택 Bracket이 실제로 소유한 Canvas Slot입니다.
+		UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Widget->Slot);
+		if (!CanvasSlot)
+		{
+			return false;
+		}
+
+		// [v1.20.0] Radar +Y 우측을 Canvas +X로 변환한 0~1 가로 Anchor입니다.
+		const float AnchorX = FMath::Clamp(0.5f + (NormalizedPosition.Y * 0.5f), 0.0f, 1.0f);
+		// [v1.20.0] Radar +X 전방을 Canvas -Y로 변환한 0~1 세로 Anchor입니다.
+		const float AnchorY = FMath::Clamp(0.5f - (NormalizedPosition.X * 0.5f), 0.0f, 1.0f);
+		CanvasSlot->SetAnchors(FAnchors(AnchorX, AnchorY));
+		CanvasSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+		CanvasSlot->SetPosition(FVector2D::ZeroVector);
+		return true;
+	}
+
+			// [v1.21.0] 저장 Preview Image의 Brush·관계색·Designer 크기를 runtime Contact Image에 복제합니다.
+	bool ApplyRadarTemplateVisual(UImage* RuntimeBlip, const UImage* TemplateImage)
+	{
+		if (!RuntimeBlip || !TemplateImage)
+		{
+			return false;
+		}
+
+		RuntimeBlip->SetBrush(TemplateImage->GetBrush());
+		RuntimeBlip->SetColorAndOpacity(TemplateImage->GetColorAndOpacity());
+
+		// [v1.21.0] runtime Contact의 위치 Anchor는 별도로 갱신하되 크기는 Designer Preview Template를 따를 Canvas Slot입니다.
+		UCanvasPanelSlot* RuntimeSlot = Cast<UCanvasPanelSlot>(RuntimeBlip->Slot);
+		// [v1.21.0] Designer가 실제 Contact 크기를 조절할 수 있게 소유하는 Preview Template Canvas Slot입니다.
+		const UCanvasPanelSlot* TemplateSlot = Cast<UCanvasPanelSlot>(TemplateImage->Slot);
+		if (!RuntimeSlot || !TemplateSlot)
+		{
+			return false;
+		}
+		RuntimeSlot->SetSize(TemplateSlot->GetSize());
+		RuntimeSlot->SetAutoSize(false);
+		return true;
+	}
+
+	// [v1.21.0] 현재 Radar Canvas의 runtime Image Blip pool에서 지정 인덱스를 재사용하거나 필요한 경우 한 개를 추가합니다.
+	UImage* FindOrCreateRadarRuntimeBlip(UCanvasPanel* RadarCanvas, const int32 PoolIndex)
+	{
+		if (!RadarCanvas || PoolIndex < 0)
+		{
+			return nullptr;
+		}
+
+		// [v1.21.0] 저장 Designer Widget과 충돌하지 않는 runtime Image Blip 안정 이름입니다.
+		const FName RuntimeBlipName(*FString::Printf(TEXT("Image_RadarRuntimeContact_%03d"), PoolIndex));
+		for (int32 ChildIndex = 0; ChildIndex < RadarCanvas->GetChildrenCount(); ++ChildIndex)
+		{
+			// [v1.21.0] 현재 Canvas에서 이름이 같은 기존 runtime Image Blip 후보입니다.
+			UImage* ExistingBlip = Cast<UImage>(RadarCanvas->GetChildAt(ChildIndex));
+			if (ExistingBlip && ExistingBlip->GetFName() == RuntimeBlipName)
+			{
+				return ExistingBlip;
+			}
+		}
+
+		// [v1.21.0] Contact 수가 기존 pool을 넘었을 때만 추가하는 transient runtime Image Blip입니다.
+		UImage* NewBlip = NewObject<UImage>(RadarCanvas, RuntimeBlipName);
+		if (!NewBlip)
+		{
+			return nullptr;
+		}
+		NewBlip->SetVisibility(ESlateVisibility::Collapsed);
+
+		// [v1.21.0] Blip이 Designer Radar Canvas의 상대 Anchor와 Template 크기를 사용할 수 있게 추가한 runtime Canvas Slot입니다.
+		UCanvasPanelSlot* NewBlipSlot = RadarCanvas->AddChildToCanvas(NewBlip);
+		if (!NewBlipSlot)
+		{
+			return nullptr;
+		}
+		NewBlipSlot->SetSize(FVector2D(20.0f, 20.0f));
+		NewBlipSlot->SetAutoSize(false);
+		NewBlipSlot->SetZOrder(1);
+		return NewBlip;
 	}
 }
 
@@ -98,16 +244,18 @@ void UCFHUDPresenter::ShutdownPresenter()
 		DataProvider->OnHUDViewDataChanged.RemoveDynamic(this, &UCFHUDPresenter::HandleHUDViewDataChanged);
 	}
 	DataProvider = nullptr;
-	ProductionWidget.Reset();
+			ProductionWidget.Reset();
 	ResetLauncherPresentationLifecycle();
+	ResetAlertPresentationLifecycle();
 	LastAppliedBindingGeneration = INDEX_NONE;
 }
 
 // [v1.0.0] 현재 Production WBP_CFInGameHUD 인스턴스를 Presenter 출력 대상으로 연결합니다.
 void UCFHUDPresenter::SetProductionWidget(UCFStyledWidgetBase* InProductionWidget)
 {
-	ProductionWidget = InProductionWidget;
+			ProductionWidget = InProductionWidget;
 	ResetLauncherPresentationLifecycle();
+	ResetAlertPresentationLifecycle();
 	LastAppliedBindingGeneration = INDEX_NONE;
 	if (DataProvider && ProductionWidget.IsValid())
 	{
@@ -131,13 +279,15 @@ void UCFHUDPresenter::ApplyViewData(const FCFInGameUIViewData& ViewData)
 	}
 
 	// [v1.7.0] Pawn Source가 바뀌면 이전 차량의 Launcher Presentation lifecycle을 새 차량 HUD에 넘기지 않습니다.
-	if (LastAppliedBindingGeneration != ViewData.BindingGeneration)
+			if (LastAppliedBindingGeneration != ViewData.BindingGeneration)
 	{
 		ResetLauncherPresentationLifecycle();
+		ResetAlertPresentationLifecycle();
 		LastAppliedBindingGeneration = ViewData.BindingGeneration;
 	}
 
-	ApplyVehicleAndDefenseViewData(RootWidget, ViewData.Vehicle, ViewData.Defense);
+			ApplyVehicleAndDefenseViewData(RootWidget, ViewData.Vehicle, ViewData.Defense);
+	ApplyViewModeViewData(RootWidget, ViewData.ViewMode);
 	ApplyWeaponViewData(RootWidget, ViewData.Weapon);
 	ApplyTargetViewData(RootWidget, ViewData.Target);
 	ApplyRadarViewData(RootWidget, ViewData.Radar);
@@ -195,6 +345,56 @@ bool UCFHUDPresenter::ResolveEngineRpmGaugePresentation(
 	return true;
 }
 
+// [v1.22.0] Camera 기준 차체 좌우 방향을 ReticleLayer의 Designer-owned Direction Track에 적용합니다.
+void UCFHUDPresenter::ApplyViewModeViewData(UUserWidget* RootWidget, const FCFViewModeHUDData& ViewModeViewData) const
+{
+	// [v1.22.0] 저장 Production Root ReticleLayer 안의 Vehicle Direction Semantic Image입니다.
+	UImage* VehicleDirectionImage = Cast<UImage>(FindNamedWidget(RootWidget, FName(TEXT("Image_ViewVehicleDirection"))));
+	if (!VehicleDirectionImage)
+	{
+		return;
+	}
+
+	// [v1.22.0] Player vehicle 방향 HUD를 노출하지 않아야 하는 spectator/destroyed Camera Mode입니다.
+	const bool bHiddenCameraMode = ViewModeViewData.CameraMode == ECFVehicleCameraMode::Spectate
+		|| ViewModeViewData.CameraMode == ECFVehicleCameraMode::Destroyed;
+	// [v1.22.0] 현재 Camera-relative Yaw가 실제 표시 가능한 finite Known 값인지 나타냅니다.
+	const bool bHasVehicleDirection = ViewModeViewData.Availability == ECFUIViewAvailability::Known
+		&& FMath::IsFinite(ViewModeViewData.CameraRelativeYawDegrees)
+		&& !bHiddenCameraMode;
+	if (!bHasVehicleDirection)
+	{
+		VehicleDirectionImage->SetVisibility(ESlateVisibility::Collapsed);
+		return;
+	}
+
+	// [v1.22.0] Vehicle Direction Image의 위치 Anchor를 runtime에 갱신할 Designer-owned Track Canvas Slot입니다.
+	UCanvasPanelSlot* VehicleDirectionSlot = Cast<UCanvasPanelSlot>(VehicleDirectionImage->Slot);
+	if (!VehicleDirectionSlot)
+	{
+		VehicleDirectionImage->SetVisibility(ESlateVisibility::Collapsed);
+		return;
+	}
+
+	// [v1.22.0] Track 중앙에서 양 끝까지 표현할 차체-카메라 상대 Yaw의 presentation-only 최대값입니다.
+	constexpr float ViewModeMaximumDisplayedYawDegrees = 90.0f;
+	// [v1.22.0] Provider의 Camera relative to Vehicle Yaw를 Vehicle relative to Camera Yaw로 반전한 화면 기준 각도입니다.
+	const float VehicleRelativeToCameraYawDegrees = -ViewModeViewData.CameraRelativeYawDegrees;
+	// [v1.22.0] 뒤쪽 차량 방향도 Track 범위를 넘지 않게 좌우 끝으로 제한한 표시 각도입니다.
+	const float ClampedVehicleYawDegrees = FMath::Clamp(
+		VehicleRelativeToCameraYawDegrees,
+		-ViewModeMaximumDisplayedYawDegrees,
+		ViewModeMaximumDisplayedYawDegrees);
+	// [v1.22.0] Track의 왼쪽 0.0, 중앙 0.5, 오른쪽 1.0으로 변환한 X Anchor입니다.
+	const float VehicleDirectionAnchorX = 0.5f
+		+ (0.5f * (ClampedVehicleYawDegrees / ViewModeMaximumDisplayedYawDegrees));
+
+	VehicleDirectionSlot->SetAnchors(FAnchors(VehicleDirectionAnchorX, 0.5f));
+	VehicleDirectionSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+	VehicleDirectionSlot->SetPosition(FVector2D::ZeroVector);
+	VehicleDirectionImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+}
+
 // [v1.0.0] Vehicle 속도와 Defense 상태를 Production VehiclePanel에 적용합니다.
 void UCFHUDPresenter::ApplyVehicleAndDefenseViewData(
 	UUserWidget* RootWidget,
@@ -225,34 +425,26 @@ void UCFHUDPresenter::ApplyVehicleAndDefenseViewData(
 			VehicleViewData.GearAvailability == ECFUIViewAvailability::Known
 				|| VehicleViewData.GearAvailability == ECFUIViewAvailability::KnownZero);
 
-		// [v1.13.0] explicit Redline/Maximum 계약으로 계산된 현재 Tachometer 0~1 화면 비율입니다.
+				// [v1.18.0] explicit Redline/Maximum 계약으로 계산된 현재 Tachometer 0~1 화면 비율입니다.
 		float EngineRpmGaugeRatio = 0.0f;
-		// [v1.13.0] RedlineStartRPM이 명시되고 current/max까지 유효해 Production Tick fill을 표시할 수 있는지 나타냅니다.
+		// [v1.18.0] RedlineStartRPM이 명시되고 current/max까지 유효해 동적 RPM Material을 표시할 수 있는지 나타냅니다.
 		const bool bHasEngineRpmGaugePresentation = ResolveEngineRpmGaugePresentation(
 			VehicleViewData,
 			EngineRpmGaugeRatio);
-		// [v1.13.0] 저장 SpeedGauge가 가진 고정 RPM Tick 개수입니다. 위치는 0%~100%를 포함한 21개 marker입니다.
-		constexpr int32 EngineRpmGaugeTickCount = 21;
-		// [v1.13.0] 21개 marker 사이 실제 0%~100% 구간 수입니다.
-		constexpr float EngineRpmGaugeIntervalCount = static_cast<float>(EngineRpmGaugeTickCount - 1);
-		// [v1.13.0] 현재 Gauge Ratio를 20개 marker interval 위치로 변환한 진행 위치입니다.
-		const float EngineRpmGaugeIntervalPosition = bHasEngineRpmGaugePresentation
-			? FMath::Clamp(EngineRpmGaugeRatio, 0.0f, 1.0f) * EngineRpmGaugeIntervalCount
-			: 0.0f;
-		for (int32 TickIndex = 0; TickIndex < EngineRpmGaugeTickCount; ++TickIndex)
+		// [v1.18.0] Track·Tick·Red Zone을 하나의 UI Material로 표시하는 Production RPM Gauge Image입니다.
+		UImage* RpmGaugeImage = Cast<UImage>(FindNamedWidget(SpeedGauge, FName(TEXT("Image_RPMGauge"))));
+		if (RpmGaugeImage)
 		{
-			// [v1.13.0] 현재 Production RPM Tick Widget의 고유 이름입니다.
-			const FName TickWidgetName(*FString::Printf(TEXT("ProgressBar_RPMTick%02d"), TickIndex));
-			// [v1.13.0] 현재 RPM이 0보다 클 때 시작 marker를 켜고 이후 marker는 직전 interval을 통과한 만큼 0~1로 채우는 값입니다.
-			float TickFillRatio = 0.0f;
-			if (bHasEngineRpmGaugePresentation && EngineRpmGaugeRatio > KINDA_SMALL_NUMBER)
+			// [v1.18.0] UImage Brush Material에서 생성되는 현재 Widget 전용 동적 Material Instance입니다.
+			UMaterialInstanceDynamic* RpmGaugeMaterial = RpmGaugeImage->GetDynamicMaterial();
+			if (RpmGaugeMaterial)
 			{
-				TickFillRatio = TickIndex == 0
-					? 1.0f
-					: FMath::Clamp(EngineRpmGaugeIntervalPosition - static_cast<float>(TickIndex - 1), 0.0f, 1.0f);
+				// [v1.18.0] 계약이 유효하면 0~1 Gauge Ratio, 아니면 stale 표시 방지를 위해 정확히 0을 전달합니다.
+				const float AppliedRpmRatio = bHasEngineRpmGaugePresentation
+					? FMath::Clamp(EngineRpmGaugeRatio, 0.0f, 1.0f)
+					: 0.0f;
+				RpmGaugeMaterial->SetScalarParameterValue(FName(TEXT("RPMRatio")), AppliedRpmRatio);
 			}
-
-			SetProgressValue(SpeedGauge, TickWidgetName, TickFillRatio, true);
 		}
 	}
 
@@ -285,15 +477,27 @@ void UCFHUDPresenter::ApplyVehicleAndDefenseViewData(
 		return;
 	}
 
-	// [v1.0.0] 정식 Defense Runtime이 있을 때만 6방향 Armor Bar를 실제 비율로 표시합니다.
+		// [v1.17.0] 정식 Defense Runtime이 있을 때만 6방향 Armor Sector의 실제 Armor Bar를 표시합니다.
 	const bool bShowArmor = DefenseViewData.ArmorAvailability == ECFUIViewAvailability::Known
 		|| DefenseViewData.ArmorAvailability == ECFUIViewAvailability::KnownZero;
-	SetProgressValue(ArmorBodyMap, FName(TEXT("ProgressBar_ArmorFront")), DefenseViewData.FrontArmorRatio, bShowArmor);
-	SetProgressValue(ArmorBodyMap, FName(TEXT("ProgressBar_ArmorRight")), DefenseViewData.RightArmorRatio, bShowArmor);
-	SetProgressValue(ArmorBodyMap, FName(TEXT("ProgressBar_ArmorRear")), DefenseViewData.RearArmorRatio, bShowArmor);
-	SetProgressValue(ArmorBodyMap, FName(TEXT("ProgressBar_ArmorLeft")), DefenseViewData.LeftArmorRatio, bShowArmor);
-	SetProgressValue(ArmorBodyMap, FName(TEXT("ProgressBar_ArmorTop")), DefenseViewData.TopArmorRatio, bShowArmor);
-	SetProgressValue(ArmorBodyMap, FName(TEXT("ProgressBar_ArmorBottom")), DefenseViewData.BottomArmorRatio, bShowArmor);
+
+	// [v1.17.0] ArmorBodyMap의 한 재사용 Sector를 찾아 기존 Defense Ratio를 내부 단일 ProgressBar에 적용하는 Presentation helper입니다.
+	const auto ApplyArmorSector = [ArmorBodyMap, bShowArmor](const FName SectorWidgetName, const float ArmorRatio)
+	{
+		// [v1.17.0] 현재 차량 로컬 방향에 배치된 재사용 ArmorSector 인스턴스입니다.
+		UCFArmorSectorWidget* ArmorSector = Cast<UCFArmorSectorWidget>(FindNamedUserWidget(ArmorBodyMap, SectorWidgetName));
+		if (ArmorSector)
+		{
+			ArmorSector->SetArmorPercent(ArmorRatio, bShowArmor);
+		}
+	};
+
+	ApplyArmorSector(FName(TEXT("WBP_ArmorFront")), DefenseViewData.FrontArmorRatio);
+	ApplyArmorSector(FName(TEXT("WBP_ArmorRight")), DefenseViewData.RightArmorRatio);
+	ApplyArmorSector(FName(TEXT("WBP_ArmorRear")), DefenseViewData.RearArmorRatio);
+	ApplyArmorSector(FName(TEXT("WBP_ArmorLeft")), DefenseViewData.LeftArmorRatio);
+	ApplyArmorSector(FName(TEXT("WBP_ArmorTop")), DefenseViewData.TopArmorRatio);
+	ApplyArmorSector(FName(TEXT("WBP_ArmorBottom")), DefenseViewData.BottomArmorRatio);
 }
 
 // [v1.7.0] Active 여부와 무관한 유효 Launcher Snapshot을 Pattern 문구와 0~1 진행률로 변환합니다.
@@ -1137,9 +1341,10 @@ void UCFHUDPresenter::ApplyWeaponViewData(UUserWidget* RootWidget, const FCFWeap
 	SetNamedVisibility(WeaponPanel, FName(TEXT("HorizontalBox_WeaponRail")), !RailEntries.IsEmpty());
 }
 
-// [v1.0.0] 선택 Target 공개 정보를 Production TargetPanel에 적용합니다.
+// [v1.19.0] 선택 Target의 공개 Sensor Knowledge만 Production TargetPanel에 적용합니다.
 void UCFHUDPresenter::ApplyTargetViewData(UUserWidget* RootWidget, const FCFTargetHUDData& TargetViewData) const
 {
+	// [v1.19.0] 저장 Production HUD에서 Target Knowledge를 표시할 의미 Panel입니다.
 	UUserWidget* TargetPanel = FindNamedUserWidget(RootWidget, FName(TEXT("WBP_CFTargetPanel")));
 	if (!TargetPanel)
 	{
@@ -1157,7 +1362,7 @@ void UCFHUDPresenter::ApplyTargetViewData(UUserWidget* RootWidget, const FCFTarg
 		return;
 	}
 
-	// [v1.0.0] Identified 이상에서만 공개 DisplayName을 사용하고 Detected 단계에서는 Unknown Contact를 사용합니다.
+	// [v1.19.0] Identified 이상에서 Sensor가 공개한 DisplayName만 Player-facing Identity로 사용합니다.
 	const bool bIdentityKnown = TargetViewData.IdentityAvailability == ECFUIViewAvailability::Known
 		&& !TargetViewData.DisplayName.IsEmpty();
 	SetTextValue(
@@ -1173,24 +1378,64 @@ void UCFHUDPresenter::ApplyTargetViewData(UUserWidget* RootWidget, const FCFTarg
 			: FText::FromString(TEXT("식별  ???")),
 		true);
 
-	// [v1.0.0] Sensor/Knowledge Provider가 아직 없는 거리, Armor Intelligence와 Scan Progress는 가짜 값을 표시하지 않습니다.
-	SetNamedVisibility(TargetPanel, FName(TEXT("Text_TargetDistance")), false);
+	// [v1.19.0] Snapshot Contact가 실제 연결되고 거리 값이 유한할 때만 거리 행을 공개합니다.
+	const bool bSensorContactKnown = TargetViewData.SensorContactAvailability == ECFUIViewAvailability::Known;
+	// [v1.19.0] KnownZero를 포함해 Sensor Snapshot이 실제 거리 0 이상을 제공했는지 나타냅니다.
+	const bool bDistanceAvailable = TargetViewData.DistanceAvailability == ECFUIViewAvailability::Known
+		|| TargetViewData.DistanceAvailability == ECFUIViewAvailability::KnownZero;
+	// [v1.19.0] stale 숫자나 NaN/Inf가 Player-facing 거리로 새지 않도록 최종 표시 조건을 고정합니다.
+	const bool bShowDistance = bSensorContactKnown
+		&& bDistanceAvailable
+		&& FMath::IsFinite(TargetViewData.DistanceMeters)
+		&& TargetViewData.DistanceMeters >= 0.0f;
+	SetTextValue(
+		TargetPanel,
+		FName(TEXT("Text_TargetDistance")),
+		bShowDistance
+			? FText::FromString(FString::Printf(TEXT("거리  %d m"), FMath::RoundToInt(TargetViewData.DistanceMeters)))
+			: FText::GetEmpty(),
+		bShowDistance);
+
+	// [v1.19.0] Sensor Knowledge 단계가 실제 존재하고 AnalysisProgress가 유한할 때만 분석 진행률을 표시합니다.
+	const bool bKnowledgeDetected = TargetViewData.InformationLevel == ECFTargetInfoLevel::Detected
+		|| TargetViewData.InformationLevel == ECFTargetInfoLevel::Identified
+		|| TargetViewData.InformationLevel == ECFTargetInfoLevel::DetailedScan;
+	// [v1.19.0] Sensor의 0~1 AnalysisProgress를 UI용으로만 clamp한 최종 진행률입니다.
+	const float TargetScanProgress = FMath::IsFinite(TargetViewData.AnalysisProgress01)
+		? FMath::Clamp(TargetViewData.AnalysisProgress01, 0.0f, 1.0f)
+		: 0.0f;
+	// [v1.19.0] Contact 연결과 Knowledge가 둘 다 실제일 때만 Scan Text/Bar를 공개합니다.
+	const bool bShowScanProgress = bSensorContactKnown
+		&& bKnowledgeDetected
+		&& FMath::IsFinite(TargetViewData.AnalysisProgress01);
+	SetTextValue(
+		TargetPanel,
+		FName(TEXT("Text_TargetScan")),
+		bShowScanProgress
+			? FText::FromString(FString::Printf(TEXT("스캔  %d%%"), FMath::RoundToInt(TargetScanProgress * 100.0f)))
+			: FText::GetEmpty(),
+		bShowScanProgress);
+	SetProgressValue(
+		TargetPanel,
+		FName(TEXT("ProgressBar_TargetScan")),
+		TargetScanProgress,
+		bShowScanProgress);
+
+	// [v1.19.0] Target Armor Intelligence는 현재 FCFTargetHUDData에 authoritative source가 없으므로 기존 Mock Row를 계속 숨깁니다.
 	SetNamedVisibility(TargetPanel, FName(TEXT("Text_TargetArmor")), false);
-	SetNamedVisibility(TargetPanel, FName(TEXT("Text_TargetScan")), false);
-	SetNamedVisibility(TargetPanel, FName(TEXT("ProgressBar_TargetScan")), false);
 }
 
-// [v1.8.0] Sensor Provider 가용 상태를 Production RadarPanel 제목에 적용하되 정적 placeholder Contact는 실제 데이터로 노출하지 않습니다.
+// [v1.21.0] Radar ViewData의 Display Range, in-range Contact와 selected range-out edge를 Production RadarPanel에 전용 Image 기반으로 적용합니다.
 void UCFHUDPresenter::ApplyRadarViewData(UUserWidget* RootWidget, const FCFRadarHUDData& RadarViewData) const
 {
-	// [v1.8.0] Sensor Radar 상태를 표시할 Production Radar Panel입니다.
+	// [v1.21.0] Sensor Radar 상태와 runtime Contact presentation을 표시할 저장 Production Radar Panel입니다.
 	UUserWidget* RadarPanel = FindNamedUserWidget(RootWidget, FName(TEXT("WBP_CFRadarPanel")));
 	if (!RadarPanel)
 	{
 		return;
 	}
 
-	// [v1.8.0] 실제 Sensor Snapshot이 준비됐거나 준비됐지만 Contact가 0개인 상태입니다.
+	// [v1.21.0] 실제 Sensor Snapshot이 준비됐거나 준비됐지만 Contact가 0개인 상태입니다.
 	const bool bRadarAvailable = RadarViewData.Availability == ECFUIViewAvailability::Known
 		|| RadarViewData.Availability == ECFUIViewAvailability::KnownZero;
 	SetTextValue(
@@ -1199,32 +1444,273 @@ void UCFHUDPresenter::ApplyRadarViewData(UUserWidget* RootWidget, const FCFRadar
 		bRadarAvailable ? FText::FromString(TEXT("RADAR")) : FText::FromString(TEXT("RADAR — UNAVAILABLE")),
 		true);
 
-	// [v1.8.0] 이 Canvas의 기존 Image들은 디자인용 정적 placeholder이며 FCFRadarHUDData.Contacts를 동적으로 렌더링하는 Widget이 아닙니다.
-	// Radar 표시 Range/Zoom과 동적 Contact 생성 계약 전에는 Sensor가 Known이어도 가짜 Contact를 보이지 않습니다.
-	SetNamedVisibility(RadarPanel, FName(TEXT("CanvasPanel_RadarContacts")), false);
+	// [v1.21.0] 현재 단계식 Display Range가 Player-facing 문자열로 표시 가능한 실제 meter 값인지 나타냅니다.
+	const bool bDisplayRangeAvailable = bRadarAvailable
+		&& (RadarViewData.DisplayRangeAvailability == ECFUIViewAvailability::Known
+			|| RadarViewData.DisplayRangeAvailability == ECFUIViewAvailability::KnownZero)
+		&& FMath::IsFinite(RadarViewData.DisplayRangeMeters)
+		&& RadarViewData.DisplayRangeMeters >= 0.0f;
+	// [v1.21.0] Widget이 단위 변환을 다시 하지 않도록 Presenter가 완성하는 Display Range 문자열입니다.
+	FText DisplayRangeText = FText::GetEmpty();
+	if (bDisplayRangeAvailable)
+	{
+		if (RadarViewData.DisplayRangeMeters >= 1000.0f)
+		{
+			DisplayRangeText = FText::FromString(FString::Printf(TEXT("RANGE %.1f km"), RadarViewData.DisplayRangeMeters / 1000.0f));
+		}
+		else
+		{
+			DisplayRangeText = FText::FromString(FString::Printf(TEXT("RANGE %d m"), FMath::RoundToInt(RadarViewData.DisplayRangeMeters)));
+		}
+	}
+	SetTextValue(RadarPanel, FName(TEXT("Text_RadarRange")), DisplayRangeText, bDisplayRangeAvailable);
+
+	// [v1.21.0] 저장 Designer가 크기·위치를 소유하고 Presenter가 runtime Contact만 추가하는 Radar 공간 Canvas입니다.
+	UCanvasPanel* RadarCanvas = Cast<UCanvasPanel>(FindNamedWidget(RadarPanel, FName(TEXT("CanvasPanel_RadarContacts"))));
+	if (!RadarCanvas)
+	{
+		return;
+	}
+
+	// [v1.21.0] 저장 Asset의 Friendly/Neutral/Hostile/Unknown Image는 runtime Brush/크기 Template일 뿐 실제 Contact가 아니므로 항상 숨깁니다.
+	const FName StaticPreviewContactNames[] =
+	{
+		FName(TEXT("Image_RadarFriendly")),
+		FName(TEXT("Image_RadarNeutral")),
+		FName(TEXT("Image_RadarHostile")),
+		FName(TEXT("Image_RadarUnknown"))
+	};
+	for (const FName StaticPreviewContactName : StaticPreviewContactNames)
+	{
+		SetNamedVisibility(RadarPanel, StaticPreviewContactName, false);
+	}
+
+	// [v1.21.0] Radar Frame은 Radar가 실제 available일 때만 표시하고 Designer Slot Layout은 변경하지 않습니다.
+	SetNamedVisibility(RadarPanel, FName(TEXT("Image_RadarFrame")), bRadarAvailable);
+	// [v1.21.0] Player Marker도 Radar available에서만 중앙 Designer Slot을 사용합니다.
+	SetNamedVisibility(RadarPanel, FName(TEXT("Image_RadarPlayer")), bRadarAvailable);
+
+	// [v1.21.0] in-range 선택 Contact에만 사용할 저장 4-Corner Bracket Image입니다.
+	UImage* SelectedBracketImage = Cast<UImage>(FindNamedWidget(RadarPanel, FName(TEXT("Image_RadarSelected"))));
+	// [v1.21.0] range-out 선택 Contact 방향에만 사용할 저장 2-Corner Open Edge Bracket Image입니다.
+	UImage* SelectedEdgeImage = Cast<UImage>(FindNamedWidget(RadarPanel, FName(TEXT("Image_RadarSelectedEdge"))));
+	if (SelectedBracketImage)
+	{
+		SelectedBracketImage->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (SelectedEdgeImage)
+	{
+		SelectedEdgeImage->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
+	// [v1.21.0] 이전 ViewData에서 사용하던 runtime Image pool과 과거 transient Text pool이 있다면 먼저 숨깁니다.
+	for (int32 ChildIndex = 0; ChildIndex < RadarCanvas->GetChildrenCount(); ++ChildIndex)
+	{
+		// [v1.21.0] 현재 Canvas의 한 자식 Widget입니다.
+		UWidget* RadarChild = RadarCanvas->GetChildAt(ChildIndex);
+		if (RadarChild
+			&& (RadarChild->GetName().StartsWith(TEXT("Image_RadarRuntimeContact_"))
+				|| RadarChild->GetName().StartsWith(TEXT("Text_RadarRuntimeContact_"))))
+		{
+			RadarChild->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+
+	RadarCanvas->SetVisibility(bRadarAvailable ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	if (!bRadarAvailable)
+	{
+		return;
+	}
+
+	// [v1.21.0] 이번 ViewData에서 실제 표시한 in-range Contact 수이며 runtime Image pool 인덱스로 사용합니다.
+	int32 VisibleBlipCount = 0;
+	for (const FCFRadarContactHUDData& RadarContact : RadarViewData.Contacts)
+	{
+		// [v1.21.0] 현재 Contact가 Heading-Up normalized Radar 위치를 실제로 제공하는지 나타냅니다.
+		const bool bNormalizedPositionAvailable = RadarContact.NormalizedPositionAvailability == ECFUIViewAvailability::Known
+			&& IsFiniteRadarPosition(RadarContact.NormalizedPosition);
+
+		if (RadarContact.bSelected
+			&& !RadarContact.bInsideDisplayRange
+			&& RadarContact.bShowSelectedEdgeMarker
+			&& SelectedEdgeImage
+			&& IsFiniteRadarPosition(RadarContact.SelectedEdgeDirection))
+		{
+			ApplyRadarNormalizedAnchor(SelectedEdgeImage, RadarContact.SelectedEdgeDirection);
+			SelectedEdgeImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+
+		if (!bNormalizedPositionAvailable || !RadarContact.bInsideDisplayRange)
+		{
+			continue;
+		}
+
+		// [v1.21.0] 현재 in-range Contact에 재사용하거나 새로 추가한 runtime Image Blip입니다.
+		UImage* ContactBlip = FindOrCreateRadarRuntimeBlip(RadarCanvas, VisibleBlipCount);
+		if (!ContactBlip)
+		{
+			continue;
+		}
+
+		// [v1.21.0] 관계별 전용 Brush·색·Designer 크기를 제공하는 숨겨진 Preview Image Template입니다.
+		const UImage* RelationVisualTemplate = FindRadarRelationColorTemplate(RadarPanel, RadarContact.Relation);
+		if (!ApplyRadarTemplateVisual(ContactBlip, RelationVisualTemplate))
+		{
+			ContactBlip->SetVisibility(ESlateVisibility::Collapsed);
+			continue;
+		}
+		ApplyRadarNormalizedAnchor(ContactBlip, RadarContact.NormalizedPosition);
+		ContactBlip->SetVisibility(ESlateVisibility::HitTestInvisible);
+
+		if (RadarContact.bSelected && SelectedBracketImage)
+		{
+			ApplyRadarNormalizedAnchor(SelectedBracketImage, RadarContact.NormalizedPosition);
+			SelectedBracketImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+
+		++VisibleBlipCount;
+	}
 }
 
-// [v1.2.0] 정상 Launcher Sequence를 제외한 현재 최고 우선순위 전역 Warning/Critical 1개를 Production AlertFeed에 적용합니다.
-void UCFHUDPresenter::ApplyAlertViewData(UUserWidget* RootWidget, const FCFCombatAlertViewData& AlertViewData) const
+// [v1.23.0] Alert 우선순위를 기존 UI Style의 Notice/Warning/Critical Severity Style로 해석합니다.
+const FCFUIAlertSeverityStyle& UCFHUDPresenter::ResolveAlertSeverityStyle(const UCFUIStyleData& StyleData, const ECFHUDAlertPriority Priority)
 {
+	switch (Priority)
+	{
+	case ECFHUDAlertPriority::Critical:
+		return StyleData.AlertStyle.Critical;
+	case ECFHUDAlertPriority::Caution:
+		return StyleData.AlertStyle.Warning;
+	case ECFHUDAlertPriority::Info:
+	default:
+		return StyleData.AlertStyle.Notice;
+	}
+}
+
+// [v1.24.0] Pawn/Widget/Presenter 수명이 바뀔 때 이전 AlertKey의 첫 표시 시각과 완료 상태를 전부 폐기합니다.
+void UCFHUDPresenter::ResetAlertPresentationLifecycle()
+{
+	AlertFirstPresentedGameTimeSeconds.Reset();
+	CompletedAlertPresentationKeys.Reset();
+}
+
+// [v1.24.0] AlertKey별 실제 첫 표시 시각과 완료 상태를 정리하고 현재 시각에 표시할 최고 우선순위 Alert를 반환합니다.
+const FCFHUDAlertItem* UCFHUDPresenter::ResolveAlertForPresentation(
+	const FCFCombatAlertViewData& AlertViewData,
+	const UCFUIStyleData& StyleData,
+	const double CurrentGameTimeSeconds)
+{
+	if (AlertViewData.Availability != ECFUIViewAvailability::Known)
+	{
+		ResetAlertPresentationLifecycle();
+		return nullptr;
+	}
+
+	// [v1.24.0] 이번 ViewData에서 실제 전역 AlertFeed 후보로 계속 활성인 AlertKey 집합입니다.
+	TSet<FName> CurrentAlertKeys;
+	for (const FCFHUDAlertItem& AlertItem : AlertViewData.ActiveAlerts)
+	{
+		if (!AlertItem.AlertKey.IsNone() && AlertItem.AlertKey != FName(TEXT("LauncherSequence")))
+		{
+			CurrentAlertKeys.Add(AlertItem.AlertKey);
+		}
+	}
+
+	for (auto AlertStartTimeIterator = AlertFirstPresentedGameTimeSeconds.CreateIterator(); AlertStartTimeIterator; ++AlertStartTimeIterator)
+	{
+		if (!CurrentAlertKeys.Contains(AlertStartTimeIterator.Key()))
+		{
+			AlertStartTimeIterator.RemoveCurrent();
+		}
+	}
+
+	for (auto CompletedAlertIterator = CompletedAlertPresentationKeys.CreateIterator(); CompletedAlertIterator; ++CompletedAlertIterator)
+	{
+		if (!CurrentAlertKeys.Contains(*CompletedAlertIterator))
+		{
+			CompletedAlertIterator.RemoveCurrent();
+		}
+	}
+
+	// [v1.24.0] 아직 표시할 수 있는 후보 중 실제 화면을 소유할 최고 Priority Alert입니다.
+	const FCFHUDAlertItem* PrimaryAlert = nullptr;
+	for (const FCFHUDAlertItem& AlertItem : AlertViewData.ActiveAlerts)
+	{
+		if (AlertItem.AlertKey.IsNone() || AlertItem.AlertKey == FName(TEXT("LauncherSequence")))
+		{
+			continue;
+		}
+
+		// [v1.24.0] 이 Alert Priority가 소비할 기존 Notice/Warning/Critical Style 계약입니다.
+		const FCFUIAlertSeverityStyle& SeverityStyle = ResolveAlertSeverityStyle(StyleData, AlertItem.Priority);
+		// [v1.24.0] Critical Persistent 또는 0초 Style을 상태 해제까지 유지하는 Presentation 조건입니다.
+		const bool bPersistentAlert = SeverityStyle.bPersistentByDefault || SeverityStyle.DefaultDurationSeconds <= 0.0f;
+		if (!bPersistentAlert)
+		{
+			if (CompletedAlertPresentationKeys.Contains(AlertItem.AlertKey))
+			{
+				continue;
+			}
+
+			// [v1.24.0] 이 유한 Alert가 실제 Primary로 처음 표시된 시각이며 아직 suppression 중이면 존재하지 않습니다.
+			const double* AlertStartTimeSeconds = AlertFirstPresentedGameTimeSeconds.Find(AlertItem.AlertKey);
+			if (AlertStartTimeSeconds)
+			{
+				// [v1.24.0] 현재 World 시간이 이전보다 작아져도 음수가 되지 않는 실제 표시 경과시간입니다.
+				const double PresentedDurationSeconds = FMath::Max(0.0, CurrentGameTimeSeconds - *AlertStartTimeSeconds);
+				if (PresentedDurationSeconds >= static_cast<double>(SeverityStyle.DefaultDurationSeconds))
+				{
+					CompletedAlertPresentationKeys.Add(AlertItem.AlertKey);
+					continue;
+				}
+			}
+		}
+
+		if (!PrimaryAlert
+			|| static_cast<uint8>(AlertItem.Priority) > static_cast<uint8>(PrimaryAlert->Priority))
+		{
+			PrimaryAlert = &AlertItem;
+		}
+	}
+
+	if (PrimaryAlert)
+	{
+		// [v1.24.0] 실제 선택된 Alert가 finite duration인지 판정할 Style 계약입니다.
+		const FCFUIAlertSeverityStyle& PrimarySeverityStyle = ResolveAlertSeverityStyle(StyleData, PrimaryAlert->Priority);
+		// [v1.24.0] Persistent Alert에는 불필요한 시작 시각을 만들지 않기 위한 최종 지속 조건입니다.
+		const bool bPrimaryPersistent = PrimarySeverityStyle.bPersistentByDefault || PrimarySeverityStyle.DefaultDurationSeconds <= 0.0f;
+		if (!bPrimaryPersistent && !AlertFirstPresentedGameTimeSeconds.Contains(PrimaryAlert->AlertKey))
+		{
+			AlertFirstPresentedGameTimeSeconds.Add(PrimaryAlert->AlertKey, CurrentGameTimeSeconds);
+		}
+	}
+	return PrimaryAlert;
+}
+
+// [v1.23.0] 정상 Launcher Sequence를 제외한 현재 최고 우선순위 전역 Alert 1개에 Style duration lifecycle을 적용합니다.
+void UCFHUDPresenter::ApplyAlertViewData(UUserWidget* RootWidget, const FCFCombatAlertViewData& AlertViewData)
+{
+	// [v1.23.0] 실제 Alert 의미 슬롯을 소유하는 저장 Production AlertFeed입니다.
 	UUserWidget* AlertFeed = FindNamedUserWidget(RootWidget, FName(TEXT("WBP_CFAlertFeed")));
 	if (!AlertFeed)
 	{
 		return;
 	}
 
-	// [v1.2.0] 혹시 외부 공급자가 LauncherSequence를 넣더라도 전역 Alert에서 제외하고 첫 실제 Warning/Critical만 선택합니다.
-	const FCFHUDAlertItem* PrimaryAlert = nullptr;
-	for (const FCFHUDAlertItem& AlertItem : AlertViewData.ActiveAlerts)
-	{
-		if (AlertItem.AlertKey != FName(TEXT("LauncherSequence")))
-		{
-			PrimaryAlert = &AlertItem;
-			break;
-		}
-	}
+	// [v1.23.0] UISubsystem이 Root에 주입한 실제 Style Data를 Alert duration source로 제공할 Styled Root입니다.
+	UCFStyledWidgetBase* StyledRootWidget = Cast<UCFStyledWidgetBase>(RootWidget);
+	// [v1.23.0] Root Context가 없더라도 승인 Native Style 기본값으로 fail-safe하는 실제 Alert Style Data입니다.
+	const UCFUIStyleData* AlertStyleData = StyledRootWidget ? StyledRootWidget->GetUIStyleData() : GetDefault<UCFUIStyleData>();
+	// [v1.23.0] Pause에서 자연스럽게 멈추는 Alert duration 계산용 현재 Production World입니다.
+	UWorld* PresentationWorld = RootWidget ? RootWidget->GetWorld() : nullptr;
+	// [v1.23.0] Timer Manager 없이 현재 HUD refresh에서 읽는 World Game-Time입니다.
+	const double CurrentGameTimeSeconds = PresentationWorld ? static_cast<double>(PresentationWorld->GetTimeSeconds()) : 0.0;
+	// [v1.23.0] Priority·AlertKey·Style duration을 적용한 이번 프레임의 실제 전역 Alert입니다.
+	const FCFHUDAlertItem* PrimaryAlert = AlertStyleData
+		? ResolveAlertForPresentation(AlertViewData, *AlertStyleData, CurrentGameTimeSeconds)
+		: nullptr;
 
-	// [v1.2.0] 현재 전역 Alert가 실제 존재하는지 나타냅니다.
+	// [v1.23.0] 현재 Style duration까지 포함해 전역 Alert가 실제 존재하는지 나타냅니다.
 	const bool bHasPrimaryAlert = PrimaryAlert != nullptr;
 	AlertFeed->SetVisibility(bHasPrimaryAlert ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	SetNamedVisibility(AlertFeed, FName(TEXT("VerticalBox_ArmorAlert")), bHasPrimaryAlert);
