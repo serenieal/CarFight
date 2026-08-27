@@ -1,0 +1,41 @@
+{
+  "trial_id": "UI_HANDOFF_TRIAL_03",
+  "version": "1.0.0",
+  "status": "PreUserEndToEndReview",
+  "module": "CompleteOuterFrameHousing",
+  "reference": {
+    "path": "SourceArt/UI/HUD/VT/VT_VehPanel01.jpg",
+    "source_type": "FlatRasterProductionVisualTarget"
+  },
+  "evaluation_axes": [
+    "StructuralFidelity",
+    "VisualIdentityFidelity",
+    "Editability",
+    "LayerEconomy",
+    "RuntimeSuitability"
+  ],
+  "authoring_layers": [
+    "FrameBase",
+    "FrameEdge",
+    "FrameAccent",
+    "FrameGlow"
+  ],
+  "bounded_edit_demo": {
+    "request": "Reduce accent stroke thickness only",
+    "changed_layers": ["FrameAccent", "FrameGlow"],
+    "unchanged_layers": ["FrameBase", "FrameEdge"]
+  },
+  "runtime_packing": {
+    "FrameRuntimeBase": ["FrameBase", "FrameEdge", "FrameAccent"],
+    "FrameRuntimeGlow": ["FrameGlow"],
+    "runtime_texture_count": 2
+  },
+  "technique_scope": {
+    "deterministic_geometry": "Candidate",
+    "decorative_treatment": "Candidate",
+    "end_to_end_handoff": "UnderUserReview"
+  },
+  "production_import": false,
+  "ue_asset_mutation": false,
+  "user_visual_pass": false
+}

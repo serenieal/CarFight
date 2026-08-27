@@ -1,0 +1,84 @@
+{
+  "trial_id": "UI_RECON_TRIAL_02",
+  "version": "1.0.0",
+  "status": "PreUserGeometryReview",
+  "source": {
+    "path": "SourceArt/UI/HUD/VT/VT_VehPanel01.jpg",
+    "size": [1280, 594],
+    "sha256": "cf5b0a57b76f9c41272ee01ed752d263a7b01a78bf02e9cb9dc042d000df6b6b"
+  },
+  "classification": {
+    "target_authority": "ProductionVisualTarget",
+    "source_type": "FlatRaster",
+    "resource_nature": "DeterministicGeometry",
+    "production_method": "Reconstruct",
+    "image_generation_used": false,
+    "treatment_used": false,
+    "glow_used": false
+  },
+  "coordinate_space": {
+    "width": 1280,
+    "height": 594,
+    "origin": "TopLeft",
+    "units": "pixels"
+  },
+  "geometry": {
+    "outer_contour": [
+      [24.2, 212.5],
+      [24.2, 72.5],
+      [72.5, 24.2],
+      [249.2, 24.2],
+      [261.7, 19.2],
+      [317.5, 19.2],
+      [330.8, 30.0],
+      [433.3, 30.0]
+    ],
+    "inner_edge": [
+      [39.2, 212.5],
+      [39.2, 80.0],
+      [80.0, 39.2],
+      [244.2, 39.2],
+      [257.5, 34.2],
+      [318.3, 34.2],
+      [333.3, 45.0],
+      [433.3, 45.0]
+    ],
+    "inner_rail": [
+      [50.0, 212.5],
+      [50.0, 88.3],
+      [87.5, 51.7],
+      [238.3, 51.7],
+      [254.2, 46.7],
+      [323.3, 46.7],
+      [337.5, 57.5],
+      [433.3, 57.5]
+    ]
+  },
+  "review_contract": {
+    "required_views": [
+      "Reference",
+      "GeometryOnly",
+      "ReferenceGeometryOverlay",
+      "CriticalCornerZoom"
+    ],
+    "geometry_pass_required_before_treatment": true,
+    "user_visual_pass": false,
+    "blocks": [
+      "Trial02TreatmentStage",
+      "ValidatedTechniquePromotion"
+    ],
+    "does_not_block": [
+      "UnrelatedUIRuntimeWork",
+      "ExistingApprovedAssetReuse",
+      "OtherProjectWork"
+    ]
+  },
+  "trial01_learning_applied": [
+    "Generative image output is not accepted as deterministic geometry evidence.",
+    "Geometry is represented as explicit repeatable coordinates.",
+    "Overlay review is mandatory before treatment."
+  ],
+  "ue_import": false,
+  "ue_asset_mutation": false,
+  "content_reposition": false
+}
