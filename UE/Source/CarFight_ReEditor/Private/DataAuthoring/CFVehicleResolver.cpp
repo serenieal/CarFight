@@ -1,14 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleResolver.cpp
-// Version: v1.1.0
-// Date: 2026-08-17
-// Description: DAUTH-P0-08E/F Frozen R0~R16 Pure Resolver + transient Definition Validation Foundation 구현입니다.
+// Version: v1.3.0
+// Date: 2026-08-26
+// Description: DAUTH-P0-08E/F Frozen R0~R16 Pure Resolver + CF-FQ-040 VB-P0-05 atomic typed Transmission/Reference wheel Profile mapping 구현입니다.
 // Scope: Snapshot-only source candidate/precedence와 R15 transient Materializer/Validator orchestration을 제공합니다.
 // Changelog:
+// - v1.3.0: 설계 검수 교정으로 TransmissionRatios를 Forward/Reverse 분리 leaf가 아닌 atomic typed ratio-set으로 복원하고 Shift RPM integer semantic을 fail-closed 검증.
+// - v1.2.0: VB-P0-05 VehicleBase Reference wheel fallback opt-in, Drivetrain Transmission complete payload opt-in, nested ratio-set mapping과 positive reverse-ratio fail-closed validation 추가.
 // - v1.1.0: DAUTH-P0-08F R15을 Completed stage로 구현하고 Definition Snapshot 공용 hash authority와 materialized readback consistency를 연결.
 // - v1.0.0: Section 22.22~22.39 immutable Resolver input/output과 deterministic candidate stack 최초 구현.
 // Migration:
+// - Resolver contract revision 2부터 기존 Base/Drivetrain Profile은 opt-in bool이 false이면 새 wheel/Transmission candidate를 만들지 않습니다.
+// - ReverseGearRatios의 0/음수 값은 abs 보정하지 않고 Block합니다. setup array는 positive magnitude storage만 허용합니다.
 // - R0~R14 Source 계산은 계속 live UObject/StaticMesh/Slate를 재조회하지 않습니다.
 // - R15는 Frozen 계약대로 transient UCFVehicleData에만 materialize하여 기존 UCFVDAValidator를 읽기 전용 실행합니다.
 // - Runtime schema/Content Asset을 수정하지 않으며 Apply/UI/CSV는 구현하지 않습니다.
@@ -882,9 +886,89 @@ namespace CFVehicleResolverPrivate
 		return ResponseProperty->ContainerPtrToValuePtr<FCFFeelResponse>(PayloadAddress);
 	}
 
+	// Transmission ratio 배열 하나가 UE 5.8 positive-magnitude 저장 계약을 만족하는지 검사합니다.
+	bool ArePositiveFiniteRatios(const TArray<float>& Ratios)
+	{
+		for (const float Ratio : Ratios)
+		{
+			if (!FMath::IsFinite(Ratio) || Ratio <= 0.0f)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	// Shift RPM 값이 Chaos 내부 uint32 의미와 동일한 비음수 정수값인지 반환합니다.
+	bool IsNonNegativeIntegerRpm(const float RpmValue)
+	{
+		return FMath::IsFinite(RpmValue)
+			&& RpmValue >= 0.0f
+			&& FMath::IsNearlyEqual(RpmValue, FMath::RoundToFloat(RpmValue));
+	}
+
+	// Drivetrain complete Transmission payload를 fail-closed 검증합니다.
+	bool ValidateTransmissionProfile(FResolverContext& Context)
+	{
+		// 검증할 Drivetrain Profile payload입니다.
+		const FCFDrivetrainProfileData& Data = Context.Request.Profiles.DrivetrainData;
+		if (!Data.bUseTransmissionConfig)
+		{
+			return true;
+		}
+
+		// atomic Transmission ratio-set을 validation issue의 대표 위치로 사용합니다.
+		const FCFVehicleFieldPath ValidationPath = FindScalarPath(TEXT("VehicleMovementConfig.TransmissionRatios"));
+		if (Data.TransmissionRatios.ForwardGearRatios.IsEmpty()
+			|| Data.TransmissionRatios.ReverseGearRatios.IsEmpty()
+			|| !ArePositiveFiniteRatios(Data.TransmissionRatios.ForwardGearRatios)
+			|| !ArePositiveFiniteRatios(Data.TransmissionRatios.ReverseGearRatios)
+			|| !FMath::IsFinite(Data.FinalRatio) || Data.FinalRatio <= 0.0f
+			|| !IsNonNegativeIntegerRpm(Data.ChangeUpRPM)
+			|| !IsNonNegativeIntegerRpm(Data.ChangeDownRPM)
+			|| !FMath::IsFinite(Data.GearChangeTime) || Data.GearChangeTime < 0.0f
+			|| !FMath::IsFinite(Data.TransmissionEfficiency) || Data.TransmissionEfficiency < 0.0f || Data.TransmissionEfficiency > 1.0f
+			|| (Data.bUseAutomaticGears && Data.ChangeDownRPM > Data.ChangeUpRPM))
+		{
+			AddIssue(
+				Context,
+				Context.Result.ResolverValidation,
+				ECFVehicleValidationSeverity::Blocked,
+				TEXT("DrivetrainTransmissionInvalid"),
+				TEXT("차량별 Transmission payload가 유효하지 않습니다. 기어비 배열은 비어 있지 않은 양수 finite magnitude만 허용하며, FinalRatio>0, Shift RPM은 비음수 정수, 변속 시간>=0, Efficiency=0..1이어야 합니다. 자동 변속에서는 ChangeDownRPM<=ChangeUpRPM이어야 합니다."),
+				&ValidationPath);
+			return false;
+		}
+		return true;
+	}
+
+	// Target field가 VehicleBase Reference wheel geometry opt-in 대상인지 반환합니다.
+	bool IsReferenceWheelGeometryField(const FString& CanonicalPattern)
+	{
+		return CanonicalPattern == TEXT("VehicleMovementConfig.FrontWheelRadius")
+			|| CanonicalPattern == TEXT("VehicleMovementConfig.RearWheelRadius")
+			|| CanonicalPattern == TEXT("VehicleMovementConfig.FrontWheelWidth")
+			|| CanonicalPattern == TEXT("VehicleMovementConfig.RearWheelWidth");
+	}
+
+	// Target field가 Drivetrain complete Transmission opt-in 대상인지 반환합니다.
+	bool IsTransmissionField(const FString& CanonicalPattern)
+	{
+		return CanonicalPattern == TEXT("VehicleMovementConfig.TransmissionRatios")
+			|| CanonicalPattern == TEXT("VehicleMovementConfig.bUseAutomaticGears")
+			|| CanonicalPattern == TEXT("VehicleMovementConfig.bUseAutoReverse")
+			|| CanonicalPattern == TEXT("VehicleMovementConfig.FinalRatio")
+			|| CanonicalPattern == TEXT("VehicleMovementConfig.ChangeUpRPM")
+			|| CanonicalPattern == TEXT("VehicleMovementConfig.ChangeDownRPM")
+			|| CanonicalPattern == TEXT("VehicleMovementConfig.GearChangeTime")
+			|| CanonicalPattern == TEXT("VehicleMovementConfig.TransmissionEfficiency");
+	}
+
 	// R2 Frozen 5 Profile Snapshot을 primary owner field에 적용합니다.
 	void RunR2Profiles(FResolverContext& Context)
 	{
+		// Enabled complete Transmission payload가 잘못되면 Profile stage 자체를 fail-closed로 유지합니다.
+		const bool bTransmissionPayloadValid = ValidateTransmissionProfile(Context);
 		for (const FCFVehicleFieldDescriptor& Descriptor : FCFVehicleFieldRegistry::GetDescriptors())
 		{
 			if (Descriptor.PrimaryProfileDomain == ECFVehicleProfileDomain::None || !Descriptor.StablePathPattern.CollectionPropertyName.IsNone())
@@ -912,6 +996,19 @@ namespace CFVehicleResolverPrivate
 				continue;
 			}
 
+			// Current descriptor의 canonical Registry pattern입니다.
+			const FString CanonicalPattern = Descriptor.GetCanonicalPattern();
+			if (IsReferenceWheelGeometryField(CanonicalPattern)
+				&& !Context.Request.Profiles.BaseData.bUseReferenceWheelGeometry)
+			{
+				continue;
+			}
+			if (IsTransmissionField(CanonicalPattern)
+				&& (!Context.Request.Profiles.DrivetrainData.bUseTransmissionConfig || !bTransmissionPayloadValid))
+			{
+				continue;
+			}
+
 			// Profile layer가 제공할 exact scalar target path입니다.
 			const FCFVehicleFieldPath& TargetPath = Descriptor.StablePathPattern;
 			// Feel-derived field의 profile response property 이름입니다.
@@ -934,7 +1031,7 @@ namespace CFVehicleResolverPrivate
 				continue;
 			}
 
-			// Direct Profile field는 target leaf name과 typed payload property name이 동일합니다.
+			// Direct Profile field는 target leaf name과 typed payload property name이 동일합니다. Atomic TransmissionRatios도 Drivetrain payload의 동일 이름 FStructProperty로 통째로 codec 처리합니다.
 			const FName TargetLeafName = TargetPath.PropertyChain.IsEmpty() ? NAME_None : TargetPath.PropertyChain.Last();
 			if (TargetLeafName.IsNone() || !FindFProperty<FProperty>(PayloadStruct, TargetLeafName))
 			{

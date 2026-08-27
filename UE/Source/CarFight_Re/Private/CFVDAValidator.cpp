@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.5.0
-// Date: 2026-08-18
-// Description: CF-FQ-015 VehicleData 검증 + CF-FQ-032 explicit RedlineStartRPM 계약을 반영한 읽기 전용 검증 헬퍼 구현입니다.
+// Version: 1.6.0
+// Date: 2026-08-26
+// Description: CF-FQ-015 VehicleData 검증 + CF-FQ-040 VB-P0-05 Chassis/Transmission complete setup 계약을 반영한 읽기 전용 검증 헬퍼 구현입니다.
 // Scope: CFVehicleData 필수 참조, 소켓, 레이아웃, 하드포인트·MountProfile, 피팅 질량, Movement, WheelVisual, DriveState, 기준 DA 비교 검증 리포트를 제공합니다.
 // Changelog:
+// - v1.6.0: VB-P0-05 ChassisWidth/Height와 complete Transmission ratio-set/FinalRatio/Shift RPM/GearChangeTime/Efficiency를 최종 VehicleData Movement validation에 추가. Shift RPM은 Chaos 내부 uint32 의미에 맞는 비음수 정수값을 요구.
 // - v1.5.0: UI-P0-06 explicit RedlineStartRPM 검증 추가. 0은 backward-compatible 미설정으로 허용하고, 명시값만 EngineIdleRPM < RedlineStartRPM < EngineMaxRPM을 강제.
 // - v1.4.0: VD-P0-02에서 Movement override, Wheel width, WheelVisual auto-scale·clamp와 Fitting mass 비교 항목을 기존 CompareVehicleData에 추가.
 // - v1.3.0: VD-P0-01 피팅 질량·MountProfile 검증, Movement flag 의미 교정, Wheel auto-scale clamp·radius 검증을 추가.
@@ -12,6 +13,7 @@
 // - v1.1.0: ThrottleInputScale 검사와 기준 DA 비교 항목을 추가.
 // - v1.0.0: EUW_VDAWizard 연동을 위한 BlueprintCallable 검증 함수와 결과 구조체를 추가.
 // Migration:
+// - v1.6.0부터 ChassisWidth/Height와 Transmission complete payload가 invalid이면 Error다. 기존 valid UE-default-compatible 값은 그대로 통과하며 Validator가 값을 자동 보정하지 않는다.
 // - v1.5.0 기존 VehicleData의 RedlineStartRPM=0은 유효한 미설정 상태다. Validator는 EngineMaxRPM/변속값으로 자동 보정하지 않으며 주행을 차단하지 않는다.
 // - RedlineStartRPM을 명시하면 EngineIdleRPM보다 크고 EngineMaxRPM보다 작아야 한다.
 // - v1.4.0 비교 항목은 기준/대상 VehicleData의 차이를 리포트할 뿐 실제 Asset 값을 수정하거나 자동 튜닝하지 않는다.
@@ -36,6 +38,31 @@ namespace CFVDAValidatorInternal
 
 	// 휠 앵커 위치가 사실상 비어 있는지 판단할 허용 오차입니다.
 	constexpr float AnchorZeroTolerance = 1.0f;
+
+	// Transmission ratio 배열이 비어 있지 않고 positive finite magnitude만 포함하는지 검사합니다.
+	bool AreTransmissionRatiosValid(const TArray<float>& Ratios)
+	{
+		if (Ratios.IsEmpty())
+		{
+			return false;
+		}
+		for (const float Ratio : Ratios)
+		{
+			if (!FMath::IsFinite(Ratio) || Ratio <= 0.0f)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	// Shift RPM이 Chaos 내부 uint32 의미와 같은 비음수 정수값인지 검사합니다.
+	bool IsNonNegativeIntegerRpm(const float RpmValue)
+	{
+		return FMath::IsFinite(RpmValue)
+			&& RpmValue >= 0.0f
+			&& FMath::IsNearlyEqual(RpmValue, FMath::RoundToFloat(RpmValue));
+	}
 
 	// 표준 차체 휠 소켓 이름 목록입니다.
 	const FName StandardSocketNames[4] =
@@ -769,6 +796,56 @@ FCFVDAValidationReport UCFVDAValidator::ValidateMovementConfig(UCFVehicleData* T
 
 	// 대상 DA의 Movement 설정입니다.
 	const FCFVehicleMovementConfig& MovementConfig = TargetVehicleData->VehicleMovementConfig;
+
+	if (!FMath::IsFinite(MovementConfig.ChassisWidth) || MovementConfig.ChassisWidth <= 0.0f)
+	{
+		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("Movement")), TEXT("VehicleMovementConfig.ChassisWidth"), TEXT("차체 폭"), TEXT("ChassisWidth는 유한한 0보다 큰 값이어야 합니다."), TEXT("실제 차체 폭을 cm 단위의 양수로 입력하세요."));
+	}
+
+	if (!FMath::IsFinite(MovementConfig.ChassisHeight) || MovementConfig.ChassisHeight <= 0.0f)
+	{
+		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("Movement")), TEXT("VehicleMovementConfig.ChassisHeight"), TEXT("차체 높이"), TEXT("ChassisHeight는 유한한 0보다 큰 값이어야 합니다."), TEXT("실제 차체 높이를 cm 단위의 양수로 입력하세요."));
+	}
+
+	if (!CFVDAValidatorInternal::AreTransmissionRatiosValid(MovementConfig.TransmissionRatios.ForwardGearRatios))
+	{
+		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("Movement")), TEXT("VehicleMovementConfig.TransmissionRatios"), TEXT("전진 기어비"), TEXT("전진 기어비는 비어 있지 않아야 하며 모든 값이 유한한 양수여야 합니다."), TEXT("1단부터 순서대로 positive magnitude 기어비를 입력하세요."));
+	}
+
+	if (!CFVDAValidatorInternal::AreTransmissionRatiosValid(MovementConfig.TransmissionRatios.ReverseGearRatios))
+	{
+		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("Movement")), TEXT("VehicleMovementConfig.TransmissionRatios"), TEXT("후진 기어비"), TEXT("후진 기어비는 비어 있지 않아야 하며 모든 값이 유한한 양수 크기여야 합니다."), TEXT("후진 방향 부호를 넣지 말고 positive magnitude만 입력하세요."));
+	}
+
+	if (!FMath::IsFinite(MovementConfig.FinalRatio) || MovementConfig.FinalRatio <= 0.0f)
+	{
+		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("Movement")), TEXT("VehicleMovementConfig.FinalRatio"), TEXT("최종 감속비"), TEXT("FinalRatio는 유한한 0보다 큰 값이어야 합니다."), TEXT("실제 변속기 최종 감속비를 양수로 입력하세요."));
+	}
+
+	if (!CFVDAValidatorInternal::IsNonNegativeIntegerRpm(MovementConfig.ChangeUpRPM))
+	{
+		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("Movement")), TEXT("VehicleMovementConfig.ChangeUpRPM"), TEXT("상향 변속 RPM"), TEXT("ChangeUpRPM은 0 이상의 정수 RPM이어야 합니다."), TEXT("Chaos 내부 uint32 의미와 동일한 정수 RPM으로 입력하세요."));
+	}
+
+	if (!CFVDAValidatorInternal::IsNonNegativeIntegerRpm(MovementConfig.ChangeDownRPM))
+	{
+		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("Movement")), TEXT("VehicleMovementConfig.ChangeDownRPM"), TEXT("하향 변속 RPM"), TEXT("ChangeDownRPM은 0 이상의 정수 RPM이어야 합니다."), TEXT("Chaos 내부 uint32 의미와 동일한 정수 RPM으로 입력하세요."));
+	}
+
+	if (!FMath::IsFinite(MovementConfig.GearChangeTime) || MovementConfig.GearChangeTime < 0.0f)
+	{
+		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("Movement")), TEXT("VehicleMovementConfig.GearChangeTime"), TEXT("변속 시간"), TEXT("GearChangeTime은 유한한 0 이상의 값이어야 합니다."), TEXT("변속 소요 시간을 초 단위의 0 이상 값으로 입력하세요."));
+	}
+
+	if (!FMath::IsFinite(MovementConfig.TransmissionEfficiency) || MovementConfig.TransmissionEfficiency < 0.0f || MovementConfig.TransmissionEfficiency > 1.0f)
+	{
+		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("Movement")), TEXT("VehicleMovementConfig.TransmissionEfficiency"), TEXT("변속 효율"), TEXT("TransmissionEfficiency는 0에서 1 사이의 유한한 값이어야 합니다."), TEXT("기계 손실을 나타내는 0~1 효율값으로 입력하세요."));
+	}
+
+	if (MovementConfig.bUseAutomaticGears && MovementConfig.ChangeDownRPM > MovementConfig.ChangeUpRPM)
+	{
+		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("Movement")), TEXT("VehicleMovementConfig.ChangeDownRPM"), TEXT("자동 변속 RPM 범위"), TEXT("자동 변속에서는 ChangeDownRPM이 ChangeUpRPM보다 클 수 없습니다."), TEXT("하향 변속 RPM을 상향 변속 RPM보다 작거나 같게 조정하세요."));
+	}
 
 			if (!MovementConfig.bUseMovementOverrides)
 	{

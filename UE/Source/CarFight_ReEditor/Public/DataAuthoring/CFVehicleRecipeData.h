@@ -1,15 +1,17 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleRecipeData.h
-// Version: v1.1.0
-// Date: 2026-08-17
-// Description: Vehicle Authoring Intent의 persistent Editor-only Recipe DataAsset입니다.
+// Version: v1.2.0
+// Date: 2026-08-27
+// Description: Vehicle Authoring Intent + Builder profile provenance receipt의 persistent Editor-only Recipe DataAsset입니다.
 // Scope: Target binding, Asset/Profile/Feel/Mass/Hardpoint/Mount/Default/Override/Import/Applied authoring truth를 보관합니다.
 // Changelog:
+// - v1.2.0: Builder-private 4 Profile commit과 accepted Evidence/Claim set을 persistent하게 연결하는 non-semantic BuilderCommitReceipt를 추가.
 // - v1.1.0: Recipe 복제 시 원본 Guid를 상속하지 않고 새 RecipeId를 발급하도록 PostDuplicate 계약을 추가.
 // - v1.0.0: DAUTH-P0-08A Frozen Recipe schema 최초 구현.
 // Migration:
 // - Runtime UCFVehicleData에 Recipe reference나 provenance를 추가하지 않습니다.
+// - BuilderCommitReceipt는 Recipe semantic fingerprint에서 제외되는 provenance metadata이며 Profile/Evidence가 바뀌면 Final Review에서 stale로 판정합니다.
 // - IsEditorOnly()=true로 Recipe package의 Never-Cook 의도를 명시합니다.
 
 #pragma once
@@ -18,6 +20,63 @@
 #include "Engine/DataAsset.h"
 #include "DataAuthoring/CFVehicleAuthoringTypes.h"
 #include "CFVehicleRecipeData.generated.h"
+
+/** Builder-private 4 Profile에 실제 commit된 accepted Evidence proposal을 증명하는 persistent non-semantic receipt입니다. */
+USTRUCT(BlueprintType)
+struct FCFVehicleBuilderCommitReceipt
+{
+	GENERATED_BODY()
+
+	// Accepted Builder Profile commit의 exact proposal hash입니다. 비어 있으면 receipt가 없습니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")
+	FString ProposalHash;
+
+	// Accepted proposal이 사용한 exact Reference Evidence path입니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")
+	FSoftObjectPath EvidencePath;
+
+	// Accepted proposal이 사용한 persistent Evidence identity입니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")
+	FGuid EvidenceId;
+
+	// Accepted proposal이 사용한 semantic Evidence fingerprint입니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")
+	FString EvidenceFingerprint;
+
+	// Accepted proposal이 실제 소비한 canonical Claim ID set의 order-independent hash입니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")
+	FString ConsumedClaimIdsHash;
+
+	// Commit 직후 VehicleBase Profile payload fingerprint입니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")
+	FString VehicleBaseFingerprint;
+
+	// Commit 직후 Drivetrain Profile payload fingerprint입니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")
+	FString DrivetrainFingerprint;
+
+	// Commit 직후 Handling Profile payload fingerprint입니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")
+	FString HandlingFingerprint;
+
+	// Commit 직후 Performance Profile payload fingerprint입니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")
+	FString PerformanceFingerprint;
+
+	// Accepted complete Profile payload의 prospective resolved Definition hash입니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")
+	FString ProspectiveResolvedDefinitionHash;
+
+	// Accepted proposal이 사용한 Resolver contract revision입니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")
+	int32 ResolverContractRevision = 0;
+
+	// Receipt가 실제 accepted proposal을 나타내는 최소 identity를 갖는지 반환합니다.
+	bool IsValid() const
+	{
+		return !ProposalHash.IsEmpty() && EvidenceId.IsValid() && !EvidenceFingerprint.IsEmpty();
+	}
+};
 
 /** P0 Vehicle Authoring Intent의 persistent Editor-only SSOT입니다. */
 UCLASS(BlueprintType)
@@ -105,6 +164,10 @@ public:
 	// 마지막 successful Apply의 deterministic provenance baseline입니다.
 	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Applied", meta=(DisplayName="마지막 적용 상태"))
 	FCFVehicleAppliedState AppliedState;
+
+	// Builder-private 4 Profile에 실제 commit된 Evidence/Claim provenance receipt입니다. Recipe semantic fingerprint에는 포함되지 않습니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder", meta=(DisplayName="Builder Commit Receipt"))
+	FCFVehicleBuilderCommitReceipt BuilderCommitReceipt;
 
 	// 사용자/서비스 Recipe edit의 diagnostic sequence입니다.
 	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Identity", meta=(DisplayName="Authoring Revision"))

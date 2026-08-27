@@ -1,18 +1,29 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAIContract.h
-// Version: v1.3.0
-// Date: 2026-08-18
-// Description: DAUTH-P0-08I~P0-11 Common Authoring Service / AI Typed Contract public value contract입니다.
+// Version: v1.11.0
+// Date: 2026-08-27
+// Description: DAUTH Common Authoring Service + CF-FQ-040 Builder provenance receipt / Final Review / post-state guarded Undo hardening contract입니다.
 // Scope: Section 25 R0~R3 risk, approval, read/query와 normal Workspace Mesh-only candidate projection을 제공합니다.
 // Changelog:
+// - v1.11.0: Final Review provenance를 persistent BuilderCommitReceipt/current 4 Profile fingerprint에 binding하고, Undo token에 semantic Recipe + post-Apply Target/AppliedState stale guard를 추가.
+// - v1.10.0: VB-P0-07 Final Review의 validation/drift/gameplay/diff/provenance summary, exact R3 Apply approval과 Builder-owned UE transaction guarded Undo token contract를 추가.
+// - v1.9.0: VB-P0-06 Durability/Defense/DestroyedFx/Hardpoint/Mount/DriveState/WheelVisual/FittingMass를 current Recipe/Resolver/Target에서 읽어 Complete/Optional/NeedsReview/Blocked로 분류하는 R0 Builder guidance contract를 추가.
+// - v1.8.0: Existing Vehicle Completion이 missing private Profile 기본값 binding으로 주행 특성을 바꾸지 않도록 New/CompleteExisting mode, complete initial Profile seed payload와 current→prospective Resolver hash preservation evidence를 추가.
+// - v1.7.0: VB-P0-05 최소 7-Asset 경로를 닫기 위해 existing Definition+Recipe 뒤 Evidence + private 4 Profile을 생성·owner/binding하는 R2 Builder companion typed request/preview/result를 추가.
+// - v1.6.0: VB-P0-05 설계 검수 교정으로 Builder commit에 typed Evidence path/id/fingerprint/consumed claims와 prospective Resolver signature/hash binding을 추가. opaque upstream hash는 보조 correlation 값으로 격하.
+// - v1.5.0: VB-P0-05 Builder-private VehicleBase/Drivetrain/Handling/Performance complete payload를 4개 current/prospective fingerprint와 OwnerRecipeId에 binding하는 atomic typed commit request/preview를 추가.
 // - v1.3.0: P0-11 ListVehicles에 bounded Mesh-only Candidate projection metadata를 추가하되 AI raw writer/create operation은 추가하지 않음.
 // - v1.2.0: P0-10 Reference Compare, Legacy Adoption, Wheel Measurement, managed-target lookup typed R0/R2 contract를 추가.
 // - v1.1.0: P0-09 reviewed Initial Import proposal/commit을 UI와 공용 facade에서 사용할 typed R2 contract로 추가.
 // - v1.0.0: AI/UI 공용 typed request/result foundation 최초 구현.
 // Migration:
 // - Raw SetField/UObject property patch/direct VehicleData write API를 제공하지 않습니다.
-// - Shared Profile payload writer, Batch/CSV, Save/SaveAll, force/skip-validation 옵션을 제공하지 않습니다.
+// - v1.5.0의 Profile write는 Meta.OwnerRecipeId가 exact RecipeId인 Builder-private 4 Profile만 허용합니다. Invalid/mismatch owner인 shared/legacy Profile은 fail-closed이며 기존 Shared Profile 편집 경로를 우회하지 않습니다.
+// - Builder-private typed commit은 fresh Reference Evidence + current Recipe/Target/private Profile + prospective Resolver result에 binding한 4 Profile complete payload만 한 transaction으로 갱신하며 Save/SaveAll, force/skip-validation, automatic retry를 제공하지 않습니다.
+// - 일반 Shared Profile payload writer, Batch/CSV, Save/SaveAll, force/skip-validation 옵션을 제공하지 않습니다.
+// - v1.9.0 Builder Gameplay Guidance는 R0 read-only입니다. Hardpoint Socket을 생성·이동하지 않고, Existing Vehicle Completion에서는 current Target의 기존 LocalTransform을 baseline-safe하게 보존할 수 있습니다.
+// - v1.10.0 Builder Final Review는 기존 Validator/Resolver/Drift/ApplyService를 재사용합니다. Apply는 exact DefinitionApply approval 뒤에만 수행되고 Undo는 이 Builder가 생성한 exact UE transaction token이 현재 Undo stack top일 때만 허용합니다.
 
 #pragma once
 
@@ -24,6 +35,11 @@
 
 class UCFVehicleData;
 class UCFVehicleRecipeData;
+class UCFVehicleRefEvidence;
+class UCFVehicleBaseProfile;
+class UCFDrivetrainProfile;
+class UCFHandlingProfile;
+class UCFPerformanceProfile;
 
 /** Section 25의 operation risk class입니다. */
 UENUM()
@@ -1196,6 +1212,457 @@ struct FCFVehicleInitialImportResult
 	FCFVehicleImportResult ImportSummary;
 };
 
+/** Guided Vehicle Builder가 한 차량에 대해 제안하는 private 4 Profile complete payload입니다. */
+USTRUCT()
+struct FCFBuilderPrivateProfilePayload
+{
+	GENERATED_BODY()
+
+	// Builder-private VehicleBase Profile asset identity입니다.
+	UPROPERTY()
+	FSoftObjectPath VehicleBaseProfilePath;
+
+	// Builder-private Drivetrain Profile asset identity입니다.
+	UPROPERTY()
+	FSoftObjectPath DrivetrainProfilePath;
+
+	// Builder-private Handling Profile asset identity입니다.
+	UPROPERTY()
+	FSoftObjectPath HandlingProfilePath;
+
+	// Builder-private Performance Profile asset identity입니다.
+	UPROPERTY()
+	FSoftObjectPath PerformanceProfilePath;
+
+	// VehicleBase의 complete prospective typed payload입니다.
+	UPROPERTY()
+	FCFVehicleBaseProfileData VehicleBaseData;
+
+	// Drivetrain의 complete prospective typed payload입니다.
+	UPROPERTY()
+	FCFDrivetrainProfileData DrivetrainData;
+
+	// Handling의 complete prospective typed payload입니다.
+	UPROPERTY()
+	FCFHandlingProfileData HandlingData;
+
+	// Performance의 complete prospective typed payload입니다.
+	UPROPERTY()
+	FCFPerformanceProfileData PerformanceData;
+};
+
+/** Builder-private 4 Profile current fingerprint를 exact domain별로 보관합니다. */
+USTRUCT()
+struct FCFBuilderProfileFingerprints
+{
+	GENERATED_BODY()
+
+	// VehicleBase Profile fingerprint입니다.
+	UPROPERTY()
+	FString VehicleBaseFingerprint;
+
+	// Drivetrain Profile fingerprint입니다.
+	UPROPERTY()
+	FString DrivetrainFingerprint;
+
+	// Handling Profile fingerprint입니다.
+	UPROPERTY()
+	FString HandlingFingerprint;
+
+	// Performance Profile fingerprint입니다.
+	UPROPERTY()
+	FString PerformanceFingerprint;
+};
+
+/** Builder가 새 companion asset 하나를 만들 exact package/object identity입니다. */
+USTRUCT()
+struct FCFBuilderAssetIdentity
+{
+	GENERATED_BODY()
+
+	// 새 asset을 생성할 Unreal long package name입니다.
+	UPROPERTY()
+	FString PackageName;
+
+	// 새 asset의 object name입니다.
+	UPROPERTY()
+	FName AssetName = NAME_None;
+};
+
+/** Builder companion completeness가 신규 차량인지 기존 차량 보완인지 구분합니다. */
+UENUM()
+enum class ECFBuilderCompanionMode : uint8
+{
+	NewVehicle,
+	CompleteExisting
+};
+
+/** Existing Definition+Recipe에 Evidence + private 4 Profile을 붙이는 R2 Builder request입니다. */
+USTRUCT()
+struct FCFBuilderCompanionRequest
+{
+	GENERATED_BODY()
+
+	// Companion owner가 될 persistent managed Recipe입니다.
+	UPROPERTY()
+	TObjectPtr<UCFVehicleRecipeData> Recipe = nullptr;
+
+	// 신규 차량 생성과 기존 차량 보완의 baseline-preservation 규칙을 선택합니다.
+	UPROPERTY()
+	ECFBuilderCompanionMode Mode = ECFBuilderCompanionMode::NewVehicle;
+
+	// 하나 이상의 private Profile이 Missing일 때 complete initial seed payload를 제공했는지 여부입니다.
+	UPROPERTY()
+	bool bHasInitialProfilePayload = false;
+
+	// Missing private Profile을 default constructor 값이 아니라 complete reviewed/effective baseline으로 초기화할 typed payload입니다.
+	UPROPERTY()
+	FCFBuilderPrivateProfilePayload InitialProfilePayload;
+
+	// 기존 정상 Reference Evidence가 있으면 그 exact path입니다. 비어 있으면 EvidenceAsset identity로 새 Evidence를 생성합니다.
+	UPROPERTY()
+	FSoftObjectPath ExistingEvidencePath;
+
+	// ExistingEvidencePath가 비어 있을 때 생성할 새 Reference Evidence asset identity입니다.
+	UPROPERTY()
+	FCFBuilderAssetIdentity EvidenceAsset;
+
+	// Recipe VehicleBase binding이 비어 있을 때 생성할 새 Builder-private VehicleBase Profile asset identity입니다.
+	UPROPERTY()
+	FCFBuilderAssetIdentity VehicleBaseAsset;
+
+	// Recipe Drivetrain binding이 비어 있을 때 생성할 새 Builder-private Drivetrain Profile asset identity입니다.
+	UPROPERTY()
+	FCFBuilderAssetIdentity DrivetrainAsset;
+
+	// Recipe Handling binding이 비어 있을 때 생성할 새 Builder-private Handling Profile asset identity입니다.
+	UPROPERTY()
+	FCFBuilderAssetIdentity HandlingAsset;
+
+	// Recipe Performance binding이 비어 있을 때 생성할 새 Builder-private Performance Profile asset identity입니다.
+	UPROPERTY()
+	FCFBuilderAssetIdentity PerformanceAsset;
+
+	// Preview는 caller identity를 사용하고 Commit은 exact R2 expected state + OwnershipWrite approval을 요구합니다.
+	UPROPERTY()
+	FCFAuthoringCallContext CallContext;
+};
+
+/** Builder companion creation의 mutation0 R2 preview입니다. */
+USTRUCT()
+struct FCFBuilderCompanionPreview
+{
+	GENERATED_BODY()
+
+	// Common typed preview result입니다.
+	UPROPERTY()
+	FCFAuthoringOpResult Operation;
+
+	// Commit에 binding할 exact OwnershipWrite proposal입니다.
+	UPROPERTY()
+	FCFAuthoringProposal Proposal;
+
+	// Preview 뒤 사용할 existing 또는 prospective Reference Evidence object path입니다.
+	UPROPERTY()
+	FSoftObjectPath EvidencePath;
+
+	// Preview 뒤 사용할 existing 또는 prospective VehicleBase private Profile object path입니다.
+	UPROPERTY()
+	FSoftObjectPath VehicleBasePath;
+
+	// Preview 뒤 사용할 existing 또는 prospective Drivetrain private Profile object path입니다.
+	UPROPERTY()
+	FSoftObjectPath DrivetrainPath;
+
+	// Preview 뒤 사용할 existing 또는 prospective Handling private Profile object path입니다.
+	UPROPERTY()
+	FSoftObjectPath HandlingPath;
+
+	// Preview 뒤 사용할 existing 또는 prospective Performance private Profile object path입니다.
+	UPROPERTY()
+	FSoftObjectPath PerformancePath;
+
+	// Companion 보완 전 current Recipe의 resolved Definition hash입니다. Current resolve가 성공한 경우에만 채웁니다.
+	UPROPERTY()
+	FString CurrentResolvedDefinitionHash;
+
+	// Missing private Profile complete seed를 prospective binding한 resolved Definition hash입니다.
+	UPROPERTY()
+	FString ProspectiveResolvedDefinitionHash;
+
+	// Prospective persistent binding identity + typed payload의 effective Source signature입니다.
+	UPROPERTY()
+	FString ProspectiveSourceSignature;
+};
+
+/** Builder companion creation terminal result입니다. */
+USTRUCT()
+struct FCFBuilderCompanionResult
+{
+	GENERATED_BODY()
+
+	// Common typed terminal result입니다.
+	UPROPERTY()
+	FCFAuthoringOpResult Operation;
+
+	// 성공 시 생성된 Reference Evidence입니다.
+	UPROPERTY()
+	TObjectPtr<UCFVehicleRefEvidence> CreatedEvidence = nullptr;
+
+	// 성공 시 생성된 private VehicleBase Profile입니다.
+	UPROPERTY()
+	TObjectPtr<UCFVehicleBaseProfile> CreatedVehicleBase = nullptr;
+
+	// 성공 시 생성된 private Drivetrain Profile입니다.
+	UPROPERTY()
+	TObjectPtr<UCFDrivetrainProfile> CreatedDrivetrain = nullptr;
+
+	// 성공 시 생성된 private Handling Profile입니다.
+	UPROPERTY()
+	TObjectPtr<UCFHandlingProfile> CreatedHandling = nullptr;
+
+	// 성공 시 생성된 private Performance Profile입니다.
+	UPROPERTY()
+	TObjectPtr<UCFPerformanceProfile> CreatedPerformance = nullptr;
+};
+
+/** Builder Gameplay Setup에서 판정할 의미 영역입니다. */
+UENUM()
+enum class ECFBuilderGameplayArea : uint8
+{
+	Durability,
+	Defense,
+	DestroyedFx,
+	Hardpoints,
+	MountProfiles,
+	DriveState,
+	WheelVisual,
+	FittingMass
+};
+
+/** Builder Gameplay Setup 영역 하나의 read-only completeness 상태입니다. */
+UENUM()
+enum class ECFBuilderGuidanceState : uint8
+{
+	Complete,
+	Optional,
+	NeedsReview,
+	Blocked
+};
+
+/** Builder Gameplay Setup R0 guidance가 읽을 current Recipe/Target context입니다. */
+USTRUCT()
+struct FCFBuilderGameplayGuidanceRequest
+{
+	GENERATED_BODY()
+
+	// Existing Authoring R0 read contract를 그대로 재사용합니다.
+	UPROPERTY()
+	FCFVehicleAuthoringReadRequest ReadRequest;
+
+	// 신규 차량과 Existing Vehicle Completion의 보존 규칙을 구분합니다.
+	UPROPERTY()
+	ECFBuilderCompanionMode Mode = ECFBuilderCompanionMode::NewVehicle;
+};
+
+/** Gameplay Setup 영역 하나의 사용자 판단/조치 안내입니다. */
+USTRUCT()
+struct FCFBuilderGameplayGuidanceItem
+{
+	GENERATED_BODY()
+
+	// 이 guidance가 설명하는 Gameplay 영역입니다.
+	UPROPERTY()
+	ECFBuilderGameplayArea Area = ECFBuilderGameplayArea::Durability;
+
+	// 현재 authoritative truth에서 fresh derive한 completeness 상태입니다.
+	UPROPERTY()
+	ECFBuilderGuidanceState State = ECFBuilderGuidanceState::Blocked;
+
+	// 사람이 현재 상태를 빠르게 이해할 한국어 요약입니다.
+	UPROPERTY()
+	FString Summary;
+
+	// USER가 해야 할 일이 있을 때의 구체적인 해결 안내입니다.
+	UPROPERTY()
+	FString ResolutionText;
+
+	// 관련 Recipe/VehicleData semantic field를 사람이 추적할 문자열입니다.
+	UPROPERTY()
+	FString RelatedFieldPath;
+
+	// True이면 USER 판단 또는 Editor 작업 없이는 이 영역을 완료할 수 없습니다.
+	UPROPERTY()
+	bool bUserActionRequired = false;
+};
+
+/** USER authority인 Chassis Socket 하나에 대한 read-only Builder 안내입니다. */
+USTRUCT()
+struct FCFBuilderManualSocketGuidance
+{
+	GENERATED_BODY()
+
+	// Hardpoint 또는 Destroyed FX 중 이 Socket이 속한 영역입니다.
+	UPROPERTY()
+	ECFBuilderGameplayArea Area = ECFBuilderGameplayArea::Hardpoints;
+
+	// Top_01 같은 semantic slot identity입니다. Destroyed FX는 FX_Destroyed를 사용합니다.
+	UPROPERTY()
+	FName SemanticId = NAME_None;
+
+	// 현재 Recipe가 binding했거나 Builder가 권장하는 Socket 이름입니다.
+	UPROPERTY()
+	FName SocketName = NAME_None;
+
+	// 현재 Chassis StaticMesh에 이 Socket이 실제 존재하는지 여부입니다.
+	UPROPERTY()
+	bool bFoundOnChassis = false;
+
+	// Existing Vehicle Completion에서 current VehicleData LocalTransform을 그대로 보존해도 되는지 여부입니다.
+	UPROPERTY()
+	bool bExistingStoredTransformAccepted = false;
+
+	// Static Mesh Editor에서 USER가 직접 수행할 작업 안내입니다.
+	UPROPERTY()
+	FString Instruction;
+};
+
+/** Builder Gameplay Setup Step이 소비할 mutation0 completeness/read-only guidance 결과입니다. */
+USTRUCT()
+struct FCFBuilderGameplayGuidanceResult
+{
+	GENERATED_BODY()
+
+	// Common R0 typed result envelope입니다.
+	UPROPERTY()
+	FCFAuthoringOpResult Operation;
+
+	// 이 평가에 적용한 NewVehicle/CompleteExisting mode입니다.
+	UPROPERTY()
+	ECFBuilderCompanionMode Mode = ECFBuilderCompanionMode::NewVehicle;
+
+	// 고정 영역 순서의 fresh completeness 결과입니다.
+	UPROPERTY()
+	TArray<FCFBuilderGameplayGuidanceItem> Items;
+
+	// USER authority인 Hardpoint/Destroyed FX Socket의 현재 존재 상태와 수동 작업 안내입니다.
+	UPROPERTY()
+	TArray<FCFBuilderManualSocketGuidance> SocketGuidance;
+
+	// USER review/action이 필요한 영역 수입니다.
+	UPROPERTY()
+	int32 NeedsReviewCount = 0;
+
+	// current contract 위반으로 막힌 영역 수입니다.
+	UPROPERTY()
+	int32 BlockedCount = 0;
+
+	// Step 6을 기술적으로 완료할 수 있는지 여부입니다. Optional은 blocker가 아닙니다.
+	UPROPERTY()
+	bool bCanCompleteGameplayStep = false;
+
+	// current Target과 resolved authoring candidate 사이 Gameplay 관련 pending diff 수입니다.
+	UPROPERTY()
+	int32 PendingGameplayDiffCount = 0;
+
+	// Existing Vehicle Completion에서 기존 값을 보존하는지, 후속 Apply review가 필요한지 설명합니다.
+	UPROPERTY()
+	FString ExistingCompletionSummary;
+};
+
+/** Builder proposal이 실제 current Reference Evidence에 binding할 typed stale-precondition입니다. */
+USTRUCT()
+struct FCFBuilderEvidenceBinding
+{
+	GENERATED_BODY()
+
+	// Preview/Commit에서 다시 load할 exact Reference Evidence asset path입니다.
+	UPROPERTY()
+	FSoftObjectPath EvidencePath;
+
+	// Preview가 사용한 exact persistent Evidence identity입니다.
+	UPROPERTY()
+	FGuid ExpectedEvidenceId;
+
+	// Preview가 사용한 exact generated semantic Evidence fingerprint입니다.
+	UPROPERTY()
+	FString ExpectedEvidenceFingerprint;
+
+	// 이번 complete Profile proposal이 실제 소비한 canonical Claim ID 목록입니다.
+	UPROPERTY()
+	TArray<FName> ConsumedClaimIds;
+};
+
+/** Preview/Commit이 공유하는 Builder-private 4 Profile atomic typed request입니다. */
+USTRUCT()
+struct FCFBuilderProfileCommitRequest
+{
+	GENERATED_BODY()
+
+	// 4 private Profile의 owner authority인 persistent Recipe입니다.
+	UPROPERTY()
+	TObjectPtr<UCFVehicleRecipeData> Recipe = nullptr;
+
+	// RecipeId와 exact equality가 필요한 expected Builder owner identity입니다.
+	UPROPERTY()
+	FGuid ExpectedOwnerRecipeId;
+
+	// 4 private Profile path + complete prospective payload입니다.
+	UPROPERTY()
+	FCFBuilderPrivateProfilePayload Payload;
+
+	// Preview 당시 current 4 Profile fingerprints입니다.
+	UPROPERTY()
+	FCFBuilderProfileFingerprints ExpectedCurrentFingerprints;
+
+	// Fresh Reference Evidence stale-precondition과 consumed canonical Claim set입니다.
+	UPROPERTY()
+	FCFBuilderEvidenceBinding EvidenceBinding;
+
+	// 상위 Builder proposal과의 correlation/binding hash입니다.
+	UPROPERTY()
+	FString UpstreamBuilderProposalHash;
+
+	// Preview/Commit 공용 caller + exact approval/current-state contract입니다.
+	UPROPERTY()
+	FCFAuthoringCallContext CallContext;
+};
+
+/** Builder-private 4 Profile complete payload의 mutation0 preview입니다. */
+USTRUCT()
+struct FCFBuilderProfileCommitPreview
+{
+	GENERATED_BODY()
+
+	// Common typed preview result입니다.
+	UPROPERTY()
+	FCFAuthoringOpResult Operation;
+
+	// Commit에 binding할 exact AuthoringWrite proposal입니다.
+	UPROPERTY()
+	FCFAuthoringProposal Proposal;
+
+	// Preview 당시 current 4 Profile fingerprints입니다.
+	UPROPERTY()
+	FCFBuilderProfileFingerprints CurrentFingerprints;
+
+	// Complete typed payload를 materialize했을 prospective 4 Profile fingerprints입니다.
+	UPROPERTY()
+	FCFBuilderProfileFingerprints ProspectiveFingerprints;
+
+	// Preview가 fresh 검증한 Reference Evidence fingerprint입니다.
+	UPROPERTY()
+	FString EvidenceFingerprint;
+
+	// Prospective complete payload의 effective Resolver Source signature입니다.
+	UPROPERTY()
+	FString ProspectiveSourceSignature;
+
+	// Prospective complete payload의 resolved Definition hash입니다.
+	UPROPERTY()
+	FString ProspectiveResolvedDefinitionHash;
+};
+
 /** BuildApplyApprovalProposal / ApplyResolvedVehicle가 공유하는 R3 typed request입니다. */
 USTRUCT()
 struct FCFVehicleApplyOpRequest
@@ -1211,6 +1678,247 @@ struct FCFVehicleApplyOpRequest
 	FString ExpectedDiffHash;
 
 	// DefinitionApply approval + common expected state입니다.
+	UPROPERTY()
+	FCFAuthoringCallContext CallContext;
+};
+
+/** Final Review가 표시할 accepted Reference Evidence consumed Claim provenance 요약입니다. */
+USTRUCT()
+struct FCFBuilderProvenanceSummary
+{
+	GENERATED_BODY()
+
+	// Persistent receipt + current Evidence/Profile binding이 fresh해서 provenance를 표시할 수 있는지 여부입니다.
+	UPROPERTY()
+	bool bAvailable = false;
+
+	// 이번 accepted proposal이 소비한 canonical Claim 수입니다.
+	UPROPERTY()
+	int32 ConsumedClaimCount = 0;
+
+	// Consumed canonical Claim 중 FACT 수입니다.
+	UPROPERTY()
+	int32 FactClaimCount = 0;
+
+	// Consumed canonical Claim 중 DERIVED 수입니다.
+	UPROPERTY()
+	int32 DerivedClaimCount = 0;
+
+	// Consumed canonical Claim 중 GAME_BIAS 수입니다.
+	UPROPERTY()
+	int32 GameBiasClaimCount = 0;
+
+	// Provenance 판정에 사용한 fresh Evidence fingerprint입니다.
+	UPROPERTY()
+	FString EvidenceFingerprint;
+
+	// Provenance를 사용할 수 없을 때의 blocker/diagnostic 설명입니다.
+	UPROPERTY()
+	FString IssueText;
+};
+
+/** Builder Final Review R0 aggregate request입니다. */
+USTRUCT()
+struct FCFBuilderFinalReviewRequest
+{
+	GENERATED_BODY()
+
+	// Existing Vehicle Authoring read + Builder gameplay guidance context입니다.
+	UPROPERTY()
+	FCFBuilderGameplayGuidanceRequest GameplayRequest;
+
+	// accepted Evidence binding을 제공했는지 여부입니다.
+	UPROPERTY()
+	bool bHasEvidenceBinding = false;
+
+	// persistent receipt와 대조할 accepted Evidence/Claim binding입니다.
+	UPROPERTY()
+	FCFBuilderEvidenceBinding EvidenceBinding;
+};
+
+/** Builder Final Review Step의 validation/drift/gameplay/diff/provenance + Apply readiness 결과입니다. */
+USTRUCT()
+struct FCFBuilderFinalReviewResult
+{
+	GENERATED_BODY()
+
+	// Common R0 typed result envelope입니다.
+	UPROPERTY()
+	FCFAuthoringOpResult Operation;
+
+	// P0-06 gameplay completeness/read-only guidance projection입니다.
+	UPROPERTY()
+	FCFBuilderGameplayGuidanceResult GameplayGuidance;
+
+	// Shared Resolver의 Recipe/Resolver/Definition/Stale validation projection입니다.
+	UPROPERTY()
+	FCFVehicleValidationReadResult Validation;
+
+	// Shared external drift projection입니다.
+	UPROPERTY()
+	FCFVehicleDriftReadResult Drift;
+
+	// current Target과 resolved candidate의 exact Shared Resolver field diff입니다.
+	UPROPERTY()
+	TArray<FCFVehicleFieldDiff> FieldDiff;
+
+	// FieldDiff exact rows의 deterministic approval hash입니다.
+	UPROPERTY()
+	FString DiffHash;
+
+	// accepted Evidence consumed canonical Claim provenance입니다.
+	UPROPERTY()
+	FCFBuilderProvenanceSummary Provenance;
+
+	// Final Review에서 표시할 warning 수입니다.
+	UPROPERTY()
+	int32 WarningCount = 0;
+
+	// Apply/Complete를 막는 blocker 수입니다.
+	UPROPERTY()
+	int32 BlockingIssueCount = 0;
+
+	// current AppliedState 기준 External Drift가 존재하는지 여부입니다.
+	UPROPERTY()
+	bool bHasExternalDrift = false;
+
+	// current Target에 pending resolved diff가 있어 explicit Apply가 필요한지 여부입니다.
+	UPROPERTY()
+	bool bApplyRequired = false;
+
+	// fresh review에서 explicit DefinitionApply proposal을 승인할 수 있는지 여부입니다.
+	UPROPERTY()
+	bool bCanApply = false;
+
+	// pending Apply 없이 Final Review Step을 기술적으로 완료할 수 있는지 여부입니다.
+	UPROPERTY()
+	bool bCanCompleteFinalReview = false;
+
+	// bCanApply=true일 때 exact DefinitionApply approval proposal입니다.
+	UPROPERTY()
+	FCFAuthoringProposal ApplyProposal;
+
+	// ApplyBuilderFinalReview가 fresh 재검사 뒤 사용할 exact ApplyService request입니다.
+	UPROPERTY()
+	FCFVehicleApplyRequest PreparedApplyRequest;
+};
+
+/** Builder Final Review의 explicit Definition Apply request입니다. */
+USTRUCT()
+struct FCFBuilderFinalApplyRequest
+{
+	GENERATED_BODY()
+
+	// Apply 직전 fresh 재검사할 exact Final Review input입니다.
+	UPROPERTY()
+	FCFBuilderFinalReviewRequest ReviewRequest;
+
+	// exact DefinitionApply ProposalHash와 expected state를 담는 explicit approval입니다.
+	UPROPERTY()
+	FCFAuthoringCallContext CallContext;
+};
+
+/** Builder가 성공한 Apply transaction 하나를 안전하게 되돌리기 위해 보관하는 transient token입니다. */
+USTRUCT()
+struct FCFBuilderUndoToken
+{
+	GENERATED_BODY()
+
+	// Apply 성공 직후 Undo stack top에서 캡처한 exact UE transaction identity입니다.
+	UPROPERTY()
+	FGuid TransactionId;
+
+	// transaction owner Recipe persistent identity입니다.
+	UPROPERTY()
+	FGuid RecipeId;
+
+	// transaction owner Recipe object path입니다.
+	UPROPERTY()
+	FSoftObjectPath RecipePath;
+
+	// transaction Target VehicleData object path입니다.
+	UPROPERTY()
+	FSoftObjectPath TargetDefinitionPath;
+
+	// explicit Undo approval이 binding할 exact token hash입니다.
+	UPROPERTY()
+	FString UndoScopeHash;
+
+	// Apply 전후 동일해야 하는 semantic Recipe fingerprint입니다. AppliedState/Builder receipt 같은 non-semantic metadata는 제외됩니다.
+	UPROPERTY()
+	FString ApplyRecipeFingerprint;
+
+	// Undo 뒤 복원돼야 하는 pre-Apply full Target Definition hash입니다.
+	UPROPERTY()
+	FString PreApplyTargetDefinitionHash;
+
+	// Undo 뒤 복원돼야 하는 pre-Apply AppliedState recipe fingerprint입니다.
+	UPROPERTY()
+	FString PreApplyAppliedRecipeFingerprint;
+
+	// Undo 뒤 복원돼야 하는 pre-Apply AppliedState source signature입니다.
+	UPROPERTY()
+	FString PreApplyAppliedSourceSignature;
+
+	// Undo 뒤 복원돼야 하는 pre-Apply AppliedState Definition hash입니다.
+	UPROPERTY()
+	FString PreApplyAppliedDefinitionHash;
+
+	// Undo 뒤 복원돼야 하는 pre-Apply AppliedState Resolver revision입니다.
+	UPROPERTY()
+	int32 PreApplyAppliedResolverRevision = 0;
+
+	// Undo 직전까지 exact 유지돼야 하는 post-Apply full Target Definition hash입니다.
+	UPROPERTY()
+	FString PostApplyTargetDefinitionHash;
+
+	// Undo 직전까지 exact 유지돼야 하는 post-Apply AppliedState recipe fingerprint입니다.
+	UPROPERTY()
+	FString PostApplyAppliedRecipeFingerprint;
+
+	// Undo 직전까지 exact 유지돼야 하는 post-Apply AppliedState source signature입니다.
+	UPROPERTY()
+	FString PostApplyAppliedSourceSignature;
+
+	// Undo 직전까지 exact 유지돼야 하는 post-Apply AppliedState Definition hash입니다.
+	UPROPERTY()
+	FString PostApplyAppliedDefinitionHash;
+
+	// Undo 직전까지 exact 유지돼야 하는 post-Apply AppliedState Resolver revision입니다.
+	UPROPERTY()
+	int32 PostApplyAppliedResolverRevision = 0;
+};
+
+/** Builder Final Review explicit Apply terminal result입니다. */
+USTRUCT()
+struct FCFBuilderFinalApplyResult
+{
+	GENERATED_BODY()
+
+	// Existing ApplyResolvedVehicle result를 그대로 전달하는 common result입니다.
+	UPROPERTY()
+	FCFAuthoringOpResult Operation;
+
+	// Apply가 실제 UE transaction을 만들었고 guarded Undo token을 발급했는지 여부입니다.
+	UPROPERTY()
+	bool bUndoAvailable = false;
+
+	// bUndoAvailable=true일 때만 유효한 one-transaction Undo capability입니다.
+	UPROPERTY()
+	FCFBuilderUndoToken UndoToken;
+};
+
+/** Builder가 자신이 만든 마지막 exact Apply transaction만 되돌리는 request입니다. */
+USTRUCT()
+struct FCFBuilderUndoRequest
+{
+	GENERATED_BODY()
+
+	// ApplyBuilderFinalReview가 발급한 exact transient Undo token입니다.
+	UPROPERTY()
+	FCFBuilderUndoToken UndoToken;
+
+	// ClientOperationId + DefinitionApply approval class + UndoScopeHash를 요구하는 explicit Undo approval입니다.
 	UPROPERTY()
 	FCFAuthoringCallContext CallContext;
 };

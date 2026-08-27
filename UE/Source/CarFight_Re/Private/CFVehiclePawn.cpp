@@ -1,9 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.156.0
-// Date: 2026-08-22
-// Description: CarFight 싱글플레이 차량 Pawn 구현 / CF-FQ-032 post-closure Target Identity 안정화
+// Version: 2.158.0
+// Date: 2026-08-26
+// Description: CarFight 싱글플레이 차량 Pawn 구현 / CF-FQ-040 VB-P0-05 UE 5.8 complete Movement setup fail-closed 적용
 // Changelog:
+// - v2.158.0: VB-P0-05 설계 검수 교정으로 invalid Chassis/Transmission을 다른 Movement 값보다 먼저 거부해 partial runtime mutation을 제거하고 Shift RPM integer semantic을 runtime에서도 검증.
+// - v2.157.0: VehicleMovementConfig의 ChassisWidth와 complete TransmissionSetup을 적용하고 setup-time 값이 live physics와 달라질 때만 선/각속도를 보존한 PhysicsState 재생성을 수행. ReverseGearRatios는 positive magnitude를 그대로 전달하며 음수/0 ratio는 runtime에서도 fail-closed로 거부.
 // - v2.156.0: VehicleData의 유효한 PrimaryAssetId.PrimaryAssetName을 차량 안정 TargetId로 사용. Actor instance GetFName/GetName은 Identity source에서 제외하고 Player-facing DisplayName은 명시 source가 없으면 Empty 유지. VehicleData/PrimaryAssetId가 없으면 TargetId=None으로 fail-closed.
 // - v2.155.0: 차량 기본 TargetDisplayInfo에서 런타임 UObject Actor 이름을 안정 TargetId/Player-facing DisplayName으로 공개하던 fallback을 제거. 명시 Identity source가 생기기 전에는 ID/이름을 비워 Sensor/HUD 내부 이름 누출을 차단.
 // - v2.154.0: IA_RadarZoom을 기본 로드하고 Started Axis1D의 양수/음수를 현재 LocalPlayer UISubsystem의 Radar Zoom In/Out으로 전달. Pawn은 Sensor Range/Profile 계산을 소유하지 않음.
@@ -103,6 +105,9 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth Visual/Shell 적용 전 기준선을 깨끗하게 만들기 위해 차량 진단 로그와 Owner 표시 안정화 기본값을 False로 통일.
 // Migration:
+// - v2.158.0부터 ChassisWidth/ChassisHeight 또는 complete Transmission payload가 invalid이면 ApplyVehicleMovementConfig는 어떤 Movement mutation도 수행하지 않는다. Shift RPM은 Chaos 내부 uint32 의미에 맞는 비음수 정수값이어야 한다.
+// - v2.157.0부터 ChassisWidth/ChassisHeight 또는 Transmission setup이 실제 live setup과 달라 PhysicsState 재생성이 필요하면 현재 chassis 선속도/각속도를 복원한다. 새 public hot setter를 만들지 않으며 기존 ApplyVehicleMovementConfig lifecycle 안에서만 수행한다.
+// - v2.157.0 ReverseGearRatios는 UE 5.8 Source 계약대로 positive magnitude만 허용한다. invalid 배열은 abs/자동 보정하지 않고 Transmission 적용을 건너뛰며 diagnostic summary를 남긴다.
 // - v2.156.0부터 차량 TargetDisplayInfo.TargetId는 VehicleData의 유효한 PrimaryAssetId.PrimaryAssetName을 사용한다. VehicleData가 없거나 PrimaryAssetId가 invalid면 None으로 유지하고 Actor GetFName/GetName fallback은 사용하지 않는다. DisplayName은 별도 Player-facing 이름 source가 생기기 전 Empty를 유지한다.
 // - v2.155.0의 TargetId=None-only 임시 교정은 Sensor Identified 공개 계약과 충돌할 수 있어 v2.156.0의 VehicleData PrimaryAssetId 기반 안정 ID로 대체한다.
 // - v2.154.0부터 `/Game/CarFight/Input/IA_RadarZoom` Axis1D를 기본 로드한다. MouseScrollUp=양수는 Zoom In, MouseScrollDown=음수는 Zoom Out으로 UISubsystem에만 전달하며 Sensor detection range와 Scanner Profile은 변경하지 않는다.
@@ -3392,7 +3397,86 @@ void ACFVehiclePawn::ApplyVehicleMovementConfig()
 	{
 		return;
 	}
+	// [v2.157.0] VehicleData에서 읽은 current complete movement setup입니다.
 	const FCFVehicleMovementConfig& VehicleMovementConfig = VehicleData->VehicleMovementConfig;
+
+	// [v2.157.0] Transmission ratio 배열이 positive finite magnitude만 포함하는지 검사합니다.
+	const auto AreTransmissionRatiosValid = [](const TArray<float>& Ratios)
+	{
+		if (Ratios.IsEmpty())
+		{
+			return false;
+		}
+		for (const float Ratio : Ratios)
+		{
+			if (!FMath::IsFinite(Ratio) || Ratio <= 0.0f)
+			{
+				return false;
+			}
+		}
+		return true;
+	};
+
+	// [v2.158.0] Shift RPM이 Chaos 내부 uint32 의미와 같은 비음수 정수값인지 검사합니다.
+	const auto IsNonNegativeIntegerRpm = [](const float RpmValue)
+	{
+		return FMath::IsFinite(RpmValue)
+			&& RpmValue >= 0.0f
+			&& FMath::IsNearlyEqual(RpmValue, FMath::RoundToFloat(RpmValue));
+	};
+
+	// [v2.158.0] Chassis DragArea setup에 필요한 폭/높이가 유효한지 여부입니다.
+	const bool bChassisGeometryValid = FMath::IsFinite(VehicleMovementConfig.ChassisWidth)
+		&& VehicleMovementConfig.ChassisWidth > 0.0f
+		&& FMath::IsFinite(VehicleMovementConfig.ChassisHeight)
+		&& VehicleMovementConfig.ChassisHeight > 0.0f;
+
+	// [v2.158.0] VehicleData Transmission complete payload가 UE 5.8 setup 계약을 만족하는지 여부입니다.
+	const bool bTransmissionConfigValid = AreTransmissionRatiosValid(VehicleMovementConfig.TransmissionRatios.ForwardGearRatios)
+		&& AreTransmissionRatiosValid(VehicleMovementConfig.TransmissionRatios.ReverseGearRatios)
+		&& FMath::IsFinite(VehicleMovementConfig.FinalRatio) && VehicleMovementConfig.FinalRatio > 0.0f
+		&& IsNonNegativeIntegerRpm(VehicleMovementConfig.ChangeUpRPM)
+		&& IsNonNegativeIntegerRpm(VehicleMovementConfig.ChangeDownRPM)
+		&& FMath::IsFinite(VehicleMovementConfig.GearChangeTime) && VehicleMovementConfig.GearChangeTime >= 0.0f
+		&& FMath::IsFinite(VehicleMovementConfig.TransmissionEfficiency)
+		&& VehicleMovementConfig.TransmissionEfficiency >= 0.0f
+		&& VehicleMovementConfig.TransmissionEfficiency <= 1.0f
+		&& (!VehicleMovementConfig.bUseAutomaticGears || VehicleMovementConfig.ChangeDownRPM <= VehicleMovementConfig.ChangeUpRPM);
+
+	// [v2.158.0] complete setup validation 실패 시 Engine/Differential/Steering을 포함해 어떤 Movement 값도 부분 적용하지 않습니다.
+	if (!bChassisGeometryValid || !bTransmissionConfigValid)
+	{
+		LastVehicleRuntimeSummary = TEXT("VehicleRuntime: MovementConfig invalid; runtime movement mutation skipped. Chassis dimensions must be positive finite, ratios positive finite, Shift RPM non-negative integers, FinalRatio>0, time>=0, Efficiency=0..1.");
+		return;
+	}
+
+	// [v2.157.0] Width/Height는 DragArea setup-time derived 값이고 Transmission은 simulation setup-time 값이므로 live state 재생성 필요 여부를 assignment 전에 계산합니다.
+	const bool bSetupRequiresPhysicsRecreate = !FMath::IsNearlyEqual(ResolvedVehicleMovementComponent->ChassisWidth, VehicleMovementConfig.ChassisWidth)
+		|| !FMath::IsNearlyEqual(ResolvedVehicleMovementComponent->ChassisHeight, VehicleMovementConfig.ChassisHeight)
+		|| ResolvedVehicleMovementComponent->TransmissionSetup.bUseAutomaticGears != VehicleMovementConfig.bUseAutomaticGears
+		|| ResolvedVehicleMovementComponent->TransmissionSetup.bUseAutoReverse != VehicleMovementConfig.bUseAutoReverse
+		|| ResolvedVehicleMovementComponent->TransmissionSetup.ForwardGearRatios != VehicleMovementConfig.TransmissionRatios.ForwardGearRatios
+		|| ResolvedVehicleMovementComponent->TransmissionSetup.ReverseGearRatios != VehicleMovementConfig.TransmissionRatios.ReverseGearRatios
+		|| !FMath::IsNearlyEqual(ResolvedVehicleMovementComponent->TransmissionSetup.FinalRatio, VehicleMovementConfig.FinalRatio)
+		|| !FMath::IsNearlyEqual(ResolvedVehicleMovementComponent->TransmissionSetup.ChangeUpRPM, VehicleMovementConfig.ChangeUpRPM)
+		|| !FMath::IsNearlyEqual(ResolvedVehicleMovementComponent->TransmissionSetup.ChangeDownRPM, VehicleMovementConfig.ChangeDownRPM)
+		|| !FMath::IsNearlyEqual(ResolvedVehicleMovementComponent->TransmissionSetup.GearChangeTime, VehicleMovementConfig.GearChangeTime)
+		|| !FMath::IsNearlyEqual(ResolvedVehicleMovementComponent->TransmissionSetup.TransmissionEfficiency, VehicleMovementConfig.TransmissionEfficiency);
+
+	// [v2.157.0] PhysicsState 재생성 전 chassis 속도를 보존할 inherited vehicle mesh입니다.
+	USkeletalMeshComponent* VehicleMeshComponent = GetMesh();
+	// [v2.157.0] 이미 live PhysicsState가 존재해 setup 재생성이 실제 필요한지 여부입니다.
+	const bool bCanRecreateLivePhysics = bSetupRequiresPhysicsRecreate
+		&& ResolvedVehicleMovementComponent->HasValidPhysicsState()
+		&& VehicleMeshComponent
+		&& VehicleMeshComponent->IsPhysicsStateCreated()
+		&& VehicleMeshComponent->IsSimulatingPhysics();
+	// [v2.157.0] live 재생성 때 복원할 기존 선속도입니다.
+	const FVector PreviousLinearVelocity = bCanRecreateLivePhysics ? VehicleMeshComponent->GetPhysicsLinearVelocity() : FVector::ZeroVector;
+	// [v2.157.0] live 재생성 때 복원할 기존 각속도입니다.
+	const FVector PreviousAngularVelocityDegrees = bCanRecreateLivePhysics ? VehicleMeshComponent->GetPhysicsAngularVelocityInDegrees() : FVector::ZeroVector;
+
+	ResolvedVehicleMovementComponent->ChassisWidth = VehicleMovementConfig.ChassisWidth;
 	ResolvedVehicleMovementComponent->ChassisHeight = VehicleMovementConfig.ChassisHeight;
 	ResolvedVehicleMovementComponent->DragCoefficient = VehicleMovementConfig.DragCoefficient;
 	ResolvedVehicleMovementComponent->DownforceCoefficient = VehicleMovementConfig.DownforceCoefficient;
@@ -3406,6 +3490,15 @@ void ACFVehiclePawn::ApplyVehicleMovementConfig()
 	ResolvedVehicleMovementComponent->EngineSetup.EngineRevDownRate = VehicleMovementConfig.EngineRevDownRate;
 	ResolvedVehicleMovementComponent->DifferentialSetup.DifferentialType = VehicleMovementConfig.DifferentialType;
 	ResolvedVehicleMovementComponent->DifferentialSetup.FrontRearSplit = VehicleMovementConfig.FrontRearSplit;
+	ResolvedVehicleMovementComponent->TransmissionSetup.bUseAutomaticGears = VehicleMovementConfig.bUseAutomaticGears;
+	ResolvedVehicleMovementComponent->TransmissionSetup.bUseAutoReverse = VehicleMovementConfig.bUseAutoReverse;
+	ResolvedVehicleMovementComponent->TransmissionSetup.ForwardGearRatios = VehicleMovementConfig.TransmissionRatios.ForwardGearRatios;
+	ResolvedVehicleMovementComponent->TransmissionSetup.ReverseGearRatios = VehicleMovementConfig.TransmissionRatios.ReverseGearRatios;
+	ResolvedVehicleMovementComponent->TransmissionSetup.FinalRatio = VehicleMovementConfig.FinalRatio;
+	ResolvedVehicleMovementComponent->TransmissionSetup.ChangeUpRPM = VehicleMovementConfig.ChangeUpRPM;
+	ResolvedVehicleMovementComponent->TransmissionSetup.ChangeDownRPM = VehicleMovementConfig.ChangeDownRPM;
+	ResolvedVehicleMovementComponent->TransmissionSetup.GearChangeTime = VehicleMovementConfig.GearChangeTime;
+	ResolvedVehicleMovementComponent->TransmissionSetup.TransmissionEfficiency = VehicleMovementConfig.TransmissionEfficiency;
 	ResolvedVehicleMovementComponent->SteeringSetup.SteeringType = VehicleMovementConfig.SteeringType;
 	ResolvedVehicleMovementComponent->SteeringSetup.AngleRatio = VehicleMovementConfig.SteeringAngleRatio;
 	ResolvedVehicleMovementComponent->bLegacyWheelFrictionPosition = VehicleMovementConfig.bLegacyWheelFrictionPosition;
@@ -3415,7 +3508,22 @@ void ACFVehiclePawn::ApplyVehicleMovementConfig()
 	ResolvedVehicleMovementComponent->SetDownforceCoefficient(VehicleMovementConfig.DownforceCoefficient);
 	ResolvedVehicleMovementComponent->SetDifferentialFrontRearSplit(VehicleMovementConfig.FrontRearSplit);
 
-	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: MovementProfile=%s, RuntimeTorque=%.1f, ConfigMaxRPM=%.1f, ThrottleScale=%.2f, Drag=%.2f, Downforce=%.2f, Differential=%s, SteeringType=%s, RuntimeSetters=EngineTorque/Drag/Downforce/DiffSplit"), *VehicleMovementConfig.MovementProfileName.ToString(), VehicleMovementConfig.EngineMaxTorque, VehicleMovementConfig.EngineMaxRPM, VehicleMovementConfig.ThrottleInputScale, VehicleMovementConfig.DragCoefficient, VehicleMovementConfig.DownforceCoefficient, *UEnum::GetValueAsString(VehicleMovementConfig.DifferentialType), *UEnum::GetValueAsString(VehicleMovementConfig.SteeringType));
+	if (bCanRecreateLivePhysics)
+	{
+		ResolvedVehicleMovementComponent->RecreatePhysicsState();
+		if (ResolvedVehicleMovementComponent->HasValidPhysicsState() && VehicleMeshComponent->IsPhysicsStateCreated())
+		{
+			VehicleMeshComponent->SetPhysicsLinearVelocity(PreviousLinearVelocity, false);
+			VehicleMeshComponent->SetPhysicsAngularVelocityInDegrees(PreviousAngularVelocityDegrees, false);
+		}
+		else
+		{
+			LastVehicleRuntimeSummary = TEXT("VehicleRuntime: Movement setup PhysicsState recreate failed.");
+			return;
+		}
+	}
+
+	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: MovementProfile=%s, RuntimeTorque=%.1f, ConfigMaxRPM=%.1f, ThrottleScale=%.2f, Chassis=%.1fx%.1f, Drag=%.2f, Downforce=%.2f, Differential=%s, ForwardGears=%d, ReverseGears=%d, FinalRatio=%.3f, PhysicsRecreate=%s, SteeringType=%s, RuntimeSetters=EngineTorque/Drag/Downforce/DiffSplit"), *VehicleMovementConfig.MovementProfileName.ToString(), VehicleMovementConfig.EngineMaxTorque, VehicleMovementConfig.EngineMaxRPM, VehicleMovementConfig.ThrottleInputScale, VehicleMovementConfig.ChassisWidth, VehicleMovementConfig.ChassisHeight, VehicleMovementConfig.DragCoefficient, VehicleMovementConfig.DownforceCoefficient, *UEnum::GetValueAsString(VehicleMovementConfig.DifferentialType), VehicleMovementConfig.TransmissionRatios.ForwardGearRatios.Num(), VehicleMovementConfig.TransmissionRatios.ReverseGearRatios.Num(), VehicleMovementConfig.FinalRatio, bCanRecreateLivePhysics ? TEXT("True") : TEXT("False"), *UEnum::GetValueAsString(VehicleMovementConfig.SteeringType));
 }
 
 void ACFVehiclePawn::ApplyVehicleWheelPhysicsConfig()

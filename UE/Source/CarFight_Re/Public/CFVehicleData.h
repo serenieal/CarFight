@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.27.0
-// Date: 2026-08-18
-// Description: CF-FQ-032 UI-P0-06 RPM Gauge용 explicit RedlineStartRPM 차량 데이터 계약 추가
+// Version: 1.28.0
+// Date: 2026-08-26
+// Description: CF-FQ-040 VB-P0-05 차량별 ChassisWidth와 UE 5.8 Transmission typed authoring/runtime 계약 추가
 // Scope: 차량 시각 자산, Wheel Class 참조, VehicleMovement/WheelVisual/Layout, 피팅 질량, 최대 체력과 선택적 방어 설정을 함께 다룹니다.
 // Changelog:
+// - v1.28.0: ChassisWidth와 UE 5.8 FVehicleTransmissionConfig 대응 typed Transmission fields를 additive 추가. ReverseGearRatios는 positive magnitude 저장 계약을 사용.
 // - v1.27.0: EngineMaxRPM과 독립된 HUD Tachometer 레드라인 시작점 RedlineStartRPM을 additive 추가. 0은 미설정이며 EngineMaxRPM/변속값에서 자동 추정하지 않음.
 // - v1.26.0: bUseMovementOverrides가 전체 Movement on/off가 아니라 Wheel Runtime 상세 튜닝·ThrottleInputScale 경로 제어임을 Tooltip과 Migration에 명확히 기록.
 // - v1.25.0: CF-FQ-034 FIT-P0-02 BaseVehicleMassKg와 MaximumGrossMassKg 데이터 계약을 추가.
@@ -22,6 +23,8 @@
 // - v1.14.0: VehicleLayoutConfig와 WheelAnchor 포즈 구조를 추가해 차량별 시각 휠 기준 위치를 DataAsset에서 관리.
 // - v1.13.0: VehicleMovement 기본값 재정렬 및 레거시 실험값 자동 마이그레이션 추가.
 // Migration:
+// - v1.28.0 기존 VehicleData는 UE 5.8 Source Build 기본값과 같은 ChassisWidth=180, Automatic/AutoReverse=true, FinalRatio=3.08, Forward=[2.85,2.02,1.35,1.0], Reverse=[2.86], Up=4500, Down=2000, GearTime=0.4, Efficiency=0.9를 사용하므로 새 필드 부재만으로 기존 주행 결과를 바꾸지 않는다.
+// - ReverseGearRatios는 방향 부호가 아닌 positive magnitude만 저장한다. UE 5.8 GetGearRatio()가 reverse 방향에서 음수 부호를 적용하므로 raw 배열에 음수를 저장하지 않는다.
 // - v1.27.0 기존 VehicleData는 RedlineStartRPM=0 기본값으로 주행 물리 결과를 그대로 유지한다. 0은 HUD Redline 미설정이며 EngineMaxRPM이나 변속 RPM에서 자동 보정/추정하지 않는다.
 // - RedlineStartRPM을 명시하는 차량은 EngineIdleRPM보다 크고 EngineMaxRPM보다 작은 실제 차량별 값을 작성한다.
 // - bUseMovementOverrides=false여도 Engine/Drag/Differential/Steering 본체 VehicleData 값은 적용된다. false는 세부 Wheel Runtime Tuning과 ThrottleInputScale이 fallback을 쓰는 현재 계약이며 동작 변경은 없다.
@@ -171,6 +174,27 @@ struct FCFVehicleLayoutConfig
 };
 
 USTRUCT(BlueprintType)
+struct FCFVehicleTransmissionRatios
+{
+	GENERATED_BODY()
+
+	// UE 5.8 FVehicleTransmissionConfig 기본 ratio를 additive migration 기본값으로 초기화합니다.
+	FCFVehicleTransmissionRatios()
+	{
+		ForwardGearRatios = { 2.85f, 2.02f, 1.35f, 1.0f };
+		ReverseGearRatios = { 2.86f };
+	}
+
+	// 전진 기어 순서대로 저장하는 양수 기어비 목록입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Transmission", meta=(DisplayName="전진 기어비 (ForwardGearRatios)", ToolTip="1단부터 순서대로 저장하는 전진 기어비입니다. 값은 0보다 커야 하며 배열 길이가 전진 기어 수입니다."))
+	TArray<float> ForwardGearRatios;
+
+	// 후진 기어 순서대로 positive magnitude만 저장하는 기어비 목록입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Transmission", meta=(DisplayName="후진 기어비 크기 (ReverseGearRatios)", ToolTip="후진 기어비의 양수 크기만 저장합니다. 음수 부호를 넣지 마세요. UE 5.8 GetGearRatio가 후진 방향 부호를 계산할 때 적용합니다."))
+	TArray<float> ReverseGearRatios;
+};
+
+USTRUCT(BlueprintType)
 struct FCFVehicleMovementConfig
 {
 	GENERATED_BODY()
@@ -264,6 +288,10 @@ struct FCFVehicleMovementConfig
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="후륜 Sweep Shape (RearWheelSweepShape)", ToolTip="후륜 Wheel Class 기본값에 적용할 SweepShape 입니다."))
 	ESweepShape RearWheelSweepShape = ESweepShape::Raycast;
 
+	// [v1.28.0] 공기저항 면적 계산에 사용하는 UE 5.8 ChassisWidth cm 값입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ClampMin="0.01", Units="cm", DisplayName="차체 폭 (ChassisWidth)", ToolTip="VehicleMovementComp의 ChassisWidth 값입니다. UE 5.8은 ChassisWidth×ChassisHeight를 공기저항 면적 계산에 사용합니다."))
+	float ChassisWidth = 180.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="차체 높이 (ChassisHeight)", ToolTip="VehicleMovementComp의 ChassisHeight 값입니다."))
 	float ChassisHeight = 140.0f;
 
@@ -306,6 +334,38 @@ struct FCFVehicleMovementConfig
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ClampMin="0.0", ClampMax="1.0", DisplayName="전후륜 구동 분배 (FrontRearSplit)", ToolTip="DifferentialSetup.FrontRearSplit 값입니다."))
 	float FrontRearSplit = 0.5f;
+
+	// [v1.28.0] UE 5.8 TransmissionSetup을 Automatic control mode로 사용할지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Transmission", meta=(DisplayName="자동 변속 사용 (bUseAutomaticGears)", ToolTip="True이면 Chaos TransmissionSetup이 자동 변속 control mode를 사용합니다. 변속기 구조 종류와는 별개입니다."))
+	bool bUseAutomaticGears = true;
+
+	// [v1.28.0] 전후진 입력에 따라 Chaos가 자동으로 Reverse 상태를 선택할지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Transmission", meta=(DisplayName="자동 후진 전환 사용 (bUseAutoReverse)", ToolTip="True이면 Chaos의 AutoReverse 동작을 사용합니다."))
+	bool bUseAutoReverse = true;
+
+	// [v1.28.0] 전진/후진 기어비 배열을 묶은 typed ratio-set입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Transmission", meta=(DisplayName="변속기 기어비 (TransmissionRatios)", ToolTip="전진/후진 기어비를 순서대로 보관합니다. 후진 배열도 positive magnitude만 저장합니다."))
+	FCFVehicleTransmissionRatios TransmissionRatios;
+
+	// [v1.28.0] 각 기어비에 곱하는 최종 감속비입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Transmission", meta=(ClampMin="0.0001", DisplayName="최종 감속비 (FinalRatio)", ToolTip="Chaos TransmissionSetup의 FinalRatio입니다."))
+	float FinalRatio = 3.08f;
+
+	// [v1.28.0] 자동 변속에서 상향 변속을 요청하는 엔진 RPM 기준입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Transmission", meta=(ClampMin="0.0", Units="rpm", DisplayName="상향 변속 RPM (ChangeUpRPM)", ToolTip="Chaos 자동 변속의 ChangeUpRPM 기준입니다."))
+	float ChangeUpRPM = 4500.0f;
+
+	// [v1.28.0] 자동 변속에서 하향 변속을 요청하는 엔진 RPM 기준입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Transmission", meta=(ClampMin="0.0", Units="rpm", DisplayName="하향 변속 RPM (ChangeDownRPM)", ToolTip="Chaos 자동 변속의 ChangeDownRPM 기준입니다."))
+	float ChangeDownRPM = 2000.0f;
+
+	// [v1.28.0] 한 기어에서 다른 기어로 전환하는 데 걸리는 시간입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Transmission", meta=(ClampMin="0.0", Units="s", DisplayName="변속 시간 (GearChangeTime)", ToolTip="Chaos TransmissionSetup의 GearChangeTime(초)입니다."))
+	float GearChangeTime = 0.4f;
+
+	// [v1.28.0] 변속기 기계 손실을 표현하는 효율 배율입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Transmission", meta=(ClampMin="0.0", ClampMax="1.0", DisplayName="변속 효율 (TransmissionEfficiency)", ToolTip="Chaos TransmissionSetup의 TransmissionEfficiency입니다. 1.0은 손실 없음입니다."))
+	float TransmissionEfficiency = 0.9f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="조향 타입 (SteeringType)", ToolTip="SteeringSetup.SteeringType 값입니다."))
 	ESteeringType SteeringType = ESteeringType::AngleRatio;

@@ -1,14 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.3.0
-// Date: 2026-08-15
-// Description: CF-FQ-015 VD-P0-01 현재 VehicleData 계약을 반영한 읽기 전용 검증 헬퍼입니다.
+// Version: 1.4.0
+// Date: 2026-08-26
+// Description: CF-FQ-015 + CF-FQ-040 VB-P0-05 현재 VehicleData complete Movement 계약을 반영한 읽기 전용 검증 헬퍼입니다.
 // Scope: CFVehicleData 필수 참조, 소켓, 레이아웃, 하드포인트·MountProfile, 피팅 질량, Movement, WheelVisual, DriveState, 기준 DA 비교 검증 리포트를 제공합니다.
 // Changelog:
+// - v1.4.0: VB-P0-05 ChassisWidth/Height와 complete Transmission validation을 기존 ValidateMovementConfig public facade에 additive 연결. public 함수 시그니처는 유지.
 // - v1.3.0: CF-FQ-015 VD-P0-01 피팅 질량·MountProfile 정합성 검증과 현재 Movement/Wheel auto-scale 계약을 추가.
 // - v1.2.0: 하드포인트 위치 슬롯과 선택 캡처 소켓 검증 함수를 추가.
 // - v1.0.0: EUW_VDAWizard 연동을 위한 BlueprintCallable 검증 함수와 결과 구조체를 추가.
 // Migration:
+// - v1.4.0 기존 Blueprint/API 호출은 그대로 유지하며 ValidateMovementConfig가 새 Chassis/Transmission invalid 상태도 Error로 보고합니다.
 // - BaseVehicleMassKg=0 && MaximumGrossMassKg=0은 레거시 미설정으로 허용하며 Info만 표시한다. 한쪽만 설정되거나 MaximumGross가 Base보다 작으면 Error다.
 // - MountProfiles가 비어 있는 것은 허용하지만 각 프로파일의 ID와 LocationSlotRef는 실제 HardpointSlots와 정합해야 한다.
 // - bUseMovementOverrides=false는 Movement 전체 미적용이 아니라 Wheel Runtime 상세 튜닝과 ThrottleInputScale fallback을 뜻한다.

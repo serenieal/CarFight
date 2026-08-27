@@ -1,18 +1,27 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringService.h
-// Version: v1.3.0
-// Date: 2026-08-18
-// Description: DAUTH-P0-08I~P0-11 UI/AI가 공유하는 single-Vehicle Authoring facade입니다.
+// Version: v1.8.0
+// Date: 2026-08-27
+// Description: DAUTH Common Authoring facade + CF-FQ-040 provenance/Undo/read-once hardening entry입니다.
 // Scope: Existing Snapshot/Resolver/Import/Adoption/Batch B2/Apply core orchestration과 Frozen 24.90~24.94 Workspace completeness를 제공합니다.
 // Changelog:
+// - v1.8.0: Builder Final Review가 one fresh Resolve를 Validation/Drift/Gameplay projection에 재사용하고 provenance receipt/post-state Undo hardening을 지원.
+// - v1.7.0: existing Validation/Drift/Gameplay/Diff/Evidence provenance를 aggregate하는 Final Review R0, exact DefinitionApply delegation과 Builder-owned top transaction guarded Undo facade를 추가.
+// - v1.6.0: current Recipe/Target/Resolver/Asset truth를 재사용해 Gameplay Setup completeness와 USER Socket/Fitting 안내를 mutation0로 반환하는 R0 facade를 추가.
+// - v1.5.0: 기존 Definition+Recipe에 Reference Evidence + Builder-private 4 Profile을 R2 approval로 생성·binding하는 preview/commit facade를 추가.
+// - v1.4.0: VB-P0-05 Builder-private VehicleBase/Drivetrain/Handling/Performance complete payload의 mutation0 preview와 one-transaction typed commit facade를 추가.
 // - v1.3.0: P0-11 Shared Profile B2 adapter, External Drift 3-way recovery, New Vehicle/Mesh-only two-record creation facade를 추가.
 // - v1.2.0: P0-10 managed-target lookup, Reference Compare, Adoption, Wheel Measurement facade를 추가해 Wizard/Workspace가 Core를 직접 호출하지 않게 함.
 // - v1.1.0: P0-09 Initial Import reviewed R2 proposal/commit facade를 추가해 Slate가 Import Core를 직접 호출하지 않게 함.
 // - v1.0.0: Section 25 Common Authoring Service Foundation 최초 구현.
 // Migration:
+// - Builder companion creation은 기존 CreateVehicleRecords의 Definition+Recipe core 계약을 변경하지 않고 후속 R2 operation으로 Evidence + private 4 Profile만 생성합니다.
+// - Builder-private Profile commit은 Recipe에 exact binding되고 Meta.OwnerRecipeId==RecipeId인 4 Profile만 허용하며 기존 Shared Profile B2 mutation을 대체하거나 우회하지 않습니다.
 // - Resolver/validation/source precedence를 재구현하지 않습니다.
 // - Target UCFVehicleData write는 ApplyResolvedVehicle에서도 FCFVehicleApplyService만 호출합니다.
+// - Builder Gameplay Guidance는 Hardpoint/Destroyed FX Socket을 생성·이동하지 않고 기존 Resolver/Asset/Target을 read-only로만 관측합니다.
+// - Builder Final Review Apply는 기존 BuildApplyApprovalProposal/ApplyResolvedVehicle/FCFVehicleApplyService만 사용하며 새 Target writer를 만들지 않습니다. Undo는 이 Builder가 만든 exact UE transaction token이 current stack top일 때만 수행합니다.
 
 #pragma once
 
@@ -88,6 +97,47 @@ public:
 		const FCFProfileNumericEditPreview& ApprovedPreview,
 		FCFProfileNumericEditResult& OutResult);
 
+	// Existing Definition+Recipe에 Reference Evidence + private 4 Profile을 만들 exact R2 companion plan을 mutation0 preview합니다.
+	static bool PreviewBuilderCompanions(
+		const FCFBuilderCompanionRequest& Request,
+		FCFBuilderCompanionPreview& OutPreview);
+
+	// Fresh OwnershipWrite approval 뒤 Evidence + private 4 Profile 생성과 Recipe binding을 한 transaction으로 commit합니다.
+	static bool CreateBuilderCompanions(
+		const FCFBuilderCompanionRequest& Request,
+		FCFBuilderCompanionResult& OutResult);
+
+	// Gameplay Setup의 Durability/Defense/DestroyedFx/Hardpoint/Mount/DriveState/WheelVisual/Fitting completeness와 USER 수동 Socket 안내를 R0로 반환합니다.
+	static bool ReadBuilderGameplayGuidance(
+		const FCFBuilderGameplayGuidanceRequest& Request,
+		FCFBuilderGameplayGuidanceResult& OutResult);
+
+	// Final Review Step의 existing Validation/External Drift/Gameplay/Diff/consumed Evidence provenance를 한 번에 mutation0로 집계합니다.
+	static bool ReadBuilderFinalReview(
+		const FCFBuilderFinalReviewRequest& Request,
+		FCFBuilderFinalReviewResult& OutResult);
+
+	// Final Review가 만든 exact DefinitionApply scope를 fresh 재검사한 뒤 existing ApplyResolvedVehicle lane으로 explicit Apply합니다.
+	static bool ApplyBuilderFinalReview(
+		const FCFBuilderFinalApplyRequest& Request,
+		FCFBuilderFinalApplyResult& OutResult);
+
+	// ApplyBuilderFinalReview가 발급한 exact Builder-owned UE transaction이 current Undo stack top일 때만 Unreal standard Undo를 수행합니다.
+	static bool UndoBuilderFinalApply(
+		const FCFBuilderUndoRequest& Request,
+		FCFAuthoringOpResult& OutResult);
+
+	// Builder-private 4 Profile complete payload를 current owner/fingerprint/Recipe/Target/Resolver/upstream proposal에 binding해 mutation0 preview합니다.
+	static bool PreviewBuilderProfiles(
+		const FCFBuilderProfileCommitRequest& Request,
+		FCFBuilderProfileCommitPreview& OutPreview);
+
+	// Fresh preview와 AuthoringWrite approval을 재검사한 뒤 Recipe에 binding된 private 4 Profile complete payload를 한 transaction으로 commit합니다.
+	static bool CommitBuilderProfiles(
+		const FCFBuilderProfileCommitRequest& Request,
+		const FCFBuilderProfileCommitPreview& ApprovedPreview,
+		FCFAuthoringOpResult& OutResult);
+
 	// Current External Drift를 Last Applied / Current Raw / Current Authoring 3-way rows로 read-only 구성합니다.
 	static bool BuildDriftReview(
 		const FCFVehicleAuthoringReadRequest& Request,
@@ -150,4 +200,11 @@ public:
 
 	// Shared Resolver FieldDiff exact rows의 deterministic hash를 반환합니다.
 	static FString BuildDiffHash(const TArray<FCFVehicleFieldDiff>& FieldDiff);
+
+private:
+	// 이미 계산한 one fresh Resolve result를 재사용해 Builder Gameplay Guidance projection만 구성합니다.
+	static bool BuildBuilderGameplayGuidanceFromResolve(
+		const FCFBuilderGameplayGuidanceRequest& Request,
+		const FCFVehicleResolveReadResult& ResolveRead,
+		FCFBuilderGameplayGuidanceResult& OutResult);
 };

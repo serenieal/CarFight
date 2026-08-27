@@ -1,14 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleProfileTypes.h
-// Version: v1.1.0
-// Date: 2026-08-18
-// Description: Vehicle Data Authoring 5개 Profile의 typed payload 구조입니다.
+// Version: v1.2.0
+// Date: 2026-08-26
+// Description: CF-FQ-040 VB-P0-05 Builder-private ownership, reference wheel geometry와 typed Transmission payload를 포함한 Profile 계약입니다.
 // Scope: Profile metadata, Feel response, mass context와 Domain별 balance payload를 제공합니다.
 // Changelog:
+// - v1.2.0: Builder-private OwnerRecipeId, opt-in Reference Wheel Geometry, ChassisWidth와 UE 5.8 Transmission complete payload를 additive 추가.
 // - v1.1.0: UI-P0-06 explicit RedlineStartRPM을 PerformanceProfileDirect typed payload로 additive 추가. EngineMaxRPMByFeel에서 자동 유도하지 않음.
 // - v1.0.0: DAUTH-P0-08A Profile schema를 최초 구현.
 // Migration:
+// - v1.2.0 기존 Profile은 OwnerRecipeId invalid로 shared/legacy이며 Builder-private commit 대상이 아닙니다.
+// - 기존 VehicleBase Profile은 bUseReferenceWheelGeometry=false, 기존 Drivetrain Profile은 bUseTransmissionConfig=false라 새 fallback/Transmission candidate를 자동 생성하지 않습니다.
+// - Builder-private Profile은 소유 RecipeId를 명시하고 complete payload를 commit할 때 opt-in gate를 함께 설정합니다.
 // - RedlineStartRPM 기본값 0은 미설정이며 기존 Profile/VehicleData 수치를 자동 채우지 않습니다.
 // - Profile C++ 기본값을 기존 VehicleData 숫자표 복사본으로 사용하지 않습니다.
 // - 실제 balance 값은 후속 Authoring Profile Asset에서 명시적으로 작성합니다.
@@ -35,6 +39,10 @@ struct FCFVehicleProfileMeta
 	// 이 Profile의 의도와 사용 범위를 설명합니다.
 	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Profile", meta=(MultiLine="true", DisplayName="설명"))
 	FString Description;
+
+	// Builder-private Profile을 독점 소유하는 RecipeId입니다. Invalid GUID는 기존 shared/legacy Profile을 뜻합니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Profile", meta=(DisplayName="Builder 소유 Recipe ID", ToolTip="Guided Vehicle Builder가 차량 전용으로 만든 Profile의 소유 RecipeId입니다. 비어 있으면 기존 shared/legacy Profile이며 Builder-private commit으로 수정할 수 없습니다."))
+	FGuid OwnerRecipeId;
 
 	// 사람이 수행한 Profile Authoring edit의 diagnostic revision입니다.
 	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Profile", meta=(DisplayName="Authoring Revision"))
@@ -97,9 +105,33 @@ struct FCFVehicleBaseProfileData
 	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Base", meta=(ClampMin="0.0"))
 	float MaxHealth = 0.0f;
 
+	// VehicleMovementConfig.ChassisWidth baseline입니다. UE 5.8 기본 180cm와 동일한 additive 기본값입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Base", meta=(ClampMin="0.01", Units="cm", DisplayName="차체 폭 cm", ToolTip="VehicleMovementConfig.ChassisWidth에 제공할 차체 폭입니다. UE 5.8 기본값 180cm를 additive 기본값으로 사용합니다."))
+	float ChassisWidth = 180.0f;
+
 	// VehicleMovementConfig.ChassisHeight baseline입니다.
 	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Base")
 	float ChassisHeight = 0.0f;
+
+	// 실차 Reference wheel geometry를 Asset measurement보다 낮은 precedence의 fallback으로 제공할지 선택합니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Base|Wheel Geometry", meta=(DisplayName="Reference 휠 치수 사용", ToolTip="True이면 이 VehicleBase Profile의 전/후륜 반지름·폭을 VehicleData 후보로 제공합니다. 채택된 실제 Wheel Mesh 측정값이 있으면 그 값이 더 높은 precedence로 우선합니다."))
+	bool bUseReferenceWheelGeometry = false;
+
+	// Reference 기반 전륜 반지름 cm fallback입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Base|Wheel Geometry", meta=(EditCondition="bUseReferenceWheelGeometry", ClampMin="0.0", Units="cm", DisplayName="Reference 전륜 반지름 cm"))
+	float FrontWheelRadius = 30.0f;
+
+	// Reference 기반 후륜 반지름 cm fallback입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Base|Wheel Geometry", meta=(EditCondition="bUseReferenceWheelGeometry", ClampMin="0.0", Units="cm", DisplayName="Reference 후륜 반지름 cm"))
+	float RearWheelRadius = 30.0f;
+
+	// Reference 기반 전륜 폭 cm fallback입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Base|Wheel Geometry", meta=(EditCondition="bUseReferenceWheelGeometry", ClampMin="0.0", Units="cm", DisplayName="Reference 전륜 폭 cm"))
+	float FrontWheelWidth = 6.0f;
+
+	// Reference 기반 후륜 폭 cm fallback입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Base|Wheel Geometry", meta=(EditCondition="bUseReferenceWheelGeometry", ClampMin="0.0", Units="cm", DisplayName="Reference 후륜 폭 cm"))
+	float RearWheelWidth = 6.0f;
 
 	// Profile이 제공할 기본 VehicleDefenseData입니다.
 	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Base")
@@ -151,6 +183,42 @@ struct FCFDrivetrainProfileData
 	// DifferentialSetup.FrontRearSplit baseline입니다.
 	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Drivetrain", meta=(ClampMin="0.0", ClampMax="1.0"))
 	float FrontRearSplit = 0.0f;
+
+	// 이 Drivetrain Profile이 차량별 TransmissionSetup complete payload를 제공할지 선택합니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Drivetrain|Transmission", meta=(DisplayName="차량별 변속기 설정 사용", ToolTip="True이면 이 Profile의 UE 5.8 Transmission complete payload를 VehicleData 후보로 제공합니다. 기존 shared Profile은 기본 False라 현재 차량에 새 변속기 값을 주입하지 않습니다."))
+	bool bUseTransmissionConfig = false;
+
+	// Chaos Transmission의 automatic control mode 여부입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Drivetrain|Transmission", meta=(EditCondition="bUseTransmissionConfig", DisplayName="자동 변속 사용"))
+	bool bUseAutomaticGears = true;
+
+	// Chaos AutoReverse 사용 여부입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Drivetrain|Transmission", meta=(EditCondition="bUseTransmissionConfig", DisplayName="자동 후진 전환 사용"))
+	bool bUseAutoReverse = true;
+
+	// 전진/후진 기어비 complete typed ratio-set입니다. ReverseGearRatios는 positive magnitude만 저장합니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Drivetrain|Transmission", meta=(EditCondition="bUseTransmissionConfig", DisplayName="변속기 기어비", ToolTip="전진/후진 기어비를 순서대로 저장합니다. 후진 기어비도 양수 크기만 저장하며 UE 5.8 GetGearRatio가 역방향 부호를 적용합니다."))
+	FCFVehicleTransmissionRatios TransmissionRatios;
+
+	// 각 기어비에 곱하는 최종 감속비입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Drivetrain|Transmission", meta=(EditCondition="bUseTransmissionConfig", ClampMin="0.0001", DisplayName="최종 감속비"))
+	float FinalRatio = 3.08f;
+
+	// 자동 상향 변속 RPM입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Drivetrain|Transmission", meta=(EditCondition="bUseTransmissionConfig", ClampMin="0.0", Units="rpm", DisplayName="상향 변속 RPM"))
+	float ChangeUpRPM = 4500.0f;
+
+	// 자동 하향 변속 RPM입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Drivetrain|Transmission", meta=(EditCondition="bUseTransmissionConfig", ClampMin="0.0", Units="rpm", DisplayName="하향 변속 RPM"))
+	float ChangeDownRPM = 2000.0f;
+
+	// 기어 전환 시간 초입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Drivetrain|Transmission", meta=(EditCondition="bUseTransmissionConfig", ClampMin="0.0", Units="s", DisplayName="변속 시간"))
+	float GearChangeTime = 0.4f;
+
+	// 변속기 기계 효율 배율입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Drivetrain|Transmission", meta=(EditCondition="bUseTransmissionConfig", ClampMin="0.0", ClampMax="1.0", DisplayName="변속 효율"))
+	float TransmissionEfficiency = 0.9f;
 
 	// 전륜이 엔진 구동 영향을 받는지 여부입니다.
 	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Drivetrain")

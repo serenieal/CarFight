@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleSnapshotBuilder.cpp
-// Version: v1.2.0
-// Date: 2026-08-17
-// Description: Recipe/Profile/Definition immutable Snapshot과 deterministic fingerprint/hash 구현입니다.
+// Version: v1.3.0
+// Date: 2026-08-26
+// Description: Recipe/Profile/Definition immutable Snapshot과 Builder-private ownership metadata를 포함한 deterministic fingerprint/hash 구현입니다.
 // Changelog:
+// - v1.3.0: CF-FQ-040 VB-P0-05에서 Profile Meta.OwnerRecipeId를 snapshot source metadata에 value-copy. Profile payload fingerprint에는 포함하지 않아 owner stale precondition과 payload stale precondition을 분리.
 // - v1.2.0: DAUTH-P0-08G prospective Adoption Preview용 Recipe Snapshot fingerprint 공용 entry point 추가.
 // - v1.1.0: DAUTH-P0-08F에서 Resolver/R15 readback이 Definition Snapshot과 동일 hash authority를 사용하도록 공용 entry point 추가.
 // - v1.0.0: DAUTH-P0-08C Section 22.13/22.27 Snapshot Foundation 최초 구현.
@@ -513,6 +514,7 @@ namespace CFVehicleSnapshotPrivate
 		}
 
 		OutSource.SourceObjectPath = FSoftObjectPath(Profile->GetPathName());
+		OutSource.OwnerRecipeId = Profile->Meta.OwnerRecipeId;
 		OutSource.AuthoringRevision = Profile->Meta.AuthoringRevision;
 		OutData = Profile->Data;
 		if (!BuildProfilePayloadFingerprint(*ProfileDataType::StaticStruct(), &OutData, OutSource.ProfileFingerprint, OutError))

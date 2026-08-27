@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleFieldRegistry.cpp
-// Version: v1.3.0
-// Date: 2026-08-18
-// Description: Current 118 VehicleData leaf pattern Registry, dependency metadata와 Reflection coverage 구현입니다.
+// Version: v1.5.0
+// Date: 2026-08-26
+// Description: Current 127 VehicleData leaf pattern Registry, Builder atomic Transmission ratio-set/wheel fallback dependency metadata와 Reflection coverage 구현입니다.
 // Changelog:
+// - v1.5.0: VB-P0-05 설계 검수 교정으로 FCFVehicleTransmissionRatios를 atomic leaf로 복원해 Forward/Reverse ratio provenance가 분리되지 않게 하고 coverage를 128→127로 정정.
+// - v1.4.0: CF-FQ-040 VB-P0-05 ChassisWidth/Transmission 10개 leaf를 추가하고 wheel geometry를 BaseProfileMeasurementPolicy로 전환해 VehicleBase fallback + AssetDerived 우선 계약을 연결.
 // - v1.3.0: UI-P0-06 explicit RedlineStartRPM을 PerformanceProfileDirect descriptor로 추가해 Reflection coverage를 118 leaf로 확장.
 // - v1.2.0: DAUTH-P0-08E candidate enforcement를 위해 Section 22.17에 이미 동결된 Project Default/Base/Asset 보조 Source mask 누락을 교정.
 // - v1.1.0: DAUTH-P0-08C Section 22.17 Main Dependency를 RequiredDependencies로 확장.
@@ -372,12 +374,13 @@ namespace CFVehicleFieldRegistryPrivate
 		return Result;
 	}
 
-	// FVector/FRotator/FTransform은 Registry에서 내부 component가 아니라 하나의 leaf value로 취급합니다.
+	// FVector/FRotator/FTransform과 complete Transmission ratio-set은 Registry에서 내부 component가 아니라 하나의 atomic leaf value로 취급합니다.
 	bool IsAtomicStruct(const UScriptStruct* Struct)
 	{
 		return Struct == TBaseStructure<FVector>::Get()
 			|| Struct == TBaseStructure<FRotator>::Get()
-			|| Struct == TBaseStructure<FTransform>::Get();
+			|| Struct == TBaseStructure<FTransform>::Get()
+			|| Struct == FCFVehicleTransmissionRatios::StaticStruct();
 	}
 
 	// Reflection struct를 재귀 순회해 scalar leaf pattern을 추가합니다.
@@ -425,10 +428,10 @@ namespace CFVehicleFieldRegistryPrivate
 		DiscoverStructLeaves(InnerStructProperty->Struct, Prefix, OutPatterns);
 	}
 
-	// Frozen Section 22.17의 exact 117 leaf descriptor를 생성합니다.
+	// Current exact 127 leaf descriptor를 생성합니다.
 	TArray<FCFVehicleFieldDescriptor> BuildDescriptors()
 	{
-		// Current 118 leaf seed입니다. 숫자값은 없고 ownership/rule metadata만 기술합니다.
+		// Current 127 leaf seed입니다. 숫자값은 없고 ownership/rule metadata만 기술합니다.
 		static const FDescriptorSeed Seeds[] =
 		{
 			{TEXT("VehicleVisualConfig.ChassisMesh"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::RecipeAssetIntent, ECFVehicleAdoptGroup::VisualAssets, false, false, false},
@@ -484,10 +487,10 @@ namespace CFVehicleFieldRegistryPrivate
 			{TEXT("VehicleMovementConfig.FrontWheelMaxBrakeTorque"), ECFVehicleProfileDomain::Handling, ECFVehicleResolveRule::HandlingProfileDirect, ECFVehicleAdoptGroup::Handling, true, false, false},
 			{TEXT("VehicleMovementConfig.RearWheelMaxBrakeTorque"), ECFVehicleProfileDomain::Handling, ECFVehicleResolveRule::HandlingProfileDirect, ECFVehicleAdoptGroup::Handling, true, false, false},
 			{TEXT("VehicleMovementConfig.RearWheelMaxHandBrakeTorque"), ECFVehicleProfileDomain::Handling, ECFVehicleResolveRule::HandlingProfileDirect, ECFVehicleAdoptGroup::Handling, true, false, false},
-			{TEXT("VehicleMovementConfig.FrontWheelRadius"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::AssetMeasurementProposal, ECFVehicleAdoptGroup::WheelGeometry, true, false, false},
-			{TEXT("VehicleMovementConfig.RearWheelRadius"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::AssetMeasurementProposal, ECFVehicleAdoptGroup::WheelGeometry, true, false, false},
-			{TEXT("VehicleMovementConfig.FrontWheelWidth"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::AssetMeasurementProposal, ECFVehicleAdoptGroup::WheelGeometry, true, false, false},
-			{TEXT("VehicleMovementConfig.RearWheelWidth"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::AssetMeasurementProposal, ECFVehicleAdoptGroup::WheelGeometry, true, false, false},
+			{TEXT("VehicleMovementConfig.FrontWheelRadius"), ECFVehicleProfileDomain::VehicleBase, ECFVehicleResolveRule::BaseProfileMeasurementPolicy, ECFVehicleAdoptGroup::WheelGeometry, true, false, false},
+			{TEXT("VehicleMovementConfig.RearWheelRadius"), ECFVehicleProfileDomain::VehicleBase, ECFVehicleResolveRule::BaseProfileMeasurementPolicy, ECFVehicleAdoptGroup::WheelGeometry, true, false, false},
+			{TEXT("VehicleMovementConfig.FrontWheelWidth"), ECFVehicleProfileDomain::VehicleBase, ECFVehicleResolveRule::BaseProfileMeasurementPolicy, ECFVehicleAdoptGroup::WheelGeometry, true, false, false},
+			{TEXT("VehicleMovementConfig.RearWheelWidth"), ECFVehicleProfileDomain::VehicleBase, ECFVehicleResolveRule::BaseProfileMeasurementPolicy, ECFVehicleAdoptGroup::WheelGeometry, true, false, false},
 			{TEXT("VehicleMovementConfig.FrontWheelFrictionForceMultiplier"), ECFVehicleProfileDomain::Handling, ECFVehicleResolveRule::GripFeelDerived, ECFVehicleAdoptGroup::Handling, true, false, false},
 			{TEXT("VehicleMovementConfig.RearWheelFrictionForceMultiplier"), ECFVehicleProfileDomain::Handling, ECFVehicleResolveRule::GripFeelDerived, ECFVehicleAdoptGroup::Handling, true, false, false},
 			{TEXT("VehicleMovementConfig.FrontWheelCorneringStiffness"), ECFVehicleProfileDomain::Handling, ECFVehicleResolveRule::GripFeelDerived, ECFVehicleAdoptGroup::Handling, true, false, false},
@@ -506,6 +509,7 @@ namespace CFVehicleFieldRegistryPrivate
 			{TEXT("VehicleMovementConfig.bRearWheelAffectedByEngine"), ECFVehicleProfileDomain::Drivetrain, ECFVehicleResolveRule::DrivetrainProfile, ECFVehicleAdoptGroup::Drivetrain, true, false, false},
 			{TEXT("VehicleMovementConfig.FrontWheelSweepShape"), ECFVehicleProfileDomain::Handling, ECFVehicleResolveRule::HandlingProfileDirect, ECFVehicleAdoptGroup::Handling, true, false, false},
 			{TEXT("VehicleMovementConfig.RearWheelSweepShape"), ECFVehicleProfileDomain::Handling, ECFVehicleResolveRule::HandlingProfileDirect, ECFVehicleAdoptGroup::Handling, true, false, false},
+			{TEXT("VehicleMovementConfig.ChassisWidth"), ECFVehicleProfileDomain::VehicleBase, ECFVehicleResolveRule::VehicleBaseProfile, ECFVehicleAdoptGroup::MassDurability, true, false, false},
 			{TEXT("VehicleMovementConfig.ChassisHeight"), ECFVehicleProfileDomain::VehicleBase, ECFVehicleResolveRule::VehicleBaseProfile, ECFVehicleAdoptGroup::MassDurability, true, false, false},
 			{TEXT("VehicleMovementConfig.DragCoefficient"), ECFVehicleProfileDomain::Performance, ECFVehicleResolveRule::PerformanceProfileDirect, ECFVehicleAdoptGroup::Performance, true, false, false},
 			{TEXT("VehicleMovementConfig.DownforceCoefficient"), ECFVehicleProfileDomain::Performance, ECFVehicleResolveRule::PerformanceProfileDirect, ECFVehicleAdoptGroup::Performance, true, false, false},
@@ -520,6 +524,14 @@ namespace CFVehicleFieldRegistryPrivate
 			{TEXT("VehicleMovementConfig.EngineRevDownRate"), ECFVehicleProfileDomain::Performance, ECFVehicleResolveRule::PerformanceProfileDirect, ECFVehicleAdoptGroup::Performance, true, false, false},
 			{TEXT("VehicleMovementConfig.DifferentialType"), ECFVehicleProfileDomain::Drivetrain, ECFVehicleResolveRule::DrivetrainProfile, ECFVehicleAdoptGroup::Drivetrain, true, false, false},
 			{TEXT("VehicleMovementConfig.FrontRearSplit"), ECFVehicleProfileDomain::Drivetrain, ECFVehicleResolveRule::DrivetrainProfile, ECFVehicleAdoptGroup::Drivetrain, true, false, false},
+			{TEXT("VehicleMovementConfig.bUseAutomaticGears"), ECFVehicleProfileDomain::Drivetrain, ECFVehicleResolveRule::DrivetrainProfile, ECFVehicleAdoptGroup::Drivetrain, true, false, false},
+			{TEXT("VehicleMovementConfig.bUseAutoReverse"), ECFVehicleProfileDomain::Drivetrain, ECFVehicleResolveRule::DrivetrainProfile, ECFVehicleAdoptGroup::Drivetrain, true, false, false},
+			{TEXT("VehicleMovementConfig.TransmissionRatios"), ECFVehicleProfileDomain::Drivetrain, ECFVehicleResolveRule::DrivetrainProfile, ECFVehicleAdoptGroup::Drivetrain, true, false, false},
+			{TEXT("VehicleMovementConfig.FinalRatio"), ECFVehicleProfileDomain::Drivetrain, ECFVehicleResolveRule::DrivetrainProfile, ECFVehicleAdoptGroup::Drivetrain, true, false, false},
+			{TEXT("VehicleMovementConfig.ChangeUpRPM"), ECFVehicleProfileDomain::Drivetrain, ECFVehicleResolveRule::DrivetrainProfile, ECFVehicleAdoptGroup::Drivetrain, true, false, false},
+			{TEXT("VehicleMovementConfig.ChangeDownRPM"), ECFVehicleProfileDomain::Drivetrain, ECFVehicleResolveRule::DrivetrainProfile, ECFVehicleAdoptGroup::Drivetrain, true, false, false},
+			{TEXT("VehicleMovementConfig.GearChangeTime"), ECFVehicleProfileDomain::Drivetrain, ECFVehicleResolveRule::DrivetrainProfile, ECFVehicleAdoptGroup::Drivetrain, true, false, false},
+			{TEXT("VehicleMovementConfig.TransmissionEfficiency"), ECFVehicleProfileDomain::Drivetrain, ECFVehicleResolveRule::DrivetrainProfile, ECFVehicleAdoptGroup::Drivetrain, true, false, false},
 			{TEXT("VehicleMovementConfig.SteeringType"), ECFVehicleProfileDomain::Handling, ECFVehicleResolveRule::HandlingProfileDirect, ECFVehicleAdoptGroup::Handling, true, false, false},
 			{TEXT("VehicleMovementConfig.SteeringAngleRatio"), ECFVehicleProfileDomain::Handling, ECFVehicleResolveRule::SteeringFeelDerived, ECFVehicleAdoptGroup::Handling, true, false, false},
 			{TEXT("VehicleMovementConfig.bLegacyWheelFrictionPosition"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::ProjectCompatibilityDefault, ECFVehicleAdoptGroup::LegacyTechnical, true, false, false},
@@ -587,7 +599,7 @@ namespace CFVehicleFieldRegistryPrivate
 	}
 }
 
-// Current P0 descriptor 118개를 canonical 순서로 반환합니다.
+// Current P0 descriptor 127개를 canonical 순서로 반환합니다.
 const TArray<FCFVehicleFieldDescriptor>& FCFVehicleFieldRegistry::GetDescriptors()
 {
 	// 최초 호출 시 한 번 구성되는 immutable descriptor cache입니다.

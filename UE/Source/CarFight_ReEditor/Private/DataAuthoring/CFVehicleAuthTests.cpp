@@ -1,10 +1,17 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthTests.cpp
-// Version: v1.5.0
-// Date: 2026-08-18
-// Description: DAUTH-P0-08 Foundation의 current schema/Never-Cook/Stable Field/Registry/Codec/Immutable Snapshot/Asset Reader Automation입니다.
+// Version: v1.12.0
+// Date: 2026-08-27
+// Description: DAUTH Foundation + CF-FQ-040 VB-P0-07 persistent provenance receipt / post-state guarded Undo hardening Automation입니다.
 // Changelog:
+// - v1.12.0: Final Review provenance를 실제 receipt-only Builder Profile commit으로 준비하고 Claim subset tamper를 차단하며, transaction 밖 post-Apply Target drift가 guarded Undo에서 StateChanged로 차단되는지 검증.
+// - v1.11.0: Final Review가 existing Validation/Drift/Gameplay/Diff와 consumed Evidence provenance를 집계하고 explicit R3 Apply → diff0 → exact transaction guarded Undo → diff restore를 수행하는지 transient-only로 검증.
+// - v1.10.0: NewVehicle USER Socket authority, optional gameplay defaults, Fitting mass와 CompleteExisting stored Hardpoint baseline preservation을 transient-only로 검증.
+// - v1.9.0: CFVRN-1 Unicode NFC 계약을 조합형/분해형 canonical-equivalent 문자열의 동일 Evidence fingerprint로 검증.
+// - v1.8.0: Vehicle Reference Evidence의 array order/diagnostic exclusion과 semantic claim-change fingerprint 변화를 transient-only Automation으로 추가.
+// - v1.7.0: 설계 검수 교정으로 TransmissionRatios를 atomic descriptor 1개로 검증하고 Registry/Reflection 기대치를 127로 정정.
+// - v1.6.0: Registry/Reflection 128 coverage, ChassisWidth/Transmission descriptor dependency, TArray<float> ratio codec round-trip와 OwnerRecipeId snapshot separation을 검증.
 // - v1.5.0: UI-P0-06 explicit RedlineStartRPM schema 호환을 위해 Current Registry/Reflection coverage를 118로 검증하고 PerformanceProfileDirect descriptor/dependency를 확인.
 // - v1.4.0: DAUTH-P0-08D Chassis socket / Wheel bounds / asset fingerprint Snapshot Reader 검증 추가.
 // - v1.3.0: DAUTH-P0-08C RequiredDependencies, Recipe/Profile/Definition/Project Default Snapshot과 deterministic fingerprint 검증 추가.
@@ -19,6 +26,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "DataAuthoring/CFVehicleAssetReader.h"
+#include "DataAuthoring/CFVehicleAuthoringService.h"
 #include "DataAuthoring/CFDriveStateProfile.h"
 #include "DataAuthoring/CFDrivetrainProfile.h"
 #include "DataAuthoring/CFHandlingProfile.h"
@@ -26,12 +34,17 @@
 #include "DataAuthoring/CFVehicleBaseProfile.h"
 #include "DataAuthoring/CFVehicleFieldCodec.h"
 #include "DataAuthoring/CFVehicleFieldRegistry.h"
+#include "DataAuthoring/CFVehicleImportService.h"
 #include "DataAuthoring/CFVehicleRecipeData.h"
+#include "DataAuthoring/CFVehicleRefEvidence.h"
 #include "DataAuthoring/CFVehicleSnapshotBuilder.h"
 #include "DataAuthoring/CFVehicleSnapshotTypes.h"
 #include "CFVehicleData.h"
+#include "Editor.h"
+#include "Editor/Transactor.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshSocket.h"
+#include "ScopedTransaction.h"
 #include "UObject/UObjectGlobals.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -41,7 +54,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCFVehicleAuthoringRegistryTest,
-	"CarFight.DataAuthoring.DAUTH_P0_08.Foundation.Registry117",
+	"CarFight.DataAuthoring.CF_FQ_040.VB_P0_05.Foundation.Registry127",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -79,6 +92,21 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"CarFight.DataAuthoring.DAUTH_P0_08.Snapshot.AssetReader",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVehicleRefEvidenceTest,
+	"CarFight.DataAuthoring.CF_FQ_040.VB_P0_05.Evidence.DeterministicFingerprint",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVehicleBuilderGameplayGuideTest,
+	"CarFight.DataAuthoring.CF_FQ_040.VB_P0_06.GameplayGuidance",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVehicleBuilderFinalReviewTest,
+	"CarFight.DataAuthoring.CF_FQ_040.VB_P0_07.FinalReviewApplyUndo",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
 // Recipe와 5개 Profile CDO가 explicit Editor-only object로 판정되는지 검증합니다.
 bool FCFVehicleAuthoringEditorOnlyTest::RunTest(const FString& Parameters)
 {
@@ -110,7 +138,7 @@ bool FCFVehicleAuthoringEditorOnlyTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// Current Registry 118개와 Current UCFVehicleData Reflection leaf 118개의 양방향 coverage 및 Redline direct authoring descriptor를 검증합니다.
+// Current Registry 127개와 Current UCFVehicleData Reflection leaf 127개의 양방향 coverage 및 Builder 추가 descriptor를 검증합니다.
 bool FCFVehicleAuthoringRegistryTest::RunTest(const FString& Parameters)
 {
 	// Coverage가 발견한 상세 오류 목록입니다.
@@ -132,6 +160,38 @@ bool FCFVehicleAuthoringRegistryTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("RedlineStartRPM resolve rule PerformanceProfileDirect"), RedlineDescriptor->ResolveRule, ECFVehicleResolveRule::PerformanceProfileDirect);
 		TestTrue(TEXT("RedlineStartRPM depends on Profile.Performance"), RedlineDescriptor->RequiredDependencies.Contains(FName(TEXT("Profile.Performance"))));
 	}
+
+	// [v1.6.0] Reference wheel fallback + AssetDerived 우선 정책을 가진 전륜 반지름 descriptor입니다.
+	const FCFVehicleFieldDescriptor* FrontRadiusDescriptor = FCFVehicleFieldRegistry::GetDescriptors().FindByPredicate([](const FCFVehicleFieldDescriptor& Descriptor)
+	{
+		return Descriptor.GetCanonicalPattern() == TEXT("VehicleMovementConfig.FrontWheelRadius");
+	});
+	if (TestNotNull(TEXT("FrontWheelRadius Registry descriptor exists"), FrontRadiusDescriptor))
+	{
+		TestEqual(TEXT("FrontWheelRadius owner domain VehicleBase"), FrontRadiusDescriptor->PrimaryProfileDomain, ECFVehicleProfileDomain::VehicleBase);
+		TestEqual(TEXT("FrontWheelRadius resolve rule BaseProfileMeasurementPolicy"), FrontRadiusDescriptor->ResolveRule, ECFVehicleResolveRule::BaseProfileMeasurementPolicy);
+		TestTrue(TEXT("FrontWheelRadius depends on Profile.VehicleBase"), FrontRadiusDescriptor->RequiredDependencies.Contains(FName(TEXT("Profile.VehicleBase"))));
+		TestTrue(TEXT("FrontWheelRadius depends on Asset.WheelBounds"), FrontRadiusDescriptor->RequiredDependencies.Contains(FName(TEXT("Asset.WheelBounds"))));
+	}
+
+	// [v1.7.0] 전진/후진 배열을 한 provenance로 묶는 atomic typed ratio-set descriptor입니다.
+	const FCFVehicleFieldDescriptor* TransmissionRatiosDescriptor = FCFVehicleFieldRegistry::GetDescriptors().FindByPredicate([](const FCFVehicleFieldDescriptor& Descriptor)
+	{
+		return Descriptor.GetCanonicalPattern() == TEXT("VehicleMovementConfig.TransmissionRatios");
+	});
+	if (TestNotNull(TEXT("TransmissionRatios atomic Registry descriptor exists"), TransmissionRatiosDescriptor))
+	{
+		TestEqual(TEXT("TransmissionRatios owner domain Drivetrain"), TransmissionRatiosDescriptor->PrimaryProfileDomain, ECFVehicleProfileDomain::Drivetrain);
+		TestTrue(TEXT("TransmissionRatios depends on Profile.Drivetrain"), TransmissionRatiosDescriptor->RequiredDependencies.Contains(FName(TEXT("Profile.Drivetrain"))));
+	}
+	TestFalse(TEXT("ForwardGearRatios is not an independent Registry leaf"), FCFVehicleFieldRegistry::GetDescriptors().ContainsByPredicate([](const FCFVehicleFieldDescriptor& Descriptor)
+	{
+		return Descriptor.GetCanonicalPattern() == TEXT("VehicleMovementConfig.TransmissionRatios.ForwardGearRatios");
+	}));
+	TestFalse(TEXT("ReverseGearRatios is not an independent Registry leaf"), FCFVehicleFieldRegistry::GetDescriptors().ContainsByPredicate([](const FCFVehicleFieldDescriptor& Descriptor)
+	{
+		return Descriptor.GetCanonicalPattern() == TEXT("VehicleMovementConfig.TransmissionRatios.ReverseGearRatios");
+	}));
 
 	for (const FString& CoverageError : CoverageErrors)
 	{
@@ -504,6 +564,130 @@ bool FCFVehicleDefinitionSnapshotTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// Reference Evidence semantic fingerprint가 array order/diagnostic 변화에는 안정적이고 canonical claim 변화에는 민감한지 검증합니다.
+bool FCFVehicleRefEvidenceTest::RunTest(const FString& Parameters)
+{
+	// Content Asset을 만들지 않는 transient Reference Evidence source입니다.
+	UCFVehicleRefEvidence* Evidence = NewObject<UCFVehicleRefEvidence>(GetTransientPackage());
+	if (!TestNotNull(TEXT("Transient Reference Evidence exists"), Evidence))
+	{
+		return false;
+	}
+
+	// 첫 primary Reference Vehicle identity입니다.
+	FCFRefVehicleIdentity& PrimaryVehicle = Evidence->ReferenceVehicles.AddDefaulted_GetRef();
+	PrimaryVehicle.ReferenceVehicleId = TEXT("REF_A");
+	PrimaryVehicle.Role = ECFRefVehicleRole::Primary;
+	PrimaryVehicle.Manufacturer = TEXT("Kia");
+	PrimaryVehicle.Model = TEXT("Morning");
+	PrimaryVehicle.ModelYearStart = 2027;
+	PrimaryVehicle.ModelYearEnd = 2027;
+	PrimaryVehicle.ModelYearQualifier = ECFRefModelYearQualifier::Exact;
+	PrimaryVehicle.MarketRegion = TEXT("KR");
+	PrimaryVehicle.IdentityConfidence = 0.95f;
+
+	// 첫 official source citation입니다.
+	FCFRefSourceCitation& SourceA = Evidence->Sources.AddDefaulted_GetRef();
+	SourceA.SourceId = TEXT("SRC_A");
+	SourceA.Tier = ECFRefSourceTier::TierA;
+	SourceA.SourceKind = TEXT("ManufacturerSpecification");
+	SourceA.Publisher = TEXT("Kia");
+	SourceA.DocumentTitle = TEXT("The 2027 Morning Specification");
+	SourceA.CanonicalUrl = TEXT("HTTPS://www.kia.com/kr/vehicles/morning/specification?utm_source=test#spec");
+	SourceA.ReferenceVehicleIds = {TEXT("REF_A")};
+	SourceA.OriginGroupId = TEXT("KIA_OFFICIAL");
+	SourceA.OriginIndependence = ECFRefOriginIndependence::SameOrigin;
+	SourceA.AccessedAtUtc = FDateTime(2026, 8, 26, 10, 0, 0);
+
+	// 두 번째 corroboration source citation입니다.
+	FCFRefSourceCitation& SourceB = Evidence->Sources.AddDefaulted_GetRef();
+	SourceB.SourceId = TEXT("SRC_B");
+	SourceB.Tier = ECFRefSourceTier::TierC;
+	SourceB.SourceKind = TEXT("VehicleDatabase");
+	SourceB.Publisher = TEXT("Carnoon");
+	SourceB.CanonicalUrl = TEXT("https://www.carnoon.co.kr/newcar/vehicle/example");
+	SourceB.ReferenceVehicleIds = {TEXT("REF_A")};
+	SourceB.OriginIndependence = ECFRefOriginIndependence::OriginUnknown;
+
+	// Canonical curb-mass FACT claim입니다.
+	FCFRefClaim& MassClaim = Evidence->Claims.AddDefaulted_GetRef();
+	MassClaim.ClaimId = TEXT("CLM_MASS");
+	MassClaim.ReferenceVehicleId = TEXT("REF_A");
+	MassClaim.FactKey = TEXT("Mass.Curb");
+	MassClaim.ValueKind = ECFRefValueKind::Number;
+	MassClaim.NumberValue = 975.0;
+	MassClaim.UnitId = TEXT("kg");
+	MassClaim.SourceValueText = TEXT("975 kg");
+	MassClaim.Provenance = ECFRefProvenance::FACT;
+	MassClaim.CitationIds = {TEXT("SRC_B"), TEXT("SRC_A")};
+	MassClaim.ConfidenceScore = 0.95f;
+	MassClaim.ResolutionState = ECFRefClaimResolution::Canonical;
+
+	// Canonical wheelbase FACT claim입니다.
+	FCFRefClaim& WheelbaseClaim = Evidence->Claims.AddDefaulted_GetRef();
+	WheelbaseClaim.ClaimId = TEXT("CLM_WB");
+	WheelbaseClaim.ReferenceVehicleId = TEXT("REF_A");
+	WheelbaseClaim.FactKey = TEXT("Dimensions.Wheelbase");
+	WheelbaseClaim.ValueKind = ECFRefValueKind::Number;
+	WheelbaseClaim.NumberValue = 2400.0;
+	WheelbaseClaim.UnitId = TEXT("mm");
+	WheelbaseClaim.Provenance = ECFRefProvenance::FACT;
+	WheelbaseClaim.CitationIds = {TEXT("SRC_A")};
+	WheelbaseClaim.ConfidenceScore = 0.99f;
+	WheelbaseClaim.ResolutionState = ECFRefClaimResolution::Canonical;
+
+	// 첫 semantic fingerprint입니다.
+	FString FirstFingerprint;
+	// Evidence fingerprint build diagnostic입니다.
+	FString FingerprintError;
+	TestTrue(TEXT("First Evidence fingerprint builds"), Evidence->BuildEvidenceFingerprint(FirstFingerprint, FingerprintError));
+	TestEqual(TEXT("Evidence SHA-256 hex length"), FirstFingerprint.Len(), 64);
+
+	// Physical array order와 diagnostic-only 값을 변경합니다.
+	Evidence->Sources.Swap(0, 1);
+	Evidence->Claims.Swap(0, 1);
+	Evidence->Sources[0].AccessedAtUtc = FDateTime(2030, 1, 1, 0, 0, 0);
+	Evidence->Sources[0].SourceScopeNote = TEXT("fingerprint 제외 diagnostic");
+	Evidence->ResearchNotes = TEXT("사람용 메모 변경");
+	Evidence->AuthoringRevision = 99;
+	// Reorder/diagnostic-only 변경 뒤 fingerprint입니다.
+	FString ReorderedFingerprint;
+	TestTrue(TEXT("Reordered Evidence fingerprint builds"), Evidence->BuildEvidenceFingerprint(ReorderedFingerprint, FingerprintError));
+	TestEqual(TEXT("Array order and diagnostic state do not change Evidence fingerprint"), ReorderedFingerprint, FirstFingerprint);
+
+	// Unicode NFC composed form으로 의미상 동일한 제조사 문자열을 설정합니다.
+	Evidence->ReferenceVehicles[0].Manufacturer = TEXT("\u00E9");
+	// NFC composed 문자열 상태의 Evidence fingerprint입니다.
+	FString ComposedNfcFingerprint;
+	TestTrue(TEXT("Composed NFC Evidence fingerprint builds"), Evidence->BuildEvidenceFingerprint(ComposedNfcFingerprint, FingerprintError));
+
+	// 같은 문자를 e + combining acute accent 분해형으로 설정합니다.
+	Evidence->ReferenceVehicles[0].Manufacturer = TEXT("e\u0301");
+	// Unicode canonical-equivalent decomposed 문자열 상태의 Evidence fingerprint입니다.
+	FString DecomposedNfcFingerprint;
+	TestTrue(TEXT("Decomposed NFC Evidence fingerprint builds"), Evidence->BuildEvidenceFingerprint(DecomposedNfcFingerprint, FingerprintError));
+	TestEqual(TEXT("Unicode NFC canonical equivalents keep Evidence fingerprint"), DecomposedNfcFingerprint, ComposedNfcFingerprint);
+
+	// 뒤 semantic mutation 검증이 최초 baseline과 동일한 identity에서 시작하도록 원래 제조사를 복원합니다.
+	Evidence->ReferenceVehicles[0].Manufacturer = TEXT("Kia");
+
+	// ClaimId로 찾아 실제 semantic curb mass만 변경합니다.
+	FCFRefClaim* ChangedMassClaim = Evidence->Claims.FindByPredicate([](const FCFRefClaim& Claim)
+	{
+		return Claim.ClaimId == TEXT("CLM_MASS");
+	});
+	if (!TestNotNull(TEXT("Mass claim remains addressable by stable ClaimId"), ChangedMassClaim))
+	{
+		return false;
+	}
+	ChangedMassClaim->NumberValue = 1010.0;
+	// Semantic fact 변경 뒤 fingerprint입니다.
+	FString ChangedFingerprint;
+	TestTrue(TEXT("Changed Evidence fingerprint builds"), Evidence->BuildEvidenceFingerprint(ChangedFingerprint, FingerprintError));
+	TestTrue(TEXT("Semantic claim change updates Evidence fingerprint"), ChangedFingerprint != FirstFingerprint);
+	return true;
+}
+
 // Chassis socket facts와 Wheel local bounds가 UObject 없는 deterministic Asset Snapshot으로 고정되는지 검증합니다.
 bool FCFVehicleAssetSnapshotTest::RunTest(const FString& Parameters)
 {
@@ -620,6 +804,691 @@ bool FCFVehicleAssetSnapshotTest::RunTest(const FString& Parameters)
 	{
 		TestFalse(TEXT("Missing Wheel socket fact is not found"), MissingWheelFact->bFound);
 	}
+	return true;
+}
+
+// VB-P0-06 Gameplay Setup이 optional defaults와 USER Socket authority를 지키고 Existing stored Hardpoint를 baseline-safe하게 보존하는지 검증합니다.
+bool FCFVehicleBuilderGameplayGuideTest::RunTest(const FString& Parameters)
+{
+	// R0 guidance의 current Target으로 사용할 transient VehicleData입니다.
+	UCFVehicleData* TargetVehicleData = NewObject<UCFVehicleData>(GetTransientPackage());
+	// R0 guidance의 authoritative semantic owner로 사용할 transient Recipe입니다.
+	UCFVehicleRecipeData* Recipe = NewObject<UCFVehicleRecipeData>(GetTransientPackage());
+	// Builder-private VehicleBase source를 대표할 transient Profile입니다.
+	UCFVehicleBaseProfile* BaseProfile = NewObject<UCFVehicleBaseProfile>(GetTransientPackage());
+	// Builder-private Drivetrain source를 대표할 transient Profile입니다.
+	UCFDrivetrainProfile* DrivetrainProfile = NewObject<UCFDrivetrainProfile>(GetTransientPackage());
+	// Builder-private Handling source를 대표할 transient Profile입니다.
+	UCFHandlingProfile* HandlingProfile = NewObject<UCFHandlingProfile>(GetTransientPackage());
+	// Builder-private Performance source를 대표할 transient Profile입니다.
+	UCFPerformanceProfile* PerformanceProfile = NewObject<UCFPerformanceProfile>(GetTransientPackage());
+	// USER가 직접 Socket을 배치한 상황을 만들 transient Chassis StaticMesh입니다.
+	UStaticMesh* ChassisMesh = NewObject<UStaticMesh>(GetTransientPackage());
+	if (!TestNotNull(TEXT("VB-P0-06 target exists"), TargetVehicleData)
+		|| !TestNotNull(TEXT("VB-P0-06 recipe exists"), Recipe)
+		|| !TestNotNull(TEXT("VB-P0-06 base profile exists"), BaseProfile)
+		|| !TestNotNull(TEXT("VB-P0-06 drivetrain profile exists"), DrivetrainProfile)
+		|| !TestNotNull(TEXT("VB-P0-06 handling profile exists"), HandlingProfile)
+		|| !TestNotNull(TEXT("VB-P0-06 performance profile exists"), PerformanceProfile)
+		|| !TestNotNull(TEXT("VB-P0-06 chassis exists"), ChassisMesh))
+	{
+		return false;
+	}
+
+	// Resolver/Validator가 사용할 실제 non-zero bounds의 Engine wheel mesh입니다.
+	UStaticMesh* WheelMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	// Resolver/Validator required reference를 만족할 existing Chaos wheel class입니다.
+	UClass* WheelClass = StaticLoadClass(UObject::StaticClass(), nullptr, TEXT("/Script/ChaosVehicles.ChaosVehicleWheel"));
+	if (!TestNotNull(TEXT("VB-P0-06 wheel mesh exists"), WheelMesh)
+		|| !TestNotNull(TEXT("VB-P0-06 wheel class exists"), WheelClass))
+	{
+		return false;
+	}
+
+	// USER가 직접 배치한 fixture Socket을 Chassis에 추가하는 helper입니다.
+	auto AddFixtureSocket = [ChassisMesh](const FName SocketName, const FVector& RelativeLocation)
+	{
+		// Chassis가 소유하는 transient StaticMesh Socket입니다.
+		UStaticMeshSocket* Socket = NewObject<UStaticMeshSocket>(ChassisMesh);
+		Socket->SocketName = SocketName;
+		Socket->RelativeLocation = RelativeLocation;
+		Socket->RelativeRotation = FRotator::ZeroRotator;
+		Socket->RelativeScale = FVector::OneVector;
+		ChassisMesh->AddSocket(Socket);
+	};
+	AddFixtureSocket(TEXT("Wheel_Anchor_FL"), FVector(110.0, -62.0, 28.0));
+	AddFixtureSocket(TEXT("Wheel_Anchor_FR"), FVector(110.0, 62.0, 28.0));
+	AddFixtureSocket(TEXT("Wheel_Anchor_RL"), FVector(-108.0, -62.0, 28.0));
+	AddFixtureSocket(TEXT("Wheel_Anchor_RR"), FVector(-108.0, 62.0, 28.0));
+	AddFixtureSocket(TEXT("HP_Top_01"), FVector(0.0, 0.0, 80.0));
+
+	TargetVehicleData->VehicleVisualConfig.ChassisMesh = ChassisMesh;
+	TargetVehicleData->VehicleVisualConfig.WheelMeshFL = WheelMesh;
+	TargetVehicleData->VehicleVisualConfig.WheelMeshFR = WheelMesh;
+	TargetVehicleData->VehicleVisualConfig.WheelMeshRL = WheelMesh;
+	TargetVehicleData->VehicleVisualConfig.WheelMeshRR = WheelMesh;
+	TargetVehicleData->VehicleReferenceConfig.FrontWheelClass = WheelClass;
+	TargetVehicleData->VehicleReferenceConfig.RearWheelClass = WheelClass;
+	TargetVehicleData->VehicleLayoutConfig.bUseLayoutOverrides = true;
+	TargetVehicleData->VehicleLayoutConfig.BodyWheelSocketFL = TEXT("Wheel_Anchor_FL");
+	TargetVehicleData->VehicleLayoutConfig.BodyWheelSocketFR = TEXT("Wheel_Anchor_FR");
+	TargetVehicleData->VehicleLayoutConfig.BodyWheelSocketRL = TEXT("Wheel_Anchor_RL");
+	TargetVehicleData->VehicleLayoutConfig.BodyWheelSocketRR = TEXT("Wheel_Anchor_RR");
+	TargetVehicleData->VehicleLayoutConfig.WheelAnchorFL.RelativeLocation = FVector(110.0, -62.0, 28.0);
+	TargetVehicleData->VehicleLayoutConfig.WheelAnchorFR.RelativeLocation = FVector(110.0, 62.0, 28.0);
+	TargetVehicleData->VehicleLayoutConfig.WheelAnchorRL.RelativeLocation = FVector(-108.0, -62.0, 28.0);
+	TargetVehicleData->VehicleLayoutConfig.WheelAnchorRR.RelativeLocation = FVector(-108.0, 62.0, 28.0);
+	TargetVehicleData->BaseVehicleMassKg = 1540.0f;
+	TargetVehicleData->MaximumGrossMassKg = 2280.0f;
+
+	// Existing Vehicle Completion baseline에 미리 존재하는 stored Top hardpoint입니다.
+	FCFVehicleHardpointSlot& ExistingHardpoint = TargetVehicleData->HardpointSlots.AddDefaulted_GetRef();
+	ExistingHardpoint.LocationSlotId = TEXT("Top_01");
+	ExistingHardpoint.LocationCategory = TEXT("Top");
+	ExistingHardpoint.SocketName = TEXT("HP_Top_01");
+	ExistingHardpoint.LocalLocation = FVector(0.0, 0.0, 80.0);
+	ExistingHardpoint.LocalRotation = FRotator::ZeroRotator;
+	// Existing baseline에 존재하는 Top mount profile입니다.
+	FCFVehicleMountProfile& ExistingMount = TargetVehicleData->MountProfiles.AddDefaulted_GetRef();
+	ExistingMount.MountProfileId = TEXT("RoofTurret_MediumOrLarge");
+	ExistingMount.LocationSlotRef = TEXT("Top_01");
+	ExistingMount.MountType = ECFVehicleMountType::Turret;
+	ExistingMount.SizeLimit = ECFVehicleWeaponSize::Large;
+	ExistingMount.DefaultEquipmentPresetData = nullptr;
+
+	Recipe->TargetVehicleData = TargetVehicleData;
+	// Lossless Existing Definition import에 사용할 current target snapshot입니다.
+	FCFVehicleDefinitionSnapshot ImportedDefinition;
+	// Import/snapshot 실패 이유입니다.
+	FString ImportError;
+	if (!FCFVehicleSnapshotBuilder::BuildDefinitionSnapshot(*TargetVehicleData, ImportedDefinition, ImportError))
+	{
+		AddError(ImportError);
+		return false;
+	}
+	// Existing Import 결과 진단입니다.
+	FCFVehicleImportResult ImportResult;
+	if (!FCFVehicleImportService::ImportDefinitionSnapshot(ImportedDefinition, *Recipe, ImportResult, ImportError))
+	{
+		AddError(ImportError);
+		return false;
+	}
+
+	Recipe->ProfileBindings.VehicleBaseProfile = BaseProfile;
+	Recipe->ProfileBindings.DrivetrainProfile = DrivetrainProfile;
+	Recipe->ProfileBindings.HandlingProfile = HandlingProfile;
+	Recipe->ProfileBindings.PerformanceProfile = PerformanceProfile;
+	Recipe->AssetIntent.ChassisMesh = ChassisMesh;
+	Recipe->DriveStateMode = ECFVehicleDriveStateMode::ProjectDefault;
+	Recipe->WheelVisualIntent.Mode = ECFWheelVisualIntentMode::UseProfilePolicy;
+	Recipe->DurabilityIntent.MaxHealthMode = ECFAuthoringInputMode::UseProfile;
+	Recipe->DefaultDataIntent.DefenseMode = ECFAssetIntentMode::UseProfile;
+	Recipe->DefaultDataIntent.DestroyedFxMode = ECFAssetIntentMode::UseProfile;
+	Recipe->MassIntent.BaseMassMode = ECFAuthoringInputMode::UseProfile;
+	Recipe->MassIntent.GrossMassMode = ECFAuthoringInputMode::UseProfile;
+
+	BaseProfile->Meta.OwnerRecipeId = Recipe->RecipeId;
+	BaseProfile->Data.BaseVehicleMassKg = 1540.0f;
+	BaseProfile->Data.MaximumGrossMassKg = 2280.0f;
+	BaseProfile->Data.MaxHealth = TargetVehicleData->VehicleDurabilityConfig.MaxHealth;
+	BaseProfile->Data.ChassisWidth = TargetVehicleData->VehicleMovementConfig.ChassisWidth;
+	BaseProfile->Data.ChassisHeight = TargetVehicleData->VehicleMovementConfig.ChassisHeight;
+	BaseProfile->Data.ExpectedWheelCount = 4;
+	BaseProfile->Data.FrontWheelCountForSteering = 2;
+	BaseProfile->Data.bAutoScaleWheelMeshToRadius = false;
+	BaseProfile->Data.WheelMeshScaleClampMin = 0.25f;
+	BaseProfile->Data.WheelMeshScaleClampMax = 4.0f;
+	DrivetrainProfile->Meta.OwnerRecipeId = Recipe->RecipeId;
+	HandlingProfile->Meta.OwnerRecipeId = Recipe->RecipeId;
+	PerformanceProfile->Meta.OwnerRecipeId = Recipe->RecipeId;
+
+	Recipe->HardpointIntents.Reset();
+	// Builder semantic owner에 추가할 Top hardpoint intent입니다.
+	FCFHardpointIntent& HardpointIntent = Recipe->HardpointIntents.AddDefaulted_GetRef();
+	HardpointIntent.LocationSlotId = TEXT("Top_01");
+	HardpointIntent.LocationCategory = TEXT("Top");
+	HardpointIntent.SocketName = TEXT("HP_Top_01");
+
+	Recipe->MountIntents.Reset();
+	// Top_01을 참조하지만 기본 EquipmentPreset은 강제하지 않는 Mount intent입니다.
+	FCFMountIntent& MountIntent = Recipe->MountIntents.AddDefaulted_GetRef();
+	MountIntent.MountProfileId = TEXT("RoofTurret_MediumOrLarge");
+	MountIntent.LocationSlotRef = TEXT("Top_01");
+	MountIntent.MountType = ECFVehicleMountType::Turret;
+	MountIntent.SizeLimit = ECFVehicleWeaponSize::Large;
+
+	// NewVehicle guidance 요청입니다.
+	FCFBuilderGameplayGuidanceRequest NewVehicleRequest;
+	NewVehicleRequest.ReadRequest.Recipe = Recipe;
+	NewVehicleRequest.ReadRequest.TargetVehicleData = TargetVehicleData;
+	NewVehicleRequest.ReadRequest.CallerKind = ECFAuthoringCallerKind::Automation;
+	NewVehicleRequest.Mode = ECFBuilderCompanionMode::NewVehicle;
+	// 정상 수동 Socket을 가진 첫 guidance 결과입니다.
+	FCFBuilderGameplayGuidanceResult ReadyResult;
+	const bool bReadyRead = FCFVehicleAuthoringService::ReadBuilderGameplayGuidance(NewVehicleRequest, ReadyResult);
+	if (!TestTrue(TEXT("VB-P0-06 ready guidance read succeeds"), bReadyRead))
+	{
+		AddError(ReadyResult.Operation.Message);
+		return false;
+	}
+
+	// 영역별 결과를 enum identity로 찾는 helper입니다.
+	auto FindItem = [](const FCFBuilderGameplayGuidanceResult& Result, const ECFBuilderGameplayArea Area) -> const FCFBuilderGameplayGuidanceItem*
+	{
+		return Result.Items.FindByPredicate([Area](const FCFBuilderGameplayGuidanceItem& Item)
+		{
+			return Item.Area == Area;
+		});
+	};
+
+	TestEqual(TEXT("VB-P0-06 fixed gameplay area count"), ReadyResult.Items.Num(), 8);
+	TestTrue(TEXT("VB-P0-06 ready step can complete"), ReadyResult.bCanCompleteGameplayStep);
+	TestEqual(TEXT("VB-P0-06 ready review count"), ReadyResult.NeedsReviewCount, 0);
+	TestEqual(TEXT("VB-P0-06 ready blocked count"), ReadyResult.BlockedCount, 0);
+	TestFalse(TEXT("VB-P0-06 guidance does not mutate Recipe"), ReadyResult.Operation.Mutation.bRecipeChanged);
+	TestFalse(TEXT("VB-P0-06 guidance does not mutate Target"), ReadyResult.Operation.Mutation.bTargetChanged);
+	TestFalse(TEXT("VB-P0-06 guidance does not mutate Profile"), ReadyResult.Operation.Mutation.bProfileChanged);
+	TestFalse(TEXT("VB-P0-06 guidance does not save"), ReadyResult.Operation.Mutation.bSavePerformed);
+
+	// Defense optional 상태 row입니다.
+	const FCFBuilderGameplayGuidanceItem* DefenseItem = FindItem(ReadyResult, ECFBuilderGameplayArea::Defense);
+	// Destroyed FX optional 상태 row입니다.
+	const FCFBuilderGameplayGuidanceItem* DestroyedFxItem = FindItem(ReadyResult, ECFBuilderGameplayArea::DestroyedFx);
+	// Hardpoint complete 상태 row입니다.
+	const FCFBuilderGameplayGuidanceItem* HardpointItem = FindItem(ReadyResult, ECFBuilderGameplayArea::Hardpoints);
+	// Mount complete 상태 row입니다.
+	const FCFBuilderGameplayGuidanceItem* MountItem = FindItem(ReadyResult, ECFBuilderGameplayArea::MountProfiles);
+	// DriveState complete 상태 row입니다.
+	const FCFBuilderGameplayGuidanceItem* DriveStateItem = FindItem(ReadyResult, ECFBuilderGameplayArea::DriveState);
+	// Fitting mass complete 상태 row입니다.
+	const FCFBuilderGameplayGuidanceItem* FittingItem = FindItem(ReadyResult, ECFBuilderGameplayArea::FittingMass);
+	if (TestNotNull(TEXT("VB-P0-06 defense item exists"), DefenseItem))
+	{
+		TestEqual(TEXT("VB-P0-06 missing Defense is optional"), DefenseItem->State, ECFBuilderGuidanceState::Optional);
+	}
+	if (TestNotNull(TEXT("VB-P0-06 destroyed fx item exists"), DestroyedFxItem))
+	{
+		TestEqual(TEXT("VB-P0-06 missing DestroyedFx is optional"), DestroyedFxItem->State, ECFBuilderGuidanceState::Optional);
+	}
+	if (TestNotNull(TEXT("VB-P0-06 hardpoint item exists"), HardpointItem))
+	{
+		TestEqual(TEXT("VB-P0-06 found USER hardpoint socket is complete"), HardpointItem->State, ECFBuilderGuidanceState::Complete);
+	}
+	if (TestNotNull(TEXT("VB-P0-06 mount item exists"), MountItem))
+	{
+		TestEqual(TEXT("VB-P0-06 mount without default equipment is complete"), MountItem->State, ECFBuilderGuidanceState::Complete);
+	}
+	if (TestNotNull(TEXT("VB-P0-06 drive state item exists"), DriveStateItem))
+	{
+		TestEqual(TEXT("VB-P0-06 ProjectDefault drive state is complete"), DriveStateItem->State, ECFBuilderGuidanceState::Complete);
+	}
+	if (TestNotNull(TEXT("VB-P0-06 fitting item exists"), FittingItem))
+	{
+		TestEqual(TEXT("VB-P0-06 complete fitting mass is complete"), FittingItem->State, ECFBuilderGuidanceState::Complete);
+	}
+
+	// USER가 아직 만들지 않은 missing hardpoint Socket 이름으로 semantic binding만 바꿉니다.
+	Recipe->HardpointIntents[0].SocketName = TEXT("HP_Top_01_Missing");
+	// Missing USER Socket을 읽는 NewVehicle guidance 결과입니다.
+	FCFBuilderGameplayGuidanceResult MissingSocketResult;
+	const bool bMissingSocketRead = FCFVehicleAuthoringService::ReadBuilderGameplayGuidance(NewVehicleRequest, MissingSocketResult);
+	if (!TestTrue(TEXT("VB-P0-06 missing socket guidance read succeeds"), bMissingSocketRead))
+	{
+		AddError(MissingSocketResult.Operation.Message);
+		return false;
+	}
+	// Missing USER Socket의 Hardpoint 상태 row입니다.
+	const FCFBuilderGameplayGuidanceItem* MissingHardpointItem = FindItem(MissingSocketResult, ECFBuilderGameplayArea::Hardpoints);
+	if (TestNotNull(TEXT("VB-P0-06 missing hardpoint item exists"), MissingHardpointItem))
+	{
+		TestEqual(TEXT("VB-P0-06 missing USER socket requires review"), MissingHardpointItem->State, ECFBuilderGuidanceState::NeedsReview);
+	}
+	TestFalse(TEXT("VB-P0-06 missing USER socket blocks step completion"), MissingSocketResult.bCanCompleteGameplayStep);
+	TestTrue(TEXT("VB-P0-06 missing USER socket has manual guidance"), MissingSocketResult.SocketGuidance.ContainsByPredicate([](const FCFBuilderManualSocketGuidance& Guidance)
+	{
+		return Guidance.Area == ECFBuilderGameplayArea::Hardpoints
+			&& Guidance.SocketName == FName(TEXT("HP_Top_01_Missing"))
+			&& !Guidance.bFoundOnChassis
+			&& Guidance.Instruction.Contains(TEXT("자동배치하지 않습니다"));
+	}));
+
+	// Existing baseline stored transform은 유지하고 Recipe Socket binding만 없는 상태를 만듭니다.
+	Recipe->HardpointIntents[0].SocketName = NAME_None;
+	// Existing Vehicle Completion mode로 같은 current truth를 다시 평가합니다.
+	FCFBuilderGameplayGuidanceRequest ExistingRequest = NewVehicleRequest;
+	ExistingRequest.Mode = ECFBuilderCompanionMode::CompleteExisting;
+	// Existing stored transform baseline-preservation guidance 결과입니다.
+	FCFBuilderGameplayGuidanceResult ExistingResult;
+	const bool bExistingRead = FCFVehicleAuthoringService::ReadBuilderGameplayGuidance(ExistingRequest, ExistingResult);
+	if (!TestTrue(TEXT("VB-P0-06 existing completion guidance read succeeds"), bExistingRead))
+	{
+		AddError(ExistingResult.Operation.Message);
+		return false;
+	}
+	// Existing mode Hardpoint 상태 row입니다.
+	const FCFBuilderGameplayGuidanceItem* ExistingHardpointItem = FindItem(ExistingResult, ECFBuilderGameplayArea::Hardpoints);
+	if (TestNotNull(TEXT("VB-P0-06 existing hardpoint item exists"), ExistingHardpointItem))
+	{
+		TestEqual(TEXT("VB-P0-06 existing stored transform avoids forced socket migration"), ExistingHardpointItem->State, ECFBuilderGuidanceState::Complete);
+	}
+	TestTrue(TEXT("VB-P0-06 existing stored transform is explicitly accepted"), ExistingResult.SocketGuidance.ContainsByPredicate([](const FCFBuilderManualSocketGuidance& Guidance)
+	{
+		return Guidance.Area == ECFBuilderGameplayArea::Hardpoints
+			&& Guidance.SemanticId == FName(TEXT("Top_01"))
+			&& Guidance.bExistingStoredTransformAccepted;
+	}));
+	TestFalse(TEXT("VB-P0-06 existing guidance still does not mutate Target"), ExistingResult.Operation.Mutation.bTargetChanged);
+	TestFalse(TEXT("VB-P0-06 existing guidance still does not save"), ExistingResult.Operation.Mutation.bSavePerformed);
+	return true;
+}
+
+// VB-P0-07 Final Review가 existing Core evidence를 집계하고 explicit Apply/guarded Undo를 새 writer 없이 왕복하는지 검증합니다.
+bool FCFVehicleBuilderFinalReviewTest::RunTest(const FString& Parameters)
+{
+	// Final Review의 current Target으로 사용할 transient VehicleData입니다.
+	UCFVehicleData* TargetVehicleData = NewObject<UCFVehicleData>(GetTransientPackage(), TEXT("VB_P0_07_Target"));
+	// Final Review의 authoritative semantic owner로 사용할 transient Recipe입니다.
+	UCFVehicleRecipeData* Recipe = NewObject<UCFVehicleRecipeData>(GetTransientPackage(), TEXT("VB_P0_07_Recipe"));
+	// Builder-private VehicleBase source를 대표할 transient Profile입니다.
+	UCFVehicleBaseProfile* BaseProfile = NewObject<UCFVehicleBaseProfile>(GetTransientPackage(), TEXT("VB_P0_07_Base"));
+	// Builder-private Drivetrain source를 대표할 transient Profile입니다.
+	UCFDrivetrainProfile* DrivetrainProfile = NewObject<UCFDrivetrainProfile>(GetTransientPackage(), TEXT("VB_P0_07_Drivetrain"));
+	// Builder-private Handling source를 대표할 transient Profile입니다.
+	UCFHandlingProfile* HandlingProfile = NewObject<UCFHandlingProfile>(GetTransientPackage(), TEXT("VB_P0_07_Handling"));
+	// Builder-private Performance source를 대표할 transient Profile입니다.
+	UCFPerformanceProfile* PerformanceProfile = NewObject<UCFPerformanceProfile>(GetTransientPackage(), TEXT("VB_P0_07_Performance"));
+	// USER가 Wheel/Hardpoint Socket을 직접 배치한 상황을 만들 transient Chassis입니다.
+	UStaticMesh* ChassisMesh = NewObject<UStaticMesh>(GetTransientPackage(), TEXT("VB_P0_07_Chassis"));
+	// Final Review provenance owner로 사용할 transient Reference Evidence입니다.
+	UCFVehicleRefEvidence* Evidence = NewObject<UCFVehicleRefEvidence>(GetTransientPackage(), TEXT("VB_P0_07_Evidence"));
+	if (!TestNotNull(TEXT("VB-P0-07 target exists"), TargetVehicleData)
+		|| !TestNotNull(TEXT("VB-P0-07 recipe exists"), Recipe)
+		|| !TestNotNull(TEXT("VB-P0-07 base profile exists"), BaseProfile)
+		|| !TestNotNull(TEXT("VB-P0-07 drivetrain profile exists"), DrivetrainProfile)
+		|| !TestNotNull(TEXT("VB-P0-07 handling profile exists"), HandlingProfile)
+		|| !TestNotNull(TEXT("VB-P0-07 performance profile exists"), PerformanceProfile)
+		|| !TestNotNull(TEXT("VB-P0-07 chassis exists"), ChassisMesh)
+		|| !TestNotNull(TEXT("VB-P0-07 evidence exists"), Evidence))
+	{
+		return false;
+	}
+
+	// ApplyService의 FScopedTransaction이 Target 변경을 Unreal Undo stack에 기록할 수 있게 하는 fixture flag입니다.
+	TargetVehicleData->SetFlags(RF_Transactional);
+	// ApplyService의 AppliedState 변경을 같은 Unreal transaction에 기록할 수 있게 하는 fixture flag입니다.
+	Recipe->SetFlags(RF_Transactional);
+
+	// Resolver/Validator가 사용할 실제 non-zero bounds의 Engine wheel mesh입니다.
+	UStaticMesh* WheelMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	// Resolver/Validator required reference를 만족할 existing Chaos wheel class입니다.
+	UClass* WheelClass = StaticLoadClass(UObject::StaticClass(), nullptr, TEXT("/Script/ChaosVehicles.ChaosVehicleWheel"));
+	if (!TestNotNull(TEXT("VB-P0-07 wheel mesh exists"), WheelMesh)
+		|| !TestNotNull(TEXT("VB-P0-07 wheel class exists"), WheelClass))
+	{
+		return false;
+	}
+
+	// USER가 직접 배치한 fixture Socket을 Chassis에 추가하는 helper입니다.
+	auto AddFixtureSocket = [ChassisMesh](const FName SocketName, const FVector& RelativeLocation)
+	{
+		// Chassis가 소유하는 transient StaticMesh Socket입니다.
+		UStaticMeshSocket* Socket = NewObject<UStaticMeshSocket>(ChassisMesh);
+		Socket->SocketName = SocketName;
+		Socket->RelativeLocation = RelativeLocation;
+		Socket->RelativeRotation = FRotator::ZeroRotator;
+		Socket->RelativeScale = FVector::OneVector;
+		ChassisMesh->AddSocket(Socket);
+	};
+	AddFixtureSocket(TEXT("Wheel_Anchor_FL"), FVector(110.0, -62.0, 28.0));
+	AddFixtureSocket(TEXT("Wheel_Anchor_FR"), FVector(110.0, 62.0, 28.0));
+	AddFixtureSocket(TEXT("Wheel_Anchor_RL"), FVector(-108.0, -62.0, 28.0));
+	AddFixtureSocket(TEXT("Wheel_Anchor_RR"), FVector(-108.0, 62.0, 28.0));
+	AddFixtureSocket(TEXT("HP_Top_01"), FVector(0.0, 0.0, 80.0));
+
+	TargetVehicleData->VehicleVisualConfig.ChassisMesh = ChassisMesh;
+	TargetVehicleData->VehicleVisualConfig.WheelMeshFL = WheelMesh;
+	TargetVehicleData->VehicleVisualConfig.WheelMeshFR = WheelMesh;
+	TargetVehicleData->VehicleVisualConfig.WheelMeshRL = WheelMesh;
+	TargetVehicleData->VehicleVisualConfig.WheelMeshRR = WheelMesh;
+	TargetVehicleData->VehicleReferenceConfig.FrontWheelClass = WheelClass;
+	TargetVehicleData->VehicleReferenceConfig.RearWheelClass = WheelClass;
+	TargetVehicleData->VehicleLayoutConfig.bUseLayoutOverrides = true;
+	TargetVehicleData->VehicleLayoutConfig.BodyWheelSocketFL = TEXT("Wheel_Anchor_FL");
+	TargetVehicleData->VehicleLayoutConfig.BodyWheelSocketFR = TEXT("Wheel_Anchor_FR");
+	TargetVehicleData->VehicleLayoutConfig.BodyWheelSocketRL = TEXT("Wheel_Anchor_RL");
+	TargetVehicleData->VehicleLayoutConfig.BodyWheelSocketRR = TEXT("Wheel_Anchor_RR");
+	TargetVehicleData->VehicleLayoutConfig.WheelAnchorFL.RelativeLocation = FVector(110.0, -62.0, 28.0);
+	TargetVehicleData->VehicleLayoutConfig.WheelAnchorFR.RelativeLocation = FVector(110.0, 62.0, 28.0);
+	TargetVehicleData->VehicleLayoutConfig.WheelAnchorRL.RelativeLocation = FVector(-108.0, -62.0, 28.0);
+	TargetVehicleData->VehicleLayoutConfig.WheelAnchorRR.RelativeLocation = FVector(-108.0, 62.0, 28.0);
+	TargetVehicleData->BaseVehicleMassKg = 1540.0f;
+	TargetVehicleData->MaximumGrossMassKg = 2280.0f;
+
+	// Existing Vehicle Completion baseline의 USER-authored Top hardpoint입니다.
+	FCFVehicleHardpointSlot& ExistingHardpoint = TargetVehicleData->HardpointSlots.AddDefaulted_GetRef();
+	ExistingHardpoint.LocationSlotId = TEXT("Top_01");
+	ExistingHardpoint.LocationCategory = TEXT("Top");
+	ExistingHardpoint.SocketName = TEXT("HP_Top_01");
+	ExistingHardpoint.LocalLocation = FVector(0.0, 0.0, 80.0);
+	ExistingHardpoint.LocalRotation = FRotator::ZeroRotator;
+	// Existing baseline의 Top mount입니다.
+	FCFVehicleMountProfile& ExistingMount = TargetVehicleData->MountProfiles.AddDefaulted_GetRef();
+	ExistingMount.MountProfileId = TEXT("RoofTurret_MediumOrLarge");
+	ExistingMount.LocationSlotRef = TEXT("Top_01");
+	ExistingMount.MountType = ECFVehicleMountType::Turret;
+	ExistingMount.SizeLimit = ECFVehicleWeaponSize::Large;
+	ExistingMount.DefaultEquipmentPresetData = nullptr;
+
+	Recipe->TargetVehicleData = TargetVehicleData;
+	// Existing Definition import source snapshot입니다.
+	FCFVehicleDefinitionSnapshot ImportedDefinition;
+	// Import/snapshot diagnostic입니다.
+	FString ImportError;
+	if (!FCFVehicleSnapshotBuilder::BuildDefinitionSnapshot(*TargetVehicleData, ImportedDefinition, ImportError))
+	{
+		AddError(ImportError);
+		return false;
+	}
+	// Existing Definition import summary입니다.
+	FCFVehicleImportResult ImportResult;
+	if (!FCFVehicleImportService::ImportDefinitionSnapshot(ImportedDefinition, *Recipe, ImportResult, ImportError))
+	{
+		AddError(ImportError);
+		return false;
+	}
+
+	Recipe->ProfileBindings.VehicleBaseProfile = BaseProfile;
+	Recipe->ProfileBindings.DrivetrainProfile = DrivetrainProfile;
+	Recipe->ProfileBindings.HandlingProfile = HandlingProfile;
+	Recipe->ProfileBindings.PerformanceProfile = PerformanceProfile;
+	Recipe->AssetIntent.ChassisMesh = ChassisMesh;
+	Recipe->DriveStateMode = ECFVehicleDriveStateMode::ProjectDefault;
+	Recipe->WheelVisualIntent.Mode = ECFWheelVisualIntentMode::UseProfilePolicy;
+	Recipe->DefaultDataIntent.DefenseMode = ECFAssetIntentMode::UseProfile;
+	Recipe->DefaultDataIntent.DestroyedFxMode = ECFAssetIntentMode::UseProfile;
+	Recipe->MassIntent.BaseMassMode = ECFAuthoringInputMode::UseProfile;
+	Recipe->MassIntent.GrossMassMode = ECFAuthoringInputMode::UseProfile;
+
+	BaseProfile->Meta.OwnerRecipeId = Recipe->RecipeId;
+	BaseProfile->Data.BaseVehicleMassKg = 1540.0f;
+	BaseProfile->Data.MaximumGrossMassKg = 2280.0f;
+	BaseProfile->Data.MaxHealth = TargetVehicleData->VehicleDurabilityConfig.MaxHealth;
+	BaseProfile->Data.ChassisWidth = TargetVehicleData->VehicleMovementConfig.ChassisWidth;
+	BaseProfile->Data.ChassisHeight = TargetVehicleData->VehicleMovementConfig.ChassisHeight;
+	BaseProfile->Data.ExpectedWheelCount = 4;
+	BaseProfile->Data.FrontWheelCountForSteering = 2;
+	BaseProfile->Data.bAutoScaleWheelMeshToRadius = false;
+	BaseProfile->Data.WheelMeshScaleClampMin = 0.25f;
+	BaseProfile->Data.WheelMeshScaleClampMax = 4.0f;
+	DrivetrainProfile->Meta.OwnerRecipeId = Recipe->RecipeId;
+	HandlingProfile->Meta.OwnerRecipeId = Recipe->RecipeId;
+	PerformanceProfile->Meta.OwnerRecipeId = Recipe->RecipeId;
+
+	Recipe->HardpointIntents.Reset();
+	// Existing USER Socket을 그대로 참조하는 managed Top hardpoint intent입니다.
+	FCFHardpointIntent& HardpointIntent = Recipe->HardpointIntents.AddDefaulted_GetRef();
+	HardpointIntent.LocationSlotId = TEXT("Top_01");
+	HardpointIntent.LocationCategory = TEXT("Top");
+	HardpointIntent.SocketName = TEXT("HP_Top_01");
+	Recipe->MountIntents.Reset();
+	// Existing Top_01을 참조하는 managed Mount intent입니다.
+	FCFMountIntent& MountIntent = Recipe->MountIntents.AddDefaulted_GetRef();
+	MountIntent.MountProfileId = TEXT("RoofTurret_MediumOrLarge");
+	MountIntent.LocationSlotRef = TEXT("Top_01");
+	MountIntent.MountType = ECFVehicleMountType::Turret;
+	MountIntent.SizeLimit = ECFVehicleWeaponSize::Large;
+
+	// Final Review Apply를 실제로 요구하게 만들 MaxHealth legacy pin만 release합니다.
+	Recipe->ImportState.LegacyPinnedFields.RemoveAll([](const FCFVehicleFieldOverride& Override)
+	{
+		return Override.FieldPath.ToCanonicalString(true) == TEXT("VehicleDurabilityConfig.MaxHealth");
+	});
+	Recipe->DurabilityIntent.MaxHealthMode = ECFAuthoringInputMode::ExplicitValue;
+	Recipe->DurabilityIntent.ExplicitMaxHealth = TargetVehicleData->VehicleDurabilityConfig.MaxHealth + 25.0f;
+
+	Evidence->TargetRecipeId = Recipe->RecipeId;
+	Evidence->TargetRecipePath = FSoftObjectPath(Recipe);
+	Evidence->TargetDefinitionPath = FSoftObjectPath(TargetVehicleData);
+	// Final Review에서 FACT provenance를 검증할 canonical consumed Claim입니다.
+	FCFRefClaim& FactClaim = Evidence->Claims.AddDefaulted_GetRef();
+	FactClaim.ClaimId = TEXT("Claim_Fact_Mass");
+	FactClaim.FactKey = TEXT("CurbMassKg");
+	FactClaim.ValueKind = ECFRefValueKind::Number;
+	FactClaim.NumberValue = 1540.0;
+	FactClaim.UnitId = TEXT("kg");
+	FactClaim.Provenance = ECFRefProvenance::FACT;
+	FactClaim.ResolutionState = ECFRefClaimResolution::Canonical;
+	// Final Review에서 DERIVED provenance를 검증할 canonical consumed Claim입니다.
+	FCFRefClaim& DerivedClaim = Evidence->Claims.AddDefaulted_GetRef();
+	DerivedClaim.ClaimId = TEXT("Claim_Derived_Ratio");
+	DerivedClaim.FactKey = TEXT("PowerToMassRatio");
+	DerivedClaim.ValueKind = ECFRefValueKind::Number;
+	DerivedClaim.NumberValue = 1.0;
+	DerivedClaim.Provenance = ECFRefProvenance::DERIVED;
+	DerivedClaim.InputClaimIds = {FactClaim.ClaimId};
+	DerivedClaim.MethodId = TEXT("AutomationDerived");
+	DerivedClaim.MethodRevision = 1;
+	DerivedClaim.ResolutionState = ECFRefClaimResolution::Canonical;
+	// Final Review에서 GAME_BIAS provenance를 검증할 canonical consumed Claim입니다.
+	FCFRefClaim& BiasClaim = Evidence->Claims.AddDefaulted_GetRef();
+	BiasClaim.ClaimId = TEXT("Claim_Bias_Health");
+	BiasClaim.FactKey = TEXT("GameplayDurabilityBias");
+	BiasClaim.ValueKind = ECFRefValueKind::Number;
+	BiasClaim.NumberValue = 25.0;
+	BiasClaim.Provenance = ECFRefProvenance::GAME_BIAS;
+	BiasClaim.InputClaimIds = {FactClaim.ClaimId};
+	BiasClaim.MethodId = TEXT("AutomationBias");
+	BiasClaim.MethodRevision = 1;
+	BiasClaim.ResolutionState = ECFRefClaimResolution::Canonical;
+	// Current semantic Evidence fingerprint 생성 diagnostic입니다.
+	FString EvidenceError;
+	if (!TestTrue(TEXT("VB-P0-07 Evidence fingerprint refresh succeeds"), Evidence->RefreshEvidenceFingerprint(EvidenceError)))
+	{
+		AddError(EvidenceError);
+		return false;
+	}
+
+	// Final Review provenance authority를 실제 Builder Profile commit lane으로 생성할 receipt request입니다.
+	FCFBuilderProfileCommitRequest ReceiptRequest;
+	ReceiptRequest.Recipe = Recipe;
+	ReceiptRequest.ExpectedOwnerRecipeId = Recipe->RecipeId;
+	ReceiptRequest.Payload.VehicleBaseProfilePath = FSoftObjectPath(BaseProfile);
+	ReceiptRequest.Payload.DrivetrainProfilePath = FSoftObjectPath(DrivetrainProfile);
+	ReceiptRequest.Payload.HandlingProfilePath = FSoftObjectPath(HandlingProfile);
+	ReceiptRequest.Payload.PerformanceProfilePath = FSoftObjectPath(PerformanceProfile);
+	ReceiptRequest.Payload.VehicleBaseData = BaseProfile->Data;
+	ReceiptRequest.Payload.DrivetrainData = DrivetrainProfile->Data;
+	ReceiptRequest.Payload.HandlingData = HandlingProfile->Data;
+	ReceiptRequest.Payload.PerformanceData = PerformanceProfile->Data;
+	ReceiptRequest.EvidenceBinding.EvidencePath = FSoftObjectPath(Evidence);
+	ReceiptRequest.EvidenceBinding.ExpectedEvidenceId = Evidence->EvidenceId;
+	ReceiptRequest.EvidenceBinding.ExpectedEvidenceFingerprint = Evidence->EvidenceFingerprint;
+	ReceiptRequest.EvidenceBinding.ConsumedClaimIds = {FactClaim.ClaimId, DerivedClaim.ClaimId, BiasClaim.ClaimId};
+	ReceiptRequest.UpstreamBuilderProposalHash = TEXT("VB-P0-07-Automation-Upstream");
+	ReceiptRequest.CallContext.CallerKind = ECFAuthoringCallerKind::Automation;
+
+	// Same-payload receipt-only commit을 승인할 fresh Builder Profile preview입니다.
+	FCFBuilderProfileCommitPreview ReceiptPreview;
+	if (!TestTrue(TEXT("VB-P0-07 receipt-only Builder Profile preview succeeds"), FCFVehicleAuthoringService::PreviewBuilderProfiles(ReceiptRequest, ReceiptPreview)))
+	{
+		AddError(ReceiptPreview.Operation.Message);
+		return false;
+	}
+	TestEqual(TEXT("VB-P0-07 missing receipt requires R1 preview even when payload matches"), ReceiptPreview.Operation.Status, ECFAuthoringOpStatus::Succeeded);
+	ReceiptRequest.ExpectedCurrentFingerprints = ReceiptPreview.CurrentFingerprints;
+	ReceiptRequest.CallContext.ClientOperationId = TEXT("VB-P0-07-Receipt-Automation");
+	ReceiptRequest.CallContext.ApprovalClass = ECFAuthoringApprovalClass::AuthoringWrite;
+	ReceiptRequest.CallContext.ApprovalScopeHash = ReceiptPreview.Proposal.ProposalHash;
+	ReceiptRequest.CallContext.ExpectedRecipeFingerprint = ReceiptPreview.Proposal.ExpectedRecipeFingerprint;
+	ReceiptRequest.CallContext.ExpectedTargetDefinitionHash = ReceiptPreview.Proposal.ExpectedTargetDefinitionHash;
+	ReceiptRequest.CallContext.ExpectedResolverContractRevision = ReceiptPreview.Proposal.ResolverContractRevision;
+	// Receipt-only commit terminal result입니다.
+	FCFAuthoringOpResult ReceiptCommitResult;
+	if (!TestTrue(TEXT("VB-P0-07 receipt-only Builder Profile commit succeeds"), FCFVehicleAuthoringService::CommitBuilderProfiles(ReceiptRequest, ReceiptPreview, ReceiptCommitResult)))
+	{
+		AddError(ReceiptCommitResult.Message);
+		return false;
+	}
+	TestTrue(TEXT("VB-P0-07 persistent Builder receipt is valid"), Recipe->BuilderCommitReceipt.IsValid());
+	TestFalse(TEXT("VB-P0-07 receipt-only commit does not mutate Profile payload"), ReceiptCommitResult.Mutation.bProfileChanged);
+	TestTrue(TEXT("VB-P0-07 receipt-only commit records Recipe provenance metadata"), ReceiptCommitResult.Mutation.bRecipeChanged);
+	TestFalse(TEXT("VB-P0-07 receipt-only commit does not save"), ReceiptCommitResult.Mutation.bSavePerformed);
+
+	// Existing Vehicle Completion Final Review request입니다.
+	FCFBuilderFinalReviewRequest ReviewRequest;
+	ReviewRequest.GameplayRequest.ReadRequest.Recipe = Recipe;
+	ReviewRequest.GameplayRequest.ReadRequest.TargetVehicleData = TargetVehicleData;
+	ReviewRequest.GameplayRequest.ReadRequest.CallerKind = ECFAuthoringCallerKind::Automation;
+	ReviewRequest.GameplayRequest.Mode = ECFBuilderCompanionMode::CompleteExisting;
+	ReviewRequest.bHasEvidenceBinding = true;
+	ReviewRequest.EvidenceBinding.EvidencePath = FSoftObjectPath(Evidence);
+	ReviewRequest.EvidenceBinding.ExpectedEvidenceId = Evidence->EvidenceId;
+	ReviewRequest.EvidenceBinding.ExpectedEvidenceFingerprint = Evidence->EvidenceFingerprint;
+	ReviewRequest.EvidenceBinding.ConsumedClaimIds = {FactClaim.ClaimId, DerivedClaim.ClaimId, BiasClaim.ClaimId};
+
+	// Initial mutation0 Final Review입니다.
+	FCFBuilderFinalReviewResult ReviewResult;
+	if (!TestTrue(TEXT("VB-P0-07 Final Review read succeeds"), FCFVehicleAuthoringService::ReadBuilderFinalReview(ReviewRequest, ReviewResult)))
+	{
+		AddError(ReviewResult.Operation.Message);
+		return false;
+	}
+	TestTrue(TEXT("VB-P0-07 provenance is available"), ReviewResult.Provenance.bAvailable);
+	TestEqual(TEXT("VB-P0-07 consumed claim count"), ReviewResult.Provenance.ConsumedClaimCount, 3);
+	TestEqual(TEXT("VB-P0-07 FACT claim count"), ReviewResult.Provenance.FactClaimCount, 1);
+	TestEqual(TEXT("VB-P0-07 DERIVED claim count"), ReviewResult.Provenance.DerivedClaimCount, 1);
+	TestEqual(TEXT("VB-P0-07 GAME_BIAS claim count"), ReviewResult.Provenance.GameBiasClaimCount, 1);
+	TestTrue(TEXT("VB-P0-07 target diff exists"), ReviewResult.FieldDiff.Num() > 0);
+	TestTrue(TEXT("VB-P0-07 Apply is required"), ReviewResult.bApplyRequired);
+	TestEqual(TEXT("VB-P0-07 blocker count is zero"), ReviewResult.BlockingIssueCount, 0);
+	TestTrue(TEXT("VB-P0-07 can build explicit Apply"), ReviewResult.bCanApply);
+	TestFalse(TEXT("VB-P0-07 cannot complete before Apply"), ReviewResult.bCanCompleteFinalReview);
+	TestFalse(TEXT("VB-P0-07 Apply proposal hash is populated"), ReviewResult.ApplyProposal.ProposalHash.IsEmpty());
+	TestFalse(TEXT("VB-P0-07 review does not mutate Target"), ReviewResult.Operation.Mutation.bTargetChanged);
+	TestFalse(TEXT("VB-P0-07 review does not save"), ReviewResult.Operation.Mutation.bSavePerformed);
+
+	// Evidence binding 없이 provenance를 추측하지 않는 blocker 검증 request입니다.
+	FCFBuilderFinalReviewRequest MissingEvidenceRequest = ReviewRequest;
+	MissingEvidenceRequest.bHasEvidenceBinding = false;
+	MissingEvidenceRequest.EvidenceBinding = FCFBuilderEvidenceBinding();
+	// Missing provenance Final Review 결과입니다.
+	FCFBuilderFinalReviewResult MissingEvidenceResult;
+	TestTrue(TEXT("VB-P0-07 missing Evidence review still returns diagnostic"), FCFVehicleAuthoringService::ReadBuilderFinalReview(MissingEvidenceRequest, MissingEvidenceResult));
+	TestFalse(TEXT("VB-P0-07 missing Evidence cannot Apply"), MissingEvidenceResult.bCanApply);
+	TestTrue(TEXT("VB-P0-07 missing Evidence adds blocker"), MissingEvidenceResult.BlockingIssueCount > 0);
+	TestFalse(TEXT("VB-P0-07 missing Evidence does not invent provenance"), MissingEvidenceResult.Provenance.bAvailable);
+
+	// 같은 Evidence의 다른 canonical Claim subset을 caller가 바꿔치기한 request입니다.
+	FCFBuilderFinalReviewRequest TamperedClaimRequest = ReviewRequest;
+	TamperedClaimRequest.EvidenceBinding.ConsumedClaimIds = {FactClaim.ClaimId};
+	// Persistent receipt와 Claim set이 다른 Final Review 결과입니다.
+	FCFBuilderFinalReviewResult TamperedClaimResult;
+	TestTrue(TEXT("VB-P0-07 tampered canonical Claim subset returns diagnostic"), FCFVehicleAuthoringService::ReadBuilderFinalReview(TamperedClaimRequest, TamperedClaimResult));
+	TestFalse(TEXT("VB-P0-07 tampered canonical Claim subset cannot reuse provenance"), TamperedClaimResult.Provenance.bAvailable);
+	TestTrue(TEXT("VB-P0-07 tampered canonical Claim subset adds blocker"), TamperedClaimResult.BlockingIssueCount > 0);
+	TestFalse(TEXT("VB-P0-07 tampered canonical Claim subset cannot Apply"), TamperedClaimResult.bCanApply);
+
+	// USER가 Final Review exact proposal을 명시 승인한 Apply request입니다.
+	FCFBuilderFinalApplyRequest ApplyRequest;
+	ApplyRequest.ReviewRequest = ReviewRequest;
+	ApplyRequest.CallContext.ClientOperationId = TEXT("VB-P0-07-Apply-Automation");
+	ApplyRequest.CallContext.CallerKind = ECFAuthoringCallerKind::Automation;
+	ApplyRequest.CallContext.ApprovalClass = ECFAuthoringApprovalClass::DefinitionApply;
+	ApplyRequest.CallContext.ApprovalScopeHash = ReviewResult.ApplyProposal.ProposalHash;
+	// Explicit Apply terminal result입니다.
+	FCFBuilderFinalApplyResult ApplyResult;
+	if (!TestTrue(TEXT("VB-P0-07 explicit Apply succeeds"), FCFVehicleAuthoringService::ApplyBuilderFinalReview(ApplyRequest, ApplyResult)))
+	{
+		AddError(ApplyResult.Operation.Message);
+		return false;
+	}
+	TestEqual(TEXT("VB-P0-07 Apply status succeeded"), ApplyResult.Operation.Status, ECFAuthoringOpStatus::Succeeded);
+	TestTrue(TEXT("VB-P0-07 Apply mutates Target through shared lane"), ApplyResult.Operation.Mutation.bTargetChanged);
+	TestFalse(TEXT("VB-P0-07 Apply does not save"), ApplyResult.Operation.Mutation.bSavePerformed);
+	TestTrue(TEXT("VB-P0-07 guarded Undo token is available"), ApplyResult.bUndoAvailable);
+	TestTrue(TEXT("VB-P0-07 Undo transaction id is valid"), ApplyResult.UndoToken.TransactionId.IsValid());
+	TestFalse(TEXT("VB-P0-07 Undo scope is populated"), ApplyResult.UndoToken.UndoScopeHash.IsEmpty());
+
+	// Apply 뒤 diff0 Final Review입니다.
+	FCFBuilderFinalReviewResult AppliedReview;
+	if (!TestTrue(TEXT("VB-P0-07 post-Apply Final Review succeeds"), FCFVehicleAuthoringService::ReadBuilderFinalReview(ReviewRequest, AppliedReview)))
+	{
+		AddError(AppliedReview.Operation.Message);
+		return false;
+	}
+	TestEqual(TEXT("VB-P0-07 post-Apply target diff is zero"), AppliedReview.FieldDiff.Num(), 0);
+	TestFalse(TEXT("VB-P0-07 post-Apply no Apply required"), AppliedReview.bApplyRequired);
+	TestTrue(TEXT("VB-P0-07 post-Apply Final Review can complete"), AppliedReview.bCanCompleteFinalReview);
+
+	// Builder가 방금 만든 exact transaction에 대한 explicit guarded Undo request입니다.
+	FCFBuilderUndoRequest UndoRequest;
+	UndoRequest.UndoToken = ApplyResult.UndoToken;
+	UndoRequest.CallContext.ClientOperationId = TEXT("VB-P0-07-Undo-Automation");
+	UndoRequest.CallContext.CallerKind = ECFAuthoringCallerKind::Automation;
+	UndoRequest.CallContext.ApprovalClass = ECFAuthoringApprovalClass::DefinitionApply;
+	UndoRequest.CallContext.ApprovalScopeHash = ApplyResult.UndoToken.UndoScopeHash;
+
+	// Undo stack을 거치지 않은 raw Target drift를 흉내 낼 post-Apply 값입니다.
+	const float AppliedMaxHealthBeforeRawDrift = TargetVehicleData->VehicleDurabilityConfig.MaxHealth;
+	TargetVehicleData->VehicleDurabilityConfig.MaxHealth = AppliedMaxHealthBeforeRawDrift + 1.0f;
+	// Raw drift 상태에서 guarded Undo가 반드시 거부되는 결과입니다.
+	FCFAuthoringOpResult RawDriftUndoResult;
+	TestFalse(TEXT("VB-P0-07 guarded Undo refuses nontransactional Target drift"), FCFVehicleAuthoringService::UndoBuilderFinalApply(UndoRequest, RawDriftUndoResult));
+	TestEqual(TEXT("VB-P0-07 raw drift refusal is StateChanged"), RawDriftUndoResult.ErrorCode, ECFAuthoringErrorCode::StateChanged);
+	TargetVehicleData->VehicleDurabilityConfig.MaxHealth = AppliedMaxHealthBeforeRawDrift;
+
+	// Builder Apply 뒤에 끼워 다른 top transaction을 잘못 Undo하지 않는지 검증할 unrelated transactional Recipe입니다.
+	UCFVehicleRecipeData* InterveningRecipe = NewObject<UCFVehicleRecipeData>(GetTransientPackage(), TEXT("VB_P0_07_Intervening"), RF_Transient | RF_Transactional);
+	if (!TestNotNull(TEXT("VB-P0-07 intervening transaction fixture exists"), InterveningRecipe))
+	{
+		return false;
+	}
+	// Intervening transaction 전 revision입니다.
+	const int32 InterveningRevisionBefore = InterveningRecipe->AuthoringRevision;
+	{
+		// Builder 소유가 아닌 unrelated Editor transaction입니다.
+		FScopedTransaction InterveningTransaction(NSLOCTEXT("CarFightDataAuthoringTests", "VBP007InterveningTransaction", "VB-P0-07 Intervening Transaction"));
+		InterveningRecipe->Modify();
+		++InterveningRecipe->AuthoringRevision;
+	}
+	// Intervening transaction 후 revision입니다.
+	const int32 InterveningRevisionAfter = InterveningRecipe->AuthoringRevision;
+	TestNotEqual(TEXT("VB-P0-07 intervening transaction changes its own object"), InterveningRevisionAfter, InterveningRevisionBefore);
+	// Wrong-top guarded Undo가 반드시 거부되는 결과입니다.
+	FCFAuthoringOpResult WrongTopUndoResult;
+	TestFalse(TEXT("VB-P0-07 guarded Undo refuses unrelated top transaction"), FCFVehicleAuthoringService::UndoBuilderFinalApply(UndoRequest, WrongTopUndoResult));
+	TestEqual(TEXT("VB-P0-07 wrong-top refusal is StateChanged"), WrongTopUndoResult.ErrorCode, ECFAuthoringErrorCode::StateChanged);
+	TestEqual(TEXT("VB-P0-07 wrong-top refusal preserves intervening object"), InterveningRecipe->AuthoringRevision, InterveningRevisionAfter);
+	TestEqual(TEXT("VB-P0-07 wrong-top refusal preserves applied Target"), TargetVehicleData->VehicleDurabilityConfig.MaxHealth, Recipe->DurabilityIntent.ExplicitMaxHealth);
+
+	if (!TestNotNull(TEXT("VB-P0-07 Editor exists for transaction recovery"), GEditor) || !GEditor->Trans)
+	{
+		return false;
+	}
+	// 테스트가 unrelated top transaction만 표준 Undo해 Builder Apply를 다시 stack top으로 복원합니다.
+	const bool bInterveningUndoSucceeded = GEditor->UndoTransaction();
+	TestTrue(TEXT("VB-P0-07 standard Undo removes only intervening transaction"), bInterveningUndoSucceeded);
+	TestEqual(TEXT("VB-P0-07 intervening transaction is restored"), InterveningRecipe->AuthoringRevision, InterveningRevisionBefore);
+
+	// Exact Builder transaction만 되돌리는 Guarded Undo terminal result입니다.
+	FCFAuthoringOpResult UndoResult;
+	if (!TestTrue(TEXT("VB-P0-07 guarded Undo succeeds"), FCFVehicleAuthoringService::UndoBuilderFinalApply(UndoRequest, UndoResult)))
+	{
+		AddError(UndoResult.Message);
+		return false;
+	}
+	TestFalse(TEXT("VB-P0-07 Undo does not save"), UndoResult.Mutation.bSavePerformed);
+
+	// Undo 뒤 pre-Apply diff가 다시 나타나는 fresh Final Review입니다.
+	FCFBuilderFinalReviewResult RestoredReview;
+	if (!TestTrue(TEXT("VB-P0-07 post-Undo Final Review succeeds"), FCFVehicleAuthoringService::ReadBuilderFinalReview(ReviewRequest, RestoredReview)))
+	{
+		AddError(RestoredReview.Operation.Message);
+		return false;
+	}
+	TestTrue(TEXT("VB-P0-07 post-Undo diff is restored"), RestoredReview.FieldDiff.Num() > 0);
+	TestTrue(TEXT("VB-P0-07 post-Undo Apply is available again"), RestoredReview.bCanApply);
+	TestFalse(TEXT("VB-P0-07 post-Undo review does not save"), RestoredReview.Operation.Mutation.bSavePerformed);
 	return true;
 }
 

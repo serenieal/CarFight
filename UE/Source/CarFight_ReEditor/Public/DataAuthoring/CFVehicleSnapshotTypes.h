@@ -1,15 +1,17 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleSnapshotTypes.h
-// Version: v1.1.0
-// Date: 2026-08-17
-// Description: DAUTH-P0-08C/D Immutable Snapshot Foundation의 public value-copy 계약입니다.
+// Version: v1.2.0
+// Date: 2026-08-26
+// Description: DAUTH Immutable Snapshot Foundation + CF-FQ-040 VB-P0-05 Builder-private Profile ownership metadata 계약입니다.
 // Scope: Recipe, 5 Profile, Registry-expanded Definition, Asset Snapshot을 제공합니다.
 // Changelog:
+// - v1.2.0: FCFVehicleProfileSource에 OwnerRecipeId를 additive 추가해 private owner stale precondition을 typed Data fingerprint와 분리해 보존.
 // - v1.1.0: DAUTH-P0-08D Chassis Socket / Wheel Bounds Asset Snapshot 계약 추가.
 // - v1.0.0: Section 22.13/22.27 Snapshot/Fingerprint public contract 최초 구현.
 // Migration:
-// - Snapshot은 Editor-only Authoring 계산 입력이며 Runtime UCFVehicleData schema를 변경하지 않습니다.
+// - OwnerRecipeId는 Profile Data fingerprint에 섞지 않고 별도 ownership precondition으로 비교합니다. 기존 shared/legacy Profile은 Invalid GUID로 해석합니다.
+// - Snapshot은 Editor-only Authoring 계산 입력이며 Runtime UCFVehicleData schema를 직접 mutation하지 않습니다.
 // - Resolver / Apply / UI / CSV 계약은 이 파일에서 구현하지 않습니다.
 
 #pragma once
@@ -126,6 +128,10 @@ struct FCFVehicleProfileSource
 	// Profile Asset identity로 사용하는 soft object path입니다.
 	UPROPERTY()
 	FSoftObjectPath SourceObjectPath;
+
+	// Builder-private Profile을 소유하는 RecipeId입니다. Invalid GUID는 shared/legacy Profile을 뜻합니다.
+	UPROPERTY()
+	FGuid OwnerRecipeId;
 
 	// 사람이 읽는 Profile edit diagnostic revision입니다.
 	UPROPERTY()

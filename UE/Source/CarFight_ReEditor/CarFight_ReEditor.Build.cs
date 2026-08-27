@@ -1,8 +1,10 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 // File: CarFight_ReEditor.Build.cs
-// Version: v1.3.0
+// Version: v1.6.0
 // Changelog:
+// - v1.6.0: CF-FQ-040 CFVRN-1 Unicode NFC canonicalization을 위해 UE 공급 ICU third-party dependency를 추가.
+// - v1.5.0: CF-FQ-040 Vehicle Reference Evidence의 Windows UE 5.8 portable SHA-256 계산을 위해 Editor-only OpenSSL third-party dependency를 추가.
 // - v1.3.0: CF-FQ-032 VehiclePanel P2 Source Art의 deterministic Texture import를 위한 Editor-only AssetTools 의존성을 추가.
 // - v1.2.0: DAUTH-P0-08J deterministic .cfbatch.json writer를 위해 Editor-only Json 의존성을 추가.
 // - v1.1.1: Data Authoring dependency block의 들여쓰기만 교정. 의미 변경 없음.
@@ -44,5 +46,8 @@ public class CarFight_ReEditor : ModuleRules
 			"ToolMenus",
 			"UnrealEd"
 		});
+
+		// CF-FQ-040 Evidence fingerprint의 SHA-256과 Unicode NFC canonicalization에 UE 공급 OpenSSL/ICU를 사용합니다.
+		AddEngineThirdPartyPrivateStaticDependencies(Target, "OpenSSL", "ICU");
 	}
 }
