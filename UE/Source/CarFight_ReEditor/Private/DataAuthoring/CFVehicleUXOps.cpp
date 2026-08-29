@@ -1,14 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleUXOps.cpp
-// Version: v1.1.0
+// Version: v1.2.0
 // Date: 2026-08-18
 // Description: DAUTH-P0-11 Frozen 24.91~24.94 normal Workspace completeness facade 구현입니다.
 // Scope: existing Batch B2 Profile edit, External Drift 3-way recovery, Definition+Recipe record creation을 Common Authoring facade에 얇게 연결합니다.
 // Changelog:
+// - v1.2.0: P0-12 UA-04 USER 피드백에 따라 Keep Authoring 성공 상태 문구를 사용자-facing 한국어로 현지화. Drift 계약과 mutation 의미 변경 없음.
 // - v1.1.0: Drift prospective simulation용 UObject duplicate가 PostDuplicate에서 새 RecipeId를 발급해 approval hash가 비결정적이던 문제를 원본 identity 복원으로 교정.
 // - v1.0.0: Shared Profile impact/commit, Drift review/decision, New Vehicle/Mesh-only two-record creation 최초 구현.
 // Migration:
+// - v1.2.0은 성공 상태 표시 문구만 변경하며 Proposal hash, approval binding, Recipe/Target mutation 계약은 변경하지 않습니다.
 // - Profile write는 FCFBatchImportService B2만 사용하고 Target Definition Apply는 수행하지 않습니다.
 // - Drift Preserve Raw는 FCFVehicleImportService ownership primitive, Advanced는 Registry allowlist를 사용합니다.
 // - record creation은 새 Definition+Recipe만 만들며 Apply/Save/Profile/class/physics inference를 수행하지 않습니다.
@@ -682,7 +684,7 @@ bool FCFVehicleAuthoringService::CommitDriftDecision(
 		OutResult.CurrentTargetDefinitionHash = FreshPreview.Review.ExpectedTargetDefinitionHash;
 		OutResult.CurrentSourceSignature = FreshPreview.Review.ExpectedSourceSignature;
 		OutResult.CurrentResolvedDefinitionHash = FreshPreview.ProspectiveResolveResult.ResolvedDefinitionHash;
-		CFVehicleUXOpsPrivate::SetSucceeded(OutResult, TEXT("Keep Authoring review token을 current External Drift evidence에 binding했습니다. Persistent source mutation은 없습니다."));
+		CFVehicleUXOpsPrivate::SetSucceeded(OutResult, TEXT("제작 기준값 유지 결정을 현재 외부 변경 상태에 연결했습니다. 레시피와 프로필은 변경하지 않았습니다."));
 		return true;
 	}
 	if (!Request.ReadRequest.Recipe)

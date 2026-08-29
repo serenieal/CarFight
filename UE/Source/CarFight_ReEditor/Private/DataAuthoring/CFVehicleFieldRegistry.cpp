@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleFieldRegistry.cpp
-// Version: v1.5.0
-// Date: 2026-08-26
-// Description: Current 127 VehicleData leaf pattern Registry, Builder atomic Transmission ratio-set/wheel fallback dependency metadata와 Reflection coverage 구현입니다.
+// Version: v1.6.0
+// Date: 2026-08-28
+// Description: Current 132 VehicleData leaf pattern Registry와 WSA Wheel Socket Scale source/dependency metadata를 포함한 Reflection coverage 구현입니다.
 // Changelog:
+// - v1.6.0: WSA-P0-01 RelativeScale 4 leaf + bUseWheelSocketScale 1 leaf를 추가하고 SocketScale flag dependency를 Project Default + Recipe.WheelVisualIntent로 고정해 coverage를 127→132로 확장.
 // - v1.5.0: VB-P0-05 설계 검수 교정으로 FCFVehicleTransmissionRatios를 atomic leaf로 복원해 Forward/Reverse ratio provenance가 분리되지 않게 하고 coverage를 128→127로 정정.
 // - v1.4.0: CF-FQ-040 VB-P0-05 ChassisWidth/Transmission 10개 leaf를 추가하고 wheel geometry를 BaseProfileMeasurementPolicy로 전환해 VehicleBase fallback + AssetDerived 우선 계약을 연결.
 // - v1.3.0: UI-P0-06 explicit RedlineStartRPM을 PerformanceProfileDirect descriptor로 추가해 Reflection coverage를 118 leaf로 확장.
@@ -315,7 +316,14 @@ namespace CFVehicleFieldRegistryPrivate
 
 		case ECFVehicleResolveRule::ProjectDefaultThenRecipeSemantic:
 			AddDependency(Dependencies, TEXT("Project.CompatibilityDefaults"));
-			AddDependency(Dependencies, TEXT("Recipe.DefaultDataIntent"));
+			if (Pattern == TEXT("WheelVisualConfig.bUseWheelSocketScale"))
+			{
+				AddDependency(Dependencies, TEXT("Recipe.WheelVisualIntent"));
+			}
+			else
+			{
+				AddDependency(Dependencies, TEXT("Recipe.DefaultDataIntent"));
+			}
 			break;
 
 		default:
@@ -428,10 +436,10 @@ namespace CFVehicleFieldRegistryPrivate
 		DiscoverStructLeaves(InnerStructProperty->Struct, Prefix, OutPatterns);
 	}
 
-	// Current exact 127 leaf descriptor를 생성합니다.
+	// Current exact 132 leaf descriptor를 생성합니다.
 	TArray<FCFVehicleFieldDescriptor> BuildDescriptors()
 	{
-		// Current 127 leaf seed입니다. 숫자값은 없고 ownership/rule metadata만 기술합니다.
+		// Current 132 leaf seed입니다. 숫자값은 없고 ownership/rule metadata만 기술합니다.
 		static const FDescriptorSeed Seeds[] =
 		{
 			{TEXT("VehicleVisualConfig.ChassisMesh"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::RecipeAssetIntent, ECFVehicleAdoptGroup::VisualAssets, false, false, false},
@@ -447,12 +455,16 @@ namespace CFVehicleFieldRegistryPrivate
 			{TEXT("VehicleLayoutConfig.BodyWheelSocketRR"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::RecipeBinding, ECFVehicleAdoptGroup::Layout, true, false, false},
 			{TEXT("VehicleLayoutConfig.WheelAnchorFL.RelativeLocation"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::AssetSocketDerived, ECFVehicleAdoptGroup::Layout, true, false, false},
 			{TEXT("VehicleLayoutConfig.WheelAnchorFL.RelativeRotation"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::AssetSocketDerived, ECFVehicleAdoptGroup::Layout, true, false, false},
+			{TEXT("VehicleLayoutConfig.WheelAnchorFL.RelativeScale"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::AssetSocketDerived, ECFVehicleAdoptGroup::Layout, true, false, false},
 			{TEXT("VehicleLayoutConfig.WheelAnchorFR.RelativeLocation"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::AssetSocketDerived, ECFVehicleAdoptGroup::Layout, true, false, false},
 			{TEXT("VehicleLayoutConfig.WheelAnchorFR.RelativeRotation"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::AssetSocketDerived, ECFVehicleAdoptGroup::Layout, true, false, false},
+			{TEXT("VehicleLayoutConfig.WheelAnchorFR.RelativeScale"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::AssetSocketDerived, ECFVehicleAdoptGroup::Layout, true, false, false},
 			{TEXT("VehicleLayoutConfig.WheelAnchorRL.RelativeLocation"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::AssetSocketDerived, ECFVehicleAdoptGroup::Layout, true, false, false},
 			{TEXT("VehicleLayoutConfig.WheelAnchorRL.RelativeRotation"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::AssetSocketDerived, ECFVehicleAdoptGroup::Layout, true, false, false},
+			{TEXT("VehicleLayoutConfig.WheelAnchorRL.RelativeScale"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::AssetSocketDerived, ECFVehicleAdoptGroup::Layout, true, false, false},
 			{TEXT("VehicleLayoutConfig.WheelAnchorRR.RelativeLocation"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::AssetSocketDerived, ECFVehicleAdoptGroup::Layout, true, false, false},
 			{TEXT("VehicleLayoutConfig.WheelAnchorRR.RelativeRotation"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::AssetSocketDerived, ECFVehicleAdoptGroup::Layout, true, false, false},
+			{TEXT("VehicleLayoutConfig.WheelAnchorRR.RelativeScale"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::AssetSocketDerived, ECFVehicleAdoptGroup::Layout, true, false, false},
 
 			{TEXT("HardpointSlots[LocationSlotId=*].LocationSlotId"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::RecipeSemantic, ECFVehicleAdoptGroup::Hardpoints, false, true, false},
 			{TEXT("HardpointSlots[LocationSlotId=*].LocationCategory"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::RecipeSemantic, ECFVehicleAdoptGroup::Hardpoints, false, false, false},
@@ -541,6 +553,7 @@ namespace CFVehicleFieldRegistryPrivate
 			{TEXT("WheelVisualConfig.bUseWheelVisualOverrides"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::DerivedGate, ECFVehicleAdoptGroup::WheelVisual, false, false, false},
 			{TEXT("WheelVisualConfig.ExpectedWheelCount"), ECFVehicleProfileDomain::VehicleBase, ECFVehicleResolveRule::VehicleBaseProfile, ECFVehicleAdoptGroup::WheelVisual, true, false, false},
 			{TEXT("WheelVisualConfig.FrontWheelCountForSteering"), ECFVehicleProfileDomain::VehicleBase, ECFVehicleResolveRule::VehicleBaseProfile, ECFVehicleAdoptGroup::WheelVisual, true, false, false},
+			{TEXT("WheelVisualConfig.bUseWheelSocketScale"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::ProjectDefaultThenRecipeSemantic, ECFVehicleAdoptGroup::WheelVisual, false, false, false},
 			{TEXT("WheelVisualConfig.bAutoScaleWheelMeshToRadius"), ECFVehicleProfileDomain::VehicleBase, ECFVehicleResolveRule::RecipeWheelVisualPolicy, ECFVehicleAdoptGroup::WheelVisual, false, false, false},
 			{TEXT("WheelVisualConfig.WheelMeshRadiusMeasureMode"), ECFVehicleProfileDomain::VehicleBase, ECFVehicleResolveRule::BaseProfileMeasurementPolicy, ECFVehicleAdoptGroup::WheelGeometry, true, false, false},
 			{TEXT("WheelVisualConfig.bAutoCenterWheelMeshBoundsToOrigin"), ECFVehicleProfileDomain::VehicleBase, ECFVehicleResolveRule::VehicleBaseProfile, ECFVehicleAdoptGroup::WheelVisual, true, false, false},
@@ -599,7 +612,7 @@ namespace CFVehicleFieldRegistryPrivate
 	}
 }
 
-// Current P0 descriptor 127개를 canonical 순서로 반환합니다.
+// Current P0 descriptor 132개를 canonical 순서로 반환합니다.
 const TArray<FCFVehicleFieldDescriptor>& FCFVehicleFieldRegistry::GetDescriptors()
 {
 	// 최초 호출 시 한 번 구성되는 immutable descriptor cache입니다.

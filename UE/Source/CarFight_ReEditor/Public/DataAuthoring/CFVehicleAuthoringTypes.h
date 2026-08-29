@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringTypes.h
-// Version: v1.2.0
-// Date: 2026-08-18
-// Description: Vehicle Data Authoring의 Editor-only 공용 계약 타입입니다.
+// Version: v1.3.0
+// Date: 2026-08-28
+// Description: Vehicle Data Authoring의 Editor-only 공용 계약 타입과 WSA Socket Scale semantic mode입니다.
 // Scope: Recipe intent, source/ownership, stable field path/value, import/applied 상태의 저장 계약을 제공합니다.
 // Changelog:
+// - v1.3.0: WSA-P0-01 신규 정상 차량의 USER Wheel Socket Scale authority를 표현하는 SocketScaleFromChassis mode를 기존 enum 뒤 append-only 추가.
 // - v1.2.0: P0-11 External Drift exact 3-way review를 위해 AppliedTrace에 backward-compatible exact LastAppliedValue를 추가.
 // - v1.1.0: P0-10 Measurement UX에서 "검토 안 함"과 "Compatibility Default 유지 확인"을 구분하는 Editor-only adoption metadata를 추가.
 // - v1.0.0: DAUTH-P0-08A Recipe/Profile Foundation용 공용 타입을 최초 구현.
@@ -133,7 +134,8 @@ enum class ECFWheelVisualIntentMode : uint8
 {
 	UseProfilePolicy UMETA(DisplayName="프로파일 정책 사용"),
 	ManualMeshScale UMETA(DisplayName="수동 메시 스케일"),
-	AutoScaleToPhysicsRadius UMETA(DisplayName="물리 반지름 자동 스케일")
+	AutoScaleToPhysicsRadius UMETA(DisplayName="물리 반지름 자동 스케일"),
+	SocketScaleFromChassis UMETA(DisplayName="차체 소켓 스케일 사용")
 };
 
 /** DriveState가 Project Default를 쓸지 차량별 Profile을 쓸지 결정합니다. */

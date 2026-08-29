@@ -1,10 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthTests.cpp
-// Version: v1.12.0
-// Date: 2026-08-27
+// Version: v1.15.0
+// Date: 2026-08-28
 // Description: DAUTH Foundation + CF-FQ-040 VB-P0-07 persistent provenance receipt / post-state guarded Undo hardening Automation입니다.
 // Changelog:
+// - v1.15.0: WSA-P0-04 Gameplay Guidance의 Socket/Manual mode Legacy clamp 제외와 Socket Reference geometry conflict를 focused 검증.
+// - v1.14.0: WSA-P0-01 Registry/Reflection 132 coverage, WheelAnchor RelativeScale descriptor 4개, bUseWheelSocketScale source/dependency와 append-only intent enum을 검증.
+// - v1.13.0: BuilderCommitReceipt가 consumed canonical Claim ID 목록을 보존하고 Editor restart를 가정한 empty-caller Claim set Final Review가 receipt에서 provenance를 복원하는지 검증.
 // - v1.12.0: Final Review provenance를 실제 receipt-only Builder Profile commit으로 준비하고 Claim subset tamper를 차단하며, transaction 밖 post-Apply Target drift가 guarded Undo에서 StateChanged로 차단되는지 검증.
 // - v1.11.0: Final Review가 existing Validation/Drift/Gameplay/Diff와 consumed Evidence provenance를 집계하고 explicit R3 Apply → diff0 → exact transaction guarded Undo → diff restore를 수행하는지 transient-only로 검증.
 // - v1.10.0: NewVehicle USER Socket authority, optional gameplay defaults, Fitting mass와 CompleteExisting stored Hardpoint baseline preservation을 transient-only로 검증.
@@ -37,6 +40,7 @@
 #include "DataAuthoring/CFVehicleImportService.h"
 #include "DataAuthoring/CFVehicleRecipeData.h"
 #include "DataAuthoring/CFVehicleRefEvidence.h"
+#include "DataAuthoring/CFVehicleResolver.h"
 #include "DataAuthoring/CFVehicleSnapshotBuilder.h"
 #include "DataAuthoring/CFVehicleSnapshotTypes.h"
 #include "CFVehicleData.h"
@@ -54,7 +58,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCFVehicleAuthoringRegistryTest,
-	"CarFight.DataAuthoring.CF_FQ_040.VB_P0_05.Foundation.Registry127",
+	"CarFight.DataAuthoring.CF_FQ_040.WSA_P0_01.Foundation.Registry132",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -138,7 +142,7 @@ bool FCFVehicleAuthoringEditorOnlyTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// Current Registry 127개와 Current UCFVehicleData Reflection leaf 127개의 양방향 coverage 및 Builder 추가 descriptor를 검증합니다.
+// Current Registry 132개와 Current UCFVehicleData Reflection leaf 132개의 양방향 coverage 및 WSA 추가 descriptor를 검증합니다.
 bool FCFVehicleAuthoringRegistryTest::RunTest(const FString& Parameters)
 {
 	// Coverage가 발견한 상세 오류 목록입니다.
@@ -192,6 +196,50 @@ bool FCFVehicleAuthoringRegistryTest::RunTest(const FString& Parameters)
 	{
 		return Descriptor.GetCanonicalPattern() == TEXT("VehicleMovementConfig.TransmissionRatios.ReverseGearRatios");
 	}));
+
+	// [v1.14.0] 132-leaf field/hash contract는 기존 127-leaf approval과 구분되는 Resolver revision 3을 사용합니다.
+	TestTrue(TEXT("WSA 132-leaf schema requires Resolver revision 3 or newer"), FCFVehicleResolver::CurrentResolverContractRevision >= 3);
+
+	// [v1.14.0] 기존 enum ordinal을 보존하고 SocketScaleFromChassis를 마지막 값으로 append-only 추가했는지 검증합니다.
+	TestEqual(TEXT("AutoScaleToPhysicsRadius enum ordinal preserved"), static_cast<uint8>(ECFWheelVisualIntentMode::AutoScaleToPhysicsRadius), static_cast<uint8>(2));
+	TestEqual(TEXT("SocketScaleFromChassis enum appended ordinal"), static_cast<uint8>(ECFWheelVisualIntentMode::SocketScaleFromChassis), static_cast<uint8>(3));
+
+	// [v1.14.0] 네 WheelAnchor RelativeScale leaf가 모두 Asset Socket Derived layout field인지 검증합니다.
+	const TCHAR* WheelScalePaths[] =
+	{
+		TEXT("VehicleLayoutConfig.WheelAnchorFL.RelativeScale"),
+		TEXT("VehicleLayoutConfig.WheelAnchorFR.RelativeScale"),
+		TEXT("VehicleLayoutConfig.WheelAnchorRL.RelativeScale"),
+		TEXT("VehicleLayoutConfig.WheelAnchorRR.RelativeScale")
+	};
+	for (const TCHAR* WheelScalePath : WheelScalePaths)
+	{
+		const FCFVehicleFieldDescriptor* WheelScaleDescriptor = FCFVehicleFieldRegistry::GetDescriptors().FindByPredicate([WheelScalePath](const FCFVehicleFieldDescriptor& Descriptor)
+		{
+			return Descriptor.GetCanonicalPattern() == WheelScalePath;
+		});
+		if (TestNotNull(*FString::Printf(TEXT("%s Registry descriptor exists"), WheelScalePath), WheelScaleDescriptor))
+		{
+			TestEqual(*FString::Printf(TEXT("%s uses AssetSocketDerived"), WheelScalePath), WheelScaleDescriptor->ResolveRule, ECFVehicleResolveRule::AssetSocketDerived);
+			TestTrue(*FString::Printf(TEXT("%s depends on Asset.ChassisSockets"), WheelScalePath), WheelScaleDescriptor->RequiredDependencies.Contains(FName(TEXT("Asset.ChassisSockets"))));
+			TestTrue(*FString::Printf(TEXT("%s depends on Recipe.AssetIntent"), WheelScalePath), WheelScaleDescriptor->RequiredDependencies.Contains(FName(TEXT("Recipe.AssetIntent"))));
+		}
+	}
+
+	// [v1.14.0] Socket Scale mode flag는 VehicleBase Profile이 아니라 Project Default + Recipe WheelVisualIntent가 소유합니다.
+	const FCFVehicleFieldDescriptor* WheelSocketScaleModeDescriptor = FCFVehicleFieldRegistry::GetDescriptors().FindByPredicate([](const FCFVehicleFieldDescriptor& Descriptor)
+	{
+		return Descriptor.GetCanonicalPattern() == TEXT("WheelVisualConfig.bUseWheelSocketScale");
+	});
+	if (TestNotNull(TEXT("bUseWheelSocketScale Registry descriptor exists"), WheelSocketScaleModeDescriptor))
+	{
+		TestEqual(TEXT("bUseWheelSocketScale has no Profile owner"), WheelSocketScaleModeDescriptor->PrimaryProfileDomain, ECFVehicleProfileDomain::None);
+		TestEqual(TEXT("bUseWheelSocketScale uses ProjectDefaultThenRecipeSemantic"), WheelSocketScaleModeDescriptor->ResolveRule, ECFVehicleResolveRule::ProjectDefaultThenRecipeSemantic);
+		TestTrue(TEXT("bUseWheelSocketScale depends on Project defaults"), WheelSocketScaleModeDescriptor->RequiredDependencies.Contains(FName(TEXT("Project.CompatibilityDefaults"))));
+		TestTrue(TEXT("bUseWheelSocketScale depends on Recipe.WheelVisualIntent"), WheelSocketScaleModeDescriptor->RequiredDependencies.Contains(FName(TEXT("Recipe.WheelVisualIntent"))));
+		TestFalse(TEXT("bUseWheelSocketScale does not depend on VehicleBase Profile"), WheelSocketScaleModeDescriptor->RequiredDependencies.Contains(FName(TEXT("Profile.VehicleBase"))));
+		TestFalse(TEXT("bUseWheelSocketScale does not depend on DefaultDataIntent"), WheelSocketScaleModeDescriptor->RequiredDependencies.Contains(FName(TEXT("Recipe.DefaultDataIntent"))));
+	}
 
 	for (const FString& CoverageError : CoverageErrors)
 	{
@@ -1027,6 +1075,57 @@ bool FCFVehicleBuilderGameplayGuideTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("VB-P0-06 complete fitting mass is complete"), FittingItem->State, ECFBuilderGuidanceState::Complete);
 	}
 
+	// WSA Socket mode는 VehicleBase에 stale Legacy AutoScale policy/clamp가 남아 있어도 그 값을 blocker로 사용하지 않습니다.
+	Recipe->WheelVisualIntent.Mode = ECFWheelVisualIntentMode::SocketScaleFromChassis;
+	BaseProfile->Data.bUseReferenceWheelGeometry = false;
+	BaseProfile->Data.bAutoScaleWheelMeshToRadius = true;
+	BaseProfile->Data.WheelMeshScaleClampMin = 0.0f;
+	BaseProfile->Data.WheelMeshScaleClampMax = 0.0f;
+	FCFBuilderGameplayGuidanceResult SocketModeResult;
+	if (!TestTrue(TEXT("WSA Socket mode guidance ignores unused legacy clamp"), FCFVehicleAuthoringService::ReadBuilderGameplayGuidance(NewVehicleRequest, SocketModeResult)))
+	{
+		AddError(SocketModeResult.Operation.Message);
+		return false;
+	}
+	const FCFBuilderGameplayGuidanceItem* SocketWheelVisualItem = FindItem(SocketModeResult, ECFBuilderGameplayArea::WheelVisual);
+	if (TestNotNull(TEXT("WSA Socket mode WheelVisual item exists"), SocketWheelVisualItem))
+	{
+		TestEqual(TEXT("WSA Socket mode WheelVisual is Complete despite invalid legacy clamp"), SocketWheelVisualItem->State, ECFBuilderGuidanceState::Complete);
+		TestTrue(TEXT("WSA Socket mode summary exposes USER authority"), SocketWheelVisualItem->Summary.Contains(TEXT("Socket Scale")) || SocketWheelVisualItem->Summary.Contains(TEXT("Socket")));
+	}
+
+	// Manual mode도 legacy auto-scale clamp를 사용하지 않습니다.
+	Recipe->WheelVisualIntent.Mode = ECFWheelVisualIntentMode::ManualMeshScale;
+	FCFBuilderGameplayGuidanceResult ManualModeResult;
+	if (!TestTrue(TEXT("WSA Manual mode guidance ignores unused legacy clamp"), FCFVehicleAuthoringService::ReadBuilderGameplayGuidance(NewVehicleRequest, ManualModeResult)))
+	{
+		AddError(ManualModeResult.Operation.Message);
+		return false;
+	}
+	const FCFBuilderGameplayGuidanceItem* ManualWheelVisualItem = FindItem(ManualModeResult, ECFBuilderGameplayArea::WheelVisual);
+	if (TestNotNull(TEXT("WSA Manual mode WheelVisual item exists"), ManualWheelVisualItem))
+	{
+		TestEqual(TEXT("WSA Manual mode WheelVisual stays Complete"), ManualWheelVisualItem->State, ECFBuilderGuidanceState::Complete);
+	}
+
+	// Socket mode에서 Reference wheel geometry를 다시 authority로 켜면 Guide가 명시적으로 Block해야 합니다.
+	Recipe->WheelVisualIntent.Mode = ECFWheelVisualIntentMode::SocketScaleFromChassis;
+	BaseProfile->Data.bUseReferenceWheelGeometry = true;
+	FCFBuilderGameplayGuidanceResult ReferenceConflictResult;
+	TestTrue(TEXT("WSA Reference conflict guidance read still returns R0 result"), FCFVehicleAuthoringService::ReadBuilderGameplayGuidance(NewVehicleRequest, ReferenceConflictResult));
+	const FCFBuilderGameplayGuidanceItem* ReferenceConflictWheelVisualItem = FindItem(ReferenceConflictResult, ECFBuilderGameplayArea::WheelVisual);
+	if (TestNotNull(TEXT("WSA Reference conflict WheelVisual item exists"), ReferenceConflictWheelVisualItem))
+	{
+		TestEqual(TEXT("WSA Socket mode blocks Reference wheel geometry authority"), ReferenceConflictWheelVisualItem->State, ECFBuilderGuidanceState::Blocked);
+	}
+
+	// 기존 VB-P0-06 hardpoint 회귀가 원래 Profile/Recipe 상태에서 계속 실행되도록 복원합니다.
+	Recipe->WheelVisualIntent.Mode = ECFWheelVisualIntentMode::UseProfilePolicy;
+	BaseProfile->Data.bUseReferenceWheelGeometry = false;
+	BaseProfile->Data.bAutoScaleWheelMeshToRadius = false;
+	BaseProfile->Data.WheelMeshScaleClampMin = 0.25f;
+	BaseProfile->Data.WheelMeshScaleClampMax = 4.0f;
+
 	// USER가 아직 만들지 않은 missing hardpoint Socket 이름으로 semantic binding만 바꿉니다.
 	Recipe->HardpointIntents[0].SocketName = TEXT("HP_Top_01_Missing");
 	// Missing USER Socket을 읽는 NewVehicle guidance 결과입니다.
@@ -1330,6 +1429,7 @@ bool FCFVehicleBuilderFinalReviewTest::RunTest(const FString& Parameters)
 		return false;
 	}
 	TestTrue(TEXT("VB-P0-07 persistent Builder receipt is valid"), Recipe->BuilderCommitReceipt.IsValid());
+	TestEqual(TEXT("VB-P0-07 receipt persists consumed Claim IDs"), Recipe->BuilderCommitReceipt.ConsumedClaimIds.Num(), 3);
 	TestFalse(TEXT("VB-P0-07 receipt-only commit does not mutate Profile payload"), ReceiptCommitResult.Mutation.bProfileChanged);
 	TestTrue(TEXT("VB-P0-07 receipt-only commit records Recipe provenance metadata"), ReceiptCommitResult.Mutation.bRecipeChanged);
 	TestFalse(TEXT("VB-P0-07 receipt-only commit does not save"), ReceiptCommitResult.Mutation.bSavePerformed);
@@ -1366,6 +1466,18 @@ bool FCFVehicleBuilderFinalReviewTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("VB-P0-07 Apply proposal hash is populated"), ReviewResult.ApplyProposal.ProposalHash.IsEmpty());
 	TestFalse(TEXT("VB-P0-07 review does not mutate Target"), ReviewResult.Operation.Mutation.bTargetChanged);
 	TestFalse(TEXT("VB-P0-07 review does not save"), ReviewResult.Operation.Mutation.bSavePerformed);
+
+	// Editor restart 뒤 transient proposal Claim list가 사라진 resume Final Review request입니다.
+	FCFBuilderFinalReviewRequest ResumeReviewRequest = ReviewRequest;
+	ResumeReviewRequest.EvidenceBinding.ConsumedClaimIds.Reset();
+	// Persistent receipt의 canonical Claim list로 복원한 Final Review 결과입니다.
+	FCFBuilderFinalReviewResult ResumeReviewResult;
+	TestTrue(TEXT("VB-P0-07 resume Final Review succeeds with receipt Claim IDs"), FCFVehicleAuthoringService::ReadBuilderFinalReview(ResumeReviewRequest, ResumeReviewResult));
+	TestTrue(TEXT("VB-P0-07 resume provenance is available"), ResumeReviewResult.Provenance.bAvailable);
+	TestEqual(TEXT("VB-P0-07 resume consumed claim count"), ResumeReviewResult.Provenance.ConsumedClaimCount, 3);
+	TestEqual(TEXT("VB-P0-07 resume FACT claim count"), ResumeReviewResult.Provenance.FactClaimCount, 1);
+	TestEqual(TEXT("VB-P0-07 resume DERIVED claim count"), ResumeReviewResult.Provenance.DerivedClaimCount, 1);
+	TestEqual(TEXT("VB-P0-07 resume GAME_BIAS claim count"), ResumeReviewResult.Provenance.GameBiasClaimCount, 1);
 
 	// Evidence binding 없이 provenance를 추측하지 않는 blocker 검증 request입니다.
 	FCFBuilderFinalReviewRequest MissingEvidenceRequest = ReviewRequest;

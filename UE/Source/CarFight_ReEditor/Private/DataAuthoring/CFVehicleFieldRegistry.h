@@ -1,18 +1,19 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleFieldRegistry.h
-// Version: v1.4.0
-// Date: 2026-08-26
-// Description: UCFVehicleData 127 leaf pattern의 P0 Authoring Registry 계약입니다.
+// Version: v1.5.0
+// Date: 2026-08-28
+// Description: UCFVehicleData 132 leaf pattern의 P0 Authoring Registry 계약입니다.
 // Scope: Resolver owner/rule/adoption/override/dependency metadata와 Reflection coverage 검증을 제공합니다.
 // Changelog:
+// - v1.5.0: WSA-P0-01 WheelAnchor RelativeScale 4개와 bUseWheelSocketScale 1개를 추가해 Registry/Reflection coverage를 127→132로 확장.
 // - v1.4.0: VB-P0-05 설계 검수 교정으로 TransmissionRatios를 atomic typed ratio-set 1개로 복원해 coverage를 128→127로 정정.
 // - v1.3.0: CF-FQ-040 VB-P0-05 ChassisWidth + UE 5.8 Transmission 9개 leaf를 추가하고 wheel geometry를 VehicleBase fallback+AssetDerived policy로 승격해 coverage를 118→128로 확장.
 // - v1.2.0: UI-P0-06 explicit RedlineStartRPM schema 추가에 맞춰 bidirectional Registry coverage를 117→118로 확장.
 // - v1.1.0: DAUTH-P0-08C Frozen Section 22.17 RequiredDependencies metadata를 활성화.
 // - v1.0.0: DAUTH-P0-08B 117 leaf Registry와 bidirectional coverage API 최초 구현.
 // Migration:
-// - Runtime UCFVehicleData schema를 변경하지 않고 Reflection으로 current source coverage를 검사합니다.
+// - WSA-P0-01 additive Runtime schema까지 Reflection으로 current source coverage를 검사하며 기존 field rename/delete 없이 leaf를 확장합니다.
 
 #pragma once
 
@@ -56,11 +57,11 @@ struct FCFVehicleFieldDescriptor
 	}
 };
 
-/** Current UCFVehicleData schema와 Current 127 Resolver Map을 연결하는 정적 Registry입니다. */
+/** Current UCFVehicleData schema와 Current 132 Resolver Map을 연결하는 정적 Registry입니다. */
 class FCFVehicleFieldRegistry
 {
 public:
-	// Current P0 descriptor 127개를 canonical 순서로 반환합니다.
+	// Current P0 descriptor 132개를 canonical 순서로 반환합니다.
 	static const TArray<FCFVehicleFieldDescriptor>& GetDescriptors();
 
 	// Current UCFVehicleData Reflection에서 실제 leaf pattern을 재발견합니다.
@@ -70,5 +71,5 @@ public:
 	static bool ValidateCoverage(TArray<FString>& OutErrors);
 
 	// Registry가 가져야 하는 Current P0 leaf pattern 개수입니다.
-	static constexpr int32 ExpectedLeafPatternCount = 127;
+	static constexpr int32 ExpectedLeafPatternCount = 132;
 };

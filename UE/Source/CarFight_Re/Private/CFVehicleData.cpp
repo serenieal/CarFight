@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.19.0
-// Date: 2026-06-25
-// Description: VehicleData 전투 장착 프로파일 보강과 레거시 VehicleMovement 실험값 자동 보정
+// Version: 1.20.0
+// Date: 2026-08-28
+// Description: VehicleData 소켓 캡처가 WSA Wheel Socket RelativeScale까지 보존하도록 확장
 // Scope: CFVehicleData 에디터 캡처, PostLoad 기반 마이그레이션, 프로젝트 기준 기본값 정렬, 에디터 저장 유도
 // Changelog:
+// - v1.20.0: WSA-P0-02 Wheel_Anchor 소켓 캡처에서 StaticMeshSocket RelativeScale을 FCFWheelAnchorPose에 저장.
 // - v1.19.0: Top_01 하드포인트가 있는 기존 자산에 RoofTurret_MediumOrLarge MountProfile을 1회 보강.
 // - v1.18.0: 차체 StaticMesh 소켓에서 HardpointSlots의 선택 캡처 소켓을 LocalTransform으로 기록.
 // - v1.17.0: 프로젝트 기준 VehicleMovement 기본값에 ThrottleInputScale=1.0을 포함.
@@ -274,6 +275,7 @@ namespace CFVehicleDataSocketCapture
 
 		OutWheelAnchorPose.RelativeLocation = MeshSocket->RelativeLocation;
 		OutWheelAnchorPose.RelativeRotation = MeshSocket->RelativeRotation;
+		OutWheelAnchorPose.RelativeScale = MeshSocket->RelativeScale;
 		return true;
 	}
 

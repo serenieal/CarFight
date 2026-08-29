@@ -1,11 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleBuilderTests.cpp
-// Version: v1.0.0
-// Date: 2026-08-27
-// Description: CF-FQ-040 VB-P0-05 Builder companion / private 4-Profile write lane direct focused Automation입니다.
+// Version: v1.2.0
+// Date: 2026-08-28
+// Description: CF-FQ-040 Builder write lane + WSA-P0-04 Wheel Size authority guard focused Automation입니다.
 // Scope: R2 companion creation, baseline preservation, stale/owner/path guards, R1 Profile commit, persistent receipt, stale Evidence/Profile guards, Save0를 직접 검증합니다.
 // Changelog:
+// - v1.2.0: SocketScaleFromChassis에서 unrelated Profile change는 허용하고 Reference wheel geometry 5필드 mutation은 Preview에서 fail-closed 검증.
+// - v1.1.0: VB-P0-09 Step 1 initial Research payload를 Companion flow에 추가하고 empty/GAME_BIAS reject 및 preview→commit Evidence fingerprint exact binding을 검증.
 // - v1.0.0: VB-P0-05 핵심 write facade를 실제 호출하는 direct Automation 2건을 추가.
 // Migration:
 // - 모든 fixture는 in-memory /Temp package만 사용하며 SavePackage를 호출하지 않습니다.
@@ -249,6 +251,54 @@ namespace CFVehicleBuilderTestsPrivate
 		return InOutFixture.Evidence->RefreshEvidenceFingerprint(OutError);
 	}
 
+	// Companion new Evidence에 사용할 최소 canonical FACT Research payload를 구성합니다.
+	FCFVehicleRefEvidencePayload BuildInitialEvidencePayload()
+	{
+		// Initial Evidence에 넣을 complete research payload입니다.
+		FCFVehicleRefEvidencePayload Payload;
+
+		// Exact Primary Reference identity입니다.
+		FCFRefVehicleIdentity& ReferenceVehicle = Payload.ReferenceVehicles.AddDefaulted_GetRef();
+		ReferenceVehicle.ReferenceVehicleId = TEXT("REF-VB-AUTO");
+		ReferenceVehicle.Role = ECFRefVehicleRole::Primary;
+		ReferenceVehicle.Manufacturer = TEXT("CarFightAutomation");
+		ReferenceVehicle.Model = TEXT("BaselineVehicle");
+		ReferenceVehicle.ModelYearStart = 2026;
+		ReferenceVehicle.ModelYearEnd = 2026;
+		ReferenceVehicle.ModelYearQualifier = ECFRefModelYearQualifier::Exact;
+		ReferenceVehicle.MarketRegion = TEXT("TEST");
+		ReferenceVehicle.IdentityConfidence = 0.95f;
+
+		// FACT를 뒷받침하는 exact test citation입니다.
+		FCFRefSourceCitation& Source = Payload.Sources.AddDefaulted_GetRef();
+		Source.SourceId = TEXT("SRC-VB-AUTO");
+		Source.Tier = ECFRefSourceTier::TierA;
+		Source.SourceKind = TEXT("AutomationFixture");
+		Source.Publisher = TEXT("CarFight");
+		Source.DocumentTitle = TEXT("VB Companion Test Evidence");
+		Source.CanonicalUrl = TEXT("https://example.invalid/carfight/vb-companion");
+		Source.ReferenceVehicleIds = {ReferenceVehicle.ReferenceVehicleId};
+		Source.OriginGroupId = TEXT("ORG-VB-AUTO");
+		Source.OriginIndependence = ECFRefOriginIndependence::IndependentOrigin;
+
+		// Baseline mass를 표현하는 canonical FACT claim입니다.
+		FCFRefClaim& FactClaim = Payload.Claims.AddDefaulted_GetRef();
+		FactClaim.ClaimId = TEXT("CLAIM-VB-MASS");
+		FactClaim.ReferenceVehicleId = ReferenceVehicle.ReferenceVehicleId;
+		FactClaim.FactKey = TEXT("CurbMassKg");
+		FactClaim.ValueKind = ECFRefValueKind::Number;
+		FactClaim.NumberValue = 1540.0;
+		FactClaim.UnitId = TEXT("kg");
+		FactClaim.SourceValueText = TEXT("1540 kg");
+		FactClaim.Provenance = ECFRefProvenance::FACT;
+		FactClaim.CitationIds = {Source.SourceId};
+		FactClaim.ConfidenceScore = 0.95f;
+		FactClaim.ResolutionState = ECFRefClaimResolution::Canonical;
+
+		Payload.ResearchNotes = TEXT("Automation-only normalized Research payload.");
+		return Payload;
+	}
+
 	// Current fixture private Profiles/Evidence에서 direct R1 commit request를 만듭니다.
 	FCFBuilderProfileCommitRequest BuildProfileCommitRequest(FBuilderFixture& Fixture)
 	{
@@ -326,6 +376,9 @@ bool FCFVehicleBuilderCompanionFlowTest::RunTest(const FString& Parameters)
 	FCFBuilderCompanionRequest Request;
 	Request.Recipe = Fixture.Recipe;
 	Request.Mode = ECFBuilderCompanionMode::CompleteExisting;
+	Request.bHasInitialEvidencePayload = true;
+	Request.NewEvidenceId = FGuid::NewGuid();
+	Request.InitialEvidencePayload = BuildInitialEvidencePayload();
 	Request.bHasInitialProfilePayload = true;
 	Request.InitialProfilePayload.VehicleBaseData = Fixture.VehicleBase->Data;
 	Request.InitialProfilePayload.DrivetrainData = Fixture.Drivetrain->Data;
@@ -334,6 +387,22 @@ bool FCFVehicleBuilderCompanionFlowTest::RunTest(const FString& Parameters)
 	Request.EvidenceAsset = MakeAssetIdentity(TEXT("CFVBEvidence"), TEXT("DA_VB_Evidence_New"));
 	Request.PerformanceAsset = MakeAssetIdentity(TEXT("CFVBPerformance"), TEXT("DA_VB_Performance_New"));
 	Request.CallContext.CallerKind = ECFAuthoringCallerKind::Automation;
+
+	// Initial Research payload 없이 empty Evidence를 만들려는 mutation0 request입니다.
+	FCFBuilderCompanionRequest EmptyEvidenceRequest = Request;
+	EmptyEvidenceRequest.bHasInitialEvidencePayload = false;
+	// Empty Evidence preview result입니다.
+	FCFBuilderCompanionPreview EmptyEvidencePreview;
+	TestFalse(TEXT("VB-P0-09 empty initial Evidence payload is rejected"), FCFVehicleAuthoringService::PreviewBuilderCompanions(EmptyEvidenceRequest, EmptyEvidencePreview));
+	TestFalse(TEXT("VB-P0-09 empty Evidence rejection performs no mutation"), EmptyEvidencePreview.Operation.Mutation.bCreatedAssets);
+
+	// Initial Research 단계에서 GAME_BIAS를 넣은 mutation0 request입니다.
+	FCFBuilderCompanionRequest GameBiasRequest = Request;
+	GameBiasRequest.InitialEvidencePayload.Claims[0].Provenance = ECFRefProvenance::GAME_BIAS;
+	// GAME_BIAS Research preview result입니다.
+	FCFBuilderCompanionPreview GameBiasPreview;
+	TestFalse(TEXT("VB-P0-09 initial Research GAME_BIAS is rejected"), FCFVehicleAuthoringService::PreviewBuilderCompanions(GameBiasRequest, GameBiasPreview));
+	TestFalse(TEXT("VB-P0-09 GAME_BIAS rejection performs no mutation"), GameBiasPreview.Operation.Mutation.bCreatedAssets);
 
 	// Existing package collision을 강제로 만드는 mutation0 request입니다.
 	FCFBuilderCompanionRequest CollisionRequest = Request;
@@ -352,6 +421,7 @@ bool FCFVehicleBuilderCompanionFlowTest::RunTest(const FString& Parameters)
 		return false;
 	}
 	TestEqual(TEXT("VB-P0-05 CompleteExisting prospective hash preserves baseline"), Preview.ProspectiveResolvedDefinitionHash, Preview.CurrentResolvedDefinitionHash);
+	TestFalse(TEXT("VB-P0-09 prospective Evidence fingerprint is not empty"), Preview.ProspectiveEvidenceFingerprint.IsEmpty());
 	TestFalse(TEXT("VB-P0-05 companion preview does not save"), Preview.Operation.Mutation.bSavePerformed);
 
 	Request.CallContext.ClientOperationId = TEXT("VB-P0-05-Companion-Stale");
@@ -392,6 +462,9 @@ bool FCFVehicleBuilderCompanionFlowTest::RunTest(const FString& Parameters)
 	}
 	TestNotNull(TEXT("VB-P0-05 Evidence companion created"), CommitResult.CreatedEvidence.Get());
 	TestNotNull(TEXT("VB-P0-05 Performance companion created"), CommitResult.CreatedPerformance.Get());
+	TestEqual(TEXT("VB-P0-09 committed Evidence keeps approved fixed EvidenceId"), CommitResult.CreatedEvidence->EvidenceId, Request.NewEvidenceId);
+	TestEqual(TEXT("VB-P0-09 committed Evidence fingerprint matches approved preview"), CommitResult.CreatedEvidence->EvidenceFingerprint, FreshPreview.ProspectiveEvidenceFingerprint);
+	TestEqual(TEXT("VB-P0-09 committed Evidence keeps initial canonical claim"), CommitResult.CreatedEvidence->Claims.Num(), 1);
 	TestTrue(TEXT("VB-P0-05 created Performance is recipe-bound"), Fixture.Recipe->ProfileBindings.PerformanceProfile.Get() == CommitResult.CreatedPerformance.Get());
 	TestEqual(TEXT("VB-P0-05 created Performance owner is Recipe"), CommitResult.CreatedPerformance->Meta.OwnerRecipeId, Fixture.Recipe->RecipeId);
 	TestFalse(TEXT("VB-P0-05 companion commit does not save"), CommitResult.Operation.Mutation.bSavePerformed);
@@ -411,6 +484,8 @@ bool FCFVehicleBuilderCompanionFlowTest::RunTest(const FString& Parameters)
 	CommitResult.CreatedPerformance->Meta.OwnerRecipeId = FGuid::NewGuid();
 	FCFBuilderCompanionRequest ForeignOwnerRequest = Request;
 	ForeignOwnerRequest.ExistingEvidencePath = FSoftObjectPath(CommitResult.CreatedEvidence.Get());
+	ForeignOwnerRequest.bHasInitialEvidencePayload = false;
+	ForeignOwnerRequest.NewEvidenceId.Invalidate();
 	// Foreign owner preview result입니다.
 	FCFBuilderCompanionPreview ForeignOwnerPreview;
 	TestFalse(TEXT("VB-P0-05 foreign-owner companion is rejected"), FCFVehicleAuthoringService::PreviewBuilderCompanions(ForeignOwnerRequest, ForeignOwnerPreview));
@@ -544,6 +619,34 @@ bool FCFVehicleBuilderProfileCommitTest::RunTest(const FString& Parameters)
 		AddError(Error);
 		return false;
 	}
+
+	// WSA Socket mode에서 unrelated Builder Profile field는 계속 proposal 가능해야 합니다.
+	Fixture.Recipe->WheelVisualIntent.Mode = ECFWheelVisualIntentMode::SocketScaleFromChassis;
+	++Fixture.Recipe->AuthoringRevision;
+	FCFBuilderProfileCommitRequest SocketSafeRequest = BuildProfileCommitRequest(Fixture);
+	SocketSafeRequest.Payload.VehicleBaseData.ChassisWidth = Fixture.VehicleBase->Data.ChassisWidth + 0.5f;
+	FCFBuilderProfileCommitPreview SocketSafePreview;
+	if (!TestTrue(TEXT("WSA Socket mode allows unrelated VehicleBase proposal"), FCFVehicleAuthoringService::PreviewBuilderProfiles(SocketSafeRequest, SocketSafePreview)))
+	{
+		AddError(SocketSafePreview.Operation.Message);
+		return false;
+	}
+
+	// AI/Builder가 Socket-owned FrontWheelRadius를 shadow value로 바꾸려 하면 Preview 단계에서 fail-closed해야 합니다.
+	FCFBuilderProfileCommitRequest SocketWheelMutationRequest = BuildProfileCommitRequest(Fixture);
+	SocketWheelMutationRequest.Payload.VehicleBaseData.FrontWheelRadius += 1.0f;
+	FCFBuilderProfileCommitPreview SocketWheelMutationPreview;
+	TestFalse(TEXT("WSA Socket mode blocks FrontWheelRadius profile mutation"), FCFVehicleAuthoringService::PreviewBuilderProfiles(SocketWheelMutationRequest, SocketWheelMutationPreview));
+	TestEqual(TEXT("WSA protected wheel mutation is ValidationBlocked"), SocketWheelMutationPreview.Operation.ErrorCode, ECFAuthoringErrorCode::ValidationBlocked);
+
+	// bUseReferenceWheelGeometry 자체를 켜서 Profile을 다시 Wheel Size authority로 만들려는 proposal도 차단합니다.
+	FCFBuilderProfileCommitRequest SocketReferenceEnableRequest = BuildProfileCommitRequest(Fixture);
+	SocketReferenceEnableRequest.Payload.VehicleBaseData.bUseReferenceWheelGeometry = true;
+	FCFBuilderProfileCommitPreview SocketReferenceEnablePreview;
+	TestFalse(TEXT("WSA Socket mode blocks bUseReferenceWheelGeometry enable"), FCFVehicleAuthoringService::PreviewBuilderProfiles(SocketReferenceEnableRequest, SocketReferenceEnablePreview));
+
+	Fixture.Recipe->WheelVisualIntent.Mode = ECFWheelVisualIntentMode::UseProfilePolicy;
+	++Fixture.Recipe->AuthoringRevision;
 
 	// One private Profile의 owner를 foreign으로 바꿔 shared/legacy fail-closed guard를 검증합니다.
 	const FGuid PerformanceOwnerBefore = Fixture.Performance->Meta.OwnerRecipeId;

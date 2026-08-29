@@ -1,19 +1,24 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleP11VM.cpp
-// Version: v1.1.0
-// Date: 2026-08-18
+// Version: v1.3.0
+// Date: 2026-08-21
 // Description: DAUTH-P0-11~12 Frozen 24.90~24.94 Workspace completeness ViewModel orchestration입니다.
 // Scope: 5-domain Profile binding/open, Shared Profile B2 edit/impact, External Drift reviewed recovery/Keep token, Mesh-only two-record creation과 affected Vehicle navigation을 제공합니다.
 // Changelog:
+// - v1.3.0: P0-12 UA-06 USER UX remediation을 위해 Registry allowlisted Shared Profile numeric field의 current authored 값을 read-only Reflection으로 조회하는 ViewModel helper를 추가.
+// - v1.2.0: P0-12 UA-07 baseline-safe 검증 복구를 위해 selected Domain의 reviewed Recipe-only Profile 연결 해제 route를 추가.
 // - v1.1.0: P0-12 UA-03 USER feedback에 따라 ListProfiles 기반 후보 조회와 existing BindVehicleProfile/Open Profile normal Workspace route를 추가.
 // - v1.0.0: Frozen UX completeness ViewModel route 최초 구현.
 // Migration:
+// - v1.3.0은 current value read-only helper만 추가하며 B2 preview/commit, Recipe binding, Target Apply와 Save 계약은 변경하지 않습니다.
+
 // - 모든 persistent Authoring operation은 FCFVehicleAuthoringService facade만 사용합니다.
 // - Profile write는 existing B2, Drift ownership은 existing Import/Registry Core, Target Apply는 existing Apply lane을 유지합니다.
 
 #include "DataAuthoring/CFVehicleAuthoringVM.h"
 
+#include "DataAuthoring/CFBatchColumnRegistry.h"
 #include "DataAuthoring/CFDriveStateProfile.h"
 #include "DataAuthoring/CFDrivetrainProfile.h"
 #include "DataAuthoring/CFHandlingProfile.h"
@@ -22,6 +27,8 @@
 #include "DataAuthoring/CFVehicleRecipeData.h"
 #include "Editor.h"
 #include "Subsystems/AssetEditorSubsystem.h"
+#include "UObject/UnrealType.h"
+
 
 
 // Current Recipe의 exact bound Profile UObject를 Frozen domain으로 resolve합니다.
@@ -105,6 +112,119 @@ FSoftObjectPath FCFVehicleAuthoringVM::GetBoundProfilePath(const ECFVehicleProfi
 	}
 }
 
+// Current bound Shared Profile의 Registry allowlisted numeric field current authored 값을 read-only로 반환합니다.
+bool FCFVehicleAuthoringVM::ReadBoundProfileNumericValue(
+	const ECFVehicleProfileDomain ProfileDomain,
+	const FString& ColumnId,
+	FString& OutCanonicalValue,
+	FString& OutError) const
+{
+	OutCanonicalValue.Reset();
+	OutError.Reset();
+
+	// Selected Domain의 current bound Shared Profile UObject입니다.
+	UObject* BoundProfile = ResolveBoundProfile(ProfileDomain);
+	if (!BoundProfile)
+	{
+		OutError = TEXT("선택한 프로필 종류에 연결된 Shared Profile이 없습니다.");
+		return false;
+	}
+
+	// Registry authority에서 selected Domain의 editable numeric columns만 가져옵니다.
+	TArray<FCFBatchColumnDescriptor> ProfileColumns;
+	// Registry projection validation diagnostic입니다.
+	TArray<FString> RegistryErrors;
+	if (!FCFBatchColumnRegistry::GetDatasetColumns(
+		ECFBatchDatasetKind::ProfileNumericEdit,
+		ProfileDomain,
+		ProfileColumns,
+		RegistryErrors))
+	{
+		OutError = RegistryErrors.IsEmpty() ? TEXT("Shared Profile 숫자 항목 Registry를 읽지 못했습니다.") : RegistryErrors[0];
+		return false;
+	}
+
+	// Caller가 선택한 exact stable ColumnId descriptor입니다.
+	const FCFBatchColumnDescriptor* Descriptor = ProfileColumns.FindByPredicate([&ColumnId](const FCFBatchColumnDescriptor& Candidate)
+	{
+		return Candidate.ColumnId == ColumnId;
+	});
+	if (!Descriptor
+		|| Descriptor->Access != ECFBatchColumnAccess::Editable
+		|| Descriptor->AuthoringOwner != ECFBatchAuthoringOwner::Profile
+		|| Descriptor->TypedMutationKind != ECFBatchMutationKind::ProfileNumericLeaf)
+	{
+		OutError = FString::Printf(TEXT("선택한 항목은 현재 프로필 종류에서 편집 가능한 숫자 항목이 아닙니다: %s"), *ColumnId);
+		return false;
+	}
+
+	// Registry descriptor가 소유한 exact reflected property path입니다. 예: Data.RedlineStartRPM.
+	TArray<FString> PropertyParts;
+	Descriptor->PropertyOrSemanticTarget.ParseIntoArray(PropertyParts, TEXT("."), true);
+	if (PropertyParts.IsEmpty())
+	{
+		OutError = FString::Printf(TEXT("프로필 숫자 항목의 reflected path가 비어 있습니다: %s"), *ColumnId);
+		return false;
+	}
+
+	// 현재 reflected property를 찾을 struct/class입니다.
+	const UStruct* CurrentStruct = BoundProfile->GetClass();
+	// 현재 reflected property storage를 소유하는 container address입니다.
+	const void* CurrentContainer = BoundProfile;
+	for (int32 PartIndex = 0; PartIndex < PropertyParts.Num(); ++PartIndex)
+	{
+		// 현재 path segment에 해당하는 reflected property입니다.
+		const FProperty* Property = FindFProperty<FProperty>(CurrentStruct, FName(*PropertyParts[PartIndex]));
+		if (!Property)
+		{
+			OutError = FString::Printf(TEXT("프로필 숫자 항목의 reflected property를 찾지 못했습니다: %s"), *Descriptor->PropertyOrSemanticTarget);
+			return false;
+		}
+
+		// 현재 property의 actual value storage입니다.
+		const void* ValueAddress = Property->ContainerPtrToValuePtr<void>(CurrentContainer);
+		if (PartIndex == PropertyParts.Num() - 1)
+		{
+			// Terminal property가 bool/enum이 아닌 plain numeric scalar인지 검증합니다.
+			const FNumericProperty* NumericProperty = CastField<FNumericProperty>(Property);
+			if (!NumericProperty || CastField<FBoolProperty>(Property) || CastField<FEnumProperty>(Property))
+			{
+				OutError = FString::Printf(TEXT("선택한 프로필 항목이 plain numeric leaf가 아닙니다: %s"), *ColumnId);
+				return false;
+			}
+			// Enum-backed byte는 숫자 직접 편집 대상에서 제외합니다.
+			const FByteProperty* ByteProperty = CastField<FByteProperty>(Property);
+			if (ByteProperty && ByteProperty->Enum)
+			{
+				OutError = FString::Printf(TEXT("선택한 프로필 항목은 enum-backed numeric이라 직접 편집할 수 없습니다: %s"), *ColumnId);
+				return false;
+			}
+
+			Property->ExportTextItem_Direct(OutCanonicalValue, ValueAddress, nullptr, nullptr, PPF_None);
+			OutCanonicalValue = OutCanonicalValue.TrimStartAndEnd();
+			if (OutCanonicalValue.IsEmpty())
+			{
+				OutError = FString::Printf(TEXT("프로필 숫자 항목의 현재 값을 직렬화하지 못했습니다: %s"), *ColumnId);
+				return false;
+			}
+			return true;
+		}
+
+		// Terminal 이전 segment는 nested struct여야 다음 path segment로 진행할 수 있습니다.
+		const FStructProperty* StructProperty = CastField<FStructProperty>(Property);
+		if (!StructProperty || !StructProperty->Struct)
+		{
+			OutError = FString::Printf(TEXT("프로필 숫자 항목 path 중간 segment가 struct가 아닙니다: %s"), *Descriptor->PropertyOrSemanticTarget);
+			return false;
+		}
+		CurrentStruct = StructProperty->Struct;
+		CurrentContainer = ValueAddress;
+	}
+
+	OutError = FString::Printf(TEXT("프로필 숫자 항목 path가 terminal property 없이 끝났습니다: %s"), *Descriptor->PropertyOrSemanticTarget);
+	return false;
+}
+
 // Existing Profile asset을 reviewed R1 BindVehicleProfile semantic write로 Recipe에만 연결합니다.
 bool FCFVehicleAuthoringVM::CommitProfileBinding(
 	const ECFVehicleProfileDomain ProfileDomain,
@@ -116,6 +236,18 @@ bool FCFVehicleAuthoringVM::CommitProfileBinding(
 	Change.Operation = ECFVehicleSemanticOp::BindVehicleProfile;
 	Change.ProfileDomain = ProfileDomain;
 	Change.ProfileAssetPath = ProfilePath;
+	return CommitSemanticChange(Change, OutResult);
+}
+
+// Current selected Domain의 Profile binding을 reviewed R1 UnbindVehicleProfile semantic write로 Recipe에서만 해제합니다.
+bool FCFVehicleAuthoringVM::CommitProfileUnbinding(
+	const ECFVehicleProfileDomain ProfileDomain,
+	FCFAuthoringOpResult& OutResult)
+{
+	// Profile UObject와 Target VehicleData를 건드리지 않는 explicit Recipe-only unbind command입니다.
+	FCFVehicleSemanticChange Change;
+	Change.Operation = ECFVehicleSemanticOp::UnbindVehicleProfile;
+	Change.ProfileDomain = ProfileDomain;
 	return CommitSemanticChange(Change, OutResult);
 }
 

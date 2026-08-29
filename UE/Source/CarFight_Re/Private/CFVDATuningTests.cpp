@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.2.0
-// Date: 2026-08-15
-// Description: CF-FQ-015 VD-P0-01 Validator, VD-P0-02 Compare, VD-P0-03 Runtime Apply 계약 자동화 테스트
+// Version: 1.3.0
+// Date: 2026-08-28
+// Description: CF-FQ-015 VehicleData + WSA-P0-04 Wheel Size authority Validator/Runtime 계약 자동화 테스트
 // Scope: Transient UCFVehicleData만 사용해 Movement flag, 피팅 질량, MountProfile↔Hardpoint와 Wheel auto-scale 검증 계약을 고정합니다.
 // Changelog:
+// - v1.3.0: SocketScale/Legacy AutoScale conflict, invalid X/Z scale, axle mismatch와 Socket mode Legacy clamp 비적용 검증 추가.
 // - v1.2.0: 실제 ACFVehiclePawn의 ApplyVehicleDataConfig를 호출해 bUseMovementOverrides=false에서도 핵심 Movement 값이 적용되고 DriveState override on/off가 보존되는 VD-P0-03 RuntimeApplyContract를 추가.
 // - v1.1.0: CarFight.VehicleData.VD_P0_02.RepresentativeCompare를 추가해 Movement/WheelVisual/Fitting mass 비교 FieldPath를 결정론적으로 검증.
 // - v1.0.0: CarFight.VehicleData.VD_P0_01.ValidatorContract 최초 추가.
@@ -171,7 +172,33 @@ bool FCFVDATuningValidatorContractTest::RunTest(const FString& Parameters)
 	WheelVisualReport = UCFVDAValidator::ValidateWheelVisualConfig(VehicleData);
 	TestTrue(TEXT("Auto-scale FrontWheelRadius 0 Error"), HasValidationItem(WheelVisualReport, TEXT("VehicleMovementConfig.FrontWheelRadius"), ECFVDASeverity::Error));
 
-		return true;
+	// WSA Socket Scale과 Legacy AutoScale의 동시 활성화는 두 authority가 충돌하므로 명시 Error입니다.
+	VehicleData->WheelVisualConfig.bUseWheelSocketScale = true;
+	WheelVisualReport = UCFVDAValidator::ValidateWheelVisualConfig(VehicleData);
+	TestTrue(TEXT("Socket Scale + Legacy AutoScale conflict Error"), HasValidationItem(WheelVisualReport, TEXT("WheelVisualConfig.bUseWheelSocketScale / bAutoScaleWheelMeshToRadius"), ECFVDASeverity::Error));
+
+	// Socket mode에서는 Legacy clamp/radius를 사용하지 않고 authored Socket Scale만 검증합니다.
+	VehicleData->WheelVisualConfig.bAutoScaleWheelMeshToRadius = false;
+	VehicleData->WheelVisualConfig.WheelMeshScaleClampMin = 0.0f;
+	VehicleData->WheelVisualConfig.WheelMeshScaleClampMax = 0.0f;
+	VehicleData->VehicleLayoutConfig.WheelAnchorFL.RelativeScale = FVector(0.72, 1.12, 0.72);
+	VehicleData->VehicleLayoutConfig.WheelAnchorFR.RelativeScale = FVector(0.72, 1.12, 0.72);
+	VehicleData->VehicleLayoutConfig.WheelAnchorRL.RelativeScale = FVector(0.80, 1.00, 0.80);
+	VehicleData->VehicleLayoutConfig.WheelAnchorRR.RelativeScale = FVector(0.80, 1.00, 0.80);
+	WheelVisualReport = UCFVDAValidator::ValidateWheelVisualConfig(VehicleData);
+	TestFalse(TEXT("Socket mode ignores unused legacy clamp min"), HasValidationItem(WheelVisualReport, TEXT("WheelVisualConfig.WheelMeshScaleClampMin"), ECFVDASeverity::Error));
+	TestFalse(TEXT("Socket mode ignores legacy FrontWheelRadius validation"), HasValidationItem(WheelVisualReport, TEXT("VehicleMovementConfig.FrontWheelRadius"), ECFVDASeverity::Error));
+
+	VehicleData->VehicleLayoutConfig.WheelAnchorFL.RelativeScale = FVector(0.72, 1.12, 0.70);
+	WheelVisualReport = UCFVDAValidator::ValidateWheelVisualConfig(VehicleData);
+	TestTrue(TEXT("Socket mode X/Z mismatch Error"), HasValidationItem(WheelVisualReport, TEXT("VehicleLayoutConfig.WheelAnchorFL.RelativeScale"), ECFVDASeverity::Error));
+
+	VehicleData->VehicleLayoutConfig.WheelAnchorFL.RelativeScale = FVector(0.72, 1.12, 0.72);
+	VehicleData->VehicleLayoutConfig.WheelAnchorFR.RelativeScale = FVector(0.72, 1.20, 0.72);
+	WheelVisualReport = UCFVDAValidator::ValidateWheelVisualConfig(VehicleData);
+	TestTrue(TEXT("Socket mode front axle mismatch Error"), HasValidationItem(WheelVisualReport, TEXT("VehicleLayoutConfig.WheelAnchorFL/FR.RelativeScale"), ECFVDASeverity::Error));
+
+	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(

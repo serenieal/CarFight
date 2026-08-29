@@ -1,15 +1,17 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringP10.cpp
-// Version: v1.2.0
-// Date: 2026-08-18
+// Version: v1.3.0
+// Date: 2026-08-20
 // Description: DAUTH-P0-10~12 Existing Wizard Migration / Frozen adoption parity page 구현입니다.
 // Changelog:
+// - v1.3.0: P0-12 UA-07 Technical Readiness에서 Driving Feel의 Recipe→Preview→Target 분리 설명과 4축 저장/프리셋 실패 feedback을 보강. Core/Resolver/Preset semantic 변경 0.
 // - v1.2.0: P0-12 UA-01 사용자 피드백에 따라 Assets/Layout, Driving Feel, Mount/Compare 사용자 문구를 한국어 우선으로 정리.
 // - v1.1.0: Frozen 24.90 Existing Import completeness를 위해 Handling/Performance Adoption normal Workspace 버튼 추가.
 // - v1.0.0: Frozen Section 24 P0-10 parity UI 최초 구현.
 // Migration:
 // - Authoring 동작은 FCFVehicleAuthoringVM을 통해 Common Authoring facade를 사용합니다.
+// - Driving Feel 프리셋은 기존 exact Recipe 4축 shortcut을 유지하며 Target 직접 변경이나 자동 저장을 추가하지 않습니다.
 // - 기존 SCFVDAWizardTab은 별도로 유지하며 Batch main page는 추가하지 않습니다.
 
 #include "DataAuthoring/CFVehicleAuthoringTab.h"
@@ -229,13 +231,13 @@ TSharedRef<SWidget> SCFVehicleAuthoringTab::BuildDrivingFeelPage()
 	AddFeelSlider(TEXT("접지감"), GripSlider, &PendingGripFeel);
 	AddFeelSlider(TEXT("서스펜션 단단함"), SuspensionSlider, &PendingSuspensionFirmness);
 
-	Root->AddSlot().AutoHeight().Padding(4.0f)
+				Root->AddSlot().AutoHeight().Padding(4.0f)
 	[
 		SNew(SButton).Text(FText::FromString(TEXT("4축 주행감 저장"))).OnClicked(this, &SCFVehicleAuthoringTab::HandleCommitDrivingFeel)
 	];
 	Root->AddSlot().AutoHeight().Padding(4.0f, 12.0f, 4.0f, 4.0f)
 	[
-		SNew(STextBlock).Text(FText::FromString(TEXT("차량 유형 프리셋 — 공유 프로필을 바꾸지 않고 4축 주행감 값만 빠르게 설정합니다.")))
+		SNew(STextBlock).Text(FText::FromString(TEXT("차량 유형 프리셋 — 레시피의 4축 값만 한 번에 바꿉니다. 공유 프로필과 차량 데이터는 자동으로 바뀌지 않습니다."))).AutoWrapText(true)
 	];
 	Root->AddSlot().AutoHeight().Padding(4.0f)
 	[
@@ -383,7 +385,15 @@ FReply SCFVehicleAuthoringTab::HandleCommitDrivingFeel()
 	Patch.SuspensionFirmness = PendingSuspensionFirmness;
 	// Typed Recipe semantic result입니다.
 	FCFAuthoringOpResult CommitResult;
-	ViewModel->CommitDrivingFeel(Patch, CommitResult);
+	if (!ViewModel->CommitDrivingFeel(Patch, CommitResult))
+	{
+		FMessageDialog::Open(
+			EAppMsgType::Ok,
+			FText::FromString(FString::Printf(
+				TEXT("4축 주행감 저장에 실패했습니다.\n\n%s"),
+				CommitResult.Message.IsEmpty() ? TEXT("현재 레시피 상태와 적용 가능한 프로필을 확인하세요.") : *CommitResult.Message)));
+		return FReply::Handled();
+	}
 	SyncEditableFieldsFromSelection();
 	return FReply::Handled();
 }
@@ -397,7 +407,15 @@ FReply SCFVehicleAuthoringTab::HandleDrivingFeelPreset(const FName PresetId)
 	}
 	// Preset semantic result입니다.
 	FCFAuthoringOpResult CommitResult;
-	ViewModel->CommitDrivingFeelPreset(PresetId, CommitResult);
+	if (!ViewModel->CommitDrivingFeelPreset(PresetId, CommitResult))
+	{
+		FMessageDialog::Open(
+			EAppMsgType::Ok,
+			FText::FromString(FString::Printf(
+				TEXT("차량 유형 프리셋 적용에 실패했습니다.\n\n%s"),
+				CommitResult.Message.IsEmpty() ? TEXT("현재 레시피 상태와 적용 가능한 프로필을 확인하세요.") : *CommitResult.Message)));
+		return FReply::Handled();
+	}
 	SyncEditableFieldsFromSelection();
 	return FReply::Handled();
 }
@@ -625,7 +643,7 @@ FText SCFVehicleAuthoringTab::GetDrivingFeelText() const
 	// Current persistent 4-axis semantic intent입니다.
 	const FCFVehicleFeelIntent& Feel = ViewModel->GetRecipe()->DrivingFeelIntent;
 	return FText::FromString(FString::Printf(
-		TEXT("4축 주행감\n가속 반응 %.2f | 조향 민첩성 %.2f | 접지감 %.2f | 서스펜션 단단함 %.2f\n\n슬라이더를 움직이는 동안에는 임시값이며 '4축 주행감 저장'을 눌러야 레시피에 반영됩니다."),
+		TEXT("4축 주행감\n가속 반응 %.2f | 조향 민첩성 %.2f | 접지감 %.2f | 서스펜션 단단함 %.2f\n\n슬라이더를 움직이는 동안에는 임시값입니다. '4축 주행감 저장'을 누르면 레시피만 변경되고 새 미리보기의 변경점이 갱신됩니다. 차량 데이터는 별도 적용 전까지 바뀌지 않습니다."),
 		Feel.AccelerationFeel, Feel.SteeringAgility, Feel.GripFeel, Feel.SuspensionFirmness));
 }
 

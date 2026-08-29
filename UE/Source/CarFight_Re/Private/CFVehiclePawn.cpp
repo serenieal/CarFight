@@ -1,9 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.158.0
-// Date: 2026-08-26
-// Description: CarFight 싱글플레이 차량 Pawn 구현 / CF-FQ-040 VB-P0-05 UE 5.8 complete Movement setup fail-closed 적용
+// Version: 2.160.0
+// Date: 2026-08-28
+// Description: CarFight 싱글플레이 차량 Pawn 구현 / WSA-P0-03 Socket-authored Wheel_Mesh scale + FL mesh fallback
 // Changelog:
+// - v2.160.0: WSA-P0-03 Socket mode에서 Wheel_Mesh_*에 USER RelativeScale을 exact set하고 FR/RL/RR null mesh는 FL을 fallback. Legacy AutoScale과 이중 적용하지 않음.
+// - v2.159.0: WSA-P0-02 Pawn legacy socket capture가 component/world scale 대신 underlying UStaticMeshSocket::RelativeScale을 FCFWheelAnchorPose에 보존.
 // - v2.158.0: VB-P0-05 설계 검수 교정으로 invalid Chassis/Transmission을 다른 Movement 값보다 먼저 거부해 partial runtime mutation을 제거하고 Shift RPM integer semantic을 runtime에서도 검증.
 // - v2.157.0: VehicleMovementConfig의 ChassisWidth와 complete TransmissionSetup을 적용하고 setup-time 값이 live physics와 달라질 때만 선/각속도를 보존한 PhysicsState 재생성을 수행. ReverseGearRatios는 positive magnitude를 그대로 전달하며 음수/0 ratio는 runtime에서도 fail-closed로 거부.
 // - v2.156.0: VehicleData의 유효한 PrimaryAssetId.PrimaryAssetName을 차량 안정 TargetId로 사용. Actor instance GetFName/GetName은 Identity source에서 제외하고 Player-facing DisplayName은 명시 source가 없으면 Empty 유지. VehicleData/PrimaryAssetId가 없으면 TargetId=None으로 fail-closed.
@@ -208,6 +210,7 @@
 #include "CFWeaponData.h"
 #include "CFVehicleWeaponComp.h"
 #include "CFWheelSyncComp.h"
+#include "CFWheelSizeUtils.h"
 #include "CarFightVehicleUtils.h"
 #include "UI/CFAimReticleWidget.h"
 #include "UI/CFTargetSelectWidget.h"
@@ -215,6 +218,8 @@
 
 #include "ChaosVehicleWheel.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshSocket.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -511,10 +516,11 @@ namespace
 		return true;
 	}
 
-	// [v2.102.0] Wheel_Mesh_* 컴포넌트에 메시를 넣고 옵션이 켜진 경우 WheelRadius 기준 표시 스케일을 적용합니다.
+	// [v2.160.0] Wheel_Mesh_* 컴포넌트에 effective mesh를 넣고 Socket-authored 또는 Legacy AutoScale 중 정확히 한 scale authority만 적용합니다.
 	void ApplyWheelMeshVisualConfigToComponent(
 		UStaticMeshComponent* WheelMeshComponent,
 		UStaticMesh* WheelMesh,
+		const FVector& WheelSocketScale,
 		const float TargetWheelRadiusCm,
 		const FCFVehicleWheelVisualConfig& WheelVisualConfig,
 		FString& InOutScaleSummary)
@@ -526,13 +532,34 @@ namespace
 
 		WheelMeshComponent->SetStaticMesh(WheelMesh);
 
+		// 현재 처리 중인 Wheel_Mesh_* 컴포넌트의 표시 이름입니다.
+		const FString WheelMeshComponentName = WheelMeshComponent->GetName();
+
+		if (WheelVisualConfig.bUseWheelSocketScale)
+		{
+			if (!WheelMesh)
+			{
+				AppendWheelMeshAutoScaleSummary(InOutScaleSummary, FString::Printf(TEXT("%s=SocketScaleMeshMissing"), *WheelMeshComponentName));
+				return;
+			}
+
+			FString SocketScaleError;
+			if (!FCFWheelSizeUtils::ValidateWheelSocketScale(WheelSocketScale, SocketScaleError))
+			{
+				AppendWheelMeshAutoScaleSummary(InOutScaleSummary, FString::Printf(TEXT("%s=InvalidSocketScale(%s)"), *WheelMeshComponentName, *SocketScaleError));
+				return;
+			}
+
+			// USER가 Chassis Socket에서 결정한 scale을 Wheel_Mesh에 그대로 적용합니다. Clamp/AutoCenter/Radius 재계산을 하지 않습니다.
+			WheelMeshComponent->SetRelativeScale3D(WheelSocketScale);
+			AppendWheelMeshAutoScaleSummary(InOutScaleSummary, FString::Printf(TEXT("%s=SocketScale %s"), *WheelMeshComponentName, *WheelSocketScale.ToCompactString()));
+			return;
+		}
+
 		if (!WheelVisualConfig.bAutoScaleWheelMeshToRadius)
 		{
 			return;
 		}
-
-		// [v2.102.0] 현재 처리 중인 Wheel_Mesh_* 컴포넌트의 표시 이름입니다.
-		const FString WheelMeshComponentName = WheelMeshComponent->GetName();
 
 		if (!WheelMesh)
 		{
@@ -711,6 +738,15 @@ namespace
 
 		OutWheelAnchorPose.RelativeLocation = CapturedRelativeTransform.GetLocation();
 		OutWheelAnchorPose.RelativeRotation = CapturedRelativeTransform.Rotator();
+
+		// WSA 타이어 크기 Authority는 Body component/world scale이 아니라 StaticMesh asset에 USER가 작성한 socket local scale입니다.
+		const UStaticMeshSocket* BodyMeshSocket = BodyMeshComponent->GetStaticMesh()->FindSocket(BodySocketName);
+		if (!BodyMeshSocket)
+		{
+			AppendWheelLayoutCaptureFailure(InOutFailureSummary, FString::Printf(TEXT("SocketObjectMissing=%s"), *BodySocketName.ToString()));
+			return false;
+		}
+		OutWheelAnchorPose.RelativeScale = BodyMeshSocket->RelativeScale;
 		return true;
 	}
 
@@ -3636,38 +3672,49 @@ void ACFVehiclePawn::ApplyVehicleWheelVisualConfig()
 	// [v2.102.0] VehicleData 기준 휠 메시 참조 설정입니다.
 	const FCFVehicleVisualConfig& VehicleVisualConfig = VehicleData->VehicleVisualConfig;
 
-	// [v2.102.0] 휠 메시 자동 스케일 목표 반지름을 제공하는 이동 설정입니다.
+	// [v2.102.0] Legacy 휠 메시 자동 스케일 목표 반지름을 제공하는 이동 설정입니다.
 	const FCFVehicleMovementConfig& VehicleMovementConfig = VehicleData->VehicleMovementConfig;
+
+	// [v2.160.0] USER Wheel Socket Scale을 제공하는 저장 레이아웃 설정입니다. Scale은 Wheel_Mesh에만 사용합니다.
+	const FCFVehicleLayoutConfig& VehicleLayoutConfig = VehicleData->VehicleLayoutConfig;
+
+	// [v2.160.0] FR/RL/RR이 비어 있으면 공용 FL mesh를 재사용하는 effective mesh 참조입니다.
+	UStaticMesh* EffectiveWheelMeshFL = VehicleVisualConfig.WheelMeshFL;
+	UStaticMesh* EffectiveWheelMeshFR = VehicleVisualConfig.WheelMeshFR ? VehicleVisualConfig.WheelMeshFR.Get() : EffectiveWheelMeshFL;
+	UStaticMesh* EffectiveWheelMeshRL = VehicleVisualConfig.WheelMeshRL ? VehicleVisualConfig.WheelMeshRL.Get() : EffectiveWheelMeshFL;
+	UStaticMesh* EffectiveWheelMeshRR = VehicleVisualConfig.WheelMeshRR ? VehicleVisualConfig.WheelMeshRR.Get() : EffectiveWheelMeshFL;
 
 	// VehicleData 기준 WheelSync 기본 설정값을 반영합니다.
 	WheelSyncComp->ExpectedWheelCount = WheelVisualConfig.ExpectedWheelCount;
 	WheelSyncComp->FrontWheelCountForSteering = WheelVisualConfig.FrontWheelCountForSteering;
 
-	// [v2.102.0] 런타임 요약에 남길 휠 메시 자동 스케일 적용 결과입니다.
-	FString WheelMeshAutoScaleSummary = WheelVisualConfig.bAutoScaleWheelMeshToRadius ? TEXT("AutoScale=On") : TEXT("AutoScale=Off");
+	// [v2.160.0] 런타임 요약에 남길 현재 Wheel Size 시각 authority입니다. Socket mode가 Legacy AutoScale보다 우선합니다.
+	FString WheelMeshAutoScaleSummary = WheelVisualConfig.bUseWheelSocketScale
+		? TEXT("SocketScale=On")
+		: (WheelVisualConfig.bAutoScaleWheelMeshToRadius ? TEXT("AutoScale=On") : TEXT("ScaleAuthority=Manual"));
 
 	// 앞왼쪽 휠 메시 컴포넌트에 VehicleData의 FL 휠 메시를 적용합니다.
 	if (UStaticMeshComponent* WheelMeshFLComp = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_FL")))
 	{
-		ApplyWheelMeshVisualConfigToComponent(WheelMeshFLComp, VehicleVisualConfig.WheelMeshFL, VehicleMovementConfig.FrontWheelRadius, WheelVisualConfig, WheelMeshAutoScaleSummary);
+		ApplyWheelMeshVisualConfigToComponent(WheelMeshFLComp, EffectiveWheelMeshFL, VehicleLayoutConfig.WheelAnchorFL.RelativeScale, VehicleMovementConfig.FrontWheelRadius, WheelVisualConfig, WheelMeshAutoScaleSummary);
 	}
 
 	// 앞오른쪽 휠 메시 컴포넌트에 VehicleData의 FR 휠 메시를 적용합니다.
 	if (UStaticMeshComponent* WheelMeshFRComp = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_FR")))
 	{
-		ApplyWheelMeshVisualConfigToComponent(WheelMeshFRComp, VehicleVisualConfig.WheelMeshFR, VehicleMovementConfig.FrontWheelRadius, WheelVisualConfig, WheelMeshAutoScaleSummary);
+		ApplyWheelMeshVisualConfigToComponent(WheelMeshFRComp, EffectiveWheelMeshFR, VehicleLayoutConfig.WheelAnchorFR.RelativeScale, VehicleMovementConfig.FrontWheelRadius, WheelVisualConfig, WheelMeshAutoScaleSummary);
 	}
 
 	// 뒤왼쪽 휠 메시 컴포넌트에 VehicleData의 RL 휠 메시를 적용합니다.
 	if (UStaticMeshComponent* WheelMeshRLComp = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_RL")))
 	{
-		ApplyWheelMeshVisualConfigToComponent(WheelMeshRLComp, VehicleVisualConfig.WheelMeshRL, VehicleMovementConfig.RearWheelRadius, WheelVisualConfig, WheelMeshAutoScaleSummary);
+		ApplyWheelMeshVisualConfigToComponent(WheelMeshRLComp, EffectiveWheelMeshRL, VehicleLayoutConfig.WheelAnchorRL.RelativeScale, VehicleMovementConfig.RearWheelRadius, WheelVisualConfig, WheelMeshAutoScaleSummary);
 	}
 
 	// 뒤오른쪽 휠 메시 컴포넌트에 VehicleData의 RR 휠 메시를 적용합니다.
 	if (UStaticMeshComponent* WheelMeshRRComp = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_RR")))
 	{
-		ApplyWheelMeshVisualConfigToComponent(WheelMeshRRComp, VehicleVisualConfig.WheelMeshRR, VehicleMovementConfig.RearWheelRadius, WheelVisualConfig, WheelMeshAutoScaleSummary);
+		ApplyWheelMeshVisualConfigToComponent(WheelMeshRRComp, EffectiveWheelMeshRR, VehicleLayoutConfig.WheelAnchorRR.RelativeScale, VehicleMovementConfig.RearWheelRadius, WheelVisualConfig, WheelMeshAutoScaleSummary);
 	}
 
 	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: WheelVisual ExpectedWheelCount=%d, FrontWheelCount=%d, %s"), WheelSyncComp->ExpectedWheelCount, WheelSyncComp->FrontWheelCountForSteering, *WheelMeshAutoScaleSummary);

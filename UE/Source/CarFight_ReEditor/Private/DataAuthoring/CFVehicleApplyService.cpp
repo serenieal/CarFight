@@ -1,14 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleApplyService.cpp
-// Version: v1.1.0
+// Version: v1.2.0
 // Date: 2026-08-18
 // Description: DAUTH-P0-08H~P0-11 TOCTOU-safe Vehicle Definition Apply Transaction 구현입니다.
 // Scope: Fresh precondition, dependency-safe exact diff, transient preflight, Validator/hash readback, AppliedState exact value trace, rollback/no-auto-save를 제공합니다.
 // Changelog:
+// - v1.2.0: P0-12 UA-06 readiness에서 Definition Apply transaction에 explicit CarFight context + Target PrimaryObject metadata를 부여해 Workspace Undo ownership 검증을 지원.
 // - v1.1.0: Frozen 24.59 3-way Drift review를 위해 AppliedTrace에 exact typed LastAppliedValue를 추가하되 기존 hash authority를 유지.
 // - v1.0.0: Frozen Section 22.33~22.35 A0~A14 Apply lane 최초 구현.
 // Migration:
+// - v1.2.0은 Editor transaction metadata만 추가하며 Asset/Runtime schema migration은 없습니다.
 // - Runtime UCFVehicleData schema와 UCFVDAValidator source는 수정하지 않습니다.
 // - R14 Foundation의 remove-array 미표현은 Apply plan에서 current-vs-resolved selector 차이로 deterministic 보완하며 Source/Resolver 의미는 변경하지 않습니다.
 
@@ -918,8 +920,12 @@ bool FCFVehicleApplyService::ApplyInternal(
 		return false;
 	}
 
-	// A4 Target + Recipe AppliedState를 하나로 묶는 Editor transaction입니다.
-	FScopedTransaction ApplyTransaction(NSLOCTEXT("CarFightDataAuthoring", "ApplyResolvedVehicleDefinition", "해석된 차량 Definition 적용"));
+					// A4 Target + Recipe AppliedState를 하나로 묶고 Workspace ownership metadata를 명시하는 Editor transaction입니다.
+	FScopedTransaction ApplyTransaction(
+		TEXT("CarFight.VehicleAuthoring.DefinitionApply"),
+		NSLOCTEXT("CarFightDataAuthoring", "ApplyResolvedVehicleDefinition", "해석된 차량 Definition 적용"),
+		Request.TargetVehicleData,
+		true);
 	// A5 Target object transaction snapshot 등록입니다.
 	Request.TargetVehicleData->Modify();
 	// A6 Recipe object transaction snapshot 등록입니다.

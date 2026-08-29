@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.154.0
-// Date: 2026-08-22
-// Description: CarFight 싱글플레이 차량 Pawn 기준 클래스 / post-closure Target Identity 안정화
+// Version: 2.155.0
+// Date: 2026-08-28
+// Description: CarFight 싱글플레이 차량 Pawn 기준 클래스 / WSA-P0-03 Runtime Visual focused test access
 // Changelog:
+// - v2.155.0: WSA-P0-03 Automation이 private WheelVisual/Layout 적용 경계를 public API로 열지 않고 실제 호출하도록 전용 friend를 추가.
 // - v2.154.0: Vehicle TargetSelectable의 안정 TargetId source를 VehicleData PrimaryAssetId로 고정하고 Actor instance 이름은 Identity source에서 제외. Player-facing DisplayName은 명시 source가 생기기 전 Empty를 유지.
 // - v2.153.0: IA_RadarZoom Axis1D 슬롯과 Started handler를 추가. 양수는 UISubsystem Radar Zoom In, 음수는 Zoom Out으로만 전달하고 Scanner/Sensor Range 계산은 Pawn에 추가하지 않음.
 // - v2.152.0: 실제 SelectableWeapons의 1-based 순번을 받는 Axis1D InputAction 슬롯과 Started handler를 추가. 숫자키 ordinal 값만 0-based RequestSelectWeaponIndex로 변환하며 새 WeaponGroup ID, cycle state, 내부 MountProfileId 입력 의미를 만들지 않음.
@@ -999,6 +1000,8 @@ class CARFIGHT_RE_API ACFVehiclePawn : public AWheeledVehiclePawn, public ICFTar
 	friend class FCFHUDP006HeatResourceTest;
 	// [v2.144.0] VD-P0-03 Automation이 프로덕션 공개 API를 늘리지 않고 실제 VehicleData 적용 경로를 검증할 테스트 전용 접근 경계입니다.
 	friend class FCFVDATuningRuntimeApplyTest;
+	// [v2.155.0] WSA-P0-03 Automation이 WheelVisual/Layout private 적용 경계를 실제 Runtime 컴포넌트로 검증할 테스트 전용 접근 경계입니다.
+	friend class FCFWheelSizeRuntimeVisualTest;
 
 public:
 	// [v1.1.0] 기본 생성자

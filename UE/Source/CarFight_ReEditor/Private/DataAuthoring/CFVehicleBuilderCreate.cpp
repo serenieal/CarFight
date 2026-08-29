@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleBuilderCreate.cpp
-// Version: v1.2.0
+// Version: v1.3.0
 // Date: 2026-08-27
 // Description: CF-FQ-040 VB-P0-05 baseline-safe Builder companion + deterministic prospective Profile identity preview/create 구현입니다.
 // Scope: Existing Definition+Recipe에 Reference Evidence + Builder-private VehicleBase/Drivetrain/Handling/Performance Profile을 보완합니다.
 // Changelog:
+// - v1.3.0: 새 Evidence를 빈 companion으로 만들지 않고 initial Research payload + fixed EvidenceId를 Preview/approval/Commit에 binding하며 prospective Evidence fingerprint를 proposal hash에 포함.
 // - v1.2.0: Missing Profile prospective resolve가 transient UObject path를 SourceSignature/approval hash에 섞지 않도록 preview에서 확정한 persistent Profile path + typed seed snapshot으로 Pure Resolver를 실행.
 // - v1.1.0: Missing private Profile은 complete initial typed payload로만 seed하고, CompleteExisting 모드는 current/prospective Resolver Definition hash 동일성을 강제해 companion 보완만으로 기존 차량 주행 특성이 바뀌는 것을 차단.
 // - v1.0.1: 새 private Profile Asset 생성은 existing Profile payload mutation이 아니므로 mutation footprint의 bProfileChanged를 false로 고정.
@@ -191,6 +192,59 @@ namespace CFVehicleBuilderCreatePrivate
 		return Evidence;
 	}
 
+	// Existing 또는 새 initial Evidence의 exact current/prospective fingerprint를 preview에 계산합니다.
+	bool BuildProspectiveEvidenceFingerprint(
+		const FCFBuilderCompanionRequest& Request,
+		UCFVehicleData& Target,
+		FCFBuilderCompanionPreview& OutPreview,
+		FString& OutError)
+	{
+		if (Request.ExistingEvidencePath.IsValid())
+		{
+			if (Request.bHasInitialEvidencePayload)
+			{
+				OutError = TEXT("Existing Evidence research payload는 Companion 생성 경로에서 덮어쓸 수 없습니다. 새 Research 변경은 별도 reviewed flow가 필요합니다.");
+				return false;
+			}
+
+			// 선택 차량에 exact binding된 existing Evidence입니다.
+			UCFVehicleRefEvidence* ExistingEvidence = ValidateExistingEvidence(Request.ExistingEvidencePath, *Request.Recipe, Target, OutError);
+			if (!ExistingEvidence)
+			{
+				return false;
+			}
+			OutPreview.ProspectiveEvidenceFingerprint = ExistingEvidence->EvidenceFingerprint;
+			OutError.Reset();
+			return true;
+		}
+
+		if (!Request.bHasInitialEvidencePayload || !Request.NewEvidenceId.IsValid())
+		{
+			OutError = TEXT("새 Reference Evidence는 빈 record로 생성할 수 없습니다. fixed NewEvidenceId와 complete initial Research payload가 필요합니다.");
+			return false;
+		}
+
+		// Preview fingerprint 계산에만 사용하는 transient Evidence carrier입니다.
+		UCFVehicleRefEvidence* ProspectiveEvidence = NewObject<UCFVehicleRefEvidence>(GetTransientPackage());
+		if (!ProspectiveEvidence)
+		{
+			OutError = TEXT("Prospective Reference Evidence carrier를 만들 수 없습니다.");
+			return false;
+		}
+		ProspectiveEvidence->EvidenceId = Request.NewEvidenceId;
+		ProspectiveEvidence->TargetRecipeId = Request.Recipe->RecipeId;
+		ProspectiveEvidence->TargetRecipePath = FSoftObjectPath(Request.Recipe);
+		ProspectiveEvidence->TargetDefinitionPath = FSoftObjectPath(&Target);
+		if (!ProspectiveEvidence->ApplyInitialResearchPayload(Request.InitialEvidencePayload, OutError))
+		{
+			return false;
+		}
+
+		OutPreview.ProspectiveEvidenceFingerprint = ProspectiveEvidence->EvidenceFingerprint;
+		OutError.Reset();
+		return true;
+	}
+
 	// Existing VehicleBase Profile이 exact Builder owner인지 검증합니다.
 	UCFVehicleBaseProfile* ValidateVehicleBaseProfile(const TSoftObjectPtr<UCFVehicleBaseProfile>& ProfileRef, const FGuid& RecipeId, FString& OutError)
 	{
@@ -262,6 +316,7 @@ namespace CFVehicleBuilderCreatePrivate
 		AppendToken(Payload, TEXT("prospectiveResolvedHash"), Preview.ProspectiveResolvedDefinitionHash);
 		AppendToken(Payload, TEXT("prospectiveSourceSignature"), Preview.ProspectiveSourceSignature);
 		AppendToken(Payload, TEXT("evidence"), Preview.EvidencePath.ToString());
+		AppendToken(Payload, TEXT("evidenceFingerprint"), Preview.ProspectiveEvidenceFingerprint);
 		AppendToken(Payload, TEXT("vehicleBase"), Preview.VehicleBasePath.ToString());
 		AppendToken(Payload, TEXT("drivetrain"), Preview.DrivetrainPath.ToString());
 		AppendToken(Payload, TEXT("handling"), Preview.HandlingPath.ToString());
@@ -580,15 +635,16 @@ bool FCFVehicleAuthoringService::PreviewBuilderCompanions(
 
 	if (Request.ExistingEvidencePath.IsValid())
 	{
-		if (!CFVehicleBuilderCreatePrivate::ValidateExistingEvidence(Request.ExistingEvidencePath, *Request.Recipe, *TargetVehicleData, Error))
-		{
-			return CFVehicleBuilderCreatePrivate::Conflict(OutPreview.Operation, ECFAuthoringErrorCode::StateChanged, Error);
-		}
 		OutPreview.EvidencePath = Request.ExistingEvidencePath;
 	}
 	else if (!CFVehicleBuilderCreatePrivate::ValidateNewAssetIdentity(Request.EvidenceAsset, OutPreview.EvidencePath, Error))
 	{
 		return CFVehicleBuilderCreatePrivate::Conflict(OutPreview.Operation, ECFAuthoringErrorCode::StateChanged, Error);
+	}
+
+	if (!CFVehicleBuilderCreatePrivate::BuildProspectiveEvidenceFingerprint(Request, *TargetVehicleData, OutPreview, Error))
+	{
+		return CFVehicleBuilderCreatePrivate::Block(OutPreview.Operation, ECFAuthoringErrorCode::ValidationBlocked, Error);
 	}
 
 	if (!Request.Recipe->ProfileBindings.VehicleBaseProfile.IsNull())
@@ -798,17 +854,21 @@ bool FCFVehicleAuthoringService::CreateBuilderCompanions(
 	if (bCreateEvidence)
 	{
 		Evidence->Modify();
+		Evidence->EvidenceId = Request.NewEvidenceId;
 		Evidence->TargetRecipeId = Request.Recipe->RecipeId;
 		Evidence->TargetRecipePath = FSoftObjectPath(Request.Recipe);
 		Evidence->TargetDefinitionPath = FSoftObjectPath(TargetVehicleData);
-		// 새 semantic ownership binding을 반영한 generated fingerprint error입니다.
+		// 새 semantic ownership/research payload를 적용하는 diagnostic입니다.
 		FString EvidenceError;
-		if (!Evidence->RefreshEvidenceFingerprint(EvidenceError))
+		if (!Evidence->ApplyInitialResearchPayload(Request.InitialEvidencePayload, EvidenceError)
+			|| Evidence->EvidenceFingerprint != FreshPreview.ProspectiveEvidenceFingerprint)
 		{
 			Transaction.Cancel();
 			OutResult.Operation.Status = ECFAuthoringOpStatus::FailedUnknownState;
 			OutResult.Operation.ErrorCode = ECFAuthoringErrorCode::InternalError;
-			OutResult.Operation.Message = EvidenceError;
+			OutResult.Operation.Message = EvidenceError.IsEmpty()
+				? TEXT("Committed Reference Evidence fingerprint가 approved prospective fingerprint와 일치하지 않습니다.")
+				: EvidenceError;
 			return false;
 		}
 	}

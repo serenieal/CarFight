@@ -1,16 +1,26 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringTab.cpp
-// Version: v1.4.0
-// Date: 2026-08-18
+// Version: v1.10.0
+// Date: 2026-08-21
 // Description: DAUTH-P0-09~12 Frozen Section 24 single-Vehicle Authoring Workspace Slate 구현입니다.
 // Changelog:
+// - v1.10.0: P0-12 UA-06 USER UX remediation으로 final Apply review에 bounded field/current/apply-after 상세를 추가하고 Shared Profile numeric selector 상태를 selection refresh와 동기화.
+// - v1.9.0: P0-12 UA-05 USER 피드백에 따라 값 출처 탭을 검색 + 실제 적용 우선 + 비적용 후보 선택 표시 UX로 교정.
+// - v1.8.0: P0-12 UA-05 USER 피드백에 따라 문제 탭 검증 이슈를 심각도/코드/필드/내용 의미 단위로 분리하고 문장 사이 줄바꿈을 추가.
+// - v1.7.0: P0-12 UA-04 USER 피드백에 따라 사용자-facing Authoring/VehicleData 용어를 `제작 기준값/차량 데이터`로 현지화하고 기본 Apply 대상은 Asset 이름만 표시.
+// - v1.6.0: P0-12 UA-05~06 readiness에서 stale Preview의 Header/Overview/Validation/Sync/Bottom cached 결과 노출을 막고 Apply terminal failure를 즉시 표시하도록 보강.
+// - v1.5.0: P0-12 UA-04 macro-flow UX로 External Drift read-only auto-review/Sync 안내, 목적 중심 summary와 drift recovery Apply review 문구를 추가.
 // - v1.4.0: P0-12 UA-02 피드백에 따라 Initial Import를 '제작 관리 시작' UX로 교정하고 기본 Recipe 이름 제안과 preview/commit 실패 팝업을 추가.
 // - v1.3.0: P0-12 UA-01 피드백에 따라 한국어 우선 UI, 테스트/레거시 기본 숨김 Browser, 폐기 DA_PoliceCar 표시 필터를 추가.
 // - v1.2.0: Frozen 24.91~24.94 Shared Profile/Mesh Candidate nested Recipe route와 3-way Drift Sync route를 연결.
 // - v1.1.0: P0-10 Assets/Layout, Measurement, 4축 Driving Feel/preset, Reference Compare, Mount/Defaults, Adoption, standard Undo page를 연결.
 // - v1.0.0: 3-pane Workspace, Vehicle Browser, 8 main navigation, 4 Context tabs, Initial Import, Recipe basic intent, Diff/Trace/Validation, Apply, Raw DA Open 추가.
 // Migration:
+// - v1.10.0은 fresh FieldDiff projection을 final review에 최대 8건 bounded 표시할 뿐 ApplyService/approval/TOCTOU/no-auto-save 의미를 변경하지 않습니다.
+// - v1.9.0은 Resolver SourceTrace 배열과 effective layer 판정을 그대로 사용하며 검색/표시 밀도만 변경합니다.
+// - v1.8.0은 Validation issue presentation만 변경하며 issue code/message/field path와 Validation 계약은 변경하지 않습니다.
+// - v1.7.0은 사용자-facing 문구만 현지화하며 C++ Authoring/VehicleData 타입명, facade 계약, serialization은 변경하지 않습니다.
 // - P0-10 parity page 구현은 CFVehicleAuthoringP10.cpp로 분리하며 공통 ViewModel/facade만 사용합니다.
 // - SCFVDAWizardTab은 DG/DEL Gate 전까지 별도 legacy Nomad Tab으로 유지합니다.
 // - Batch main page는 추가하지 않습니다.
@@ -121,10 +131,22 @@ namespace CFVehicleAuthoringTabPrivate
 		return Hash.Len() > 12 ? Hash.Left(12) + TEXT("…") : Hash;
 	}
 
-		// Boolean 상태를 사용자 화면용 한국어로 변환합니다.
+			// Boolean 상태를 사용자 화면용 한국어로 변환합니다.
 	const TCHAR* BooleanText(const bool bValue)
 	{
 		return bValue ? TEXT("있음") : TEXT("없음");
+	}
+
+	// Stable Field Path의 마지막 segment를 macro-flow 사용자 표시용 짧은 이름으로 변환합니다.
+	FString FieldDisplayText(const FCFVehicleFieldPath& FieldPath)
+	{
+		// Canonical Stable Field Path 전체 문자열입니다.
+		const FString CanonicalPath = FieldPath.ToCanonicalString(true);
+		// 마지막 구조 구분점 위치입니다.
+		const int32 LastDotIndex = CanonicalPath.Find(TEXT("."), ESearchCase::CaseSensitive, ESearchDir::FromEnd);
+		return LastDotIndex != INDEX_NONE && LastDotIndex + 1 < CanonicalPath.Len()
+			? CanonicalPath.Mid(LastDotIndex + 1)
+			: CanonicalPath;
 	}
 
 	// 기존 VehicleData 이름에서 사람이 수정할 수 있는 새 Recipe 이름 제안을 만듭니다.
@@ -305,7 +327,7 @@ void SCFVehicleAuthoringTab::Construct(const FArguments& InArgs)
 							[
 								SNew(SVerticalBox)
 								.Visibility(this, &SCFVehicleAuthoringTab::GetUnmanagedVisibility)
-																+ SVerticalBox::Slot().AutoHeight()[SNew(STextBlock).Text(FText::FromString(TEXT("제작 관리 시작 — 이미 존재하는 VehicleData는 그대로 둡니다. 현재 값을 기준으로 편집용 레시피를 새로 만들고, 이후 변경은 레시피/프로필에서 검토한 뒤 VehicleData에 적용합니다."))).AutoWrapText(true)]
+																+ SVerticalBox::Slot().AutoHeight()[SNew(STextBlock).Text(FText::FromString(TEXT("제작 관리 시작 — 이미 존재하는 차량 데이터는 그대로 둡니다. 현재 값을 기준으로 편집용 레시피를 새로 만들고, 이후 변경은 레시피/프로필에서 검토한 뒤 차량 데이터에 적용합니다."))).AutoWrapText(true)]
 								+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 4.0f, 0.0f, 0.0f)[SNew(STextBlock).Text(FText::FromString(TEXT("레시피 저장 폴더")))]
 								+ SVerticalBox::Slot().AutoHeight()[SAssignNew(ImportFolderTextBox, SEditableTextBox).Text(FText::FromString(TEXT("/Game/CarFight/Data/Authoring"))).HintText(FText::FromString(TEXT("/Game 이하 저장 폴더")))]
 								+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 4.0f, 0.0f, 0.0f)[SNew(STextBlock).Text(FText::FromString(TEXT("새 레시피 이름")))]
@@ -327,7 +349,7 @@ void SCFVehicleAuthoringTab::Construct(const FArguments& InArgs)
 					[
 						SNew(SVerticalBox)
 						+ SVerticalBox::Slot().FillHeight(1.0f)[CFVehicleAuthoringTabPrivate::MakeTextBody(TAttribute<FText>::CreateSP(this, &SCFVehicleAuthoringTab::GetRawDAWarningText))]
-						+ SVerticalBox::Slot().AutoHeight().Padding(4.0f)[SNew(SButton).Text(FText::FromString(TEXT("원본 VehicleData 열기"))).OnClicked(this, &SCFVehicleAuthoringTab::HandleOpenRawDA)]
+						+ SVerticalBox::Slot().AutoHeight().Padding(4.0f)[SNew(SButton).Text(FText::FromString(TEXT("원본 차량 데이터 열기"))).OnClicked(this, &SCFVehicleAuthoringTab::HandleOpenRawDA)]
 					]
 				]
 			]
@@ -346,8 +368,36 @@ void SCFVehicleAuthoringTab::Construct(const FArguments& InArgs)
 				+ SVerticalBox::Slot().FillHeight(1.0f).Padding(4.0f)
 				[
 					SAssignNew(ContextPageSwitcher, SWidgetSwitcher)
-					+ SWidgetSwitcher::Slot()[CFVehicleAuthoringTabPrivate::MakeTextBody(TAttribute<FText>::CreateSP(this, &SCFVehicleAuthoringTab::GetChangesContextText))]
-					+ SWidgetSwitcher::Slot()[CFVehicleAuthoringTabPrivate::MakeTextBody(TAttribute<FText>::CreateSP(this, &SCFVehicleAuthoringTab::GetSourceTraceText))]
+										+ SWidgetSwitcher::Slot()[CFVehicleAuthoringTabPrivate::MakeTextBody(TAttribute<FText>::CreateSP(this, &SCFVehicleAuthoringTab::GetChangesContextText))]
+					+ SWidgetSwitcher::Slot()
+					[
+						SNew(SVerticalBox)
+						+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 4.0f)
+						[
+							SNew(SSearchBox)
+							.HintText(FText::FromString(TEXT("필드명 / 출처 검색")))
+							.OnTextChanged_Lambda([this](const FText& NewText)
+							{
+								SourceTraceSearchText = NewText.ToString().TrimStartAndEnd();
+							})
+						]
+						+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 4.0f)
+						[
+							SNew(SCheckBox)
+							.IsChecked_Lambda([this]() { return bShowSourceTraceCandidates ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+							.OnCheckStateChanged_Lambda([this](const ECheckBoxState NewState)
+							{
+								bShowSourceTraceCandidates = NewState == ECheckBoxState::Checked;
+							})
+							[
+								SNew(STextBlock).Text(FText::FromString(TEXT("비적용 후보까지 보기")))
+							]
+						]
+						+ SVerticalBox::Slot().FillHeight(1.0f)
+						[
+							CFVehicleAuthoringTabPrivate::MakeTextBody(TAttribute<FText>::CreateSP(this, &SCFVehicleAuthoringTab::GetSourceTraceText))
+						]
+					]
 					+ SWidgetSwitcher::Slot()[CFVehicleAuthoringTabPrivate::MakeTextBody(TAttribute<FText>::CreateSP(this, &SCFVehicleAuthoringTab::GetIssuesContextText))]
 										+ SWidgetSwitcher::Slot()[BuildP11SyncPanel()]
 				]
@@ -412,7 +462,8 @@ void SCFVehicleAuthoringTab::HandleVehicleSelectionChanged(TSharedPtr<FCFVehicle
 	{
 		return;
 	}
-	SyncEditableFieldsFromSelection();
+		SyncEditableFieldsFromSelection();
+	RefreshDriftGuidanceIfNeeded();
 	if (ImportNameTextBox.IsValid() && !ViewModel->HasRecipe() && !ViewModel->IsMeshOnlyCandidate())
 	{
 		// 미관리 VehicleData 선택이 바뀔 때마다 현재 차량 identity에 맞는 새 Recipe 이름을 제안합니다.
@@ -454,9 +505,25 @@ FReply SCFVehicleAuthoringTab::HandleRefreshPreview()
 	}
 	// Facade refresh diagnostic입니다.
 	FString RefreshError;
-	ViewModel->RefreshPreview(RefreshError);
+	if (ViewModel.IsValid() && ViewModel->RefreshPreview(RefreshError))
+	{
+		RefreshDriftGuidanceIfNeeded();
+	}
 	SyncEditableFieldsFromSelection();
 	return FReply::Handled();
+}
+
+// Fresh preview에서 External Drift가 확인되면 read-only 3-way를 준비하고 Sync Context로 안내합니다.
+void SCFVehicleAuthoringTab::RefreshDriftGuidanceIfNeeded()
+{
+	if (!ViewModel.IsValid() || !ViewModel->HasRecipe() || !ViewModel->HasExternalDrift())
+	{
+		return;
+	}
+	// External Drift 상세 비교를 자동 준비하는 read-only diagnostic입니다.
+	FString DriftReviewError;
+	ViewModel->RefreshDriftReview(DriftReviewError);
+	SetContextPage(ECFVehicleContextPage::Sync);
 }
 
 // Recipe Archetype text commit을 reviewed R1 facade transaction으로 반영합니다.
@@ -507,7 +574,7 @@ FReply SCFVehicleAuthoringTab::HandleInitialImport()
 
 	// Explicit R2 review dialog message입니다.
 	const FText ReviewText = FText::FromString(FString::Printf(
-		TEXT("제작 관리 시작 검토\n\n기존 VehicleData는 변경하지 않습니다.\n새로 만들 레시피: %s\n현재 VehicleData 식별값: %s\n현재 값을 그대로 보존하는 항목: %d\n숨김 상태로 보존하는 항목: %d\n레시피에서 편집 가능한 후보 항목: %d\n자동 저장: 안 함\n\n이 차량을 제작 관리 대상으로 등록하고 새 레시피를 만들까요?"),
+		TEXT("제작 관리 시작 검토\n\n기존 차량 데이터는 변경하지 않습니다.\n새로 만들 레시피: %s\n현재 차량 데이터 식별값: %s\n현재 값을 그대로 보존하는 항목: %d\n숨김 상태로 보존하는 항목: %d\n레시피에서 편집 가능한 후보 항목: %d\n자동 저장: 안 함\n\n이 차량을 제작 관리 대상으로 등록하고 새 레시피를 만들까요?"),
 		*Preview.ProspectiveRecipePath.ToString(),
 		*CFVehicleAuthoringTabPrivate::ShortHash(Preview.Proposal.ExpectedTargetDefinitionHash),
 		Preview.ImportSummary.LegacyPinnedFieldCount,
@@ -528,7 +595,7 @@ FReply SCFVehicleAuthoringTab::HandleInitialImport()
 			: ImportResult.Operation.Message;
 		FMessageDialog::Open(
 			EAppMsgType::Ok,
-			FText::FromString(FString::Printf(TEXT("제작 관리 시작에 실패했습니다.\n\n%s\n\nVehicleData는 변경하지 않았습니다."), *CommitError)));
+			FText::FromString(FString::Printf(TEXT("제작 관리 시작에 실패했습니다.\n\n%s\n\n차량 데이터는 변경하지 않았습니다."), *CommitError)));
 		return FReply::Handled();
 	}
 	SyncEditableFieldsFromSelection();
@@ -543,6 +610,8 @@ FReply SCFVehicleAuthoringTab::HandleApply()
 	{
 		return FReply::Handled();
 	}
+	// Keep Authoring review를 거친 External Drift 복구 Apply인지 구분합니다.
+	const bool bIsReviewedExternalDriftRecovery = ViewModel->HasExternalDrift() && ViewModel->HasAcceptedDriftKeep();
 	// Exact fresh R3 approval preparation result입니다.
 	FCFAuthoringOpResult PrepareResult;
 	if (!ViewModel->PrepareApply(PrepareResult))
@@ -550,13 +619,51 @@ FReply SCFVehicleAuthoringTab::HandleApply()
 		return FReply::Handled();
 	}
 
+	// Final review에서 한 번에 펼쳐 보여줄 최대 변경 상세 건수입니다.
+	constexpr int32 MaxReviewDiffRows = 8;
+	// PrepareApply 직후에도 authority가 되는 fresh FieldDiff 배열입니다.
+	const TArray<FCFVehicleFieldDiff>& FreshDiffs = ViewModel->GetDiffResult().FieldDiff;
+	// Final review에 넣을 bounded field/current/apply-after 상세 문자열입니다.
+	FString DiffDetailText;
+	// 실제 dialog에 펼칠 bounded diff row 수입니다.
+	const int32 VisibleDiffCount = FMath::Min(FreshDiffs.Num(), MaxReviewDiffRows);
+	for (int32 DiffIndex = 0; DiffIndex < VisibleDiffCount; ++DiffIndex)
+	{
+		// Final review 한 줄의 exact fresh field diff입니다.
+		const FCFVehicleFieldDiff& Diff = FreshDiffs[DiffIndex];
+		DiffDetailText += FString::Printf(
+			TEXT("%d. %s\n   현재: %s\n   적용 후: %s\n"),
+			DiffIndex + 1,
+			*Diff.FieldPath.ToCanonicalString(true),
+			Diff.bHasBeforeValue ? *Diff.BeforeValue.CanonicalValueText : TEXT("<없음>"),
+			Diff.bHasAfterValue ? *Diff.AfterValue.CanonicalValueText : TEXT("<없음>"));
+	}
+	if (FreshDiffs.Num() > VisibleDiffCount)
+	{
+		// Bounded dialog가 생략한 나머지 exact 변경 개수입니다.
+		const int32 RemainingDiffCount = FreshDiffs.Num() - VisibleDiffCount;
+		DiffDetailText += FString::Printf(TEXT("... 외 %d건 — 전체 내용은 오른쪽 '변경점'에서 확인할 수 있습니다.\n"), RemainingDiffCount);
+	}
+	if (DiffDetailText.IsEmpty())
+	{
+		DiffDetailText = TEXT("표시할 fresh 변경 상세가 없습니다.");
+	}
+
 	// Explicit Definition Apply review dialog입니다.
-	const FText ReviewText = FText::FromString(FString::Printf(
-				TEXT("VehicleData 적용 검토\n\n적용할 변경: %d개\n경고: %d개\n외부 변경 감지: %s\n대상: %s\n자동 저장: 안 함\n\n검토한 변경을 VehicleData에 적용하시겠습니까?"),
-		ViewModel->GetPendingDiffCount(),
-				ViewModel->GetWarningCount(),
-		CFVehicleAuthoringTabPrivate::BooleanText(ViewModel->HasExternalDrift()),
-		*ViewModel->GetSelectedEntry().DefinitionPath.ToString()));
+	const FText ReviewText = bIsReviewedExternalDriftRecovery
+		? FText::FromString(FString::Printf(
+			TEXT("제작 기준값 복구 적용 검토\n\n처리 방향: 제작 기준값 유지\n복구할 변경: %d개\n경고: %d개\n대상: %s\n자동 저장: 안 함\n\n복구 상세:\n%s\n검토한 제작 기준값을 차량 데이터에 복구 적용하시겠습니까?"),
+			ViewModel->GetPendingDiffCount(),
+			ViewModel->GetWarningCount(),
+			*ViewModel->GetSelectedEntry().DefinitionPath.GetAssetName(),
+			*DiffDetailText))
+		: FText::FromString(FString::Printf(
+			TEXT("차량 데이터 적용 검토\n\n적용할 변경: %d개\n경고: %d개\n외부 변경 감지: %s\n대상: %s\n자동 저장: 안 함\n\n변경 상세:\n%s\n검토한 변경을 차량 데이터에 적용하시겠습니까?"),
+			ViewModel->GetPendingDiffCount(),
+			ViewModel->GetWarningCount(),
+			CFVehicleAuthoringTabPrivate::BooleanText(ViewModel->HasExternalDrift()),
+			*ViewModel->GetSelectedEntry().DefinitionPath.GetAssetName(),
+			*DiffDetailText));
 	if (FMessageDialog::Open(EAppMsgType::YesNo, ReviewText) != EAppReturnType::Yes)
 	{
 		return FReply::Handled();
@@ -564,7 +671,19 @@ FReply SCFVehicleAuthoringTab::HandleApply()
 
 	// Shared facade Apply terminal result입니다.
 	FCFAuthoringOpResult ApplyResult;
-	ViewModel->ExecutePreparedApply(ApplyResult);
+	if (!ViewModel->ExecutePreparedApply(ApplyResult))
+	{
+		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(ApplyResult.Message));
+		if (bIsReviewedExternalDriftRecovery)
+		{
+			SetContextPage(ECFVehicleContextPage::Sync);
+		}
+		return FReply::Handled();
+	}
+	if (bIsReviewedExternalDriftRecovery)
+	{
+		SetContextPage(ECFVehicleContextPage::Sync);
+	}
 	return FReply::Handled();
 }
 
@@ -611,14 +730,24 @@ FText SCFVehicleAuthoringTab::GetHeaderText() const
 	}
 		if (ViewModel->IsMeshOnlyCandidate())
 	{
-				return FText::FromString(FString::Printf(TEXT("차량 데이터 제작 — 차체 메시 후보\n메시: %s\nVehicleData: 아직 생성되지 않음\n레시피: 아직 생성되지 않음"), *ViewModel->GetSelectedEntry().ChassisMeshPath.ToString()));
+				return FText::FromString(FString::Printf(TEXT("차량 데이터 제작 — 차체 메시 후보\n메시: %s\n차량 데이터: 아직 생성되지 않음\n레시피: 아직 생성되지 않음"), *ViewModel->GetSelectedEntry().ChassisMeshPath.ToString()));
 	}
 	// Selected Definition path입니다.
 	const FString DefinitionPath = ViewModel->GetSelectedEntry().DefinitionPath.ToString();
-	// Selected Recipe path입니다.
+		// Selected Recipe path입니다.
 	const FString RecipePath = ViewModel->HasRecipe() ? ViewModel->GetSelectedEntry().RecipePath.ToString() : TEXT("<none>");
+	if (ViewModel->HasRecipe() && !ViewModel->IsPreviewFresh())
+	{
+		return FText::FromString(FString::Printf(
+			TEXT("%s\n차량 데이터: %s\n레시피: %s\n관리 상태: %s | 동기화: %s | 검증: 재계산 필요 | 적용 대기 변경: 재계산 필요"),
+			*ViewModel->GetSelectedEntry().DefinitionPath.GetAssetName(),
+			*DefinitionPath,
+			*RecipePath,
+			*CFVehicleAuthoringTabPrivate::ManageText(ViewModel->GetManagementView()),
+			*CFVehicleAuthoringTabPrivate::SyncText(ViewModel->GetSyncView())));
+	}
 	return FText::FromString(FString::Printf(
-				TEXT("%s\nVehicleData: %s\n레시피: %s\n관리 상태: %s | 동기화: %s | 검증: %s | 적용 대기 변경: %d"),
+				TEXT("%s\n차량 데이터: %s\n레시피: %s\n관리 상태: %s | 동기화: %s | 검증: %s | 적용 대기 변경: %d"),
 		*ViewModel->GetSelectedEntry().DefinitionPath.GetAssetName(),
 		*DefinitionPath,
 		*RecipePath,
@@ -633,20 +762,24 @@ FText SCFVehicleAuthoringTab::GetOverviewText() const
 {
 	if (!ViewModel.IsValid() || !ViewModel->HasSelection())
 	{
-				return FText::FromString(TEXT("왼쪽 차량 목록에서 VehicleData 또는 차체 메시 후보를 선택하세요."));
+				return FText::FromString(TEXT("왼쪽 차량 목록에서 차량 데이터 또는 차체 메시 후보를 선택하세요."));
 	}
 		if (ViewModel->IsMeshOnlyCandidate())
 	{
-				return FText::FromString(TEXT("이 항목은 아직 차량 데이터가 없는 차체 메시 후보입니다. '레시피 / 프로필'에서 VehicleData + 레시피 생성을 검토할 수 있습니다."));
+				return FText::FromString(TEXT("이 항목은 아직 차량 데이터가 없는 차체 메시 후보입니다. '레시피 / 프로필'에서 차량 데이터 + 레시피 생성을 검토할 수 있습니다."));
 	}
-		if (!ViewModel->HasRecipe())
+				if (!ViewModel->HasRecipe())
 	{
-		return FText::FromString(TEXT("이미 존재하는 VehicleData이지만 아직 제작용 레시피가 연결되지 않은 차량입니다.\n\n권장 순서:\n1. 원본 VehicleData 확인\n2. '레시피 / 프로필'에서 제작 관리 시작\n3. 현재 VehicleData 값을 기준으로 새 레시피 생성\n4. 미리보기 새로고침\n5. 변경점 / 값 출처 / 검증 확인\n6. 필요한 변경만 VehicleData에 적용"));
+		return FText::FromString(TEXT("이미 존재하는 차량 데이터이지만 아직 제작용 레시피가 연결되지 않은 차량입니다.\n\n권장 순서:\n1. 원본 차량 데이터 확인\n2. '레시피 / 프로필'에서 제작 관리 시작\n3. 현재 차량 데이터 값을 기준으로 새 레시피 생성\n4. 미리보기 새로고침\n5. 변경점 / 값 출처 / 검증 확인\n6. 필요한 변경만 차량 데이터에 적용"));
+	}
+	if (!ViewModel->IsPreviewFresh())
+	{
+		return FText::FromString(TEXT("해석 미리보기가 오래되었거나 아직 준비되지 않았습니다.\n\n'미리보기 새로고침'을 실행한 뒤 변경점 → 값 출처 → 검증을 같은 최신 상태에서 확인하세요."));
 	}
 	// Current facade resolve result입니다.
 	const FCFVehicleResolveReadResult& Resolve = ViewModel->GetResolveResult();
 	return FText::FromString(FString::Printf(
-				TEXT("해석 미리보기\n\n레시피 식별값: %s\n값 출처 서명: %s\n현재 VehicleData 해시: %s\n예상 결과 해시: %s\n해석기 버전: %d\n적용 대기 변경: %d\n경고: %d\n차단 문제: %d\n외부 변경 감지: %s\n\n미리보기만으로 VehicleData는 변경되지 않습니다."),
+				TEXT("해석 미리보기\n\n레시피 식별값: %s\n값 출처 서명: %s\n현재 차량 데이터 해시: %s\n예상 결과 해시: %s\n해석기 버전: %d\n적용 대기 변경: %d\n경고: %d\n차단 문제: %d\n외부 변경 감지: %s\n\n미리보기만으로 차량 데이터는 변경되지 않습니다."),
 		*CFVehicleAuthoringTabPrivate::ShortHash(Resolve.ResolveRequest.Recipe.RecipeFingerprint),
 		*CFVehicleAuthoringTabPrivate::ShortHash(Resolve.ResolveResult.SourceSignature),
 		*CFVehicleAuthoringTabPrivate::ShortHash(Resolve.ResolveRequest.CurrentDefinition.DefinitionHash),
@@ -667,11 +800,11 @@ FText SCFVehicleAuthoringTab::GetRecipeText() const
 	}
 		if (ViewModel->IsMeshOnlyCandidate())
 	{
-				return FText::FromString(TEXT("레시피 없음 — 차체 메시 후보입니다. 아래 '메시에서 차량 만들기'에서 VehicleData + 레시피 생성을 검토하세요."));
+				return FText::FromString(TEXT("레시피 없음 — 차체 메시 후보입니다. 아래 '메시에서 차량 만들기'에서 차량 데이터 + 레시피 생성을 검토하세요."));
 	}
 		if (!ViewModel->HasRecipe())
 	{
-		return FText::FromString(TEXT("레시피 없음 — 이 VehicleData를 제작 관리 대상으로 사용하려면 아래 '제작 관리 시작'에서 편집용 레시피를 만드세요."));
+		return FText::FromString(TEXT("레시피 없음 — 이 차량 데이터를 제작 관리 대상으로 사용하려면 아래 '제작 관리 시작'에서 편집용 레시피를 만드세요."));
 	}
 	// Facade context result입니다.
 	const FCFVehicleContextReadResult& Context = ViewModel->GetContextResult();
@@ -695,7 +828,7 @@ FText SCFVehicleAuthoringTab::GetDiffText() const
 	const TArray<FCFVehicleFieldDiff>& Diffs = ViewModel->GetDiffResult().FieldDiff;
 	if (Diffs.IsEmpty())
 	{
-				return FText::FromString(TEXT("적용 대기 변경: 0\n현재 VehicleData와 Authoring 예상 결과가 같습니다."));
+				return FText::FromString(TEXT("적용 대기 변경: 0\n현재 차량 데이터와 제작 예상 결과가 같습니다."));
 	}
 	// Full deterministic diff presentation입니다.
 		FString Text = FString::Printf(TEXT("적용 대기 변경: %d\n변경 묶음 식별값: %s\n\n"), Diffs.Num(), *CFVehicleAuthoringTabPrivate::ShortHash(ViewModel->GetDiffResult().DiffHash));
@@ -716,30 +849,45 @@ FText SCFVehicleAuthoringTab::GetValidationText() const
 {
 	if (!ViewModel.IsValid() || !ViewModel->HasRecipe())
 	{
-				return FText::FromString(TEXT("관리 중인 레시피 차량을 선택하면 레시피 / 해석 결과 / VehicleData 검증 문제가 표시됩니다."));
+				return FText::FromString(TEXT("관리 중인 레시피 차량을 선택하면 레시피 / 해석 결과 / 차량 데이터 검증 문제가 표시됩니다."));
+	}
+	if (!ViewModel->IsPreviewFresh())
+	{
+		return FText::FromString(TEXT("최신 미리보기가 없어 검증 결과를 표시할 수 없습니다. '미리보기 새로고침'을 먼저 실행하세요."));
 	}
 	// Fresh facade Validation projection입니다.
 	const FCFVehicleValidationReadResult& Validation = ViewModel->GetValidationResult();
-	// Layer별 issue를 append하는 local helper입니다.
+		// Layer별 issue를 사람이 의미 단위로 끊어 읽을 수 있게 append하는 local helper입니다.
 	auto AppendIssues = [](FString& InOutText, const TCHAR* LayerName, const TArray<FCFVehicleValidationIssue>& Issues)
 	{
-		InOutText += FString::Printf(TEXT("[%s] %d\n"), LayerName, Issues.Num());
-		for (const FCFVehicleValidationIssue& Issue : Issues)
+		InOutText += FString::Printf(TEXT("[%s] %d\n\n"), LayerName, Issues.Num());
+		for (int32 IssueIndex = 0; IssueIndex < Issues.Num(); ++IssueIndex)
 		{
+			// 현재 표시할 검증 이슈입니다.
+			const FCFVehicleValidationIssue& Issue = Issues[IssueIndex];
+			// 비어 있지 않을 때만 별도 필드 줄을 표시하기 위한 canonical field path입니다.
+			const FString FieldPathText = Issue.FieldPath.ToCanonicalString(true);
+			// 원본 검증 메시지는 바꾸지 않고 UI presentation에서만 문장 사이를 줄바꿈한 문자열입니다.
+			FString MessageText = Issue.Message;
+			MessageText.ReplaceInline(TEXT(". "), TEXT(".\n    "));
+
 			InOutText += FString::Printf(
-				TEXT("- %s / %s / %s\n  %s\n"),
+				TEXT("이슈 %d\n  심각도: %s\n  코드: %s\n"),
+				IssueIndex + 1,
 				*CFVehicleAuthoringTabPrivate::SeverityText(Issue.Severity),
-				*Issue.IssueCode.ToString(),
-				*Issue.FieldPath.ToCanonicalString(true),
-				*Issue.Message);
+				*Issue.IssueCode.ToString());
+			if (!FieldPathText.IsEmpty())
+			{
+				InOutText += FString::Printf(TEXT("  필드: %s\n"), *FieldPathText);
+			}
+			InOutText += FString::Printf(TEXT("  내용:\n    %s\n\n"), *MessageText);
 		}
-		InOutText += TEXT("\n");
 	};
 	// Validation full presentation입니다.
 	FString Text;
 		AppendIssues(Text, TEXT("레시피"), Validation.RecipeValidation);
 	AppendIssues(Text, TEXT("해석 결과"), Validation.ResolverValidation);
-	AppendIssues(Text, TEXT("VehicleData 검증"), Validation.DefinitionValidation);
+	AppendIssues(Text, TEXT("차량 데이터 검증"), Validation.DefinitionValidation);
 	Text += FString::Printf(TEXT("요약: 경고=%d / 차단=%d / 오류=%d"), Validation.Operation.ValidationSummary.WarningCount, Validation.Operation.ValidationSummary.BlockedCount, Validation.Operation.ValidationSummary.ErrorCount);
 	return FText::FromString(Text);
 }
@@ -750,32 +898,87 @@ FText SCFVehicleAuthoringTab::GetChangesContextText() const
 	return GetDiffText();
 }
 
-// Current Source Trace stack text를 만듭니다.
+// Current Source Trace stack text를 검색/상세 표시 상태에 맞춰 만듭니다.
 FText SCFVehicleAuthoringTab::GetSourceTraceText() const
 {
 	if (!ViewModel.IsValid() || !ViewModel->IsPreviewFresh())
 	{
-				return FText::FromString(TEXT("최신 미리보기가 없어 값 출처를 표시할 수 없습니다. '미리보기 새로고침'을 먼저 실행하세요."));
+		return FText::FromString(TEXT("최신 미리보기가 없어 값 출처를 표시할 수 없습니다. '미리보기 새로고침'을 먼저 실행하세요."));
 	}
 	// Resolver Source Trace authority입니다.
 	const TArray<FCFVehicleSourceTrace>& Traces = ViewModel->GetTraceResult().SourceTrace;
-	// Read-only source stack presentation입니다.
-		FString Text = FString::Printf(TEXT("값 출처가 추적되는 항목: %d\n\n"), Traces.Num());
+	// 현재 검색 조건과 일치해 화면에 표시된 Trace 수입니다.
+	int32 VisibleTraceCount = 0;
+	// 검색 조건을 적용한 source stack presentation입니다.
+	FString TraceBodyText;
 	for (const FCFVehicleSourceTrace& Trace : Traces)
 	{
-		Text += FString::Printf(TEXT("%s\n"), *Trace.FieldPath.ToCanonicalString(true));
-		for (int32 LayerIndex = 0; LayerIndex < Trace.Layers.Num(); ++LayerIndex)
+		// Stable Field Path 전체 문자열입니다.
+		const FString CanonicalFieldPath = Trace.FieldPath.ToCanonicalString(true);
+		// Field Path와 모든 Source layer를 함께 검색하기 위한 비교 문자열입니다.
+		FString SearchableTraceText = CanonicalFieldPath;
+				for (const FCFVehicleSourceLayer& Layer : Trace.Layers)
 		{
-			// Current source layer입니다.
-			const FCFVehicleSourceLayer& Layer = Trace.Layers[LayerIndex];
-			Text += FString::Printf(
-				TEXT("  %s %s — %s\n"),
-								LayerIndex == Trace.EffectiveLayerIndex ? TEXT("[실제 적용]" ) : TEXT("[비적용 후보]"),
-				*CFVehicleAuthoringTabPrivate::SourceTypeText(Layer.SourceType),
-				*Layer.SourceId);
+			SearchableTraceText += TEXT(" ");
+			SearchableTraceText += CFVehicleAuthoringTabPrivate::SourceTypeText(Layer.SourceType);
+			SearchableTraceText += TEXT(" ");
+			SearchableTraceText += Layer.SourceId;
 		}
-		Text += TEXT("\n");
+		if (!SourceTraceSearchText.IsEmpty() && !SearchableTraceText.Contains(SourceTraceSearchText, ESearchCase::IgnoreCase))
+		{
+			continue;
+		}
+
+		++VisibleTraceCount;
+		TraceBodyText += FString::Printf(TEXT("%s\n"), *CanonicalFieldPath);
+		if (Trace.Layers.IsValidIndex(Trace.EffectiveLayerIndex))
+		{
+			// Resolver가 실제 적용으로 판정한 source layer입니다.
+			const FCFVehicleSourceLayer& EffectiveLayer = Trace.Layers[Trace.EffectiveLayerIndex];
+			TraceBodyText += FString::Printf(
+				TEXT("  실제 적용: %s — %s\n"),
+				*CFVehicleAuthoringTabPrivate::SourceTypeText(EffectiveLayer.SourceType),
+				*EffectiveLayer.SourceId);
+		}
+		else
+		{
+			TraceBodyText += TEXT("  실제 적용: 없음\n");
+		}
+
+		if (bShowSourceTraceCandidates)
+		{
+			for (int32 LayerIndex = 0; LayerIndex < Trace.Layers.Num(); ++LayerIndex)
+			{
+				if (LayerIndex == Trace.EffectiveLayerIndex)
+				{
+					continue;
+				}
+				// 실제 적용되지 않았지만 Resolver가 추적한 후보 source layer입니다.
+				const FCFVehicleSourceLayer& CandidateLayer = Trace.Layers[LayerIndex];
+				TraceBodyText += FString::Printf(
+					TEXT("  비적용 후보: %s — %s\n"),
+					*CFVehicleAuthoringTabPrivate::SourceTypeText(CandidateLayer.SourceType),
+					*CandidateLayer.SourceId);
+			}
+		}
+		TraceBodyText += TEXT("\n");
 	}
+
+	// 검색과 상세 표시 상태를 한눈에 확인할 수 있는 summary입니다.
+	FString Text = FString::Printf(
+		TEXT("전체 추적 항목: %d | 현재 표시: %d\n기본 화면은 실제 적용 출처만 표시합니다. 필요한 필드를 검색하고, 출처 경쟁 관계를 확인할 때만 '비적용 후보까지 보기'를 켜세요.\n\n"),
+		Traces.Num(),
+		VisibleTraceCount);
+	if (!SourceTraceSearchText.IsEmpty())
+	{
+		Text += FString::Printf(TEXT("검색: %s\n\n"), *SourceTraceSearchText);
+	}
+	if (VisibleTraceCount == 0)
+	{
+		Text += TEXT("검색 조건과 일치하는 값 출처가 없습니다.");
+		return FText::FromString(Text);
+	}
+	Text += TraceBodyText;
 	return FText::FromString(Text);
 }
 
@@ -792,25 +995,51 @@ FText SCFVehicleAuthoringTab::GetSyncContextText() const
 	{
 		return FText::FromString(TEXT("차량을 선택하세요."));
 	}
-		if (ViewModel->IsMeshOnlyCandidate())
+	if (ViewModel->IsMeshOnlyCandidate())
 	{
-				return FText::FromString(TEXT("차체 메시 후보 / VehicleData 없음\n'메시에서 차량 만들기' 전에는 적용 기준값, 검증, 외부 변경 감지, 적용 대상이 없습니다."));
+		return FText::FromString(TEXT("차체 메시 후보 / 차량 데이터 없음\n'메시에서 차량 만들기' 전에는 적용 기준값, 검증, 외부 변경 감지, 적용 대상이 없습니다."));
 	}
 		if (!ViewModel->HasRecipe())
 	{
 		return FText::FromString(TEXT("적용 기준 없음 / 미관리\n'제작 관리 시작'으로 레시피를 만들기 전에는 제작 관리 기준값과 값 출처 기록이 없습니다."));
 	}
+	if (!ViewModel->IsPreviewFresh())
+	{
+		return FText::FromString(TEXT("현재 미리보기가 오래되었습니다. 이전 동기화/외부 변경 정보는 현재 판단에 사용하지 않습니다.\n\n'미리보기 새로고침'으로 현재 레시피와 차량 데이터를 다시 읽어주세요."));
+	}
 	// Current R16 stale report입니다.
 	const FCFVehicleStaleReport& Stale = ViewModel->GetResolveResult().ResolveResult.StaleReport;
+	if (Stale.bHasExternalDrift)
+	{
+		// Macro-flow 첫 화면에 표시할 External Drift 요약입니다.
+		FString Text = FString::Printf(TEXT("외부 변경 %d건 발견\n\n차량 데이터 원본이 마지막 제작 기준값 적용 이후 바뀌었습니다. 아래에서 처리 방향을 선택하기 전에는 변경 적용이 차단됩니다.\n\n"), Stale.Fields.Num());
+		// 자동 준비된 read-only 3-way 비교입니다.
+		const FCFVehicleDriftReviewResult& Review = ViewModel->GetDriftReview();
+		for (const FCFVehicleDriftReviewRow& Row : Review.Rows)
+		{
+			Text += FString::Printf(
+				TEXT("- %s: 제작 기준값 %s → 현재 원본 %s\n"),
+				*CFVehicleAuthoringTabPrivate::FieldDisplayText(Row.FieldPath),
+				*Row.CurrentAuthoringValue.CanonicalValueText,
+				*Row.CurrentRawValue.CanonicalValueText);
+		}
+		if (Review.Rows.IsEmpty())
+		{
+			Text += TEXT("- 변경값 상세 비교를 아직 준비하지 못했습니다. 미리보기 새로고침으로 현재 값을 다시 읽어주세요.\n");
+		}
+		Text += ViewModel->HasAcceptedDriftKeep()
+			? TEXT("\n처리 방향: 제작 기준값을 유지하기로 승인했습니다.\n다음 단계: '제작 기준값으로 복구 적용…'을 눌러 차량 데이터에 복구하세요.\n")
+			: TEXT("\n권장 처리: '제작 기준값으로 복구…'에서 관리 기준값을 유지할지 먼저 검토하세요.\n다른 소유권 처리는 '다른 처리 방법'에서 선택할 수 있습니다.\n");
+		Text += TEXT("자동 저장은 하지 않습니다. 정확한 마지막 적용값 / 현재 원본값 / 현재 제작 기준값은 '상세 비교'에서 확인할 수 있습니다.");
+		return FText::FromString(Text);
+	}
 	return FText::FromString(FString::Printf(
-								TEXT("미리보기: %s\n동기화: %s\n실제 적용값 오래됨: %s\n비적용 출처 변경: %s\n외부 변경 감지: %s\n영향 항목: %d\nAuthoring 유지 검토: %s\n\n외부 변경이 있으면 3-way 검토에서 'Authoring 유지 / 원본값 레거시 보존 / 고급 덮어쓰기' 중 하나를 명시적으로 선택합니다."),
-				*CFVehicleAuthoringTabPrivate::PreviewText(ViewModel->GetPreviewView()),
+		TEXT("미리보기: %s\n동기화: %s\n실제 적용값 오래됨: %s\n비적용 출처 변경: %s\n외부 변경 감지: 없음\n영향 항목: %d"),
+		*CFVehicleAuthoringTabPrivate::PreviewText(ViewModel->GetPreviewView()),
 		*CFVehicleAuthoringTabPrivate::SyncText(ViewModel->GetSyncView()),
 		CFVehicleAuthoringTabPrivate::BooleanText(Stale.bHasEffectiveStale),
 		CFVehicleAuthoringTabPrivate::BooleanText(Stale.bHasShadowSourceChange),
-		CFVehicleAuthoringTabPrivate::BooleanText(Stale.bHasExternalDrift),
-		Stale.Fields.Num(),
-		ViewModel->HasAcceptedDriftKeep() ? TEXT("유지 승인됨") : TEXT("없음")));
+		Stale.Fields.Num()));
 }
 
 // Bottom Action Bar summary text를 만듭니다.
@@ -820,9 +1049,13 @@ FText SCFVehicleAuthoringTab::GetBottomStatusText() const
 	{
 				return FText::FromString(TEXT("미리보기: 차량 선택 필요"));
 	}
-		if (ViewModel->IsMeshOnlyCandidate())
+				if (ViewModel->IsMeshOnlyCandidate())
 	{
-				return FText::FromString(FString::Printf(TEXT("차체 메시 후보 | %s | VehicleData/레시피 아직 생성되지 않음"), *ViewModel->GetSelectedEntry().ChassisMeshPath.GetAssetName()));
+				return FText::FromString(FString::Printf(TEXT("차체 메시 후보 | %s | 차량 데이터/레시피 아직 생성되지 않음"), *ViewModel->GetSelectedEntry().ChassisMeshPath.GetAssetName()));
+	}
+	if (ViewModel->HasRecipe() && !ViewModel->IsPreviewFresh())
+	{
+		return FText::FromString(FString::Printf(TEXT("미리보기: %s | 변경/검증 재계산 필요 | 대상: %s"), *CFVehicleAuthoringTabPrivate::PreviewText(ViewModel->GetPreviewView()), *ViewModel->GetSelectedEntry().DefinitionPath.GetAssetName()));
 	}
 	return FText::FromString(FString::Printf(
 				TEXT("미리보기: %s | 변경: %d | 경고: %d | 차단: %d | 외부 변경: %s | 대상: %s"),
@@ -877,13 +1110,13 @@ FText SCFVehicleAuthoringTab::GetRawDAWarningText() const
 	}
 	if (ViewModel->IsMeshOnlyCandidate())
 	{
-		return FText::FromString(TEXT("차체 메시 후보에는 아직 VehicleData가 없습니다. '메시에서 차량 만들기' 전에는 원본 데이터 에디터를 열 수 없습니다."));
+		return FText::FromString(TEXT("차체 메시 후보에는 아직 차량 데이터가 없습니다. '메시에서 차량 만들기' 전에는 원본 데이터 에디터를 열 수 없습니다."));
 	}
 	if (!ViewModel->HasRecipe())
 	{
-		return FText::FromString(TEXT("원본 VehicleData 열기\n\n아직 Authoring으로 관리하지 않는 VehicleData입니다. 원본 DataAsset을 확인하는 것만으로 값이 변경되지는 않습니다."));
+		return FText::FromString(TEXT("원본 차량 데이터 열기\n\n아직 제작 관리 대상이 아닌 차량 데이터입니다. 원본 DataAsset을 확인하는 것만으로 값이 변경되지는 않습니다."));
 	}
-	return FText::FromString(TEXT("원본 VehicleData 직접 편집 주의\n\n이 차량은 Authoring 관리 대상입니다. 원본 VehicleData를 직접 수정하면 값 출처 추적을 우회하고 다음 새로고침에서 외부 변경으로 감지될 수 있습니다.\n\n원본 수정값이 자동으로 고급 덮어쓰기나 레시피 설정으로 변환되지는 않습니다."));
+	return FText::FromString(TEXT("원본 차량 데이터 직접 편집 주의\n\n이 차량은 제작 관리 대상입니다. 원본 차량 데이터를 직접 수정하면 값 출처 추적을 우회하고 다음 새로고침에서 외부 변경으로 감지될 수 있습니다.\n\n원본 수정값이 자동으로 고급 덮어쓰기나 레시피 설정으로 변환되지는 않습니다."));
 }
 
 // Browser UObject rows를 Slate shared rows로 재구성합니다.
@@ -911,6 +1144,7 @@ void SCFVehicleAuthoringTab::RebuildBrowserRows()
 void SCFVehicleAuthoringTab::SyncEditableFieldsFromSelection()
 {
 	SyncP11FieldsFromSelection();
+	RefreshProfileNumericFieldRows();
 	// Current persistent Recipe selection입니다.
 	UCFVehicleRecipeData* CurrentRecipe = ViewModel.IsValid() ? ViewModel->GetRecipe() : nullptr;
 	if (ArchetypeTextBox.IsValid())

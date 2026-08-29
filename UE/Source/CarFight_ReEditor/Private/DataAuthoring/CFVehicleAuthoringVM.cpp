@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringVM.cpp
-// Version: v1.4.0
+// Version: v1.5.0
 // Date: 2026-08-18
 // Description: DAUTH-P0-09~12 Vehicle Authoring Workspace transient ViewModel 구현입니다.
 // Changelog:
+// - v1.5.0: P0-12 UA-06 readiness에서 UE top Undo TransactionId exact binding을 추가해 intervening Editor transaction을 잘못 Undo하지 않도록 fail-closed 보강.
 // - v1.4.0: P0-12 UA-03 Profile choice cache를 selection lifecycle에 포함해 stale 후보를 보존하지 않도록 교정.
 // - v1.3.0: Mesh-only Candidate selection과 reviewed Keep Authoring token 기반 External Drift Apply gate를 연결.
 // - v1.2.0: P0-10 typed Assets/Layout, Driving Feel preset, Reference Compare, Adoption/Measurement review, Mount/Defaults, standard Undo orchestration 추가.
@@ -20,6 +21,7 @@
 #include "CFVehicleData.h"
 #include "DataAuthoring/CFVehicleRecipeData.h"
 #include "Editor.h"
+#include "Editor/Transactor.h"
 #include "Subsystems/AssetEditorSubsystem.h"
 
 namespace CFVehicleAuthoringVMPrivate
@@ -836,21 +838,42 @@ bool FCFVehicleAuthoringVM::OpenRawVehicleData(FString& OutError) const
 	return true;
 }
 
-// 마지막으로 이 Workspace가 성공시킨 Recipe/Apply transaction을 Unreal 표준 Undo로 되돌리고 fresh preview를 읽습니다.
+// Last Workspace transaction이 현재 UE Undo stack의 exact top인지 확인해 standard Undo 가능 여부를 반환합니다.
+bool FCFVehicleAuthoringVM::CanUndoLastWorkspaceAction() const
+{
+	if (!bCanUndoLastWorkspaceAction || !LastWorkspaceTransactionId.IsValid() || !GEditor || !GEditor->Trans)
+	{
+		return false;
+	}
+	// 사용자가 지금 Undo하면 실제로 되돌릴 top transaction identity입니다. Undo 가능 여부 자체는 최종 UndoTransaction()이 판정합니다.
+		const FTransactionContext UndoContext = GEditor->Trans->GetUndoContext(false);
+	return UndoContext.TransactionId.IsValid() && UndoContext.TransactionId == LastWorkspaceTransactionId;
+}
+
+// 마지막으로 이 Workspace가 성공시킨 Recipe/Apply transaction을 exact UE TransactionId 확인 뒤 표준 Undo하고 fresh preview를 읽습니다.
 bool FCFVehicleAuthoringVM::UndoLastWorkspaceAction(FString& OutError)
 {
-	if (!bCanUndoLastWorkspaceAction || !GEditor)
+	if (!bCanUndoLastWorkspaceAction || !LastWorkspaceTransactionId.IsValid() || !GEditor || !GEditor->Trans)
 	{
 		OutError = TEXT("현재 Workspace가 확실히 소유한 마지막 transaction이 없습니다. 일반 Ctrl+Z는 Unreal 표준 Undo 기록을 따릅니다.");
 		LastMessage = OutError;
 		return false;
 	}
-	// Unreal Editor global transaction buffer의 standard Undo 결과입니다.
+	// 사용자가 지금 Undo하면 실제로 되돌릴 top transaction identity입니다. 다른 transaction을 Undo하지 않기 위한 exact guard입니다.
+		const FTransactionContext UndoContext = GEditor->Trans->GetUndoContext(false);
+	if (!UndoContext.TransactionId.IsValid() || UndoContext.TransactionId != LastWorkspaceTransactionId)
+	{
+		OutError = TEXT("Workspace 작업 이후 다른 Editor 변경이 있어 안전한 '마지막 작업 되돌리기'를 차단했습니다. 일반 Ctrl+Z/Redo 기록을 먼저 확인하세요.");
+		LastMessage = OutError;
+		return false;
+	}
+	// Exact Workspace TransactionId가 top일 때만 실행하는 Unreal 표준 Undo 결과입니다.
 	const bool bUndoSucceeded = GEditor->UndoTransaction();
 	bCanUndoLastWorkspaceAction = false;
+	LastWorkspaceTransactionId.Invalidate();
 	if (!bUndoSucceeded)
 	{
-		OutError = TEXT("Unreal 표준 Undo가 마지막 transaction을 되돌리지 못했습니다.");
+		OutError = TEXT("Unreal 표준 Undo가 마지막 Workspace transaction을 되돌리지 못했습니다.");
 		LastMessage = OutError;
 		return false;
 	}
@@ -905,7 +928,8 @@ void FCFVehicleAuthoringVM::ClearSelection()
 	PreparedVehicleCreatePreview = FCFVehicleRecordCreatePreview();
 	bHasPreparedVehicleCreate = false;
 	InvalidateDriftReviewState();
-	bCanUndoLastWorkspaceAction = false;
+		bCanUndoLastWorkspaceAction = false;
+	LastWorkspaceTransactionId.Invalidate();
 	LastWorkspaceActionDescription.Reset();
 	ManagementView = ECFWorkspaceManageView::Unmanaged;
 	SyncView = ECFWorkspaceSyncView::NoBaseline;
@@ -1022,9 +1046,23 @@ void FCFVehicleAuthoringVM::InvalidatePreparedApply()
 	bHasPreparedApply = false;
 }
 
-// 성공한 Workspace-owned transaction 뒤 standard Undo action을 transient하게 활성화합니다.
+// 성공한 Workspace-owned transaction 뒤 UE Undo stack top의 exact TransactionId를 캡처해 안전한 Undo 후보로 기록합니다.
 void FCFVehicleAuthoringVM::MarkWorkspaceTransaction(const FString& ActionDescription)
 {
-	bCanUndoLastWorkspaceAction = true;
+	bCanUndoLastWorkspaceAction = false;
+	LastWorkspaceTransactionId.Invalidate();
+	LastWorkspaceActionDescription.Reset();
+	if (!GEditor || !GEditor->Trans)
+	{
+		return;
+	}
+	// 방금 완료된 Workspace mutation 뒤 현재 UE Undo stack top transaction identity입니다.
+		const FTransactionContext UndoContext = GEditor->Trans->GetUndoContext(false);
+	if (!UndoContext.TransactionId.IsValid())
+	{
+		return;
+	}
+	LastWorkspaceTransactionId = UndoContext.TransactionId;
 	LastWorkspaceActionDescription = ActionDescription;
+	bCanUndoLastWorkspaceAction = LastWorkspaceTransactionId.IsValid();
 }

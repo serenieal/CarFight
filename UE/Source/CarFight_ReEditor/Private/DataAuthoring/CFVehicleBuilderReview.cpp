@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleBuilderReview.cpp
-// Version: v1.1.0
+// Version: v1.2.0
 // Date: 2026-08-27
 // Description: CF-FQ-040 VB-P0-07 Final Review provenance receipt / one-resolve / post-state guarded Undo hardening 구현입니다.
 // Scope: Existing Validation/External Drift/Gameplay/Diff/Reference Evidence를 aggregate하고 기존 R3 Apply lane과 Unreal standard Undo를 재사용합니다.
 // Changelog:
+// - v1.2.0: Final Review caller가 ConsumedClaimIds를 비운 resume read에서는 persistent BuilderCommitReceipt의 canonical Claim ID 목록을 사용하고, caller가 명시한 목록은 기존 hash exact-match로 계속 tamper 차단.
 // - v1.1.0: provenance를 persistent BuilderCommitReceipt/current 4 Profile fingerprint에 binding하고, Final Review one-resolve projection과 Undo post-Apply state guard를 추가.
 // - v1.0.0: ReadBuilderFinalReview / ApplyBuilderFinalReview / UndoBuilderFinalApply 최초 구현.
 // Migration:
@@ -228,11 +229,15 @@ namespace CFVehicleBuilderReviewPrivate
 
 		// Current Recipe가 보유한 persistent Builder profile provenance receipt입니다.
 		const FCFVehicleBuilderCommitReceipt& Receipt = Recipe->BuilderCommitReceipt;
+		// Caller가 explicit Claim set을 제공하면 그것을 사용하고, resume read에서 비어 있으면 receipt의 persistent canonical 목록을 사용합니다.
+		const TArray<FName>& EffectiveConsumedClaimIds = Request.EvidenceBinding.ConsumedClaimIds.IsEmpty()
+			? Receipt.ConsumedClaimIds
+			: Request.EvidenceBinding.ConsumedClaimIds;
 		if (!Receipt.IsValid()
 			|| Receipt.EvidencePath != Request.EvidenceBinding.EvidencePath
 			|| Receipt.EvidenceId != Request.EvidenceBinding.ExpectedEvidenceId
 			|| Receipt.EvidenceFingerprint != FreshEvidenceFingerprint
-			|| Receipt.ConsumedClaimIdsHash != BuildConsumedClaimIdHash(Request.EvidenceBinding.ConsumedClaimIds)
+			|| Receipt.ConsumedClaimIdsHash != BuildConsumedClaimIdHash(EffectiveConsumedClaimIds)
 			|| Receipt.ResolverContractRevision != FCFVehicleResolver::CurrentResolverContractRevision)
 		{
 			OutSummary.IssueText = TEXT("Current Recipe의 Builder commit receipt가 이 Evidence/Claim set/Resolver revision을 증명하지 않습니다. Builder Profile proposal을 다시 preview/commit해야 합니다.");
@@ -285,7 +290,7 @@ namespace CFVehicleBuilderReviewPrivate
 
 		// Duplicate consumed Claim ID를 막는 stable set입니다.
 		TSet<FName> ConsumedClaimIds;
-		for (const FName ClaimId : Request.EvidenceBinding.ConsumedClaimIds)
+		for (const FName ClaimId : EffectiveConsumedClaimIds)
 		{
 			if (ClaimId.IsNone() || ConsumedClaimIds.Contains(ClaimId))
 			{

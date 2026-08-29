@@ -1,8 +1,9 @@
 # CarFight Data Authoring targeted Automation runner.
-# Version: v1.0.0
-# Date: 2026-08-17
+# Version: v1.1.0
+# Date: 2026-08-28
 # Description: DAUTH-P0-08 이후 Data Authoring Automation filter를 공식 UE 5.8 Editor에서 무인 실행하고 JSON 결과를 기록합니다.
 # Changelog:
+# - v1.1.0: Start-Process -Wait의 descendant-process 대기를 제거하고 exact UnrealEditor Process 객체 WaitForExit()만 사용해 TestExit 이후 wrapper가 terminal로 회수되도록 교정.
 # - v1.0.0: CarFight.DataAuthoring 전용 재실행 가능한 Automation 진입점을 추가.
 # Migration:
 # - Product Source/Config/Content Asset을 저장하지 않습니다.
@@ -61,9 +62,10 @@ $EditorArguments = @(
     '-FullStdOutLogOutput'
 )
 
-# GUI Editor 프로세스를 실제 종료까지 기다리고 ExitCode를 회수할 프로세스 핸들입니다.
-$EditorProcess = Start-Process -FilePath $EditorExecutable -ArgumentList $EditorArguments -WorkingDirectory $RepositoryRoot -Wait -PassThru
-# UnrealEditor가 반환한 실제 프로세스 종료 코드입니다.
+# actual UnrealEditor Automation exact PID를 시작하며 Process Tree 전체가 아니라 이 Editor PID만 기다립니다.
+$EditorProcess = Start-Process -FilePath $EditorExecutable -ArgumentList $EditorArguments -WorkingDirectory $RepositoryRoot -PassThru
+$EditorProcess.WaitForExit()
+# exact UnrealEditor PID가 반환한 실제 프로세스 종료 코드입니다.
 $EngineExitCode = $EditorProcess.ExitCode
 
 if (-not (Test-Path -LiteralPath $AutomationLogPath -PathType Leaf)) {

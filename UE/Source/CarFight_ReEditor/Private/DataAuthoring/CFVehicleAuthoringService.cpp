@@ -1,11 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringService.cpp
-// Version: v1.5.0
-// Date: 2026-08-18
+// Version: v1.6.4
+// Date: 2026-08-28
 // Description: DAUTH-P0-08I~P0-12 Common Authoring Service 구현입니다.
 // Scope: R0 read facade, semantic preview/commit, bounded Mesh-only Candidate projection, R3 shared Apply lane를 제공합니다.
 // Changelog:
+// - v1.6.4: Definition layer에서는 validator blocker보다 Resolver R15 internal Error code를 우선 진단해 실제 Resolve=false 원인을 보존.
+// - v1.6.3: current baseline Resolve Error 진단을 Recipe/Resolver/Definition 세 validation layer 전체에서 찾아 layer+code+path+message로 보존.
+// - v1.6.2: current baseline Pure Resolver Error도 첫 structured Resolver issue code/path/message를 보존해 원인 진단 가능하게 교정.
+// - v1.6.1: prospective Pure Resolver Error를 generic InternalError로 숨기지 않고 첫 structured Resolver issue code/path/message를 진단문에 보존.
+// - v1.6.0: P0-12 UA-07 baseline-safe Profile 복구를 위해 explicit UnbindVehicleProfile R1 Recipe-only semantic preview/commit을 추가. Bind non-empty path 계약과 Target/Profile/Save 경계는 유지.
 // - v1.5.0: P0-12 UA-02에서 sibling directory만 조회해 실제 Mesh-only 차량이 0개로 보이던 문제를 common vehicle mesh collection root recursive query로 교정.
 // - v1.4.0: P0-12 USER Acceptance에서 발견된 WheelMesh→Mesh-only Candidate 오분류를 실제 VehicleVisualConfig wheel 참조 기반으로 차단.
 // - v1.3.0: P0-11 Vehicle Browser에 existing Chassis directories 기반 bounded Mesh-only Candidate projection 추가.
@@ -221,9 +226,11 @@ namespace CFVehicleAuthoringPrivate
 	FName GetSemanticOperationName(const ECFVehicleSemanticOp Operation)
 	{
 		switch (Operation)
-		{
+				{
 		case ECFVehicleSemanticOp::BindVehicleProfile:
 			return TEXT("BindVehicleProfile");
+		case ECFVehicleSemanticOp::UnbindVehicleProfile:
+			return TEXT("UnbindVehicleProfile");
 		case ECFVehicleSemanticOp::SetVehicleArchetype:
 			return TEXT("SetVehicleArchetype");
 		case ECFVehicleSemanticOp::SetVehicleAssetIntent:
@@ -620,7 +627,56 @@ namespace CFVehicleAuthoringPrivate
 		OutState.ResolveRequest.ResolverContractRevision = FCFVehicleResolver::CurrentResolverContractRevision;
 		if (!FCFVehicleResolver::Resolve(OutState.ResolveRequest, OutState.ResolveResult))
 		{
-			SetFailed(OutOperation, TEXT("Shared Pure Resolver가 internal Error로 실패했습니다."));
+			// Resolve Error를 발생시킨 첫 structured issue와 소유 validation layer를 찾습니다.
+			const FCFVehicleValidationIssue* FirstError = OutState.ResolveResult.ResolverValidation.FindByPredicate([](const FCFVehicleValidationIssue& Issue)
+			{
+				return Issue.Severity == ECFVehicleValidationSeverity::Error;
+			});
+			FString ErrorLayer = TEXT("Resolver");
+
+			if (!FirstError)
+			{
+				FirstError = OutState.ResolveResult.RecipeValidation.FindByPredicate([](const FCFVehicleValidationIssue& Issue)
+				{
+					return Issue.Severity == ECFVehicleValidationSeverity::Error;
+				});
+				ErrorLayer = TEXT("Recipe");
+			}
+			if (!FirstError)
+			{
+				// R15 자체 실패 code를 기존 Definition validator Error보다 우선해 실제 Resolve=false 원인을 보존합니다.
+				FirstError = OutState.ResolveResult.DefinitionValidation.FindByPredicate([](const FCFVehicleValidationIssue& Issue)
+				{
+					return Issue.IssueCode == TEXT("DefinitionHashReadbackMismatch")
+						|| Issue.IssueCode == TEXT("DefinitionMaterializationFailed");
+				});
+				if (!FirstError)
+				{
+					FirstError = OutState.ResolveResult.DefinitionValidation.FindByPredicate([](const FCFVehicleValidationIssue& Issue)
+					{
+						return Issue.Severity == ECFVehicleValidationSeverity::Error;
+					});
+				}
+				ErrorLayer = TEXT("Definition");
+			}
+
+			if (FirstError)
+			{
+				// Field-specific issue이면 exact canonical path를 함께 노출합니다.
+				const FString ErrorFieldPath = FirstError->FieldPath.ToCanonicalString(true);
+				SetFailed(
+					OutOperation,
+					FString::Printf(
+						TEXT("Shared Resolve Error: Layer=%s Code=%s Field=%s Message=%s"),
+						*ErrorLayer,
+						*FirstError->IssueCode.ToString(),
+						ErrorFieldPath.IsEmpty() ? TEXT("<none>") : *ErrorFieldPath,
+						*FirstError->Message));
+			}
+			else
+			{
+				SetFailed(OutOperation, TEXT("Shared Resolve가 Error로 실패했지만 세 validation layer에 structured Error issue가 없습니다."));
+			}
 			return false;
 		}
 
@@ -661,7 +717,27 @@ namespace CFVehicleAuthoringPrivate
 		if (!FCFVehicleResolver::Resolve(OutRequest, OutResult))
 		{
 			OutErrorCode = ECFAuthoringErrorCode::InternalError;
-			OutError = TEXT("Prospective shared Pure Resolver가 internal Error로 실패했습니다.");
+
+			// Resolver가 이미 구조화한 첫 Error issue를 상위 진단에 보존합니다.
+			const FCFVehicleValidationIssue* FirstResolverError = OutResult.ResolverValidation.FindByPredicate([](const FCFVehicleValidationIssue& Issue)
+			{
+				return Issue.Severity == ECFVehicleValidationSeverity::Error;
+			});
+
+			if (FirstResolverError)
+			{
+				// Field-specific issue이면 exact canonical path를 함께 노출합니다.
+				const FString ErrorFieldPath = FirstResolverError->FieldPath.ToCanonicalString(true);
+				OutError = FString::Printf(
+					TEXT("Prospective shared Pure Resolver Error: Code=%s Field=%s Message=%s"),
+					*FirstResolverError->IssueCode.ToString(),
+					ErrorFieldPath.IsEmpty() ? TEXT("<none>") : *ErrorFieldPath,
+					*FirstResolverError->Message);
+			}
+			else
+			{
+				OutError = TEXT("Prospective shared Pure Resolver가 internal Error로 실패했지만 structured Resolver Error issue가 없습니다.");
+			}
 			return false;
 		}
 		OutErrorCode = ECFAuthoringErrorCode::None;
@@ -766,6 +842,65 @@ namespace CFVehicleAuthoringPrivate
 		}
 	}
 
+			// Prospective Recipe Snapshot에서 exact Profile Domain binding만 명시적으로 비웁니다.
+	bool ClearProfileBinding(
+		FCFVehicleRecipeSnapshot& Snapshot,
+		const ECFVehicleProfileDomain Domain,
+		ECFAuthoringErrorCode& OutErrorCode,
+		FString& OutError)
+	{
+		switch (Domain)
+		{
+		case ECFVehicleProfileDomain::VehicleBase:
+			Snapshot.ProfileBindings.VehicleBaseProfile.Reset();
+			break;
+		case ECFVehicleProfileDomain::Drivetrain:
+			Snapshot.ProfileBindings.DrivetrainProfile.Reset();
+			break;
+		case ECFVehicleProfileDomain::Handling:
+			Snapshot.ProfileBindings.HandlingProfile.Reset();
+			break;
+		case ECFVehicleProfileDomain::Performance:
+			Snapshot.ProfileBindings.PerformanceProfile.Reset();
+			break;
+		case ECFVehicleProfileDomain::DriveState:
+			Snapshot.ProfileBindings.DriveStateProfile.Reset();
+			break;
+		default:
+			OutErrorCode = ECFAuthoringErrorCode::InvalidSemanticInput;
+			OutError = TEXT("Profile 연결 해제에는 exact Profile Domain이 필요합니다.");
+			return false;
+		}
+		OutErrorCode = ECFAuthoringErrorCode::None;
+		OutError.Reset();
+		return true;
+	}
+
+	// Persistent Recipe UObject에서 exact Profile Domain binding만 명시적으로 비웁니다.
+	bool ClearPersistentProfileBinding(UCFVehicleRecipeData& Recipe, const ECFVehicleProfileDomain Domain)
+	{
+		switch (Domain)
+		{
+		case ECFVehicleProfileDomain::VehicleBase:
+			Recipe.ProfileBindings.VehicleBaseProfile.Reset();
+			return true;
+		case ECFVehicleProfileDomain::Drivetrain:
+			Recipe.ProfileBindings.DrivetrainProfile.Reset();
+			return true;
+		case ECFVehicleProfileDomain::Handling:
+			Recipe.ProfileBindings.HandlingProfile.Reset();
+			return true;
+		case ECFVehicleProfileDomain::Performance:
+			Recipe.ProfileBindings.PerformanceProfile.Reset();
+			return true;
+		case ECFVehicleProfileDomain::DriveState:
+			Recipe.ProfileBindings.DriveStateProfile.Reset();
+			return true;
+		default:
+			return false;
+		}
+	}
+
 	// SetDrivingFeel partial patch가 0..1 범위인지 검사하고 Snapshot의 selected axes만 바꿉니다.
 	bool ApplyDrivingFeelPatch(
 		FCFVehicleFeelIntent& InOutIntent,
@@ -824,10 +959,13 @@ namespace CFVehicleAuthoringPrivate
 		ECFAuthoringErrorCode& OutErrorCode,
 		FString& OutError)
 	{
-		switch (Change.Operation)
+				switch (Change.Operation)
 		{
 		case ECFVehicleSemanticOp::BindVehicleProfile:
 			return SetProfileBinding(InOutSnapshot, Change.ProfileDomain, Change.ProfileAssetPath, OutErrorCode, OutError);
+
+		case ECFVehicleSemanticOp::UnbindVehicleProfile:
+			return ClearProfileBinding(InOutSnapshot, Change.ProfileDomain, OutErrorCode, OutError);
 
 		case ECFVehicleSemanticOp::SetVehicleArchetype:
 			if (Change.VehicleArchetypeId.IsNone())
@@ -966,10 +1104,10 @@ namespace CFVehicleAuthoringPrivate
 		return true;
 	}
 
-		// Current persistent Recipe가 typed semantic desired state를 이미 만족하는지 exact operation별로 판정합니다.
+			// Current persistent Recipe가 typed semantic desired state를 이미 만족하는지 exact operation별로 판정합니다.
 	bool IsSemanticChangeSatisfied(const UCFVehicleRecipeData& Recipe, const FCFVehicleSemanticChange& Change)
 	{
-		switch (Change.Operation)
+				switch (Change.Operation)
 		{
 		case ECFVehicleSemanticOp::BindVehicleProfile:
 			switch (Change.ProfileDomain)
@@ -982,8 +1120,25 @@ namespace CFVehicleAuthoringPrivate
 				return Recipe.ProfileBindings.HandlingProfile.ToSoftObjectPath() == Change.ProfileAssetPath;
 			case ECFVehicleProfileDomain::Performance:
 				return Recipe.ProfileBindings.PerformanceProfile.ToSoftObjectPath() == Change.ProfileAssetPath;
-			case ECFVehicleProfileDomain::DriveState:
+						case ECFVehicleProfileDomain::DriveState:
 				return Recipe.ProfileBindings.DriveStateProfile.ToSoftObjectPath() == Change.ProfileAssetPath;
+			default:
+				return false;
+			}
+
+		case ECFVehicleSemanticOp::UnbindVehicleProfile:
+			switch (Change.ProfileDomain)
+			{
+			case ECFVehicleProfileDomain::VehicleBase:
+				return !Recipe.ProfileBindings.VehicleBaseProfile.ToSoftObjectPath().IsValid();
+			case ECFVehicleProfileDomain::Drivetrain:
+				return !Recipe.ProfileBindings.DrivetrainProfile.ToSoftObjectPath().IsValid();
+			case ECFVehicleProfileDomain::Handling:
+				return !Recipe.ProfileBindings.HandlingProfile.ToSoftObjectPath().IsValid();
+			case ECFVehicleProfileDomain::Performance:
+				return !Recipe.ProfileBindings.PerformanceProfile.ToSoftObjectPath().IsValid();
+			case ECFVehicleProfileDomain::DriveState:
+				return !Recipe.ProfileBindings.DriveStateProfile.ToSoftObjectPath().IsValid();
 			default:
 				return false;
 			}
@@ -1045,10 +1200,12 @@ namespace CFVehicleAuthoringPrivate
 	// 검증이 끝난 normal R1 typed semantic command를 persistent Recipe에 적용합니다.
 	bool ApplySemanticChangeToRecipe(UCFVehicleRecipeData& Recipe, const FCFVehicleSemanticChange& Change)
 	{
-		switch (Change.Operation)
+				switch (Change.Operation)
 		{
 		case ECFVehicleSemanticOp::BindVehicleProfile:
 			return SetPersistentProfileBinding(Recipe, Change.ProfileDomain, Change.ProfileAssetPath);
+		case ECFVehicleSemanticOp::UnbindVehicleProfile:
+			return ClearPersistentProfileBinding(Recipe, Change.ProfileDomain);
 		case ECFVehicleSemanticOp::SetVehicleArchetype:
 			Recipe.VehicleArchetypeId = Change.VehicleArchetypeId;
 			return true;

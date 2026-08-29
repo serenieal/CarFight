@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleRefEvidence.cpp
-// Version: v1.2.0
+// Version: v1.3.0
 // Date: 2026-08-26
 // Description: CF-FQ-040 Vehicle Reference Evidence Unicode NFC canonical semantic payload와 portable SHA-256 fingerprint 구현입니다.
 // Changelog:
+// - v1.3.0: VB-P0-09 Step 1 initial Research payload의 stable-ID/provenance/reference/blocking-conflict validation과 atomic apply+fingerprint 갱신을 추가.
 // - v1.2.0: CFVRN-1 frozen contract의 Unicode NFC를 UE 공급 ICU Normalizer2로 구현하고 stable-ID 정렬과 모든 length-prefixed semantic token에 적용.
 // - v1.1.1: Unreal CoreUObject namespace UI와 OpenSSL 전역 UI typedef 충돌을 third-party include 구간의 local macro rename으로 격리.
 // - v1.1.0: Windows UE 5.8에서 GenericPlatform SHA-256이 assert-only인 경로를 제거하고 Editor-only OpenSSL EVP SHA-256으로 교체.
@@ -504,5 +505,219 @@ bool UCFVehicleRefEvidence::RefreshEvidenceFingerprint(FString& OutError)
 		return false;
 	}
 	EvidenceFingerprint = MoveTemp(CurrentFingerprint);
+	return true;
+}
+
+// 새 companion 생성에 사용할 initial Research payload의 ID/provenance/reference integrity를 검증합니다.
+bool UCFVehicleRefEvidence::ValidateInitialResearchPayload(const FCFVehicleRefEvidencePayload& Payload, FString& OutError) const
+{
+	if (Payload.ReferenceVehicles.IsEmpty())
+	{
+		OutError = TEXT("Reference Research에는 최소 1개의 Reference Vehicle identity가 필요합니다.");
+		return false;
+	}
+
+	// ReferenceVehicleId 중복과 참조 무결성 검사용 ID 집합입니다.
+	TSet<FName> ReferenceVehicleIds;
+	// Primary Reference Vehicle 개수입니다.
+	int32 PrimaryReferenceCount = 0;
+	for (const FCFRefVehicleIdentity& ReferenceVehicle : Payload.ReferenceVehicles)
+	{
+		if (ReferenceVehicle.ReferenceVehicleId.IsNone() || ReferenceVehicleIds.Contains(ReferenceVehicle.ReferenceVehicleId))
+		{
+			OutError = TEXT("ReferenceVehicleId는 비어 있지 않고 Evidence 안에서 유일해야 합니다.");
+			return false;
+		}
+		ReferenceVehicleIds.Add(ReferenceVehicle.ReferenceVehicleId);
+		if (ReferenceVehicle.Role == ECFRefVehicleRole::Primary)
+		{
+			++PrimaryReferenceCount;
+		}
+	}
+	if (PrimaryReferenceCount != 1)
+	{
+		OutError = TEXT("Initial Reference Set에는 exact Primary Reference Vehicle이 1개 필요합니다.");
+		return false;
+	}
+
+	// SourceId 중복과 Claim/Unknown citation 무결성 검사용 ID 집합입니다.
+	TSet<FName> SourceIds;
+	for (const FCFRefSourceCitation& Source : Payload.Sources)
+	{
+		if (Source.SourceId.IsNone() || SourceIds.Contains(Source.SourceId))
+		{
+			OutError = TEXT("SourceId는 비어 있지 않고 Evidence 안에서 유일해야 합니다.");
+			return false;
+		}
+		for (const FName ReferenceVehicleId : Source.ReferenceVehicleIds)
+		{
+			if (!ReferenceVehicleIds.Contains(ReferenceVehicleId))
+			{
+				OutError = FString::Printf(TEXT("Source %s가 존재하지 않는 ReferenceVehicleId %s를 참조합니다."), *Source.SourceId.ToString(), *ReferenceVehicleId.ToString());
+				return false;
+			}
+		}
+		SourceIds.Add(Source.SourceId);
+	}
+
+	// ClaimId 중복과 Derived/Conflict 참조 무결성 검사용 ID 집합입니다.
+	TSet<FName> ClaimIds;
+	for (const FCFRefClaim& Claim : Payload.Claims)
+	{
+		if (Claim.ClaimId.IsNone() || ClaimIds.Contains(Claim.ClaimId))
+		{
+			OutError = TEXT("ClaimId는 비어 있지 않고 Evidence 안에서 유일해야 합니다.");
+			return false;
+		}
+		if (!ReferenceVehicleIds.Contains(Claim.ReferenceVehicleId) || Claim.FactKey.IsNone())
+		{
+			OutError = FString::Printf(TEXT("Claim %s의 ReferenceVehicleId/FactKey가 유효하지 않습니다."), *Claim.ClaimId.ToString());
+			return false;
+		}
+		ClaimIds.Add(Claim.ClaimId);
+	}
+
+	// Initial research에 canonical FACT/DERIVED claim이 하나 이상 있는지 여부입니다.
+	bool bHasCanonicalClaim = false;
+	for (const FCFRefClaim& Claim : Payload.Claims)
+	{
+		if (Claim.Provenance == ECFRefProvenance::GAME_BIAS)
+		{
+			OutError = FString::Printf(TEXT("Initial Research에는 GAME_BIAS Claim을 넣을 수 없습니다: %s"), *Claim.ClaimId.ToString());
+			return false;
+		}
+		if (Claim.Provenance == ECFRefProvenance::FACT)
+		{
+			if (Claim.CitationIds.IsEmpty())
+			{
+				OutError = FString::Printf(TEXT("FACT Claim %s에는 CitationId가 1개 이상 필요합니다."), *Claim.ClaimId.ToString());
+				return false;
+			}
+			for (const FName CitationId : Claim.CitationIds)
+			{
+				if (!SourceIds.Contains(CitationId))
+				{
+					OutError = FString::Printf(TEXT("FACT Claim %s가 존재하지 않는 SourceId %s를 참조합니다."), *Claim.ClaimId.ToString(), *CitationId.ToString());
+					return false;
+				}
+			}
+		}
+		else if (Claim.Provenance == ECFRefProvenance::DERIVED)
+		{
+			if (Claim.InputClaimIds.IsEmpty() || Claim.MethodId.IsNone() || Claim.MethodRevision <= 0)
+			{
+				OutError = FString::Printf(TEXT("DERIVED Claim %s에는 InputClaimIds와 MethodId/Revision이 필요합니다."), *Claim.ClaimId.ToString());
+				return false;
+			}
+			for (const FName InputClaimId : Claim.InputClaimIds)
+			{
+				if (!ClaimIds.Contains(InputClaimId) || InputClaimId == Claim.ClaimId)
+				{
+					OutError = FString::Printf(TEXT("DERIVED Claim %s의 InputClaimId %s가 유효하지 않습니다."), *Claim.ClaimId.ToString(), *InputClaimId.ToString());
+					return false;
+				}
+			}
+		}
+
+		if (Claim.ResolutionState == ECFRefClaimResolution::Canonical)
+		{
+			bHasCanonicalClaim = true;
+		}
+	}
+	if (!bHasCanonicalClaim)
+	{
+		OutError = TEXT("Initial Reference Set에는 최소 1개의 Canonical FACT/DERIVED Claim이 필요합니다.");
+		return false;
+	}
+
+	// ConflictId 중복 검사용 ID 집합입니다.
+	TSet<FName> ConflictIds;
+	for (const FCFRefConflict& Conflict : Payload.Conflicts)
+	{
+		if (Conflict.ConflictId.IsNone() || ConflictIds.Contains(Conflict.ConflictId)
+			|| !ReferenceVehicleIds.Contains(Conflict.ReferenceVehicleId) || Conflict.FactKey.IsNone())
+		{
+			OutError = TEXT("Conflict identity/reference/fact key가 유효하지 않거나 중복되었습니다.");
+			return false;
+		}
+		ConflictIds.Add(Conflict.ConflictId);
+		for (const FName CandidateClaimId : Conflict.CandidateClaimIds)
+		{
+			if (!ClaimIds.Contains(CandidateClaimId))
+			{
+				OutError = FString::Printf(TEXT("Conflict %s가 존재하지 않는 Candidate Claim %s를 참조합니다."), *Conflict.ConflictId.ToString(), *CandidateClaimId.ToString());
+				return false;
+			}
+		}
+
+		// Block conflict가 실제로 해소되지 않았는지 여부입니다.
+		const bool bUnresolvedBlock = Conflict.Severity == ECFRefConflictSeverity::Block
+			&& (Conflict.ResolutionPolicy == ECFRefResolutionPolicy::UnresolvedBlock || Conflict.ResolutionClaimId.IsNone());
+		if (bUnresolvedBlock)
+		{
+			OutError = FString::Printf(TEXT("Reference Evidence에 unresolved blocking conflict가 남아 있습니다: %s"), *Conflict.ConflictId.ToString());
+			return false;
+		}
+		if (!Conflict.ResolutionClaimId.IsNone())
+		{
+			// Conflict가 canonical resolution으로 가리키는 Claim입니다.
+			const FCFRefClaim* ResolutionClaim = Payload.Claims.FindByPredicate([&Conflict](const FCFRefClaim& Claim)
+			{
+				return Claim.ClaimId == Conflict.ResolutionClaimId;
+			});
+			if (!ResolutionClaim || ResolutionClaim->ResolutionState != ECFRefClaimResolution::Canonical)
+			{
+				OutError = FString::Printf(TEXT("Conflict %s의 ResolutionClaimId는 존재하는 Canonical Claim이어야 합니다."), *Conflict.ConflictId.ToString());
+				return false;
+			}
+		}
+	}
+
+	// UnknownFactId 중복 검사용 ID 집합입니다.
+	TSet<FName> UnknownFactIds;
+	for (const FCFRefUnknownFact& UnknownFact : Payload.UnknownFacts)
+	{
+		if (UnknownFact.UnknownFactId.IsNone() || UnknownFactIds.Contains(UnknownFact.UnknownFactId)
+			|| !ReferenceVehicleIds.Contains(UnknownFact.ReferenceVehicleId) || UnknownFact.FactKey.IsNone())
+		{
+			OutError = TEXT("UnknownFact identity/reference/fact key가 유효하지 않거나 중복되었습니다.");
+			return false;
+		}
+		UnknownFactIds.Add(UnknownFact.UnknownFactId);
+		for (const FName SearchedSourceId : UnknownFact.SearchedSourceIds)
+		{
+			if (!SourceIds.Contains(SearchedSourceId))
+			{
+				OutError = FString::Printf(TEXT("UnknownFact %s가 존재하지 않는 searched SourceId %s를 참조합니다."), *UnknownFact.UnknownFactId.ToString(), *SearchedSourceId.ToString());
+				return false;
+			}
+		}
+	}
+
+	OutError.Reset();
+	return true;
+}
+
+// 검증된 initial Research payload를 이 Evidence의 research fields에 복사하고 generated fingerprint를 갱신합니다.
+bool UCFVehicleRefEvidence::ApplyInitialResearchPayload(const FCFVehicleRefEvidencePayload& Payload, FString& OutError)
+{
+	if (!ValidateInitialResearchPayload(Payload, OutError))
+	{
+		return false;
+	}
+
+	ReferenceVehicles = Payload.ReferenceVehicles;
+	Sources = Payload.Sources;
+	Claims = Payload.Claims;
+	Conflicts = Payload.Conflicts;
+	UnknownFacts = Payload.UnknownFacts;
+	ResearchNotes = Payload.ResearchNotes;
+	LastResearchAtUtc = FDateTime::UtcNow();
+	if (!RefreshEvidenceFingerprint(OutError))
+	{
+		return false;
+	}
+
+	OutError.Reset();
 	return true;
 }

@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.6.0
-// Date: 2026-08-26
-// Description: CF-FQ-015 VehicleData 검증 + CF-FQ-040 VB-P0-05 Chassis/Transmission complete setup 계약을 반영한 읽기 전용 검증 헬퍼 구현입니다.
+// Version: 1.7.0
+// Date: 2026-08-28
+// Description: VehicleData 검증 + CF-FQ-040 WSA-P0-04 Wheel Size authority validation을 반영한 읽기 전용 검증 헬퍼 구현입니다.
 // Scope: CFVehicleData 필수 참조, 소켓, 레이아웃, 하드포인트·MountProfile, 피팅 질량, Movement, WheelVisual, DriveState, 기준 DA 비교 검증 리포트를 제공합니다.
 // Changelog:
+// - v1.7.0: Socket Scale/Legacy AutoScale 동시 활성화를 Error로 차단하고 Socket Scale X/Z/양수 및 axle 좌우 일치를 검증. Socket mode에서는 Legacy clamp/radius 검사를 수행하지 않음.
 // - v1.6.0: VB-P0-05 ChassisWidth/Height와 complete Transmission ratio-set/FinalRatio/Shift RPM/GearChangeTime/Efficiency를 최종 VehicleData Movement validation에 추가. Shift RPM은 Chaos 내부 uint32 의미에 맞는 비음수 정수값을 요구.
 // - v1.5.0: UI-P0-06 explicit RedlineStartRPM 검증 추가. 0은 backward-compatible 미설정으로 허용하고, 명시값만 EngineIdleRPM < RedlineStartRPM < EngineMaxRPM을 강제.
 // - v1.4.0: VD-P0-02에서 Movement override, Wheel width, WheelVisual auto-scale·clamp와 Fitting mass 비교 항목을 기존 CompareVehicleData에 추가.
@@ -26,6 +27,7 @@
 // - 에디터 위젯은 BP 내부 판단 대신 이 헬퍼의 리포트를 표시한다.
 
 #include "CFVDAValidator.h"
+#include "CFWheelSizeUtils.h"
 
 #include "CFVehicleData.h"
 #include "Containers/Set.h"
@@ -944,7 +946,66 @@ FCFVDAValidationReport UCFVDAValidator::ValidateWheelVisualConfig(UCFVehicleData
 		CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Warning, FName(TEXT("WheelVisual")), TEXT("WheelVisualConfig.FrontWheelCountForSteering"), TEXT("조향 전륜 개수"), TEXT("조향 전륜 개수가 예상 휠 개수보다 큽니다."), TEXT("4륜 전륜 조향 차량이면 FrontWheelCountForSteering을 2로 설정하세요."));
 	}
 
-	if (WheelVisualConfig.bUseWheelVisualOverrides && WheelVisualConfig.bAutoScaleWheelMeshToRadius)
+	if (WheelVisualConfig.bUseWheelVisualOverrides
+		&& WheelVisualConfig.bUseWheelSocketScale
+		&& WheelVisualConfig.bAutoScaleWheelMeshToRadius)
+	{
+		CFVDAValidatorInternal::AddItem(
+			Report,
+			ECFVDASeverity::Error,
+			FName(TEXT("WheelVisual")),
+			TEXT("WheelVisualConfig.bUseWheelSocketScale / bAutoScaleWheelMeshToRadius"),
+			TEXT("휠 크기 Authority 충돌"),
+			TEXT("차체 Socket Scale과 WheelRadius 기반 Legacy AutoScale이 동시에 켜져 있습니다."),
+			TEXT("신규 Socket Scale 차량은 bUseWheelSocketScale만 켜고 bAutoScaleWheelMeshToRadius는 끄세요."));
+	}
+
+	if (WheelVisualConfig.bUseWheelVisualOverrides && WheelVisualConfig.bUseWheelSocketScale)
+	{
+		const FCFVehicleLayoutConfig& LayoutConfig = TargetVehicleData->VehicleLayoutConfig;
+		const FCFWheelAnchorPose* AnchorPoses[] =
+		{
+			&LayoutConfig.WheelAnchorFL,
+			&LayoutConfig.WheelAnchorFR,
+			&LayoutConfig.WheelAnchorRL,
+			&LayoutConfig.WheelAnchorRR
+		};
+		const TCHAR* AnchorLabels[] = {TEXT("FL"), TEXT("FR"), TEXT("RL"), TEXT("RR")};
+		for (int32 WheelIndex = 0; WheelIndex < UE_ARRAY_COUNT(AnchorPoses); ++WheelIndex)
+		{
+			FString ScaleError;
+			if (!FCFWheelSizeUtils::ValidateWheelSocketScale(AnchorPoses[WheelIndex]->RelativeScale, ScaleError))
+			{
+				CFVDAValidatorInternal::AddItem(
+					Report,
+					ECFVDASeverity::Error,
+					FName(TEXT("WheelVisual")),
+					FString::Printf(TEXT("VehicleLayoutConfig.WheelAnchor%s.RelativeScale"), AnchorLabels[WheelIndex]),
+					FString::Printf(TEXT("%s Wheel Socket Scale"), AnchorLabels[WheelIndex]),
+					ScaleError,
+					TEXT("USER가 Static Mesh 에디터에서 X/Z를 같은 양수 직경 배율로, Y를 양수 폭 배율로 수정하세요."));
+			}
+		}
+
+		auto AreSocketScalesCompatible = [](const FVector& Left, const FVector& Right)
+		{
+			return FMath::IsNearlyEqual(Left.X, Right.X, FCFWheelSizeUtils::DefaultRadialScaleTolerance)
+				&& FMath::IsNearlyEqual(Left.Y, Right.Y, FCFWheelSizeUtils::DefaultRadialScaleTolerance)
+				&& FMath::IsNearlyEqual(Left.Z, Right.Z, FCFWheelSizeUtils::DefaultRadialScaleTolerance);
+		};
+		if (!AreSocketScalesCompatible(LayoutConfig.WheelAnchorFL.RelativeScale, LayoutConfig.WheelAnchorFR.RelativeScale))
+		{
+			CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("WheelVisual")), TEXT("VehicleLayoutConfig.WheelAnchorFL/FR.RelativeScale"), TEXT("전륜 좌우 Wheel Size"), TEXT("전륜 FL/FR Socket Scale이 서로 다릅니다."), TEXT("같은 전륜 axle의 좌우 타이어 크기를 동일하게 맞추세요."));
+		}
+		if (!AreSocketScalesCompatible(LayoutConfig.WheelAnchorRL.RelativeScale, LayoutConfig.WheelAnchorRR.RelativeScale))
+		{
+			CFVDAValidatorInternal::AddItem(Report, ECFVDASeverity::Error, FName(TEXT("WheelVisual")), TEXT("VehicleLayoutConfig.WheelAnchorRL/RR.RelativeScale"), TEXT("후륜 좌우 Wheel Size"), TEXT("후륜 RL/RR Socket Scale이 서로 다릅니다."), TEXT("같은 후륜 axle의 좌우 타이어 크기를 동일하게 맞추세요."));
+		}
+	}
+
+	if (WheelVisualConfig.bUseWheelVisualOverrides
+		&& WheelVisualConfig.bAutoScaleWheelMeshToRadius
+		&& !WheelVisualConfig.bUseWheelSocketScale)
 	{
 		// [v1.3.0] 휠 메시 자동 스케일의 최소 허용 배율입니다.
 		const float ScaleClampMin = WheelVisualConfig.WheelMeshScaleClampMin;

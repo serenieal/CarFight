@@ -1,11 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleBuilderCommit.cpp
-// Version: v1.2.0
-// Date: 2026-08-27
-// Description: CF-FQ-040 VB-P0-05 Evidence-bound private 4 Profile commit + persistent provenance receipt/final readback hardening 구현입니다.
+// Version: v1.4.0
+// Date: 2026-08-28
+// Description: CF-FQ-040 Builder private Profile commit + WSA-P0-04 Socket Scale wheel authority guard 구현입니다.
 // Scope: fresh Evidence + Recipe binding + OwnerRecipeId + 4 current fingerprints + prospective Resolver/Target state를 exact approval scope에 묶습니다.
 // Changelog:
+// - v1.4.0: SocketScaleFromChassis에서 VehicleBase Reference wheel geometry 5필드의 Builder mutation을 baseline-preserve fail-closed로 차단.
+// - v1.3.0: BuilderCommitReceipt에 consumed canonical Claim ID 목록 자체를 lexical order로 보존해 Editor restart 뒤 Final Review provenance resume를 지원.
 // - v1.2.0: accepted proposal/Evidence/Claim set/4 Profile fingerprint를 Recipe BuilderCommitReceipt에 persistent binding하고, receipt-only migration과 PostEditChange/final fingerprint readback/rollback을 추가.
 // - v1.1.0: 설계 검수 교정으로 current EvidenceId/fingerprint/consumed canonical claims를 fresh 검증하고 complete prospective 4 Profile을 Shared Resolver/Definition validation에 통과시킨 결과를 proposal hash에 binding. Current gameplay에 manual shift가 없으므로 Builder Transmission은 automatic gears + auto reverse를 요구.
 // - v1.0.0: PreviewBuilderProfiles / CommitBuilderProfiles 최초 구현. Shared/legacy Profile mutation과 raw VehicleData write를 fail-closed로 차단.
@@ -353,6 +355,45 @@ namespace CFVehicleBuilderCommitPrivate
 			&& FMath::IsNearlyEqual(RpmValue, FMath::RoundToFloat(RpmValue));
 	}
 
+	// SocketScaleFromChassis에서 Builder Profile proposal이 Wheel Size shadow authority를 만들지 않는지 검사합니다.
+	bool ValidateSocketScaleWheelAuthority(
+		const FCFBuilderProfileCommitRequest& Request,
+		const FLoadedProfiles& CurrentProfiles,
+		FString& OutError)
+	{
+		if (!Request.Recipe || Request.Recipe->WheelVisualIntent.Mode != ECFWheelVisualIntentMode::SocketScaleFromChassis)
+		{
+			return true;
+		}
+		if (!CurrentProfiles.VehicleBase)
+		{
+			OutError = TEXT("Socket Scale Wheel authority 검증에 current VehicleBase Profile이 필요합니다.");
+			return false;
+		}
+
+		const FCFVehicleBaseProfileData& Current = CurrentProfiles.VehicleBase->Data;
+		const FCFVehicleBaseProfileData& Proposed = Request.Payload.VehicleBaseData;
+		if (Current.bUseReferenceWheelGeometry)
+		{
+			OutError = TEXT("SocketScaleFromChassis에서는 current VehicleBase Profile의 bUseReferenceWheelGeometry가 false여야 합니다. Reference wheel geometry는 sanity reference로만 유지하세요.");
+			return false;
+		}
+
+		const bool bProtectedFieldsPreserved = Proposed.bUseReferenceWheelGeometry == Current.bUseReferenceWheelGeometry
+			&& FMath::IsNearlyEqual(Proposed.FrontWheelRadius, Current.FrontWheelRadius, KINDA_SMALL_NUMBER)
+			&& FMath::IsNearlyEqual(Proposed.RearWheelRadius, Current.RearWheelRadius, KINDA_SMALL_NUMBER)
+			&& FMath::IsNearlyEqual(Proposed.FrontWheelWidth, Current.FrontWheelWidth, KINDA_SMALL_NUMBER)
+			&& FMath::IsNearlyEqual(Proposed.RearWheelWidth, Current.RearWheelWidth, KINDA_SMALL_NUMBER);
+		if (!bProtectedFieldsPreserved)
+		{
+			OutError = TEXT("SocketScaleFromChassis에서는 AI/Builder Profile proposal이 bUseReferenceWheelGeometry 또는 Front/Rear WheelRadius/Width를 변경할 수 없습니다. 타이어 크기는 USER Wheel Socket Scale + Wheel Mesh Bounds가 소유합니다.");
+			return false;
+		}
+
+		OutError.Reset();
+		return true;
+	}
+
 	// Complete prospective Builder payload가 Profile/Transmission 최소 물리 계약을 만족하는지 검사합니다.
 	bool ValidateProspectivePayload(const FCFBuilderPrivateProfilePayload& Payload, FString& OutError)
 	{
@@ -599,6 +640,18 @@ namespace CFVehicleBuilderCommitPrivate
 		return ClaimPayload;
 	}
 
+	// Consumed Claim ID를 deterministic lexical order로 정렬한 persistent resume 목록을 만듭니다.
+	TArray<FName> BuildCanonicalConsumedClaimIds(const TArray<FName>& ConsumedClaimIds)
+	{
+		// Caller order와 무관하게 receipt에 저장할 canonical 복사본입니다.
+		TArray<FName> SortedClaimIds = ConsumedClaimIds;
+		SortedClaimIds.Sort([](const FName Left, const FName Right)
+		{
+			return Left.LexicalLess(Right);
+		});
+		return SortedClaimIds;
+	}
+
 	// Consumed Claim ID set의 order-independent deterministic hash를 만듭니다.
 	FString BuildConsumedClaimIdHash(const TArray<FName>& ConsumedClaimIds)
 	{
@@ -617,6 +670,7 @@ namespace CFVehicleBuilderCommitPrivate
 			&& Receipt.EvidencePath == Request.EvidenceBinding.EvidencePath
 			&& Receipt.EvidenceId == Request.EvidenceBinding.ExpectedEvidenceId
 			&& Receipt.EvidenceFingerprint == Preview.EvidenceFingerprint
+			&& Receipt.ConsumedClaimIds == BuildCanonicalConsumedClaimIds(Request.EvidenceBinding.ConsumedClaimIds)
 			&& Receipt.ConsumedClaimIdsHash == BuildConsumedClaimIdHash(Request.EvidenceBinding.ConsumedClaimIds)
 			&& Receipt.VehicleBaseFingerprint == Preview.ProspectiveFingerprints.VehicleBaseFingerprint
 			&& Receipt.DrivetrainFingerprint == Preview.ProspectiveFingerprints.DrivetrainFingerprint
@@ -637,6 +691,7 @@ namespace CFVehicleBuilderCommitPrivate
 		Receipt.EvidencePath = Request.EvidenceBinding.EvidencePath;
 		Receipt.EvidenceId = Request.EvidenceBinding.ExpectedEvidenceId;
 		Receipt.EvidenceFingerprint = Preview.EvidenceFingerprint;
+		Receipt.ConsumedClaimIds = BuildCanonicalConsumedClaimIds(Request.EvidenceBinding.ConsumedClaimIds);
 		Receipt.ConsumedClaimIdsHash = BuildConsumedClaimIdHash(Request.EvidenceBinding.ConsumedClaimIds);
 		Receipt.VehicleBaseFingerprint = Preview.ProspectiveFingerprints.VehicleBaseFingerprint;
 		Receipt.DrivetrainFingerprint = Preview.ProspectiveFingerprints.DrivetrainFingerprint;
@@ -718,6 +773,10 @@ bool FCFVehicleAuthoringService::PreviewBuilderProfiles(
 	// Complete prospective typed payload의 fail-closed validation diagnostic입니다.
 	FString ValidationError;
 	if (!ValidateProspectivePayload(Request.Payload, ValidationError))
+	{
+		return Block(OutPreview.Operation, ECFAuthoringErrorCode::ValidationBlocked, ValidationError);
+	}
+	if (!ValidateSocketScaleWheelAuthority(Request, CurrentProfiles, ValidationError))
 	{
 		return Block(OutPreview.Operation, ECFAuthoringErrorCode::ValidationBlocked, ValidationError);
 	}

@@ -1,11 +1,15 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleResolver.cpp
-// Version: v1.3.0
-// Date: 2026-08-26
-// Description: DAUTH-P0-08E/F Frozen R0~R16 Pure Resolver + CF-FQ-040 VB-P0-05 atomic typed Transmission/Reference wheel Profile mapping 구현입니다.
+// Version: v1.5.2
+// Date: 2026-08-28
+// Description: DAUTH-P0-08E/F Frozen R0~R16 Pure Resolver + WSA-P0-02 Socket Scale derived Wheel physics 구현입니다.
 // Scope: Snapshot-only source candidate/precedence와 R15 transient Materializer/Validator orchestration을 제공합니다.
 // Changelog:
+// - v1.5.2: Recipe SoftObject reference를 Target hard Object leaf로 encode할 때 target class-qualified canonical text로 정규화해 R15 hash roundtrip을 복원.
+// - v1.5.1: R15 Definition hash readback mismatch에 첫 불일치 leaf의 path/type/value 진단을 추가해 원인 추적 가능하게 교정.
+// - v1.5.0: WSA-P0-04 공용 Wheel 계약에 맞춰 SocketScaleFromChassis R6에서 FR/RL/RR 미지정 시 FL Wheel Snapshot을 deterministic fallback으로 재사용.
+// - v1.4.0: WSA-P0-02 SocketScaleFromChassis semantic flag, R5 RelativeScale candidate, R6 Bounds+SocketScale derived Radius/Width, narrow fingerprint와 axle consistency validation 추가.
 // - v1.3.0: 설계 검수 교정으로 TransmissionRatios를 Forward/Reverse 분리 leaf가 아닌 atomic typed ratio-set으로 복원하고 Shift RPM integer semantic을 fail-closed 검증.
 // - v1.2.0: VB-P0-05 VehicleBase Reference wheel fallback opt-in, Drivetrain Transmission complete payload opt-in, nested ratio-set mapping과 positive reverse-ratio fail-closed validation 추가.
 // - v1.1.0: DAUTH-P0-08F R15을 Completed stage로 구현하고 Definition Snapshot 공용 hash authority와 materialized readback consistency를 연결.
@@ -20,6 +24,7 @@
 #include "DataAuthoring/CFVehicleResolver.h"
 
 #include "CFVehicleData.h"
+#include "CFWheelSizeUtils.h"
 #include "Containers/StringConv.h"
 #include "DataAuthoring/CFVehicleFieldCodec.h"
 #include "DataAuthoring/CFVehicleFieldRegistry.h"
@@ -249,7 +254,54 @@ namespace CFVehicleResolverPrivate
 			return false;
 		}
 
+		// Target Definition leaf의 exact reflection type signature입니다.
 		OutValue.PropertyTypeSignature = FCFVehicleFieldCodec::BuildTypeSignature(*TargetProperty);
+
+		// Recipe AssetIntent처럼 SoftObject reference를 hard Object Definition leaf로 투영하는 source property입니다.
+		const FSoftObjectProperty* SourceSoftObjectProperty = CastField<FSoftObjectProperty>(&SourceProperty);
+		// Target VehicleData의 hard Object reference property입니다.
+		const FObjectPropertyBase* TargetObjectProperty = CastField<FObjectPropertyBase>(TargetProperty);
+		if (SourceSoftObjectProperty && TargetObjectProperty)
+		{
+			// Source/Target object class가 reflection 상 호환되는지 먼저 확인합니다.
+			if (!SourceSoftObjectProperty->PropertyClass
+				|| !TargetObjectProperty->PropertyClass
+				|| !SourceSoftObjectProperty->PropertyClass->IsChildOf(TargetObjectProperty->PropertyClass))
+			{
+				OutError = FString::Printf(
+					TEXT("SoftObject source class와 Target Object class가 호환되지 않습니다: Source=%s Target=%s"),
+					*GetPathNameSafe(SourceSoftObjectProperty->PropertyClass),
+					*GetPathNameSafe(TargetObjectProperty->PropertyClass));
+				return false;
+			}
+
+			// SoftObject export text의 공백을 제거한 source object path text입니다.
+			const FString SourceObjectPathText = SourceValue.CanonicalValueText.TrimStartAndEnd();
+			if (SourceObjectPathText.IsEmpty() || SourceObjectPathText == TEXT("None"))
+			{
+				OutValue.CanonicalValueText = TEXT("None");
+				OutError.Reset();
+				return true;
+			}
+
+			// Snapshot text만 사용해 복원한 soft object path이며 live UObject load를 수행하지 않습니다.
+			const FSoftObjectPath SourceObjectPath(SourceObjectPathText);
+			if (!SourceObjectPath.IsValid())
+			{
+				OutError = FString::Printf(TEXT("SoftObject canonical path가 유효하지 않습니다: %s"), *SourceObjectPathText);
+				return false;
+			}
+
+			// Target hard Object property의 ExportText 형식과 동일한 class-qualified canonical reference입니다.
+			OutValue.CanonicalValueText = FString::Printf(
+				TEXT("%s'%s'"),
+				*GetPathNameSafe(TargetObjectProperty->PropertyClass),
+				*SourceObjectPath.ToString());
+			OutError.Reset();
+			return true;
+		}
+
+		// Source/Target이 별도 reference adaptation을 요구하지 않는 기존 canonical text 경로입니다.
 		OutValue.CanonicalValueText = MoveTemp(SourceValue.CanonicalValueText);
 		OutError.Reset();
 		return true;
@@ -1193,9 +1245,12 @@ namespace CFVehicleResolverPrivate
 
 		if (Context.Request.Recipe.WheelVisualIntent.Mode != ECFWheelVisualIntentMode::UseProfilePolicy)
 		{
-			// Recipe WheelVisual intent가 요구하는 auto-scale bool입니다.
+			// Recipe WheelVisual intent가 요구하는 legacy auto-scale bool입니다.
 			const bool bAutoScale = Context.Request.Recipe.WheelVisualIntent.Mode == ECFWheelVisualIntentMode::AutoScaleToPhysicsRadius;
+			// USER Chassis Socket Scale을 Wheel Size Authority로 사용하는 신규 mode 여부입니다.
+			const bool bUseWheelSocketScale = Context.Request.Recipe.WheelVisualIntent.Mode == ECFWheelVisualIntentMode::SocketScaleFromChassis;
 			AddBoolCandidate(Context, FindScalarPath(TEXT("WheelVisualConfig.bAutoScaleWheelMeshToRadius")), bAutoScale, ECFVehicleSourceType::RecipeExplicitSemanticInput, RecipeSourceId, RecipeRevision, RecipeFingerprint);
+			AddBoolCandidate(Context, FindScalarPath(TEXT("WheelVisualConfig.bUseWheelSocketScale")), bUseWheelSocketScale, ECFVehicleSourceType::RecipeExplicitSemanticInput, RecipeSourceId, RecipeRevision, RecipeFingerprint);
 		}
 	}
 
@@ -1389,8 +1444,11 @@ namespace CFVehicleResolverPrivate
 			const FCFVehicleFieldPath LocationPath = FindScalarPath(*FString::Printf(TEXT("VehicleLayoutConfig.%s.RelativeLocation"), Rule.AnchorName));
 			// Wheel anchor rotation target path입니다.
 			const FCFVehicleFieldPath RotationPath = FindScalarPath(*FString::Printf(TEXT("VehicleLayoutConfig.%s.RelativeRotation"), Rule.AnchorName));
+			// Wheel anchor authored size scale target path입니다.
+			const FCFVehicleFieldPath ScalePath = FindScalarPath(*FString::Printf(TEXT("VehicleLayoutConfig.%s.RelativeScale"), Rule.AnchorName));
 			AddVectorCandidate(Context, LocationPath, SocketSnapshot->RelativeLocation, ECFVehicleSourceType::AssetDerived, Context.Request.Assets.ChassisObjectPath.ToString(), 0, Context.Request.Assets.ChassisLayoutFingerprint);
 			AddRotatorCandidate(Context, RotationPath, SocketSnapshot->RelativeRotation, ECFVehicleSourceType::AssetDerived, Context.Request.Assets.ChassisObjectPath.ToString(), 0, Context.Request.Assets.ChassisLayoutFingerprint);
+			AddVectorCandidate(Context, ScalePath, SocketSnapshot->RelativeScale, ECFVehicleSourceType::AssetDerived, Context.Request.Assets.ChassisObjectPath.ToString(), 0, Context.Request.Assets.ChassisLayoutFingerprint);
 		}
 
 		for (const FCFHardpointIntent& HardpointIntent : Context.Request.Recipe.HardpointIntents)
@@ -1504,43 +1562,171 @@ namespace CFVehicleResolverPrivate
 		Proposal.MeasurementRuleId = RuleId;
 	}
 
-	// R6 Wheel bounds measurement proposal을 effective source와 분리해 생성합니다.
-	void RunR6MeasurementProposals(FResolverContext& Context)
+	// Socket Scale derived size fingerprint에 scale 한 축을 deterministic canonical token으로 추가합니다.
+	void AppendScaleFingerprintTokens(FString& Payload, const TCHAR* Prefix, const FVector& Scale)
 	{
-		// Current Base/Profile/default radius measure mode입니다.
-		const ECFWheelMeshRadiusMeasureMode MeasureMode = ReadCurrentMeasureMode(Context);
-		// Front axle measurement source wheel입니다.
-		const FCFVehicleWheelAssetSnapshot* FrontWheel = SelectWheelSnapshot(Context.Request.Assets.WheelFL, Context.Request.Assets.WheelFR);
-		// Rear axle measurement source wheel입니다.
-		const FCFVehicleWheelAssetSnapshot* RearWheel = SelectWheelSnapshot(Context.Request.Assets.WheelRL, Context.Request.Assets.WheelRR);
+		AppendToken(Payload, *FString::Printf(TEXT("%sX"), Prefix), FString::SanitizeFloat(Scale.X));
+		AppendToken(Payload, *FString::Printf(TEXT("%sY"), Prefix), FString::SanitizeFloat(Scale.Y));
+		AppendToken(Payload, *FString::Printf(TEXT("%sZ"), Prefix), FString::SanitizeFloat(Scale.Z));
+	}
 
-		if (FrontWheel)
+	// Wheel Bounds와 두 authored Socket Scale만 포함하는 narrow axle-size fingerprint입니다.
+	FString BuildSocketScaleAxleFingerprint(
+		const FCFVehicleWheelAssetSnapshot& LeftWheelSource,
+		const FCFVehicleWheelAssetSnapshot& RightWheelSource,
+		const FCFVehicleSocketSnapshot& LeftSocket,
+		const FCFVehicleSocketSnapshot& RightSocket)
+	{
+		FString Payload;
+		AppendToken(Payload, TEXT("Kind"), TEXT("WheelSocketScaleAxleSize.v1"));
+		AppendToken(Payload, TEXT("LeftWheel"), LeftWheelSource.MeasureFingerprint);
+		AppendToken(Payload, TEXT("RightWheel"), RightWheelSource.MeasureFingerprint);
+		AppendToken(Payload, TEXT("LeftSocket"), LeftSocket.SocketName.ToString());
+		AppendToken(Payload, TEXT("RightSocket"), RightSocket.SocketName.ToString());
+		AppendScaleFingerprintTokens(Payload, TEXT("LeftScale"), LeftSocket.RelativeScale);
+		AppendScaleFingerprintTokens(Payload, TEXT("RightScale"), RightSocket.RelativeScale);
+		return HashUtf8Payload(Payload);
+	}
+
+	// 한 Wheel의 Bounds + authored Socket Scale을 공용 Runtime helper로 파생합니다.
+	bool TryDeriveSocketScaleWheelSize(
+		FResolverContext& Context,
+		const TCHAR* WheelLabel,
+		const TCHAR* AnchorName,
+		const FCFVehicleWheelAssetSnapshot* WheelSource,
+		const FCFVehicleSocketSnapshot* SocketSnapshot,
+		FCFDerivedWheelSize& OutWheelSize)
+	{
+		if (!WheelSource || !WheelSource->bAssetLoaded)
 		{
-			// Front axle resolver-relevant combined fingerprint입니다.
-			const FString FrontFingerprint = BuildAxleFingerprint(Context.Request.Assets.WheelFL, Context.Request.Assets.WheelFR);
-			AddMeasurementProposal(Context, FindScalarPath(TEXT("VehicleMovementConfig.FrontWheelRadius")), MeasureWheelRadius(FrontWheel->BoundsExtent, MeasureMode), FrontFingerprint, TEXT("WheelBounds.Radius.v1"));
-			// Current wheel convention은 차축 Y이므로 전체 Y bounds 길이를 width candidate로 사용합니다.
-			AddMeasurementProposal(Context, FindScalarPath(TEXT("VehicleMovementConfig.FrontWheelWidth")), FMath::Abs(FrontWheel->BoundsExtent.Y) * 2.0f, FrontFingerprint, TEXT("WheelBounds.WidthAxisY.v1"));
+			AddIssue(Context, Context.Result.ResolverValidation, ECFVehicleValidationSeverity::Blocked, TEXT("WheelSocketSizeWheelMissing"), FString::Printf(TEXT("Socket Scale Wheel Size source mesh가 없습니다: %s"), WheelLabel));
+			return false;
+		}
+		if (!SocketSnapshot || !SocketSnapshot->bFound)
+		{
+			return false;
 		}
 
-		if (RearWheel)
+		FString DeriveError;
+		if (!FCFWheelSizeUtils::DeriveWheelSizeFromBoundsAndScale(WheelSource->BoundsExtent, SocketSnapshot->RelativeScale, OutWheelSize, DeriveError))
 		{
-			// Rear axle resolver-relevant combined fingerprint입니다.
-			const FString RearFingerprint = BuildAxleFingerprint(Context.Request.Assets.WheelRL, Context.Request.Assets.WheelRR);
-			AddMeasurementProposal(Context, FindScalarPath(TEXT("VehicleMovementConfig.RearWheelRadius")), MeasureWheelRadius(RearWheel->BoundsExtent, MeasureMode), RearFingerprint, TEXT("WheelBounds.Radius.v1"));
-			// Current wheel convention은 차축 Y이므로 전체 Y bounds 길이를 width candidate로 사용합니다.
-			AddMeasurementProposal(Context, FindScalarPath(TEXT("VehicleMovementConfig.RearWheelWidth")), FMath::Abs(RearWheel->BoundsExtent.Y) * 2.0f, RearFingerprint, TEXT("WheelBounds.WidthAxisY.v1"));
+			const FCFVehicleFieldPath ScalePath = FindScalarPath(*FString::Printf(TEXT("VehicleLayoutConfig.%s.RelativeScale"), AnchorName));
+			AddIssue(Context, Context.Result.ResolverValidation, ECFVehicleValidationSeverity::Blocked, TEXT("WheelSocketScaleInvalid"), FString::Printf(TEXT("%s Wheel Size 계산 실패: %s"), WheelLabel, *DeriveError), &ScalePath);
+			return false;
+		}
+		return true;
+	}
+
+	// Socket Scale mode에서 axle 두 Wheel을 검증하고 Radius/Width proposal을 생성합니다.
+	void AddSocketScaleAxleProposals(
+		FResolverContext& Context,
+		const TCHAR* AxleLabel,
+		const TCHAR* RadiusPath,
+		const TCHAR* WidthPath,
+		const FCFVehicleWheelAssetSnapshot& LeftWheel,
+		const FCFVehicleWheelAssetSnapshot& RightWheel,
+		const FCFVehicleSocketSnapshot* LeftSocket,
+		const FCFVehicleSocketSnapshot* RightSocket,
+		const TCHAR* LeftAnchorName,
+		const TCHAR* RightAnchorName)
+	{
+		// 각 side는 자기 Wheel을 우선하고 같은 axle 반대편 Wheel을 bounds fallback으로 사용합니다.
+		const FCFVehicleWheelAssetSnapshot* LeftWheelSource = SelectWheelSnapshot(LeftWheel, RightWheel);
+		const FCFVehicleWheelAssetSnapshot* RightWheelSource = SelectWheelSnapshot(RightWheel, LeftWheel);
+
+		FCFDerivedWheelSize LeftSize;
+		FCFDerivedWheelSize RightSize;
+		const bool bLeftValid = TryDeriveSocketScaleWheelSize(Context, *FString::Printf(TEXT("%s.Left"), AxleLabel), LeftAnchorName, LeftWheelSource, LeftSocket, LeftSize);
+		const bool bRightValid = TryDeriveSocketScaleWheelSize(Context, *FString::Printf(TEXT("%s.Right"), AxleLabel), RightAnchorName, RightWheelSource, RightSocket, RightSize);
+		if (!bLeftValid || !bRightValid || !LeftWheelSource || !RightWheelSource || !LeftSocket || !RightSocket)
+		{
+			return;
+		}
+
+		if (!FCFWheelSizeUtils::AreWheelSizesCompatible(LeftSize, RightSize))
+		{
+			AddIssue(
+				Context,
+				Context.Result.ResolverValidation,
+				ECFVehicleValidationSeverity::Blocked,
+				TEXT("WheelSocketAxleSizeMismatch"),
+				FString::Printf(
+					TEXT("%s 좌/우 Socket-derived Wheel Size가 일치하지 않습니다. Left(R=%.4f W=%.4f) Right(R=%.4f W=%.4f)"),
+					AxleLabel,
+					LeftSize.RadiusCm,
+					LeftSize.WidthCm,
+					RightSize.RadiusCm,
+					RightSize.WidthCm));
+			return;
+		}
+
+		// tolerance 안에서 좌우 편향을 만들지 않도록 axle 최종값은 양쪽 derived 결과의 평균을 사용합니다.
+		const float AxleRadiusCm = (LeftSize.RadiusCm + RightSize.RadiusCm) * 0.5f;
+		const float AxleWidthCm = (LeftSize.WidthCm + RightSize.WidthCm) * 0.5f;
+		const FString AxleFingerprint = BuildSocketScaleAxleFingerprint(*LeftWheelSource, *RightWheelSource, *LeftSocket, *RightSocket);
+		AddMeasurementProposal(Context, FindScalarPath(RadiusPath), AxleRadiusCm, AxleFingerprint, TEXT("WheelSocketScale.Radius.v1"));
+		AddMeasurementProposal(Context, FindScalarPath(WidthPath), AxleWidthCm, AxleFingerprint, TEXT("WheelSocketScale.Width.v1"));
+	}
+
+	// Socket Scale mode에서 optional FR/RL/RR Wheel Mesh가 비어 있으면 canonical FL Wheel을 재사용합니다.
+	const FCFVehicleWheelAssetSnapshot& ResolveSocketScaleWheelSnapshot(
+		const FCFVehicleWheelAssetSnapshot& RequestedWheel,
+		const FCFVehicleWheelAssetSnapshot& FallbackWheelFL)
+	{
+		return RequestedWheel.bAssetLoaded ? RequestedWheel : FallbackWheelFL;
+	}
+
+	// R6 Wheel measurement proposal을 Legacy Bounds mode 또는 USER Socket Scale mode로 분기해 생성합니다.
+	void RunR6MeasurementProposals(FResolverContext& Context)
+	{
+		const bool bSocketScaleMode = Context.Request.Recipe.WheelVisualIntent.Mode == ECFWheelVisualIntentMode::SocketScaleFromChassis;
+
+		if (bSocketScaleMode)
+		{
+			const FCFVehicleSocketSnapshot* SocketFL = Context.Request.Assets.FindChassisSocket(ResolveWheelSocketName(Context.Request.Recipe.AssetIntent.BodyWheelSocketFL, TEXT("Wheel_Anchor_FL")));
+			const FCFVehicleSocketSnapshot* SocketFR = Context.Request.Assets.FindChassisSocket(ResolveWheelSocketName(Context.Request.Recipe.AssetIntent.BodyWheelSocketFR, TEXT("Wheel_Anchor_FR")));
+			const FCFVehicleSocketSnapshot* SocketRL = Context.Request.Assets.FindChassisSocket(ResolveWheelSocketName(Context.Request.Recipe.AssetIntent.BodyWheelSocketRL, TEXT("Wheel_Anchor_RL")));
+			const FCFVehicleSocketSnapshot* SocketRR = Context.Request.Assets.FindChassisSocket(ResolveWheelSocketName(Context.Request.Recipe.AssetIntent.BodyWheelSocketRR, TEXT("Wheel_Anchor_RR")));
+
+			const FCFVehicleWheelAssetSnapshot& EffectiveWheelFL = Context.Request.Assets.WheelFL;
+			const FCFVehicleWheelAssetSnapshot& EffectiveWheelFR = ResolveSocketScaleWheelSnapshot(Context.Request.Assets.WheelFR, EffectiveWheelFL);
+			const FCFVehicleWheelAssetSnapshot& EffectiveWheelRL = ResolveSocketScaleWheelSnapshot(Context.Request.Assets.WheelRL, EffectiveWheelFL);
+			const FCFVehicleWheelAssetSnapshot& EffectiveWheelRR = ResolveSocketScaleWheelSnapshot(Context.Request.Assets.WheelRR, EffectiveWheelFL);
+
+			AddSocketScaleAxleProposals(Context, TEXT("Front"), TEXT("VehicleMovementConfig.FrontWheelRadius"), TEXT("VehicleMovementConfig.FrontWheelWidth"), EffectiveWheelFL, EffectiveWheelFR, SocketFL, SocketFR, TEXT("WheelAnchorFL"), TEXT("WheelAnchorFR"));
+			AddSocketScaleAxleProposals(Context, TEXT("Rear"), TEXT("VehicleMovementConfig.RearWheelRadius"), TEXT("VehicleMovementConfig.RearWheelWidth"), EffectiveWheelRL, EffectiveWheelRR, SocketRL, SocketRR, TEXT("WheelAnchorRL"), TEXT("WheelAnchorRR"));
+		}
+		else
+		{
+			// Legacy/current Base/Profile/default radius measure mode입니다.
+			const ECFWheelMeshRadiusMeasureMode MeasureMode = ReadCurrentMeasureMode(Context);
+			const FCFVehicleWheelAssetSnapshot* FrontWheel = SelectWheelSnapshot(Context.Request.Assets.WheelFL, Context.Request.Assets.WheelFR);
+			const FCFVehicleWheelAssetSnapshot* RearWheel = SelectWheelSnapshot(Context.Request.Assets.WheelRL, Context.Request.Assets.WheelRR);
+
+			if (FrontWheel)
+			{
+				const FString FrontFingerprint = BuildAxleFingerprint(Context.Request.Assets.WheelFL, Context.Request.Assets.WheelFR);
+				AddMeasurementProposal(Context, FindScalarPath(TEXT("VehicleMovementConfig.FrontWheelRadius")), MeasureWheelRadius(FrontWheel->BoundsExtent, MeasureMode), FrontFingerprint, TEXT("WheelBounds.Radius.v1"));
+				AddMeasurementProposal(Context, FindScalarPath(TEXT("VehicleMovementConfig.FrontWheelWidth")), FMath::Abs(FrontWheel->BoundsExtent.Y) * 2.0f, FrontFingerprint, TEXT("WheelBounds.WidthAxisY.v1"));
+			}
+
+			if (RearWheel)
+			{
+				const FString RearFingerprint = BuildAxleFingerprint(Context.Request.Assets.WheelRL, Context.Request.Assets.WheelRR);
+				AddMeasurementProposal(Context, FindScalarPath(TEXT("VehicleMovementConfig.RearWheelRadius")), MeasureWheelRadius(RearWheel->BoundsExtent, MeasureMode), RearFingerprint, TEXT("WheelBounds.Radius.v1"));
+				AddMeasurementProposal(Context, FindScalarPath(TEXT("VehicleMovementConfig.RearWheelWidth")), FMath::Abs(RearWheel->BoundsExtent.Y) * 2.0f, RearFingerprint, TEXT("WheelBounds.WidthAxisY.v1"));
+			}
+
+			if (Context.Request.Recipe.AssetAdoption.bUseSuggestedRadiusMeasureMode)
+			{
+				AddIssue(Context, Context.Result.ResolverValidation, ECFVehicleValidationSeverity::Blocked, TEXT("RadiusModeSuggestionNotFrozen"), TEXT("bUseSuggestedRadiusMeasureMode가 활성화됐지만 P0-08E에는 bounds에서 radius mode를 자동 선택하는 Frozen rule이 없습니다. 임의 추정하지 않습니다."));
+			}
 		}
 
 		Context.Result.MeasurementProposals.Sort([](const FCFVehicleMeasurementProposal& Left, const FCFVehicleMeasurementProposal& Right)
 		{
 			return Left.FieldPath.ToCanonicalString(true) < Right.FieldPath.ToCanonicalString(true);
 		});
-
-		if (Context.Request.Recipe.AssetAdoption.bUseSuggestedRadiusMeasureMode)
-		{
-			AddIssue(Context, Context.Result.ResolverValidation, ECFVehicleValidationSeverity::Blocked, TEXT("RadiusModeSuggestionNotFrozen"), TEXT("bUseSuggestedRadiusMeasureMode가 활성화됐지만 P0-08E에는 bounds에서 radius mode를 자동 선택하는 Frozen rule이 없습니다. 임의 추정하지 않습니다."));
-		}
 	}
 
 	// 특정 measurement field의 proposal을 찾습니다.
@@ -1635,12 +1821,12 @@ namespace CFVehicleResolverPrivate
 	{
 		static const TCHAR* LayoutPoseFields[] =
 		{
-			TEXT("VehicleLayoutConfig.WheelAnchorFL.RelativeLocation"), TEXT("VehicleLayoutConfig.WheelAnchorFL.RelativeRotation"),
-			TEXT("VehicleLayoutConfig.WheelAnchorFR.RelativeLocation"), TEXT("VehicleLayoutConfig.WheelAnchorFR.RelativeRotation"),
-			TEXT("VehicleLayoutConfig.WheelAnchorRL.RelativeLocation"), TEXT("VehicleLayoutConfig.WheelAnchorRL.RelativeRotation"),
-			TEXT("VehicleLayoutConfig.WheelAnchorRR.RelativeLocation"), TEXT("VehicleLayoutConfig.WheelAnchorRR.RelativeRotation")
+			TEXT("VehicleLayoutConfig.WheelAnchorFL.RelativeLocation"), TEXT("VehicleLayoutConfig.WheelAnchorFL.RelativeRotation"), TEXT("VehicleLayoutConfig.WheelAnchorFL.RelativeScale"),
+			TEXT("VehicleLayoutConfig.WheelAnchorFR.RelativeLocation"), TEXT("VehicleLayoutConfig.WheelAnchorFR.RelativeRotation"), TEXT("VehicleLayoutConfig.WheelAnchorFR.RelativeScale"),
+			TEXT("VehicleLayoutConfig.WheelAnchorRL.RelativeLocation"), TEXT("VehicleLayoutConfig.WheelAnchorRL.RelativeRotation"), TEXT("VehicleLayoutConfig.WheelAnchorRL.RelativeScale"),
+			TEXT("VehicleLayoutConfig.WheelAnchorRR.RelativeLocation"), TEXT("VehicleLayoutConfig.WheelAnchorRR.RelativeRotation"), TEXT("VehicleLayoutConfig.WheelAnchorRR.RelativeScale")
 		};
-		// 8개 Wheel Anchor leaf가 모두 non-default source인지 여부입니다.
+		// 12개 Wheel Anchor leaf가 모두 non-default source인지 여부입니다.
 		bool bLayoutReady = true;
 		for (const TCHAR* FieldPath : LayoutPoseFields)
 		{
@@ -2010,15 +2196,50 @@ namespace CFVehicleResolverPrivate
 
 		if (MaterializationResult.ResolvedReadbackSnapshot.DefinitionHash != Context.Result.ResolvedDefinitionHash)
 		{
+			// Hash mismatch의 첫 exact leaf 차이를 사람이 바로 확인할 수 있는 진단 문자열입니다.
+			FString FirstMismatchDetail = TEXT("<leaf mismatch not found>");
+
+			for (const FCFVehicleResolvedField& ResolvedField : Context.Result.SortedResolvedFields)
+			{
+				// 현재 Resolver leaf의 exact canonical path입니다.
+				const FString CanonicalPath = ResolvedField.FieldPath.ToCanonicalString(true);
+
+				// Materialized readback에서 같은 exact path를 가진 leaf입니다.
+				const FCFVehicleFieldEntry* ReadbackField = MaterializationResult.ResolvedReadbackSnapshot.SortedFields.FindByPredicate([&CanonicalPath](const FCFVehicleFieldEntry& Entry)
+				{
+					return Entry.FieldPath.ToCanonicalString(true) == CanonicalPath;
+				});
+
+				if (!ReadbackField)
+				{
+					FirstMismatchDetail = FString::Printf(TEXT("Path=%s Readback=<missing>"), *CanonicalPath);
+					break;
+				}
+
+				if (ReadbackField->Value.PropertyTypeSignature != ResolvedField.Value.PropertyTypeSignature
+					|| ReadbackField->Value.CanonicalValueText != ResolvedField.Value.CanonicalValueText)
+				{
+					FirstMismatchDetail = FString::Printf(
+						TEXT("Path=%s ResolverType=%s ReadbackType=%s ResolverValue=%s ReadbackValue=%s"),
+						*CanonicalPath,
+						*ResolvedField.Value.PropertyTypeSignature,
+						*ReadbackField->Value.PropertyTypeSignature,
+						*ResolvedField.Value.CanonicalValueText,
+						*ReadbackField->Value.CanonicalValueText);
+					break;
+				}
+			}
+
 			AddIssue(
 				Context,
 				Context.Result.DefinitionValidation,
 				ECFVehicleValidationSeverity::Error,
 				TEXT("DefinitionHashReadbackMismatch"),
 				FString::Printf(
-					TEXT("Transient materialized readback hash가 Resolver hash와 다릅니다. Resolver=%s Readback=%s"),
+					TEXT("Transient materialized readback hash가 Resolver hash와 다릅니다. Resolver=%s Readback=%s FirstMismatch=%s"),
 					*Context.Result.ResolvedDefinitionHash,
-					*MaterializationResult.ResolvedReadbackSnapshot.DefinitionHash));
+					*MaterializationResult.ResolvedReadbackSnapshot.DefinitionHash,
+					*FirstMismatchDetail));
 			return ECFVehicleResolverStageStatus::Failed;
 		}
 

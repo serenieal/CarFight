@@ -1,16 +1,23 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringTab.h
-// Version: v1.4.0
-// Date: 2026-08-18
+// Version: v1.8.0
+// Date: 2026-08-21
 // Description: DAUTH-P0-09~12 single-Vehicle Authoring Nomad Workspace Slate widget입니다.
 // Changelog:
+// - v1.8.0: P0-12 UA-06 USER UX remediation을 위해 Shared Profile numeric field 검색/선택/current-value UI state와 bounded Apply detail review presentation을 추가.
+// - v1.7.0: P0-12 UA-07 baseline-safe Profile 검증 복구를 위한 explicit reviewed Profile 연결 해제 UI action을 추가.
+// - v1.6.0: P0-12 UA-05 값 출처 UX를 위해 Source Trace 검색과 비적용 후보 상세 표시 상태를 추가.
+// - v1.5.0: P0-12 UA-04 macro-flow UX를 위해 External Drift read-only 자동 review + Sync 안내 helper를 추가.
 // - v1.4.0: P0-12 UA-03 USER feedback에 따라 5-domain Profile 후보 선택/Recipe binding/Open Profile UI state를 추가.
 // - v1.3.0: P0-12 UA-01 한국어 우선 UI와 기본 Browser 테스트/레거시 숨김 표시 상태 추가.
 // - v1.2.0: Frozen 24.90~24.94 Handling/Performance Adoption, Shared Profile impact, Drift 3-way recovery, Mesh-only Create flow UI 추가.
 // - v1.1.0: P0-10 Assets/Layout, Wheel Measurement, 4축 Driving Feel/preset, Reference Compare, Mount/Default, Adoption, standard Undo parity UI 추가.
 // - v1.0.0: Frozen Section 24 P0-09 Browser/Overview/Recipe/Preview/Diff/Trace/Validation/Apply/Raw DA 최소 UI 최초 구현.
 // Migration:
+// - v1.8.0은 existing Registry descriptor를 사람용 field selector에 projection할 UI state만 추가하며 stable ColumnId authority와 B2 mutation contract를 변경하지 않습니다.
+
+// - v1.6.0은 Resolver SourceTrace authority를 변경하지 않고 right Context presentation 상태만 추가합니다.
 // - SCFVDAWizardTab은 P0-10 Technical parity 후에도 DG/DEL Gate 전까지 별도 legacy Nomad Tab으로 유지합니다.
 // - Batch main page는 이 Workspace에 추가하지 않습니다.
 
@@ -28,6 +35,7 @@ template<typename OptionType> class SComboBox;
 template<typename ItemType> class SListView;
 struct FCFVehicleListEntry;
 struct FCFProfileListEntry;
+struct FCFBatchColumnDescriptor;
 enum class ECFVehicleMeasureDecision : uint8;
 enum class ECFVehicleAdoptGroup : uint8;
 enum class ECFVehicleProfileDomain : uint8;
@@ -79,8 +87,11 @@ private:
 	// Browser cache를 fresh facade result로 교체하고 list widget을 갱신합니다.
 	FReply HandleRefreshBrowser();
 
-	// Current selection Resolve/Diff/Trace/Validation을 fresh facade result로 갱신합니다.
+		// Current selection Resolve/Diff/Trace/Validation을 fresh facade result로 갱신합니다.
 	FReply HandleRefreshPreview();
+
+	// Fresh preview에서 External Drift가 확인되면 read-only 3-way를 준비하고 Sync Context로 안내합니다.
+	void RefreshDriftGuidanceIfNeeded();
 
 	// Recipe Archetype text commit을 reviewed R1 facade transaction으로 반영합니다.
 	void HandleArchetypeCommitted(const FText& NewText, ETextCommit::Type CommitType);
@@ -148,8 +159,29 @@ private:
 		// Profile Domain 선택을 바꾸고 해당 Domain의 existing Profile 후보를 read-only 갱신합니다.
 	FReply HandleProfileDomainSelected(ECFVehicleProfileDomain ProfileDomain);
 
-	// Selected Domain의 facade Profile 후보 cache를 Slate Combo rows로 재구성합니다.
+		// Selected Domain의 facade Profile 후보 cache를 Slate Combo rows로 재구성합니다.
 	void RefreshProfileChoiceRows();
+
+	// Selected Domain의 Registry editable numeric fields를 검색 조건에 맞는 Slate rows로 재구성합니다.
+	void RefreshProfileNumericFieldRows();
+
+	// Shared Profile numeric field 검색어를 갱신하고 filtered field rows를 다시 만듭니다.
+	void HandleProfileNumericFieldSearchChanged(const FText& NewText);
+
+	// Shared Profile numeric field ComboBox 한 후보의 사용자 표시 widget을 생성합니다.
+	TSharedRef<SWidget> GenerateProfileNumericFieldWidget(TSharedPtr<FCFBatchColumnDescriptor> Item) const;
+
+	// Shared Profile numeric field selection을 보존하고 current authored value를 read-only 갱신합니다.
+	void HandleProfileNumericFieldChanged(TSharedPtr<FCFBatchColumnDescriptor> Item, ESelectInfo::Type SelectInfo);
+
+	// Shared Profile numeric field ComboBox의 current selection summary를 반환합니다.
+	FText GetSelectedProfileNumericFieldText() const;
+
+	// Shared Profile numeric field의 표시명/current value/unit/technical ID를 반환합니다.
+	FText GetSelectedProfileNumericFieldStatusText() const;
+
+	// Selected Shared Profile numeric field의 current authored value cache를 read-only 갱신합니다.
+	void RefreshSelectedProfileNumericCurrentValue();
 
 	// Shared Profile ComboBox 한 후보의 표시 widget을 생성합니다.
 	TSharedRef<SWidget> GenerateProfileChoiceWidget(TSharedPtr<FCFProfileListEntry> Item) const;
@@ -166,8 +198,11 @@ private:
 	// Selected Domain에 current bound Profile이 존재하는지 반환합니다.
 	bool HasBoundSelectedProfile() const;
 
-	// User-selected existing Profile을 reviewed Recipe-only BindVehicleProfile transaction으로 연결합니다.
+		// User-selected existing Profile을 reviewed Recipe-only BindVehicleProfile transaction으로 연결합니다.
 	FReply HandleBindSelectedProfile();
+
+	// Current selected Domain의 bound Profile을 reviewed Recipe-only UnbindVehicleProfile transaction으로 해제합니다.
+	FReply HandleUnbindSelectedProfile();
 
 	// Current Recipe에 bound된 selected Domain Shared Profile을 Unreal 표준 Asset Editor로 엽니다.
 	FReply HandleOpenBoundProfile();
@@ -229,8 +264,9 @@ private:
 	// Current right Changes context text를 만듭니다.
 	FText GetChangesContextText() const;
 
-	// Current Source Trace stack text를 만듭니다.
+		// Current Source Trace stack text를 검색/상세 표시 상태에 맞춰 만듭니다.
 	FText GetSourceTraceText() const;
+
 
 	// Current right Issues context text를 만듭니다.
 	FText GetIssuesContextText() const;
@@ -387,10 +423,28 @@ private:
 	// User가 explicit binding 후보로 선택한 Shared Profile row입니다.
 	TSharedPtr<FCFProfileListEntry> SelectedProfileChoice;
 
-	// Shared Profile editable Registry stable ColumnId input입니다.
-	TSharedPtr<SEditableTextBox> ProfileColumnIdTextBox;
+		// Shared Profile numeric field의 표시명/기술 ID를 좁히는 검색 입력입니다.
+	TSharedPtr<SSearchBox> ProfileNumericFieldSearchBox;
 
-	// Shared Profile canonical numeric value input입니다.
+	// Selected Domain Registry에서 검색 조건을 통과한 editable numeric field rows입니다.
+	TArray<TSharedPtr<FCFBatchColumnDescriptor>> ProfileNumericFieldRows;
+
+	// Shared Profile editable numeric field 선택 ComboBox입니다.
+	TSharedPtr<SComboBox<TSharedPtr<FCFBatchColumnDescriptor>>> ProfileNumericFieldComboBox;
+
+	// User가 편집 대상으로 선택한 Registry numeric field descriptor입니다.
+	TSharedPtr<FCFBatchColumnDescriptor> SelectedProfileNumericField;
+
+	// Shared Profile numeric field 검색 문자열입니다.
+	FString ProfileNumericFieldSearchText;
+
+	// Selected numeric field의 current authored canonical value cache입니다.
+	FString SelectedProfileNumericCurrentValue;
+
+	// Selected numeric field current value를 읽지 못했을 때의 read-only diagnostic입니다.
+	FString SelectedProfileNumericCurrentValueError;
+
+	// Shared Profile canonical numeric 새 값 input입니다.
 	TSharedPtr<SEditableTextBox> ProfileNumericValueTextBox;
 
 	// Advanced Drift Override 이유 input입니다.
@@ -412,8 +466,14 @@ private:
 	// Center page switcher입니다.
 	TSharedPtr<SWidgetSwitcher> MainPageSwitcher;
 
-	// Right context switcher입니다.
+		// Right context switcher입니다.
 	TSharedPtr<SWidgetSwitcher> ContextPageSwitcher;
+
+	// Source Trace에서 필드 경로·출처 종류·출처 ID를 좁히는 검색 문자열입니다.
+	FString SourceTraceSearchText;
+
+	// Source Trace에서 실제 적용 출처 외의 비적용 후보까지 펼쳐 표시할지 결정합니다.
+	bool bShowSourceTraceCandidates = false;
 
 	// Current center page입니다.
 	ECFVehicleAuthoringPage CurrentMainPage = ECFVehicleAuthoringPage::Overview;

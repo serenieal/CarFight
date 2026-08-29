@@ -1,17 +1,22 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringVM.h
-// Version: v1.4.0
-// Date: 2026-08-18
+// Version: v1.7.0
+// Date: 2026-08-21
 // Description: DAUTH-P0-09~12 single-Vehicle Authoring Workspace transient ViewModel입니다.
 // Scope: Selection, Profile binding/impact, Drift review/recovery, Mesh-only creation, typed Recipe intents, Apply/Undo transient UI state만 보관합니다.
 // Changelog:
+// - v1.7.0: P0-12 UA-06 USER UX remediation을 위해 bound Shared Profile의 Registry allowlisted numeric current value를 read-only로 조회하는 helper를 추가.
+// - v1.6.0: P0-12 UA-07 baseline-safe Profile 검증 복구를 위해 explicit Recipe-only Profile unbind orchestration을 추가.
+// - v1.5.0: P0-12 UA-06 readiness에서 Workspace Undo를 exact UE TransactionId에 binding해 중간 Editor transaction이 끼면 fail-closed하도록 보강.
 // - v1.4.0: P0-12 UA-03 USER feedback에 따라 Frozen 5-domain Profile 목록/현재 binding/explicit Bind/Open orchestration을 normal Workspace에 추가.
 // - v1.3.0: Frozen 24.90~24.94 Shared Profile B2, External Drift reviewed decision/Keep token, Mesh-only record creation orchestration 추가.
 // - v1.2.0: P0-10 Assets/Layout, Driving Feel preset, Reference Compare, Adoption/Measurement, Mount/Defaults, standard Undo orchestration을 facade-only로 추가.
 // - v1.1.0: reviewed Initial Import R2 proposal을 exact transient approval로 보존하고 unsaved loaded Recipe/Target selection을 지원.
 // - v1.0.0: Section 24.85~24.87 P0-09 ViewModel foundation 최초 구현.
 // Migration:
+// - v1.7.0은 Registry descriptor와 bound Profile UObject를 read-only로 결합해 current numeric authored value만 조회하며 Recipe/Profile/VehicleData mutation contract를 변경하지 않습니다.
+
 // - Persistent Authoring Source/Resolver truth/Legacy Pin/Override authority를 저장하지 않습니다.
 // - 모든 Authoring read/write는 FCFVehicleAuthoringService facade를 통해 수행합니다.
 // - Raw DA Open은 Editor navigation일 뿐 Authoring mutation이 아닙니다.
@@ -139,11 +144,21 @@ public:
 		// Project Asset Registry의 Frozen Profile 후보를 selected Domain 기준으로 read-only 갱신합니다.
 	bool RefreshProfileChoices(ECFVehicleProfileDomain ProfileDomain, FString& OutError);
 
-	// Current Recipe의 exact selected Domain Profile binding path를 반환합니다.
+		// Current Recipe의 exact selected Domain Profile binding path를 반환합니다.
 	FSoftObjectPath GetBoundProfilePath(ECFVehicleProfileDomain ProfileDomain) const;
 
-	// Existing Profile asset을 reviewed R1 Recipe semantic binding으로 연결하고 Target은 변경하지 않습니다.
+	// Current bound Shared Profile의 Registry allowlisted numeric field current authored 값을 read-only로 반환합니다.
+	bool ReadBoundProfileNumericValue(
+		ECFVehicleProfileDomain ProfileDomain,
+		const FString& ColumnId,
+		FString& OutCanonicalValue,
+		FString& OutError) const;
+
+		// Existing Profile asset을 reviewed R1 Recipe semantic binding으로 연결하고 Target은 변경하지 않습니다.
 	bool CommitProfileBinding(ECFVehicleProfileDomain ProfileDomain, const FSoftObjectPath& ProfilePath, FCFAuthoringOpResult& OutResult);
+
+	// Current selected Domain의 Profile binding을 reviewed R1 Recipe-only semantic write로 명시적으로 해제합니다.
+	bool CommitProfileUnbinding(ECFVehicleProfileDomain ProfileDomain, FCFAuthoringOpResult& OutResult);
 
 	// Current Recipe에 bound된 selected Domain Profile을 Unreal 표준 Asset Editor로 엽니다.
 	bool OpenBoundProfile(ECFVehicleProfileDomain ProfileDomain, FString& OutError) const;
@@ -306,8 +321,8 @@ public:
 		// Current prepared R3 approval이 존재하는지 반환합니다.
 	bool HasPreparedApply() const { return bHasPreparedApply; }
 
-	// Last Workspace transaction에 standard Undo를 제공할 수 있는 transient confidence flag입니다.
-	bool CanUndoLastWorkspaceAction() const { return bCanUndoLastWorkspaceAction; }
+		// Last Workspace transaction이 현재 UE Undo stack의 exact top인지 확인해 standard Undo 가능 여부를 반환합니다.
+	bool CanUndoLastWorkspaceAction() const;
 
 
 	// 마지막 facade operation의 persistent UI diagnostic입니다.
@@ -477,8 +492,11 @@ private:
 	// Preview freshness presentation state입니다.
 	ECFWorkspacePreviewView PreviewView = ECFWorkspacePreviewView::NeedsRefresh;
 
-		// 마지막 Workspace-owned transaction을 standard Undo할 수 있다고 판단하는 transient flag입니다.
+			// 마지막 Workspace-owned transaction을 standard Undo 후보로 추적하는 transient flag입니다.
 	bool bCanUndoLastWorkspaceAction = false;
+
+	// Workspace transaction 완료 직후 UE Undo stack top에서 캡처한 exact TransactionId입니다.
+	FGuid LastWorkspaceTransactionId;
 
 	// Undo button에 표시할 마지막 Workspace-owned logical action 설명입니다.
 	FString LastWorkspaceActionDescription;

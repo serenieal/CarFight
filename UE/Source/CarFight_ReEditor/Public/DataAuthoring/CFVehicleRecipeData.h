@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleRecipeData.h
-// Version: v1.2.0
+// Version: v1.3.0
 // Date: 2026-08-27
 // Description: Vehicle Authoring Intent + Builder profile provenance receipt의 persistent Editor-only Recipe DataAsset입니다.
 // Scope: Target binding, Asset/Profile/Feel/Mass/Hardpoint/Mount/Default/Override/Import/Applied authoring truth를 보관합니다.
 // Changelog:
+// - v1.3.0: Editor restart 뒤 Final Review provenance를 정확히 복원할 수 있도록 BuilderCommitReceipt에 canonical ConsumedClaimIds 목록을 non-semantic metadata로 추가.
 // - v1.2.0: Builder-private 4 Profile commit과 accepted Evidence/Claim set을 persistent하게 연결하는 non-semantic BuilderCommitReceipt를 추가.
 // - v1.1.0: Recipe 복제 시 원본 Guid를 상속하지 않고 새 RecipeId를 발급하도록 PostDuplicate 계약을 추가.
 // - v1.0.0: DAUTH-P0-08A Frozen Recipe schema 최초 구현.
@@ -42,6 +43,10 @@ struct FCFVehicleBuilderCommitReceipt
 	// Accepted proposal이 사용한 semantic Evidence fingerprint입니다.
 	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")
 	FString EvidenceFingerprint;
+
+	// Accepted proposal이 실제 소비한 canonical Claim ID를 deterministic lexical order로 보존한 resume provenance 목록입니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")
+	TArray<FName> ConsumedClaimIds;
 
 	// Accepted proposal이 실제 소비한 canonical Claim ID set의 order-independent hash입니다.
 	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")

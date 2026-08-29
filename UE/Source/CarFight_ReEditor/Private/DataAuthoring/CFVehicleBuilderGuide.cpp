@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleBuilderGuide.cpp
-// Version: v1.1.0
-// Date: 2026-08-27
-// Description: CF-FQ-040 VB-P0-06 Gameplay guidance + VB-P0-07 one-resolve projection reuse hardening입니다.
+// Version: v1.2.0
+// Date: 2026-08-28
+// Description: CF-FQ-040 Gameplay guidance + WSA-P0-04 mode-aware WheelVisual validation입니다.
 // Scope: Durability, Defense, Destroyed FX, Hardpoint, Mount, DriveState, WheelVisual, Fitting mass의 current authored truth를 mutation 없이 설명합니다.
 // Changelog:
+// - v1.2.0: Socket/Manual mode에서 Legacy AutoScale clamp를 blocker에서 제외하고 Socket Scale USER authority summary/Reference geometry conflict를 추가.
 // - v1.1.0: Final Review가 이미 계산한 fresh Resolve를 재사용할 수 있도록 projection helper를 분리해 동일 Resolver 반복 실행을 제거.
 // - v1.0.0: 기존 Resolver/Asset/Target 계약을 재사용하는 8영역 R0 guidance와 Existing Vehicle baseline-preserving Hardpoint 안내를 최초 구현.
 // Migration:
@@ -234,7 +235,7 @@ namespace CFVehicleBuilderGuidePrivate
 	}
 
 	// VehicleBase Profile이 WheelVisual policy를 완전히 제공할 수 있는지 검사합니다.
-	bool IsWheelVisualProfileComplete(const FCFVehicleBaseProfileData& BaseData, FString& OutFailureReason)
+	bool IsWheelVisualProfileComplete(const FCFVehicleBaseProfileData& BaseData, const ECFWheelVisualIntentMode WheelVisualMode, FString& OutFailureReason)
 	{
 		if (BaseData.ExpectedWheelCount <= 0)
 		{
@@ -249,7 +250,15 @@ namespace CFVehicleBuilderGuidePrivate
 			return false;
 		}
 
-		if (BaseData.bAutoScaleWheelMeshToRadius)
+		if (WheelVisualMode == ECFWheelVisualIntentMode::SocketScaleFromChassis && BaseData.bUseReferenceWheelGeometry)
+		{
+			OutFailureReason = TEXT("Socket Scale mode에서는 VehicleBase Profile의 Reference wheel geometry를 Wheel Size authority로 사용할 수 없습니다. bUseReferenceWheelGeometry를 끄고 Reference 값은 sanity reference로만 유지하세요.");
+			return false;
+		}
+
+		const bool bLegacyAutoScaleEffective = WheelVisualMode == ECFWheelVisualIntentMode::AutoScaleToPhysicsRadius
+			|| (WheelVisualMode == ECFWheelVisualIntentMode::UseProfilePolicy && BaseData.bAutoScaleWheelMeshToRadius);
+		if (bLegacyAutoScaleEffective)
 		{
 			// 자동 스케일 최소 제한값입니다.
 			const float ClampMin = BaseData.WheelMeshScaleClampMin;
@@ -838,14 +847,14 @@ bool FCFVehicleAuthoringService::BuildBuilderGameplayGuidanceFromResolve(
 			TEXT("WheelVisualIntent"),
 			false);
 	}
-	else if (!CFVehicleBuilderGuidePrivate::IsWheelVisualProfileComplete(Profiles.BaseData, WheelVisualFailure))
+	else if (!CFVehicleBuilderGuidePrivate::IsWheelVisualProfileComplete(Profiles.BaseData, Recipe.WheelVisualIntent.Mode, WheelVisualFailure))
 	{
 		CFVehicleBuilderGuidePrivate::AddGuidanceItem(
 			OutResult,
 			ECFBuilderGameplayArea::WheelVisual,
 			ECFBuilderGuidanceState::Blocked,
 			WheelVisualFailure,
-			TEXT("ExpectedWheelCount/Steering count와 필요한 auto-scale clamp를 current VehicleBase Profile에서 교정하세요."),
+			TEXT("ExpectedWheelCount/Steering count와 현재 WheelVisual mode에 실제 필요한 항목만 교정하세요. Socket/Manual mode에서는 Legacy AutoScale clamp를 요구하지 않습니다."),
 			TEXT("WheelVisualIntent / Profile.VehicleBase"),
 			true);
 	}
@@ -860,6 +869,9 @@ bool FCFVehicleAuthoringService::BuildBuilderGameplayGuidanceFromResolve(
 			break;
 		case ECFWheelVisualIntentMode::AutoScaleToPhysicsRadius:
 			WheelVisualSummary = TEXT("휠 메시를 current physics radius에 맞추는 기존 auto-scale 정책을 사용합니다.");
+			break;
+		case ECFWheelVisualIntentMode::SocketScaleFromChassis:
+			WheelVisualSummary = TEXT("차체 Wheel Socket Scale이 타이어 크기 Authority입니다. USER가 휠하우스를 보고 X/Z 직경 배율과 Y 폭 배율을 직접 결정하며 Builder는 크기를 자동 추정·보정하지 않습니다.");
 			break;
 		case ECFWheelVisualIntentMode::UseProfilePolicy:
 		default:

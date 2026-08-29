@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.28.0
-// Date: 2026-08-26
-// Description: CF-FQ-040 VB-P0-05 차량별 ChassisWidth와 UE 5.8 Transmission typed authoring/runtime 계약 추가
+// Version: 1.30.0
+// Date: 2026-08-28
+// Description: CF-FQ-040 WSA-P0-03 WheelVisual FL runtime fallback 계약을 명시
 // Scope: 차량 시각 자산, Wheel Class 참조, VehicleMovement/WheelVisual/Layout, 피팅 질량, 최대 체력과 선택적 방어 설정을 함께 다룹니다.
 // Changelog:
+// - v1.30.0: WheelMeshFR/RL/RR이 비어 있으면 런타임에서 WheelMeshFL을 재사용하는 실제 fallback 계약을 Tooltip에 명시.
+// - v1.29.0: FCFWheelAnchorPose.RelativeScale과 WheelVisualConfig.bUseWheelSocketScale을 additive 추가. 기존 자산은 OneVector/false 기본값으로 기존 시각·물리 동작을 유지.
 // - v1.28.0: ChassisWidth와 UE 5.8 FVehicleTransmissionConfig 대응 typed Transmission fields를 additive 추가. ReverseGearRatios는 positive magnitude 저장 계약을 사용.
 // - v1.27.0: EngineMaxRPM과 독립된 HUD Tachometer 레드라인 시작점 RedlineStartRPM을 additive 추가. 0은 미설정이며 EngineMaxRPM/변속값에서 자동 추정하지 않음.
 // - v1.26.0: bUseMovementOverrides가 전체 Movement on/off가 아니라 Wheel Runtime 상세 튜닝·ThrottleInputScale 경로 제어임을 Tooltip과 Migration에 명확히 기록.
@@ -23,6 +25,7 @@
 // - v1.14.0: VehicleLayoutConfig와 WheelAnchor 포즈 구조를 추가해 차량별 시각 휠 기준 위치를 DataAsset에서 관리.
 // - v1.13.0: VehicleMovement 기본값 재정렬 및 레거시 실험값 자동 마이그레이션 추가.
 // Migration:
+// - v1.29.0 이전 VehicleData는 WheelAnchor RelativeScale=OneVector, bUseWheelSocketScale=false 기본값으로 기존 Wheel_Anchor/Wheel_Mesh 동작과 Legacy AutoScale 정책을 그대로 유지한다.
 // - v1.28.0 기존 VehicleData는 UE 5.8 Source Build 기본값과 같은 ChassisWidth=180, Automatic/AutoReverse=true, FinalRatio=3.08, Forward=[2.85,2.02,1.35,1.0], Reverse=[2.86], Up=4500, Down=2000, GearTime=0.4, Efficiency=0.9를 사용하므로 새 필드 부재만으로 기존 주행 결과를 바꾸지 않는다.
 // - ReverseGearRatios는 방향 부호가 아닌 positive magnitude만 저장한다. UE 5.8 GetGearRatio()가 reverse 방향에서 음수 부호를 적용하므로 raw 배열에 음수를 저장하지 않는다.
 // - v1.27.0 기존 VehicleData는 RedlineStartRPM=0 기본값으로 주행 물리 결과를 그대로 유지한다. 0은 HUD Redline 미설정이며 EngineMaxRPM이나 변속 RPM에서 자동 보정/추정하지 않는다.
@@ -81,13 +84,13 @@ struct FCFVehicleVisualConfig
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="앞왼쪽 휠 메쉬 (WheelMeshFL)", ToolTip="앞왼쪽 바퀴 시각 표현에 사용할 Static Mesh 입니다."))
 	TObjectPtr<UStaticMesh> WheelMeshFL = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="앞오른쪽 휠 메쉬 (WheelMeshFR)", ToolTip="앞오른쪽 바퀴 시각 표현에 사용할 Static Mesh 입니다. 비어 있으면 FL 재사용을 권장합니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="앞오른쪽 휠 메쉬 (WheelMeshFR)", ToolTip="앞오른쪽 바퀴 시각 표현에 사용할 Static Mesh 입니다. 비어 있으면 런타임에서 WheelMeshFL을 재사용합니다."))
 	TObjectPtr<UStaticMesh> WheelMeshFR = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="뒤왼쪽 휠 메쉬 (WheelMeshRL)", ToolTip="뒤왼쪽 바퀴 시각 표현에 사용할 Static Mesh 입니다. 비어 있으면 FL 재사용을 권장합니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="뒤왼쪽 휠 메쉬 (WheelMeshRL)", ToolTip="뒤왼쪽 바퀴 시각 표현에 사용할 Static Mesh 입니다. 비어 있으면 런타임에서 WheelMeshFL을 재사용합니다."))
 	TObjectPtr<UStaticMesh> WheelMeshRL = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="뒤오른쪽 휠 메쉬 (WheelMeshRR)", ToolTip="뒤오른쪽 바퀴 시각 표현에 사용할 Static Mesh 입니다. 비어 있으면 FL 재사용을 권장합니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="뒤오른쪽 휠 메쉬 (WheelMeshRR)", ToolTip="뒤오른쪽 바퀴 시각 표현에 사용할 Static Mesh 입니다. 비어 있으면 런타임에서 WheelMeshFL을 재사용합니다."))
 	TObjectPtr<UStaticMesh> WheelMeshRR = nullptr;
 };
 
@@ -103,6 +106,10 @@ struct FCFWheelAnchorPose
 	// [v1.14.0] Wheel_Anchor_* 컴포넌트에 적용할 부모 기준 상대 회전입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Layout", meta=(DisplayName="상대 회전 (RelativeRotation)", ToolTip="Wheel_Anchor_* 컴포넌트에 적용할 부모 기준 상대 회전입니다."))
 	FRotator RelativeRotation = FRotator::ZeroRotator;
+
+	// [v1.29.0] 차체 Wheel Socket에 USER가 작성한 차량별 타이어 크기 Scale입니다. 기존 자산은 OneVector로 호환됩니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Layout", meta=(DisplayName="상대 스케일 (RelativeScale)", ToolTip="차체 Wheel_Anchor_* Socket에 USER가 작성한 타이어 크기 Scale입니다. X/Z는 직경 배율, Y는 폭 배율로 사용하며 기존 자산은 1/1/1을 유지합니다."))
+	FVector RelativeScale = FVector::OneVector;
 };
 
 USTRUCT(BlueprintType)
@@ -396,6 +403,10 @@ struct FCFVehicleWheelVisualConfig
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ClampMin="0", DisplayName="조향 전륜 개수 (FrontWheelCountForSteering)", ToolTip="차량 휠 시각 동기화에서 조향 대상으로 보는 전륜 개수입니다."))
 	int32 FrontWheelCountForSteering = 2;
+
+	// [v1.29.0] True이면 차체 Wheel Socket Scale을 차량별 타이어 크기 Authoring authority로 사용합니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="차체 소켓 스케일 사용 (bUseWheelSocketScale)", ToolTip="True이면 차체 Wheel Socket의 Scale을 차량별 타이어 크기 기준으로 사용합니다. USER가 정한 X/Z 직경 배율과 Y 폭 배율을 시각 Wheel Mesh에 적용하고 같은 크기에서 물리 WheelRadius/Width를 파생하는 신규 경로용 명시 flag입니다. WheelRadius 기준 시각 자동 스케일과 동시에 사용하지 않습니다."))
+	bool bUseWheelSocketScale = false;
 
 	// [v1.20.0] True이면 WheelMesh의 원본 바운드 반지름을 VehicleMovementConfig의 WheelRadius에 맞춰 표시 스케일을 자동 보정합니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="WheelRadius 기준 휠 메시 자동 스케일 (bAutoScaleWheelMeshToRadius)", ToolTip="True이면 VehicleVisualConfig의 WheelMesh 바운드 반지름을 측정해서 FrontWheelRadius / RearWheelRadius에 맞게 Wheel_Mesh_* 표시 스케일을 자동 적용합니다. 기존 수동 스케일 보존을 위해 기본값은 False입니다."))

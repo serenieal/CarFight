@@ -1,11 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAIContract.h
-// Version: v1.11.0
+// Version: v1.13.0
 // Date: 2026-08-27
 // Description: DAUTH Common Authoring Service + CF-FQ-040 Builder provenance receipt / Final Review / post-state guarded Undo hardening contract입니다.
 // Scope: Section 25 R0~R3 risk, approval, read/query와 normal Workspace Mesh-only candidate projection을 제공합니다.
 // Changelog:
+// - v1.13.0: VB-P0-09 Step 5에서 current accepted Evidence + complete Builder-private 4 Profile proposal을 AI→Guided Shell에 넘기는 transient FCFBuilderPhysicsDraft contract를 추가.
+// - v1.12.0: VB-P0-09 Step 1에서 initial Reference Research payload/EvidenceId를 Companion approval에 binding하고 AI→Shell ResearchDraft typed handoff를 추가.
 // - v1.11.0: Final Review provenance를 persistent BuilderCommitReceipt/current 4 Profile fingerprint에 binding하고, Undo token에 semantic Recipe + post-Apply Target/AppliedState stale guard를 추가.
 // - v1.10.0: VB-P0-07 Final Review의 validation/drift/gameplay/diff/provenance summary, exact R3 Apply approval과 Builder-owned UE transaction guarded Undo token contract를 추가.
 // - v1.9.0: VB-P0-06 Durability/Defense/DestroyedFx/Hardpoint/Mount/DriveState/WheelVisual/FittingMass를 current Recipe/Resolver/Target에서 읽어 Complete/Optional/NeedsReview/Blocked로 분류하는 R0 Builder guidance contract를 추가.
@@ -13,6 +15,7 @@
 // - v1.7.0: VB-P0-05 최소 7-Asset 경로를 닫기 위해 existing Definition+Recipe 뒤 Evidence + private 4 Profile을 생성·owner/binding하는 R2 Builder companion typed request/preview/result를 추가.
 // - v1.6.0: VB-P0-05 설계 검수 교정으로 Builder commit에 typed Evidence path/id/fingerprint/consumed claims와 prospective Resolver signature/hash binding을 추가. opaque upstream hash는 보조 correlation 값으로 격하.
 // - v1.5.0: VB-P0-05 Builder-private VehicleBase/Drivetrain/Handling/Performance complete payload를 4개 current/prospective fingerprint와 OwnerRecipeId에 binding하는 atomic typed commit request/preview를 추가.
+// - v1.4.0: P0-12 UA-07 baseline-safe Profile 복구를 위해 explicit R1 UnbindVehicleProfile semantic operation을 additive 추가. Bind의 non-empty path 계약은 유지.
 // - v1.3.0: P0-11 ListVehicles에 bounded Mesh-only Candidate projection metadata를 추가하되 AI raw writer/create operation은 추가하지 않음.
 // - v1.2.0: P0-10 Reference Compare, Legacy Adoption, Wheel Measurement, managed-target lookup typed R0/R2 contract를 추가.
 // - v1.1.0: P0-09 reviewed Initial Import proposal/commit을 UI와 공용 facade에서 사용할 typed R2 contract로 추가.
@@ -22,6 +25,7 @@
 // - v1.5.0의 Profile write는 Meta.OwnerRecipeId가 exact RecipeId인 Builder-private 4 Profile만 허용합니다. Invalid/mismatch owner인 shared/legacy Profile은 fail-closed이며 기존 Shared Profile 편집 경로를 우회하지 않습니다.
 // - Builder-private typed commit은 fresh Reference Evidence + current Recipe/Target/private Profile + prospective Resolver result에 binding한 4 Profile complete payload만 한 transaction으로 갱신하며 Save/SaveAll, force/skip-validation, automatic retry를 제공하지 않습니다.
 // - 일반 Shared Profile payload writer, Batch/CSV, Save/SaveAll, force/skip-validation 옵션을 제공하지 않습니다.
+// - v1.4.0의 UnbindVehicleProfile은 Profile Asset을 삭제하거나 수정하지 않고 Recipe의 선택 Domain binding만 명시적으로 비웁니다.
 // - v1.9.0 Builder Gameplay Guidance는 R0 read-only입니다. Hardpoint Socket을 생성·이동하지 않고, Existing Vehicle Completion에서는 current Target의 기존 LocalTransform을 baseline-safe하게 보존할 수 있습니다.
 // - v1.10.0 Builder Final Review는 기존 Validator/Resolver/Drift/ApplyService를 재사용합니다. Apply는 exact DefinitionApply approval 뒤에만 수행되고 Undo는 이 Builder가 생성한 exact UE transaction token이 현재 Undo stack top일 때만 허용합니다.
 
@@ -31,6 +35,7 @@
 #include "DataAuthoring/CFVehicleApplyService.h"
 #include "DataAuthoring/CFVehicleImportService.h"
 #include "DataAuthoring/CFVehicleResolverTypes.h"
+#include "DataAuthoring/CFVehicleRefEvidence.h"
 #include "CFVehicleAIContract.generated.h"
 
 class UCFVehicleData;
@@ -141,6 +146,7 @@ UENUM()
 enum class ECFVehicleSemanticOp : uint8
 {
 	BindVehicleProfile,
+	UnbindVehicleProfile,
 	SetVehicleArchetype,
 	SetVehicleAssetIntent,
 	SetDrivingFeel,
@@ -1297,6 +1303,84 @@ enum class ECFBuilderCompanionMode : uint8
 	CompleteExisting
 };
 
+/** AI가 조사한 Reference와 complete private Profile seed를 Guided Shell에 넘기는 transient typed draft입니다. Persistent SSOT나 approval token이 아닙니다. */
+USTRUCT()
+struct FCFBuilderResearchDraft
+{
+	GENERATED_BODY()
+
+	// Research Draft JSON schema revision입니다.
+	UPROPERTY()
+	int32 SchemaRevision = 1;
+
+	// 이 Draft가 exact binding된 managed Recipe identity입니다.
+	UPROPERTY()
+	FGuid RecipeId;
+
+	// 이 Draft가 exact binding된 Target VehicleData path입니다.
+	UPROPERTY()
+	FSoftObjectPath TargetDefinitionPath;
+
+	// 새 Reference Evidence에 넣을 normalized FACT/DERIVED research payload입니다.
+	UPROPERTY()
+	FCFVehicleRefEvidencePayload EvidencePayload;
+
+	// Missing Builder-private Profile을 current effective/reference proposal에서 완전하게 seed할 typed payload입니다.
+	UPROPERTY()
+	FCFBuilderPrivateProfilePayload InitialProfilePayload;
+
+	// 사람이 어떤 Research Draft인지 식별할 diagnostic label입니다. Persistent authority가 아닙니다.
+	UPROPERTY()
+	FString ResearchLabel;
+};
+
+/** AI가 current accepted Reference Evidence를 근거로 작성한 Step 5 complete 4-Profile Physics Proposal transient draft입니다. Persistent SSOT나 approval token이 아닙니다. */
+USTRUCT()
+struct FCFBuilderPhysicsDraft
+{
+	GENERATED_BODY()
+
+	// Physics Draft JSON schema revision입니다.
+	UPROPERTY()
+	int32 SchemaRevision = 1;
+
+	// 이 Physics Draft가 exact binding된 managed Recipe identity입니다.
+	UPROPERTY()
+	FGuid RecipeId;
+
+	// 이 Physics Draft가 exact binding된 Target VehicleData path입니다.
+	UPROPERTY()
+	FSoftObjectPath TargetDefinitionPath;
+
+	// 이 Proposal이 소비한 exact accepted Reference Evidence identity입니다.
+	UPROPERTY()
+	FGuid EvidenceId;
+
+	// Proposal 작성 시점에 소비한 exact Reference Evidence semantic fingerprint입니다.
+	UPROPERTY()
+	FString ExpectedEvidenceFingerprint;
+
+	// Current Builder-private 4 Profile에 반영할 complete prospective typed payload입니다.
+	UPROPERTY()
+	FCFBuilderPrivateProfilePayload ProfilePayload;
+
+	// Profile Proposal이 실제로 소비한 canonical Evidence Claim ID 목록입니다.
+	UPROPERTY()
+	TArray<FName> ConsumedClaimIds;
+
+	// Upstream AI proposal correlation을 stable하게 구분하는 opaque deterministic hash입니다.
+	UPROPERTY()
+	FString ProposalCorrelationHash;
+
+	// USER가 어떤 제안인지 식별할 짧은 제목입니다. Persistent authority가 아닙니다.
+	UPROPERTY()
+	FString ProposalLabel;
+
+	// USER가 Chaos 세부 숫자를 몰라도 차량 특성 변화 방향을 이해할 수 있게 AI가 작성한 설명입니다.
+	UPROPERTY()
+	FString UserFacingSummary;
+};
+
 /** Existing Definition+Recipe에 Evidence + private 4 Profile을 붙이는 R2 Builder request입니다. */
 USTRUCT()
 struct FCFBuilderCompanionRequest
@@ -1322,6 +1406,18 @@ struct FCFBuilderCompanionRequest
 	// 기존 정상 Reference Evidence가 있으면 그 exact path입니다. 비어 있으면 EvidenceAsset identity로 새 Evidence를 생성합니다.
 	UPROPERTY()
 	FSoftObjectPath ExistingEvidencePath;
+
+	// 새 Evidence를 생성할 때 complete normalized Research payload가 제공됐는지 여부입니다.
+	UPROPERTY()
+	bool bHasInitialEvidencePayload = false;
+
+	// Preview와 Commit이 같은 새 Evidence semantic identity/fingerprint를 사용하도록 caller가 한 번 생성해 고정하는 GUID입니다.
+	UPROPERTY()
+	FGuid NewEvidenceId;
+
+	// 새 Evidence를 빈 record로 만들지 않고 같은 Companion transaction에서 채울 normalized initial Research payload입니다.
+	UPROPERTY()
+	FCFVehicleRefEvidencePayload InitialEvidencePayload;
 
 	// ExistingEvidencePath가 비어 있을 때 생성할 새 Reference Evidence asset identity입니다.
 	UPROPERTY()
@@ -1365,6 +1461,10 @@ struct FCFBuilderCompanionPreview
 	// Preview 뒤 사용할 existing 또는 prospective Reference Evidence object path입니다.
 	UPROPERTY()
 	FSoftObjectPath EvidencePath;
+
+	// Existing 또는 prospective initial Research payload에서 fresh 계산한 exact Evidence fingerprint입니다.
+	UPROPERTY()
+	FString ProspectiveEvidenceFingerprint;
 
 	// Preview 뒤 사용할 existing 또는 prospective VehicleBase private Profile object path입니다.
 	UPROPERTY()

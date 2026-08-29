@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleRefEvidence.h
-// Version: v1.0.0
+// Version: v1.3.0
 // Date: 2026-08-26
 // Description: CF-FQ-040 VB-P0-01/05 Vehicle Reference Evidence Editor-only DataAsset와 typed stale-binding schema입니다.
 // Scope: Reference identity/source/claim/conflict/unknown fact와 deterministic SHA-256 Evidence fingerprint를 소유합니다.
 // Changelog:
+// - v1.3.0: VB-P0-09 Step 1 AI Research handoff용 typed initial Evidence payload와 initial research semantic validation/apply API를 추가.
 // - v1.0.0: VB-P0-05 설계 검수 교정으로 VB-P0-01 frozen schema를 실제 Editor-only DataAsset contract로 구현.
 // Migration:
 // - Runtime UCFVehicleData에는 citation/provenance를 추가하지 않습니다.
@@ -444,6 +445,37 @@ struct FCFRefUnknownFact
 	FString Note;
 };
 
+/** AI Research handoff가 새 Evidence에 넣을 complete semantic research payload입니다. Target binding/EvidenceId/fingerprint는 포함하지 않습니다. */
+USTRUCT(BlueprintType)
+struct FCFVehicleRefEvidencePayload
+{
+	GENERATED_BODY()
+
+	// 서로 섞으면 안 되는 exact Reference Vehicle identity 목록입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Builder|Research")
+	TArray<FCFRefVehicleIdentity> ReferenceVehicles;
+
+	// Research citation 목록입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Builder|Research")
+	TArray<FCFRefSourceCitation> Sources;
+
+	// FACT/DERIVED atomic claim 목록입니다. Initial research handoff에서는 GAME_BIAS를 허용하지 않습니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Builder|Research")
+	TArray<FCFRefClaim> Claims;
+
+	// Source/identity/variant conflict 목록입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Builder|Research")
+	TArray<FCFRefConflict> Conflicts;
+
+	// 조사했지만 확정하지 못한 fact 목록입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Builder|Research")
+	TArray<FCFRefUnknownFact> UnknownFacts;
+
+	// 사람이 읽는 Research 메모입니다. Fingerprint authority에는 포함되지 않습니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Builder|Diagnostic", meta=(MultiLine="true"))
+	FString ResearchNotes;
+};
+
 /** 한 Builder 차량의 Reference research companion SSOT입니다. */
 UCLASS(BlueprintType)
 class CARFIGHT_REEDITOR_API UCFVehicleRefEvidence : public UDataAsset
@@ -470,6 +502,12 @@ public:
 
 	// generated read-only EvidenceFingerprint를 현재 semantic payload로 갱신합니다.
 	bool RefreshEvidenceFingerprint(FString& OutError);
+
+	// 새 companion 생성에 사용할 initial Research payload의 ID/provenance/reference integrity를 검증합니다. GAME_BIAS와 unresolved blocking conflict는 거부합니다.
+	bool ValidateInitialResearchPayload(const FCFVehicleRefEvidencePayload& Payload, FString& OutError) const;
+
+	// 검증된 initial Research payload를 이 Evidence의 research fields에 복사하고 generated fingerprint를 갱신합니다.
+	bool ApplyInitialResearchPayload(const FCFVehicleRefEvidencePayload& Payload, FString& OutError);
 
 	// 이 Evidence의 persistent identity입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Builder|Identity", meta=(ToolTip="이 Reference Evidence asset의 persistent identity입니다."))

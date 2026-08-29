@@ -1,10 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleResolverTests.cpp
-// Version: v1.2.0
-// Date: 2026-08-17
-// Description: DAUTH-P0-08E/F Pure Resolver와 R15 Definition Materializer / Validation Automation입니다.
+// Version: v1.5.0
+// Date: 2026-08-28
+// Description: DAUTH-P0-08E/F Pure Resolver + WSA-P0-02 Socket Scale derived physics Automation입니다.
 // Changelog:
+// - v1.5.0: WSA-P0-05 Recipe SoftObject ChassisMesh → Target Object canonical reference가 R15 materialized readback hash와 일치하는 회귀검증 추가.
+// - v1.4.0: WSA-P0-04 SocketScaleFromChassis의 FL-only shared Wheel fallback을 Resolver에서 직접 회귀검증.
+// - v1.3.0: WSA-P0-02 SocketScaleFromChassis Radius/Width, narrow fingerprint, invalid scale/axle mismatch와 AssetAdoption source를 focused 검증.
 // - v1.2.0: R15 Completed semantics, DefinitionValidation Blocked 분리, Stable-ID array reconstruction, materialized readback hash consistency와 FieldCodec import fail-closed 검증 추가.
 // - v1.1.0: R14 FieldDiff + R16 Effective/External Drift foundation과 same-precedence fail-closed conflict 검증 추가.
 // - v1.0.0: Frozen R0~R16, proposal/adoption, PreviewContext, Advanced/Legacy/Derived precedence, fingerprint mismatch, legacy serialized 검증 최초 구현.
@@ -22,6 +25,7 @@
 #include "DataAuthoring/CFVehicleMaterializer.h"
 #include "DataAuthoring/CFVehicleResolver.h"
 #include "DataAuthoring/CFVehicleSnapshotBuilder.h"
+#include "Engine/StaticMesh.h"
 
 namespace CFVehicleResolverTestsPrivate
 {
@@ -269,6 +273,24 @@ namespace CFVehicleResolverTestsPrivate
 		});
 	}
 
+	// ResolveResult에서 exact measurement proposal을 찾습니다.
+	const FCFVehicleMeasurementProposal* FindProposal(const FCFVehicleResolveResult& Result, const TCHAR* CanonicalPath)
+	{
+		return Result.MeasurementProposals.FindByPredicate([CanonicalPath](const FCFVehicleMeasurementProposal& Proposal)
+		{
+			return Proposal.FieldPath.ToCanonicalString(true) == CanonicalPath;
+		});
+	}
+
+	// Asset Snapshot에서 exact Chassis socket mutable fact를 찾습니다.
+	FCFVehicleSocketSnapshot* FindSocket(FCFVehicleAssetSnapshot& Assets, const FName SocketName)
+	{
+		return Assets.ChassisSockets.FindByPredicate([SocketName](const FCFVehicleSocketSnapshot& Socket)
+		{
+			return Socket.SocketName == SocketName;
+		});
+	}
+
 	// Validation bucket에 issue code가 존재하는지 검사합니다.
 	bool HasIssueCode(const TArray<FCFVehicleValidationIssue>& Issues, const FName IssueCode)
 	{
@@ -295,6 +317,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVehicleResolverSocketScaleTest,
+	"CarFight.DataAuthoring.CF_FQ_040.WSA_P0_02.Resolver.SocketScaleDerived",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCFVehicleResolverLegacyTest,
 	"CarFight.DataAuthoring.DAUTH_P0_08.Resolver.LegacySerialized",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -307,6 +334,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCFVehicleResolverConflictTest,
 	"CarFight.DataAuthoring.DAUTH_P0_08.Resolver.ConflictFailClosed",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVehicleResolverObjectReferenceRoundTripTest,
+	"CarFight.DataAuthoring.CF_FQ_040.WSA_P0_05.Resolver.ObjectReferenceRoundTrip",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -375,6 +407,53 @@ bool FCFVehicleResolverDeterminismTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Preview context does not bypass Definition validation"), PreviewResult.ResolveStatus, ECFVehicleResolveStatus::Blocked);
 	TestEqual(TEXT("Preview context cannot change Source signature"), PreviewResult.SourceSignature, FirstResult.SourceSignature);
 	TestEqual(TEXT("Preview context cannot change Definition hash"), PreviewResult.ResolvedDefinitionHash, FirstResult.ResolvedDefinitionHash);
+	return true;
+}
+
+// Recipe SoftObject ChassisMesh가 Target hard Object canonical reference로 정규화되어 R15 readback hash와 일치하는지 검증합니다.
+bool FCFVehicleResolverObjectReferenceRoundTripTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// SoftObject→Object canonical roundtrip을 검증할 baseline managed Resolver request입니다.
+	FCFVehicleResolveRequest Request;
+	// Request 구성 실패 사유입니다.
+	FString BuildError;
+	if (!TestTrue(TEXT("Object reference roundtrip request builds"), CFVehicleResolverTestsPrivate::BuildManagedRequest(Request, BuildError)))
+	{
+		AddError(BuildError);
+		return false;
+	}
+
+	// Engine 기본 StaticMesh를 가리키는 immutable soft object path입니다.
+	const FSoftObjectPath CubeMeshPath(TEXT("/Engine/BasicShapes/Cube.Cube"));
+	// Recipe source는 SoftObject reference를 보유합니다.
+	Request.Recipe.AssetIntent.ChassisMesh = TSoftObjectPtr<UStaticMesh>(CubeMeshPath);
+	// Asset Snapshot도 같은 chassis identity를 가리켜 source/readback 의미를 맞춥니다.
+	Request.Assets.ChassisObjectPath = CubeMeshPath;
+	Request.Assets.bChassisLoaded = true;
+
+	// SoftObject→Object adaptation이 적용된 Resolve 결과입니다.
+	FCFVehicleResolveResult Result;
+	if (!TestTrue(TEXT("SoftObject to Object Resolve avoids internal error"), FCFVehicleResolver::Resolve(Request, Result)))
+	{
+		for (const FCFVehicleValidationIssue& Issue : Result.DefinitionValidation)
+		{
+			AddError(FString::Printf(TEXT("Definition issue %s: %s"), *Issue.IssueCode.ToString(), *Issue.Message));
+		}
+		return false;
+	}
+
+	// ChassisMesh exact resolved field입니다.
+	const FCFVehicleResolvedField* ChassisField = CFVehicleResolverTestsPrivate::FindResolvedField(Result, TEXT("VehicleVisualConfig.ChassisMesh"));
+	if (TestNotNull(TEXT("Resolved ChassisMesh field exists"), ChassisField))
+	{
+		TestEqual(TEXT("ChassisMesh target type is hard StaticMesh Object"), ChassisField->Value.PropertyTypeSignature, FString(TEXT("Object:/Script/Engine.StaticMesh")));
+		TestEqual(TEXT("ChassisMesh canonical text matches target Object export form"), ChassisField->Value.CanonicalValueText, FString(TEXT("/Script/Engine.StaticMesh'/Engine/BasicShapes/Cube.Cube'")));
+	}
+
+	TestFalse(TEXT("R15 readback hash mismatch is absent"), CFVehicleResolverTestsPrivate::HasIssueCode(Result.DefinitionValidation, TEXT("DefinitionHashReadbackMismatch")));
+	TestEqual(TEXT("R15 materializer completes after object canonicalization"), Result.StageRecords[15].Status, ECFVehicleResolverStageStatus::Completed);
 	return true;
 }
 
@@ -468,6 +547,163 @@ bool FCFVehicleResolverFingerprintTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Changed accepted asset fingerprint blocks Resolve"), ChangedAssetResult.ResolveStatus, ECFVehicleResolveStatus::Blocked);
 	TestTrue(TEXT("Fingerprint mismatch issue emitted"), CFVehicleResolverTestsPrivate::HasIssueCode(ChangedAssetResult.ResolverValidation, TEXT("AcceptedMeasurementFingerprintMismatch")));
 	TestEqual(TEXT("Measurement proposals remain preview-visible while blocked"), ChangedAssetResult.MeasurementProposals.Num(), 4);
+	return true;
+}
+
+// WSA-P0-02 USER Socket Scale에서 Radius/Width와 narrow fingerprint를 derive하고 invalid input을 fail-closed하는지 검증합니다.
+bool FCFVehicleResolverSocketScaleTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	FCFVehicleResolveRequest Request;
+	FString BuildError;
+	if (!TestTrue(TEXT("WSA managed request builds"), CFVehicleResolverTestsPrivate::BuildManagedRequest(Request, BuildError)))
+	{
+		AddError(BuildError);
+		return false;
+	}
+
+	TestEqual(TEXT("WSA-P0-02 Resolver contract revision"), FCFVehicleResolver::CurrentResolverContractRevision, 4);
+	Request.Recipe.WheelVisualIntent.Mode = ECFWheelVisualIntentMode::SocketScaleFromChassis;
+	// Socket mode는 Legacy radius measure mode를 무시해야 하므로 의도적으로 AxisY를 둡니다.
+	Request.Profiles.BaseData.WheelMeshRadiusMeasureMode = ECFWheelMeshRadiusMeasureMode::AxisY;
+	Request.Recipe.AssetAdoption.bUseSuggestedRadiusMeasureMode = true;
+
+	FCFVehicleWheelAssetSnapshot* Wheels[] = {&Request.Assets.WheelFL, &Request.Assets.WheelFR, &Request.Assets.WheelRL, &Request.Assets.WheelRR};
+	for (int32 WheelIndex = 0; WheelIndex < UE_ARRAY_COUNT(Wheels); ++WheelIndex)
+	{
+		Wheels[WheelIndex]->BoundsOrigin = FVector::ZeroVector;
+		Wheels[WheelIndex]->BoundsExtent = FVector(50.0, 12.5, 50.0);
+		Wheels[WheelIndex]->MeasureFingerprint = FString::Printf(TEXT("wsa-wheel-%d-v1"), WheelIndex);
+	}
+
+	FCFVehicleSocketSnapshot* SocketFL = CFVehicleResolverTestsPrivate::FindSocket(Request.Assets, TEXT("Wheel_Anchor_FL"));
+	FCFVehicleSocketSnapshot* SocketFR = CFVehicleResolverTestsPrivate::FindSocket(Request.Assets, TEXT("Wheel_Anchor_FR"));
+	FCFVehicleSocketSnapshot* SocketRL = CFVehicleResolverTestsPrivate::FindSocket(Request.Assets, TEXT("Wheel_Anchor_RL"));
+	FCFVehicleSocketSnapshot* SocketRR = CFVehicleResolverTestsPrivate::FindSocket(Request.Assets, TEXT("Wheel_Anchor_RR"));
+	if (!TestNotNull(TEXT("FL socket exists"), SocketFL)
+		|| !TestNotNull(TEXT("FR socket exists"), SocketFR)
+		|| !TestNotNull(TEXT("RL socket exists"), SocketRL)
+		|| !TestNotNull(TEXT("RR socket exists"), SocketRR))
+	{
+		return false;
+	}
+
+	SocketFL->RelativeScale = FVector(0.72, 1.12, 0.72);
+	SocketFR->RelativeScale = FVector(0.72, 1.12, 0.72);
+	SocketRL->RelativeScale = FVector(0.80, 1.00, 0.80);
+	SocketRR->RelativeScale = FVector(0.80, 1.00, 0.80);
+	Request.Assets.ChassisLayoutFingerprint = TEXT("wsa-layout-v1");
+
+	FCFVehicleResolveResult ProposalResult;
+	TestTrue(TEXT("Socket Scale proposal Resolve executes"), FCFVehicleResolver::Resolve(Request, ProposalResult));
+	TestEqual(TEXT("Socket Scale creates four wheel geometry proposals"), ProposalResult.MeasurementProposals.Num(), 4);
+	TestFalse(TEXT("Legacy radius-mode suggestion blocker is ignored in Socket mode"), CFVehicleResolverTestsPrivate::HasIssueCode(ProposalResult.ResolverValidation, TEXT("RadiusModeSuggestionNotFrozen")));
+
+	const FCFVehicleMeasurementProposal* FrontRadius = CFVehicleResolverTestsPrivate::FindProposal(ProposalResult, TEXT("VehicleMovementConfig.FrontWheelRadius"));
+	const FCFVehicleMeasurementProposal* FrontWidth = CFVehicleResolverTestsPrivate::FindProposal(ProposalResult, TEXT("VehicleMovementConfig.FrontWheelWidth"));
+	const FCFVehicleMeasurementProposal* RearRadius = CFVehicleResolverTestsPrivate::FindProposal(ProposalResult, TEXT("VehicleMovementConfig.RearWheelRadius"));
+	const FCFVehicleMeasurementProposal* RearWidth = CFVehicleResolverTestsPrivate::FindProposal(ProposalResult, TEXT("VehicleMovementConfig.RearWheelWidth"));
+	if (!TestNotNull(TEXT("Front radius proposal exists"), FrontRadius)
+		|| !TestNotNull(TEXT("Front width proposal exists"), FrontWidth)
+		|| !TestNotNull(TEXT("Rear radius proposal exists"), RearRadius)
+		|| !TestNotNull(TEXT("Rear width proposal exists"), RearWidth))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("Front radius derived 36cm"), FMath::IsNearlyEqual(FCString::Atof(*FrontRadius->MeasuredCandidateValue.CanonicalValueText), 36.0f, KINDA_SMALL_NUMBER));
+	TestTrue(TEXT("Front width derived 28cm"), FMath::IsNearlyEqual(FCString::Atof(*FrontWidth->MeasuredCandidateValue.CanonicalValueText), 28.0f, KINDA_SMALL_NUMBER));
+	TestTrue(TEXT("Rear radius derived 40cm"), FMath::IsNearlyEqual(FCString::Atof(*RearRadius->MeasuredCandidateValue.CanonicalValueText), 40.0f, KINDA_SMALL_NUMBER));
+	TestTrue(TEXT("Rear width derived 25cm"), FMath::IsNearlyEqual(FCString::Atof(*RearWidth->MeasuredCandidateValue.CanonicalValueText), 25.0f, KINDA_SMALL_NUMBER));
+	TestEqual(TEXT("Socket radius rule id"), FrontRadius->MeasurementRuleId, FName(TEXT("WheelSocketScale.Radius.v1")));
+	TestEqual(TEXT("Socket width rule id"), FrontWidth->MeasurementRuleId, FName(TEXT("WheelSocketScale.Width.v1")));
+
+	// 공용 Wheel Mesh를 FL 하나만 지정한 신규 정상 경로는 FR/RL/RR 모두 FL Snapshot을 deterministic fallback으로 재사용해야 합니다.
+	FCFVehicleResolveRequest SharedWheelFallbackRequest = Request;
+	SharedWheelFallbackRequest.Assets.WheelFR = FCFVehicleWheelAssetSnapshot();
+	SharedWheelFallbackRequest.Assets.WheelRL = FCFVehicleWheelAssetSnapshot();
+	SharedWheelFallbackRequest.Assets.WheelRR = FCFVehicleWheelAssetSnapshot();
+	FCFVehicleResolveResult SharedWheelFallbackResult;
+	TestTrue(TEXT("Socket Scale FL-only shared Wheel Resolve executes"), FCFVehicleResolver::Resolve(SharedWheelFallbackRequest, SharedWheelFallbackResult));
+	TestFalse(TEXT("FL-only shared Wheel does not emit missing Wheel blocker"), CFVehicleResolverTestsPrivate::HasIssueCode(SharedWheelFallbackResult.ResolverValidation, TEXT("WheelSocketSizeWheelMissing")));
+	TestEqual(TEXT("FL-only shared Wheel still creates four geometry proposals"), SharedWheelFallbackResult.MeasurementProposals.Num(), 4);
+	const FCFVehicleMeasurementProposal* SharedRearRadius = CFVehicleResolverTestsPrivate::FindProposal(SharedWheelFallbackResult, TEXT("VehicleMovementConfig.RearWheelRadius"));
+	const FCFVehicleMeasurementProposal* SharedRearWidth = CFVehicleResolverTestsPrivate::FindProposal(SharedWheelFallbackResult, TEXT("VehicleMovementConfig.RearWheelWidth"));
+	if (TestNotNull(TEXT("FL-only shared Wheel rear radius proposal exists"), SharedRearRadius)
+		&& TestNotNull(TEXT("FL-only shared Wheel rear width proposal exists"), SharedRearWidth))
+	{
+		TestTrue(TEXT("FL-only shared Wheel rear radius uses rear Socket Scale"), FMath::IsNearlyEqual(FCString::Atof(*SharedRearRadius->MeasuredCandidateValue.CanonicalValueText), 40.0f, KINDA_SMALL_NUMBER));
+		TestTrue(TEXT("FL-only shared Wheel rear width uses rear Socket Scale"), FMath::IsNearlyEqual(FCString::Atof(*SharedRearWidth->MeasuredCandidateValue.CanonicalValueText), 25.0f, KINDA_SMALL_NUMBER));
+	}
+
+	const FCFVehicleResolvedField* SocketModeField = CFVehicleResolverTestsPrivate::FindResolvedField(ProposalResult, TEXT("WheelVisualConfig.bUseWheelSocketScale"));
+	const FCFVehicleResolvedField* LegacyAutoScaleField = CFVehicleResolverTestsPrivate::FindResolvedField(ProposalResult, TEXT("WheelVisualConfig.bAutoScaleWheelMeshToRadius"));
+	if (TestNotNull(TEXT("Socket mode field exists"), SocketModeField))
+	{
+		TestTrue(TEXT("Socket mode resolves true"), SocketModeField->Value.CanonicalValueText.Equals(TEXT("True"), ESearchCase::IgnoreCase) || SocketModeField->Value.CanonicalValueText == TEXT("1"));
+	}
+	if (TestNotNull(TEXT("Legacy auto scale field exists"), LegacyAutoScaleField))
+	{
+		TestTrue(TEXT("Socket mode forces legacy auto scale false"), LegacyAutoScaleField->Value.CanonicalValueText.Equals(TEXT("False"), ESearchCase::IgnoreCase) || LegacyAutoScaleField->Value.CanonicalValueText == TEXT("0"));
+	}
+
+	const FCFVehicleSourceTrace* ScaleTrace = CFVehicleResolverTestsPrivate::FindTrace(ProposalResult, TEXT("VehicleLayoutConfig.WheelAnchorFL.RelativeScale"));
+	if (TestNotNull(TEXT("FL scale trace exists"), ScaleTrace))
+	{
+		TestEqual(TEXT("FL scale effective source is AssetDerived"), ScaleTrace->Layers[ScaleTrace->EffectiveLayerIndex].SourceType, ECFVehicleSourceType::AssetDerived);
+	}
+
+	const FString BaselineFrontFingerprint = FrontRadius->AssetFingerprint;
+	FCFVehicleResolveRequest LocationChangedRequest = Request;
+	FCFVehicleSocketSnapshot* LocationChangedFL = CFVehicleResolverTestsPrivate::FindSocket(LocationChangedRequest.Assets, TEXT("Wheel_Anchor_FL"));
+	LocationChangedFL->RelativeLocation += FVector(5.0, 0.0, 0.0);
+	LocationChangedRequest.Assets.ChassisLayoutFingerprint = TEXT("wsa-layout-location-changed");
+	FCFVehicleResolveResult LocationChangedResult;
+	TestTrue(TEXT("Location-changed Socket Resolve executes"), FCFVehicleResolver::Resolve(LocationChangedRequest, LocationChangedResult));
+	const FCFVehicleMeasurementProposal* LocationChangedFrontRadius = CFVehicleResolverTestsPrivate::FindProposal(LocationChangedResult, TEXT("VehicleMovementConfig.FrontWheelRadius"));
+	if (TestNotNull(TEXT("Location-changed front radius proposal exists"), LocationChangedFrontRadius))
+	{
+		TestEqual(TEXT("Wheel Size fingerprint ignores location-only layout change"), LocationChangedFrontRadius->AssetFingerprint, BaselineFrontFingerprint);
+	}
+
+	FCFVehicleResolveRequest ScaleChangedRequest = Request;
+	CFVehicleResolverTestsPrivate::FindSocket(ScaleChangedRequest.Assets, TEXT("Wheel_Anchor_FL"))->RelativeScale = FVector(0.74, 1.12, 0.74);
+	CFVehicleResolverTestsPrivate::FindSocket(ScaleChangedRequest.Assets, TEXT("Wheel_Anchor_FR"))->RelativeScale = FVector(0.74, 1.12, 0.74);
+	ScaleChangedRequest.Assets.ChassisLayoutFingerprint = TEXT("wsa-layout-scale-changed");
+	FCFVehicleResolveResult ScaleChangedResult;
+	TestTrue(TEXT("Scale-changed Socket Resolve executes"), FCFVehicleResolver::Resolve(ScaleChangedRequest, ScaleChangedResult));
+	const FCFVehicleMeasurementProposal* ScaleChangedFrontRadius = CFVehicleResolverTestsPrivate::FindProposal(ScaleChangedResult, TEXT("VehicleMovementConfig.FrontWheelRadius"));
+	if (TestNotNull(TEXT("Scale-changed front radius proposal exists"), ScaleChangedFrontRadius))
+	{
+		TestNotEqual(TEXT("Wheel Size fingerprint changes with authored scale"), ScaleChangedFrontRadius->AssetFingerprint, BaselineFrontFingerprint);
+		TestTrue(TEXT("Scale-changed front radius is 37cm"), FMath::IsNearlyEqual(FCString::Atof(*ScaleChangedFrontRadius->MeasuredCandidateValue.CanonicalValueText), 37.0f, KINDA_SMALL_NUMBER));
+	}
+
+	FCFVehicleResolveRequest InvalidScaleRequest = Request;
+	CFVehicleResolverTestsPrivate::FindSocket(InvalidScaleRequest.Assets, TEXT("Wheel_Anchor_FL"))->RelativeScale = FVector(0.72, 1.12, 0.70);
+	FCFVehicleResolveResult InvalidScaleResult;
+	TestTrue(TEXT("Invalid-scale Resolve executes fail-closed"), FCFVehicleResolver::Resolve(InvalidScaleRequest, InvalidScaleResult));
+	TestTrue(TEXT("X/Z mismatch emits WheelSocketScaleInvalid"), CFVehicleResolverTestsPrivate::HasIssueCode(InvalidScaleResult.ResolverValidation, TEXT("WheelSocketScaleInvalid")));
+
+	FCFVehicleResolveRequest AxleMismatchRequest = Request;
+	CFVehicleResolverTestsPrivate::FindSocket(AxleMismatchRequest.Assets, TEXT("Wheel_Anchor_FR"))->RelativeScale = FVector(0.72, 1.20, 0.72);
+	FCFVehicleResolveResult AxleMismatchResult;
+	TestTrue(TEXT("Axle-mismatch Resolve executes fail-closed"), FCFVehicleResolver::Resolve(AxleMismatchRequest, AxleMismatchResult));
+	TestTrue(TEXT("Axle mismatch emits blocker"), CFVehicleResolverTestsPrivate::HasIssueCode(AxleMismatchResult.ResolverValidation, TEXT("WheelSocketAxleSizeMismatch")));
+
+	FCFVehicleResolveRequest AdoptedRequest = Request;
+	CFVehicleResolverTestsPrivate::AdoptAllWheelMeasurements(AdoptedRequest, ProposalResult);
+	FCFVehicleResolveResult AdoptedResult;
+	TestTrue(TEXT("Adopted Socket Scale Resolve executes"), FCFVehicleResolver::Resolve(AdoptedRequest, AdoptedResult));
+	const FCFVehicleSourceTrace* FrontRadiusTrace = CFVehicleResolverTestsPrivate::FindTrace(AdoptedResult, TEXT("VehicleMovementConfig.FrontWheelRadius"));
+	if (TestNotNull(TEXT("Adopted front radius trace exists"), FrontRadiusTrace))
+	{
+		const FCFVehicleSourceLayer& EffectiveLayer = FrontRadiusTrace->Layers[FrontRadiusTrace->EffectiveLayerIndex];
+		TestEqual(TEXT("Adopted radius source type AssetDerived"), EffectiveLayer.SourceType, ECFVehicleSourceType::AssetDerived);
+		TestEqual(TEXT("Adopted radius source id"), EffectiveLayer.SourceId, FString(TEXT("Measurement.WheelSocketScale.Radius.v1")));
+	}
+
 	return true;
 }
 
