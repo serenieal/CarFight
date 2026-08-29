@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.10.0
-// Date: 2026-08-21
-// Description: CarFight LocalPlayer UI 수명·레이어·Pause·Production HUD·Target Marker·Radar Zoom·Screen-edge Relation Visual 연결 Subsystem 구현
-// Scope: 기존 UI 수명을 보존하면서 UI-P0-08 Screen-Off Selected Target Edge Marker에 공용 HUD Visual/Style Data를 주입합니다.
+// Version: 1.11.0
+// Date: 2026-08-25
+// Description: CarFight LocalPlayer UI 수명 + Production HUD Visual Data 주입 Subsystem 구현
+// Scope: 기존 UI 수명을 보존하면서 Presenter와 Target Marker가 공용 HUD Visual/Style Data를 소비하도록 연결합니다.
 // Changelog:
+// - v1.11.0: Config에서 이미 해석한 ResolvedHUDVisualData를 HUDPresenter에도 주입해 VehicleData identity별 Armor Body Map silhouette 선택을 Presentation 계층에서 수행하게 함.
 // - v1.10.0: USER 가독성 피드백에 따라 HUDDataProvider와 Friendly/Hostile/Unknown Style 색을 TargetSelect Screen-edge에 주입. Neutral은 Edge에서만 Unknown 회색을 공유하며 전역 NeutralColor는 보존.
 // - v1.9.0: DefaultHUDVisualDataAsset을 해석하고 T_UI_RadarEdge 기반 RadarSelectedEdgeBracket·AccentTactical·SafeMargin을 TargetSelect Widget에 주입. WBP_TargetSelect 저장 구조와 Gameplay 선택 상태는 변경하지 않음.
 // - v1.8.0: RequestRadarZoomIn/Out을 추가해 Pawn Mouse Wheel 입력이 HUDDataProvider의 Provider-local Range Preset 선택만 변경하도록 연결. Sensor/Scanner Gameplay Range는 수정하지 않음.
@@ -27,6 +28,7 @@
 // - v1.8.0 Radar Zoom은 UISubsystem이 새 Range 상태를 소유하지 않고 기존 HUDDataProvider API에만 위임합니다.
 // - v1.9.0 Screen-edge World Marker는 UISubsystem이 Visual/Style Data를 해석해 주입하고 TargetSelect Widget은 콘텐츠 경로를 직접 Load하지 않습니다.
 // - v1.10.0 관계색은 HUDDataProvider가 이미 판정한 Target.Relation을 소비하며 Friendly/Hostile/Unknown Style Token만 주입합니다. Neutral은 Screen-edge에서만 Unknown 회색을 사용합니다.
+// - v1.11.0 HUD Visual Data는 UISubsystem이 계속 단일 Load/Cache owner이며 Presenter는 주입받은 DataAsset에서 VehicleData identity→silhouette만 해석합니다.
 
 #include "UI/CFUISubsystem.h"
 
@@ -67,6 +69,7 @@ void UCFUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	if (HUDPresenter && HUDDataProvider)
 	{
 		HUDPresenter->InitializePresenter(HUDDataProvider);
+		HUDPresenter->SetHUDVisualData(ResolvedHUDVisualData);
 	}
 
 	WorldCleanupDelegateHandle = FWorldDelegates::OnWorldCleanup.AddUObject(this, &UCFUISubsystem::HandleWorldCleanup);

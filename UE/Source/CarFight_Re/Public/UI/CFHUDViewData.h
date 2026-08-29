@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.14.0
-// Date: 2026-08-21
-// Description: CF-FQ-032 HUD ViewData + UI-P0-09A View Mode / Direction Foundation
-// Scope: Vehicle, ViewMode, Weapon, Defense, Target, Radar Range·Contact 표시 상태와 Alert의 Player-facing ViewData 계약을 제공합니다.
+// Version: 1.15.0
+// Date: 2026-08-25
+// Description: CF-FQ-039 차량별 HUD silhouette identity + 기존 HUD ViewData 계약
+// Scope: VehicleData visual identity, Vehicle, ViewMode, Weapon, Defense, Target, Radar Range·Contact 표시 상태와 Alert의 Player-facing ViewData 계약을 제공합니다.
 // Changelog:
+// - v1.15.0: 현재 차량의 VehicleData Soft identity를 Vehicle HUD Data에 additive 전달해 Presenter가 HUD Visual catalog에서 차종별 Armor Body Map silhouette를 선택할 수 있게 함. Texture와 Gameplay 설정은 ViewData에 넣지 않음.
 // - v1.14.0: 기존 VehicleCamera/Aim Runtime을 재계산하지 않고 Camera Mode, 차량 Heading, 카메라·터렛의 차량 기준 상대 Yaw/Pitch를 전달하는 ViewMode HUD 계약을 추가.
 // - v1.13.0: Radar에 Display/Maximum Range, Preset index/count/zoom 가능 상태와 Contact의 range-inside/selected-edge 방향 계약을 추가. NormalizedPosition은 명시 Range가 있을 때만 사용.
 // - v1.12.0: UI-P0-06 실제 WeaponCharge Runtime의 Current/Maximum/Ratio/Insufficient를 ViewData로 전달하는 계약을 추가. VehicleBattery는 계속 Unavailable.
@@ -31,6 +32,7 @@
 // - EngineRpm은 Chaos Runtime 현재값이고 EngineRedlineStartRpm/EngineMaximumRpm은 VehicleData의 명시 authored 값입니다. RedlineStartRPM=0은 Unavailable이며 EngineMaxRPM 또는 변속값으로 추정하지 않습니다.
 // - Heat처럼 실제 Runtime Provider가 없는 채널은 값을 추정하지 않고 Unavailable로 유지하며 finite Ammo는 VehicleAmmoComp Snapshot만 사용합니다.
 // - Target Actor 이름이나 Component 이름 같은 내부 식별자는 Player-facing Text로 사용하지 않습니다.
+// - v1.15.0 VehicleDataAsset은 HUD Visual 선택용 identity일 뿐 Player-facing Text가 아니며 Presenter가 Gameplay VehicleData 필드를 읽는 용도로 사용하지 않습니다.
 
 #pragma once
 
@@ -41,6 +43,8 @@
 #include "CFVehicleCameraTypes.h"
 #include "CFTargetSelectTypes.h"
 #include "CFHUDViewData.generated.h"
+
+class UCFVehicleData;
 
 /**
  * UI가 값의 의미를 추정하지 않도록 공개 상태를 명시적으로 구분합니다.
@@ -175,6 +179,10 @@ struct CARFIGHT_RE_API FCFVehicleHUDData
 	// [v1.0.0] 차량 채널 자체의 가용 상태입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Vehicle", meta=(DisplayName="차량 데이터 상태", ToolTip="현재 UI Pawn이 지원 차량인지 나타냅니다."))
 	ECFUIViewAvailability Availability = ECFUIViewAvailability::Unavailable;
+
+	// [v1.15.0] HUD Visual catalog가 차종별 실루엣을 선택할 현재 VehicleData Asset identity입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Vehicle", meta=(DisplayName="차량 Visual Identity", ToolTip="현재 Pawn이 사용하는 VehicleData Asset의 Soft identity입니다. Presenter는 이 값으로 HUD 실루엣만 선택하며 VehicleData Gameplay 설정을 조회하지 않습니다."))
+	TSoftObjectPtr<UCFVehicleData> VehicleDataAsset;
 
 	// [v1.0.0] 실제 차량 속도 값의 가용 상태입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Vehicle", meta=(DisplayName="속도 데이터 상태", ToolTip="현재 속도가 실제 Runtime에서 제공됐는지 나타냅니다."))

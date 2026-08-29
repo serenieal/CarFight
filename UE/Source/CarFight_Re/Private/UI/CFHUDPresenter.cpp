@@ -1,10 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.24.0
-// Date: 2026-08-22
-// Description: CF-FQ-032 Runtime HUD Presenter + post-closure Alert Suppression Lifecycle 교정
-// Scope: Provider ViewData와 Root UI Style Data만 사용해 기존 HUD·ViewMode와 Alert의 Priority·Duration·Persistent Presentation을 적용합니다.
+// Version: 1.26.1
+// Date: 2026-08-25
+// Description: CF-FQ-039 VehiclePanel 차량별 Armor silhouette + Shield/Integrity Production Presentation
+// Scope: Provider ViewData, UISubsystem HUD Visual Data와 Root UI Style Data만 사용해 차량별 silhouette 및 기존 HUD Presentation을 적용합니다.
 // Changelog:
+// - v1.26.1: VehicleData catalog miss와 fallback null에서 이전 차량 silhouette Brush가 남지 않도록 resource를 명시적으로 비우고 Image를 Collapsed 처리. 다음 유효 차량에서는 같은 Designer Slot을 HitTestInvisible로 복구.
+// - v1.26.0: VehicleViewData.VehicleDataAsset identity를 HUDVisualData vehicle silhouette catalog에 해석해 `Image_VehicleSilhouette` Brush resource를 차량 전환 시에만 교체. Presenter의 Gameplay 조회 0과 Designer Position/Size ownership을 유지.
+// - v1.25.1: v1.25.0의 FSlateColorBrush 기본 ImageSize=0 때문에 VerticalBox 안 Shield/Integrity ProgressBar가 실제 픽셀에서 높이 0으로 수축한 결함을 교정. Designer Slot은 유지하고 Track/Fill Brush intrinsic height만 10px로 명시.
+// - v1.25.0: 기존 ProgressBar_Shield/Integrity Widget과 Designer Layout을 유지하면서 Style Token 기반 dark track + inset semantic fill Style, 좌→우 Scale fill, Shield/Integrity icon/value accent를 적용. Gameplay Defense source와 Ratio 계산은 변경하지 않음.
 // - v1.24.0: 유한 Alert duration을 최초 Active 시각이 아니라 실제 Primary로 처음 표시된 시각부터 계산. 상위 Priority에 가려진 Alert는 표시 전 duration을 소모하지 않고, 만료된 같은 AlertKey는 상태 해제 전 재표시하지 않도록 완료 집합을 추가.
 // - v1.23.0: AlertKey별 최초 활성 Game-Time을 보존하고 Style AlertStyle의 Notice 2초/Warning 3초/Critical Persistent 기본값을 실제 소비. 반복 ViewData Refresh는 duration을 리셋하지 않으며 상태 해제 후 재발생만 새 lifecycle로 취급.
 // - v1.22.0: FCFViewModeHUDData.CameraRelativeYawDegrees를 카메라 기준 차체 방향으로 변환해 `CanvasPanel_ViewDirection` 내부 `Image_ViewVehicleDirection` X Anchor에 적용. ±90° presentation clamp, Spectate/Destroyed/Unavailable hide, 기존 Command/Turret Reticle·Gameplay 조회 0.
@@ -52,6 +56,9 @@
 // - v1.22.0 Vehicle Direction은 세계 Compass가 아닙니다. 기존 Command Reticle을 Camera/User Aim 기준으로 두고 차체의 상대 Yaw만 조용한 Vehicle Semantic Image 위치로 표시하며 Vehicle Pitch를 추정하지 않습니다.
 // - v1.23.0 Alert duration은 Gameplay 상태 수명이 아니라 Presentation lifecycle입니다. Style Data의 Severity 기본값을 소비하며 같은 AlertKey가 계속 활성이라고 Timer를 재시작하지 않습니다.
 // - v1.24.0 유한 Alert duration은 실제 Primary 첫 표시부터 시작합니다. suppression 중에는 시간을 소모하지 않고, 한번 만료된 AlertKey는 Gameplay 상태가 해제되기 전 다시 표시하지 않습니다.
+// - v1.25.0 Shield/Integrity Production Style은 기존 ProgressBar Widget 이름, Percent/Visibility sink와 Designer Slot을 그대로 사용합니다. 새 Content Asset이나 Gameplay 상태를 만들지 않으며 StyleData Token만 소비합니다.
+// - v1.25.1 ProgressBar Row 높이는 새 Widget/SizeBox가 아니라 Background/Fill Brush의 10px intrinsic ImageSize가 제공합니다. Designer 위치·가로폭·VerticalBox 순서는 변경하지 않습니다.
+// - v1.26.0 차량별 silhouette는 HUDVisualData Soft Reference catalog에서만 선택합니다. 동일 VehicleData의 10Hz Refresh에서는 다시 Load하지 않으며 Brush resource만 바꿔 Image의 Designer layout을 수정하지 않습니다.
 
 
 
@@ -67,11 +74,53 @@
 #include "Components/Widget.h"
 #include "Engine/World.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Brushes/SlateColorBrush.h"
 #include "UI/CFHUDDataProvider.h"
+#include "UI/CFHUDVisualData.h"
 #include "UI/CFStyledWidgetBase.h"
 
 namespace
 {
+	// [v1.25.0] 기존 UProgressBar를 새 Widget Tree 없이 VehiclePanel의 얇은 dark track + semantic inset fill Production Style로 교체합니다.
+	void ApplyVehicleDefenseProgressStyle(
+		UProgressBar* ProgressBar,
+		const UCFUIStyleData* StyleData,
+		const ECFUIColorToken FillColorToken)
+	{
+		if (!ProgressBar || !StyleData)
+		{
+			return;
+		}
+
+		// [v1.25.0] Shield/Integrity의 미충전 영역과 2px inset 경계를 동시에 담당하는 어두운 Track 색상입니다.
+		const FLinearColor TrackColor = StyleData->ResolveColor(ECFUIColorToken::SurfaceRaised);
+		// [v1.25.0] 현재 Defense 계층의 의미색을 실제 Fill에 적용할 색상입니다.
+		const FLinearColor FillColor = StyleData->ResolveColor(FillColorToken);
+		// [v1.25.1] VerticalBox Auto desired-height가 0으로 수축하지 않도록 Track/Fill Brush가 제공할 Production Bar 높이입니다.
+		constexpr float DefenseBarBrushHeight = 10.0f;
+		// [v1.25.1] 기본 엔진 ProgressBar 배경 대신 단색 tactical Track을 그리는 Brush입니다.
+		FSlateColorBrush TrackBrush(TrackColor);
+		// [v1.25.1] 실제 의미색은 FillColorAndOpacity로 곱하므로 중복 Tint를 피하기 위한 흰색 Fill Brush입니다.
+		FSlateColorBrush FillBrush(FLinearColor::White);
+		// [v1.25.0] Marquee를 사용하지 않는 방어 Bar에서 불필요한 기본 Brush를 제거하는 투명 Brush입니다.
+		FSlateColorBrush MarqueeBrush(FLinearColor::Transparent);
+		TrackBrush.ImageSize = FVector2D(1.0f, DefenseBarBrushHeight);
+		FillBrush.ImageSize = FVector2D(1.0f, DefenseBarBrushHeight);
+		MarqueeBrush.ImageSize = FVector2D(1.0f, DefenseBarBrushHeight);
+		// [v1.25.0] 저장 Designer Widget의 Layout은 건드리지 않고 Slate 시각만 교체할 ProgressBar Style입니다.
+		FProgressBarStyle ProgressBarStyle;
+		ProgressBarStyle.SetBackgroundImage(TrackBrush);
+		ProgressBarStyle.SetFillImage(FillBrush);
+		ProgressBarStyle.SetMarqueeImage(MarqueeBrush);
+
+		ProgressBar->SetWidgetStyle(ProgressBarStyle);
+		ProgressBar->SetFillColorAndOpacity(FillColor);
+		ProgressBar->SetBorderPadding(FVector2D(2.0f, 2.0f));
+		ProgressBar->SetBarFillType(EProgressBarFillType::LeftToRight);
+		ProgressBar->SetBarFillStyle(EProgressBarFillStyle::Scale);
+		ProgressBar->SetIsMarquee(false);
+	}
+
 	// [v1.9.0] 지정 종류의 additive Weapon Resource Channel을 찾고 없으면 nullptr를 반환합니다.
 			const FCFWeaponResourceHUDData* FindWeaponResourceChannel(
 		const FCFWeaponHUDData& WeaponViewData,
@@ -244,16 +293,33 @@ void UCFHUDPresenter::ShutdownPresenter()
 		DataProvider->OnHUDViewDataChanged.RemoveDynamic(this, &UCFHUDPresenter::HandleHUDViewDataChanged);
 	}
 	DataProvider = nullptr;
+	HUDVisualData = nullptr;
 			ProductionWidget.Reset();
+	bVehicleSilhouettePresentationInitialized = false;
+	LastPresentedVehicleDataAssetPath.Reset();
 	ResetLauncherPresentationLifecycle();
 	ResetAlertPresentationLifecycle();
 	LastAppliedBindingGeneration = INDEX_NONE;
+}
+
+// [v1.26.0] UISubsystem이 해석한 HUD Visual Data를 연결하고 현재 차량 silhouette Cache를 무효화합니다.
+void UCFHUDPresenter::SetHUDVisualData(UCFHUDVisualData* InHUDVisualData)
+{
+	HUDVisualData = InHUDVisualData;
+	bVehicleSilhouettePresentationInitialized = false;
+	LastPresentedVehicleDataAssetPath.Reset();
+	if (DataProvider && ProductionWidget.IsValid())
+	{
+		ApplyViewData(DataProvider->GetCurrentViewData());
+	}
 }
 
 // [v1.0.0] 현재 Production WBP_CFInGameHUD 인스턴스를 Presenter 출력 대상으로 연결합니다.
 void UCFHUDPresenter::SetProductionWidget(UCFStyledWidgetBase* InProductionWidget)
 {
 			ProductionWidget = InProductionWidget;
+	bVehicleSilhouettePresentationInitialized = false;
+	LastPresentedVehicleDataAssetPath.Reset();
 	ResetLauncherPresentationLifecycle();
 	ResetAlertPresentationLifecycle();
 	LastAppliedBindingGeneration = INDEX_NONE;
@@ -395,17 +461,24 @@ void UCFHUDPresenter::ApplyViewModeViewData(UUserWidget* RootWidget, const FCFVi
 	VehicleDirectionImage->SetVisibility(ESlateVisibility::HitTestInvisible);
 }
 
-// [v1.0.0] Vehicle 속도와 Defense 상태를 Production VehiclePanel에 적용합니다.
+// [v1.26.0] Vehicle 속도·차량별 silhouette와 Defense 상태를 Production VehiclePanel에 적용합니다.
 void UCFHUDPresenter::ApplyVehicleAndDefenseViewData(
 	UUserWidget* RootWidget,
 	const FCFVehicleHUDData& VehicleViewData,
-	const FCFDefenseHUDData& DefenseViewData) const
+	const FCFDefenseHUDData& DefenseViewData)
 {
 	UUserWidget* VehiclePanel = FindNamedUserWidget(RootWidget, FName(TEXT("WBP_CFVehiclePanel")));
 	if (!VehiclePanel)
 	{
 		return;
 	}
+
+	// [v1.25.0] 중첩 VehiclePanel에 Root에서 전파된 현재 UI Style Context를 읽을 수 있는 Styled Widget입니다.
+	UCFStyledWidgetBase* StyledVehiclePanel = Cast<UCFStyledWidgetBase>(VehiclePanel);
+	// [v1.25.0] Shield/Integrity Track·Fill·Icon·Value가 모두 같은 의미 Palette를 소비하게 할 현재 Style Data입니다.
+	const UCFUIStyleData* VehiclePanelStyleData = StyledVehiclePanel
+		? StyledVehiclePanel->GetUIStyleData()
+		: GetDefault<UCFUIStyleData>();
 
 	UUserWidget* SpeedGauge = FindNamedUserWidget(VehiclePanel, FName(TEXT("WBP_CFSpeedGauge")));
 	if (SpeedGauge)
@@ -452,6 +525,25 @@ void UCFHUDPresenter::ApplyVehicleAndDefenseViewData(
 	// [v1.0.0] Legacy Defense에서는 Shield Row 전체를 숨기고 Integrity만 유지할지 여부입니다.
 	const bool bShowShield = DefenseViewData.Availability == ECFUIViewAvailability::Known
 		&& DefenseViewData.MaximumShield > KINDA_SMALL_NUMBER;
+	// [v1.25.0] 저장 Widget 이름과 Slot을 유지한 채 Production Track/Fill Style을 받을 실제 Shield Bar입니다.
+	UProgressBar* ShieldProgressBar = Cast<UProgressBar>(FindNamedWidget(VehiclePanel, FName(TEXT("ProgressBar_Shield"))));
+	ApplyVehicleDefenseProgressStyle(ShieldProgressBar, VehiclePanelStyleData, ECFUIColorToken::Shield);
+	// [v1.25.0] Shield 의미색을 Bar와 동일하게 맞출 저장 Semantic Icon입니다.
+	UImage* ShieldImage = Cast<UImage>(FindNamedWidget(VehiclePanel, FName(TEXT("Image_Shield"))));
+	// [v1.25.0] Shield 현재/최대값을 Bar와 동일한 의미색으로 읽히게 할 숫자 Text입니다.
+	UTextBlock* ShieldValueText = Cast<UTextBlock>(FindNamedWidget(VehiclePanel, FName(TEXT("Text_ShieldValue"))));
+	// [v1.25.0] 현재 Style Data가 정의한 Shield 계층의 실제 강조색입니다.
+	const FLinearColor ShieldVisualColor = VehiclePanelStyleData
+		? VehiclePanelStyleData->ResolveColor(ECFUIColorToken::Shield)
+		: FLinearColor::White;
+	if (ShieldImage)
+	{
+		ShieldImage->SetColorAndOpacity(ShieldVisualColor);
+	}
+	if (ShieldValueText)
+	{
+		ShieldValueText->SetColorAndOpacity(FSlateColor(ShieldVisualColor));
+	}
 	SetNamedVisibility(VehiclePanel, FName(TEXT("HorizontalBox_Shield")), bShowShield);
 	SetTextValue(
 		VehiclePanel,
@@ -463,6 +555,25 @@ void UCFHUDPresenter::ApplyVehicleAndDefenseViewData(
 	// [v1.0.0] VehicleHealth Runtime이 실제 Integrity를 제공하는지 여부입니다.
 	const bool bShowIntegrity = DefenseViewData.IntegrityAvailability == ECFUIViewAvailability::Known
 		|| DefenseViewData.IntegrityAvailability == ECFUIViewAvailability::KnownZero;
+	// [v1.25.0] 저장 Widget 이름과 Slot을 유지한 채 Production Track/Fill Style을 받을 실제 Integrity Bar입니다.
+	UProgressBar* IntegrityProgressBar = Cast<UProgressBar>(FindNamedWidget(VehiclePanel, FName(TEXT("ProgressBar_Integrity"))));
+	ApplyVehicleDefenseProgressStyle(IntegrityProgressBar, VehiclePanelStyleData, ECFUIColorToken::Integrity);
+	// [v1.25.0] Integrity 의미색을 Bar와 동일하게 맞출 저장 Semantic Icon입니다.
+	UImage* IntegrityImage = Cast<UImage>(FindNamedWidget(VehiclePanel, FName(TEXT("Image_Integrity"))));
+	// [v1.25.0] Integrity 현재/최대값을 Bar와 동일한 의미색으로 읽히게 할 숫자 Text입니다.
+	UTextBlock* IntegrityValueText = Cast<UTextBlock>(FindNamedWidget(VehiclePanel, FName(TEXT("Text_IntegrityValue"))));
+	// [v1.25.0] 현재 Style Data가 정의한 Integrity 계층의 실제 강조색입니다.
+	const FLinearColor IntegrityVisualColor = VehiclePanelStyleData
+		? VehiclePanelStyleData->ResolveColor(ECFUIColorToken::Integrity)
+		: FLinearColor::White;
+	if (IntegrityImage)
+	{
+		IntegrityImage->SetColorAndOpacity(IntegrityVisualColor);
+	}
+	if (IntegrityValueText)
+	{
+		IntegrityValueText->SetColorAndOpacity(FSlateColor(IntegrityVisualColor));
+	}
 	SetNamedVisibility(VehiclePanel, FName(TEXT("HorizontalBox_Integrity")), bShowIntegrity);
 	SetTextValue(
 		VehiclePanel,
@@ -475,6 +586,31 @@ void UCFHUDPresenter::ApplyVehicleAndDefenseViewData(
 	if (!ArmorBodyMap)
 	{
 		return;
+	}
+
+	// [v1.26.0] 현재 차량 silhouette catalog lookup을 반복하지 않기 위한 VehicleData Soft Object Path입니다.
+	const FSoftObjectPath CurrentVehicleDataAssetPath = VehicleViewData.VehicleDataAsset.ToSoftObjectPath();
+	if (HUDVisualData
+		&& (!bVehicleSilhouettePresentationInitialized || CurrentVehicleDataAssetPath != LastPresentedVehicleDataAssetPath))
+	{
+		// [v1.26.0] 현재 VehicleData identity와 일치하거나 catalog miss 시 fallback으로 사용할 silhouette Soft Reference입니다.
+		const TSoftObjectPtr<UTexture2D> VehicleSilhouetteReference = HUDVisualData->ResolveVehicleSilhouette(VehicleViewData.VehicleDataAsset);
+		// [v1.26.0] 차량 identity가 실제로 바뀔 때만 동기 Load하는 HUD 전용 silhouette Texture입니다.
+		UTexture2D* VehicleSilhouetteTexture = VehicleSilhouetteReference.IsNull()
+			? nullptr
+			: VehicleSilhouetteReference.LoadSynchronous();
+		// [v1.26.1] Designer가 위치·크기를 소유하고 Presenter가 Brush resource와 source 유무에 따른 가시성만 교체할 차량 실루엣 Image입니다.
+		UImage* VehicleSilhouetteImage = Cast<UImage>(FindNamedWidget(ArmorBodyMap, FName(TEXT("Image_VehicleSilhouette"))));
+		if (VehicleSilhouetteImage)
+		{
+			VehicleSilhouetteImage->SetBrushResourceObject(VehicleSilhouetteTexture);
+			VehicleSilhouetteImage->SetVisibility(VehicleSilhouetteTexture
+				? ESlateVisibility::HitTestInvisible
+				: ESlateVisibility::Collapsed);
+		}
+
+		LastPresentedVehicleDataAssetPath = CurrentVehicleDataAssetPath;
+		bVehicleSilhouettePresentationInitialized = true;
 	}
 
 		// [v1.17.0] 정식 Defense Runtime이 있을 때만 6방향 Armor Sector의 실제 Armor Bar를 표시합니다.

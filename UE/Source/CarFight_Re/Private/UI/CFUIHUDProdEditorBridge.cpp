@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.14.0
-// Date: 2026-08-21
-// Description: CF-FQ-032 Designer Layout Ownership + UI-P0-09B View Mode additive migration 구현
-// Scope: 저장된 Production UMG의 기존 Slot Layout을 보존하면서 Radar Visual과 Root ReticleLayer의 Vehicle Direction 의미 Widget만 누락 시 추가합니다.
+// Version: 1.15.1
+// Date: 2026-08-25
+// Description: CF-FQ-039 Armor modular visual + Production HUD layout-preserving migration 구현
+// Scope: 저장된 Production UMG의 기존 Slot Layout을 보존하면서 Armor Direction Icon, Radar Visual과 Root ReticleLayer 의미 Widget만 누락 시 추가합니다.
 // Changelog:
+// - v1.15.1: UE 5.8 WidgetBlueprintCompiler의 변수 GUID invariant를 만족하도록 새 Image_DirectionIcon을 MarkBlueprintAsStructurallyModified 전에 WidgetVariableNameToGuidMap에 deterministic 등록. 기존 persisted Icon에 GUID가 없으면 metadata만 repair하고 Slot은 보존.
+// - v1.15.0: BuildArmorSector 신규 Scaffold에 Image_DirectionIcon을 additive 포함하고, 저장 WBP_CFArmorSector는 ApplyArmorVisualMigrationResult가 Overlay_Plate에 해당 Image만 누락 시 추가하도록 구현. BuildArmorBodyMap은 modular Armor Art가 준비된 경우 공통 Plate만 구성하고 icon family/rotation과 6개 Sector 위치는 Designer 소유로 남김.
 // - v1.14.0: 기존 WBP_CFInGameHUD Root 7-child 구조와 ReticleLayer Slot을 보존하고 ReticleLayer 내부에 `CanvasPanel_ViewDirection` + `Image_ViewVehicleDirection`만 additive 추가하는 ApplyViewModeVisualMigrationResult를 구현. Vehicle Semantic Icon·TextSecondary·Style IconLarge를 재사용.
 // - v1.13.0: RadarPanel Scaffold/Validator를 Frame+Range+Player+SelectedEdge 구조로 확장하고 기존 Designer Tree용 ApplyRadarVisualMigrationResult를 추가. 기존 Radar Widget Slot은 수정하지 않고 Brush/Color만 갱신.
 // - v1.12.0: Production Child/Root Build를 RootWidget 없는 최초 Scaffold 전용으로 fail-closed하고 기존 Designer Tree 교체를 차단. Root Validator의 Position/Size/Alignment/ZOrder 비교를 제거해 persisted Designer Layout ownership을 보존.
@@ -34,6 +36,7 @@
 // - v1.8.0 Weapon Rail은 실제 weapon icon source가 없으므로 Image를 만들지 않고 Text Tile만 소유합니다. 비선택 무기의 자원 상태도 현재 HUD ViewData에 없으므로 Designer에서 summary 값을 만들지 않습니다.
 // - v1.9.1 VehiclePanel Frame 9-Slice는 SourceArt P2 Frame의 48/512 = 24/256 = 0.09375 UV 경계를 사용합니다.
 // - v1.10.0 ArmorBodyMap은 Vehicle Silhouette + 재사용 ArmorSector 6개만 직접 배치합니다. Sector 내부 ProgressBar는 장식이 아니라 실제 방향 Armor Ratio를 표시합니다.
+// - v1.15.0 ArmorSector의 공통 Plate와 Direction Icon은 서로 분리합니다. Image_DirectionIcon의 texture/rotation과 ArmorBodyMap의 Sector Position/Size는 저장 Designer Asset이 소유하며 migration/scaffold 재적용으로 덮어쓰지 않습니다.
 // - v1.12.0부터 아래 Position/Size/SizeBox/Padding 값은 신규 Asset 최초 Scaffold 기본값일 뿐 저장 Asset의 재적용 계약이 아닙니다. 기존 Asset은 Validate-only 경로를 사용합니다.
 // - v1.13.0 Radar Visual migration은 기존 Widget의 Position/Size/Anchor/Alignment/AutoSize를 변경하지 않습니다. 누락된 새 의미 Widget에만 최초 배치값을 적용하며 이후 Layout SSOT는 Designer Asset입니다.
 // - v1.14.0 ViewMode migration도 같은 ownership을 따릅니다. `CanvasPanel_Slot_ReticleLayer` 자체는 수정하지 않고 새 Direction Track/Image의 최초 Scaffold Slot만 설정합니다.
@@ -482,9 +485,11 @@ namespace CFUIHUDProdEditorBridge
 		USizeBox* PlateBox = CreateWidget<USizeBox>(WidgetTree, TEXT("SizeBox_Plate"));
 		// [v1.10.0] Plate Image와 방향 Label만 겹치는 시각 Overlay입니다.
 		UOverlay* PlateOverlay = CreateWidget<UOverlay>(WidgetTree, TEXT("Overlay_Plate"));
-		// [v1.10.0] 실제 방향별 Armor Art를 표시하며 Sector 인스턴스 설정이 있으면 Texture가 교체되는 Image입니다.
+		// [v1.10.0] 실제 Armor Plate Art를 표시하며 Sector 인스턴스 설정이 있으면 Texture가 교체되는 Image입니다.
 		UImage* ArmorImage = CreateImage(WidgetTree, TEXT("Image_ArmorPlate"), StyleData, FName(TEXT("Armor")), ECFUIColorToken::Armor);
-		// [v1.10.0] 방향 Art를 가리지 않도록 Caption 크기로 낮춘 보조 방향 Label입니다.
+		// [v1.15.0] 공통 Plate와 분리된 Arrow/Chevron2를 각 Sector 인스턴스가 선택·회전해 표시할 Direction Icon Image입니다.
+		UImage* DirectionIconImage = CreateWidget<UImage>(WidgetTree, TEXT("Image_DirectionIcon"));
+		// [v1.10.0] Direction Icon이 아직 구성되지 않았을 때만 사용할 보조 방향 Label입니다.
 		UTextBlock* DirectionText = CreateText(WidgetTree, TEXT("Text_Direction"), TEXT("ARMOR"), StyleData, LayoutData, ECFUIFontFamilyRole::UI, ECFUITypographyRole::Caption, ECFUIColorToken::TextSecondary);
 		// [v1.10.0] Plate와 실제 Armor Bar 사이의 작은 구조적 간격입니다.
 		USpacer* ArmorGap = CreateSpacer(WidgetTree, TEXT("Spacer_ArmorGap"), FVector2D(2.0f, 1.0f));
@@ -492,10 +497,11 @@ namespace CFUIHUDProdEditorBridge
 		USizeBox* ProgressBox = CreateWidget<USizeBox>(WidgetTree, TEXT("SizeBox_ArmorProgress"));
 		// [v1.10.0] 실제 방향 Armor Ratio를 아래에서 위로 채우는 단일 ProgressBar입니다.
 		UProgressBar* ArmorBar = CreateVerticalProgress(WidgetTree, TEXT("ProgressBar_Armor"), 1.0f, StyleData, ECFUIColorToken::Armor);
-		if (!Root || !Content || !PlateBox || !PlateOverlay || !ArmorImage || !DirectionText || !ArmorGap || !ProgressBox || !ArmorBar)
+		if (!Root || !Content || !PlateBox || !PlateOverlay || !ArmorImage || !DirectionIconImage || !DirectionText || !ArmorGap || !ProgressBox || !ArmorBar)
 		{
 			return false;
 		}
+		DirectionIconImage->SetVisibility(ESlateVisibility::Collapsed);
 
 		Root->SetWidthOverride(68.0f);
 		Root->SetHeightOverride(58.0f);
@@ -507,14 +513,18 @@ namespace CFUIHUDProdEditorBridge
 
 		// [v1.10.0] Plate Image를 58x58 Overlay 전체에 채우는 Slot입니다.
 		UOverlaySlot* ArmorImageSlot = PlateOverlay->AddChildToOverlay(ArmorImage);
-		// [v1.10.0] 작은 방향 Label을 Plate 상단 중앙에 두는 Slot입니다.
+		// [v1.15.0] 별도 Direction Icon을 공통 Plate 위에 겹치는 Slot입니다. 실제 texture/rotation은 Sector Designer 인스턴스가 소유합니다.
+		UOverlaySlot* DirectionIconSlot = PlateOverlay->AddChildToOverlay(DirectionIconImage);
+		// [v1.10.0] 작은 방향 Label을 Plate 상단 중앙에 두는 fallback Slot입니다.
 		UOverlaySlot* DirectionTextSlot = PlateOverlay->AddChildToOverlay(DirectionText);
-		if (!ArmorImageSlot || !DirectionTextSlot)
+		if (!ArmorImageSlot || !DirectionIconSlot || !DirectionTextSlot)
 		{
 			return false;
 		}
 		ArmorImageSlot->SetHorizontalAlignment(HAlign_Fill);
 		ArmorImageSlot->SetVerticalAlignment(VAlign_Fill);
+		DirectionIconSlot->SetHorizontalAlignment(HAlign_Fill);
+		DirectionIconSlot->SetVerticalAlignment(VAlign_Fill);
 		DirectionTextSlot->SetHorizontalAlignment(HAlign_Center);
 		DirectionTextSlot->SetVerticalAlignment(VAlign_Top);
 		DirectionTextSlot->SetPadding(FMargin(0.0f, 1.0f, 0.0f, 0.0f));
@@ -566,7 +576,7 @@ namespace CFUIHUDProdEditorBridge
 			TSoftObjectPtr<UTexture2D> PreferredTexture;
 		};
 
-		// [v1.10.0] 사용자 확정 공간 계약: Front=좌←, Right=상↑, Rear=우→, Left=하↓, Top=좌상단, Bottom=우하단입니다.
+		// [v1.15.0] 아래 좌표는 신규/빈 ArmorBodyMap 최초 Scaffold용 시작값일 뿐입니다. 저장 뒤 6개 Sector의 Position/Size는 USER가 UMG Designer에서 직접 소유합니다.
 		const FArmorSectorSpec ArmorSpecs[] =
 		{
 			{TEXT("WBP_ArmorFront"), TEXT("FRONT"), 0.30f, FVector2D(8.0f, 66.0f), HUDVisualData ? HUDVisualData->ArmorPlates.FrontPlate : TSoftObjectPtr<UTexture2D>()},
@@ -577,6 +587,18 @@ namespace CFUIHUDProdEditorBridge
 			{TEXT("WBP_ArmorBottom"), TEXT("BOTTOM"), 0.72f, FVector2D(286.0f, 130.0f), HUDVisualData ? HUDVisualData->ArmorPlates.BottomPlate : TSoftObjectPtr<UTexture2D>()}
 		};
 
+		// [v1.15.0] 새 Scaffold가 modular Armor Art를 사용할 수 있을 때 여섯 Sector가 공유할 공통 Plate Texture입니다. Direction Icon은 USER Designer 선택을 위해 자동 지정하지 않습니다.
+		UTexture2D* CommonArmorPlateTexture = nullptr;
+		const bool bUseModularArmorArt = HUDVisualData && HUDVisualData->HasModularArmorArt();
+		if (bUseModularArmorArt)
+		{
+			CommonArmorPlateTexture = HUDVisualData->ArmorCommonPlate.LoadSynchronous();
+			if (!CommonArmorPlateTexture)
+			{
+				return false;
+			}
+		}
+
 		for (const FArmorSectorSpec& Spec : ArmorSpecs)
 		{
 			// [v1.10.0] 동일 WBP_CFArmorSector Generated Class를 재사용하는 현재 방향 Sector 인스턴스입니다.
@@ -586,9 +608,17 @@ namespace CFUIHUDProdEditorBridge
 				return false;
 			}
 
-			// [v1.10.0] 현재 방향에 연결된 P2 Plate Texture이며 없으면 ArmorSector 기본 Semantic Image를 그대로 사용합니다.
-			UTexture2D* ArmorTexture = Spec.PreferredTexture.IsNull() ? nullptr : Spec.PreferredTexture.LoadSynchronous();
-			ArmorSector->ConfigureSector(FText::FromString(Spec.DirectionText), ArmorTexture, Spec.DesignerArmorPercent);
+			if (bUseModularArmorArt)
+			{
+				// [v1.15.0] Modular 신규 Scaffold는 공통 Plate만 연결하고 Direction Icon 종류/회전은 각 Sector Designer 인스턴스가 직접 선택합니다.
+				ArmorSector->ConfigureModularSector(FText::FromString(Spec.DirectionText), CommonArmorPlateTexture, nullptr, Spec.DesignerArmorPercent);
+			}
+			else
+			{
+				// [v1.10.0] Modular Art가 아직 준비되지 않은 기존 P2 호환 Scaffold에서만 사용하는 방향-baked legacy Plate Texture입니다.
+				UTexture2D* ArmorTexture = Spec.PreferredTexture.IsNull() ? nullptr : Spec.PreferredTexture.LoadSynchronous();
+				ArmorSector->ConfigureSector(FText::FromString(Spec.DirectionText), ArmorTexture, Spec.DesignerArmorPercent);
+			}
 			if (!AddCanvasChild(Root, ArmorSector, Spec.Position, FVector2D(68.0f, 58.0f), 2))
 			{
 				return false;
@@ -1558,6 +1588,81 @@ bool UCFUIHUDProdEditorBridge::ValidateProductionWidgetResult(
 		return CFUIHUDProdEditorBridge::Fail(FailureReason);
 	}
 		return true;
+#else
+	return false;
+#endif
+}
+
+// [v1.15.0] 저장 ArmorSector의 기존 Designer Tree를 보존하면서 공통 Plate와 분리된 Direction Icon 의미 슬롯만 additive 추가합니다.
+bool UCFUIHUDProdEditorBridge::ApplyArmorVisualMigrationResult(UObject* ArmorSectorBlueprintObject)
+{
+#if WITH_EDITOR
+	// [v1.15.0] 기존 persisted Designer Tree를 직접 보존 갱신할 정확한 ArmorSector Widget Blueprint입니다.
+	UWidgetBlueprint* ArmorSectorBlueprint = Cast<UWidgetBlueprint>(ArmorSectorBlueprintObject);
+	if (!ArmorSectorBlueprint || ArmorSectorBlueprint->ParentClass != UCFArmorSectorWidget::StaticClass()
+		|| !ArmorSectorBlueprint->WidgetTree || !ArmorSectorBlueprint->WidgetTree->RootWidget)
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("Armor visual migration requires an existing UCFArmorSectorWidget Designer Tree"));
+	}
+
+	// [v1.15.0] 기존 ArmorSector WidgetTree이며 Root나 기존 Widget을 교체하지 않습니다.
+	UWidgetTree* WidgetTree = ArmorSectorBlueprint->WidgetTree;
+	// [v1.15.0] 공통 Plate, Direction Icon과 fallback Label이 겹쳐지는 기존 Designer-owned Overlay입니다.
+	UOverlay* PlateOverlay = Cast<UOverlay>(WidgetTree->FindWidget(FName(TEXT("Overlay_Plate"))));
+	// [v1.15.0] 기존 Armor Plate Image입니다.
+	UImage* ArmorPlateImage = Cast<UImage>(WidgetTree->FindWidget(FName(TEXT("Image_ArmorPlate"))));
+	// [v1.15.0] Icon이 없을 때만 보이는 기존 fallback 방향 Text입니다.
+	UTextBlock* DirectionText = Cast<UTextBlock>(WidgetTree->FindWidget(FName(TEXT("Text_Direction"))));
+	// [v1.15.0] 실제 Armor Ratio를 계속 소유하는 기존 ProgressBar입니다.
+	UProgressBar* ArmorProgress = Cast<UProgressBar>(WidgetTree->FindWidget(FName(TEXT("ProgressBar_Armor"))));
+	if (!PlateOverlay || !ArmorPlateImage || !DirectionText || !ArmorProgress)
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("Armor visual migration requires existing Overlay_Plate/Image_ArmorPlate/Text_Direction/ProgressBar_Armor"));
+	}
+
+	// [v1.15.1] 이미 migration이 적용된 경우 기존 Image와 그 Slot은 그대로 보존하고 UE 5.8 변수 GUID metadata만 검증·repair합니다.
+	UWidget* ExistingDirectionIconWidget = WidgetTree->FindWidget(FName(TEXT("Image_DirectionIcon")));
+	if (ExistingDirectionIconWidget)
+	{
+		// [v1.15.1] 동일 이름이 반드시 UImage여야 기존 migration 상태로 인정됩니다.
+		UImage* ExistingDirectionIconImage = Cast<UImage>(ExistingDirectionIconWidget);
+		if (!ExistingDirectionIconImage)
+		{
+			return CFUIHUDProdEditorBridge::Fail(TEXT("Armor visual migration found non-Image widget named Image_DirectionIcon"));
+		}
+
+		if (!ArmorSectorBlueprint->WidgetVariableNameToGuidMap.Contains(ExistingDirectionIconImage->GetFName()))
+		{
+			ArmorSectorBlueprint->Modify();
+			// [v1.15.1] UE 5.8 Widget compiler의 기존 source-widget 방식과 같은 path 기반 deterministic GUID입니다.
+			const FGuid DirectionIconGuid = FGuid::NewDeterministicGuid(ExistingDirectionIconImage->GetPathName());
+			ArmorSectorBlueprint->WidgetVariableNameToGuidMap.Emplace(ExistingDirectionIconImage->GetFName(), DirectionIconGuid);
+			FBlueprintEditorUtils::MarkBlueprintAsModified(ArmorSectorBlueprint);
+		}
+		return true;
+	}
+
+	ArmorSectorBlueprint->Modify();
+	WidgetTree->Modify();
+	PlateOverlay->Modify();
+
+	// [v1.15.0] Arrow/Chevron2 Source와 per-instance 회전값을 표시할 새 Direction Icon Image입니다.
+	UImage* DirectionIconImage = CFUIHUDProdEditorBridge::CreateWidget<UImage>(WidgetTree, TEXT("Image_DirectionIcon"));
+	// [v1.15.0] 새 Image만 기존 Overlay에 추가하는 최초 Slot이며 이후 상세 시각 조정은 Designer Asset이 소유합니다.
+	UOverlaySlot* DirectionIconSlot = DirectionIconImage ? PlateOverlay->AddChildToOverlay(DirectionIconImage) : nullptr;
+	if (!DirectionIconImage || !DirectionIconSlot)
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("Armor Direction Icon additive Widget creation failed"));
+	}
+	DirectionIconSlot->SetHorizontalAlignment(HAlign_Fill);
+	DirectionIconSlot->SetVerticalAlignment(VAlign_Fill);
+	DirectionIconImage->SetVisibility(ESlateVisibility::Collapsed);
+
+	// [v1.15.1] 구조 compile 전에 새 source Widget의 UE 5.8 변수 GUID를 deterministic 등록합니다.
+	const FGuid DirectionIconGuid = FGuid::NewDeterministicGuid(DirectionIconImage->GetPathName());
+	ArmorSectorBlueprint->WidgetVariableNameToGuidMap.Emplace(DirectionIconImage->GetFName(), DirectionIconGuid);
+	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(ArmorSectorBlueprint);
+	return true;
 #else
 	return false;
 #endif

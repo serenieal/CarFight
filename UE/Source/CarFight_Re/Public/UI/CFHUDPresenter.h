@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.23.0
-// Date: 2026-08-22
-// Description: CF-FQ-032 Runtime HUD Presenter + post-closure Alert Suppression Lifecycle 교정
-// Scope: Gameplay 참조 없이 FCFInGameUIViewData와 Root Style Data만 소비하며 ViewMode와 Alert의 Player-facing Presentation lifecycle을 적용합니다.
+// Version: 1.26.0
+// Date: 2026-08-25
+// Description: CF-FQ-039 차량별 Armor Body Map silhouette + 기존 Runtime HUD Presenter
+// Scope: Gameplay 참조 없이 FCFInGameUIViewData, HUD Visual Data와 Root Style Data를 소비해 차량별 silhouette와 기존 Presentation lifecycle을 적용합니다.
 // Changelog:
+// - v1.26.0: UISubsystem이 해석한 UCFHUDVisualData를 Presenter에 주입하고 VehicleData soft identity 변경 시 `Image_VehicleSilhouette` Brush resource만 교체. Presenter가 Pawn/VehicleData Gameplay 필드를 조회하지 않고 Designer Brush size/layout을 유지.
 // - v1.23.0: 유한 Alert duration 시작점을 Active 진입이 아니라 실제 첫 Presentation 시각으로 교정. 높은 Priority Alert에 가려진 Alert는 표시 전에 시간을 소모하지 않으며, 한번 만료된 AlertKey는 상태 해제 전 재표시하지 않음.
 // - v1.22.0: 기존 AlertKey/Priority ViewData와 UI Style AlertStyle을 연결해 Notice/Warning의 자동 제거 시간과 Critical persistent lifecycle을 구현. 같은 AlertKey의 반복 Refresh는 시간을 리셋하지 않고 상태 해제 후 재발생할 때만 새 lifecycle을 시작.
 // - v1.21.0: FCFViewModeHUDData.CameraRelativeYawDegrees와 CameraMode만 소비해 ReticleLayer의 Vehicle Semantic Image를 Designer-owned Track 내부 좌우 Anchor로 표시. 기존 Command/Turret Reticle과 Gameplay Camera/Aim은 변경하지 않음.
@@ -51,6 +52,7 @@
 // - Display Range Text와 range-out selected edge는 Provider가 이미 계산한 FCFRadarHUDData/FCFRadarContactHUDData만 소비하며 Widget에서 Sensor Range나 방향을 재계산하지 않습니다.
 // - v1.21.0 Vehicle Direction은 Provider가 이미 계산한 CameraRelativeYawDegrees의 부호만 반전해 카메라 기준 차체 좌우 방향으로 표시합니다. 세계 Compass, Vehicle Pitch, Camera/Turret Gameplay 계산을 새로 만들지 않습니다.
 // - v1.23.0부터 Notice/Warning의 duration은 Alert가 ActiveAlerts에 들어온 때가 아니라 실제 Primary로 처음 선택된 시각부터 계산합니다. 상위 Priority에 가려진 시간은 소비하지 않으며, 완료된 AlertKey는 Gameplay 상태가 한번 해제되어야 새 lifecycle을 시작합니다.
+// - v1.26.0 차량 silhouette 선택은 VehicleViewData.VehicleDataAsset identity와 UCFHUDVisualData catalog만 사용합니다. Texture 변경은 Image Brush resource만 교체해 UMG Designer Position/Size를 수정하지 않습니다.
 
 
 #pragma once
@@ -62,6 +64,7 @@
 #include "CFHUDPresenter.generated.h"
 
 class UCFHUDDataProvider;
+class UCFHUDVisualData;
 class UCFStyledWidgetBase;
 class UProgressBar;
 class UTextBlock;
@@ -147,6 +150,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="CarFight|UI|HUD|Presenter", meta=(DisplayName="HUD Presenter 종료", ToolTip="Provider 이벤트와 Production Widget 연결을 제거합니다."))
 	void ShutdownPresenter();
 
+	// [v1.26.0] UISubsystem이 이미 해석한 HUD Visual Data를 차량별 silhouette 선택 Source로 연결합니다.
+	void SetHUDVisualData(UCFHUDVisualData* InHUDVisualData);
+
 	// [v1.0.0] 현재 Production WBP_CFInGameHUD 인스턴스를 Presenter 출력 대상으로 연결합니다.
 	UFUNCTION(BlueprintCallable, Category="CarFight|UI|HUD|Presenter", meta=(DisplayName="Production HUD Widget 설정", ToolTip="CFStyledWidgetBase 계열 Production HUD를 ViewData 출력 대상으로 설정합니다. Gameplay 조회는 수행하지 않습니다."))
 	void SetProductionWidget(UCFStyledWidgetBase* InProductionWidget);
@@ -214,8 +220,8 @@ private:
 	// [v1.0.0] 전체 ViewData를 Vehicle/Weapon/Target/Radar/Alert 영역별로 적용합니다.
 	void ApplyViewData(const FCFInGameUIViewData& ViewData);
 
-			// [v1.0.0] Vehicle 속도와 Defense 상태를 Production VehiclePanel에 적용합니다.
-	void ApplyVehicleAndDefenseViewData(UUserWidget* RootWidget, const FCFVehicleHUDData& VehicleViewData, const FCFDefenseHUDData& DefenseViewData) const;
+			// [v1.26.0] Vehicle 속도·차량별 silhouette와 Defense 상태를 Production VehiclePanel에 적용합니다.
+	void ApplyVehicleAndDefenseViewData(UUserWidget* RootWidget, const FCFVehicleHUDData& VehicleViewData, const FCFDefenseHUDData& DefenseViewData);
 
 	// [v1.21.0] Camera 기준 차체 좌우 방향을 ReticleLayer의 Designer-owned Vehicle Direction Track에 적용합니다.
 	void ApplyViewModeViewData(UUserWidget* RootWidget, const FCFViewModeHUDData& ViewModeViewData) const;
@@ -263,8 +269,19 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UCFHUDDataProvider> DataProvider = nullptr;
 
+	// [v1.26.0] UISubsystem이 Config에서 해석해 Presenter에 전달한 HUD Visual Data입니다.
+	UPROPERTY(Transient)
+	TObjectPtr<UCFHUDVisualData> HUDVisualData = nullptr;
+
 	// [v1.0.0] 현재 Production HUD 인스턴스의 약한 참조입니다.
 	TWeakObjectPtr<UCFStyledWidgetBase> ProductionWidget;
+
+
+	// [v1.26.0] 현재 Production Widget에 silhouette 선택을 한 번 이상 적용했는지 나타냅니다.
+	bool bVehicleSilhouettePresentationInitialized = false;
+
+	// [v1.26.0] 반복 10Hz Refresh에서 같은 차량 Texture를 다시 Load/적용하지 않도록 마지막 VehicleData identity Path를 보존합니다.
+	FSoftObjectPath LastPresentedVehicleDataAssetPath;
 
 	// [v1.7.0] 현재 Presenter가 Active Launcher Presentation lifecycle을 추적 중인지 나타냅니다.
 	bool bLauncherSequencePresentationActive = false;

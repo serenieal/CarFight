@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.16.0
-// Date: 2026-08-22
-// Description: CF-FQ-032 HUD Provider + post-closure Refresh hot-path 중복 해석 교정
-// Scope: Current Pawn Runtime과 actor-free Sensor Snapshot을 ViewData로 변환하고 기존 Camera/Aim Runtime을 외부 3인칭 방향 ViewData로 읽기 전용 투영합니다.
+// Version: 1.17.0
+// Date: 2026-08-25
+// Description: CF-FQ-039 차량별 HUD silhouette identity + 기존 HUD Provider
+// Scope: Current Pawn Runtime과 VehicleData visual identity, actor-free Sensor Snapshot을 ViewData로 변환합니다.
 // Changelog:
+// - v1.17.0: 현재 Pawn의 VehicleData를 HUD Visual 선택용 Soft identity로 Vehicle ViewData에 전달. Presenter가 차종별 silhouette를 선택할 수 있게 하되 VehicleData Gameplay 값/Texture는 Provider가 해석하지 않음.
 // - v1.16.0: 한 Refresh에서 Sensor Snapshot과 Radar Range Profile을 각각 1회만 캡처해 Target/Radar filler가 같은 immutable 입력을 공유. Radar Zoom command도 Profile 1회 해석 결과로 reconcile하여 중복 복사를 제거.
 // - v1.15.0: VehicleCameraComp의 Camera Mode/현재 시선과 VehicleAimComp의 CurrentMuzzleDirection을 기존 Pawn Forward 기준 Heading·상대 Yaw/Pitch로 변환해 FCFViewModeHUDData에 전달. Gameplay Camera/Aim mutation 0.
 // - v1.14.0: Applied Scanner Radar Range Preset 기반 Display/Maximum Range, Provider-local Zoom In/Out, Heading-Up normalized Contact, range-out selected edge 방향을 구현. Sensor 탐지 성능 mutation 없음.
@@ -34,6 +35,7 @@
 // - finite Ammo Runtime Snapshot이 없으면 AmmoAvailability를 Unavailable로 유지하며 MagazineSize나 MaximumLoadableAmmoCount를 현재 탄약으로 사용하지 않습니다.
 // - Widget 또는 Presenter에서 Gameplay Actor/Component를 찾지 않습니다.
 // - v1.16.0 Refresh 내부 Target/Radar는 같은 FCFSensorSnapshot 사본과 같은 Radar Range Preset 배열을 공유합니다. Gameplay Sensor state나 Range 선택 의미는 변경하지 않습니다.
+// - v1.17.0 VehicleDataAsset은 Visual identity 전달용이며 Provider가 HUD Texture를 선택하거나 VehicleData를 Player-facing Text로 노출하지 않습니다.
 
 #include "UI/CFHUDDataProvider.h"
 
@@ -517,6 +519,12 @@ void UCFHUDDataProvider::FillVehicleViewData(FCFVehicleHUDData& OutVehicleViewDa
 	}
 
 		OutVehicleViewData.Availability = ECFUIViewAvailability::Known;
+	// [v1.17.0] HUD Visual catalog가 차종별 silhouette를 선택할 현재 VehicleData Asset입니다.
+	UCFVehicleData* VehicleData = VehiclePawn->VehicleData;
+	if (VehicleData)
+	{
+		OutVehicleViewData.VehicleDataAsset = TSoftObjectPtr<UCFVehicleData>(VehicleData);
+	}
 	OutVehicleViewData.SpeedKmh = FMath::Max(0.0f, FMath::Abs(VehiclePawn->GetVehicleSpeed()));
 	OutVehicleViewData.SpeedAvailability = ResolveKnownNumericAvailability(true, OutVehicleViewData.SpeedKmh);
 
@@ -536,8 +544,7 @@ void UCFHUDDataProvider::FillVehicleViewData(FCFVehicleHUDData& OutVehicleViewDa
 			OutVehicleViewData.EngineRpmAvailability = ResolveKnownNumericAvailability(true, OutVehicleViewData.EngineRpm);
 		}
 
-		// [v1.10.0] Chaos EngineSetup.MaxRPM의 실제 source와 HUD Redline authored source를 함께 가진 현재 VehicleData입니다.
-		const UCFVehicleData* VehicleData = VehiclePawn->VehicleData;
+		// [v1.10.0] Chaos EngineSetup.MaxRPM의 실제 source와 HUD Redline authored source를 함께 가진 현재 VehicleData를 재사용합니다.
 		if (VehicleData)
 		{
 			// [v1.10.0] 실제 Chaos EngineSetup.MaxRPM으로 적용되는 물리 엔진 최대 RPM입니다.

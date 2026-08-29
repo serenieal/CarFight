@@ -1,10 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.32.0
-// Date: 2026-08-22
-// Description: CF-FQ-032 HUD Runtime Automation + post-closure Code Review Remediation 회귀 검증
-// Scope: 실제 Runtime 계약과 저장 Production HUD의 ViewMode·Alert·Style Context·다중 해상도 Root Layout 의미 Presentation을 검증합니다.
+// Version: 1.35.0
+// Date: 2026-08-25
+// Description: CF-FQ-032 HUD Runtime Automation + CF-FQ-039 VehiclePanel Production Visual 회귀 검증
+// Scope: 실제 Runtime 계약과 저장 Production HUD의 Vehicle Frame·Shield/Integrity·Armor·ViewMode·Alert·Style Context·다중 해상도 Root Layout 의미 Presentation을 검증합니다.
 // Changelog:
+// - v1.35.0: CF-FQ-039 modular Armor migration 단계에 맞춰 ArmorSectorProductionVisualContract를 common Plate + additive Image_DirectionIcon + Text fallback 계약으로 전환. DirectionIcon Texture가 아직 Source Binding되지 않은 현재 persisted 상태에서는 Icon Collapsed / Text HitTestInvisible을 검증하고 Ratio/Tint 회귀는 그대로 유지.
+// - v1.34.2: fresh PIE에서는 Defense Bar가 실제 픽셀로 정상 렌더링되지만 viewport에 붙지 않은 transient Widget의 GetDesiredSize()가 계속 0을 반환하는 test-harness 불일치를 교정. 실제 회귀 원인인 ProgressBar Style Background/Fill/Marquee Brush intrinsic height > 0을 직접 검증하도록 변경.
+// - v1.34.1: 실제 PIE pixel review에서 발견된 Defense Bar 높이 0 회귀를 막기 위해 Presenter 적용 후 Layout Prepass를 수행하고 Shield/Integrity ProgressBar DesiredSize.Y가 0보다 큰지 검증.
+// - v1.34.0: 저장 VehiclePanel의 Border_Surface가 HUDVisualData VehiclePanelFrame 9-Slice를 실제 소비하는지와 Presenter 적용 후 Shield/Integrity가 custom dark track + 2px inset semantic fill/색/Ratio를 유지하는 VehicleDefenseBarVisualContract 추가.
+// - v1.33.1: headless nested UserWidget lifecycle에 의존하지 않고 실제 Presenter 공용 경로와 동일하게 SetArmorPercent를 먼저 호출한 뒤 icon-first Direction Label visibility를 검증하도록 focused test를 교정.
+// - v1.33.0: 저장 Production HUD의 6개 재사용 ArmorSector가 방향 Texture 우선/Label fallback 계약을 지키고 0~1 Armor Ratio를 Stable Armor/Caution/Critical 시각 상태와 실제 세로 Bar Percent로 반영하는 ArmorSectorProductionVisualContract 추가.
 // - v1.32.0: Vehicle Target Identity 테스트가 Production TargetCandidate resolver와 동일하게 native ICFTargetSelectable의 GetTargetDisplayInfo_Implementation 경로를 사용하도록 fixture를 교정. Product Identity 의미는 변경하지 않음.
 // - v1.31.0: Vehicle Target Identity를 VehicleData PrimaryAssetId 기반 안정 TargetId로 검증하고 Actor instance 이름 비노출, DisplayName fail-closed와 Identified Sensor Contact public contract 유효성을 함께 확인.
 // - v1.30.0: Vehicle Target Identity fail-closed 회귀와 Critical suppression 중 Warning duration 비소모/첫 표시부터 3초 lifecycle 회귀를 추가.
@@ -61,6 +67,10 @@
 // - v1.32.0 Identity fixture는 Production CFTargetCandidateSearch의 native interface resolver branch와 동일한 GetTargetDisplayInfo_Implementation 호출을 사용합니다. Raw Execute dispatch를 native C++ override 검증 수단으로 해석하지 않습니다.
 // - v1.31.0 Identity 검증은 transient UCFVehicleData의 PrimaryAssetId만 사용하며 실제 VehicleData Asset을 생성·수정·저장하지 않습니다. Actor instance 이름을 TargetId/DisplayName fallback으로 사용하지 않고 Identified Sensor Contact 계약까지 확인합니다.
 // - v1.30.0 Identity/Alert remediation 검증은 transient VehiclePawn과 synthetic Alert Game-Time만 사용하며 Content Asset을 생성·수정·저장하지 않습니다.
+// - v1.33.0 Armor Production Visual 검증은 저장 WBP_CFInGameHUD/WBP_CFArmorBodyMap/WBP_CFArmorSector를 읽기만 하고 transient Widget 인스턴스의 SetArmorPercent만 호출합니다. Content Asset과 Gameplay Defense 상태를 생성·수정·저장하지 않습니다.
+// - v1.34.0 Vehicle Frame/Defense Bar Visual 검증은 저장 WBP_CFInGameHUD와 HUDVisualData를 읽고 transient Presenter ViewData만 적용합니다. Widget Tree, Texture, DataAsset과 Designer Layout을 저장하지 않습니다.
+// - v1.34.1 Defense Bar 검증은 property 값만 확인하지 않고 Layout Prepass 뒤 DesiredSize.Y > 0까지 확인해 Brush intrinsic size 손실로 인한 실제 픽셀 소실을 차단합니다.
+// - v1.34.2 viewport에 붙지 않은 transient UserWidget의 DesiredSize는 실제 PIE pixel 결과와 불일치할 수 있으므로 pixel 가시성 자체는 fresh PIE screenshot evidence가 소유하고, focused test는 regression root인 3개 Style Brush intrinsic height를 직접 고정합니다.
 
 
 
@@ -88,6 +98,7 @@
 #include "CFWeaponHeatRuntime.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
 #include "Blueprint/UserWidget.h"
+#include "Components/Border.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/Image.h"
@@ -96,15 +107,19 @@
 #include "Components/Widget.h"
 #include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/Texture2D.h"
 #include "Engine/UserInterfaceSettings.h"
 #include "EngineUtils.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/AutomationEditorCommon.h"
+#include "UI/CFArmorSectorWidget.h"
 #include "UI/CFHUDDataProvider.h"
 #include "UI/CFHUDPresenter.h"
+#include "UI/CFHUDVisualData.h"
 #include "UI/CFHUDViewData.h"
 #include "UI/CFStyledWidgetBase.h"
+#include "UI/CFUIStyleData.h"
 #include "UI/CFUISubsystem.h"
 
 namespace
@@ -2016,6 +2031,328 @@ bool FCFHUDP006RpmGaugeVisualBindingTest::RunTest(const FString& Parameters)
 	ViewData.Vehicle.EngineRedlineStartRpm = 0.0f;
 	ApplyViewDataOnce(ViewData);
 	TestRpmRatio(TEXT("UI-P0-06 Redline 제거 후 stale RPMRatio reset"), 0.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP006ArmorSectorProductionVisualTest,
+	"CarFight.UI.UI_P0_06.ArmorSectorProductionVisualContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.35.0] 저장 Production VehiclePanel의 6개 ArmorSector가 modular Direction Icon 슬롯·Texture 미바인딩 fallback과 Ratio 기반 Production 상태색을 실제 공통 Widget에서 일관되게 소비하는지 검증합니다.
+bool FCFHUDP006ArmorSectorProductionVisualTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.33.0] 저장 Production HUD Widget을 실제 생성해 ArmorSector Presentation만 검증할 Automation World입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("UI-P0-06 Armor Visual Automation World"), TestWorld))
+	{
+		return false;
+	}
+
+	// [v1.33.0] DefaultGame.ini와 동일한 저장 Production HUD Generated Class입니다.
+	UClass* ProductionHUDClass = LoadClass<UCFStyledWidgetBase>(
+		nullptr,
+		TEXT("/Game/CarFight/UI/HUD/WBP_CFInGameHUD.WBP_CFInGameHUD_C"));
+	if (!TestNotNull(TEXT("UI-P0-06 Armor Visual Production HUD Class"), ProductionHUDClass))
+	{
+		return false;
+	}
+
+	// [v1.33.0] 저장 Production HUD Class로 만든 테스트 전용 transient Widget 인스턴스입니다.
+	UCFStyledWidgetBase* ProductionHUDWidget = CreateWidget<UCFStyledWidgetBase>(TestWorld, ProductionHUDClass);
+	if (!TestNotNull(TEXT("UI-P0-06 Armor Visual Production HUD Widget"), ProductionHUDWidget))
+	{
+		return false;
+	}
+
+	// [v1.33.0] 저장 Production VehiclePanel 자식 Widget입니다.
+	UUserWidget* VehiclePanelWidget = Cast<UUserWidget>(ProductionHUDWidget->GetWidgetFromName(FName(TEXT("WBP_CFVehiclePanel"))));
+	if (!TestNotNull(TEXT("UI-P0-06 Armor Visual VehiclePanel"), VehiclePanelWidget))
+	{
+		return false;
+	}
+
+	// [v1.33.0] 탑다운 VehicleSilhouette와 6개 재사용 Sector를 소유하는 저장 ArmorBodyMap입니다.
+	UUserWidget* ArmorBodyMapWidget = Cast<UUserWidget>(VehiclePanelWidget->GetWidgetFromName(FName(TEXT("WBP_CFArmorBodyMap"))));
+	if (!TestNotNull(TEXT("UI-P0-06 Armor Visual BodyMap"), ArmorBodyMapWidget))
+	{
+		return false;
+	}
+
+	// [v1.33.0] Runtime Presenter가 안정 이름으로 찾는 여섯 방향 재사용 Sector 이름입니다.
+	const FName ArmorSectorNames[] =
+	{
+		FName(TEXT("WBP_ArmorFront")),
+		FName(TEXT("WBP_ArmorRight")),
+		FName(TEXT("WBP_ArmorRear")),
+		FName(TEXT("WBP_ArmorLeft")),
+		FName(TEXT("WBP_ArmorTop")),
+		FName(TEXT("WBP_ArmorBottom"))
+	};
+
+	// [v1.35.0] 6개 Sector 모두 동일 UCFArmorSectorWidget modular 슬롯/fallback 계약을 유지하는지 순회할 인덱스입니다.
+	int32 ArmorSectorIndex = 0;
+	for (; ArmorSectorIndex < UE_ARRAY_COUNT(ArmorSectorNames); ++ArmorSectorIndex)
+	{
+		// [v1.33.0] 현재 방향의 실제 저장 재사용 ArmorSector Widget입니다.
+		UCFArmorSectorWidget* ArmorSectorWidget = Cast<UCFArmorSectorWidget>(ArmorBodyMapWidget->GetWidgetFromName(ArmorSectorNames[ArmorSectorIndex]));
+		if (!TestNotNull(*FString::Printf(TEXT("UI-P0-06 Armor Visual Sector %s"), *ArmorSectorNames[ArmorSectorIndex].ToString()), ArmorSectorWidget))
+		{
+			return false;
+		}
+
+		// [v1.35.0] 현재 persisted 전이 단계에서 계속 남아 있는 기존 Plate Texture입니다. 새 modular Direction 의미는 이 Texture 존재 여부로 판정하지 않습니다.
+		UTexture2D* ArmorPlateTexture = ArmorSectorWidget->GetConfiguredArmorPlateTexture();
+		TestNotNull(*FString::Printf(TEXT("UI-P0-06 Armor Visual Plate Texture %s"), *ArmorSectorNames[ArmorSectorIndex].ToString()), ArmorPlateTexture);
+
+		// [v1.35.0] Source Binding 전이므로 아직 연결되지 않아야 하는 별도 modular Direction Icon Texture입니다.
+		UTexture2D* DirectionIconTexture = ArmorSectorWidget->GetConfiguredDirectionIconTexture();
+		TestNull(*FString::Printf(TEXT("UI-P0-06 Armor Visual Direction Icon Texture pending %s"), *ArmorSectorNames[ArmorSectorIndex].ToString()), DirectionIconTexture);
+
+		// [v1.35.0] WBP migration으로 실제 Overlay_Plate에 additive 저장된 Direction Icon Image입니다.
+		UImage* DirectionIconImage = Cast<UImage>(ArmorSectorWidget->GetWidgetFromName(FName(TEXT("Image_DirectionIcon"))));
+		if (!TestNotNull(*FString::Printf(TEXT("UI-P0-06 Armor Visual Direction Icon Image %s"), *ArmorSectorNames[ArmorSectorIndex].ToString()), DirectionIconImage))
+		{
+			return false;
+		}
+
+		// [v1.35.0] 실제 Presenter와 같은 공용 API를 호출해 현재 Ratio와 Texture 미바인딩 fallback visibility를 한 번 적용합니다.
+		ArmorSectorWidget->SetArmorPercent(1.0f, true);
+
+		// [v1.35.0] Direction Icon Texture가 아직 없을 때만 표시되어야 하는 fallback Direction Text입니다.
+		UTextBlock* DirectionText = Cast<UTextBlock>(ArmorSectorWidget->GetWidgetFromName(FName(TEXT("Text_Direction"))));
+		if (!TestNotNull(*FString::Printf(TEXT("UI-P0-06 Armor Visual Direction Text %s"), *ArmorSectorNames[ArmorSectorIndex].ToString()), DirectionText))
+		{
+			return false;
+		}
+		TestEqual(
+			*FString::Printf(TEXT("UI-P0-06 Armor Visual unbound Icon collapsed %s"), *ArmorSectorNames[ArmorSectorIndex].ToString()),
+			DirectionIconImage->GetVisibility(),
+			ESlateVisibility::Collapsed);
+		TestEqual(
+			*FString::Printf(TEXT("UI-P0-06 Armor Visual unbound Icon Text fallback visible %s"), *ArmorSectorNames[ArmorSectorIndex].ToString()),
+			DirectionText->GetVisibility(),
+			ESlateVisibility::HitTestInvisible);
+	}
+
+	// [v1.33.0] Ratio 상태색 경계값을 대표로 검증할 Front 재사용 Sector입니다.
+	UCFArmorSectorWidget* FrontArmorSector = Cast<UCFArmorSectorWidget>(ArmorBodyMapWidget->GetWidgetFromName(FName(TEXT("WBP_ArmorFront"))));
+	if (!TestNotNull(TEXT("UI-P0-06 Armor Visual Front Sector"), FrontArmorSector))
+	{
+		return false;
+	}
+
+	// [v1.33.0] Front 방향 Texture와 상태 Tint를 함께 표시하는 실제 Production Plate Image입니다.
+	UImage* FrontArmorPlateImage = Cast<UImage>(FrontArmorSector->GetWidgetFromName(FName(TEXT("Image_ArmorPlate"))));
+	// [v1.33.0] Front 실제 Armor Ratio를 아래에서 위로 표시하는 Production 세로 ProgressBar입니다.
+	UProgressBar* FrontArmorProgressBar = Cast<UProgressBar>(FrontArmorSector->GetWidgetFromName(FName(TEXT("ProgressBar_Armor"))));
+	if (!TestNotNull(TEXT("UI-P0-06 Armor Visual Front Plate Image"), FrontArmorPlateImage)
+		|| !TestNotNull(TEXT("UI-P0-06 Armor Visual Front ProgressBar"), FrontArmorProgressBar))
+	{
+		return false;
+	}
+
+	// [v1.33.0] Front Sector가 현재 Visual Context에서 사용하는 실제 UI Style Data입니다.
+	const UCFUIStyleData* ArmorStyleData = FrontArmorSector->GetUIStyleData();
+	if (!TestNotNull(TEXT("UI-P0-06 Armor Visual Style Data"), ArmorStyleData))
+	{
+		return false;
+	}
+
+	// [v1.33.0] Stable Armor 상태의 기대 의미 색상입니다.
+	const FLinearColor StableArmorColor = ArmorStyleData->ResolveColor(ECFUIColorToken::Armor);
+	// [v1.33.0] Caution Armor 상태의 기대 의미 색상입니다.
+	const FLinearColor CautionArmorColor = ArmorStyleData->ResolveColor(ECFUIColorToken::StateCaution);
+	// [v1.33.0] Critical Armor 상태의 기대 의미 색상입니다.
+	const FLinearColor CriticalArmorColor = ArmorStyleData->ResolveColor(ECFUIColorToken::StateCritical);
+
+	FrontArmorSector->SetArmorPercent(0.80f, true);
+	TestTrue(TEXT("UI-P0-06 Armor Visual 80% Stable tint"), FrontArmorPlateImage->GetColorAndOpacity().Equals(StableArmorColor));
+	TestTrue(TEXT("UI-P0-06 Armor Visual 80% Bar ratio"), FMath::IsNearlyEqual(FrontArmorProgressBar->GetPercent(), 0.80f));
+	TestEqual(TEXT("UI-P0-06 Armor Visual 80% Bar visible"), FrontArmorProgressBar->GetVisibility(), ESlateVisibility::HitTestInvisible);
+
+	FrontArmorSector->SetArmorPercent(0.50f, true);
+	TestTrue(TEXT("UI-P0-06 Armor Visual 50% Caution tint"), FrontArmorPlateImage->GetColorAndOpacity().Equals(CautionArmorColor));
+	TestTrue(TEXT("UI-P0-06 Armor Visual 50% Bar ratio"), FMath::IsNearlyEqual(FrontArmorProgressBar->GetPercent(), 0.50f));
+
+	FrontArmorSector->SetArmorPercent(0.20f, true);
+	TestTrue(TEXT("UI-P0-06 Armor Visual 20% Critical tint"), FrontArmorPlateImage->GetColorAndOpacity().Equals(CriticalArmorColor));
+	TestTrue(TEXT("UI-P0-06 Armor Visual 20% Bar ratio"), FMath::IsNearlyEqual(FrontArmorProgressBar->GetPercent(), 0.20f));
+
+	FrontArmorSector->SetArmorPercent(0.0f, true);
+	TestTrue(TEXT("UI-P0-06 Armor Visual 0% Critical tint"), FrontArmorPlateImage->GetColorAndOpacity().Equals(CriticalArmorColor));
+	TestTrue(TEXT("UI-P0-06 Armor Visual 0% empty Bar"), FMath::IsNearlyZero(FrontArmorProgressBar->GetPercent()));
+
+	FrontArmorSector->SetArmorPercent(0.80f, false);
+	TestEqual(TEXT("UI-P0-06 Armor Visual unavailable Bar collapsed"), FrontArmorProgressBar->GetVisibility(), ESlateVisibility::Collapsed);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFHUDP006VehicleDefenseBarVisualTest,
+	"CarFight.UI.UI_P0_06.VehicleDefenseBarVisualContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.34.0] 저장 VehiclePanel Frame과 Shield/Integrity ProgressBar가 현재 Production Visual 계약을 실제 Asset/Presenter 경로에서 만족하는지 검증합니다.
+bool FCFHUDP006VehicleDefenseBarVisualTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.34.0] 저장 Production HUD를 transient 인스턴스로 생성할 Automation World입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("UI-P0-06 Vehicle Defense Visual Automation World"), TestWorld))
+	{
+		return false;
+	}
+
+	// [v1.34.0] DefaultGame.ini와 동일한 저장 Production HUD Generated Class입니다.
+	UClass* ProductionHUDClass = LoadClass<UCFStyledWidgetBase>(
+		nullptr,
+		TEXT("/Game/CarFight/UI/HUD/WBP_CFInGameHUD.WBP_CFInGameHUD_C"));
+	if (!TestNotNull(TEXT("UI-P0-06 Vehicle Defense Visual HUD Class"), ProductionHUDClass))
+	{
+		return false;
+	}
+
+	// [v1.34.0] 저장 Production HUD Class로 만든 테스트 전용 transient Widget입니다.
+	UCFStyledWidgetBase* ProductionHUDWidget = CreateWidget<UCFStyledWidgetBase>(TestWorld, ProductionHUDClass);
+	if (!TestNotNull(TEXT("UI-P0-06 Vehicle Defense Visual HUD Widget"), ProductionHUDWidget))
+	{
+		return false;
+	}
+
+	// [v1.34.0] Frame과 Shield/Integrity를 실제 소유하는 저장 VehiclePanel입니다.
+	UCFStyledWidgetBase* VehiclePanelWidget = Cast<UCFStyledWidgetBase>(ProductionHUDWidget->GetWidgetFromName(FName(TEXT("WBP_CFVehiclePanel"))));
+	if (!TestNotNull(TEXT("UI-P0-06 Vehicle Defense Visual VehiclePanel"), VehiclePanelWidget))
+	{
+		return false;
+	}
+
+	// [v1.34.0] 저장 VehiclePanel의 전체 9-Slice Frame Brush를 소유하는 Border입니다.
+	UBorder* VehiclePanelSurface = Cast<UBorder>(VehiclePanelWidget->GetWidgetFromName(FName(TEXT("Border_Surface"))));
+	// [v1.34.0] 실제 Runtime Ratio와 Production Style을 받을 Shield ProgressBar입니다.
+	UProgressBar* ShieldProgressBar = Cast<UProgressBar>(VehiclePanelWidget->GetWidgetFromName(FName(TEXT("ProgressBar_Shield"))));
+	// [v1.34.0] 실제 Runtime Ratio와 Production Style을 받을 Integrity ProgressBar입니다.
+	UProgressBar* IntegrityProgressBar = Cast<UProgressBar>(VehiclePanelWidget->GetWidgetFromName(FName(TEXT("ProgressBar_Integrity"))));
+	// [v1.34.0] Shield semantic color가 Bar와 함께 적용될 저장 Icon입니다.
+	UImage* ShieldImage = Cast<UImage>(VehiclePanelWidget->GetWidgetFromName(FName(TEXT("Image_Shield"))));
+	// [v1.34.0] Integrity semantic color가 Bar와 함께 적용될 저장 Icon입니다.
+	UImage* IntegrityImage = Cast<UImage>(VehiclePanelWidget->GetWidgetFromName(FName(TEXT("Image_Integrity"))));
+	if (!TestNotNull(TEXT("UI-P0-06 Vehicle Defense Visual Surface"), VehiclePanelSurface)
+		|| !TestNotNull(TEXT("UI-P0-06 Vehicle Defense Visual Shield Bar"), ShieldProgressBar)
+		|| !TestNotNull(TEXT("UI-P0-06 Vehicle Defense Visual Integrity Bar"), IntegrityProgressBar)
+		|| !TestNotNull(TEXT("UI-P0-06 Vehicle Defense Visual Shield Icon"), ShieldImage)
+		|| !TestNotNull(TEXT("UI-P0-06 Vehicle Defense Visual Integrity Icon"), IntegrityImage))
+	{
+		return false;
+	}
+
+	// [v1.34.0] Production VehiclePanel Frame Soft Reference를 소유하는 실제 HUD Visual Data입니다.
+	UCFHUDVisualData* HUDVisualData = LoadObject<UCFHUDVisualData>(
+		nullptr,
+		TEXT("/Game/CarFight/UI/HUD/Visual/DA_CFHUDVisual_Default.DA_CFHUDVisual_Default"));
+	if (!TestNotNull(TEXT("UI-P0-06 Vehicle Defense Visual HUD Visual Data"), HUDVisualData))
+	{
+		return false;
+	}
+
+	// [v1.34.0] Visual Data가 지정한 실제 P2 VehiclePanel Frame Texture입니다.
+	UTexture2D* ExpectedVehiclePanelFrame = HUDVisualData->VehiclePanelFrame.LoadSynchronous();
+	if (!TestNotNull(TEXT("UI-P0-06 Vehicle Defense Visual expected Frame Texture"), ExpectedVehiclePanelFrame))
+	{
+		return false;
+	}
+
+	// [v1.34.0] 저장 Border Surface가 현재 Brush에서 실제 소비하는 Resource UObject입니다.
+	UObject* ActualVehiclePanelFrameResource = VehiclePanelSurface->Background.GetResourceObject();
+	TestTrue(
+		TEXT("UI-P0-06 Vehicle Defense Visual saved Frame resource matches HUDVisualData"),
+		ActualVehiclePanelFrameResource == ExpectedVehiclePanelFrame);
+	TestEqual(
+		TEXT("UI-P0-06 Vehicle Defense Visual Frame uses 9-slice Box"),
+		VehiclePanelSurface->Background.DrawAs,
+		ESlateBrushDrawType::Box);
+
+	// [v1.34.0] 실제 Production Widget에 synthetic ViewData를 한 번 적용할 Presenter입니다.
+	UCFHUDPresenter* Presenter = NewObject<UCFHUDPresenter>(GetTransientPackage());
+	if (!TestNotNull(TEXT("UI-P0-06 Vehicle Defense Visual Presenter"), Presenter))
+	{
+		return false;
+	}
+	Presenter->SetProductionWidget(ProductionHUDWidget);
+
+	// [v1.34.0] private UFUNCTION을 Provider delegate와 같은 경로로 호출할 Reflection 함수입니다.
+	UFunction* HandleViewDataFunction = Presenter->FindFunction(FName(TEXT("HandleHUDViewDataChanged")));
+	if (!TestNotNull(TEXT("UI-P0-06 Vehicle Defense Visual HandleHUDViewDataChanged"), HandleViewDataFunction))
+	{
+		return false;
+	}
+
+	// [v1.34.0] Reflection UFUNCTION의 단일 ViewData 인자를 전달하는 파라미터 구조입니다.
+	struct FHandleHUDViewDataChangedParams
+	{
+		// [v1.34.0] Presenter에 적용할 전체 HUD ViewData입니다.
+		FCFInGameUIViewData ViewData;
+	};
+
+	// [v1.34.0] Shield 78%, Integrity 42%의 실제 Runtime 의미를 모사할 synthetic HUD ViewData입니다.
+	FCFInGameUIViewData ViewData;
+	ViewData.Defense.Availability = ECFUIViewAvailability::Known;
+	ViewData.Defense.ShieldAvailability = ECFUIViewAvailability::Known;
+	ViewData.Defense.CurrentShield = 78.0f;
+	ViewData.Defense.MaximumShield = 100.0f;
+	ViewData.Defense.ShieldRatio = 0.78f;
+	ViewData.Defense.IntegrityAvailability = ECFUIViewAvailability::Known;
+	ViewData.Defense.CurrentIntegrity = 42.0f;
+	ViewData.Defense.MaximumIntegrity = 100.0f;
+	ViewData.Defense.IntegrityRatio = 0.42f;
+
+	// [v1.34.0] synthetic ViewData를 Production Presenter에 정확히 한 번 전달할 Reflection 호출 인자입니다.
+	FHandleHUDViewDataChangedParams ApplyParams;
+	ApplyParams.ViewData = ViewData;
+	Presenter->ProcessEvent(HandleViewDataFunction, &ApplyParams);
+
+	// [v1.34.2] Shield ProgressBar에 Presenter가 실제 적용한 Style이며 intrinsic Brush 크기 회귀를 직접 검사합니다.
+	const FProgressBarStyle& ShieldDefenseBarStyle = ShieldProgressBar->GetWidgetStyle();
+	// [v1.34.2] Integrity ProgressBar에 Presenter가 실제 적용한 Style이며 intrinsic Brush 크기 회귀를 직접 검사합니다.
+	const FProgressBarStyle& IntegrityDefenseBarStyle = IntegrityProgressBar->GetWidgetStyle();
+
+	// [v1.34.0] Production VehiclePanel이 실제 소비하는 현재 Style Context입니다.
+	const UCFUIStyleData* VehiclePanelStyleData = VehiclePanelWidget->GetUIStyleData();
+	if (!TestNotNull(TEXT("UI-P0-06 Vehicle Defense Visual Style Data"), VehiclePanelStyleData))
+	{
+		return false;
+	}
+
+	// [v1.34.0] Shield Bar/Icon이 공유해야 하는 현재 semantic 색상입니다.
+	const FLinearColor ExpectedShieldColor = VehiclePanelStyleData->ResolveColor(ECFUIColorToken::Shield);
+	// [v1.34.0] Integrity Bar/Icon이 공유해야 하는 현재 semantic 색상입니다.
+	const FLinearColor ExpectedIntegrityColor = VehiclePanelStyleData->ResolveColor(ECFUIColorToken::Integrity);
+	// [v1.34.0] 기본 ProgressBar primitive와 구분되는 Production inset padding 계약입니다.
+	const FVector2D ExpectedDefenseBarPadding(2.0f, 2.0f);
+
+	TestTrue(TEXT("UI-P0-06 Vehicle Defense Visual Shield Ratio"), FMath::IsNearlyEqual(ShieldProgressBar->GetPercent(), 0.78f));
+	TestTrue(TEXT("UI-P0-06 Vehicle Defense Visual Integrity Ratio"), FMath::IsNearlyEqual(IntegrityProgressBar->GetPercent(), 0.42f));
+	TestTrue(TEXT("UI-P0-06 Vehicle Defense Visual Shield semantic Fill"), ShieldProgressBar->GetFillColorAndOpacity().Equals(ExpectedShieldColor));
+	TestTrue(TEXT("UI-P0-06 Vehicle Defense Visual Integrity semantic Fill"), IntegrityProgressBar->GetFillColorAndOpacity().Equals(ExpectedIntegrityColor));
+	TestTrue(TEXT("UI-P0-06 Vehicle Defense Visual Shield Icon semantic color"), ShieldImage->GetColorAndOpacity().Equals(ExpectedShieldColor));
+	TestTrue(TEXT("UI-P0-06 Vehicle Defense Visual Integrity Icon semantic color"), IntegrityImage->GetColorAndOpacity().Equals(ExpectedIntegrityColor));
+	TestTrue(TEXT("UI-P0-06 Vehicle Defense Visual Shield inset padding"), ShieldProgressBar->GetBorderPadding().Equals(ExpectedDefenseBarPadding));
+	TestTrue(TEXT("UI-P0-06 Vehicle Defense Visual Integrity inset padding"), IntegrityProgressBar->GetBorderPadding().Equals(ExpectedDefenseBarPadding));
+	TestTrue(TEXT("UI-P0-06 Vehicle Defense Visual Shield Background intrinsic height"), ShieldDefenseBarStyle.BackgroundImage.ImageSize.Y > KINDA_SMALL_NUMBER);
+	TestTrue(TEXT("UI-P0-06 Vehicle Defense Visual Shield Fill intrinsic height"), ShieldDefenseBarStyle.FillImage.ImageSize.Y > KINDA_SMALL_NUMBER);
+	TestTrue(TEXT("UI-P0-06 Vehicle Defense Visual Shield Marquee intrinsic height"), ShieldDefenseBarStyle.MarqueeImage.ImageSize.Y > KINDA_SMALL_NUMBER);
+	TestTrue(TEXT("UI-P0-06 Vehicle Defense Visual Integrity Background intrinsic height"), IntegrityDefenseBarStyle.BackgroundImage.ImageSize.Y > KINDA_SMALL_NUMBER);
+	TestTrue(TEXT("UI-P0-06 Vehicle Defense Visual Integrity Fill intrinsic height"), IntegrityDefenseBarStyle.FillImage.ImageSize.Y > KINDA_SMALL_NUMBER);
+	TestTrue(TEXT("UI-P0-06 Vehicle Defense Visual Integrity Marquee intrinsic height"), IntegrityDefenseBarStyle.MarqueeImage.ImageSize.Y > KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("UI-P0-06 Vehicle Defense Visual Shield fill direction"), ShieldProgressBar->GetBarFillType(), EProgressBarFillType::LeftToRight);
+	TestEqual(TEXT("UI-P0-06 Vehicle Defense Visual Integrity fill direction"), IntegrityProgressBar->GetBarFillType(), EProgressBarFillType::LeftToRight);
+	TestEqual(TEXT("UI-P0-06 Vehicle Defense Visual Shield fill style"), ShieldProgressBar->GetBarFillStyle(), EProgressBarFillStyle::Scale);
+	TestEqual(TEXT("UI-P0-06 Vehicle Defense Visual Integrity fill style"), IntegrityProgressBar->GetBarFillStyle(), EProgressBarFillStyle::Scale);
+	TestEqual(TEXT("UI-P0-06 Vehicle Defense Visual Shield visible"), ShieldProgressBar->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("UI-P0-06 Vehicle Defense Visual Integrity visible"), IntegrityProgressBar->GetVisibility(), ESlateVisibility::HitTestInvisible);
 	return true;
 }
 

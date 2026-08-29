@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.11.0
-// Date: 2026-08-21
-// Description: CF-FQ-032 Production HUD 의미 구조 검증 + UI-P0-09B View Mode additive migration Editor Bridge
-// Scope: 기존 Production Designer Layout을 보존하면서 Radar Visual과 Root ReticleLayer의 Vehicle Direction 의미 Widget만 명시적으로 additive 갱신합니다.
+// Version: 1.12.1
+// Date: 2026-08-25
+// Description: CF-FQ-039 Armor modular visual + 기존 Production HUD layout-preserving Editor Bridge
+// Scope: 기존 Production Designer Layout을 보존하면서 Armor Direction Icon, Radar Visual과 Root ReticleLayer 의미 Widget만 필요한 경우 additive 갱신합니다.
 // Changelog:
+// - v1.12.1: UE 5.8 UMG compiler 계약에 맞춰 additive Image_DirectionIcon의 WidgetVariableNameToGuidMap GUID를 구조 compile 전에 deterministic 등록하고, 이미 저장된 Icon의 GUID 누락도 repair 가능하게 보강.
+// - v1.12.0: 저장 WBP_CFArmorSector의 기존 Tree/Slot을 보존하고 Overlay_Plate에 Image_DirectionIcon만 누락 시 추가하는 ApplyArmorVisualMigrationResult를 추가. ArmorBodyMap의 6개 Sector Position/Size와 icon texture/rotation은 Designer ownership으로 유지.
 // - v1.11.0: UI-P0-09B용 View Mode migration을 추가. 기존 Root 7-child 구조와 모든 Panel Slot Layout을 보존하고 빈 ReticleLayer 내부에 Designer-owned Direction Track + Vehicle Semantic Image만 누락 시 추가합니다.
 // - v1.10.0: UI-P0-08B용 Radar Visual layout-preserving migration을 추가. 기존 RadarPanel Tree를 교체하지 않고 Frame/Range/Player/SelectedEdge 의미 Widget만 누락 시 추가하며 기존 Contact/Selected Image는 Brush/Color만 교체합니다.
 // - v1.9.0: Build 경로를 신규/빈 Widget Blueprint의 최초 Scaffold 전용으로 제한하고 기존 Designer Tree는 Validate-only로 보호. 기존 Asset의 Position/Size/Anchor/Alignment/Padding/AutoSize를 Bridge 재적용 계약에서 제거.
@@ -21,7 +23,9 @@
 // Migration:
 // - 기존 CFUIHUDEditorBridge v1.x Border/Canvas Mock 경로는 Historical Preview evidence로 보존합니다.
 // - Production Bridge는 Gameplay 조회, Runtime Event Binding, 직접 콘텐츠 경로 하드코딩을 만들지 않습니다.
-// - WBP_CFArmorSector는 방향 Label + Plate Image + 실제 Armor Ratio ProgressBar의 재사용 Presentation 단위이며 WBP_CFArmorBodyMap의 Canvas는 여섯 Sector 위치와 차량 실루엣 배치만 소유합니다.
+// - WBP_CFArmorSector는 공통 Plate Image + 별도 Direction Icon + fallback Label + 실제 Armor Ratio ProgressBar의 재사용 Presentation 단위입니다. WBP_CFArmorBodyMap의 Canvas는 여섯 Sector 위치와 차량 실루엣 배치만 소유합니다.
+// - v1.12.0 Armor migration은 기존 WBP_CFArmorSector의 Overlay/Plate/Text/Progress와 BodyMap의 6개 Sector Slot을 수정하지 않습니다. 누락된 Image_DirectionIcon만 추가하며 Arrow/Chevron2 선택과 각도는 각 Sector Designer 인스턴스가 소유합니다.
+// - v1.12.1 additive Widget 생성은 UE 5.8의 WidgetVariableNameToGuidMap 계약을 함께 갱신합니다. GUID metadata repair 외 기존 Designer Slot/Widget 속성은 수정하지 않습니다.
 // - WBP_CFSpeedGauge는 Track·21 Tick·Redline 표현을 `Image_RPMGauge`의 UI Material 한 장에서 처리하며 UCFHUDPresenter는 explicit Redline/Maximum 계약으로 계산한 `RPMRatio` 하나만 전달합니다.
 // - HUDVisualData.SpeedArcMaterial이 없으면 `Image_RPMGauge`는 표시하지 않으며 Production Validator가 fail-closed합니다. 구형 `Image_RPMTrackArt`와 `ProgressBar_RPMTick*`는 현재 구조에서 금지됩니다.
 // - WeaponPanel은 raw ResourceChannels 개수대로 Widget을 생성하지 않으며 Primary/SecondaryA/SecondaryB/FireState 고정 의미 슬롯만 생성합니다.
@@ -82,6 +86,11 @@ public:
 		UCFHUDVisualData* HUDVisualData,
 		UObject* SpeedGaugeBlueprintObject,
 		UObject* ArmorBodyMapBlueprintObject,
+		UObject* ArmorSectorBlueprintObject);
+
+	// [v1.12.0] 저장 ArmorSector의 기존 Slot Layout을 보존하면서 공통 Plate와 분리된 Direction Icon 의미 슬롯만 additive 추가합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|UI|Editor", meta=(DisplayName="Armor Visual 보존 마이그레이션 (Apply Armor Visual Migration)", ToolTip="기존 WBP_CFArmorSector의 Plate, Text, Progress와 부모 ArmorBodyMap 배치를 유지하고 Overlay_Plate에 Image_DirectionIcon이 없을 때만 추가합니다. 아이콘 종류와 회전, Sector 위치·크기는 Designer가 직접 소유합니다."))
+	static bool ApplyArmorVisualMigrationResult(
 		UObject* ArmorSectorBlueprintObject);
 
 	// [v1.10.0] 저장 RadarPanel의 기존 Slot Layout을 보존하면서 UI-P0-08B에 필요한 정적 Visual 의미 Widget과 Brush만 additive 갱신합니다.
