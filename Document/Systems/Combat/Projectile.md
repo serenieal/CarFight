@@ -57,18 +57,19 @@
 - Trail-only, Thruster-only, 두 FX 동시, 소켓·Fallback, 종료 Reset, Pool 재사용, Ribbon History와 30 FPS 고속 Bounds 검증 PASS
 ```
 
-`CF-FQ-028` 완료 Plan:
+`CF-FQ-028` 완료 Historical Plan:
 
 ```text
-Document/Plan/ProjectilePropulsionPlan.md
+Document/Plan/Archive/ProjectilePropulsionPlan.md
 ```
 
-`CF-FQ-027` 보존 Plan:
+`CF-FQ-027` 완료 Historical Plan:
 
 ```text
-Document/Plan/ProjectileFlightFxPlan.md
-Document/Plan/ProjectileFlightFxRoadmap.md
+Document/Plan/Archive/ProjectileFlightFxPlan.md
 ```
+
+기존 Roadmap 세부 이력은 대표 Historical Plan과 Plan Archive 색인에서 추적한다.
 
 ---
 
@@ -1275,7 +1276,7 @@ Document/Systems/UI/VehicleDebugPanel.md
 
 ```text
 - CF-FQ-028의 현재 구현 판단은 이 Projectile.md를 우선한다.
-- Document/Plan/ProjectilePropulsionPlan.md는 완료 당시 설계·빌드·PIE 체크포인트 보존용이다.
+- `Document/Plan/Archive/ProjectilePropulsionPlan.md`는 완료 당시 설계·빌드·PIE 체크포인트 보존용이다.
 - 기존 ProjectileData는 bUsePropulsion=false와 비활성 Trail·Thruster 기본값으로 이전 동작을 유지한다.
 - 추진 Rocket은 InitialSpeed를 발사대 분리 속도로 해석한다.
 - BurnedOut은 Projectile 비활성화가 아니라 추가 추진 종료다.

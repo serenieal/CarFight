@@ -1,8 +1,8 @@
 # Document Entry (CarFight)
 
-- 문서 버전: v2.11
+- 문서 버전: v2.14
 - 작성일: 2026-06-19
-- 최근 갱신일: 2026-08-19
+- 최근 갱신일: 2026-08-27
 - 문서 상태: Current
 - 역할: `Document/` 전체의 작업별 진입 라우터
 
@@ -68,7 +68,7 @@ AGENTS
 ```
 
 `DesignSource`와 공용 `SSOT`는 위 실행 흐름 옆에서 장기 방향과 공통 규칙을 제공한다.
-`Link_Audit_Check`는 전체 구조의 링크, 역할과 상태 정합성을 검사한다.
+`Document/Maintenance/Link_Audit_Check.md`는 전체 구조의 링크, 역할과 상태 정합성을 검사한다.
 
 각 계층의 한 줄 책임은 다음과 같다.
 
@@ -103,7 +103,7 @@ Link_Audit_Check = 위 관계가 서로 모순되지 않는지 검사한다.
 | `Systems/` | 검증된 현재 구현 구조, 책임, 제한과 데이터 흐름 | 아직 구현되지 않은 미래 설계와 희망 사항 |
 | `SSOT/` | 여러 프로젝트에 공통 적용되는 UE·협업 규칙 | CarFight 전용 우선순위와 예외 결정 |
 | `Archive/` | 완료·보류·대체된 과거 기록 보존 | 현재 착수 또는 현재 구현 기준 |
-| `Link_Audit_Check.md` | 링크, 역할, 버전과 상태 정합성 감사 | 프로젝트 기능 우선순위 결정 |
+| `Maintenance/Link_Audit_Check.md` | 링크, 역할, 버전과 상태 정합성 감사 | 프로젝트 기능 우선순위 결정 |
 
 ### 2.3 ActiveWork와 대표 Plan의 책임 경계
 
@@ -237,6 +237,7 @@ CarFight 문서체계의 소유 범위는 `main_game` 게임 프로젝트다.
 | --- | --- | --- | --- |
 | AssetDump | `UE/Plugins/ue-assetdump/Documents/Document_Entry.md` | `UE/Plugins/ue-assetdump/Documents/ActiveWork.md` | `UE/Plugins/ue-assetdump/Documents/Plan/README.md` |
 | GoPyMCP | `GoPyMCP/Workspace/docs/Document_Entry.md` | `GoPyMCP/Workspace/docs/ActiveWork.md` | `GoPyMCP/Workspace/docs/plan/README.md` |
+| Shared SSOT | `Document/SSOT/README.md` | 없음 — 공용 규칙 저장소 | 없음 — Principle/Gate/Pattern만 소유 |
 
 다음 정보는 CarFight `ActiveWork`, Plan, ProjectSSOT와 FeatureQueue에 등록하지 않는다.
 
@@ -257,6 +258,7 @@ CarFight가 독립 도구의 공개 기능에 의존할 경우 다음 정보만 
 ```
 
 독립 저장소 작업을 요청받으면 CarFight 라우터에서 작업을 복원하지 않고 해당 저장소의 Git 상태, 가장 가까운 `AGENTS.md`와 문서 진입점으로 전환한다.
+Shared SSOT는 예외적으로 CarFight 작업에서 read-only 공용 기준으로 직접 참조할 수 있지만, Shared 규칙 자체를 수정할 때는 `ssot_repo`와 `Document/SSOT/AGENTS.md`로 ownership을 전환한다.
 
 ---
 
@@ -272,6 +274,8 @@ CarFight가 독립 도구의 공개 기능에 의존할 경우 다음 정보만 
 | 진행 중 계획과 남은 검증 확인 | `Document/Plan/README.md` | 선택한 Plan의 대표 진입 문서 |
 | 전투 정체성·장기 전투 설계 확인 | `Document/ProjectSSOT/CombatPlan/00_Index.md` | 필요한 번호 문서만 선택 |
 | 차량·터렛·발사체 콘셉트 작업 | `Document/Plan/ConceptArt/README.md` | 필요한 규칙 문서와 작업 대상 이미지 |
+| AI가 새 Concept·설계·Workflow를 실제 Production 목표로 제안/승격 | `Document/SSOT/Shared/Production_Realizability_Gate.md` | Exploration/Production-Bound/Production Proven 판정 → 필요 시 Trial → 해당 Domain Gate/Plan |
+| UI 이미지·시각 Source 신규 제작·재구성 | `Document/SSOT/Shared/UI_Resource_Gate.md` | 새 Production Target이면 상위 Realizability Gate 선행 → Triage → 필요한 경우 Pattern 색인 → 해당 UI 대표 Plan. 공용 Gate 내용을 프로젝트 문서에 복제하지 않음 |
 | 완료·보류된 과거 Plan 조사 | 현재 ProjectSSOT와 Systems를 먼저 확인 | `Document/Plan/Archive/README.md`에서 필요한 폴더만 선택 |
 | 공통 UE 협업 방식 확인 | `Document/SSOT/README.md` | `Document/SSOT/UE_SSOT/UE_AI_User_Workflow_SSOT_v0_1.md` 및 필요한 기술 SSOT |
 | 문서체계 자체 개선 | `Document/Plan/DocSystemPlan/CF_DocSystemPlan_v0_1.md` | `Document/AGENTS.md`, 이 문서, 관련 색인 |
@@ -464,7 +468,8 @@ Document/
   CodeWorkGate.md           # 브라우저 AI 코드 작업 사전 게이트와 실행 출처 통제
   ActiveWork.md             # 현재 활성 작업과 대표 체크포인트 연결
   Document_Entry.md         # 작업별 총괄 진입 라우터
-  Link_Audit_Check.md       # 링크와 역할 정합성 점검표
+  Maintenance/              # 문서체계 유지보수·감사 문서
+    Link_Audit_Check.md     # 링크와 역할 정합성 점검표
   DesignSource/             # 장기 방향과 원본 기획 참고
   Plan/                     # 진행 중 상세 계획과 검증
     README.md               # Plan 폴더 단위 색인
@@ -494,6 +499,7 @@ Document/
 
 - `Document/CodeWorkGate.md`
 - `Document/ActiveWork.md`
+- `Document/Maintenance/Link_Audit_Check.md`
 - `Document/ProjectSSOT/README.md`
 - `Document/Systems/SystemIndex.md`
 - `Document/Plan/README.md`
@@ -501,12 +507,34 @@ Document/
 - `Document/ProjectSSOT/CombatPlan/00_Index.md`
 - `Document/DesignSource/README.md`
 - `Document/SSOT/README.md`
+- `Document/SSOT/Shared/Production_Realizability_Gate.md`
+- `Document/SSOT/Shared/UI_Resource_Gate.md`
+- `Document/SSOT/Shared/Pattern_Index.md`
 - `Document/SSOT/UE_SSOT/UE_AI_User_Workflow_SSOT_v0_1.md`
 - `Document/Plan/DocSystemPlan/CF_DocSystemPlan_v0_1.md`
 
 ---
 
 ## 11. Changelog
+
+### v2.14 - 2026-08-27
+
+- AI가 새 Concept·설계·Workflow를 실제 Production 목표로 제안하거나 승격할 때 공용 `Production_Realizability_Gate.md`를 먼저 거치도록 라우팅을 추가했다.
+- UI 신규 Production Target은 Realizability 판정 후 `UI_Resource_Gate.md`로 내려가도록 상·하위 Gate 순서를 명시했다.
+- "보기 좋은 Proposal"이 구현 가능성 검증 없이 Production Promise로 받아들여지는 재발 경로를 CarFight 진입 단계에서 차단했다.
+
+### v2.13 - 2026-08-27
+
+- UI 이미지·시각 Source 신규 제작·재구성의 첫 진입을 공용 `UI_Resource_Gate.md`로 연결했다.
+- CarFight 문서에는 공용 Gate 내용을 복제하지 않고 routing만 유지하도록 경계를 고정했다.
+- 공용 Problem Pattern 색인을 Quick Links에 연결해 새 UI 세션에서도 기존 문제 유형을 먼저 찾을 수 있게 했다.
+- `Document/SSOT`가 독립 `ssot_repo`임을 저장소 경계 표에 추가하고, 공용 규칙 수정 시 ownership을 해당 저장소로 전환하도록 명시했다.
+
+### v2.12 - 2026-08-22
+
+- `Link_Audit_Check.md`를 `Document/Maintenance/`로 물리 이동한 현재 경로를 총괄 라우터·구조·Quick Links에 반영했다.
+- 완료 Historical Plan의 실제 `Document/Plan/Archive/` physical placement와 ProjectSSOT Archive의 Historical Systems 분리를 현재 문서체계에 반영했다.
+- 문서 역할과 현재 구현/계획/역사 evidence 권한 순서는 변경하지 않았다.
 
 ### v2.11 - 2026-08-19
 
@@ -600,6 +628,13 @@ Document/
 ---
 
 ## 12. Migration
+
+### v2.12 적용 안내
+
+- 링크·역할 정합성 감사는 `Document/Maintenance/Link_Audit_Check.md`에서 수행한다.
+- 완료되어 physical Archive로 이동한 Plan은 `Document/Plan/Archive/README.md`와 실제 `Document/Plan/Archive/` 경로에서 찾는다.
+- Current Systems에서 내려온 Historical 구현 기록은 `Document/ProjectSSOT/Archive/Systems/`에서 찾는다.
+- Archive 경로의 문서를 현재 Active/Current owner로 자동 복원하지 않는다.
 
 ### v2.11 적용 안내
 

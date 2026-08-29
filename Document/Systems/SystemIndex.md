@@ -1,7 +1,7 @@
 # SystemIndex
 
-- Version: 1.20.0
-- Date: 2026-08-18
+- Version: 1.24.0
+- Date: 2026-08-24
 
 - Status: Active
 - Scope: `Document/Systems/` 하위 문서 위치 안내 색인
@@ -71,11 +71,13 @@
 
 ## 7. Network 폴더
 
-현재 싱글 플레이 1대 차량 고도화 기준에서 Network 폴더 문서는 활성 구현 지시가 아니라 보류된 서버/멀티 기록으로 본다.
+현재 `Document/Systems/Network/`에는 Current System 문서가 없다. 과거 Dedicated Server / Multiplayer Spawn 구현 기록은 Current Systems에서 내려와 다음 Historical 경로에 보존한다.
 
-| 경로 | 문서 내용 |
-| --- | --- |
-| `Document/Systems/Network/ServerSpawn.md` | 현재는 Deferred 기록이다. Dedicated Server 테스트 환경에서 플레이어 로그인 후 서버가 기본 차량 Pawn을 스폰하고 PlayerController가 Possess하도록 만드는 최소 멀티플레이 진입 기능을 설명한다. |
+```text
+Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
+```
+
+서버/멀티 작업을 재개할 때는 이 Historical 기록을 그대로 Current로 복원하지 않고 현재 Source·ProjectSSOT를 다시 감사해 새 lifecycle을 연다.
 
 ---
 
@@ -94,9 +96,9 @@
 
 | 경로 | 문서 내용 |
 | --- | --- |
-| `Document/Systems/UI/AimReticle.md` | `Image_CenterDot` 조준 레티클과 `CurrentMuzzleDirection` 기반 `Image_WeaponReticle` 터렛 레티클을 분리해 표시하고, 로컬 Aim/FireFeedback 상태를 이미지·텍스트·색상으로 표현한다. CF-FQ-025 이중 레티클과 기존 NoWeapon, AimBlocked, 피드백 회귀를 사용자 PIE로 확인했다. |
+| `Document/Systems/UI/InGameUI.md` | `CF-FQ-032` 인게임 UI Current System이다. LocalPlayer `UCFUISubsystem → UCFUIRootWidget` 8 Layer 수명, Production `UCFHUDDataProvider → FCFInGameUIViewData → UCFHUDPresenter` 데이터 경계, HUD·AimReticle·Target Marker·Pause·Radar·Weapon과 VehiclePanel persisted editable 구조의 현재 구현, USER Visual/Feel Deferred 경계를 기록한다. |
+| `Document/Systems/UI/AimReticle.md` | `UCFUISubsystem`이 HUD Layer Z10에서 `WBP_AimReticle` singleton 수명과 Current Pawn Rebind를 소유하고, Widget은 Weak Pawn 참조로 `Image_CenterDot` 조준 레티클·`CurrentMuzzleDirection` 기반 `Image_WeaponReticle` 터렛 레티클과 로컬 Aim/FireFeedback 상태를 표시한다. 기존 Aim/FireFeedback USER PIE 의미 계약을 보존한다. |
 | `Document/Systems/UI/DisplayTextPolicy.md` | 내부 식별자는 영문으로 유지하고, 화면에 보이는 UI/Debug UI 텍스트는 한국어로 표시한다는 표시 텍스트 정책 문서다. |
-| `Document/Systems/UI/VehicleDebug.md` | 차량 Pawn의 런타임 준비 상태, Drive 상태, 입력 상태, 마지막 상태 전이, 런타임 요약을 문자열로 조합해 로컬 플레이어 위젯으로 표시하는 텍스트 기반 차량 진단 기능 문서다. |
 | `Document/Systems/UI/VehicleDebugPanel.md` | `VehicleDebug Panel`의 Navigation + Selected Section 구조, TopLevel Section, Camera Debug 편입 상태, 표시 언어 정책을 설명하는 문서다. |
 
 ---
@@ -131,17 +133,18 @@
 | HitScan·Projectile 공용 피해 진입점, Vehicle Integrity 적용, Legacy Fallback과 최초 파괴 상태 | `Combat/HitDamage.md` |
 | Shield, 6방향 Armor, 관통·Overflow, 재생과 방어층별 전체 결과 | `Combat/VehicleDefense.md` |
 | Muzzle·Impact·Destroyed Niagara의 데이터 연결, 발생 위치, 1회성, 중복 방지와 잔류 안전 계약 | `Combat/CombatFx.md` |
-| Reticle 목표점, 터렛 추적, Muzzle 방향을 하나의 Aim Solution으로 통합하는 설계 | `Document/Plan/AimFireAlignment/ImplementationDesign.md` |
-| Sweep/Sub-stepping/보조 Sphere Sweep을 통한 고속 Projectile 연속 충돌 설계 | `Document/Plan/ProjectileContinuousCollision/ImplementationDesign.md` |
+| Reticle 목표점, 터렛 추적, Muzzle 방향을 하나의 Aim Solution으로 통합한 완료 설계·검증 기록 | `Document/Plan/Archive/AimFireAlignment/ImplementationDesign.md` |
+| Sweep/Sub-stepping/보조 Sphere Sweep을 통한 고속 Projectile 연속 충돌 완료 설계·검증 기록 | `Document/Plan/Archive/ProjectileContinuousCollision/ImplementationDesign.md` |
 | 프로젝트 시작 맵, 렌더링, 입력 백엔드 설정 | `Config/ProjectRuntimeConfig.md` |
 | 입력 액션, 매핑 컨텍스트, 키보드/게임패드 입력 처리 | `Input/Input.md` |
-| 보류된 서버 접속 후 차량 Pawn 생성과 Possess 기록 | `Network/ServerSpawn.md` |
+| 과거 Dedicated Server 접속 후 차량 Pawn 생성과 Possess 기록 | `Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md` |
 | 차량 Sensor 탐지, ContactId, Live/LastKnown/Lost/DestroyedHold, Tactical Analysis·Knowledge, Scanner Utility 장비/Fitting Source와 V Active Scan 입력, actor-free Snapshot/HUD 소비 경계 | `Targeting/SensorContact.md` |
 
 | UI 텍스트를 한국어로 표시하는 기준 | `UI/DisplayTextPolicy.md` |
-| 차량 디버그 위젯의 기본 문자열 표시 | `UI/VehicleDebug.md` |
+| 레거시 `WBP_VehicleDebug` 문자열 표시 비교 기준 | `Document/ProjectSSOT/Archive/Systems/UI/VehicleDebug.md` |
 | 차량 디버그 패널의 탭/섹션 구조 | `UI/VehicleDebugPanel.md` |
-| 조준점/Reticle 표시, 로컬 발사 결과 피드백 표시 후보 | `UI/AimReticle.md` |
+| 인게임 UI Root·Layer 수명, Production HUD 데이터 흐름, Pause, Radar·Target·Weapon UI의 현재 구현 | `UI/InGameUI.md` |
+| 조준점/Reticle 표시, 로컬 발사 결과 피드백과 UISubsystem singleton/Rebind | `UI/AimReticle.md` |
 | 차량 코어 변경 전 결정 기준 | `Vehicles/VehicleCoreDecisions.md` |
 | 차량 DataAsset 구조 | `Vehicles/VehicleData.md` |
 | 차량 BeginPlay 준비와 Ready 판정 | `Vehicles/VehicleRuntime.md` |
@@ -167,6 +170,36 @@
 ---
 
 ## 13. Changelog
+
+### v1.24.0 - 2026-08-24
+
+- `UI/InGameUI.md v1.1.1`의 CF-FQ-039 VehiclePanel persisted editable Structure Readiness 감사를 Current UI owner 설명에 반영했다.
+- 신규 기능 승격이 아니라 기존 `WBP_CFArmorSector` 6개 재사용 + BodyMap Canvas + 탑다운 VehicleSilhouette의 실제 persisted 구조를 문서화한 변경이다.
+- USER Production Visual PASS와 CF-FQ-039 완료 상태는 변경하지 않았다.
+
+### v1.23.0 - 2026-08-22
+
+- 문서 물리 정리 closure를 반영해 Decommissioned `ServerSpawn`과 레거시 `VehicleDebug`를 Current Systems 색인에서 내리고 `ProjectSSOT/Archive/Systems/` Historical 경로로 연결했다.
+- 물리 Archive로 이동된 완료 Plan의 설계·검증 참조를 `Document/Plan/Archive/` 실제 경로로 정상화했다.
+- Current 구현 owner, PASS evidence와 USER 판정은 변경하지 않았다.
+
+Migration: 현재 구현은 계속 `Document/Systems/`와 실제 Source/Asset을 우선한다. 과거 완료 설계·검증 또는 내려온 시스템 기준선이 필요할 때만 각 Archive 경로를 선택한다.
+
+### v1.22.0 - 2026-08-22
+
+- CF-FQ-032 post-closure remediation 완료 후 Current owner 버전을 `UI/InGameUI.md v1.1.0`, `UI/AimReticle.md v1.10.0`, `Targeting/SensorContact.md v1.2.0`으로 동기화했다.
+- CF-FQ-032 Done과 USER Visual/Zoom Feel Deferred 상태는 변경하지 않았다.
+
+Migration: CF-FQ-032 현재 구현은 최신 Systems와 실제 Source/Asset을 우선한다.
+
+### v1.21.0 - 2026-08-22
+
+- `CF-FQ-032 / UI-P0-11 Systems Promotion`을 반영해 `Document/Systems/UI/InGameUI.md v1.1.0`을 인게임 UI Current System으로 신규 등록했다.
+- LocalPlayer `UCFUISubsystem → UCFUIRootWidget` 수명, Production `UCFHUDDataProvider → FCFInGameUIViewData → UCFHUDPresenter` 경계, 실제 Pause·HUD·Radar·Target·Weapon 계약과 UI-P0-10 AI Runtime Technical Validation을 Current 지식으로 승격했다.
+- `AimReticle.md v1.10.0`의 생성·수명 owner를 실제 Source에 맞춰 `UCFUISubsystem` HUD Layer singleton + Current Pawn Rebind로 교정했다. 기존 Aim/FireFeedback/Turret Reticle USER PASS 의미는 변경하지 않았다.
+- UI-P0-08 Radar/Edge Visual·Zoom Feel과 D1-11-ART 잔여 Visual은 Deferred/Pending으로 유지하며 Current Systems 등록을 USER Visual PASS로 확대하지 않는다.
+
+Migration: CF-FQ-032의 현재 구현 판단은 `UI/InGameUI.md`와 실제 Source/Asset을 우선한다. `UI/AimReticle.md`는 Aim/FireFeedback 상세 의미 owner로 유지하며 과거 Pawn direct AddToViewport 설명을 Current 생성 경로로 사용하지 않는다.
 
 ### v1.20.0 - 2026-08-18
 
@@ -275,14 +308,14 @@
 
 - `VehicleAim.md`와 `AimReticle.md` 설명에 Reticle 목표와 Muzzle 발사 방향 정렬 한계를 반영했다.
 - `Projectile.md`와 `DamageHitContext.md` 설명을 시각 차체 피격 완료 / 고속 Projectile 부분 완료 상태로 갱신했다.
-- `Document/Plan/AimFireAlignment/ImplementationDesign.md`를 조준 해 통합 설계로 연결했다.
-- `Document/Plan/ProjectileContinuousCollision/ImplementationDesign.md`를 고속 Projectile 연속 충돌 설계로 연결했다.
+- `Document/Plan/Archive/AimFireAlignment/ImplementationDesign.md`를 조준 해 통합 설계의 Historical evidence로 연결했다.
+- `Document/Plan/Archive/ProjectileContinuousCollision/ImplementationDesign.md`를 고속 Projectile 연속 충돌 설계의 Historical evidence로 연결했다.
 - `HitDamage` Plan 설명을 시각 피격 구현 완료 이후 Damage Runtime 대기 상태로 정정했다.
 
 ### v1.4.0 - 2026-07-13
 
 - `DamageHitContext.md` 설명에 현재 차량 피격이 `VehicleMesh` Physics Asset 기준이라는 한계를 반영했다.
-- 시각 차체 기반 피격 콜리전 분리와 피해 처리 사전 설계 문서 `Document/Plan/HitDamage/ImplementationDesign.md`를 기능별 찾기 표에 연결했다.
+- 시각 차체 기반 피격 콜리전 분리와 피해 처리 완료 설계 기록 `Document/Plan/Archive/HitDamage/ImplementationDesign.md`를 Historical evidence로 연결했다.
 - `SM_Body` 기반 무기 피격 전환은 아직 Systems 완료 기능이 아니라 Plan 단계임을 유지했다.
 
 ### v1.3.0 - 2026-07-09
@@ -316,7 +349,7 @@
 ### v1.19.0 적용 안내
 
 - `CF-FQ-036` 완료 이후 Sensor/Contact 현재 구현은 `Targeting/SensorContact.md v1.0.0`과 실제 Source를 우선한다.
-- `Document/Plan/SensorContactPlan.md`는 완료 당시 설계·검증 evidence를 보존하는 Historical + Retained Path로 읽는다.
+- `Document/Plan/Archive/SensorContactPlan.md`는 완료 당시 설계·검증 evidence를 보존하는 Historical + Archived Path로 읽는다.
 - TargetSelect 후보 검색·선택 수명과 Sensor Contact lifecycle·Knowledge를 합치지 않는다.
 - Radar Range/Zoom·NormalizedPosition·동적 Blip 및 CF-FQ-032 Target/Radar USER Visual은 이 Current System 승격으로 자동 완료되지 않는다.
 - CF-FQ-026 TS-P0-08 USER PIE도 별도 Pending 상태를 유지한다.
@@ -324,7 +357,7 @@
 ### v1.18.0 적용 안내
 
 - `CF-FQ-008` 완료 이후 WeaponData 현재 구현은 `Combat/WeaponData.md`와 실제 `UCFWeaponData` 코드를 우선한다.
-- `Document/Plan/WeaponDataPlan.md`는 완료 당시 설계·검증 기록인 Historical + Retained Path로 읽는다.
+- `Document/Plan/Archive/WeaponDataPlan.md`는 완료 당시 설계·검증 기록인 Historical + Archived Path로 읽는다.
 - `MagazineSize`와 `ReloadTimeSeconds`는 현재 Ammo Runtime의 정적 입력이며, Loaded·Reserve·Reload 진행 상태는 `UCFVehicleAmmoComp`가 소유한다.
 - `HeatPerShot / MaxHeat`는 현재 과열 Runtime 완료를 의미하지 않는다.
 
@@ -338,14 +371,14 @@
 ### v1.14.0 적용 안내
 
 - `CF-FQ-027`의 현재 구현 판단은 `Document/Systems/Combat/Projectile.md v1.5.0`을 우선한다.
-- `Document/Plan/ProjectileFlightFxPlan.md v1.0.0`은 완료 당시 설계·빌드·사용자 PIE 기록으로 유지한다.
+- `Document/Plan/Archive/ProjectileFlightFxPlan.md v1.0.0`은 완료 당시 설계·빌드·사용자 PIE 기록으로 유지한다.
 - `CF-TC-023`은 PASS이며 CF-FQ-027을 Active 또는 Paused로 복원하지 않는다.
 - Automation 실행은 Runner 미노출로 Not Run 상태를 유지한다.
 
 ### v1.13.0 적용 안내
 
 - `CF-FQ-028`의 현재 구현 판단은 `Document/Systems/Combat/Projectile.md`를 우선한다.
-- `Document/Plan/ProjectilePropulsionPlan.md`는 완료 당시 설계·빌드·PIE 체크포인트로 유지한다.
+- `Document/Plan/Archive/ProjectilePropulsionPlan.md`는 완료 당시 설계·빌드·PIE 체크포인트로 유지한다.
 - `CF-TC-024`는 PASS이며 비유도 Rocket 추진과 Burning 기반 Thruster는 Current System이다.
 - 반복 전투 확장 회귀는 `CF-FQ-019`가 소유하며 자동 착수하지 않는다.
 - `CF-FQ-027`과 `CF-TC-023`의 별도 전체 Trail·Fallback·Pool 검증은 Paused 상태를 유지한다.
@@ -353,26 +386,26 @@
 ### v1.12.0 적용 안내
 
 - `CF-FQ-024`의 현재 구현 판단은 `Document/Systems/Combat/CombatFx.md`를 우선한다.
-- `Document/Plan/CombatFxAudio/ImplementationDesign.md`는 완료 당시 설계와 검증 기록으로 유지한다.
+- `Document/Plan/Archive/CombatFxAudio/ImplementationDesign.md`는 완료 당시 설계와 검증 기록으로 유지한다.
 - `CF-TC-021`은 PASS이며 CombatFx는 P0 사용자 PIE 완료된 Current System이다.
 
 ### v1.10.0 적용 안내
 
 - `CF-FQ-017`의 현재 구현 판단은 `Document/Systems/Combat/FireFeedback.md`와 `Document/Systems/UI/AimReticle.md`를 우선한다.
-- `Document/Plan/ReticleFireFeedback/ImplementationDesign.md`는 완료 당시 설계와 검증 체크포인트 보존용으로 유지한다.
+- `Document/Plan/Archive/ReticleFireFeedback/ImplementationDesign.md`는 완료 당시 설계와 검증 체크포인트 보존용으로 유지한다.
 - NoWeapon, AimBlocked와 정상 발사 회귀는 P0 사용자 PIE 완료 상태로 읽는다.
 
 ### v1.9.0 적용 안내
 
 - `CF-FQ-018`의 현재 구현 판단은 `Document/Systems/Combat/HitDamage.md`를 우선한다.
-- `Document/Plan/HitDamage/ImplementationDesign.md`는 완료 당시 설계와 검증 체크포인트 보존용으로 유지한다.
+- `Document/Plan/Archive/HitDamage/ImplementationDesign.md`는 완료 당시 설계와 검증 체크포인트 보존용으로 유지한다.
 - 최소 Damage Runtime은 Current System이지만 파괴 시 입력·물리 정지와 장갑·모듈 피해는 구현된 것으로 간주하지 않는다.
 
 ### v1.8.0 적용 안내
 
 - `CF-FQ-022`와 `CF-FQ-023`은 P0 사용자 PIE까지 완료된 Current System 기준으로 읽는다.
 - AimFireAlignment와 ProjectileContinuousCollision Plan은 완료 체크포인트 보존용이며 현재 구현 판단은 관련 Systems 문서를 우선한다.
-- 실제 `BaseDamage`, 체력 감소와 파괴 상태는 `Document/Plan/HitDamage/ImplementationDesign.md`의 `CF-FQ-018` 범위로 유지한다.
+- 실제 `BaseDamage`, 체력 감소와 파괴 상태의 완료 당시 설계 evidence는 `Document/Plan/Archive/HitDamage/ImplementationDesign.md`의 `CF-FQ-018` 기록에 보존한다.
 
 ### v1.7.0 적용 안내
 

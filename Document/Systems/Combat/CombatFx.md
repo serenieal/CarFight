@@ -33,8 +33,8 @@ Feature 상태: Done
 사용자 PIE: PASS
 테스트 ID: CF-TC-021
 현재 구현 문서: Document/Systems/Combat/CombatFx.md
-완료 Plan: Document/Plan/CombatFxAudio/ImplementationDesign.md
-자산 준비 기록: Document/Plan/CombatFxAudio/AssetPreparationChecklist.md
+완료 Plan: Document/Plan/Archive/CombatFxAudio/ImplementationDesign.md
+자산 준비 기록: Document/Plan/Archive/CombatFxAudio/AssetPreparationChecklist.md
 ```
 
 최종 사용자 PIE 결과:
@@ -830,7 +830,7 @@ Document/Systems/Combat/HitDamage.md
 
 ```text
 - CF-FQ-024의 현재 구현 판단은 이 문서를 우선한다.
-- Document/Plan/CombatFxAudio/ImplementationDesign.md는 완료 당시 설계와 검증 체크포인트 보존용으로 유지한다.
+- `Document/Plan/Archive/CombatFxAudio/ImplementationDesign.md`는 완료 당시 설계와 검증 체크포인트를 보존하는 Historical + Archived Path로 유지한다.
 - Impact P0는 NS_BasicHit을 현재 크기 그대로 사용하며 Scale 미반응 분석을 다시 열지 않는다.
 - 차량별 Destroyed 위치는 SM_Body StaticMesh의 FX_Destroyed 소켓으로 지정한다.
 - CombatFxData 또는 Niagara 누락은 전투 판정 실패가 아니라 선택적 시각 연출 없음으로 해석한다.

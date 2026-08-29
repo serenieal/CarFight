@@ -731,7 +731,7 @@ UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp
 Document/Systems/Combat/HitDamage.md
 Document/Systems/Combat/DamageHitContext.md
 Document/Systems/Combat/Projectile.md
-Document/Plan/VehicleDefenseDamageDesign.md
+Document/Plan/Archive/VehicleDefenseDamageDesign.md
 ```
 
 ---

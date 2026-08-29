@@ -685,7 +685,7 @@ P0 체감 테스트 후 차량 기본 속도, 거리 구간, 무기 유효거리
 
 - 날짜: 2026-07-30
 - 상태: Accepted
-- 관련 문서: `14_CombatUI.md`, `Document/Plan/InGameUIPlan.md`
+- 관련 문서: `14_CombatUI.md`, `Document/Plan/Archive/InGameUIPlan.md`
 
 #### 결정
 
@@ -820,7 +820,7 @@ UI는 서로 다른 자원을 공통 `Resource View Data` 채널로 표시할 �
 
 - 날짜: 2026-07-31
 - 상태: Accepted
-- 관련 문서: `14_CombatUI.md`, `Document/Plan/InGameUIPlan.md`, `Document/Plan/InGameUIDesign.md`, `Document/Plan/InGameUIRoadmap.md`
+- 관련 문서: `14_CombatUI.md`, `Document/Plan/Archive/InGameUIPlan.md`, `Document/Plan/InGameUIDesign.md`, `Document/Plan/Archive/InGameUIRoadmap.md`
 
 #### 결정
 
@@ -882,7 +882,7 @@ Widget
 
 - 날짜: 2026-07-31
 - 상태: Accepted
-- 관련 문서: `13_Fitting.md`, `14_CombatUI.md`, `Document/Plan/InGameUIPlan.md`, `Document/Plan/InGameUIDesign.md`, `Document/Plan/InGameUIRoadmap.md`
+- 관련 문서: `13_Fitting.md`, `14_CombatUI.md`, `Document/Plan/Archive/InGameUIPlan.md`, `Document/Plan/InGameUIDesign.md`, `Document/Plan/Archive/InGameUIRoadmap.md`
 
 #### 결정
 
@@ -935,7 +935,7 @@ Widget
 
 - 날짜: 2026-08-06
 - 상태: Accepted
-- 관련 문서: `14_CombatUI.md`, `Document/Plan/InGameUIVisualConcept.md`, `Document/Plan/InGameUIPlan.md`
+- 관련 문서: `14_CombatUI.md`, `Document/Plan/InGameUIVisualConcept.md`, `Document/Plan/Archive/InGameUIPlan.md`
 
 #### 결정
 
@@ -977,7 +977,7 @@ CarFight는 자동차 전투 게임이므로 일반 FPS, 우주선이나 항공�
 
 - 날짜: 2026-08-07
 - 상태: Accepted
-- 관련 문서: `14_CombatUI.md`, `Document/Plan/InGameUIVisualConcept.md`, `Document/Plan/InGameUIStyleSpec.md`, `Document/Plan/InGameUIRoadmap.md`
+- 관련 문서: `14_CombatUI.md`, `Document/Plan/InGameUIVisualConcept.md`, `Document/Plan/InGameUIStyleSpec.md`, `Document/Plan/Archive/InGameUIRoadmap.md`
 
 #### 결정
 

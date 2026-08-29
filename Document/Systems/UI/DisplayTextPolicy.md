@@ -173,7 +173,7 @@ VehicleCameraComp
 
 ## 9. 관련 문서
 
-- `Document/Systems/UI/VehicleDebug.md`
+- Historical legacy baseline: `Document/ProjectSSOT/Archive/Systems/UI/VehicleDebug.md`
 - `Document/Plan/CameraDebugPlan/CD_DebugDesign.md`
 - `Document/Plan/CameraDebugPlan/CD_Checklist.md`
 - `Document/Plan/CameraDebugPlan/CD_VerifyGuide.md`

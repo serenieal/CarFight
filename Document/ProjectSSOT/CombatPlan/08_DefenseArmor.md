@@ -813,7 +813,7 @@ WheelModule / EngineModule / TurretModule = DR-P1
 상세 데이터 계약, 피해 분배 공식, Legacy Fallback과 테스트 계획은 아래 문서를 우선한다.
 
 ```text
-Document/Plan/VehicleDefenseDamageDesign.md
+Document/Plan/Archive/VehicleDefenseDamageDesign.md
 ```
 
 ### 데이터 에셋 영향

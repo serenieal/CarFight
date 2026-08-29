@@ -77,7 +77,7 @@
 현재 전역 Active: 없음
 최근 완료: CF-FQ-024 전투 FX / Done / User PIE PASS
 현재 구현: Document/Systems/Combat/CombatFx.md
-완료 Plan: Document/Plan/CombatFxAudio/ImplementationDesign.md
+완료 Plan: Document/Plan/Archive/CombatFxAudio/ImplementationDesign.md
 검증 ID: CF-TC-021 PASS / Visual FX Only
 다음 Candidate: CF-FQ-019 주행·전투 반복 테스트
 일시중지: CF-FQ-026 타겟 선택 시스템 / TS-P0-08

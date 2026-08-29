@@ -1,6 +1,6 @@
 # CarFight — 05_TestChecklist
 
-> 문서 버전: v1.21.0
+> 문서 버전: v1.22.0
 > 작성일(Asia/Seoul): 2026-08-02
 > 문서 상태: Active
 > 역할: CarFight의 **완료된 Systems 기준 최소 회귀 테스트**를 관리한다.
@@ -352,7 +352,7 @@ DA_PFX_ThrusterTest
 - CF-FQ-028: Done / User PIE PASS / Systems Current
 - CF-TC-024: PASS
 - Current System: Document/Systems/Combat/Projectile.md v1.4.0
-- Completed Plan: Document/Plan/ProjectilePropulsionPlan.md v1.2.0
+- Completed Plan: Document/Plan/Archive/ProjectilePropulsionPlan.md v1.2.0
 ```
 
 검증 범위 해석:
@@ -402,7 +402,7 @@ DA_PFX_ThrusterTest
 - CF-FQ-027: Done / User PIE PASS / Systems Current
 - CF-TC-023: PASS
 - Current System: Document/Systems/Combat/Projectile.md v1.5.0
-- Completed Plan: Document/Plan/ProjectileFlightFxPlan.md v1.0.0
+- Completed Plan: Document/Plan/Archive/ProjectileFlightFxPlan.md v1.0.0
 - Automation: PASS — 2026-08-02 최신 로컬 결과에서 `PFX_P0_01.RuntimeContract` Success
 - Reusable Entry Point: Not Defined — 재실행 시 현재 도구·작업 범위를 다시 확인
 ```
@@ -441,26 +441,26 @@ DA_PFX_ThrusterTest
 | `CF-TC-002` | Vehicle | 휠 시각 동기화 | 휠 위치/조향/스핀 시각 반응이 정상 | `Document/Systems/Vehicles/WheelSync.md` | `TODO` |
 | `CF-TC-003` | Vehicle | 카메라 | 차량 기준 카메라가 정상 추적/회전 | `Document/Systems/Vehicles/VehicleCamera.md` | `TODO` |
 | `CF-TC-004` | Input | 기본 입력 등록 | Enhanced Input Mapping Context 등록 성공 | `Document/Systems/Input/Input.md` | `TODO` |
-| `CF-TC-005` | UI | 차량 디버그 표시 | 디버그 HUD/Panel이 필요한 조건에서 표시 | `Document/Systems/UI/VehicleDebug.md`, `Document/Systems/UI/VehicleDebugPanel.md` | `TODO` |
+| `CF-TC-005` | UI | 차량 디버그 표시 | 현재 VehicleDebugPanel이 필요한 조건에서 표시 | `Document/Systems/UI/VehicleDebugPanel.md` | `TODO` |
 | `CF-TC-006` | UI | 조준 Reticle | 조준 Reticle 표시/갱신이 정상이며 로컬 발사 결과 피드백 후보와 충돌하지 않음 | `Document/Systems/UI/AimReticle.md`, `Document/Systems/Combat/FireFeedback.md` | `PASS` |
-| `CF-TC-007` | Network | Dedicated Server 실행 | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/Systems/Network/ServerSpawn.md` | `N/A` |
-| `CF-TC-008` | Network | 1클라 Spawn/Possess | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/Systems/Network/ServerSpawn.md` | `N/A` |
-| `CF-TC-009` | Network | 2클라 Spawn/Possess | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/Systems/Network/ServerSpawn.md` | `N/A` |
-| `CF-TC-010` | Network | 입력 분리 | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/Systems/Network/ServerSpawn.md`, `Document/Systems/Input/Input.md` | `N/A` |
-| `CF-TC-011` | Network | 이동 복제 | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/Systems/Network/ServerSpawn.md` | `N/A` |
+| `CF-TC-007` | Network | Dedicated Server 실행 | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md` | `N/A` |
+| `CF-TC-008` | Network | 1클라 Spawn/Possess | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md` | `N/A` |
+| `CF-TC-009` | Network | 2클라 Spawn/Possess | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md` | `N/A` |
+| `CF-TC-010` | Network | 입력 분리 | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md`, `Document/Systems/Input/Input.md` | `N/A` |
+| `CF-TC-011` | Network | 이동 복제 | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md` | `N/A` |
 | `CF-TC-012` | Config | 런타임 설정 | 현재 Config 기준 경로/모드가 깨지지 않음 | `Document/Systems/Config/ProjectRuntimeConfig.md` | `TODO` |
 | `CF-TC-013` | Combat | 차량 무기 조준/발사 | 조준 방향으로 로컬 발사 명령이 생성되고 성공/불가/쿨다운 상태가 구분됨 | `Document/Systems/Combat/WeaponFire.md`, `Document/Systems/Vehicles/VehicleAim.md`, `Document/Systems/UI/VehicleDebugPanel.md` | `PARTIAL` |
 | `CF-TC-014` | Feedback | 발사 피드백/UI | 발사 성공/불가/쿨다운/무기 없음 상태가 Reticle 또는 FireFeedback UI 기준으로 읽힘 | `Document/Systems/Combat/FireFeedback.md`, `Document/Systems/UI/AimReticle.md`, `Document/Systems/Combat/WeaponFire.md` | `PASS` |
-| `CF-TC-015` | Combat | 시각 메시 기반 피격 판정 기록 | HitScan/Projectile이 SM_Body 시각 차체에서 명중하고 P0 고속 집중 조건에서도 DamageHitContext로 누락 없이 기록됨 | `Document/Plan/HitDamage/ImplementationDesign.md`, `Document/Plan/ProjectileContinuousCollision/ImplementationDesign.md`, `Document/Systems/Combat/DamageHitContext.md`, `Document/Systems/Combat/Projectile.md` | `PASS` |
+| `CF-TC-015` | Combat | 시각 메시 기반 피격 판정 기록 | HitScan/Projectile이 SM_Body 시각 차체에서 명중하고 P0 고속 집중 조건에서도 DamageHitContext로 누락 없이 기록됨 | `Document/Plan/Archive/HitDamage/ImplementationDesign.md`, `Document/Plan/Archive/ProjectileContinuousCollision/ImplementationDesign.md`, `Document/Systems/Combat/DamageHitContext.md`, `Document/Systems/Combat/Projectile.md` | `PASS` |
 | `CF-TC-016` | Combat | 피해 처리 | BaseDamage가 차량 체력에 정확히 한 번 누적되고 체력 0 이하에서 파괴 상태가 한 번만 전환됨 | `Document/Systems/Combat/HitDamage.md`, `Document/Systems/Combat/DamageHitContext.md` | `PASS` |
 | `CF-TC-017` | Loop | 주행/전투 반복 | 주행, 조준, 발사, 피격, 피해 루프를 반복해도 상태가 꼬이지 않음 | `Document/Systems/Combat/CoreLoop.md` 예정 | `TODO` |
 | `CF-TC-018` | Feel | 전투 템포/피드백 | 조작감, 발사 리듬, 피격 반응 문제가 기능 차단과 품질 후속으로 분리됨 | `Document/Systems/Combat/CombatFeel.md` 예정 | `TODO` |
-| `CF-TC-019` | Combat | Reticle·터렛·총구 정렬 | 동일 Aim Solution을 공유하고, `bAllowFireWhileAligning` true/false 양쪽에서 실제 발사 방향·거부 조건·TurretAligning·MuzzleBlocked 표시가 정책대로 동작함 | `Document/Plan/AimFireAlignment/ImplementationDesign.md`, `Document/Systems/Vehicles/VehicleAim.md`, `Document/Systems/Combat/WeaponFire.md`, `Document/Systems/UI/AimReticle.md` | `PASS` |
-| `CF-TC-020` | Combat | 고속 Projectile 연속 충돌 | 30 FPS + 기준 속도 4배에서 차량과 얇은 벽을 통과하지 않고 첫 Hit을 한 번 기록하며 Pool 재사용이 정상임 | `Document/Plan/ProjectileContinuousCollision/ImplementationDesign.md`, `Document/Systems/Combat/Projectile.md`, `Document/Systems/Combat/DamageHitContext.md` | `PASS` |
-| `CF-TC-021` | Presentation | 전투 FX | 승인된 발사, 첫 Impact와 최초 파괴에서 Niagara FX가 각 1회 발생하고 거부·중복 판정·반복 전투에서 중복 또는 잔류가 없으며 게임 오디오 참조가 0개임 | `Document/Systems/Combat/CombatFx.md`, `Document/Plan/CombatFxAudio/ImplementationDesign.md` | `PASS` |
-| `CF-TC-022` | UI | 조준·터렛 이중 레티클 | Image_CenterDot은 사용자 조준점을 유지하고 Image_WeaponReticle은 CurrentMuzzleDirection 기반 터렛 조준 지점을 탄종·착탄 위치와 무관하게 표시 | `Document/Plan/ReticleAimDirection/ImplementationDesign.md`, `Document/Systems/UI/AimReticle.md`, `Document/Systems/Vehicles/VehicleAim.md` | `PASS` |
-| `CF-TC-023` | Presentation | 투사체 비행 FX | Trail·Thruster를 독립·동시 사용하고 소켓·Fallback, Hit·LifeExpired Reset, 20발 이상 Pool 재사용, Ribbon History 무잔류와 30 FPS 고속 Bounds가 정상이며 기존 Impact·Damage를 유지 | `Document/Systems/Combat/Projectile.md`, `Document/Plan/ProjectileFlightFxPlan.md` | `PASS` |
-| `CF-TC-024` | Combat | 비유도 Rocket 추진 | InitialSpeed 분리, IgnitionDelay, Burning 고정 방향 가속, BurnedOut 관성 비행과 Burning 기반 Thruster가 동작하고 FX_Exhaust 소켓·독립 Scale이 적용됨 | `Document/Systems/Combat/Projectile.md`, `Document/Plan/ProjectilePropulsionPlan.md` | `PASS` |
+| `CF-TC-019` | Combat | Reticle·터렛·총구 정렬 | 동일 Aim Solution을 공유하고, `bAllowFireWhileAligning` true/false 양쪽에서 실제 발사 방향·거부 조건·TurretAligning·MuzzleBlocked 표시가 정책대로 동작함 | `Document/Plan/Archive/AimFireAlignment/ImplementationDesign.md`, `Document/Systems/Vehicles/VehicleAim.md`, `Document/Systems/Combat/WeaponFire.md`, `Document/Systems/UI/AimReticle.md` | `PASS` |
+| `CF-TC-020` | Combat | 고속 Projectile 연속 충돌 | 30 FPS + 기준 속도 4배에서 차량과 얇은 벽을 통과하지 않고 첫 Hit을 한 번 기록하며 Pool 재사용이 정상임 | `Document/Plan/Archive/ProjectileContinuousCollision/ImplementationDesign.md`, `Document/Systems/Combat/Projectile.md`, `Document/Systems/Combat/DamageHitContext.md` | `PASS` |
+| `CF-TC-021` | Presentation | 전투 FX | 승인된 발사, 첫 Impact와 최초 파괴에서 Niagara FX가 각 1회 발생하고 거부·중복 판정·반복 전투에서 중복 또는 잔류가 없으며 게임 오디오 참조가 0개임 | `Document/Systems/Combat/CombatFx.md`, `Document/Plan/Archive/CombatFxAudio/ImplementationDesign.md` | `PASS` |
+| `CF-TC-022` | UI | 조준·터렛 이중 레티클 | Image_CenterDot은 사용자 조준점을 유지하고 Image_WeaponReticle은 CurrentMuzzleDirection 기반 터렛 조준 지점을 탄종·착탄 위치와 무관하게 표시 | `Document/Plan/Archive/ReticleAimDirection/ImplementationDesign.md`, `Document/Systems/UI/AimReticle.md`, `Document/Systems/Vehicles/VehicleAim.md` | `PASS` |
+| `CF-TC-023` | Presentation | 투사체 비행 FX | Trail·Thruster를 독립·동시 사용하고 소켓·Fallback, Hit·LifeExpired Reset, 20발 이상 Pool 재사용, Ribbon History 무잔류와 30 FPS 고속 Bounds가 정상이며 기존 Impact·Damage를 유지 | `Document/Systems/Combat/Projectile.md`, `Document/Plan/Archive/ProjectileFlightFxPlan.md` | `PASS` |
+| `CF-TC-024` | Combat | 비유도 Rocket 추진 | InitialSpeed 분리, IgnitionDelay, Burning 고정 방향 가속, BurnedOut 관성 비행과 Burning 기반 Thruster가 동작하고 FX_Exhaust 소켓·독립 Scale이 적용됨 | `Document/Systems/Combat/Projectile.md`, `Document/Plan/Archive/ProjectilePropulsionPlan.md` | `PASS` |
 | `CF-TC-025` | Combat | Projectile Launch Handoff 회귀 | Direct 발사가 기존 위치·방향·초기 속도·추진·충돌·피해를 유지하고 Launch Context가 발사 후 런처와 독립하며 Pool 반환 시 초기화됨 | `Document/Plan/LauncherMissilePlan.md`, `Document/Systems/Combat/Projectile.md` | `PARTIAL` |
 | `CF-TC-026` | Combat | 모듈형 런처·Ejection | Muzzle 1→4→2→3, Ripple 4발·0.15초, 고정 Command Target, SequenceCompleted 쿨다운, 후속 발사 실패 정책, Direct·Angled·Vertical Release와 차량 속도 상속이 정책대로 동작함. 수동 취소는 호출 수단 구현 뒤 별도 검증함 | `Document/Plan/LauncherMissilePlan.md`, `Document/Plan/ModularLauncherPlan.md`, `Document/Systems/Combat/Projectile.md` | `PARTIAL` |
 
@@ -914,7 +914,7 @@ CF-TC-026 CarrierVelocityRatio 0·1 비교: PASS / FAIL
 ## 8.2 VehicleDebug / VehicleDebugPanel
 
 - 관련 문서:
-  - `Document/Systems/UI/VehicleDebug.md`
+  - Historical legacy baseline: `Document/ProjectSSOT/Archive/Systems/UI/VehicleDebug.md`
   - `Document/Systems/UI/VehicleDebugPanel.md`
 
 ### 확인 항목
@@ -1078,7 +1078,7 @@ CF-TC-026 CarrierVelocityRatio 0·1 비교: PASS / FAIL
 
 ## 10.1 ServerSpawn
 
-- 관련 문서: `Document/Systems/Network/ServerSpawn.md`
+- 관련 Historical 문서: `Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md`
 
 ### 확인 항목
 
@@ -1105,7 +1105,7 @@ CF-TC-026 CarrierVelocityRatio 0·1 비교: PASS / FAIL
 ## 10.2 2클라 소유권 / 입력 분리
 
 - 관련 문서:
-  - `Document/Systems/Network/ServerSpawn.md`
+  - Historical baseline: `Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md`
   - `Document/Systems/Input/Input.md`
 
 ### 확인 항목
@@ -1130,7 +1130,7 @@ CF-TC-026 CarrierVelocityRatio 0·1 비교: PASS / FAIL
 
 ## 10.3 이동 복제
 
-- 관련 문서: `Document/Systems/Network/ServerSpawn.md`
+- 관련 Historical 문서: `Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md`
 
 ### 확인 항목
 
@@ -1231,7 +1231,7 @@ CF-TC-026 CarrierVelocityRatio 0·1 비교: PASS / FAIL
 
 ## 15. 문서 버전 관리
 
-- 현재 문서 버전: `v1.21.0`
+- 현재 문서 버전: `v1.22.0`
 - 문서 상태: `Active`
 
 ### 버전 증가 기준
@@ -1245,6 +1245,14 @@ CF-TC-026 CarrierVelocityRatio 0·1 비교: PASS / FAIL
 ---
 
 ## 16. 체인지로그
+
+### v1.22.0 - 2026-08-22
+
+```text
+- 2026-08-22 문서 물리 정리 결과를 반영해 완료 Plan 검증 근거를 실제 Document/Plan/Archive 경로로 교정했다.
+- Decommissioned ServerSpawn과 레거시 WBP_VehicleDebug의 회귀 참고 경로를 ProjectSSOT/Archive/Systems로 교정했다.
+- 기존 PASS/PARTIAL/TODO/N/A 판정과 사용자 검증 결과는 변경하지 않았다.
+```
 
 ### v1.21.0 - 2026-08-02
 
@@ -1414,7 +1422,7 @@ CF-TC-026 CarrierVelocityRatio 0·1 비교: PASS / FAIL
 - CF-TC-020 고속 Projectile 연속 충돌 테스트 추가
 - DesiredAimTargetLocation, AimAlignmentError, Muzzle obstruction 기준 추가
 - Sweep/Sub-stepping, 보조 Sphere Sweep, 중복 Impact 방지 테스트 기준 추가
-- Document/Plan/AimFireAlignment 및 ProjectileContinuousCollision 설계 문서 연결
+- Document/Plan/Archive/AimFireAlignment 및 Document/Plan/Archive/ProjectileContinuousCollision 설계 문서 연결
 ```
 
 ### v1.5.0 - 2026-07-13
@@ -1424,7 +1432,7 @@ CF-TC-026 CarrierVelocityRatio 0·1 비교: PASS / FAIL
 - SM_Body를 시각 차체 기반 무기 피격 표면으로 전환한다는 테스트 원칙 추가
 - CF-TC-015를 시각 메시 기반 HitScan/Projectile 피격 판정 기록 기준으로 보강
 - VehicleMesh 무기 Query 제외, SM_Body 명중, HitComponent 확인, 차량 주행 물리 회귀 검증 항목 추가
-- Document/Plan/HitDamage/ImplementationDesign.md를 CF-TC-015 관련 설계 문서로 연결
+- Document/Plan/Archive/HitDamage/ImplementationDesign.md를 CF-TC-015 관련 Historical 설계 문서로 연결
 ```
 
 ### v1.4.0 - 2026-07-13
@@ -1495,7 +1503,7 @@ CF-TC-026 CarrierVelocityRatio 0·1 비교: PASS / FAIL
 ```text
 - CF-TC-024는 PASS이며 CF-FQ-028 완료 범위의 최소 회귀 기준으로 사용한다.
 - 발사체 추진과 지속형 FX의 현재 구현 판단은 Document/Systems/Combat/Projectile.md를 우선한다.
-- ProjectilePropulsionPlan.md는 완료 당시 검증 기록이다.
+- `Document/Plan/Archive/ProjectilePropulsionPlan.md`는 완료 당시 검증 기록이다.
 - 반복 전투 확장 회귀는 CF-FQ-019가 소유하며 자동 착수하지 않는다.
 - CF-TC-023은 별도 전체 Flight FX 체크리스트 완료 전까지 PASS로 해석하지 않는다.
 ```
@@ -1531,7 +1539,7 @@ CF-TC-026 CarrierVelocityRatio 0·1 비교: PASS / FAIL
 
 ```text
 - CF-TC-021은 구현 전 TODO이며 PASS 또는 PARTIAL로 해석하지 않는다.
-- 테스트 기준은 Document/Plan/CombatFxAudio/ImplementationDesign.md를 사용한다.
+- 완료 당시 테스트 기준은 Document/Plan/Archive/CombatFxAudio/ImplementationDesign.md에 보존한다.
 - 사용자 PIE 확인 전에는 CF-FQ-024 Done 또는 CombatFxAudio Systems 승격을 기록하지 않는다.
 - 기존 CF-TC-014, 015, 016, 019, 020의 PASS 상태는 유지한다.
 ```

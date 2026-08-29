@@ -222,12 +222,12 @@ Projectile                     = Projectile Object Type
 3. 장갑·모듈·범위 피해는 별도 FeatureQueue 승인 후 진행
 ```
 
-관련 설계:
+관련 완료 설계·검증 evidence:
 
 ```text
-Document/Plan/HitDamage/ImplementationDesign.md
-Document/Plan/AimFireAlignment/ImplementationDesign.md
-Document/Plan/ProjectileContinuousCollision/ImplementationDesign.md
+Document/Plan/Archive/HitDamage/ImplementationDesign.md
+Document/Plan/Archive/AimFireAlignment/ImplementationDesign.md
+Document/Plan/Archive/ProjectileContinuousCollision/ImplementationDesign.md
 ```
 
 ---
@@ -432,7 +432,7 @@ UCFEquipmentPresetData.DefaultWeaponData
 ```text
 - 코드와 자산은 변경하지 않는다.
 - 현재 VehicleMesh Physics Asset 기반 피격 상태를 현행 구현으로 기록한다.
-- 시각 차체 기반 피격 전환은 Document/Plan/HitDamage/ImplementationDesign.md의 후속 코드 작업에서 수행한다.
+- 시각 차체 기반 피격 전환의 당시 설계·작업 기록은 `Document/Plan/Archive/HitDamage/ImplementationDesign.md`에 보존한다.
 - HitComponent 기록 필드가 추가되면 FCFDamageHitContext 사용처와 VehicleDebug 표시를 함께 갱신한다.
 ```
 
@@ -516,5 +516,5 @@ UCFEquipmentPresetData.DefaultWeaponData
   - `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp`
   - `UE/Source/CarFight_Re/Private/CFProjectileActor.cpp`
   - `/Game/CarFight/Vehicles/Blueprints/BP_CFVehiclePawn.BP_CFVehiclePawn` 자산 상세 덤프
-  - `Document/Plan/HitDamage/ImplementationDesign.md`
+  - `Document/Plan/Archive/HitDamage/ImplementationDesign.md`
 

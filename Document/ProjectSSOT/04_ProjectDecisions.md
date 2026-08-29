@@ -1,31 +1,33 @@
 # CarFight — 04_ProjectDecisions
 
-> 문서 버전: v1.8.0
+> 문서 버전: v1.9.0
 > 작성일(Asia/Seoul): 2026-07-24
-> 최근 갱신일(Asia/Seoul): 2026-08-08
+> 최근 갱신일(Asia/Seoul): 2026-08-22
 > 문서 상태: Active
 > 역할: CarFight 프로젝트 전체의 **구조 / 서버 / 관리툴 / 운영 / 데이터 흐름 결정**을 기록한다.
 
 ---
 
-## 0. 현재 우선순위 결정 — 전투 FX 활성화
+## 0. Historical Priority Checkpoint — 2026-07-24 전투 FX 활성화
 
-### 결정
+> 아래 블록은 2026-07-24 당시 우선순위 결정 기록이다. 현재 Active/우선순위 판단은 `Document/ActiveWork.md`, `02_Roadmap.md`, `03_FeatureQueue.md`를 우선한다. `CF-FQ-024`는 현재 Done이며 이 Historical checkpoint를 현재 착수 지시로 사용하지 않는다.
+
+### 당시 결정
 
 ```text
-- CF-FQ-024 전투 FX를 현재 단일 Active 작업으로 유지한다.
-- 현재 단계는 Phase 0 FAB FX 자산 반입과 후보 선별이다.
-- CF-FQ-026 타겟 선택 시스템은 TS-P0-00~07 Done / TS-P0-08 Paused 상태로 보존한다.
-- CF-FQ-024는 Document/Plan/CombatFxAudio/ImplementationDesign.md와 AssetPreparationChecklist.md를 대표 체크포인트로 사용한다.
+- CF-FQ-024 전투 FX를 당시 단일 Active 작업으로 유지했다.
+- 당시 단계는 Phase 0 FAB FX 자산 반입과 후보 선별이었다.
+- CF-FQ-026 타겟 선택 시스템은 TS-P0-00~07 Done / TS-P0-08 Paused 상태로 보존했다.
+- CF-FQ-024 완료 당시 설계·검증 근거는 Document/Plan/Archive/CombatFxAudio/ImplementationDesign.md와 AssetPreparationChecklist.md에 보존한다.
 ```
 
-### 영향
+### 당시 영향
 
 ```text
-- ActiveWork와 ProjectSSOT는 CF-FQ-024를 우선 복원한다.
-- 첫 작업은 반입된 FAB 콘텐츠의 NiagaraSystem 목록과 의존성을 확인하고 Muzzle·Impact·Destroyed 후보를 확정하는 것이다.
-- 기존 직접 조준, 발사, 피해, 이중 레티클과 TargetSelect 판정을 FX 연출이 다시 계산하거나 변경하지 않는다.
-- CF-FQ-026의 코드·에셋·Automation 결과와 TS-P0-08 결함 체크포인트는 그대로 유지한다.
+- 당시 ActiveWork와 ProjectSSOT는 CF-FQ-024를 우선 복원했다.
+- 당시 첫 작업은 반입된 FAB 콘텐츠의 NiagaraSystem 목록과 의존성을 확인하고 Muzzle·Impact·Destroyed 후보를 확정하는 것이었다.
+- 기존 직접 조준, 발사, 피해, 이중 레티클과 TargetSelect 판정을 FX 연출이 다시 계산하거나 변경하지 않는 원칙은 현재도 유효하다.
+- CF-FQ-026의 코드·에셋·Automation 결과와 TS-P0-08 체크포인트는 별도 Feature lifecycle이 소유한다.
 ```
 
 ---
@@ -108,8 +110,8 @@
 ### 영향
 
 ```text
-- 대표 설계는 Document/Plan/CombatFxAudio/ImplementationDesign.md v0.3.0 이상을 사용한다.
-- FAB 자산 반입과 후보 선별은 Document/Plan/CombatFxAudio/AssetPreparationChecklist.md를 사용한다.
+- 완료 당시 대표 설계는 `Document/Plan/Archive/CombatFxAudio/ImplementationDesign.md`에 보존한다.
+- 완료 당시 FAB 자산 반입과 후보 선별 기록은 `Document/Plan/Archive/CombatFxAudio/AssetPreparationChecklist.md`에 보존한다.
 - UCFCombatFxData는 Niagara 선택과 Scale / RotationOffset을 소유한다.
 - UCFProjectileData는 TrailAttachSocketName과 TrailFallbackRelativeTransform 같은 메시 구조 정보를 소유한다.
 - ACFProjectileActor에는 지속형 NiagaraComponent와 Activate / Deactivate / Reset 수명이 추가될 수 있다.
@@ -569,7 +571,7 @@ DataAsset 기반 참조를 사용하면 1인 개발 환경에서 C++ 재빌드 �
 
 ```text
 - CF-FQ-024를 P0 Active 기능으로 추가한다.
-- 대표 Plan은 Document/Plan/CombatFxAudio/ImplementationDesign.md를 사용한다.
+- 완료 당시 대표 Plan은 `Document/Plan/Archive/CombatFxAudio/ImplementationDesign.md`에 보존한다.
 - C++는 호출 시점, 요청 데이터, null 안전성, 중복 방지와 Projectile Pool 초기화를 담당한다.
 - Blueprint와 Unreal Editor 자산은 Niagara, Material, Decal과 DataAsset 연결을 담당한다.
 - 연출 자산 누락 또는 재생 실패는 발사·피해·파괴 결과를 취소하지 않는다.
@@ -621,7 +623,7 @@ DataAsset 기반 참조를 사용하면 1인 개발 환경에서 C++ 재빌드 �
 
 ## 7. 문서 버전 관리
 
-- 현재 문서 버전: `v1.8.0`
+- 현재 문서 버전: `v1.9.0`
 - 문서 상태: `Active`
 
 ### 버전 증가 기준
@@ -635,6 +637,14 @@ DataAsset 기반 참조를 사용하면 1인 개발 환경에서 C++ 재빌드 �
 ---
 
 ## 8. 체인지로그
+
+### v1.9.0 - 2026-08-22
+
+```text
+- 상단 CF-FQ-024 단일 Active 문구를 2026-07-24 Historical Priority Checkpoint로 재분류해 현재 작업 선택과 분리했다.
+- 물리 Archive로 이동한 CombatFx 완료 Plan·자산 준비 기록의 경로를 Document/Plan/Archive/CombatFxAudio로 교정했다.
+- Accepted 결정 내용과 당시 이유·영향은 보존하고 현재 Feature 상태를 새로 추정하지 않았다.
+```
 
 ### v1.8.0 - 2026-08-08
 

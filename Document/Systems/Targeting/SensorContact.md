@@ -1,11 +1,11 @@
 # SensorContact
 
-- Version: 1.1.0
-- Date: 2026-08-18
+- Version: 1.2.0
+- Date: 2026-08-22
 - Status: Current System
 - Feature: `CF-FQ-036 차량 센서·Contact Intelligence Runtime` + `CF-FQ-037 차량 스캐너 입력·장비 통합`
 - Acceptance: `SEN-P0-00~07 PASS` + `SCAN-P0-00~07 PASS`
-- Verification: 최종 UE 5.8 Editor Build `fcf52353d1f5440392d5e1c379f09ee3` PASS / Scanner Fitting 1/1 + Fitting 22/22 + Sensor 14/14 + Inventory 12/12 + TargetSelect RuntimeContract 1/1 PASS / SCAN-P0-06 USER PIE PASS
+- Verification: Sensor/Scanner Acceptance 보존 + CF-FQ-032 post-closure Identity/HUD remediation final Build `bd3640c616794cd7a54cc8a8afa4b021` PASS / `CarFight.Sensor` broad `dc4ba42db0fc477aa82112a903b2054b` 14/14 PASS / `SEN_P0_06.HUDSnapshot` `10825286b6d14994a31baa0295486aec` 1/1 PASS / 기존 SCAN-P0-06 USER PIE PASS 보존
 
 
 ---
@@ -21,7 +21,7 @@
 = 실제 C++
 → Document/Systems/Targeting/SensorContact.md
 → 관련 TargetSelect / HUD Current 구현
-→ Document/Plan/SensorContactPlan.md 완료 이력
+→ Document/Plan/Archive/SensorContactPlan.md 완료 이력
 ```
 
 이 시스템의 핵심 목적은 TargetSelect와 별개인 Sensor Runtime을 제공하는 것이다.
@@ -520,13 +520,16 @@ progress < IdentifiedThreshold
 
 progress >= IdentifiedThreshold
 → Identified
-→ private Source TargetId / DisplayName 공개 가능
+→ 유효한 private Source TargetId 공개 가능
+→ DisplayName은 명시 Player-facing source가 있을 때만 공개
 
 progress >= DetailedScanThreshold
 → DetailedScan
 ```
 
 Source TargetId가 `None`이면 threshold를 넘었다는 이유만으로 잘못된 Known identity를 만들지 않는다.
+
+차량의 현재 native Identity source는 `ACFVehiclePawn::VehicleData`의 유효한 `PrimaryAssetId.PrimaryAssetName`이다. 이는 Pawn Actor instance 이름과 독립된 차량 타입/모델 Identity이며, 개별 Contact 수명은 계속 `ContactId`가 소유한다. VehicleData가 없거나 PrimaryAssetId가 invalid면 TargetId는 `None`으로 fail-closed한다. 별도 Player-facing 차량 이름 source가 아직 없으므로 차량 `DisplayName`은 Empty를 유지하고 Actor `GetFName()/GetName()`을 TargetId/DisplayName fallback으로 사용하지 않는다.
 
 ---
 
@@ -1033,8 +1036,18 @@ Scanner test fixture에서 `V` 단발 입력, 5초 timed Active Scan 자동 종�
 
 ## 26. Migration
 
-- 완료 이후 Sensor의 현재 구현을 판단할 때 `Document/Plan/SensorContactPlan.md`의 old next gate보다 이 Current System과 실제 Source를 우선한다.
-- `SensorContactPlan.md`는 완료 당시 설계·검증 evidence를 보존하는 Historical + Retained Path 문서로 유지한다.
+### v1.1.0 -> v1.2.0
+
+- CF-FQ-032 post-closure code review에서 차량 Target Identity의 Actor-name fallback을 제거했다.
+- `ACFVehiclePawn`은 유효한 `VehicleData.PrimaryAssetId.PrimaryAssetName`만 안정 TargetId로 제공하고 VehicleData/PrimaryAssetId가 없으면 None으로 fail-closed한다.
+- Player-facing 차량 DisplayName은 명시 source 전까지 Empty를 유지한다. Sensor는 Empty DisplayName을 내부 Actor 이름으로 보충하지 않는다.
+- `ContactId`와 TargetId의 독립 책임, Detected 비공개, Identified public-contract valid KnownTargetId 조건은 유지한다.
+- final Sensor broad 14/14와 HUDSnapshot 1/1 PASS로 회귀를 확인했다.
+
+
+
+- 완료 이후 Sensor의 현재 구현을 판단할 때 `Document/Plan/Archive/SensorContactPlan.md`의 old next gate보다 이 Current System과 실제 Source를 우선한다.
+- `Document/Plan/Archive/SensorContactPlan.md`는 완료 당시 설계·검증 evidence를 보존하는 Historical + Archived Path 문서로 유지한다.
 - TargetSelect의 기존 후보 검색·선택 수명은 그대로 유지한다.
 - CF-FQ-032의 Radar/TargetPanel USER Visual과 CF-FQ-026 TS-P0-08 USER PIE는 CF-FQ-036/037 Done으로 자동 승격되지 않는다.
 - `ScannerIntegrationPlan.md`는 CF-FQ-037 완료 당시 fixture RCA·USER Acceptance·P0-07 승격 evidence를 보존하는 Historical + Retained Path 문서다.
@@ -1045,6 +1058,12 @@ Scanner test fixture에서 `V` 단발 입력, 5초 timed Active Scan 자동 종�
 ---
 
 ## 27. Changelog
+
+### v1.2.0 - 2026-08-22
+
+- Vehicle Target Identity의 Current source를 `VehicleData.PrimaryAssetId.PrimaryAssetName`으로 명시하고 Actor `GetFName/GetName` fallback 금지와 DisplayName fail-closed 계약을 추가했다.
+- Identified Sensor public contract의 유효 KnownTargetId 요구를 유지하면서 Player-facing 내부 UObject 이름 누출을 제거했다.
+- CF-FQ-032 remediation final Build `bd3640c616794cd7a54cc8a8afa4b021`, `CarFight.Sensor` broad `dc4ba42db0fc477aa82112a903b2054b` 14/14, HUDSnapshot `10825286b6d14994a31baa0295486aec` 1/1 PASS를 최신 관련 회귀 evidence로 연결했다.
 
 ### v1.1.0 - 2026-08-18
 
@@ -1078,5 +1097,5 @@ Scanner test fixture에서 `V` 단발 입력, 5초 timed Active Scan 자동 종�
   - `UE/Source/CarFight_Re/Private/CFVehicleSensorComp.cpp v1.5.0`
   - `UE/Source/CarFight_Re/Private/UI/CFHUDDataProvider.cpp v1.6.0`
   - `UE/Source/CarFight_Re/Public/UI/CFHUDViewData.h v1.4.0`
-- 완료 이력: `Document/Plan/SensorContactPlan.md`
+- 완료 이력: `Document/Plan/Archive/SensorContactPlan.md`
 - Current System: `Document/Systems/Targeting/SensorContact.md`

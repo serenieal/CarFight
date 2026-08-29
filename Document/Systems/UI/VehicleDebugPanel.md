@@ -11,7 +11,7 @@
 
 이 문서는 현재 CarFight 프로젝트에서 사용하는 최신 `VehicleDebug Panel` 구조를 기록한다.
 
-기존 `Document/Systems/UI/VehicleDebug.md`는 레거시 `WBP_VehicleDebug` 기준선 문서로 유지한다.
+기존 레거시 `WBP_VehicleDebug` 기준선 문서는 `Document/ProjectSSOT/Archive/Systems/UI/VehicleDebug.md`로 내려가 Historical 비교 기록으로 유지한다.
 현재 패널 구조, Navigation 방식, Selected Section 표시 방식, Camera / Aim / Weapon Debug 편입 상태는 이 문서를 기준으로 본다.
 
 현재 CarFight의 전투 구현 기준은 **싱글플레이 로컬 차량 전투**다.
@@ -581,7 +581,7 @@ ValueText = 카메라 압축
 
 ```text
 - Document/Systems/UI/DisplayTextPolicy.md
-- Document/Systems/UI/VehicleDebug.md
+- Historical legacy baseline: Document/ProjectSSOT/Archive/Systems/UI/VehicleDebug.md
 - Document/Systems/UI/AimReticle.md
 - Document/Systems/Vehicles/VehicleCamera.md
 - Document/Systems/Vehicles/VehicleAim.md

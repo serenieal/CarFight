@@ -228,10 +228,10 @@ AimDirection = 실제 최종 발사 방향
 - MuzzleBlocked는 실제 최종 AimDirection 경로를 검사하며 정책과 관계없이 거부한다.
 ```
 
-이 구현의 설계와 검증 기준은 아래 문서를 우선한다.
+이 구현의 완료 당시 설계와 검증 evidence는 아래 Historical 문서에 보존한다.
 
 ```text
-Document/Plan/AimFireAlignment/ImplementationDesign.md
+Document/Plan/Archive/AimFireAlignment/ImplementationDesign.md
 ```
 
 현재 구조 요약:
@@ -278,7 +278,7 @@ AimDirection
 `TurretReticleWorldLocation`은 `AimOrigin + CurrentMuzzleDirection × TurretReticleDistance`이며, 비교 거리는 `AimOrigin`에서 `AimTargetLocation`까지의 거리다.
 UI는 이 터렛 레티클 전용 값만 소비하고 기존 `ECFWeaponReticleMode`와 `WeaponPreviewWorldLocation`은 Legacy Debug로만 보존한다.
 공식 에디터 빌드와 2026-07-21 사용자 PIE에서 계획한 터렛 레티클 동작을 확인했다.
-세부 기준은 `Document/Plan/ReticleAimDirection/ImplementationDesign.md` v0.3.2를 따른다.
+완료 당시 세부 기준은 `Document/Plan/Archive/ReticleAimDirection/ImplementationDesign.md` v0.3.2에 보존한다. 현재 구현 판단은 이 Systems 문서와 실제 Source를 우선한다.
 
 ---
 
@@ -883,7 +883,7 @@ HandleFireStarted
 - 현재 Camera Aim Trace는 ECC_Visibility, 실제 무기 Trace는 WeaponHit을 사용한다.
 - 현재 LocalAimDirection은 차량 Actor 위치, 터렛 방향은 TurretYawPivot 위치, 최종 발사 방향은 Muzzle Socket X축을 기준으로 한다.
 - 조준 정렬 구현 전까지 이 방향들을 동일한 Aim Solution으로 간주하지 않는다.
-- 목표 구조와 코드 변경 기준은 Document/Plan/AimFireAlignment/ImplementationDesign.md를 우선한다.
+- 완료 당시 목표 구조와 코드 변경 기준은 `Document/Plan/Archive/AimFireAlignment/ImplementationDesign.md`에 보존한다.
 - 현재 코드와 데이터 마이그레이션은 이 문서 갱신에서 수행하지 않는다.
 ```
 
@@ -975,7 +975,7 @@ HandleFireStarted
 - Camera, Vehicle Actor, Turret Pivot, Muzzle Socket이 서로 다른 방향 기준을 사용하는 현재 구조 기록
 - Camera Aim Trace ECC_Visibility와 실제 WeaponHit Trace 채널 불일치 기록
 - DesiredAimTargetLocation SSOT, Muzzle 기준 요구 방향, 터렛 정렬 오차, 총구 장애물 검사를 후속 설계로 연결
-- Document/Plan/AimFireAlignment/ImplementationDesign.md 기준 문서 추가
+- `Document/Plan/Archive/AimFireAlignment/ImplementationDesign.md` Historical evidence 연결
 ```
 
 ### v1.2.0 - 2026-07-09

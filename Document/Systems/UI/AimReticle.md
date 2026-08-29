@@ -1,9 +1,9 @@
 # AimReticle
 
-- Version: 1.8.1
-- Date: 2026-07-21
-- Status: Current / P0 Aim, FireFeedback and CF-FQ-025 Turret Reticle User PIE Verified
-- Scope: 로컬 Aim/FireFeedback 표시의 현재 구현과 조준 레티클·터렛 레티클의 확정 의미 계약
+- Version: 1.10.0
+- Date: 2026-08-22
+- Status: Current / P0 Aim·FireFeedback Verified / UI-P0-04 USER PASS / Post-Closure Refresh Optimization Accepted
+- Scope: 로컬 Aim/FireFeedback 표시 의미와 UCFUISubsystem 소유 AimReticle 수명·Rebind의 현재 구현 계약
 
 ---
 
@@ -48,19 +48,18 @@ RepAimVisualState -> AimVisualState
 이 문서에서 말하는 `AimReticle` 기능은 아래 요소를 묶어서 본다.
 
 - C++ 부모 위젯: `UCFAimReticleWidget`
-- 대표 생성 주체: `ACFVehiclePawn`
+- 대표 생성·수명 주체: `UCFUISubsystem`
+- Current Widget Class 설정: `UCFUISubsystem::DefaultAimReticleWidgetClass`
+- 현재 Layer: `ECFUILayer::HUD`, Local ZOrder 10
+- 표시 조건 공급: 현재 Possessed `ACFVehiclePawn::ShouldShowAimReticle()`
 - Aim 상태 공급 주체: `UCFVehicleAimComp`
 - 현재 표시 상태 enum: `ECFVehicleReticleState`
 - 현재 Aim 표시 데이터: `FCFVehicleLocalAimState`
 - 현재 FireFeedback 표시 데이터: `FCFVehicleFireFeedbackViewData`
-- 현재 Pawn 설정:
-  - `AimReticleWidgetClass`
-  - `AimReticleWidgetInstance`
-  - `bShowAimReticle`
-  - `AimReticleZOrder`
+- Legacy Pawn 직렬화 호환 Property/API는 남아 있지만 자동 생성 수명 owner가 아니다.
 
 즉, 현재 기준 `AimReticle`은 화면에 조준점을 그리는 WBP 하나만을 뜻하지 않는다.
-차량 Pawn이 로컬 플레이어 조건에서 위젯을 만들고, 위젯이 `VehicleAimComp`의 Local Aim 상태를 읽어 표시/숨김/텍스트를 갱신하는 UI 표시 흐름 전체로 본다.
+LocalPlayer `UCFUISubsystem`이 기존 `WBP_AimReticle`을 HUD Layer에 단일 생성하고 Current Vehicle Pawn으로 Rebind하며, 위젯이 약한 Pawn 참조를 통해 `VehicleAimComp`의 Local Aim 상태와 Pawn FireFeedback 표시 데이터를 읽어 갱신하는 UI 흐름 전체로 본다.
 
 ---
 
@@ -74,7 +73,7 @@ RepAimVisualState -> AimVisualState
 2. Pawn의 `VehicleAimComp`에서 Local Aim 상태를 읽는다.
 3. Reticle 상태를 캐시하고 선택적 TextBlock에 반영한다.
 4. Pawn 표시 조건은 Root Visibility로 따르고, Reticle 상태 기반 Hidden은 RenderOpacity로 표현한다.
-5. 매 프레임 자동 갱신을 지원한다.
+5. 매 프레임 자동 갱신을 지원하되 한 Tick에서 Pawn/Aim/FireFeedback cache를 먼저 확정한 뒤 Text·WeaponReticle·Visibility를 각각 한 번만 반영한다.
 6. 내부 enum 상태를 한국어 표시 텍스트로 변환한다.
 
 즉 현재 `AimReticle`은 조준 가능 여부나 발사 판정을 직접 계산하지 않는다. `VehicleAimComp`의 기본 Reticle 상태와 `ACFVehiclePawn::BuildFireFeedbackViewData()`의 표시 데이터를 합쳐 화면에 반영하는 UI 계층이다.
@@ -140,10 +139,10 @@ Reticle 목표점 = Camera Aim Trace의 AimHitLocation
 - 정렬 완료 후 실제 발사
 ```
 
-상세 구현 전 설계:
+상세 완료 설계·검증 evidence:
 
 ```text
-Document/Plan/AimFireAlignment/ImplementationDesign.md
+Document/Plan/Archive/AimFireAlignment/ImplementationDesign.md
 ```
 
 현재 `TurretAligning` 상태는 `OutOfArc`와 분리한다.
@@ -191,7 +190,7 @@ Image_WeaponReticle
 - 과거 정렬 완료 후 탄착 일치 검증은 발사 방향 정합성 증거이며 Image_WeaponReticle의 의미 정의가 아니다.
 ```
 
-최신 세부 구현 기준은 `Document/Plan/ReticleAimDirection/ImplementationDesign.md` v0.3.2를 따른다.
+완료 당시 세부 구현 기준은 `Document/Plan/Archive/ReticleAimDirection/ImplementationDesign.md` v0.3.2에 보존한다. 현재 구현 판단은 이 Systems 문서와 실제 Source를 우선한다.
 
 ---
 
@@ -251,9 +250,9 @@ OutOfArc != 무조건 발사 불가
 
 ## 7. 현재 동작 방식
 
-### 7.1 Pawn 쪽 생성 조건
+### 7.1 현재 표시 조건
 
-`ACFVehiclePawn::ShouldShowAimReticle()`이 현재 표시 가능 조건을 판단한다.
+`ACFVehiclePawn::ShouldShowAimReticle()`이 현재 Vehicle Pawn의 Reticle 표시 가능 조건을 판단한다.
 
 현재 조건:
 
@@ -263,56 +262,58 @@ OutOfArc != 무조건 발사 불가
 - IsLocallyControlled() == true
 ```
 
-즉 현재 Reticle은 **로컬 제어 Pawn에서만 보이는 Viewport UI**다.
-Dedicated Server 조건은 과거 멀티플레이 기능을 활성 범위로 둔다는 뜻이 아니라, UI를 서버 전용 실행 환경에서 만들지 않기 위한 안전 조건으로 본다.
+Reticle Widget의 생성 수명은 Pawn이 아니라 `UCFUISubsystem`이 소유한다. UISubsystem은 현재 Possessed Pawn을 `ACFVehiclePawn`으로 해석한 뒤 `ShouldShowAimReticle()` 결과에 따라 Root Visibility를 `HitTestInvisible` 또는 `Collapsed`로 적용한다.
 
-### 7.2 Pawn 쪽 생성 흐름
+### 7.2 UISubsystem 생성 흐름
 
-`ACFVehiclePawn::CreateAimReticleWidget()`는 현재 아래 순서로 동작한다.
+`UCFUISubsystem::CreateAimReticleWidget()`의 현재 흐름은 아래와 같다.
 
-1. 이미 `AimReticleWidgetInstance`가 있으면 `RefreshAimReticleWidget()` 후 기존 인스턴스 반환
-2. `ShouldShowAimReticle()`이 false면 생성하지 않음
-3. `AimReticleWidgetClass`가 없으면 생성하지 않음
-4. Controller를 `APlayerController`로 캐스팅
-5. `CreateWidget<UCFAimReticleWidget>()` 호출
-6. 생성된 위젯을 `AimReticleWidgetInstance`에 저장
-7. `SetVehiclePawnRef(this)` 호출
-8. `AddToViewport(AimReticleZOrder)` 호출
-9. `RefreshAimReticleWidget()` 호출
+1. 기존 AimReticle이 이미 HUD Layer의 올바른 부모에 있으면 새로 만들지 않고 Current Pawn Rebind만 수행
+2. 잘못된 기존 인스턴스가 있으면 먼저 정리
+3. 현재 LocalPlayer의 `ACFPlayerController`, UI Root와 `DefaultAimReticleWidgetClass` 해석 결과 확인
+4. Config의 기존 `WBP_AimReticle` Class로 `CreateWidget<UCFAimReticleWidget>()`
+5. `UCFUIRootWidget`의 `ECFUILayer::HUD`에 Local ZOrder 10으로 추가
+6. `RebindAimReticleToCurrentPawn()` 수행
 
 현재 의미:
 
 ```text
-- Reticle 생성은 Pawn이 주도한다.
-- 위젯은 생성 직후 표시 대상 Pawn을 받는다.
-- Viewport ZOrder는 AimReticleZOrder로 조정한다.
+- Reticle 자동 생성·단일 수명은 LocalPlayer UCFUISubsystem이 소유한다.
+- Pawn direct AddToViewport 자동 생성 경로는 Current owner가 아니다.
+- 기존 Pawn의 AimReticleWidgetClass/API는 저장 Asset 호환 경계로 남아 있을 수 있다.
 ```
 
-### 7.3 Pawn 쪽 제거 흐름
+### 7.3 UISubsystem 제거 흐름
 
-`ACFVehiclePawn::DestroyAimReticleWidget()`은 현재 아래를 수행한다.
-
-```text
-- 위젯 인스턴스가 없으면 아무것도 하지 않음
-- 있으면 RemoveFromParent() 호출
-- AimReticleWidgetInstance = nullptr
-```
-
-### 7.4 Pawn 쪽 갱신 흐름
-
-`ACFVehiclePawn::RefreshAimReticleWidget()`은 현재 아래를 수행한다.
+`UCFUISubsystem::DestroyAimReticleWidget()`은 현재 아래를 수행한다.
 
 ```text
 - 인스턴스가 없으면 반환
-- SetVehiclePawnRef(this) 호출
-- ShouldShowAimReticle() 결과에 따라 위젯 가시성을 HitTestInvisible 또는 Collapsed로 설정
+- SetVehiclePawnRef(nullptr)로 이전 Pawn 참조 먼저 제거
+- RemoveFromParent()
+- UISubsystem 소유 AimReticleWidget 참조를 nullptr로 정리
 ```
+
+### 7.4 Possession Rebind 흐름
+
+`UCFUISubsystem::NotifyPossessedPawnChanged()`는 Current Pawn을 갱신한 뒤 `RebindAimReticleToCurrentPawn()`을 호출한다.
+
+```text
+CurrentPawn 변경
+  -> Cast<ACFVehiclePawn>
+  -> AimReticleWidget.SetVehiclePawnRef(CurrentVehiclePawn)
+  -> CurrentVehiclePawn && ShouldShowAimReticle()
+      ? HitTestInvisible
+      : Collapsed
+```
+
+`UCFAimReticleWidget::VehiclePawnRef`는 v1.9.0부터 약한 참조이므로 UISubsystem보다 짧은 Pawn lifetime을 소유하지 않는다.
 
 현재 의미:
 
 ```text
-- Pawn 표시 조건이 바뀌면 Reticle도 함께 숨김 처리될 수 있다.
-- 위젯 내부의 상태 기반 Hidden은 RenderOpacity 0으로만 표현하고, Root Visibility는 Pawn 표시 조건이 담당한다.
+- Pawn 표시 조건이 바뀌거나 Possession이 바뀌면 UISubsystem이 Reticle Root Visibility와 Source Pawn을 함께 Rebind한다.
+- 위젯 내부의 상태 기반 Hidden은 RenderOpacity 0으로 표현하고, Root Visibility는 UISubsystem의 Current Pawn 표시 조건이 담당한다.
 ```
 
 ### 7.5 위젯 내부 갱신 흐름
@@ -350,8 +351,8 @@ RefreshFromPawn
 - ACFVehiclePawn::bShowAimReticle이 true여야 한다.
 - Pawn이 Dedicated Server 환경이 아니어야 한다.
 - Pawn이 로컬 제어 상태여야 한다.
-- AimReticleWidgetClass가 설정되어 있어야 한다.
-- Pawn의 Controller가 APlayerController여야 한다.
+- UISubsystem의 `DefaultAimReticleWidgetClass`가 현재 `WBP_AimReticle`로 해석되어야 한다.
+- LocalPlayer의 `ACFPlayerController`와 UI Root가 유효해야 한다.
 - VehicleAimComp가 있어야 의미 있는 상태를 읽을 수 있다.
 - Pawn 표시 조건이 true이고 VehicleAimComp가 Hidden이 아닌 Reticle 상태를 반환해야 위젯 RenderOpacity가 1로 복구된다.
 ```
@@ -359,7 +360,8 @@ RefreshFromPawn
 조건 해석:
 
 ```text
-- Pawn 조건이 맞지 않으면 위젯이 생성되지 않거나 Collapsed된다.
+- UISubsystem/Root/Class 생성 전제가 없으면 Widget을 만들지 않는다.
+- Current Pawn 표시 조건이 맞지 않으면 기존 singleton Widget을 Collapsed한다.
 - AimComp 조건이 맞지 않으면 위젯은 안전하게 RenderOpacity 0인 Hidden 상태로 동작한다.
 - WBP에 TextBlock이 없어도 위젯 자체는 동작할 수 있다.
 ```
@@ -373,10 +375,15 @@ RefreshFromPawn
 - 종류: C++ UserWidget 부모 클래스
 - 현재 역할: Pawn/AimComp 상태, Weapon Aim Solution과 FireFeedback ViewData 읽기, 최종 Reticle 상태 결정, Optional 이미지/TextBlock 갱신, World To Screen 투영, 상태별 색상과 RenderOpacity 적용
 
+### `UCFUISubsystem`
+
+- 종류: LocalPlayer C++ Subsystem
+- 현재 역할: `WBP_AimReticle` 단일 생성·HUD Layer Z10 연결, Current Pawn Rebind, World/Controller 수명 정리와 Root Visibility 적용
+
 ### `ACFVehiclePawn`
 
 - 종류: C++ Pawn
-- 현재 역할: Reticle 위젯 생성/제거/갱신, Viewport 추가, `BuildFireFeedbackViewData()`를 통한 UI 표시 데이터 제공
+- 현재 역할: `ShouldShowAimReticle()` 표시 조건과 `BuildFireFeedbackViewData()` UI 표시 데이터 제공. Legacy AimReticle Class/API는 직렬화 호환 경계이며 자동 생성 수명 owner가 아님
 
 ### `UCFVehicleAimComp`
 
@@ -418,13 +425,20 @@ RefreshFromPawn
 현재 생성 및 연결 구조는 아래와 같다.
 
 ```text
+ACFPlayerController::BeginPlay
+  -> LocalPlayer UCFUISubsystem 등록
+      -> UCFUIRootWidget
+          -> HUD Layer
+              -> WBP_CFInGameHUD Z0
+              -> WBP_AimReticle Z10
+
+Possession 변경
+  -> UCFUISubsystem::NotifyPossessedPawnChanged
+  -> RebindAimReticleToCurrentPawn
+      -> UCFAimReticleWidget::SetVehiclePawnRef(CurrentVehiclePawn)
+      -> ACFVehiclePawn::ShouldShowAimReticle()로 Root Visibility 결정
+
 ACFVehiclePawn
-  -> ShouldShowAimReticle
-  -> CreateAimReticleWidget
-      -> CreateWidget<UCFAimReticleWidget>
-      -> SetVehiclePawnRef(this)
-      -> AddToViewport(AimReticleZOrder)
-      -> RefreshAimReticleWidget
   -> BuildFireFeedbackViewData
       -> LastFireResult / RejectReason
       -> VehicleWeaponComp Cooldown
@@ -432,7 +446,7 @@ ACFVehiclePawn
       -> FCFVehicleFireFeedbackViewData
 
 UCFAimReticleWidget
-  -> VehiclePawnRef.GetVehicleAimComp
+  -> Weak VehiclePawnRef.GetVehicleAimComp
   -> BaseReticleState / LocalAimState
   -> VehiclePawnRef.BuildFireFeedbackViewData
   -> CachedFireFeedbackViewData
@@ -440,6 +454,8 @@ UCFAimReticleWidget
   -> CachedReticleState / bCachedCanFire
   -> RefreshTextBlocks / RefreshVisualStyle / RenderOpacity 갱신
 ```
+
+전체 UI Root·Layer 수명과 Production HUD 경계는 `Document/Systems/UI/InGameUI.md`가 상위 Current owner다.
 
 ---
 
@@ -578,9 +594,10 @@ OutOfArc 전용 경고 정책:
 - GetReticleStateDisplayText() 표시 문구 변경
 - GetReticleHintDisplayText() 표시 문구 변경
 - UpdateReticleVisibility() 가시성 정책 변경
-- ACFVehiclePawn::CreateAimReticleWidget() 생성 흐름 변경
-- ShouldShowAimReticle() 표시 조건 변경
-- Reticle이 Common UI 레이어로 이동할 때
+- `UCFUISubsystem::CreateAimReticleWidget()` 생성·단일 수명·Rebind 흐름 변경
+- `DefaultAimReticleWidgetClass` 또는 HUD Layer/ZOrder 변경
+- `ShouldShowAimReticle()` 표시 조건 변경
+- AimReticle의 상위 UI Root/Layer 소유권 변경
 - 실제 WBP 자산명과 구조가 확정될 때
 - Reticle이 FireValidationState, LastFireResult, Cooldown 정보를 직접 읽도록 확장될 때
 - FireFeedback 문서가 신설되어 Reticle과 피드백 책임이 분리될 때
@@ -590,8 +607,8 @@ OutOfArc 전용 경고 정책:
 
 ## 17. 문서 버전 관리
 
-- 현재 문서 버전: `1.6.0`
-- 문서 상태: `Current / P0 Aim and FireFeedback User PIE Verified`
+- 현재 문서 버전: `1.10.0`
+- 문서 상태: `Current / P0 Aim·FireFeedback Verified / UI-P0-04 UISubsystem Singleton·Pawn Rebind USER PASS`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
   - 기능 설명 본문이 바뀌면 체인지로그도 같이 갱신한다.
@@ -615,6 +632,27 @@ OutOfArc 전용 경고 정책:
 ---
 
 ## 18. Migration
+
+### v1.9.0 -> v1.10.0
+
+```text
+- post-closure code review에서 확인한 AimReticle per-frame 중복 refresh만 교정한다.
+- 자동 Pawn Refresh는 FireFeedback/Reticle cache를 한 번에 갱신한 뒤 RefreshTextBlocks, RefreshWeaponReticle, UpdateReticleVisibility를 각각 한 번 수행한다.
+- SetVehiclePawnRef, NativeConstruct, NativeTick에서 RefreshFromPawn 이후 Visibility를 중복 호출하지 않는다.
+- 외부 Blueprint/C++ ApplyReticleState / ApplyFireFeedbackViewData API의 의미와 기존 USER PASS는 변경하지 않는다.
+- Widget Asset/Layout mutation은 0이다.
+```
+
+### v1.8.1 -> v1.9.0
+
+```text
+- AimReticle 자동 생성·단일 수명 owner를 ACFVehiclePawn이 아니라 LocalPlayer UCFUISubsystem Current 계약으로 교정한다.
+- WBP_AimReticle은 UCFUISubsystem의 DefaultAimReticleWidgetClass에서 생성되어 HUD Layer Z10에 존재한다.
+- Possession 변경은 UCFUISubsystem::NotifyPossessedPawnChanged -> RebindAimReticleToCurrentPawn 경로를 사용하고 UCFAimReticleWidget은 Weak VehiclePawnRef로 이전 Pawn lifetime을 소유하지 않는다.
+- ACFVehiclePawn의 Legacy AimReticle Class/API는 저장 Asset 호환 경계로 남길 수 있으나 자동 생성 owner로 해석하지 않는다.
+- Aim/FireFeedback/Turret Reticle 의미와 기존 USER PASS는 변경하지 않는다.
+- 이번 문서 교정은 Product Source/Config/Content Asset을 변경하지 않는다.
+```
 
 ### v1.5.0 -> v1.6.0
 
@@ -663,7 +701,7 @@ OutOfArc 전용 경고 정책:
 - Reticle 목표와 실제 발사 방향 통합 전까지 Ready 표시를 총구 정렬 완료와 같은 의미로 확장 해석하지 않는다.
 - v1.4.1에서 TurretAligning 상태를 ECFVehicleReticleState enum에 추가했다.
 - OutOfArc는 기계적 조준 범위 밖, TurretAligning은 범위 안에서의 회전 지연으로 분리한다.
-- 목표 구조와 UI 변경 기준은 Document/Plan/AimFireAlignment/ImplementationDesign.md를 우선한다.
+- 완료 당시 목표 구조와 UI 변경 기준은 `Document/Plan/Archive/AimFireAlignment/ImplementationDesign.md`에 보존한다.
 - 이 문서 갱신에서는 WBP와 C++를 변경하지 않는다.
 ```
 
@@ -692,6 +730,25 @@ OutOfArc 전용 경고 정책:
 ---
 
 ## 19. Changelog
+
+### v1.10.0 - 2026-08-22
+
+```text
+- UCFAimReticleWidget.cpp v1.10.0의 자동 Pawn Refresh hot-path를 Current 문서에 반영했다.
+- 한 Tick의 중복 Text/Visibility 갱신을 제거하고 최종 cache 확정 뒤 단일 visual refresh를 수행한다.
+- 외부 Apply API, UISubsystem singleton/Rebind, Weak Pawn, Aim/FireFeedback/Turret 의미 계약은 그대로 유지한다.
+- final Official Build bd3640c616794cd7a54cc8a8afa4b021 PASS와 CarFight.UI broad c7bbf0bf32c54d248c7cd3e122d700bc 44/44 PASS를 회귀 evidence로 사용한다.
+```
+
+### v1.9.0 - 2026-08-22
+
+```text
+- UI-P0-04 이후 Current AimReticle 생성·수명 owner를 UCFUISubsystem으로 교정했다.
+- WBP_AimReticle의 HUD Layer Z10 singleton, Current Pawn Rebind, Weak VehiclePawnRef와 World cleanup 경계를 기록했다.
+- ACFVehiclePawn은 ShouldShowAimReticle과 BuildFireFeedbackViewData source를 제공하고 Legacy AimReticle 직렬화/API는 호환 경계임을 명시했다.
+- 기존 Aim/FireFeedback/Turret Reticle USER PASS와 의미 계약은 변경하지 않았다.
+- 상위 인게임 UI Current owner로 Document/Systems/UI/InGameUI.md를 연결했다.
+```
 
 ### v1.8.1 - 2026-07-21
 
@@ -767,7 +824,7 @@ OutOfArc 전용 경고 정책:
 - 현재 Reticle을 조준 의도/피드백 표시 UI로 유지하되 실제 탄착 보장은 미완료로 명시
 - Command Reticle, TurretAligning, Weapon Reticle 후보 의미 정리
 - OutOfArc와 TurretAligning 분리 기준 추가
-- Document/Plan/AimFireAlignment/ImplementationDesign.md 연결
+- `Document/Plan/Archive/AimFireAlignment/ImplementationDesign.md` Historical evidence 연결
 ```
 
 ### v1.2.0 - 2026-07-13
@@ -804,10 +861,12 @@ OutOfArc 전용 경고 정책:
 
 ## 20. 마지막 확인 기준
 
-- 확인 일시: `2026-07-15`
+- 확인 일시: `2026-08-22`
 - 확인 근거:
   - `UE/Source/CarFight_Re/Public/UI/CFAimReticleWidget.h`
-    - `UE/Source/CarFight_Re/Private/UI/CFAimReticleWidget.cpp`
+  - `UE/Source/CarFight_Re/Private/UI/CFAimReticleWidget.cpp`
+  - `UE/Source/CarFight_Re/Public/UI/CFUISubsystem.h`
+  - `UE/Source/CarFight_Re/Private/UI/CFUISubsystem.cpp`
   - `UE/Source/CarFight_Re/Public/CFVehiclePawn.h`
   - `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp`
   - `UE/Source/CarFight_Re/Public/CFVehicleFireFeedbackTypes.h`

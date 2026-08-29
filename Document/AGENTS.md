@@ -1,7 +1,7 @@
 # CarFight Document 작업 규칙
 
-- 문서 버전: v2.2
-- 최근 갱신일: 2026-08-19
+- 문서 버전: v2.4
+- 최근 갱신일: 2026-08-22
 - 문서 상태: Current
 - 적용 범위: `Document/` 이하의 문서 읽기, 작성, 정리, 색인 갱신과 상태 기록
 
@@ -91,6 +91,18 @@ Current System 공식 승격
 일반 문서 변경에서 상위 색인 갱신은 최대 1개로 제한한다.
 구조 변경, ProjectSSOT 판단 변경, Plan의 Systems 승격과 깨진 링크 수정은 필요한 관련 문서를 함께 갱신할 수 있다.
 
+종합방침·공통 운영 규칙 갱신 요청은 다음 승격 게이트를 먼저 적용한다.
+
+```text
+- 새 결론이 Feature·세션을 넘어 반복 적용되는 영구·범용 규칙인지 먼저 판정한다. 아니면 종합방침 mutation은 0이다.
+- 특정 기능·도구의 상세 상태, RCA, Build/Test evidence와 작업 이력은 해당 authoritative owner에만 기록한다.
+- 같은 의미의 기존 규칙이 있으면 새 문단을 누적하지 않고 기존 규칙을 merge/replace한다.
+- 대응 규칙이 없고 실제로 새 영구·범용 규칙일 때만 최소 문구로 신규 추가한다.
+- 갱신 후 diff에서 중복과 불필요한 순증가가 없는지 확인한다.
+```
+
+사용자가 `종합방침에 반영해`, `종합방침에 적용할 사항이 있어?`처럼 짧게 요청해도 위 게이트를 자동 적용하며, 승격할 내용이 없으면 문서를 수정하지 않는다.
+
 ---
 
 ## 4. 검색 제외와 저장소 경계
@@ -158,7 +170,38 @@ D:\Work\CarFight_git\Tools\BuildEditor.bat
 
 ---
 
-## 6. Changelog
+## 6. 문서 Lifecycle 유지 규칙
+
+상세 Lifecycle과 Health Check 기준은 `Document/ProjectSSOT/README.md`를 따른다. 이 파일에는 다음 강제 원칙만 둔다.
+
+```text
+- Feature 종료 시 상세 Build·Automation·PIE·USER evidence는 대표 Plan이 보존한다.
+- 현재 구현 계약은 Systems가 소유한다.
+- FeatureQueue는 상태·next checkpoint·Current owner만 유지한다.
+- ActiveWork는 현재 복원 포인터만 유지하고 완료 상세 로그를 누적하지 않는다.
+- ProjectState/Roadmap은 프로젝트 수준 상태나 순서가 실제로 바뀔 때만 갱신한다.
+- 다른 authoritative owner가 없는 고유 정보는 문서 길이만을 이유로 삭제하지 않는다.
+- projection 압축만으로 기존 PASS를 무효화하거나 재검증하지 않는다.
+- 역할 이탈, stale pointer 또는 Current 상태 충돌이 나타날 때만 Health Check를 수행한다.
+```
+
+정리 후에도 현재 Active, Paused/Ready next gate, 반복 금지 evidence 위치, Current System owner와 Technical/USER 경계를 owner 링크를 따라 복원할 수 있어야 한다.
+
+---
+
+## 7. Changelog
+
+### v2.4 - 2026-08-22
+
+- 종합방침·공통 운영 규칙 갱신에 영구·범용성 판정, owner 분리, 기존 규칙 merge/replace 우선, 최소 신규 추가와 diff 순증가 검사를 강제하는 승격 게이트를 추가했다.
+- 사용자가 짧게 종합방침 반영을 요청해도 이 게이트를 자동 적용하고, 승격 대상이 없으면 mutation 0으로 종료하도록 고정했다.
+
+### v2.3 - 2026-08-22
+
+- Feature 종료 시 Plan·Systems·FeatureQueue·ActiveWork·ProjectState/Roadmap의 갱신 책임을 분리하는 Lifecycle 규칙을 추가했다.
+- Current projection의 중복 정보를 제거할 때 authoritative owner가 있는지 먼저 확인하는 비파괴 정리 원칙을 고정했다.
+- 달력 기반 정기 대청소 대신 역할 이탈·stale pointer·상태 충돌 신호 기반 Health Check를 사용하도록 했다.
+- 정리 후에도 Active, next gate, 반복 금지 evidence, Current owner와 USER/Technical 경계를 복원할 수 있어야 한다는 합격 기준을 추가했다.
 
 ### v2.2 - 2026-08-19
 
@@ -183,8 +226,10 @@ D:\Work\CarFight_git\Tools\BuildEditor.bat
 
 ---
 
-## 7. Migration
+## 8. Migration
 
+- v2.4부터 `종합방침에 반영` 요청은 단순 append 지시로 해석하지 않는다. 영구·범용 규칙 승격 필요성을 먼저 판정하고 기존 owner·규칙과 통합하며, 승격 대상이 없으면 문서를 변경하지 않는다.
+- 2026-08-22 문서 정상화 이후 `ActiveWork`, `FeatureQueue`, `ProjectState`, `Roadmap`에서 제거된 상세 진행 로그는 대표 Plan, Systems, Archive와 Git history가 계속 소유한다. projection 압축만을 이유로 기존 PASS를 재검증하거나 미검증 상태로 되돌리지 않는다.
 - v1.7의 Browser 작업지시서 강제 게이트는 폐기되었으며 현재 판단에 사용하지 않는다.
 - 기존 TaskSource, WorkOrder와 Codex YAML은 당시 기록 또는 선택 참고 자료로 유지한다.
 - `Document/Plan` 작업은 `Document/Plan/AGENTS.md`에서 시작한다.

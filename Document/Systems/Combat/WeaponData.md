@@ -12,7 +12,7 @@
 
 이 문서는 CarFight의 현재 `UCFWeaponData`가 차량 장착 무기의 **정적 데이터 SSOT**로서 어떤 값을 소유하고, Fitting·WeaponFire·Launcher·Ammo·TargetUse·Projectile/FX 계층이 그 값을 어떤 경계로 소비하는지 기록한다.
 
-이 문서는 미래 무기 설계서가 아니다. 현재 구현 판단은 실제 `UCFWeaponData` 코드와 이 Current System을 우선하며, CF-FQ-008의 작업 과정과 검증 이력은 `Document/Plan/WeaponDataPlan.md`를 Historical 기록으로 참고한다.
+이 문서는 미래 무기 설계서가 아니다. 현재 구현 판단은 실제 `UCFWeaponData` 코드와 이 Current System을 우선하며, CF-FQ-008의 작업 과정과 검증 이력은 `Document/Plan/Archive/WeaponDataPlan.md`를 Historical 기록으로 참고한다.
 
 핵심 원칙은 다음과 같다.
 
@@ -593,7 +593,7 @@ Runtime 상태 머신만 변경되고 WeaponData의 정적 입력 의미가 바�
 
 ```text
 - CF-FQ-008 완료 이후 WeaponData 현재 구현 판단은 이 문서와 실제 UCFWeaponData 코드를 우선한다.
-- Document/Plan/WeaponDataPlan.md는 완료 당시 설계·검증 이력을 보존하는 Historical + Retained Path 문서로 읽는다.
+- `Document/Plan/Archive/WeaponDataPlan.md`는 완료 당시 설계·검증 이력을 보존하는 Historical + Archived Path 문서로 읽는다.
 - 기존 WeaponData Content Asset을 새 Validator에 맞춘다는 이유만으로 자동 수정·저장하지 않는다.
 - FireRate=0, MaxRange=0, WeaponMass=0, DefaultProjectileData=None과 infinite-ammo 호환은 현재 허용 계약을 유지한다.
 - MagazineSize와 ReloadTimeSeconds는 현재 CF-FQ-031 Ammo Runtime의 정적 입력이며 “미구현 예약 필드”로 해석하지 않는다.
@@ -610,6 +610,6 @@ Runtime 상태 머신만 변경되고 WeaponData의 정적 입력 의미가 바�
   - Heat exact Automation `c736d1a6d6134a798a4b84452750e3d6` / Result SHA-256 `1abf0dc7a4788d6543c7933abef38433849ae57d569229cfab220f14937abad5`
   - `Document/Systems/Combat/Ammo.md v1.0.0`
   - `Document/Systems/Combat/WeaponFire.md`
-  - `Document/Plan/WeaponDataPlan.md v0.2.0`
+  - `Document/Plan/Archive/WeaponDataPlan.md v0.2.0`
   - Build `53e2dbaf04a3401b8ed89c906b308cdc`
   - Automation `eefe58aa87d74dcaa79a1764a5f7611b`

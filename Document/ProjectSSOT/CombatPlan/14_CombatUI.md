@@ -22,7 +22,7 @@
 = 타이틀 + 메인 메뉴 + 차고 + 피팅 + 임무 선택 + 로딩 + 결과 화면
 ```
 
-이 문서는 장기 전투 UI의 SSOT다. 실제 구현 순서와 검증 기준은 `Document/Plan/InGameUIPlan.md`를 따른다. 아직 구현되지 않은 항목을 Current System으로 해석하지 않는다.
+이 문서는 장기 전투 UI의 SSOT다. CF-FQ-032 완료 당시 구현 순서와 검증 evidence는 `Document/Plan/Archive/InGameUIPlan.md`에 보존돼 있고, 현재 구현은 `Document/Systems/UI/InGameUI.md`와 실제 Source/Asset을 우선한다. 아직 구현되지 않은 항목을 Current System으로 해석하지 않는다.
 
 ---
 

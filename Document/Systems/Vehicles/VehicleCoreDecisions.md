@@ -2,8 +2,8 @@
 
 > 역할: CarFight 현재 기준 차량 코어의 **유지 결정 / 교체 결정 / 임시 운영 판단**을 기록한다.
 > 상위 방향 문서: `00_Vision.md`
-> 문서 버전: v1.3.0
-> 마지막 정리(Asia/Seoul): 2026-07-13
+> 문서 버전: v1.4.2
+> 마지막 정리(Asia/Seoul): 2026-08-28
 
 
 ---
@@ -441,7 +441,7 @@
 ---
 
 ### CF-DL-0072 — WheelRadius 기준 휠 메시 크기 보정은 VehicleData 옵션으로 둔다
-- 판정: 확정
+- 판정: **Superseded / Legacy Compatibility** — 신규 정상 차량 제작 정책은 CF-DL-0076이 우선한다. 기존 `bAutoScaleWheelMeshToRadius` 코드/자산 호환은 migration 전까지 유지할 수 있다.
 - 결정:
   - 휠 StaticMesh 표시 크기를 `FrontWheelRadius` / `RearWheelRadius`에 맞추는 기능은 `WheelSync` Tick 보정이 아니라 `VehicleData.WheelVisualConfig`의 명시 옵션으로 둔다.
   - 기본값은 비활성화하고, DA에서 `bAutoScaleWheelMeshToRadius`를 켠 차량에만 `Wheel_Mesh_*` Uniform Scale을 적용한다.
@@ -452,6 +452,11 @@
   - 휠 반지름 불일치는 공통 WheelSync 회전/서스펜션 로직보다 VehicleData 해석 단계에서 정렬하는 편이 안전하다.
   - 자동 스케일을 WheelSync 기준 캡처 전에 적용하면 이후 스핀/조향/서스펜션 Tick과 책임이 섞이지 않는다.
         - `WheelRadius`가 물리와 시각에 모두 반영되어도 StaticMesh 바운드 중심이 원점에서 어긋나면 바퀴가 반지름 변경량만큼 계속 파묻혀 보일 수 있다.
+- 대체 관계:
+  - 이 결정의 구현은 기존 차량 호환용 Legacy path로만 남길 수 있다.
+  - 신규 정상 제작에서는 Physics WheelRadius가 Visual Scale을 결정하지 않는다.
+  - `bUseWheelSocketScale`와 `bAutoScaleWheelMeshToRadius`의 동시 사용/배율 곱셈은 금지한다.
+  - 상세 successor는 CF-DL-0076 및 `Document/Plan/WheelSizeAuthorityPlan.md`다.
 
 ---
 
@@ -471,7 +476,7 @@
 - 구현 전 미확정:
   - HitScan Trace Channel, Projectile Object Channel, 시각 차체 Collision Profile의 최종 이름과 슬롯은 별도 구현 설계에서 확정한다.
 - 관련 문서:
-  - `Document/Plan/HitDamage/ImplementationDesign.md`
+  - `Document/Plan/Archive/HitDamage/ImplementationDesign.md`
   - `Document/Systems/Combat/DamageHitContext.md`
 
 ---
@@ -492,7 +497,7 @@
 - 후속:
   - 중력 Projectile의 탄도 발사 해와 이동 표적 선행 조준은 별도 확장으로 둔다.
 - 관련 문서:
-  - `Document/Plan/AimFireAlignment/ImplementationDesign.md`
+  - `Document/Plan/Archive/AimFireAlignment/ImplementationDesign.md`
   - `Document/Systems/Vehicles/VehicleAim.md`
   - `Document/Systems/UI/AimReticle.md`
 
@@ -512,13 +517,51 @@
   - 실제 피해 처리 전에 HitContext가 속도와 프레임률에 관계없이 신뢰 가능해야 한다.
   - 중복 Impact 처리를 막지 않으면 한 발이 피해를 두 번 적용할 수 있다.
 - 관련 문서:
-  - `Document/Plan/ProjectileContinuousCollision/ImplementationDesign.md`
+  - `Document/Plan/Archive/ProjectileContinuousCollision/ImplementationDesign.md`
   - `Document/Systems/Combat/Projectile.md`
   - `Document/Systems/Combat/DamageHitContext.md`
 
 ---
 
+### CF-DL-0076 — 타이어 크기 Authority는 USER Wheel Socket Scale로 둔다
+- 판정: 확정 / Design Locked / Implementation Pending
+- 결정:
+  - 차량별 타이어의 적절한 크기는 AI/코드가 자동 판단하지 않고 USER가 차체 StaticMesh의 `Wheel_Anchor_FL/FR/RL/RR` Socket을 휠하우스에 맞춰 직접 배치·스케일해 결정한다.
+  - Wheel StaticMesh Bounds는 원본 메시의 실제 기하학적 치수를 읽는 Source일 뿐, 휠하우스에 적절한 Scale을 자동 선택하는 디자인 Authority가 아니다.
+  - `SocketScaleFromChassis`에 참여하는 Wheel StaticMesh는 차축 Y 기준으로 X/Z=직경, Y=폭을 사용하고 Bounds Size `100×25×100cm`를 canonical source dimension으로 둔다.
+  - Socket Scale은 X/Z=직경 배율, Y=폭 배율로 해석하며 일반 타이어는 X와 Z가 동일해야 한다.
+  - USER Socket Scale과 resolved Wheel Mesh Bounds에서 최종 Visual Wheel Scale과 Chaos `Front/Rear WheelRadius/Width`를 같은 source로 파생한다.
+  - Socket mode에서 파생된 Radius/Width는 VehicleData에 명시적으로 저장되는 Runtime 최종값이며 AI Reference Physics Proposal의 독립 덮어쓰기 대상이 아니다.
+  - 실차 Tire/Wheel Reference 값은 USER Socket 작성과 결과 sanity comparison에 사용하고 USER의 시각적 결정을 자동 보정하지 않는다.
+  - Chassis Socket은 authoring source이며 runtime permanent parent가 아니다. 기존 `Wheel_Anchor_* → Wheel_Mesh_* → UCFWheelSyncComp` transform ownership을 유지하고 Socket Scale은 Wheel_Mesh 시각 크기에 적용한다.
+  - 동일 타이어 디자인은 공용 Wheel StaticMesh를 재사용하며 P0에서는 `WheelMeshFL`을 기본 공용 메시로 사용하고 비어 있는 FR/RL/RR은 FL fallback을 허용하는 방향으로 구현한다.
+  - 기존 `bAutoScaleWheelMeshToRadius`는 CF-DL-0072 Legacy compatibility로만 남기며 신규 Socket mode와 동시에 적용하지 않는다.
+- 이유:
+  - 타이어가 휠하우스에 어울리는지는 기하학 수치만으로 결정할 수 없는 시각 디자인 판단이며 USER가 직접 보는 것이 더 신뢰 가능하다.
+  - 시각 타이어와 물리 Wheel 크기를 별도 입력으로 유지하면 타이어가 지면에 파묻히거나 떠 보이는 불일치가 생길 수 있다.
+  - 공용 Wheel Mesh + USER Socket Scale 구조는 차종별 크기 차이 때문에 Wheel Mesh를 복제하는 반복 작업을 제거하면서도 자동 시각 판단을 요구하지 않는다.
+  - VehicleData에 derived 물리값을 저장하면 기존 Resolver/Diff/Validation/Apply/Undo와 Runtime authority를 유지할 수 있다.
+- 현재 evidence:
+  - shared `/Game/CarFight/Vehicles/Shared/Tire/Wheel_FL` live Bounds는 `99.9990×24.9992×99.9990cm`, center≈0으로 canonical `100×25×100` PASS다.
+  - Wheel Size Authority 재감사에서 전체 ChassisLayoutFingerprint 대신 narrow WheelSizeSourceFingerprint, Step4 RelativeScale equality, enum append-only, Legacy AutoScale/AutoCenter/Clamp 비사용을 확정했다.
+- 관련 문서:
+  - `Document/Plan/WheelSizeAuthorityPlan.md v0.1.4`
+  - `Document/Plan/VehicleBuilderPlan.md v0.1.23`
+  - `Document/Plan/VehicleBuilderRoadmap.md v0.1.23`
+
+---
+
 ## 변경 이력
+- v1.4.2 (2026-08-28)
+  - CF-DL-0076 final Source audit에서 Socket mode field source를 ProjectDefault+Recipe explicit로 한정하고, Legacy WheelVisual validation과 AI private Profile wheel geometry가 새 Authority에 침범하지 않도록 설계 guard를 추가했다.
+  - 상세 owner를 WheelSizeAuthorityPlan v0.1.4 / VehicleBuilderPlan-Roadmap v0.1.23으로 갱신했다.
+- v1.4.1 (2026-08-28)
+  - CF-DL-0076 canonical Wheel source dimension을 `100×25×100cm`로 확정하고 actual shared Wheel_FL live Bounds/center PASS evidence를 반영했다.
+  - Wheel Size stale fingerprint 범위와 Legacy visual option 분리를 재감사 설계에 맞게 명확히 했다. Runtime 구현은 여전히 Pending이다.
+- v1.4.0 (2026-08-28)
+  - CF-DL-0072의 WheelRadius→Visual AutoScale 정책을 신규 정상 제작 기준에서는 Superseded / Legacy Compatibility로 재분류했다.
+  - CF-DL-0076으로 USER Wheel Socket Scale을 타이어 크기 Authority로 고정하고, 공용 Wheel Bounds + Socket Scale에서 Visual/Physics 크기를 함께 파생하는 설계를 확정했다.
+  - 실제 Runtime 구현은 아직 변경하지 않았으며 상세 구현 Gate는 `WheelSizeAuthorityPlan.md`가 소유한다.
 - v1.3.0 (2026-07-13)
   - Reticle 월드 목표점을 터렛/Muzzle/실제 발사의 단일 조준 기준으로 사용하는 결정을 CF-DL-0074로 추가했다.
   - 고속 Projectile의 Sweep/Sub-stepping/보조 Sphere Sweep과 단일 Impact 처리 결정을 CF-DL-0075로 추가했다.

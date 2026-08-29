@@ -12,7 +12,7 @@
 
 이 문서는 CarFight의 현재 차량 탄약·재장전 런타임이 실제로 어떤 데이터를 소유하고, 출격 피팅의 탄약 수량이 무기별 장전량과 차량 예비량으로 어떻게 구성되며, SingleCycle·Ripple·Salvo 발사와 Reload·HUD가 그 상태를 어떤 계약으로 소비하는지 기록한다.
 
-이 문서는 미래 설계서가 아니다. 현재 구현 판단은 이 문서와 실제 코드·에셋을 우선하며, 완료 당시 계획과 검증 이력은 `Document/Plan/AmmoSystemPlan.md`를 참고한다.
+이 문서는 미래 설계서가 아니다. 현재 구현 판단은 이 문서와 실제 코드·에셋을 우선하며, 완료 당시 계획과 검증 이력은 `Document/Plan/Archive/AmmoSystemPlan.md`를 참고한다.
 
 현재 기준은 싱글플레이 로컬 차량 전투다. 서버 권한 탄약 소유권, 복제, 보급·경제와 영구 저장은 이 Current System의 완료 범위가 아니다.
 
@@ -534,7 +534,7 @@ Launcher 자체는 아직 `CF-FQ-029 LM-P0-06` 체크포인트가 남아 있으�
 ## 16. Migration
 
 - CF-FQ-031의 현재 구현 판단은 이 문서와 실제 코드를 우선한다.
-- `Document/Plan/AmmoSystemPlan.md`는 완료 당시 구현·검증 체크포인트로 유지하며 Current System을 대체하지 않는다.
+- `Document/Plan/Archive/AmmoSystemPlan.md`는 완료 당시 구현·검증 체크포인트를 보존하는 Historical + Archived Path이며 Current System을 대체하지 않는다.
 - 기존 무한탄 WeaponData는 명시적인 finite Ammo 설정이 없으면 계속 기존 호환 동작을 유지한다.
 - `MaximumLoadableAmmoCount`를 인게임 현재 탄약으로 사용하지 않는다.
 - Launcher 전체 기능의 완료 여부는 별도 `CF-FQ-029` 체크포인트를 따른다.
