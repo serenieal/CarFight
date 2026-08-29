@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "project_id": "carfight",
+  "display_name": "CarFight",
+  "repositories": [
+    {
+      "repository_id": "carfight_repo",
+      "repository_role": "main_game",
+      "primary": true,
+      "mount_path": "."
+    },
+    {
+      "repository_id": "assetdump_repo",
+      "repository_role": "assetdump",
+      "primary": false,
+      "mount_path": "UE/Plugins/ue-assetdump"
+    }
+  ],
+  "capabilities": [
+    {
+      "capability_id": "unreal",
+      "capability_kind": "unreal",
+      "project_path": "UE/CarFight_Re.uproject",
+      "required_toolchain": {
+        "toolchain_id": "unreal_engine",
+        "version": "5.8"
+      },
+      "operations": [
+        {
+          "operation_id": "editor.build",
+          "operation_kind": "build",
+          "path": "Tools/BuildEditor.bat",
+          "arguments": [
+            "--non-interactive"
+          ],
+          "freshness": [
+            "static"
+          ]
+        },
+        {
+          "operation_id": "editor.start",
+          "operation_kind": "process",
+          "path": "Tools/RunEditor.ps1",
+          "arguments": [
+            "-WaitForReady"
+          ],
+          "freshness": [
+            "static"
+          ],
+          "lifecycle_action": "editor_start",
+          "ownership_scope": "server_owned",
+          "save_policy": "none"
+        },
+        {
+          "operation_id": "editor.stop",
+          "operation_kind": "process",
+          "path": "Tools/StopEditor.ps1",
+          "freshness": [
+            "static",
+            "runtime"
+          ],
+          "requires_runtime": true,
+          "runtime_kind": "editor",
+          "lifecycle_action": "editor_stop",
+          "ownership_scope": "server_owned",
+          "save_policy": "none"
+        },
+        {
+          "operation_id": "ue.read",
+          "operation_kind": "runtime",
+          "runtime_kind": "editor"
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "relation_id": "assetdump_component",
+      "relation_kind": "component",
+      "component_project_id": "assetdump",
+      "repository_id": "assetdump_repo",
+      "repository_role": "assetdump",
+      "mount_path": "UE/Plugins/ue-assetdump",
+      "git_kind": "submodule",
+      "consumer_capability": "unreal"
+    }
+  ],
+  "policy_refs": [
+    "AGENTS.md",
+    "Document/CodeWorkGate.md",
+    "UE/AGENTS.md"
+  ]
+}

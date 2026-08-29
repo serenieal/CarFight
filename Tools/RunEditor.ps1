@@ -1,11 +1,13 @@
 # CarFight Unreal Editor Browser 실행 래퍼.
-# Version: v1.2.0
+# Version: v1.3.0
 # Changelog:
+# - v1.3.0: Ready가 증명된 exact CarFight Editor PID를 `editor_process_id` evidence marker로 출력해 Project Runtime이 동일 Consumer process identity를 저장할 수 있게 했다.
 # - v1.2.0: 선택적 Ready 대기를 추가해 exact CarFight Editor 프로세스의 8100 listener ownership까지 확인한 뒤 Browser lifecycle start를 완료할 수 있게 했다.
 # - v1.1.0: Browser process.run용 검증 전용 모드와 정확한 CarFight Editor 프로세스 확인을 추가했다.
 # - v1.0.0: 기존 Tools/RunEditor.bat를 그대로 사용하는 PowerShell 래퍼를 추가했다.
 # Migration:
 # - 공식 수동 실행 진입점과 기본 RunEditor.ps1 호출은 기존처럼 프로세스 출현까지만 기다린다. Browser fixed preset만 -WaitForReady를 server-owned 인자로 사용해 8100 Ready까지 보장한다.
+# - `editor_process_id`는 이미 Ready ownership이 증명된 exact Consumer process의 관측 evidence일 뿐 lifecycle authority나 force/Save 권한을 추가하지 않는다.
 
 [CmdletBinding()]
 param(
@@ -98,6 +100,7 @@ if ($ExistingEditors.Count -gt 0) {
             Write-Output 'editor_ready=true'
             Write-Output 'port_8100_owned_by_editor=true'
             Write-Output "editor_process_count=$($ExistingRunningEditors.Count)"
+            Write-Output "editor_process_id=$([int]$ExistingRunningEditors[0].ProcessId)"
             exit 0
         }
 
@@ -144,6 +147,7 @@ while ((Get-Date) -lt $StartupDeadline) {
                 Write-Output 'editor_ready=true'
                 Write-Output 'port_8100_owned_by_editor=true'
                 Write-Output "editor_process_count=$($ReadyEditors.Count)"
+                Write-Output "editor_process_id=$([int]$ReadyEditors[0].ProcessId)"
                 Write-Output "launcher_exit_known=$($LauncherProcess.HasExited)"
                 exit 0
             }
