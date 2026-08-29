@@ -1,6 +1,6 @@
 # CarFight Active Work
 
-- 문서 버전: v4.43
+- 문서 버전: v4.44
 - 최근 갱신일: 2026-08-29
 - 문서 상태: Current
 - 역할: CarFight 게임 프로젝트에서 현재 실제로 진행 중인 작업을 선택하고 대표 Plan으로 연결하는 **세션 복원 projection**
@@ -28,10 +28,10 @@ Archive/Git = Historical 기록
 ### CF-FQ-039 Production UI Visual Rework — Active
 
 ```text
-대표 Plan: Document/Plan/InGameUIVisualPlan.md v0.1.33
-Roadmap: Document/Plan/InGameUIVisualRoadmap.md v0.1.27
+대표 Plan: Document/Plan/InGameUIVisual/InGameUIVisualPlan.md v0.1.33
+Roadmap: Document/Plan/InGameUIVisual/InGameUIVisualRoadmap.md v0.1.27
 Current Gate: VPR-P0-01 VehiclePanel Actual-Asset Prototype — VT12 SPEED/RPM + ARMOR COMPOSITION READY / USER COMPOSITION REVIEW PENDING / UE IMPORT 0 / PRODUCTION ASSET MUTATION 0
-Supporting Art Spec: Document/Plan/InGameUIHUDArtSpec.md v0.4.18
+Supporting Art Spec: Document/Plan/InGameUIVisual/InGameUIHUDArtSpec.md v0.4.18
 Current System 기준: Document/Systems/UI/InGameUI.md v1.1.10
 완료 기반: CF-FQ-032 Done / Document/Plan/Archive/InGameUIPlan.md v0.59.36
 ```
@@ -71,11 +71,11 @@ Sensor/Target Identity owner: Document/Systems/Targeting/SensorContact.md v1.2.0
 
 | Feature | 상태 | 대표 owner / 재개 지점 | 반복 금지 범위 |
 | --- | --- | --- | --- |
-| `CF-FQ-038` 차량 데이터 Authoring | Paused | `DataAuthoringPlan.md v0.2.52` + `DataAuthoringRoadmap.md v0.1.56` → Deprecated transition Technical Complete / CF-FQ-040 Builder Backend·Advanced Workspace 역할 / 다음 non-blocking `DEL6 compatibility retirement` 또는 `UA-08 quantitative comparison Deferred` | P0-12 USER PASS 7/8 유지. UA-01~08·P0-08~11·DG1~DG5·deprecation validation replay 금지. DEL6 Pending이라 physical Wizard deletion 금지 |
-| `CF-FQ-034` 차량 피팅·질량 | Paused | `VehicleFittingPlan.md v0.17.0` → `FIT-P0-07D USER Driving Feel Comparison` | FIT-P0-07A~07C 정량 Mobility evidence 반복 금지 |
-| `CF-FQ-029` 모듈형 런처 | Paused | `LauncherMissilePlan.md v0.14.0` → `LM-P0-06 USER PIE` | LM-P0-06A Failure Policy Technical PASS 반복 금지 |
+| `CF-FQ-038` 차량 데이터 Authoring | Paused | `Document/Plan/DataAuthoring/DataAuthoringPlan.md v0.2.52` + `Document/Plan/DataAuthoring/DataAuthoringRoadmap.md v0.1.56` → Deprecated transition Technical Complete / CF-FQ-040 Builder Backend·Advanced Workspace 역할 / 다음 non-blocking `DEL6 compatibility retirement` 또는 `UA-08 quantitative comparison Deferred` | P0-12 USER PASS 7/8 유지. UA-01~08·P0-08~11·DG1~DG5·deprecation validation replay 금지. DEL6 Pending이라 physical Wizard deletion 금지 |
+| `CF-FQ-034` 차량 피팅·질량 | Paused | `Document/Plan/VehicleFitting/VehicleFittingPlan.md v0.17.0` → `FIT-P0-07D USER Driving Feel Comparison` | FIT-P0-07A~07C 정량 Mobility evidence 반복 금지 |
+| `CF-FQ-029` 모듈형 런처 | Paused | `Document/Plan/LauncherMissile/LauncherMissilePlan.md v0.14.0` → `LM-P0-06 USER PIE` | LM-P0-06A Failure Policy Technical PASS 반복 금지 |
 | `CF-FQ-030` 미사일 비행·유도 | Ready | `CF-TC-027 Manual PIE Pending` | Persisted Asset Technical Verification과 Direct Runtime 기술 증거 반복 금지 |
-| `CF-FQ-040` Guided Vehicle Builder | Ready | `VehicleBuilderPlan.md v0.1.25` + `VehicleBuilderRoadmap.md v0.1.25` + `WheelSizeAuthorityPlan.md v0.1.11` + `VehicleBuilderProposalSpec.md v0.1.1` + `VehicleBuilderShellSpec.md v0.1.14` + `VehicleRefEvidenceSpec.md v0.1.1` → `VB-P0-09 In Progress / actual Wagon AI-only preparation complete / WSA-P0-06 Technical PASS / WSA-P0-07 USER Acceptance Ready / Step 1~8 Technical PASS preserved` | Actual Wagon Recipe는 shared `Wheel_FL` + `SocketScaleFromChassis` + Socket-derived Radius/Width adoption 4건 persisted. AI ResearchDraft는 2026 Volvo V60 Cross Country KR representative reference, private Profile 4종 initial seed, actual Front/Rear WheelClass와 WSA-safe wheel authority로 준비 완료했고 schema/consistency PASS다. UE Asset/Recipe/Target/Save mutation은 추가 수행하지 않았다. next는 출근 후 Step 1 Reference Set USER review → Companion explicit 생성 → Step 5 provenance/Profile proposal → Step 7 full Diff USER review/Apply → USER Save → Technical Driving + WSA-P0-07 PIE USER Acceptance. USER Scale 없는 legacy 자동 migration/AI tire-size decision/raw writer 금지 |
+| `CF-FQ-040` Guided Vehicle Builder | Ready | `Document/Plan/VehicleBuilder/VehicleBuilderPlan.md v0.1.25` + `Document/Plan/VehicleBuilder/VehicleBuilderRoadmap.md v0.1.25` + `Document/Plan/VehicleBuilder/WheelSizeAuthorityPlan.md v0.1.11` + `Document/Plan/VehicleBuilder/VehicleBuilderProposalSpec.md v0.1.1` + `Document/Plan/VehicleBuilder/VehicleBuilderShellSpec.md v0.1.14` + `Document/Plan/VehicleBuilder/VehicleRefEvidenceSpec.md v0.1.1` → `VB-P0-09 In Progress / actual Wagon AI-only preparation complete / WSA-P0-06 Technical PASS / WSA-P0-07 USER Acceptance Ready / Step 1~8 Technical PASS preserved` | Actual Wagon Recipe는 shared `Wheel_FL` + `SocketScaleFromChassis` + Socket-derived Radius/Width adoption 4건 persisted. AI ResearchDraft는 2026 Volvo V60 Cross Country KR representative reference, private Profile 4종 initial seed, actual Front/Rear WheelClass와 WSA-safe wheel authority로 준비 완료했고 schema/consistency PASS다. UE Asset/Recipe/Target/Save mutation은 추가 수행하지 않았다. next는 출근 후 Step 1 Reference Set USER review → Companion explicit 생성 → Step 5 provenance/Profile proposal → Step 7 full Diff USER review/Apply → USER Save → Technical Driving + WSA-P0-07 PIE USER Acceptance. USER Scale 없는 legacy 자동 migration/AI tire-size decision/raw writer 금지 |
 | `CF-FQ-035` 인벤토리 Foundation | Paused | FeatureQueue/대표 Plan → USER Field UI·Mobility | 기존 Inventory/Fitting Technical checkpoint 반복 금지 |
 | `CF-FQ-026` 타겟 선택 | Paused | FeatureQueue/대표 Plan → `TS-P0-08 USER PIE` | TS-P0-00~07 및 Remote Technical evidence 반복 금지 |
 | `CF-FQ-015` 차량 데이터 튜닝 | Paused | FeatureQueue/대표 Plan → `VD-P0-04 USER Tuning` | VD-P0-00~03 Technical evidence 반복 금지 |
@@ -123,6 +123,12 @@ ActiveWork가 다시 상세 Build/Automation/USER 로그를 누적하거나 서�
 ---
 
 ## 8. Changelog
+
+### v4.44 - 2026-08-29
+
+- Document/Plan 물리 구조 정리에 따라 Active/Paused/Ready 대표 Plan 포인터를 기능 폴더 경로로 교정했다.
+- CF-FQ-039/034/038/040의 Feature 상태·Gate·Acceptance 의미는 변경하지 않았고 경로 migration만 수행했다.
+- 완료·대체된 구형 Plan은 Archive로 이동하고 Generated Intermediate 잔여물은 Trash 격리했다.
 
 ### v4.43 - 2026-08-29
 

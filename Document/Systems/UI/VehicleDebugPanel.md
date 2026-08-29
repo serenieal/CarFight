@@ -589,8 +589,8 @@ ValueText = 카메라 압축
 - Document/Systems/Combat/FireFeedback.md
 - Document/Systems/Combat/Projectile.md
 - Document/Systems/Combat/DamageHitContext.md
-- Document/Plan/CameraDebugPlan/CD_DebugDesign.md
-- Document/Plan/CameraDebugPlan/CD_VerifyGuide.md
+- Document/Plan/Archive/CameraDebugPlan/CD_DebugDesign.md
+- Document/Plan/Archive/CameraDebugPlan/CD_VerifyGuide.md
 ```
 
 ---

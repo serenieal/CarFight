@@ -456,7 +456,7 @@
   - 이 결정의 구현은 기존 차량 호환용 Legacy path로만 남길 수 있다.
   - 신규 정상 제작에서는 Physics WheelRadius가 Visual Scale을 결정하지 않는다.
   - `bUseWheelSocketScale`와 `bAutoScaleWheelMeshToRadius`의 동시 사용/배율 곱셈은 금지한다.
-  - 상세 successor는 CF-DL-0076 및 `Document/Plan/WheelSizeAuthorityPlan.md`다.
+  - 상세 successor는 CF-DL-0076 및 `Document/Plan/VehicleBuilder/WheelSizeAuthorityPlan.md`다.
 
 ---
 
@@ -545,9 +545,9 @@
   - shared `/Game/CarFight/Vehicles/Shared/Tire/Wheel_FL` live Bounds는 `99.9990×24.9992×99.9990cm`, center≈0으로 canonical `100×25×100` PASS다.
   - Wheel Size Authority 재감사에서 전체 ChassisLayoutFingerprint 대신 narrow WheelSizeSourceFingerprint, Step4 RelativeScale equality, enum append-only, Legacy AutoScale/AutoCenter/Clamp 비사용을 확정했다.
 - 관련 문서:
-  - `Document/Plan/WheelSizeAuthorityPlan.md v0.1.4`
-  - `Document/Plan/VehicleBuilderPlan.md v0.1.23`
-  - `Document/Plan/VehicleBuilderRoadmap.md v0.1.23`
+  - `Document/Plan/VehicleBuilder/WheelSizeAuthorityPlan.md v0.1.4`
+  - `Document/Plan/VehicleBuilder/VehicleBuilderPlan.md v0.1.23`
+  - `Document/Plan/VehicleBuilder/VehicleBuilderRoadmap.md v0.1.23`
 
 ---
 

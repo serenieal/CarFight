@@ -1030,5 +1030,5 @@ HandleFireStarted
 - 2026-07-21: 과거 정렬 완료 후 탄착 일치 기록은 발사 방향 정합성 증거로 유지하되 터렛 레티클의 의미 정의와 분리했다.
 - 2026-06-19: 현재 코드에서 제거/변경된 서버 RPC 명칭을 현재 상태 문서의 현행 설명에서 제외했다.
 - 2026-07-09: OutOfArc / bLocalWithinWeaponArc를 발사 차단 기준으로 오해하지 않도록 현재 P0 싱글플레이 기준으로 재정리했다.
-- 과거 멀티플레이 설계 기록은 Document/Plan/AimPlan/CF_AimNet.md와 이전 체인지로그에 남긴다.
+- 과거 멀티플레이 설계 기록은 Document/Plan/Archive/AimPlan/CF_AimNet.md와 이전 체인지로그에 남긴다.
 ```

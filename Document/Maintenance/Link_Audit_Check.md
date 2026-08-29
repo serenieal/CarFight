@@ -1,7 +1,7 @@
 # Link Audit Checklist (Document)
 
-- 문서 버전: v3.0
-- 최근 갱신일: 2026-07-30
+- 문서 버전: v3.1
+- 최근 갱신일: 2026-08-29
 - 문서 상태: Current
 - 역할: `Document/`의 경로, 문서 역할, 색인 등록, 기본 읽기 범위를 점검하는 체크리스트
 
@@ -59,7 +59,7 @@
 
 - [ ] CarFight `Document/ActiveWork.md`에 AssetDump 또는 GoPyMCP의 내부 작업 ID와 마지막 작업 초점이 등록되지 않았다.
 - [ ] CarFight `Document/Plan/README.md`에 AssetDump 또는 GoPyMCP의 내부 Plan이 공식 Active Plan으로 등록되지 않았다.
-- [ ] `Document/Plan/AssetDumpPlan/README.md`가 공식 체크포인트가 아니라 폐기·이관 안내 문서로 표시되어 있다.
+- [ ] `Document/Plan/Archive/AssetDumpPlan/README.md`가 공식 체크포인트가 아니라 폐기·이관 안내 문서로 표시되어 있다.
 - [ ] `UE/Plugins/ue-assetdump/AGENTS.md`가 존재한다.
 - [ ] `UE/Plugins/ue-assetdump/Documents/Document_Entry.md`가 존재한다.
 - [ ] `UE/Plugins/ue-assetdump/Documents/ActiveWork.md`가 존재한다.
@@ -110,6 +110,11 @@
 - [ ] `Document/Plan/Archive/README.md`가 존재한다.
 - [ ] `Document/Plan/README.md`는 개별 파일이 아니라 Plan 폴더와 대표 진입 문서 단위로 관리된다.
 - [ ] `Document/Plan/Archive/README.md`는 Archive가 현재 착수 기준이 아니라고 명시한다.
+- [ ] `Document/Plan/` 루트에는 `AGENTS.md`, `README.md` 같은 저장소 대문 외 Current Plan 문서가 직접 흩어져 있지 않다.
+- [ ] Active / Paused / Ready Plan은 `Document/Plan/<Feature>/` 기능 폴더 단위로 묶여 있다.
+- [ ] 같은 Feature의 Plan / Roadmap / Design / Spec은 가능한 한 같은 기능 폴더에서 탐색된다.
+- [ ] Done / Superseded / Deprecated 문서는 Current root가 아니라 `Document/Plan/Archive/<Feature>/`에서 탐색된다.
+- [ ] `Generated/Intermediate`와 중복 임시 예시가 Current Plan 경로에 찌꺼기로 남아 있지 않다.
 
 ### 2.4 Systems 색인
 
@@ -222,6 +227,12 @@
 ---
 
 ## 9. Changelog
+
+### v3.1 - 2026-08-29
+
+- Plan root 평면 파일 누적을 막기 위해 Current Plan의 기능 폴더 배치 검사를 추가했다.
+- Done/Superseded/Deprecated의 Archive 물리 배치와 Generated Intermediate 잔여물 검사를 추가했다.
+- AssetDump migration stub의 실제 경로를 `Document/Plan/Archive/AssetDumpPlan/README.md`로 교정했다.
 
 ### v3.0 - 2026-07-30
 

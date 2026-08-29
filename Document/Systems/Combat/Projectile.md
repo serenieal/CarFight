@@ -66,7 +66,7 @@ Document/Plan/Archive/ProjectilePropulsionPlan.md
 `CF-FQ-027` 완료 Historical Plan:
 
 ```text
-Document/Plan/Archive/ProjectileFlightFxPlan.md
+Document/Plan/Archive/ProjectileFlightFx/ProjectileFlightFxPlan.md
 ```
 
 기존 Roadmap 세부 이력은 대표 Historical Plan과 Plan Archive 색인에서 추적한다.

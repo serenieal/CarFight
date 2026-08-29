@@ -7,9 +7,9 @@
 - 담당 범위: 차량 피팅 / 슬롯 / 하드포인트 / 질량 / 출격·필드 장착
 - 구현 Feature: `CF-FQ-034 차량 피팅·질량 런타임`
 - 지원 Feature: `CF-FQ-035 인벤토리 Foundation`
-- 대표 Plan: `Document/Plan/VehicleFittingPlan.md`
-- Design: `Document/Plan/VehicleFittingDesign.md`
-- Roadmap: `Document/Plan/VehicleFittingRoadmap.md`
+- 대표 Plan: `Document/Plan/VehicleFitting/VehicleFittingPlan.md`
+- Design: `Document/Plan/VehicleFitting/VehicleFittingDesign.md`
+- Roadmap: `Document/Plan/VehicleFitting/VehicleFittingRoadmap.md`
 
 ---
 

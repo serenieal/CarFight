@@ -8,9 +8,9 @@
 - 기능 ID: `CF-FQ-026`
 - 상위 원칙: 직접 조준을 유지하면서 정보 확인과 장비 연동에 사용할 지속 타겟을 제공한다.
 - 관련 문서:
-  - `../Plan/TargetSelectPlan.md`
-  - `../Plan/TargetSelectRoadmap.md`
-  - `../Plan/TargetSelectWorkOrder.md`
+  - `../Plan/TargetSelect/TargetSelectPlan.md`
+  - `../Plan/TargetSelect/TargetSelectRoadmap.md`
+  - `../Plan/TargetSelect/TargetSelectWorkOrder.md`
 
 ---
 

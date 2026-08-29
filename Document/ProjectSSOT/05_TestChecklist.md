@@ -402,7 +402,7 @@ DA_PFX_ThrusterTest
 - CF-FQ-027: Done / User PIE PASS / Systems Current
 - CF-TC-023: PASS
 - Current System: Document/Systems/Combat/Projectile.md v1.5.0
-- Completed Plan: Document/Plan/Archive/ProjectileFlightFxPlan.md v1.0.0
+- Completed Plan: Document/Plan/Archive/ProjectileFlightFx/ProjectileFlightFxPlan.md v1.0.0
 - Automation: PASS — 2026-08-02 최신 로컬 결과에서 `PFX_P0_01.RuntimeContract` Success
 - Reusable Entry Point: Not Defined — 재실행 시 현재 도구·작업 범위를 다시 확인
 ```
@@ -459,10 +459,10 @@ DA_PFX_ThrusterTest
 | `CF-TC-020` | Combat | 고속 Projectile 연속 충돌 | 30 FPS + 기준 속도 4배에서 차량과 얇은 벽을 통과하지 않고 첫 Hit을 한 번 기록하며 Pool 재사용이 정상임 | `Document/Plan/Archive/ProjectileContinuousCollision/ImplementationDesign.md`, `Document/Systems/Combat/Projectile.md`, `Document/Systems/Combat/DamageHitContext.md` | `PASS` |
 | `CF-TC-021` | Presentation | 전투 FX | 승인된 발사, 첫 Impact와 최초 파괴에서 Niagara FX가 각 1회 발생하고 거부·중복 판정·반복 전투에서 중복 또는 잔류가 없으며 게임 오디오 참조가 0개임 | `Document/Systems/Combat/CombatFx.md`, `Document/Plan/Archive/CombatFxAudio/ImplementationDesign.md` | `PASS` |
 | `CF-TC-022` | UI | 조준·터렛 이중 레티클 | Image_CenterDot은 사용자 조준점을 유지하고 Image_WeaponReticle은 CurrentMuzzleDirection 기반 터렛 조준 지점을 탄종·착탄 위치와 무관하게 표시 | `Document/Plan/Archive/ReticleAimDirection/ImplementationDesign.md`, `Document/Systems/UI/AimReticle.md`, `Document/Systems/Vehicles/VehicleAim.md` | `PASS` |
-| `CF-TC-023` | Presentation | 투사체 비행 FX | Trail·Thruster를 독립·동시 사용하고 소켓·Fallback, Hit·LifeExpired Reset, 20발 이상 Pool 재사용, Ribbon History 무잔류와 30 FPS 고속 Bounds가 정상이며 기존 Impact·Damage를 유지 | `Document/Systems/Combat/Projectile.md`, `Document/Plan/Archive/ProjectileFlightFxPlan.md` | `PASS` |
+| `CF-TC-023` | Presentation | 투사체 비행 FX | Trail·Thruster를 독립·동시 사용하고 소켓·Fallback, Hit·LifeExpired Reset, 20발 이상 Pool 재사용, Ribbon History 무잔류와 30 FPS 고속 Bounds가 정상이며 기존 Impact·Damage를 유지 | `Document/Systems/Combat/Projectile.md`, `Document/Plan/Archive/ProjectileFlightFx/ProjectileFlightFxPlan.md` | `PASS` |
 | `CF-TC-024` | Combat | 비유도 Rocket 추진 | InitialSpeed 분리, IgnitionDelay, Burning 고정 방향 가속, BurnedOut 관성 비행과 Burning 기반 Thruster가 동작하고 FX_Exhaust 소켓·독립 Scale이 적용됨 | `Document/Systems/Combat/Projectile.md`, `Document/Plan/Archive/ProjectilePropulsionPlan.md` | `PASS` |
-| `CF-TC-025` | Combat | Projectile Launch Handoff 회귀 | Direct 발사가 기존 위치·방향·초기 속도·추진·충돌·피해를 유지하고 Launch Context가 발사 후 런처와 독립하며 Pool 반환 시 초기화됨 | `Document/Plan/LauncherMissilePlan.md`, `Document/Systems/Combat/Projectile.md` | `PARTIAL` |
-| `CF-TC-026` | Combat | 모듈형 런처·Ejection | Muzzle 1→4→2→3, Ripple 4발·0.15초, 고정 Command Target, SequenceCompleted 쿨다운, 후속 발사 실패 정책, Direct·Angled·Vertical Release와 차량 속도 상속이 정책대로 동작함. 수동 취소는 호출 수단 구현 뒤 별도 검증함 | `Document/Plan/LauncherMissilePlan.md`, `Document/Plan/ModularLauncherPlan.md`, `Document/Systems/Combat/Projectile.md` | `PARTIAL` |
+| `CF-TC-025` | Combat | Projectile Launch Handoff 회귀 | Direct 발사가 기존 위치·방향·초기 속도·추진·충돌·피해를 유지하고 Launch Context가 발사 후 런처와 독립하며 Pool 반환 시 초기화됨 | `Document/Plan/LauncherMissile/LauncherMissilePlan.md`, `Document/Systems/Combat/Projectile.md` | `PARTIAL` |
+| `CF-TC-026` | Combat | 모듈형 런처·Ejection | Muzzle 1→4→2→3, Ripple 4발·0.15초, 고정 Command Target, SequenceCompleted 쿨다운, 후속 발사 실패 정책, Direct·Angled·Vertical Release와 차량 속도 상속이 정책대로 동작함. 수동 취소는 호출 수단 구현 뒤 별도 검증함 | `Document/Plan/LauncherMissile/LauncherMissilePlan.md`, `Document/Plan/Archive/LauncherMissileLegacy/ModularLauncherPlan.md`, `Document/Systems/Combat/Projectile.md` | `PARTIAL` |
 
 ---
 

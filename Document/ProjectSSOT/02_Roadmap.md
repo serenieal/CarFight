@@ -22,8 +22,8 @@
 현재 단일 Active Feature는 **`CF-FQ-039 Production UI Visual Rework`**다.
 
 ```text
-대표 Plan: Document/Plan/InGameUIVisualPlan.md v0.1.5
-Roadmap: Document/Plan/InGameUIVisualRoadmap.md v0.1.5
+대표 Plan: Document/Plan/InGameUIVisual/InGameUIVisualPlan.md v0.1.5
+Roadmap: Document/Plan/InGameUIVisual/InGameUIVisualRoadmap.md v0.1.5
 Current Gate: VPR-P0-01 VehiclePanel Production Vertical Slice — ARMOR TECHNICAL PASS / USER VISUAL REVIEW PENDING
 ```
 
@@ -164,7 +164,7 @@ Roadmap은 진행 순서와 선택지에 집중한다. Feature별 세부 P0 목�
 - 첫 Gate를 `VPR-P0-00 Visual Target Recovery & Registry`로 연결하고, 과거 승인 이미지를 실제 Visual Target으로 고정한 뒤 Production Art에 들어가는 순서를 프로젝트 Roadmap에 반영했다.
 - CF-FQ-032의 Deferred Visual 후속은 새 CF-FQ-039 범위로 이동하되 CF-FQ-032 Done과 완료 evidence는 그대로 유지했다.
 
-Migration: 현재 UI Visual 작업은 `InGameUIVisualRoadmap.md`의 VPR 순서를 사용한다. CF-FQ-032의 Historical UI-P0 순서를 현재 작업 순서로 사용하지 않는다.
+Migration: 현재 UI Visual 작업은 `Document/Plan/InGameUIVisual/InGameUIVisualRoadmap.md`의 VPR 순서를 사용한다. CF-FQ-032의 Historical UI-P0 순서를 현재 작업 순서로 사용하지 않는다.
 
 ### v2.29.0 - 2026-08-22
 

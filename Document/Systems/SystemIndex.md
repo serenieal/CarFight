@@ -371,7 +371,7 @@ Migration: CF-FQ-032의 현재 구현 판단은 `UI/InGameUI.md`와 실제 Sourc
 ### v1.14.0 적용 안내
 
 - `CF-FQ-027`의 현재 구현 판단은 `Document/Systems/Combat/Projectile.md v1.5.0`을 우선한다.
-- `Document/Plan/Archive/ProjectileFlightFxPlan.md v1.0.0`은 완료 당시 설계·빌드·사용자 PIE 기록으로 유지한다.
+- `Document/Plan/Archive/ProjectileFlightFx/ProjectileFlightFxPlan.md v1.0.0`은 완료 당시 설계·빌드·사용자 PIE 기록으로 유지한다.
 - `CF-TC-023`은 PASS이며 CF-FQ-027을 Active 또는 Paused로 복원하지 않는다.
 - Automation 실행은 Runner 미노출로 Not Run 상태를 유지한다.
 

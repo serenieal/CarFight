@@ -31,8 +31,8 @@ Editor Run Entry: D:\Work\CarFight_git\Tools\RunEditor.bat
 현재 단일 Active Feature는 **`CF-FQ-039 Production UI Visual Rework`**다.
 
 ```text
-대표 Plan: Document/Plan/InGameUIVisualPlan.md v0.1.24
-Roadmap: Document/Plan/InGameUIVisualRoadmap.md v0.1.24
+대표 Plan: Document/Plan/InGameUIVisual/InGameUIVisualPlan.md v0.1.24
+Roadmap: Document/Plan/InGameUIVisual/InGameUIVisualRoadmap.md v0.1.24
 Current Gate: VPR-P0-01 VehiclePanel Production Vertical Slice — VEHICLE-SPECIFIC SILHOUETTE SOURCE + PRODUCTION TEXTURE/CATALOG ASSETIZATION PASS / DEFENSE SOURCE FAMILY NEXT / MASTER SOURCE BINDING PENDING
 ```
 
@@ -62,9 +62,9 @@ UI-P0-08 Radar/Edge Visual·Zoom Feel과 D1-11-ART SpeedGauge·VehiclePanel·전
 
 | Feature | 상태 | 현재 재개 지점 |
 | --- | --- | --- |
-| `CF-FQ-038` 차량 데이터 Authoring | Paused | `DataAuthoringPlan.md v0.2.47` / `DataAuthoringRoadmap.md v0.1.52` / UA-01~06 USER PASS 보존 / 다음 `UA-07 Driving Feel Authoring` / Remote Technical Readiness PASS |
-| `CF-FQ-034` 차량 피팅·질량 런타임 | Paused | `VehicleFittingPlan.md v0.17.0` / `FIT-P0-07D USER Driving Feel Comparison` |
-| `CF-FQ-029` 모듈형 런처 및 발사 인계 | Paused | `LauncherMissilePlan.md v0.14.0` / `LM-P0-06 USER PIE` |
+| `CF-FQ-038` 차량 데이터 Authoring | Paused | `Document/Plan/DataAuthoring/DataAuthoringPlan.md v0.2.47` / `Document/Plan/DataAuthoring/DataAuthoringRoadmap.md v0.1.52` / UA-01~06 USER PASS 보존 / 다음 `UA-07 Driving Feel Authoring` / Remote Technical Readiness PASS |
+| `CF-FQ-034` 차량 피팅·질량 런타임 | Paused | `Document/Plan/VehicleFitting/VehicleFittingPlan.md v0.17.0` / `FIT-P0-07D USER Driving Feel Comparison` |
+| `CF-FQ-029` 모듈형 런처 및 발사 인계 | Paused | `Document/Plan/LauncherMissile/LauncherMissilePlan.md v0.14.0` / `LM-P0-06 USER PIE` |
 | `CF-FQ-030` 물리 제한형 미사일 비행·유도 | Ready | Persisted Asset Technical Verification PASS / `CF-TC-027 Manual PIE Pending` |
 | `CF-FQ-035` 인벤토리 Foundation | Paused | 기존 Technical checkpoint 보존 / USER Field UI·Mobility Pending |
 | `CF-FQ-026` 타겟 선택 시스템 | Paused | `TS-P0-08 USER PIE Pending` |

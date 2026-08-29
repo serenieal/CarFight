@@ -12,7 +12,7 @@
 이 문서는 CarFight에서 `VehicleData`가 **현재 실제로 어떤 데이터를 소유하고, VehiclePawn 런타임에 어떻게 적용되며, 어떤 검증 계약으로 보호되는지** 기록한다.
 
 미래 튜닝 계획이나 사용자 주행감 목표를 기록하는 문서가 아니다.
-실제 수치 조정 계획은 `Document/Plan/VehicleDataTuningPlan.md`가 소유한다.
+실제 수치 조정 계획은 `Document/Plan/VehicleDataTuning/VehicleDataTuningPlan.md`가 소유한다.
 
 ---
 
