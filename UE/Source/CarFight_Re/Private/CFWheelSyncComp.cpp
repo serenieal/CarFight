@@ -1,11 +1,11 @@
-// Version: 1.1.9
-// Date: 2026-04-01
-// Description: CarFight 휠 시각 동기화 컴포넌트 구현 (컴포넌트 탐색/Helper 상태 초기화 중복 정리)
-// Scope: 단일 축 테스트/Phase1Stub 제거. helper 비교/override/상태 관측은 DebugMode에서만 활성화됩니다.
+// Version: 1.4.0
+// Date: 2026-08-31
+// Description: CarFight 휠 시각 동기화 컴포넌트 구현
+// Changelog: v1.4.0 - Right-side FL fallback의 local-axis 반전을 per-wheel spin handedness로 보정하고 absolute/debug spin도 BaseQuat × LocalPitchQuat으로 합성
+// Migration: persistent asset field는 추가하지 않으며 runtime handedness 미설정 경로는 기존과 동일한 +1로 동작
 
 #include "CFWheelSyncComp.h"
 
-#include "CarFightVehicleUtils.h"
 #include "ChaosVehicleWheel.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
 #include "Components/SceneComponent.h"
@@ -16,18 +16,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogCFWheelSync, Log, All);
 
 namespace
 {
-	// helper 회전값에서 실제 바퀴 굴림에 가까운 축의 각도를 추출합니다.
-	float ExtractWheelSpinAngleDegFromRotation(const FRotator& InWheelRotation)
-	{
-		// Pitch 축 절대값을 보관합니다.
-		const float PitchAbsDeg = FMath::Abs(InWheelRotation.Pitch);
-
-		// Roll 축 절대값을 보관합니다.
-		const float RollAbsDeg = FMath::Abs(InWheelRotation.Roll);
-
-		return (PitchAbsDeg >= RollAbsDeg) ? InWheelRotation.Pitch : InWheelRotation.Roll;
-	}
-
 	// Chaos 휠 인스턴스에서 현재 누적 회전각(deg)을 안전하게 읽습니다.
 	float GetWheelSpinAngleDegFromRuntimeWheel(const UChaosWheeledVehicleMovementComponent* InMovementComponent, const int32 InWheelIndex)
 	{
@@ -74,14 +62,7 @@ namespace
 		return nullptr;
 	}
 
-	// Helper 비교 상태 요약 문자열 묶음을 한 번에 초기화합니다.
-	void SetHelperCompareStatus(UCFWheelSyncComp& WheelSyncComp, const TCHAR* SummaryText, const TCHAR* FrontRearSummaryText)
-	{
-		WheelSyncComp.LastHelperCompareSummary = SummaryText;
-		WheelSyncComp.LastHelperCompareWarnWheelIndices = TEXT("None");
-		WheelSyncComp.LastHelperCompareFrontRearSummary = FrontRearSummaryText;
 	}
-}
 
 // WheelSync 기본 소유 축과 디버그/운영 기본값을 초기화합니다.
 UCFWheelSyncComp::UCFWheelSyncComp()
@@ -94,22 +75,8 @@ UCFWheelSyncComp::UCFWheelSyncComp()
 	bDebugMode = false;
 	bVerboseLog = false;
 
-	// [v1.1.0] 신규 BP 기준 기본값:
-	// - C++이 조향 Yaw를 실제 적용합니다.
-	// - helper 실험 경로는 DebugMode에서만 사용합니다.
+	// 정식 C++ Wheel Visual 적용 경로를 기본으로 사용합니다.
 	bEnableApplyTransformsInCpp = true;
-	bUseRealWheelTransformHelper = false;
-	bHelperOverridesDebugInputs = false;
-	bHelperOverridesSteeringYaw = false;
-	bHelperOverridesSuspensionZ = false;
-	bHelperOverridesSpinPitch = false;
-	bLogHelperFallbackOnce = true;
-	bHasLoggedHelperFallback = false;
-
-	bEnableHelperCompareMode = false;
-	bLogHelperCompareDetails = false;
-	HelperCompareWarnDeltaDeg = 10.0f;
-	HelperCompareWarnDeltaZ = 5.0f;
 
 	// [v1.1.0] 축별 C++ 적용 기본값:
 	// - 신규 BP 첫 단계에서는 조향 Yaw만 C++가 소유합니다.
@@ -131,6 +98,8 @@ UCFWheelSyncComp::UCFWheelSyncComp()
 	WheelSpinPitchDebugDeg = 0.0f;
 	WheelSpinVisualSign = 1.0f;
 	WheelSpinMeshAxisSign = -1.0f;
+	// 기본 4륜 모두 기존 local spin handedness를 유지합니다. Pawn fallback resolve가 필요한 wheel만 -1로 갱신합니다.
+	WheelSpinHandednessSigns.Init(1.0f, ExpectedWheelCount);
 	WheelSpinAngularVelocityDeadZoneDegPerSec = 5.0f;
 	WheelSpinForwardDeadZoneKmh = 1.0f;
 	WheelSpinSlipAngularVelocityThresholdDegPerSec = 360.0f;
@@ -141,15 +110,29 @@ UCFWheelSyncComp::UCFWheelSyncComp()
 	bWheelSyncReady = false;
 	LastValidationSummary = TEXT("NotValidated");
 	LastInputBuildSummary = TEXT("NotBuilt");
-	LastHelperCompareSummary = TEXT("HelperCompare:Disabled");
-	LastHelperCompareWarnWheelIndices = TEXT("None");
-	LastHelperCompareFrontRearSummary = TEXT("HelperCompareFR:Disabled");
 
 	InitializeDefaultWheelNames();
 	ResetBaseVisualCaches();
 	ResetLastWheelStates();
 	ResetRuntimeWheelSpinCaches();
-	ResetHelperCompareStates();
+}
+
+// Wheel Visual resolve가 전달한 휠별 local spin handedness를 +1/-1 runtime 부호로 정규화합니다.
+void UCFWheelSyncComp::SetWheelSpinHandednessSigns(const TArray<float>& InWheelSpinHandednessSigns)
+{
+	// 현재 ExpectedWheelCount를 우선하고 유효하지 않으면 입력 개수를 사용하는 runtime 배열 크기입니다.
+	const int32 ResolvedWheelCount = ExpectedWheelCount > 0 ? ExpectedWheelCount : InWheelSpinHandednessSigns.Num();
+	WheelSpinHandednessSigns.Init(1.0f, ResolvedWheelCount);
+
+	for (int32 WheelIndex = 0; WheelIndex < ResolvedWheelCount; ++WheelIndex)
+	{
+		// 호출자가 전달한 현재 wheel의 원본 handedness 값입니다. 누락된 index는 기존 호환 +1입니다.
+		const float RequestedHandednessSign = InWheelSpinHandednessSigns.IsValidIndex(WheelIndex)
+			? InWheelSpinHandednessSigns[WheelIndex]
+			: 1.0f;
+
+		WheelSpinHandednessSigns[WheelIndex] = RequestedHandednessSign < 0.0f ? -1.0f : 1.0f;
+	}
 }
 
 void UCFWheelSyncComp::BeginPlay()
@@ -172,12 +155,8 @@ void UCFWheelSyncComp::ResetWheelSyncState()
 	LastWheelVisualInputs.Reset();
 	ResetLastWheelStates();
 	ResetRuntimeWheelSpinCaches();
-	ResetHelperCompareStates();
-
-	SetHelperCompareStatus(*this, TEXT("HelperCompare:Reset"), TEXT("HelperCompareFR:Reset"));
 
 	bWheelSyncReady = false;
-	bHasLoggedHelperFallback = false;
 	LastValidationSummary = TEXT("Reset");
 
 	if (bDebugMode && bVerboseLog)
@@ -416,209 +395,12 @@ bool UCFWheelSyncComp::BuildWheelVisualInputsFromDebugPipe(float DeltaSeconds, T
 	return true;
 }
 
-bool UCFWheelSyncComp::TryApplyRealTransformHelperToInput(int32 WheelIndex, const FCFWheelVisualInput& DebugWheelInput, FCFWheelVisualInput& InOutFinalWheelInput)
-{
-	if (!bDebugMode || !bUseRealWheelTransformHelper || !CachedVehicleMovementComponent)
-	{
-		return false;
-	}
-
-	FVector HelperOffset = FVector::ZeroVector;
-	FRotator HelperRotation = FRotator::ZeroRotator;
-	UCarFightVehicleUtils::GetRealWheelTransform(CachedVehicleMovementComponent, WheelIndex, HelperOffset, HelperRotation);
-
-	if (LastHelperCompareStates.IsValidIndex(WheelIndex))
-	{
-		FCFWheelHelperCompareState& CompareState = LastHelperCompareStates[WheelIndex];
-		CompareState.WheelIndex = WheelIndex;
-		CompareState.bHelperSampleAttempted = true;
-		CompareState.DebugSteeringYawDeg = DebugWheelInput.SteeringYawDeg;
-		CompareState.HelperSteeringYawDeg = HelperRotation.Yaw;
-		CompareState.DeltaSteeringYawDeg = HelperRotation.Yaw - DebugWheelInput.SteeringYawDeg;
-		CompareState.DebugSpinPitchDeg = DebugWheelInput.SpinPitchDeg;
-		CompareState.HelperSpinPitchDeg = HelperRotation.Pitch;
-		CompareState.DeltaSpinPitchDeg = HelperRotation.Pitch - DebugWheelInput.SpinPitchDeg;
-		CompareState.DebugSuspensionOffsetZ = DebugWheelInput.SuspensionOffsetZ;
-		CompareState.HelperSuspensionOffsetZ = HelperOffset.Z;
-		CompareState.DeltaSuspensionOffsetZ = HelperOffset.Z - DebugWheelInput.SuspensionOffsetZ;
-	}
-
-	const bool bOverrideYaw = bHelperOverridesDebugInputs || bHelperOverridesSteeringYaw;
-	const bool bOverrideZ = bHelperOverridesDebugInputs || bHelperOverridesSuspensionZ;
-	const bool bOverridePitch = bHelperOverridesDebugInputs || bHelperOverridesSpinPitch;
-
-	if (bOverrideZ)
-	{
-		InOutFinalWheelInput.SuspensionOffsetZ = HelperOffset.Z;
-	}
-
-	if (bOverrideYaw)
-	{
-		InOutFinalWheelInput.SteeringYawDeg = HelperRotation.Yaw;
-	}
-
-	if (bOverridePitch)
-	{
-		InOutFinalWheelInput.SpinPitchDeg = HelperRotation.Pitch;
-	}
-
-	return true;
-}
-
-void UCFWheelSyncComp::ResetHelperCompareStates()
-{
-	const int32 SafeWheelCount = FMath::Max(0, ExpectedWheelCount);
-	LastHelperCompareStates.Init(FCFWheelHelperCompareState(), SafeWheelCount);
-
-	for (int32 WheelIndex = 0; WheelIndex < LastHelperCompareStates.Num(); ++WheelIndex)
-	{
-		LastHelperCompareStates[WheelIndex].WheelIndex = WheelIndex;
-	}
-}
-
-void UCFWheelSyncComp::FinalizeHelperCompareSummary()
-{
-	float MaxAbsYawDelta = 0.0f;
-	float MaxAbsPitchDelta = 0.0f;
-	float MaxAbsZDelta = 0.0f;
-	int32 WarnCount = 0;
-	int32 SampledCount = 0;
-
-	int32 FrontWarnCount = 0;
-	int32 RearWarnCount = 0;
-	float FrontMaxAbsYawDelta = 0.0f;
-	float RearMaxAbsYawDelta = 0.0f;
-	float FrontMaxAbsPitchDelta = 0.0f;
-	float RearMaxAbsPitchDelta = 0.0f;
-	float FrontMaxAbsZDelta = 0.0f;
-	float RearMaxAbsZDelta = 0.0f;
-
-	TArray<FString> WarnWheelIndexTokens;
-
-	for (const FCFWheelHelperCompareState& CompareState : LastHelperCompareStates)
-	{
-		if (!CompareState.bHelperSampleAttempted)
-		{
-			continue;
-		}
-
-		++SampledCount;
-
-		const float AbsYaw = FMath::Abs(CompareState.DeltaSteeringYawDeg);
-		const float AbsPitch = FMath::Abs(CompareState.DeltaSpinPitchDeg);
-		const float AbsZ = FMath::Abs(CompareState.DeltaSuspensionOffsetZ);
-		MaxAbsYawDelta = FMath::Max(MaxAbsYawDelta, AbsYaw);
-		MaxAbsPitchDelta = FMath::Max(MaxAbsPitchDelta, AbsPitch);
-		MaxAbsZDelta = FMath::Max(MaxAbsZDelta, AbsZ);
-
-		const bool bIsFrontWheel = IsFrontWheelIndexForSteering(CompareState.WheelIndex);
-		if (bIsFrontWheel)
-		{
-			FrontMaxAbsYawDelta = FMath::Max(FrontMaxAbsYawDelta, AbsYaw);
-			FrontMaxAbsPitchDelta = FMath::Max(FrontMaxAbsPitchDelta, AbsPitch);
-			FrontMaxAbsZDelta = FMath::Max(FrontMaxAbsZDelta, AbsZ);
-		}
-		else
-		{
-			RearMaxAbsYawDelta = FMath::Max(RearMaxAbsYawDelta, AbsYaw);
-			RearMaxAbsPitchDelta = FMath::Max(RearMaxAbsPitchDelta, AbsPitch);
-			RearMaxAbsZDelta = FMath::Max(RearMaxAbsZDelta, AbsZ);
-		}
-
-		const bool bWarn = (AbsYaw > HelperCompareWarnDeltaDeg) || (AbsPitch > HelperCompareWarnDeltaDeg) || (AbsZ > HelperCompareWarnDeltaZ);
-		if (bWarn)
-		{
-			++WarnCount;
-			WarnWheelIndexTokens.Add(FString::FromInt(CompareState.WheelIndex));
-
-			if (bIsFrontWheel)
-			{
-				++FrontWarnCount;
-			}
-			else
-			{
-				++RearWarnCount;
-			}
-		}
-
-		if (bDebugMode && bLogHelperCompareDetails)
-		{
-			UE_LOG(LogCFWheelSync, Log, TEXT("[WheelSync][HelperCmp][W%d][%s] dYaw=%.2f dPitch=%.2f dZ=%.2f"),
-				CompareState.WheelIndex,
-				bIsFrontWheel ? TEXT("Front") : TEXT("Rear"),
-				CompareState.DeltaSteeringYawDeg,
-				CompareState.DeltaSpinPitchDeg,
-				CompareState.DeltaSuspensionOffsetZ);
-		}
-	}
-
-	LastHelperCompareWarnWheelIndices = (WarnWheelIndexTokens.Num() > 0)
-		? FString::Join(WarnWheelIndexTokens, TEXT(","))
-		: TEXT("None");
-
-	LastHelperCompareFrontRearSummary = FString::Printf(
-		TEXT("HelperCompareFR: FrontWarn=%d RearWarn=%d FrontMax(Y/P/Z)=%.2f/%.2f/%.2f RearMax(Y/P/Z)=%.2f/%.2f/%.2f"),
-		FrontWarnCount,
-		RearWarnCount,
-		FrontMaxAbsYawDelta,
-		FrontMaxAbsPitchDelta,
-		FrontMaxAbsZDelta,
-		RearMaxAbsYawDelta,
-		RearMaxAbsPitchDelta,
-		RearMaxAbsZDelta);
-
-	LastHelperCompareSummary = FString::Printf(
-		TEXT("HelperCompare: Sampled=%d Warn=%d WarnWheels=%s MaxYaw=%.2f MaxPitch=%.2f MaxZ=%.2f"),
-		SampledCount,
-		WarnCount,
-		*LastHelperCompareWarnWheelIndices,
-		MaxAbsYawDelta,
-		MaxAbsPitchDelta,
-		MaxAbsZDelta);
-}
-
 // 현재 프레임에 적용할 휠 시각 입력을 조합하고 필요 시 실제 스핀 회전값을 주입합니다.
 bool UCFWheelSyncComp::BuildWheelVisualInputsPhase2(float DeltaSeconds, TArray<FCFWheelVisualInput>& OutWheelInputs)
 {
 	if (!BuildWheelVisualInputsFromDebugPipe(DeltaSeconds, OutWheelInputs))
 	{
 		return false;
-	}
-
-	const bool bUseHelperInput = bDebugMode && bUseRealWheelTransformHelper;
-	const bool bUseHelperCompare = bDebugMode && bEnableHelperCompareMode;
-
-	ResetHelperCompareStates();
-	SetHelperCompareStatus(
-		*this,
-		bUseHelperInput ? TEXT("HelperCompare:Pending") : TEXT("HelperCompare:Disabled"),
-		bUseHelperCompare ? TEXT("HelperCompareFR:Pending") : TEXT("HelperCompareFR:Disabled"));
-
-	if (bUseHelperInput)
-	{
-		for (int32 WheelIndex = 0; WheelIndex < OutWheelInputs.Num(); ++WheelIndex)
-		{
-			const FCFWheelVisualInput DebugInputCopy = OutWheelInputs[WheelIndex];
-			TryApplyRealTransformHelperToInput(WheelIndex, DebugInputCopy, OutWheelInputs[WheelIndex]);
-		}
-
-		if (bUseHelperCompare)
-		{
-			FinalizeHelperCompareSummary();
-
-			if (bDebugMode && bVerboseLog)
-			{
-				UE_LOG(LogCFWheelSync, Log, TEXT("[WheelSync][HelperCmp] %s"), *LastHelperCompareSummary);
-			}
-		}
-	}
-	else if (bDebugMode)
-	{
-		if (!bHasLoggedHelperFallback || !bLogHelperFallbackOnce)
-		{
-			UE_LOG(LogCFWheelSync, Log, TEXT("[WheelSync] RealWheelTransform helper disabled. Using debug pipe inputs only."));
-			bHasLoggedHelperFallback = true;
-		}
 	}
 
 	// 현재 프레임의 차량 Forward 속도(km/h)입니다.
@@ -839,8 +621,23 @@ bool UCFWheelSyncComp::ApplySingleWheelInputPhase2(const FCFWheelVisualInput& Wh
 	FRotator TargetAnchorRotation = BaseWheelAnchorRotations[WheelInput.WheelIndex];
 	TargetAnchorRotation.Yaw += WheelInput.SteeringYawDeg;
 
-	FRotator TargetMeshRotation = BaseWheelMeshRotations[WheelInput.WheelIndex];
-	TargetMeshRotation.Pitch += WheelInput.SpinPitchDeg;
+	// 현재 wheel의 source-aware local spin handedness입니다.
+	const float WheelSpinHandednessSign = ResolveWheelSpinHandednessSign(WheelInput.WheelIndex);
+
+	// handedness까지 반영한 absolute local Pitch spin 각도입니다.
+	const float EffectiveSpinPitchDeg = WheelInput.SpinPitchDeg * WheelSpinHandednessSign;
+
+	// handedness까지 반영한 per-frame local Pitch spin delta입니다.
+	const float EffectiveSpinPitchDeltaDeg = WheelInput.SpinPitchDeltaDeg * WheelSpinHandednessSign;
+
+	// CaptureBaseWheelVisualState에서 저장한 orientation compensation 포함 기준 회전입니다.
+	const FQuat BaseWheelMeshRotationQuaternion = BaseWheelMeshRotations[WheelInput.WheelIndex].Quaternion();
+
+	// 기준 회전 뒤 local Pitch 축으로 적용할 absolute spin 회전입니다.
+	const FQuat LocalWheelSpinQuaternion = FRotator(EffectiveSpinPitchDeg, 0.0f, 0.0f).Quaternion();
+
+	// compensated base orientation과 local-axis spin을 Euler 덧셈 없이 합성한 최종 회전입니다.
+	const FRotator TargetMeshRotation = (BaseWheelMeshRotationQuaternion * LocalWheelSpinQuaternion).GetNormalized().Rotator();
 
 	if (bEnableApplyTransformsInCpp)
 	{
@@ -866,16 +663,14 @@ bool UCFWheelSyncComp::ApplySingleWheelInputPhase2(const FCFWheelVisualInput& Wh
 		{
 			if (WheelInput.bApplySpinPitchAsDelta)
 			{
-				// 현재 프레임 휠 메시의 local pitch delta 회전값입니다.
-				const FRotator MeshLocalSpinDeltaRotation(WheelInput.SpinPitchDeltaDeg, 0.0f, 0.0f);
+				// 현재 프레임 휠 메시의 handedness 보정 local pitch delta 회전값입니다.
+				const FRotator MeshLocalSpinDeltaRotation(EffectiveSpinPitchDeltaDeg, 0.0f, 0.0f);
 
 				MeshComponent->AddLocalRotation(MeshLocalSpinDeltaRotation, false, nullptr, ETeleportType::TeleportPhysics);
 			}
 			else
 			{
-				FRotator CurrentMeshRotation = MeshComponent->GetRelativeRotation();
-				CurrentMeshRotation.Pitch = TargetMeshRotation.Pitch;
-				MeshComponent->SetRelativeRotation(CurrentMeshRotation);
+				MeshComponent->SetRelativeRotation(TargetMeshRotation);
 			}
 		}
 	}
@@ -962,6 +757,17 @@ bool UCFWheelSyncComp::IsSuspensionZOwnedByCpp() const
 bool UCFWheelSyncComp::IsSpinPitchOwnedByCpp() const
 {
 	return bEnableApplyTransformsInCpp && bApplySpinPitchInCpp;
+}
+
+// 지정 휠의 runtime spin handedness를 +1/-1로 반환하고 미설정 index는 기존 호환 +1을 사용합니다.
+float UCFWheelSyncComp::ResolveWheelSpinHandednessSign(const int32 InWheelIndex) const
+{
+	if (!WheelSpinHandednessSigns.IsValidIndex(InWheelIndex))
+	{
+		return 1.0f;
+	}
+
+	return WheelSpinHandednessSigns[InWheelIndex] < 0.0f ? -1.0f : 1.0f;
 }
 
 // 현재 차량 Forward 속도(km/h)를 Wheel spin 방향 안정화용으로 계산합니다.

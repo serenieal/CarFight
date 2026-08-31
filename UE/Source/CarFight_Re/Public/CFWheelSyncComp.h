@@ -1,3 +1,8 @@
+// Version: 1.4.0
+// Date: 2026-08-31
+// Changelog: Right-side FL fallback orientation에 대응하는 per-wheel spin handedness runtime 계약과 local-axis absolute spin 합성 추가
+// Migration: persistent asset field는 추가하지 않습니다. Pawn Wheel Visual resolve가 runtime handedness를 전달하며 기존 경로는 기본 +1로 호환됩니다.
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -63,45 +68,6 @@ struct FCFWheelVisualState
 	FRotator LastAppliedMeshRotation = FRotator::ZeroRotator;
 };
 
-USTRUCT(BlueprintType)
-struct FCFWheelHelperCompareState
-{
-	GENERATED_BODY()
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WheelSync", meta=(DisplayName="휠 인덱스 (WheelIndex)", ToolTip="비교 상태가 대응하는 휠 인덱스입니다."))
-	int32 WheelIndex = INDEX_NONE;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WheelSync", meta=(DisplayName="Helper 샘플 시도 여부 (bHelperSampleAttempted)", ToolTip="현재 프레임에 helper 샘플 추출을 시도했는지 여부입니다."))
-	bool bHelperSampleAttempted = false;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WheelSync", meta=(DisplayName="디버그 조향 Yaw (DebugSteeringYawDeg)", ToolTip="디버그 파이프 기준 조향 Yaw 각도(deg)입니다."))
-	float DebugSteeringYawDeg = 0.0f;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WheelSync", meta=(DisplayName="Helper 조향 Yaw (HelperSteeringYawDeg)", ToolTip="helper 기준 조향 Yaw 각도(deg)입니다."))
-	float HelperSteeringYawDeg = 0.0f;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WheelSync", meta=(DisplayName="조향 Yaw 차이 (DeltaSteeringYawDeg)", ToolTip="디버그 파이프와 helper 사이의 조향 Yaw 차이(deg)입니다."))
-	float DeltaSteeringYawDeg = 0.0f;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WheelSync", meta=(DisplayName="디버그 스핀 Pitch (DebugSpinPitchDeg)", ToolTip="디버그 파이프 기준 스핀 Pitch 각도(deg)입니다."))
-	float DebugSpinPitchDeg = 0.0f;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WheelSync", meta=(DisplayName="Helper 스핀 Pitch (HelperSpinPitchDeg)", ToolTip="helper 기준 스핀 Pitch 각도(deg)입니다."))
-	float HelperSpinPitchDeg = 0.0f;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WheelSync", meta=(DisplayName="스핀 Pitch 차이 (DeltaSpinPitchDeg)", ToolTip="디버그 파이프와 helper 사이의 스핀 Pitch 차이(deg)입니다."))
-	float DeltaSpinPitchDeg = 0.0f;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WheelSync", meta=(DisplayName="디버그 서스펜션 Z (DebugSuspensionOffsetZ)", ToolTip="디버그 파이프 기준 서스펜션 Z 오프셋입니다."))
-	float DebugSuspensionOffsetZ = 0.0f;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WheelSync", meta=(DisplayName="Helper 서스펜션 Z (HelperSuspensionOffsetZ)", ToolTip="helper 기준 서스펜션 Z 오프셋입니다."))
-	float HelperSuspensionOffsetZ = 0.0f;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="WheelSync", meta=(DisplayName="서스펜션 Z 차이 (DeltaSuspensionOffsetZ)", ToolTip="디버그 파이프와 helper 사이의 서스펜션 Z 차이입니다."))
-	float DeltaSuspensionOffsetZ = 0.0f;
-};
-
 UCLASS(ClassGroup=(CarFight), BlueprintType, Blueprintable, meta=(BlueprintSpawnableComponent))
 class CARFIGHT_RE_API UCFWheelSyncComp : public UActorComponent
 {
@@ -131,36 +97,6 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="WheelSync", meta=(DisplayName="C++ 변환 적용 사용 (bEnableApplyTransformsInCpp)", ToolTip="True이면 계산된 Wheel Visual 변환을 C++에서 직접 적용합니다."))
 	bool bEnableApplyTransformsInCpp;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="WheelSync|Debug|Helper", meta=(EditCondition="bDebugMode", EditConditionHides, DisplayName="실제 휠 Transform Helper 사용 (bUseRealWheelTransformHelper)", ToolTip="True이면 helper 입력 경로를 사용합니다."))
-	bool bUseRealWheelTransformHelper;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="WheelSync|Debug|Helper", meta=(EditCondition="bDebugMode", EditConditionHides, DisplayName="Helper가 디버그 입력 전체 덮어쓰기 (bHelperOverridesDebugInputs)", ToolTip="True이면 helper 결과가 디버그 파이프 입력 전체를 덮어씁니다."))
-	bool bHelperOverridesDebugInputs;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="WheelSync|Debug|Helper", meta=(EditCondition="bDebugMode", EditConditionHides, DisplayName="Helper가 조향 Yaw 덮어쓰기 (bHelperOverridesSteeringYaw)", ToolTip="True이면 helper 결과로 SteeringYaw를 덮어씁니다."))
-	bool bHelperOverridesSteeringYaw;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="WheelSync|Debug|Helper", meta=(EditCondition="bDebugMode", EditConditionHides, DisplayName="Helper가 서스펜션 Z 덮어쓰기 (bHelperOverridesSuspensionZ)", ToolTip="True이면 helper 결과로 SuspensionZ를 덮어씁니다."))
-	bool bHelperOverridesSuspensionZ;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="WheelSync|Debug|Helper", meta=(EditCondition="bDebugMode", EditConditionHides, DisplayName="Helper가 스핀 Pitch 덮어쓰기 (bHelperOverridesSpinPitch)", ToolTip="True이면 helper 결과로 SpinPitch를 덮어씁니다."))
-	bool bHelperOverridesSpinPitch;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="WheelSync|Debug|HelperCompare", meta=(EditCondition="bDebugMode", EditConditionHides, DisplayName="Helper 비교 모드 사용 (bEnableHelperCompareMode)", ToolTip="True이면 helper와 디버그 파이프 입력 차이를 비교합니다."))
-	bool bEnableHelperCompareMode;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="WheelSync|Debug|HelperCompare", meta=(EditCondition="bDebugMode", EditConditionHides, DisplayName="Helper 비교 상세 로그 (bLogHelperCompareDetails)", ToolTip="True이면 helper 비교 상세 로그를 출력합니다."))
-	bool bLogHelperCompareDetails;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="WheelSync|Debug|HelperCompare", meta=(EditCondition="bDebugMode", EditConditionHides, DisplayName="Helper 비교 경고 각도 임계값 (HelperCompareWarnDeltaDeg)", ToolTip="helper 비교 경고 각도 임계값입니다."))
-	float HelperCompareWarnDeltaDeg;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="WheelSync|Debug|HelperCompare", meta=(EditCondition="bDebugMode", EditConditionHides, DisplayName="Helper 비교 경고 Z 임계값 (HelperCompareWarnDeltaZ)", ToolTip="helper 비교 경고 Z 임계값입니다."))
-	float HelperCompareWarnDeltaZ;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="WheelSync|Debug|Helper", meta=(EditCondition="bDebugMode", EditConditionHides, DisplayName="Helper 폴백 로그 1회 출력 (bLogHelperFallbackOnce)", ToolTip="True이면 helper 미사용/실패 로그를 1회만 출력합니다."))
-	bool bLogHelperFallbackOnce;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="WheelSync", meta=(DisplayName="조향 Yaw 디버그 파이프 사용 (bUseSteeringYawDebugPipe)", ToolTip="True이면 조향 Yaw 값을 디버그 파이프 기준으로 생성합니다."))
 	bool bUseSteeringYawDebugPipe;
@@ -274,23 +210,9 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="WheelSync|Debug|Runtime", meta=(EditCondition="bDebugMode", EditConditionHides, DisplayName="마지막 Wheel Visual 상태 목록 (LastWheelVisualStates)", ToolTip="마지막으로 적용된 Wheel Visual 상태 배열입니다."))
 	TArray<FCFWheelVisualState> LastWheelVisualStates;
 
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="WheelSync|Debug|HelperCompare", meta=(EditCondition="bDebugMode", EditConditionHides, DisplayName="Helper 비교 상태 목록 (LastHelperCompareStates)", ToolTip="helper 입력 vs 디버그 파이프 입력 비교 상태 배열입니다."))
-	TArray<FCFWheelHelperCompareState> LastHelperCompareStates;
-
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="WheelSync|Debug|HelperCompare", meta=(EditCondition="bDebugMode", EditConditionHides, DisplayName="Helper 비교 요약 (LastHelperCompareSummary)", ToolTip="helper 비교 요약 문자열입니다."))
-	FString LastHelperCompareSummary;
-
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="WheelSync|Debug|HelperCompare", meta=(EditCondition="bDebugMode", EditConditionHides, DisplayName="Helper 비교 경고 휠 목록 (LastHelperCompareWarnWheelIndices)", ToolTip="helper 비교 경고 휠 인덱스 목록 문자열입니다."))
-	FString LastHelperCompareWarnWheelIndices;
-
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="WheelSync|Debug|HelperCompare", meta=(EditCondition="bDebugMode", EditConditionHides, DisplayName="Helper 비교 전후륜 요약 (LastHelperCompareFrontRearSummary)", ToolTip="helper 비교 전/후륜 요약 문자열입니다."))
-	FString LastHelperCompareFrontRearSummary;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="WheelSync|Legacy", meta=(EditCondition="bDebugMode", EditConditionHides, DeprecatedProperty, DeprecationMessage="Legacy single-axis test field. No longer used by CFWheelSyncComp runtime.", DisplayName="레거시 단일축 테스트 사용 (bEnableSingleAxisSteeringYawCppApplyOnly)", ToolTip="레거시 단일축 테스트 필드입니다. 현재 런타임에서는 사용하지 않습니다."))
-	bool bEnableSingleAxisSteeringYawCppApplyOnly;
-
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="WheelSync|Legacy", meta=(EditCondition="bDebugMode", EditConditionHides, DeprecatedProperty, DeprecationMessage="Legacy single-axis summary field. No longer updated by CFWheelSyncComp runtime.", DisplayName="레거시 단일축 테스트 요약 (SingleAxisCppApplyTestSummary)", ToolTip="레거시 단일축 테스트 요약 문자열입니다. 현재 런타임에서는 갱신하지 않습니다."))
-	FString SingleAxisCppApplyTestSummary;
+	// Right-side shared Mesh fallback처럼 local spin 축 handedness가 달라질 때 사용할 휠별 runtime 부호입니다. persistent 설정이 아닙니다.
+	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, Category="WheelSync|Debug|Runtime", meta=(DisplayName="휠별 스핀 Handedness 부호 (WheelSpinHandednessSigns)", ToolTip="Wheel Visual resolve가 전달한 휠별 local spin handedness입니다. 기본값은 +1이며 Right FL fallback처럼 축이 반전된 경우 -1을 사용합니다."))
+	TArray<float> WheelSpinHandednessSigns;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="WheelSync", meta=(DisplayName="조향 Yaw C++ 적용 (bApplySteeringYawInCpp)", ToolTip="True이면 최종 조향 Yaw 적용을 C++에서 수행합니다."))
 	bool bApplySteeringYawInCpp;
@@ -310,6 +232,9 @@ public:
 	// 마지막 Phase2 입력 생성 요약 문자열입니다.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="WheelSync", meta=(DisplayName="마지막 입력 생성 요약 (LastInputBuildSummary)", ToolTip="마지막 Phase2 입력 생성 요약 문자열입니다."))
 	FString LastInputBuildSummary;
+
+	// Wheel Visual resolve가 계산한 per-wheel local spin handedness를 runtime 설정합니다. Blueprint/persistent authoring surface는 아닙니다.
+	void SetWheelSpinHandednessSigns(const TArray<float>& InWheelSpinHandednessSigns);
 
 	UFUNCTION(BlueprintCallable, Category="WheelSync")
 	void ResetWheelSyncState();
@@ -358,9 +283,6 @@ private:
 	USceneComponent* FindSceneComponentByName(FName ComponentName) const;
 	UStaticMeshComponent* FindStaticMeshComponentByName(FName ComponentName) const;
 	bool ApplySingleWheelInputPhase2(const FCFWheelVisualInput& WheelInput);
-	bool TryApplyRealTransformHelperToInput(int32 WheelIndex, const FCFWheelVisualInput& DebugWheelInput, FCFWheelVisualInput& InOutFinalWheelInput);
-	void ResetHelperCompareStates();
-	void FinalizeHelperCompareSummary();
 	bool IsFrontWheelIndexForSteering(int32 WheelIndex) const;
 	void ResetBaseVisualCaches();
 	void ResetLastWheelStates();
@@ -376,7 +298,9 @@ private:
 
 	// 휠별 방향 hold 상태를 반영해 실제 stable sign을 갱신합니다.
 	int32 UpdateStableWheelSpinDirectionSign(int32 InWheelIndex, int32 InDesiredDirectionSign, float InDeltaSeconds);
-	bool bHasLoggedHelperFallback;
+
+	// 지정 휠에 설정된 runtime handedness를 +1/-1로 안전하게 반환합니다.
+	float ResolveWheelSpinHandednessSign(int32 InWheelIndex) const;
 	bool FailValidation(const FString& FailureMessage);
 	bool PassValidation(const FString& SuccessMessage);
 };

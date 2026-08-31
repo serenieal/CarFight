@@ -183,7 +183,12 @@
 현재 `ApplySingleWheelInputPhase2()`에서 실제로 하는 일:
 - Base Anchor 위치에 `SuspensionOffsetZ` 반영
 - Base Anchor 회전에 `SteeringYawDeg` 반영
-- Base Mesh 회전에 `SpinPitchDeg` 반영
+- Base Mesh 회전에 local-axis `SpinPitchDeg` 반영
+- Wheel Visual resolve가 전달한 per-wheel `WheelSpinHandednessSigns`를 spin에 적용
+
+현재 handedness 기본값은 `+1`이다. FL-only shared Mesh가 FR/RR의 **null fallback source**로 사용되어 Right orientation이 local Roll180으로 보정된 경우 해당 FR/RR만 `-1`을 사용한다. explicit Right Mesh는 같은 StaticMesh pointer를 사용하더라도 `+1`을 유지한다.
+
+absolute/debug spin은 `BaseWheelMeshRotationQuat × LocalPitchSpinQuat`으로 합성하고 production delta spin은 handedness가 반영된 local `AddLocalRotation()`을 사용한다. 따라서 compensated Right base orientation에서도 좌우 바퀴가 차량 기준 동일한 실제 굴림 방향을 유지한다.
 
 그리고 `bEnableApplyTransformsInCpp`가 켜져 있을 때,
 소유권 스위치에 따라 실제 컴포넌트 변환을 직접 적용한다.
@@ -398,8 +403,8 @@
 - Anchor/Mesh 이름 배열 변경
 
 ## 문서 버전 관리
-- 현재 문서 버전: `1.0.0`
-- 문서 상태: `Initial`
+- 현재 문서 버전: `1.1.0`
+- 문서 상태: `Right Fallback Handedness Current`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
   - 기능 설명 본문이 바뀌면 체인지로그도 같이 갱신한다.
@@ -419,6 +424,12 @@
   - 본문 의미는 유지한 채 설명 정밀도만 올라갈 때
 
 ## 체인지로그
+### v1.1.0 - 2026-09-01
+- WSA-P0-07 USER PASS 결과를 Current WheelSync 계약으로 승격했다.
+- persistent 설정이 아닌 runtime per-wheel `WheelSpinHandednessSigns`를 기록하고 Right FL fallback만 `-1`, Left/explicit Right는 `+1`을 사용하는 source-aware 계약을 추가했다.
+- absolute/debug spin의 Quaternion local-axis 합성과 production delta local rotation이 같은 handedness 의미를 공유하는 current 동작을 반영했다.
+- actual Wagon USER PIE에서 Right 방향과 실제 굴림/회전이 정상임을 확인했다.
+
 ### v1.0.0 - 2026-04-23
 - `WheelSync` 문서 최초 작성
 - `UCFWheelSyncComp` 기준으로 현재 준비/검증, 입력 생성, 실제 적용, 방향 안정화 기능 정리
@@ -426,7 +437,7 @@
 - 단순 휠 회전 기능이 아니라 휠 시각 동기화 파이프라인 중심으로 본문 작성
 
 ## 마지막 확인 기준
-- 확인 일시: 2026-04-23
+- 확인 일시: 2026-09-01
 - 확인 근거:
   - `UE/Source/CarFight_Re/Public/CFWheelSyncComp.h`
   - `UE/Source/CarFight_Re/Private/CFWheelSyncComp.cpp`

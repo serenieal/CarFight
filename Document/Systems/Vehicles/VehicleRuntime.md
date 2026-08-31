@@ -133,6 +133,8 @@
 #### 2-4. Wheel Visual 설정 적용
 `ApplyVehicleWheelVisualConfig()`는 현재 `WheelSyncComp`와 `VehicleData`가 모두 있어야 동작한다.
 
+CF-FQ-040 WSA 완료 이후 이 단계는 단순 Mesh 지정뿐 아니라 **현재 VehicleData만으로 Wheel Visual state를 deterministic하게 재구성하는 경계**다.
+
 현재 이 단계가 하는 일:
 
 - `WheelSyncComp->ExpectedWheelCount` 적용
@@ -141,8 +143,13 @@
 - `Wheel_Mesh_FR`에 FR 휠 메쉬 적용
 - `Wheel_Mesh_RL`에 RL 휠 메쉬 적용
 - `Wheel_Mesh_RR`에 RR 휠 메쉬 적용
-- `WheelVisualConfig.bAutoScaleWheelMeshToRadius`가 켜져 있으면 각 휠 StaticMesh 바운드 반지름을 측정해 `FrontWheelRadius` / `RearWheelRadius` 기준 Uniform Scale 적용
-- `WheelVisualConfig.bAutoCenterWheelMeshBoundsToOrigin`이 켜져 있으면 스케일된 StaticMesh 바운드 중심을 `Wheel_Mesh_*` 원점에 맞춰 시각 휠 중심을 물리 휠 중심과 정렬
+- 최초 Wheel Visual mutation 전에 `Wheel_Mesh_FL/FR/RL/RR`의 BP-authored base RelativeTransform(Location/Rotation/Scale)을 캡처
+- 매 Apply 시작 시 authored base full transform을 복원해 이전 VehicleData의 scale/center/orientation 잔류를 제거
+- `bUseWheelSocketScale=true`이면 USER-authored `Wheel_Anchor_*` Socket RelativeScale을 `Wheel_Mesh_*` 시각 Scale로 exact 적용
+- FR/RR explicit Mesh가 없고 FL Mesh를 null fallback으로 재사용하는 Right slot에만 local Roll(X) 180° orientation compensation 적용
+- 같은 fallback source에서 WheelSync에 FR/RR per-wheel spin handedness `-1` 전달, Left/explicit Right는 `+1`
+- Legacy `WheelVisualConfig.bAutoScaleWheelMeshToRadius`가 켜져 있으면 각 휠 StaticMesh 바운드 반지름을 측정해 `FrontWheelRadius` / `RearWheelRadius` 기준 Uniform Scale 적용
+- Legacy `WheelVisualConfig.bAutoCenterWheelMeshBoundsToOrigin`이 켜져 있으면 최종 orientation/scale 기준 StaticMesh 바운드 중심을 `Wheel_Mesh_*` 원점에 맞춰 시각 휠 중심을 물리 휠 중심과 정렬
 
 즉 현재 `VehicleRuntime`은 **휠이 몇 개인지, 앞바퀴가 몇 개인지, 실제 시각 휠 메쉬가 무엇인지까지 런타임에 반영하는 기능**도 포함한다.
 자동 스케일은 `WheelSyncComp->TryPrepareWheelSync()`가 기준 회전/위치를 캡처하기 전에 적용된다.
@@ -382,8 +389,8 @@
 - `LastVehicleRuntimeSummary` 요약 포맷 변경
 
 ## 문서 버전 관리
-- 현재 문서 버전: `1.1.0`
-- 문서 상태: `WheelMesh Auto Scale Added`
+- 현재 문서 버전: `1.2.0`
+- 문서 상태: `Wheel Size Authority + Deterministic Hot-Reinit Current`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
   - 기능 설명 본문이 바뀌면 체인지로그도 같이 갱신한다.
@@ -403,6 +410,12 @@
   - 본문 의미는 유지한 채 설명 정밀도만 올라갈 때
 
 ## 체인지로그
+### v1.2.0 - 2026-09-01
+- WSA-P0-07 USER PASS를 Current VehicleRuntime 계약으로 승격했다.
+- Socket Scale authority, FL-only shared Wheel Right fallback orientation, per-wheel spin handedness 전달을 Wheel Visual 적용 단계에 반영했다.
+- authored Wheel_Mesh full RelativeTransform을 먼저 복원해 Legacy AutoScale/AutoCenter → SocketScale → Manual hot-reinit에서 stale Location/Scale/Rotation을 남기지 않는 current 동작을 기록했다.
+- `OnConstruction()`에서는 SCS-authored Wheel transform cache를 fresh recapture하고 runtime hot-reinit에서는 동일 authored base를 유지하는 경계를 반영했다.
+
 ### v1.1.0 - 2026-07-08
 - `ApplyVehicleWheelVisualConfig()`가 WheelRadius 기준 휠 메시 자동 스케일도 처리할 수 있음을 추가했다.
 - 자동 스케일 적용 시점이 WheelSync 준비 캡처 이전임을 명시했다.
@@ -416,7 +429,7 @@
 - 현재 실패 요약 문자열과 현재 운영 스위치까지 포함해 문서화
 
 ## 마지막 확인 기준
-- 확인 일시: 2026-07-08
+- 확인 일시: 2026-09-01
 - 확인 근거:
   - `UE/Source/CarFight_Re/Public/CFVehiclePawn.h`
   - `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp`

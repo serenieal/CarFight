@@ -1,9 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.155.0
-// Date: 2026-08-28
-// Description: CarFight 싱글플레이 차량 Pawn 기준 클래스 / WSA-P0-03 Runtime Visual focused test access
+// Version: 2.165.0
+// Date: 2026-09-01
+// Description: CarFight 싱글플레이 차량 Pawn 기준 클래스 / WSA deterministic Wheel Visual full-transform seam
 // Changelog:
+// - v2.165.0: Wheel Visual authored cache를 Rotation에서 Full RelativeTransform으로 확장하고 Construction fresh recapture / runtime deterministic reapply 계약을 추가.
+// - v2.164.0: FL-only shared Wheel fallback의 Right orientation 보정을 위해 authored Wheel_Mesh base rotation cache와 Wheel Visual 전용 private helper 경계를 추가. 신규 Component 분해는 하지 않고 향후 추출 가능한 seam으로 한정.
 // - v2.155.0: WSA-P0-03 Automation이 private WheelVisual/Layout 적용 경계를 public API로 열지 않고 실제 호출하도록 전용 friend를 추가.
 // - v2.154.0: Vehicle TargetSelectable의 안정 TargetId source를 VehicleData PrimaryAssetId로 고정하고 Actor instance 이름은 Identity source에서 제외. Player-facing DisplayName은 명시 source가 생기기 전 Empty를 유지.
 // - v2.153.0: IA_RadarZoom Axis1D 슬롯과 Started handler를 추가. 양수는 UISubsystem Radar Zoom In, 음수는 Zoom Out으로만 전달하고 Scanner/Sensor Range 계산은 Pawn에 추가하지 않음.
@@ -1002,6 +1004,8 @@ class CARFIGHT_RE_API ACFVehiclePawn : public AWheeledVehiclePawn, public ICFTar
 	friend class FCFVDATuningRuntimeApplyTest;
 	// [v2.155.0] WSA-P0-03 Automation이 WheelVisual/Layout private 적용 경계를 실제 Runtime 컴포넌트로 검증할 테스트 전용 접근 경계입니다.
 	friend class FCFWheelSizeRuntimeVisualTest;
+	// [v2.164.0] WSA-P0-07 Right fallback orientation/spin Automation이 private Wheel Visual 적용 경계를 public API 확대 없이 검증합니다.
+	friend class FCFWheelSizeRightFallbackOrientationSpinTest;
 
 public:
 	// [v1.1.0] 기본 생성자
@@ -1858,6 +1862,12 @@ protected:
 	void ApplyVehicleMovementConfig();
 	// [v1.2.0] VehicleMovementConfig 중 런타임 setter가 가능한 휠 물리 값을 차량 인스턴스 기준으로 적용합니다.
 	void ApplyVehicleWheelPhysicsConfig();
+	// [v2.165.0] 현재 Pawn의 Wheel_Mesh authored base relative transform을 최초 시각 mutation 전에 1회 캡처합니다.
+	void CaptureWheelVisualAuthoredBaseTransformsIfNeeded();
+	// [v2.165.0] Construction에서 새 SCS authored transform을 다시 읽을 수 있도록 Wheel Visual authored cache를 비웁니다.
+	void InvalidateWheelVisualAuthoredBaseTransforms();
+	// [v2.165.0] 지정 Wheel Mesh를 authored base full transform으로 복원한 뒤 optional Right FL-fallback orientation을 적용합니다.
+	void PrepareWheelVisualComponentForApply(UStaticMeshComponent* WheelMeshComponent, int32 WheelIndex, bool bUseRightFallbackCompensation);
 	void ApplyVehicleWheelVisualConfig();
 	void ApplyVehicleReferenceConfig();
 		void DisplayDriveStateOnScreenDebug() const;
@@ -1915,6 +1925,12 @@ protected:
 	void HandleHandbrakeCompleted(const FInputActionValue& InputActionValue);
 
 private:
+	// [v2.165.0] Wheel Visual 최초 mutation 전에 캡처한 FL/FR/RL/RR authored base relative transform입니다.
+	TArray<FTransform> WheelVisualAuthoredBaseTransforms;
+
+	// [v2.165.0] Wheel Visual authored base transform 4개가 현재 Pawn lifetime에서 정상 캡처됐는지 여부입니다.
+	bool bHasCapturedWheelVisualAuthoredBaseTransforms = false;
+
 	// [v2.87.0] 마지막 터렛 시각 장착에 사용한 TurretMountData입니다.
 	UPROPERTY(Transient)
 	TObjectPtr<UCFTurretMountData> LastTurretMountData = nullptr;

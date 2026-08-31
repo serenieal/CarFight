@@ -1,9 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.160.0
-// Date: 2026-08-28
-// Description: CarFight 싱글플레이 차량 Pawn 구현 / WSA-P0-03 Socket-authored Wheel_Mesh scale + FL mesh fallback
+// Version: 2.165.0
+// Date: 2026-09-01
+// Description: CarFight 싱글플레이 차량 Pawn 구현 / WSA deterministic Wheel Visual full-transform seam
 // Changelog:
+// - v2.165.0: Wheel Visual authored base를 Location/Rotation/Scale 전체로 캡처해 매 Apply 시작 시 복원하고, OnConstruction은 fresh SCS authored transform을 재캡처하도록 cache invalidation 추가. Legacy/Socket/Manual hot-reinit 잔류 transform을 제거.
+// - v2.164.1: Right fallback orientation을 Mesh scale/Legacy AutoCenter보다 먼저 확정해 center correction도 최종 Right orientation 기준으로 계산되게 순서 교정.
+// - v2.164.0: FL-only shared Wheel fallback에서 FR/RR Wheel_Mesh에 authored base 기준 local Roll180을 source-aware 적용하고 per-wheel spin handedness를 WheelSync에 전달. 반복 Apply/re-init 누적을 막기 위해 authored base rotation을 1회 캡처.
 // - v2.160.0: WSA-P0-03 Socket mode에서 Wheel_Mesh_*에 USER RelativeScale을 exact set하고 FR/RL/RR null mesh는 FL을 fallback. Legacy AutoScale과 이중 적용하지 않음.
 // - v2.159.0: WSA-P0-02 Pawn legacy socket capture가 component/world scale 대신 underlying UStaticMeshSocket::RelativeScale을 FCFWheelAnchorPose에 보존.
 // - v2.158.0: VB-P0-05 설계 검수 교정으로 invalid Chassis/Transmission을 다른 Movement 값보다 먼저 거부해 partial runtime mutation을 제거하고 Shift RPM integer semantic을 runtime에서도 검증.
@@ -1430,6 +1433,8 @@ bool ACFVehiclePawn::ClearSelectedTargetManually()
 void ACFVehiclePawn::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
+	// [v2.165.0] SCS component authored transform이 Construction에서 갱신될 수 있으므로 이전 Wheel Visual cache를 폐기하고 현재 authored 값을 다시 기준으로 삼습니다.
+	InvalidateWheelVisualAuthoredBaseTransforms();
 	ApplyVehicleVisualConfig();
 	ApplyVehicleWheelVisualConfig();
 	ApplyVehicleLayoutConfig();
@@ -3658,6 +3663,81 @@ void ACFVehiclePawn::ApplyVehicleWheelPhysicsConfig()
 		*VehicleMovementConfig.RearWheelAdditionalOffset.ToCompactString());
 }
 
+// [v2.165.0] 현재 Pawn의 Wheel_Mesh authored base full relative transform을 최초 시각 mutation 전에 한 번만 캡처합니다.
+void ACFVehiclePawn::CaptureWheelVisualAuthoredBaseTransformsIfNeeded()
+{
+	if (bHasCapturedWheelVisualAuthoredBaseTransforms)
+	{
+		return;
+	}
+
+	// FL/FR/RL/RR 순서와 WheelSync index 계약을 공유하는 Wheel_Mesh 컴포넌트 이름입니다.
+	static const FName WheelMeshComponentNames[] =
+	{
+		TEXT("Wheel_Mesh_FL"),
+		TEXT("Wheel_Mesh_FR"),
+		TEXT("Wheel_Mesh_RL"),
+		TEXT("Wheel_Mesh_RR")
+	};
+
+	// 모든 Wheel_Mesh가 존재할 때만 한 번에 commit할 임시 authored base transform 배열입니다.
+	TArray<FTransform> CapturedBaseTransforms;
+	CapturedBaseTransforms.Reserve(UE_ARRAY_COUNT(WheelMeshComponentNames));
+
+	for (int32 WheelIndex = 0; WheelIndex < UE_ARRAY_COUNT(WheelMeshComponentNames); ++WheelIndex)
+	{
+		// 현재 index의 Wheel_Mesh 컴포넌트입니다.
+		UStaticMeshComponent* WheelMeshComponent = FindStaticMeshComponentByName(this, WheelMeshComponentNames[WheelIndex]);
+		if (!WheelMeshComponent)
+		{
+			return;
+		}
+
+		CapturedBaseTransforms.Add(WheelMeshComponent->GetRelativeTransform());
+	}
+
+	WheelVisualAuthoredBaseTransforms = MoveTemp(CapturedBaseTransforms);
+	bHasCapturedWheelVisualAuthoredBaseTransforms = true;
+}
+
+// [v2.165.0] 다음 Construction에서 현재 SCS authored Wheel_Mesh transform을 fresh capture하도록 기존 cache를 폐기합니다.
+void ACFVehiclePawn::InvalidateWheelVisualAuthoredBaseTransforms()
+{
+	WheelVisualAuthoredBaseTransforms.Reset();
+	bHasCapturedWheelVisualAuthoredBaseTransforms = false;
+}
+
+// [v2.165.0] authored base full transform을 먼저 복원한 뒤 Right-side FL fallback orientation을 deterministic하게 합성합니다.
+void ACFVehiclePawn::PrepareWheelVisualComponentForApply(UStaticMeshComponent* WheelMeshComponent, const int32 WheelIndex, const bool bUseRightFallbackCompensation)
+{
+	if (!WheelMeshComponent)
+	{
+		return;
+	}
+
+	CaptureWheelVisualAuthoredBaseTransformsIfNeeded();
+	if (!bHasCapturedWheelVisualAuthoredBaseTransforms || !WheelVisualAuthoredBaseTransforms.IsValidIndex(WheelIndex))
+	{
+		return;
+	}
+
+	// Blueprint/Construction에서 authored된 원래 Wheel_Mesh 전체 상대 transform입니다.
+	const FTransform& AuthoredBaseTransform = WheelVisualAuthoredBaseTransforms[WheelIndex];
+	WheelMeshComponent->SetRelativeTransform(AuthoredBaseTransform);
+
+	// Blueprint/Construction에서 authored된 원래 Wheel_Mesh 상대 회전입니다.
+	const FQuat AuthoredBaseRotation = AuthoredBaseTransform.GetRotation();
+
+	// Left용 FL Mesh를 Right slot에서 재사용할 때만 local X(Roll) 180도를 추가합니다.
+	const FQuat SlotOrientationCompensation = bUseRightFallbackCompensation
+		? FRotator(0.0f, 0.0f, 180.0f).Quaternion()
+		: FQuat::Identity;
+
+	// 반복 Apply에서도 누적되지 않는 최종 Wheel_Mesh 상대 회전입니다.
+	const FQuat TargetRelativeRotation = (AuthoredBaseRotation * SlotOrientationCompensation).GetNormalized();
+	WheelMeshComponent->SetRelativeRotation(TargetRelativeRotation.Rotator());
+}
+
 // [v2.5.2] VehicleData의 휠 메시 자산을 기존 Wheel_Mesh_* 컴포넌트에 적용하고 WheelSync 기본 시각 설정을 함께 갱신합니다.
 void ACFVehiclePawn::ApplyVehicleWheelVisualConfig()
 {
@@ -3684,36 +3764,59 @@ void ACFVehiclePawn::ApplyVehicleWheelVisualConfig()
 	UStaticMesh* EffectiveWheelMeshRL = VehicleVisualConfig.WheelMeshRL ? VehicleVisualConfig.WheelMeshRL.Get() : EffectiveWheelMeshFL;
 	UStaticMesh* EffectiveWheelMeshRR = VehicleVisualConfig.WheelMeshRR ? VehicleVisualConfig.WheelMeshRR.Get() : EffectiveWheelMeshFL;
 
+	// FR이 explicit Mesh 없이 FL을 실제 fallback source로 사용하는지 여부입니다.
+	const bool bFrontRightUsesLeftFallback = VehicleVisualConfig.WheelMeshFR == nullptr && EffectiveWheelMeshFL != nullptr;
+
+	// RR이 explicit Mesh 없이 FL을 실제 fallback source로 사용하는지 여부입니다.
+	const bool bRearRightUsesLeftFallback = VehicleVisualConfig.WheelMeshRR == nullptr && EffectiveWheelMeshFL != nullptr;
+
 	// VehicleData 기준 WheelSync 기본 설정값을 반영합니다.
 	WheelSyncComp->ExpectedWheelCount = WheelVisualConfig.ExpectedWheelCount;
 	WheelSyncComp->FrontWheelCountForSteering = WheelVisualConfig.FrontWheelCountForSteering;
+
+	// FL/RL은 +1, Right FL fallback만 -1로 설정하는 per-wheel runtime spin handedness입니다.
+	TArray<float> WheelSpinHandednessSigns;
+	WheelSpinHandednessSigns.Init(1.0f, 4);
+	WheelSpinHandednessSigns[1] = bFrontRightUsesLeftFallback ? -1.0f : 1.0f;
+	WheelSpinHandednessSigns[3] = bRearRightUsesLeftFallback ? -1.0f : 1.0f;
+	WheelSyncComp->SetWheelSpinHandednessSigns(WheelSpinHandednessSigns);
+
+	CaptureWheelVisualAuthoredBaseTransformsIfNeeded();
 
 	// [v2.160.0] 런타임 요약에 남길 현재 Wheel Size 시각 authority입니다. Socket mode가 Legacy AutoScale보다 우선합니다.
 	FString WheelMeshAutoScaleSummary = WheelVisualConfig.bUseWheelSocketScale
 		? TEXT("SocketScale=On")
 		: (WheelVisualConfig.bAutoScaleWheelMeshToRadius ? TEXT("AutoScale=On") : TEXT("ScaleAuthority=Manual"));
 
-	// 앞왼쪽 휠 메시 컴포넌트에 VehicleData의 FL 휠 메시를 적용합니다.
-	if (UStaticMeshComponent* WheelMeshFLComp = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_FL")))
+	// 앞왼쪽 Wheel_Mesh 컴포넌트입니다.
+	UStaticMeshComponent* WheelMeshFLComp = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_FL"));
+	if (WheelMeshFLComp)
 	{
+		PrepareWheelVisualComponentForApply(WheelMeshFLComp, 0, false);
 		ApplyWheelMeshVisualConfigToComponent(WheelMeshFLComp, EffectiveWheelMeshFL, VehicleLayoutConfig.WheelAnchorFL.RelativeScale, VehicleMovementConfig.FrontWheelRadius, WheelVisualConfig, WheelMeshAutoScaleSummary);
 	}
 
-	// 앞오른쪽 휠 메시 컴포넌트에 VehicleData의 FR 휠 메시를 적용합니다.
-	if (UStaticMeshComponent* WheelMeshFRComp = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_FR")))
+	// 앞오른쪽 Wheel_Mesh 컴포넌트입니다.
+	UStaticMeshComponent* WheelMeshFRComp = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_FR"));
+	if (WheelMeshFRComp)
 	{
+		PrepareWheelVisualComponentForApply(WheelMeshFRComp, 1, bFrontRightUsesLeftFallback);
 		ApplyWheelMeshVisualConfigToComponent(WheelMeshFRComp, EffectiveWheelMeshFR, VehicleLayoutConfig.WheelAnchorFR.RelativeScale, VehicleMovementConfig.FrontWheelRadius, WheelVisualConfig, WheelMeshAutoScaleSummary);
 	}
 
-	// 뒤왼쪽 휠 메시 컴포넌트에 VehicleData의 RL 휠 메시를 적용합니다.
-	if (UStaticMeshComponent* WheelMeshRLComp = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_RL")))
+	// 뒤왼쪽 Wheel_Mesh 컴포넌트입니다.
+	UStaticMeshComponent* WheelMeshRLComp = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_RL"));
+	if (WheelMeshRLComp)
 	{
+		PrepareWheelVisualComponentForApply(WheelMeshRLComp, 2, false);
 		ApplyWheelMeshVisualConfigToComponent(WheelMeshRLComp, EffectiveWheelMeshRL, VehicleLayoutConfig.WheelAnchorRL.RelativeScale, VehicleMovementConfig.RearWheelRadius, WheelVisualConfig, WheelMeshAutoScaleSummary);
 	}
 
-	// 뒤오른쪽 휠 메시 컴포넌트에 VehicleData의 RR 휠 메시를 적용합니다.
-	if (UStaticMeshComponent* WheelMeshRRComp = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_RR")))
+	// 뒤오른쪽 Wheel_Mesh 컴포넌트입니다.
+	UStaticMeshComponent* WheelMeshRRComp = FindStaticMeshComponentByName(this, TEXT("Wheel_Mesh_RR"));
+	if (WheelMeshRRComp)
 	{
+		PrepareWheelVisualComponentForApply(WheelMeshRRComp, 3, bRearRightUsesLeftFallback);
 		ApplyWheelMeshVisualConfigToComponent(WheelMeshRRComp, EffectiveWheelMeshRR, VehicleLayoutConfig.WheelAnchorRR.RelativeScale, VehicleMovementConfig.RearWheelRadius, WheelVisualConfig, WheelMeshAutoScaleSummary);
 	}
 

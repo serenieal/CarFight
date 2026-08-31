@@ -1,8 +1,10 @@
 # CarFight Data Authoring targeted Automation runner.
-# Version: v1.1.0
-# Date: 2026-08-28
+# Version: v1.2.1
+# Date: 2026-09-01
 # Description: DAUTH-P0-08 이후 Data Authoring Automation filter를 공식 UE 5.8 Editor에서 무인 실행하고 JSON 결과를 기록합니다.
 # Changelog:
+# - v1.2.1: MCP log suppression 사용 여부를 `MODEL_CONTEXT_PROTOCOL_LOG_SUPPRESSED=True/False` marker로 명시해 focused evidence의 실행 조건을 추적 가능하게 함.
+# - v1.2.0: opt-in SuppressModelContextProtocolLog switch를 추가해 제품 설정 변경 없이 unattended Automation에서 Experimental MCP 비동기 로그 오염을 격리할 수 있게 함. 기본값은 false.
 # - v1.1.0: Start-Process -Wait의 descendant-process 대기를 제거하고 exact UnrealEditor Process 객체 WaitForExit()만 사용해 TestExit 이후 wrapper가 terminal로 회수되도록 교정.
 # - v1.0.0: CarFight.DataAuthoring 전용 재실행 가능한 Automation 진입점을 추가.
 # Migration:
@@ -12,7 +14,10 @@
 [CmdletBinding()]
 param(
     # 실행할 Data Authoring Automation 전체 경로 prefix 또는 filter 문자열입니다.
-    [string]$TestFilter = 'CarFight.DataAuthoring'
+    [string]$TestFilter = 'CarFight.DataAuthoring',
+
+    # Experimental ModelContextProtocol의 비동기 로그가 무관한 Automation을 Fail시키는 환경에서 해당 category만 실행 중 숨깁니다.
+    [switch]$SuppressModelContextProtocolLog
 )
 
 # PowerShell 오류를 즉시 실패로 처리하는 실행 정책입니다.
@@ -61,6 +66,14 @@ $EditorArguments = @(
     '-stdout',
     '-FullStdOutLogOutput'
 )
+
+if ($SuppressModelContextProtocolLog) {
+    # WSA 등 MCP 자체를 검증하지 않는 unattended Automation에서 Experimental MCP의 비동기 Error 로그가 현재 test에 귀속되는 것을 방지합니다.
+    $EditorArguments += '-LogCmds="LogModelContextProtocol off"'
+}
+
+# 현재 targeted run이 Experimental MCP log suppression을 사용했는지 process evidence에 명시합니다.
+Write-Output ("MODEL_CONTEXT_PROTOCOL_LOG_SUPPRESSED={0}" -f [bool]$SuppressModelContextProtocolLog)
 
 # actual UnrealEditor Automation exact PID를 시작하며 Process Tree 전체가 아니라 이 Editor PID만 기다립니다.
 $EditorProcess = Start-Process -FilePath $EditorExecutable -ArgumentList $EditorArguments -WorkingDirectory $RepositoryRoot -PassThru

@@ -1,7 +1,7 @@
 # VehicleData
 
-- 문서 버전: v2.1.0
-- 최근 갱신일: 2026-08-18
+- 문서 버전: v2.2.0
+- 최근 갱신일: 2026-09-01
 - 문서 상태: Current Implementation
 - 적용 범위: `UCFVehicleData`, `UCFVDAValidator`, `ACFVehiclePawn::ApplyVehicleDataConfig()`와 현재 대표 VehicleData 기준
 
@@ -125,7 +125,23 @@ RedlineStartRPM
 
 ### WheelVisualConfig
 
-WheelSync와 WheelMesh 자동 스케일·바운드 중심 보정 기준을 제공한다.
+Wheel Visual의 적용 모드와 WheelSync가 소비할 시각 기준을 제공한다.
+
+현재 정상 신규 차량 제작의 Wheel Size Authority는 다음과 같다.
+
+```text
+canonical shared Wheel StaticMesh Bounds
++
+USER-authored Wheel_Anchor Socket RelativeScale
+→ Wheel_Mesh visual scale
+→ Front/Rear Wheel Radius/Width derived physics size
+```
+
+`bUseWheelSocketScale=true`일 때 USER-authored Socket Scale이 차량별 타이어 크기의 authority다. 이 모드에서는 `bAutoScaleWheelMeshToRadius`를 사용하지 않으며 물리 Radius/Width와 시각 크기는 같은 Socket Scale source에서 파생한다.
+
+FL-only shared Wheel Mesh fallback을 허용한다. FR/RL/RR Mesh가 비어 있으면 FL Mesh를 재사용하되, FR/RR처럼 Right slot에서 **null fallback으로 FL을 재사용한 경우에만** runtime이 Right orientation compensation과 spin handedness를 적용한다. explicit FR/RR Mesh는 FL과 같은 pointer여도 자동 반전하지 않는다.
+
+Legacy `bAutoScaleWheelMeshToRadius` / `bAutoCenterWheelMeshBoundsToOrigin` 경로는 기존 Asset 호환을 위해 유지한다. VehicleData hot-reinit에서는 이전 차량이 변경한 Wheel_Mesh Location/Rotation/Scale이 다음 차량에 남지 않도록 BP-authored base full relative transform을 복원한 뒤 현재 VehicleData의 Wheel Visual 설정을 적용한다.
 
 ### VehicleReferenceConfig
 
@@ -485,6 +501,13 @@ USER 튜닝 결과
 ---
 
 ## 14. Changelog
+
+### v2.2.0 - 2026-09-01
+
+- CF-FQ-040 Wheel Size Authority P0 USER PASS 결과를 Current 계약으로 승격했다.
+- `bUseWheelSocketScale=true`에서 USER-authored Wheel Socket Scale을 시각/물리 Wheel Size의 단일 authority로 정의하고 canonical shared Wheel Bounds와 함께 Radius/Width를 파생하는 계약을 추가했다.
+- FL-only shared Mesh null fallback의 Right slot orientation/spin 보정과 explicit Right Mesh 예외 계약을 반영했다.
+- runtime hot-reinit 시 authored Wheel_Mesh full relative transform(Location/Rotation/Scale)을 복원해 Legacy AutoScale/AutoCenter, SocketScale, Manual mode 사이의 stale transform 잔류를 금지하는 현재 동작을 기록했다.
 
 ### v2.1.0 - 2026-08-18
 
