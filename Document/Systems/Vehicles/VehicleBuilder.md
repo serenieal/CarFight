@@ -461,16 +461,20 @@ Document/Systems/Vehicles/VehicleCoreDecisions.md
 완료 당시 상세 설계·검증:
 
 ```text
-Document/Plan/VehicleBuilder/VehicleBuilderPlan.md
-Document/Plan/VehicleBuilder/VehicleBuilderRoadmap.md
+Document/Plan/Archive/VehicleBuilder/VehicleBuilderPlan.md
+Document/Plan/Archive/VehicleBuilder/VehicleBuilderRoadmap.md
 Document/Plan/Archive/README.md
 ```
 
-대표 Plan은 `CF-FQ-040 Done → Historical + Retained Path`로 보존한다.
+대표 Plan은 `CF-FQ-040 Done → Historical + Archived Path`로 `Document/Plan/Archive/VehicleBuilder/`에 보존한다.
 
 ---
 
 ## 13. Changelog
+
+### Maintenance - 2026-09-02
+
+- CF-FQ-040 G5 Physical Move에 따라 완료 당시 Historical Plan 링크만 `Document/Plan/Archive/VehicleBuilder/`로 교정했다. Current runtime/authoring 계약과 문서 버전은 변경하지 않는다.
 
 ### v1.0.0 - 2026-09-02
 

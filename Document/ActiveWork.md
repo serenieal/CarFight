@@ -1,6 +1,6 @@
 # CarFight Active Work
 
-- 문서 버전: v4.75
+- 문서 버전: v4.78
 - 최근 갱신일: 2026-09-02
 - 문서 상태: Current
 - 역할: CarFight 게임 프로젝트에서 현재 실제로 진행 중인 작업을 선택하고 대표 Plan으로 연결하는 **세션 복원 projection**
@@ -51,8 +51,8 @@ UI Resource 방법론 실험 `URT05_Plan.md v0.8`은 Method Validation Complete�
 ```text
 상태: Done / VB-P0-10 Current System Promotion Complete
 Current owner: Document/Systems/Vehicles/VehicleBuilder.md v1.0.0
-Historical Plan: Document/Plan/VehicleBuilder/VehicleBuilderPlan.md v0.1.46 — Historical + Retained Path
-Historical Roadmap: Document/Plan/VehicleBuilder/VehicleBuilderRoadmap.md v0.1.38 — Historical + Retained Path
+Historical Plan: Document/Plan/Archive/VehicleBuilder/VehicleBuilderPlan.md v0.1.47 — Historical + Archived Path
+Historical Roadmap: Document/Plan/Archive/VehicleBuilder/VehicleBuilderRoadmap.md v0.1.39 — Historical + Archived Path
 Data Authoring 역할: Builder Backend + Advanced Workspace
 ```
 
@@ -76,6 +76,7 @@ Data Authoring 역할: Builder Backend + Advanced Workspace
 | `CF-FQ-029` 모듈형 런처 | Paused | `Document/Plan/LauncherMissile/LauncherMissilePlan.md v0.14.0` → `LM-P0-06 USER PIE` | LM-P0-06A Failure Policy Technical PASS 반복 금지 |
 | `CF-FQ-030` 미사일 비행·유도 | Ready | `CF-TC-027 Manual PIE Pending` | Persisted Asset Technical Verification과 Direct Runtime 기술 증거 반복 금지 |
 | `CF-FQ-041` 런타임 콘텐츠 적용 메뉴 | Ready | `Document/Plan/RuntimeApply/RuntimeApplyPlan.md v0.1.5` → `RTA-P0-01 Technical PASS / next RTA-P0-02 Vehicle Runtime Apply` | Runtime Catalog/Settings, `/Game/CarFight/Debug` bounded Cook, persisted 기본 Catalog Vehicle 3 / Equipment 2, actual runtime load Automation까지 PASS했다. Vehicle은 Builder Step 8 same-Pawn transient reinitialize를 재사용하며 RTA-P0-02 착수 전 dirty `CFVehiclePawn` 최신 diff를 다시 확인한다. |
+| `CF-FQ-042` Vehicle Builder 신규 차량 생성 UX | Ready | `Document/Plan/VehicleBuilderCreationUX/VehicleBuilderCreationUXPlan.md v0.1.1` → `Design PASS / Implementation Ready / next VBCUX-P0-01 Step Navigation / Explicit New Vehicle Entry UX` | CF-FQ-040 Done을 재오픈하지 않는다. 모든 Guided 신규 차량은 `VehicleSpecificRequired`; 생성 단계 Chassis는 Recipe AssetIntent만 기록하고 VehicleData 자동 Apply 금지; post-create exact Builder adoption, reused Mesh Socket/WSA 공유, pre-refresh Step exact8 회귀를 보호한다. Wagon/WSA/ESH/Vehicle Runtime 재작업 금지. |
 | `CF-FQ-035` 인벤토리 Foundation | Paused | FeatureQueue/대표 Plan → USER Field UI·Mobility | 기존 Inventory/Fitting Technical checkpoint 반복 금지 |
 | `CF-FQ-026` 타겟 선택 | Paused | FeatureQueue/대표 Plan → `TS-P0-08 USER PIE` | TS-P0-00~07 및 Remote Technical evidence 반복 금지 |
 | `CF-FQ-015` 차량 데이터 튜닝 | Paused | FeatureQueue/대표 Plan → `VD-P0-04 USER Tuning` | VD-P0-00~03 Technical evidence 반복 금지 |
@@ -123,6 +124,23 @@ ActiveWork가 다시 상세 Build/Automation/USER 로그를 누적하거나 서�
 ---
 
 ## 8. Changelog
+
+### v4.78 - 2026-09-02
+
+- `CF-FQ-042` 설계검수 교정을 반영해 대표 Plan을 v0.1.1로 갱신하고 `Design PASS / Implementation Ready`로 전진했다.
+- VehicleSpecificRequired 유지, Recipe-only initial Chassis intent, post-create exact adoption, reused Mesh Socket/WSA 공유, pre-refresh Stable Step exact8, BuilderVM-owned creation state와 Vehicle ID validation을 구현 전 계약으로 고정했다.
+- next는 `VBCUX-P0-01`이며 현재 단일 Active CF-FQ-039와 CF-FQ-040 완료 evidence는 변경하지 않았다.
+
+### v4.77 - 2026-09-02
+
+- `CF-FQ-040 Guided Vehicle Builder` Historical 묶음의 G5 Physical Move 완료를 반영해 최근 완료 포인터를 `Document/Plan/Archive/VehicleBuilder/`로 교정했다.
+- Current owner `Systems/Vehicles/VehicleBuilder.md v1.0.0`, CF-FQ-042 Ready와 현재 단일 Active CF-FQ-039는 변경하지 않았다.
+
+### v4.76 - 2026-09-02
+
+- USER 승인으로 `CF-FQ-042 Vehicle Builder 신규 차량 생성 UX`를 P2 / Ready 후속 Feature로 등록하고 대표 owner를 `Document/Plan/VehicleBuilderCreationUX/VehicleBuilderCreationUXPlan.md v0.1.0`으로 연결했다.
+- current Source 감사에서 `2. 제작 단계` 공백은 8-Step model 부재가 아니라 Slate 초기화/refresh 결함이며, 새 VehicleData+Recipe 생성 Backend는 null/reused Chassis를 이미 지원하지만 Guided Builder 진입이 Mesh-only Candidate에 묶여 있음을 확인했다.
+- next는 `VBCUX-P0-01 Step Navigation / Explicit New Vehicle Entry UX`다. 현재 단일 Active CF-FQ-039, CF-FQ-040 Done과 Wagon/WSA/ESH 완료 evidence는 변경하지 않았다.
 
 ### v4.75 - 2026-09-02
 

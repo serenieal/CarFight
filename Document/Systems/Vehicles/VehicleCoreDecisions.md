@@ -456,7 +456,7 @@
   - 이 결정의 구현은 기존 차량 호환용 Legacy path로만 남길 수 있다.
   - 신규 정상 제작에서는 Physics WheelRadius가 Visual Scale을 결정하지 않는다.
   - `bUseWheelSocketScale`와 `bAutoScaleWheelMeshToRadius`의 동시 사용/배율 곱셈은 금지한다.
-  - 상세 successor는 CF-DL-0076 및 `Document/Plan/VehicleBuilder/WheelSizeAuthorityPlan.md`다.
+  - 상세 successor는 CF-DL-0076 및 `Document/Plan/Archive/VehicleBuilder/WheelSizeAuthorityPlan.md`다.
 
 ---
 
@@ -545,13 +545,14 @@
   - shared `/Game/CarFight/Vehicles/Shared/Tire/Wheel_FL` live Bounds는 `99.9990×24.9992×99.9990cm`, center≈0으로 canonical `100×25×100` PASS다.
   - Wheel Size Authority 재감사에서 전체 ChassisLayoutFingerprint 대신 narrow WheelSizeSourceFingerprint, Step4 RelativeScale equality, enum append-only, Legacy AutoScale/AutoCenter/Clamp 비사용을 확정했다.
 - 관련 문서:
-  - `Document/Plan/VehicleBuilder/WheelSizeAuthorityPlan.md v0.1.4`
-  - `Document/Plan/VehicleBuilder/VehicleBuilderPlan.md v0.1.23`
-  - `Document/Plan/VehicleBuilder/VehicleBuilderRoadmap.md v0.1.23`
+  - `Document/Plan/Archive/VehicleBuilder/WheelSizeAuthorityPlan.md v0.1.4`
+  - `Document/Plan/Archive/VehicleBuilder/VehicleBuilderPlan.md v0.1.23`
+  - `Document/Plan/Archive/VehicleBuilder/VehicleBuilderRoadmap.md v0.1.23`
 
 ---
 
 ## 변경 이력
+- 2026-09-02: CF-FQ-040 G5 Physical Move에 따라 VehicleBuilder/WheelSizeAuthority Historical 문서 링크를 `Document/Plan/Archive/VehicleBuilder/`로 교정했다. 결정 내용과 v1.4.2 계약은 변경하지 않았다.
 - v1.4.2 (2026-08-28)
   - CF-DL-0076 final Source audit에서 Socket mode field source를 ProjectDefault+Recipe explicit로 한정하고, Legacy WheelVisual validation과 AI private Profile wheel geometry가 새 Authority에 침범하지 않도록 설계 guard를 추가했다.
   - 상세 owner를 WheelSizeAuthorityPlan v0.1.4 / VehicleBuilderPlan-Roadmap v0.1.23으로 갱신했다.

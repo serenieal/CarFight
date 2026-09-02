@@ -1050,7 +1050,7 @@ Scanner test fixture에서 `V` 단발 입력, 5초 timed Active Scan 자동 종�
 - `Document/Plan/Archive/SensorContactPlan.md`는 완료 당시 설계·검증 evidence를 보존하는 Historical + Archived Path 문서로 유지한다.
 - TargetSelect의 기존 후보 검색·선택 수명은 그대로 유지한다.
 - CF-FQ-032의 Radar/TargetPanel USER Visual과 CF-FQ-026 TS-P0-08 USER PIE는 CF-FQ-036/037 Done으로 자동 승격되지 않는다.
-- `ScannerIntegrationPlan.md`는 CF-FQ-037 완료 당시 fixture RCA·USER Acceptance·P0-07 승격 evidence를 보존하는 Historical + Retained Path 문서다.
+- `Document/Plan/Archive/ScannerIntegrationPlan.md`는 CF-FQ-037 완료 당시 fixture RCA·USER Acceptance·P0-07 승격 evidence를 보존하는 Historical + Archived Path 문서다.
 
 - Radar normalized position을 임의의 Sensor range로 계산하지 않는다.
 - Sensor public Snapshot에 Actor/UObject pointer를 추가하지 않는다. 그런 요구가 생기면 public contract를 확장하기 전에 별도 구조 검토가 필요하다.
@@ -1058,6 +1058,10 @@ Scanner test fixture에서 `V` 단발 입력, 5초 timed Active Scan 자동 종�
 ---
 
 ## 27. Changelog
+
+### Maintenance - 2026-09-02
+
+- 이미 물리 Archive된 CF-FQ-037 Scanner Historical Plan의 stale Retained Path 표기를 `Document/Plan/Archive/ScannerIntegrationPlan.md` Archived Path로 교정했다. Sensor Runtime 계약과 v1.2.0 내용은 변경하지 않았다.
 
 ### v1.2.0 - 2026-08-22
 
