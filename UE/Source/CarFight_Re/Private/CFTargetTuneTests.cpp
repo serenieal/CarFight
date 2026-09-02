@@ -1,15 +1,17 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.3.0
-// Date: 2026-08-15
-// Description: CF-FQ-026 TS-P0-08 단일 후보 범위·대칭성·런타임 검색 진단·LOS 사전필터·실제 설정 경로 자동화 테스트
+// Version: 1.4.0
+// Date: 2026-08-31
+// Description: CF-FQ-026 TS-P0-08 단일 후보 범위·대칭성·Target Registry 검색 진단·LOS 사전필터·실제 설정 경로 자동화 테스트
 // Scope: 현재 fallback 튜닝값과 단일 후보의 좌우 반각 경계를 Transient World에서 자산 저장 없이 검증합니다.
 // Changelog:
+// - v1.4.0: SearchDiagnostics가 반복 World Actor scan 0과 Registry snapshot 사용을 검증하고 RegistryLifecycle로 초기 bootstrap 이후 spawn 증분 등록·파괴 prune를 추가.
 // - v1.3.0: SearchDiagnostics에 반각 밖·거리 밖 Targetable Actor를 추가해 후보 입력은 유지하면서 LOS Trace 2건을 사전 생략하는 계약을 검증.
 // - v1.2.0: BP_CFVehiclePawn GeneratedClass CDO를 Load-only로 읽어 실제 TargetSelectData source와 resolved config를 기록하는 SettingsPath 회귀와 SearchDiagnostics 샘플 로그를 추가.
 // - v1.1.0: Transient ACFVehiclePawn의 실제 RefreshCurrentCandidate 경로에서 월드 Actor 스캔·Visibility/전체 Trace·검색시간 진단이 채워지는 SearchDiagnostics 회귀를 추가.
 // - v1.0.0: 7도 근접 반각의 좌우 6.9도 수락·7.1도 거부, 16:9·32:9 각도 수락 대칭과 현재 fallback 설정 계약을 추가.
 // Migration:
+// - v1.4.0 성능 교정은 후보 공급원만 Registry로 변경하며 기존 7도·1200m·15% 튜닝값과 직접 조준/LOS 의미는 변경하지 않습니다.
 // - 사용자 감각 검증을 대신해 ProximityHalfAngleDeg, 거리 또는 CandidateSwitchAdvantageRatio를 변경하지 않습니다.
 // - 정확히 한 후보만 평가해 후보 경쟁과 15% 히스테리시스를 이번 원인 분리에서 제외합니다.
 // - WBP_TargetSelect, Input Action, Mapping Context와 다른 Content Asset을 생성·수정·저장하지 않습니다.
@@ -17,6 +19,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "CFTargetSelectComp.h"
+#include "CFTargetRegistrySubsystem.h"
 #include "CFTargetSelectContractTestTypes.h"
 #include "CFTargetSelectData.h"
 #include "CFTargetPointComp.h"
@@ -286,14 +289,15 @@ bool FCFTargetSearchDiagnosticsTest::RunTest(const FString& Parameters)
 	TargetSelectComp->TargetSelectData = nullptr;
 	TargetSelectComp->FallbackTargetSelectConfig = FCFTargetSelectConfig();
 
-	// [v1.1.0] 반환값과 무관하게 실제 View 생성·월드 순회·Trace·후보 평가가 수행되는 런타임 갱신을 한 번 실행합니다.
+	// [v1.4.0] 반환값과 무관하게 실제 View 생성·Registry snapshot·Trace·후보 평가가 수행되는 런타임 갱신을 한 번 실행합니다.
 	const bool bRuntimeRefreshSelectedCandidate = TargetSelectComp->RefreshCurrentCandidate();
 	(void)bRuntimeRefreshSelectedCandidate;
 
 	// [v1.1.0] 실제 런타임 검색 뒤 캐시된 성능 진단 결과입니다.
 		const FCFTargetSearchResult RuntimeSearchResult = TargetSelectComp->GetLastCandidateSearchResult();
 	AddInfo(FString::Printf(
-				TEXT("TS-P0-08 SearchDiagnostics | WorldScanned=%d | Input=%d | Accepted=%d | VisibilityTraces=%d | PrefilterSkipped=%d | TotalTraces=%d | SearchMs=%.4f"),
+		TEXT("TS-P0-08 SearchDiagnostics | RegistryTargetable=%d | WorldScanned=%d | Input=%d | Accepted=%d | VisibilityTraces=%d | PrefilterSkipped=%d | TotalTraces=%d | SearchMs=%.4f"),
+		RuntimeSearchResult.RuntimeRegistryTargetableCount,
 		RuntimeSearchResult.RuntimeWorldActorScanCount,
 		RuntimeSearchResult.InputActorCount,
 		RuntimeSearchResult.AcceptedCandidateCount,
@@ -301,7 +305,8 @@ bool FCFTargetSearchDiagnosticsTest::RunTest(const FString& Parameters)
 		RuntimeSearchResult.RuntimeVisibilityPrefilterSkipCount,
 		RuntimeSearchResult.RuntimeTotalTraceCount,
 		RuntimeSearchResult.RuntimeSearchDurationMs));
-		TestTrue(TEXT("런타임 월드 Actor 스캔 수 기록"), RuntimeSearchResult.RuntimeWorldActorScanCount > 0);
+	TestEqual(TEXT("런타임 반복 월드 Actor 스캔 0"), RuntimeSearchResult.RuntimeWorldActorScanCount, 0);
+	TestTrue(TEXT("런타임 Registry Targetable snapshot 기록"), RuntimeSearchResult.RuntimeRegistryTargetableCount >= 3);
 	TestEqual(TEXT("런타임 Targetable Actor 입력 3개 유지"), RuntimeSearchResult.InputActorCount, 3);
 	TestEqual(TEXT("런타임 inside 대상 Visibility Trace 1회"), RuntimeSearchResult.RuntimeVisibilityTraceCount, 1);
 	TestEqual(TEXT("런타임 outside 대상 LOS 사전 생략 2회"), RuntimeSearchResult.RuntimeVisibilityPrefilterSkipCount, 2);
@@ -310,8 +315,9 @@ bool FCFTargetSearchDiagnosticsTest::RunTest(const FString& Parameters)
 
 	// [v1.1.0] DebugSummary가 프로파일링 값을 외부에서 바로 읽을 수 있게 포함하는지 확인합니다.
 	const FString RuntimeDebugSummary = TargetSelectComp->BuildCandidateSearchDebugSummary();
-	TestTrue(TEXT("DebugSummary WorldScanned 포함"), RuntimeDebugSummary.Contains(TEXT("WorldScanned=")));
-		TestTrue(TEXT("DebugSummary VisibilityTraces 포함"), RuntimeDebugSummary.Contains(TEXT("VisibilityTraces=")));
+	TestTrue(TEXT("DebugSummary RegistryTargetable 포함"), RuntimeDebugSummary.Contains(TEXT("RegistryTargetable=")));
+	TestTrue(TEXT("DebugSummary WorldScanned 호환값 포함"), RuntimeDebugSummary.Contains(TEXT("WorldScanned=0")));
+	TestTrue(TEXT("DebugSummary VisibilityTraces 포함"), RuntimeDebugSummary.Contains(TEXT("VisibilityTraces=")));
 	TestTrue(TEXT("DebugSummary PrefilterSkipped 포함"), RuntimeDebugSummary.Contains(TEXT("PrefilterSkipped=")));
 	TestTrue(TEXT("DebugSummary TotalTraces 포함"), RuntimeDebugSummary.Contains(TEXT("TotalTraces=")));
 	TestTrue(TEXT("DebugSummary SearchMs 포함"), RuntimeDebugSummary.Contains(TEXT("SearchMs=")));
@@ -326,7 +332,8 @@ bool FCFTargetSearchDiagnosticsTest::RunTest(const FString& Parameters)
 	PureCandidateActors.Add(TargetActor);
 	// [v1.1.0] 월드 수집을 거치지 않은 순수 후보 평가 결과입니다.
 	const FCFTargetSearchResult PureEvaluationResult = TargetSelectComp->EvaluateCandidateActors(PureCandidateActors, PureSearchView, PureSelectionContext);
-		TestEqual(TEXT("순수 평가 월드 스캔 0"), PureEvaluationResult.RuntimeWorldActorScanCount, 0);
+	TestEqual(TEXT("순수 평가 월드 스캔 0"), PureEvaluationResult.RuntimeWorldActorScanCount, 0);
+	TestEqual(TEXT("순수 평가 Registry snapshot 0"), PureEvaluationResult.RuntimeRegistryTargetableCount, 0);
 	TestEqual(TEXT("순수 평가 Visibility Trace 0"), PureEvaluationResult.RuntimeVisibilityTraceCount, 0);
 	TestEqual(TEXT("순수 평가 LOS 사전필터 생략 0"), PureEvaluationResult.RuntimeVisibilityPrefilterSkipCount, 0);
 	TestEqual(TEXT("순수 평가 전체 Trace 0"), PureEvaluationResult.RuntimeTotalTraceCount, 0);
@@ -336,6 +343,78 @@ bool FCFTargetSearchDiagnosticsTest::RunTest(const FString& Parameters)
 	OutsideAngleActor->Destroy();
 	OutsideDistanceActor->Destroy();
 	VehiclePawn->Destroy();
+	return true;
+}
+
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFTargetRegistryLifecycleTest,
+	"CarFight.TargetSelect.TS_P0_08.RegistryLifecycle",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.4.0] 초기 bootstrap 이후 spawn된 Targetable Actor의 증분 등록과 파괴 Actor prune를 검증합니다.
+bool FCFTargetRegistryLifecycleTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.4.0] Registry lifecycle을 Content Asset 변경 없이 검증할 transient World입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("TS-P0-08 RegistryLifecycle Transient World 생성"), TestWorld))
+	{
+		return false;
+	}
+
+	// [v1.4.0] 현재 World의 TargetSelect 후보 Registry Subsystem입니다.
+	UCFTargetRegistrySubsystem* TargetRegistrySubsystem = TestWorld->GetSubsystem<UCFTargetRegistrySubsystem>();
+	if (!TestNotNull(TEXT("Target Registry Subsystem 존재"), TargetRegistrySubsystem))
+	{
+		return false;
+	}
+
+	// [v1.4.0] 새 Actor spawn 전에 초기 bootstrap을 확정할 snapshot입니다.
+	TArray<AActor*> InitialTargetActors;
+	TargetRegistrySubsystem->CollectTargetableActors(InitialTargetActors);
+	// [v1.4.0] spawn handler가 초기 scan 완료 뒤에도 새 Targetable을 잡는지 검증할 첫 대상입니다.
+	ACFTargetSelectContractActor* SpawnedTargetA = SpawnTuneTarget(
+		TestWorld,
+		TEXT("RegistrySpawnedTargetA"),
+		FVector(2000.0f, 0.0f, 100.0f));
+	if (!TestNotNull(TEXT("Registry spawn 대상 A 생성"), SpawnedTargetA))
+	{
+		return false;
+	}
+
+	// [v1.4.0] 대상 A spawn 직후 Registry가 반환하는 snapshot입니다.
+	TArray<AActor*> AfterSpawnTargetActors;
+	TargetRegistrySubsystem->CollectTargetableActors(AfterSpawnTargetActors);
+	TestTrue(TEXT("초기 scan 이후 spawn 대상 A 증분 등록"), AfterSpawnTargetActors.Contains(SpawnedTargetA));
+
+	// [v1.4.0] 연속 spawn 증분 등록을 확인할 두 번째 대상입니다.
+	ACFTargetSelectContractActor* SpawnedTargetB = SpawnTuneTarget(
+		TestWorld,
+		TEXT("RegistrySpawnedTargetB"),
+		FVector(2500.0f, 100.0f, 100.0f));
+	if (!TestNotNull(TEXT("Registry spawn 대상 B 생성"), SpawnedTargetB))
+	{
+		SpawnedTargetA->Destroy();
+		return false;
+	}
+
+	// [v1.4.0] 두 번째 spawn 뒤 Registry가 반환하는 snapshot입니다.
+	TArray<AActor*> AfterSecondSpawnTargetActors;
+	TargetRegistrySubsystem->CollectTargetableActors(AfterSecondSpawnTargetActors);
+	TestTrue(TEXT("spawn 대상 A 유지"), AfterSecondSpawnTargetActors.Contains(SpawnedTargetA));
+	TestTrue(TEXT("spawn 대상 B 증분 등록"), AfterSecondSpawnTargetActors.Contains(SpawnedTargetB));
+
+	SpawnedTargetA->Destroy();
+
+	// [v1.4.0] 파괴된 대상 A의 weak reference가 prune된 뒤 Registry snapshot입니다.
+	TArray<AActor*> AfterDestroyTargetActors;
+	TargetRegistrySubsystem->CollectTargetableActors(AfterDestroyTargetActors);
+	TestFalse(TEXT("파괴 대상 A Registry prune"), AfterDestroyTargetActors.Contains(SpawnedTargetA));
+	TestTrue(TEXT("유효 대상 B Registry 유지"), AfterDestroyTargetActors.Contains(SpawnedTargetB));
+
+	SpawnedTargetB->Destroy();
 	return true;
 }
 

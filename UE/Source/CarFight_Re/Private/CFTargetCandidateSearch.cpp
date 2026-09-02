@@ -1,15 +1,17 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.5.0
-// Date: 2026-08-15
-// Description: TS-P0-03 후보 탐색·TS-P0-04 선택 수명과 TS-P0-08 지속형 디버그·LOS 사전필터·검색 진단 구현
+// Version: 1.6.0
+// Date: 2026-08-31
+// Description: TS-P0-03 후보 탐색·TS-P0-04 선택 수명과 TS-P0-08 Target Registry·LOS 사전필터·검색 진단 구현
 // Changelog:
+// - v1.6.0: 20Hz 후보 갱신의 TActorIterator 전체 월드 순회를 UCFTargetRegistrySubsystem snapshot으로 교체하고 direct-hit fallback을 추가.
 // - v1.5.0: 기존 Evaluate가 반드시 거부할 비-Direct 거리·반각 밖 Targetable Actor의 LOS Trace를 사전 생략하고 생략 수를 진단.
 // - v1.4.0: 실제 런타임 후보 갱신의 월드 Actor 스캔 수, Visibility/전체 Trace 수와 View·수집·평가 전체 경과시간을 진단 결과에 기록.
 // - v1.3.0: 자동 후보 디버그 Sphere를 한 프레임이 아니라 CandidateRefreshIntervalSec 동안 유지하고 반경을 컴포넌트 Debug 설정에서 읽도록 변경.
 // - v1.2.1: 기존 v1.2.0 의도와 달리 남아 있던 익명 네임스페이스 IsFiniteVector를 IsFiniteTargetCandidateVector로 실제 교정해 Unity Build 충돌을 제거.
 // - v1.2.0: Unity 빌드에서 다른 구현 파일의 익명 네임스페이스 심볼과 충돌하지 않도록 후보 탐색 전용 이름으로 분리.
 // Migration:
+// - v1.6.0 후보 공급원만 Registry로 교체하며 직접 Trace, TargetSelect LOS, EvaluateCandidateActors 정렬과 히스테리시스 의미는 변경하지 않습니다. Sensor Snapshot에는 의존하지 않습니다.
 // - v1.5.0 사전필터는 LOS Trace 수만 줄이며 모든 Targetable Actor를 OutCandidateActors에 유지한다. 직접 조준 후보와 기존 Evaluate/정렬/히스테리시스 계약은 변경하지 않는다.
 // - TS-P0-08 디버그 표시 변경은 시각 진단 수명·반경만 다루며 ProximityHalfAngleDeg, 거리, 히스테리시스와 후보 정렬 계약은 변경하지 않는다.
 // - 후보 평가는 TargetSelect 전용 Trace와 ICFTargetSelectable 대표 위치를 사용한다.
@@ -19,6 +21,7 @@
 
 #include "CFCollisionChannels.h"
 #include "CFTargetSelectable.h"
+#include "CFTargetRegistrySubsystem.h"
 #include "CFVehicleCameraComp.h"
 #include "CFVehiclePawn.h"
 
@@ -27,7 +30,6 @@
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
-#include "EngineUtils.h"
 #include "GameFramework/Actor.h"
 #include "HAL/PlatformTime.h"
 #include "UnrealClient.h"
@@ -370,13 +372,13 @@ bool UCFTargetSelectComp::ShouldKeepCurrentCandidateForStability(const FCFTarget
 bool UCFTargetSelectComp::BuildRuntimeSearchView(
 	FCFTargetSearchView& OutSearchView,
 	TArray<AActor*>& OutCandidateActors,
-			int32& OutWorldActorScanCount,
+	int32& OutRegistryTargetableCount,
 	int32& OutVisibilityTraceCount,
 	int32& OutVisibilityPrefilterSkipCount,
 	int32& OutTotalTraceCount) const
 {
-	// [v1.5.0] 호출자가 실패 경로에서도 이전 프레임 수치를 재사용하지 않도록 런타임 진단값을 먼저 초기화합니다.
-	OutWorldActorScanCount = 0;
+	// [v1.6.0] 호출자가 실패 경로에서도 이전 프레임 수치를 재사용하지 않도록 Registry/Trace 진단값을 먼저 초기화합니다.
+	OutRegistryTargetableCount = 0;
 	OutVisibilityTraceCount = 0;
 	OutVisibilityPrefilterSkipCount = 0;
 	OutTotalTraceCount = 0;
@@ -423,17 +425,39 @@ bool UCFTargetSelectComp::BuildRuntimeSearchView(
 		OutSearchView.DirectAimHitActor = DirectHitResult.GetActor();
 	}
 
-				for (TActorIterator<AActor> ActorIterator(CurrentWorld); ActorIterator; ++ActorIterator)
+	// [v1.6.0] 매 후보 갱신 전체 월드 순회 대신 ICFTargetSelectable Actor만 제공하는 월드 Registry입니다.
+	UCFTargetRegistrySubsystem* TargetRegistrySubsystem = CurrentWorld->GetSubsystem<UCFTargetRegistrySubsystem>();
+	// [v1.6.0] Registry가 보유한 현재 유효 TargetSelectable Actor snapshot입니다.
+	TArray<AActor*> RegisteredTargetActors;
+	if (TargetRegistrySubsystem)
 	{
-		// [v1.4.0] 현재 구현이 매 후보 갱신마다 실제로 순회한 전체 월드 Actor 수를 성능 진단에 기록합니다.
-		++OutWorldActorScanCount;
-		AActor* CandidateActor = *ActorIterator;
+		TargetRegistrySubsystem->CollectTargetableActors(RegisteredTargetActors);
+	}
+	OutRegistryTargetableCount = RegisteredTargetActors.Num();
+
+	for (AActor* RegisteredTargetActor : RegisteredTargetActors)
+	{
+		if (CanUseActorAsTarget(RegisteredTargetActor, DefaultSelectionContext))
+		{
+			OutCandidateActors.Add(RegisteredTargetActor);
+		}
+	}
+
+	// [v1.6.0] Spawn/streaming 등록 타이밍과 무관하게 직접 Trace가 맞춘 유효 대상은 즉시 후보에 보강합니다.
+	AActor* DirectAimHitActor = OutSearchView.DirectAimHitActor.Get();
+	if (CanUseActorAsTarget(DirectAimHitActor, DefaultSelectionContext)
+		&& !OutCandidateActors.Contains(DirectAimHitActor))
+	{
+		OutCandidateActors.Add(DirectAimHitActor);
+	}
+
+	for (AActor* CandidateActor : OutCandidateActors)
+	{
+		// [v1.6.0] Registry snapshot 이후 상태가 변한 Actor도 기존 필터 계약으로 다시 방어합니다.
 		if (!CanUseActorAsTarget(CandidateActor, DefaultSelectionContext))
 		{
 			continue;
 		}
-
-						OutCandidateActors.Add(CandidateActor);
 
 		// [v1.5.0] 직접 조준 적중 Actor는 기존처럼 별도 LOS Trace 없이 visible로 취급합니다.
 		const bool bDirectAimActor = OutSearchView.DirectAimHitActor.Get() == CandidateActor;
@@ -481,23 +505,25 @@ bool UCFTargetSelectComp::BuildRuntimeSearchView(
 
 bool UCFTargetSelectComp::RefreshCurrentCandidate()
 {
-	// [v1.4.0] View 생성·월드 Actor 수집·Trace·후보 평가 전체의 실제 검색 시간을 측정할 시작 시각입니다.
+	// [v1.6.0] View 생성·Registry 후보 수집·Trace·후보 평가 전체의 실제 검색 시간을 측정할 시작 시각입니다.
 	const double SearchStartSeconds = FPlatformTime::Seconds();
+	// [v1.6.0] 이번 런타임 후보 평가에 사용할 카메라·가시성 검색 View입니다.
 	FCFTargetSearchView SearchView;
+	// [v1.6.0] Registry snapshot에서 현재 선택 컨텍스트를 통과한 후보 Actor 배열입니다.
 	TArray<AActor*> CandidateActors;
-	// [v1.4.0] 이번 런타임 검색이 TActorIterator로 순회한 전체 Actor 수입니다.
-	int32 WorldActorScanCount = 0;
-			// [v1.4.0] 이번 런타임 검색이 대상 시야 확인에 실제 사용한 Visibility Trace 수입니다.
+	// [v1.6.0] Registry snapshot이 반환한 전체 유효 ICFTargetSelectable Actor 수입니다.
+	int32 RegistryTargetableCount = 0;
+	// [v1.4.0] 이번 런타임 검색이 대상 시야 확인에 실제 사용한 Visibility Trace 수입니다.
 	int32 VisibilityTraceCount = 0;
 	// [v1.5.0] 기존 proximity 거리·반각 밖이라 LOS Trace를 생략한 Targetable Actor 수입니다.
 	int32 VisibilityPrefilterSkipCount = 0;
 	// [v1.4.0] 직접 조준 Trace와 Visibility Trace를 합친 전체 Trace 수입니다.
 	int32 TotalTraceCount = 0;
-	if (!BuildRuntimeSearchView(SearchView, CandidateActors, WorldActorScanCount, VisibilityTraceCount, VisibilityPrefilterSkipCount, TotalTraceCount))
+	if (!BuildRuntimeSearchView(SearchView, CandidateActors, RegistryTargetableCount, VisibilityTraceCount, VisibilityPrefilterSkipCount, TotalTraceCount))
 	{
 		// [v1.4.0] 검색 View 구성 실패도 비용과 실제 시도 횟수를 잃지 않고 마지막 진단 결과로 남깁니다.
 		FCFTargetSearchResult FailedSearchResult;
-						FailedSearchResult.RuntimeWorldActorScanCount = WorldActorScanCount;
+		FailedSearchResult.RuntimeRegistryTargetableCount = RegistryTargetableCount;
 		FailedSearchResult.RuntimeVisibilityTraceCount = VisibilityTraceCount;
 		FailedSearchResult.RuntimeVisibilityPrefilterSkipCount = VisibilityPrefilterSkipCount;
 		FailedSearchResult.RuntimeTotalTraceCount = TotalTraceCount;
@@ -509,7 +535,7 @@ bool UCFTargetSelectComp::RefreshCurrentCandidate()
 
 	// [v1.4.0] 기존 결정적 후보 판정을 그대로 수행한 뒤 런타임 성능 진단값만 결과에 덧붙입니다.
 	FCFTargetSearchResult SearchResult = EvaluateCandidateActors(CandidateActors, SearchView, DefaultSelectionContext);
-		SearchResult.RuntimeWorldActorScanCount = WorldActorScanCount;
+	SearchResult.RuntimeRegistryTargetableCount = RegistryTargetableCount;
 	SearchResult.RuntimeVisibilityTraceCount = VisibilityTraceCount;
 	SearchResult.RuntimeVisibilityPrefilterSkipCount = VisibilityPrefilterSkipCount;
 	SearchResult.RuntimeTotalTraceCount = TotalTraceCount;
@@ -565,11 +591,12 @@ FString UCFTargetSelectComp::BuildCandidateSearchDebugSummary() const
 		? SearchResult.BestCandidate.TargetActor->GetName()
 		: TEXT("None");
 
-			return FString::Printf(
-				TEXT("TargetCandidateSearch: Input=%d, Accepted=%d, Direct=%d, WorldScanned=%d, VisibilityTraces=%d, PrefilterSkipped=%d, TotalTraces=%d, SearchMs=%.4f, Best=%s, KeptForStability=%s"),
+	return FString::Printf(
+		TEXT("TargetCandidateSearch: Input=%d, Accepted=%d, Direct=%d, RegistryTargetable=%d, WorldScanned=%d, VisibilityTraces=%d, PrefilterSkipped=%d, TotalTraces=%d, SearchMs=%.4f, Best=%s, KeptForStability=%s"),
 		SearchResult.InputActorCount,
 		SearchResult.AcceptedCandidateCount,
 		SearchResult.DirectAimCandidateCount,
+		SearchResult.RuntimeRegistryTargetableCount,
 		SearchResult.RuntimeWorldActorScanCount,
 		SearchResult.RuntimeVisibilityTraceCount,
 		SearchResult.RuntimeVisibilityPrefilterSkipCount,

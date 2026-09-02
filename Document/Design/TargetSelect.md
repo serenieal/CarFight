@@ -1,9 +1,9 @@
 # CarFight 타겟 선택 시스템
 
-- 문서 버전: v0.3.0
-- 상태: 기획 확정 / TS-P0-08 Paused
+- 문서 버전: v0.4.0
+- 상태: 기획 확정 / TS-P0-08 Technical PASS / USER PIE Pending / UE Audit P1 Target Registry Remediation PASS
 - 작성일: 2026-07-22
-- 최근 갱신일: 2026-07-30
+- 최근 갱신일: 2026-08-31
 - 대상 프로젝트: CarFight
 - 기능 ID: `CF-FQ-026`
 - 상위 원칙: 직접 조준을 유지하면서 정보 확인과 장비 연동에 사용할 지속 타겟을 제공한다.
@@ -17,12 +17,14 @@
 ## 0. 현재 구현 체크포인트
 
 ```text
-현재 Task: TS-P0-01 계약 및 데이터 설계 검증
-코드 구현: PASS 후보
+현재 Task: TS-P0-08 Technical PASS 유지 + UE 전수검사 P1 Target Registry Remediation
+코드 구현: PASS
 Editor 빌드: PASS
-Blueprint 노출 검증: Pending
-사용자 PIE: Pending
-다음 Task: TS-P0-00 조사 결과 복구와 TS-P0-01 검증 완료 후 TS-P0-02
+TargetSelect Automation: 11 / 11 PASS
+Registry SearchDiagnostics: RegistryTargetable=4 / WorldScanned=0 / Input=3 / VisibilityTraces=1 / PrefilterSkipped=2 / TotalTraces=2
+Registry Lifecycle: 초기 bootstrap 후 spawn 증분 등록 + 파괴 weak reference prune PASS
+사용자 PIE: 기존 TS-P0-08 USER PIE Pending 유지
+다음 Task: TargetSelect 재개 시 기존 USER PIE Gate 진행. UE Audit P1 반복 World Actor scan 교정은 재개 대상 아님.
 ```
 
 현재 존재하는 C++ 기반:
@@ -32,9 +34,14 @@ Blueprint 노출 검증: Pending
 - CFTargetSelectable
 - CFTargetSelectData
 - CFTargetSelectComp
+- CFTargetPointComp
+- CFTargetRegistrySubsystem
+- CFTargetSelectWidget
+- Target Marker runtime Class/Layer owner: UCFUISubsystem (DefaultTargetSelectWidgetClass, Game Layer ZOrder)
+- ACFVehiclePawn TargetSelectWidgetClass/TargetSelectHudZOrder: 저장 역직렬화 호환 전용, constructor/runtime hard-load·생성 소유권 없음
 ```
 
-이 구현은 후보 탐색, 타겟 포인트, 입력, HUD와 장비 연결을 아직 포함하지 않는다. 따라서 P0 완료 또는 Current System으로 해석하지 않는다.
+현재 후보 검색은 `CFTargetRegistrySubsystem`이 제공하는 `ICFTargetSelectable` Actor snapshot을 사용한다. 직접 조준 Trace, TargetSelect 전용 LOS, 결정적 후보 정렬, 기존 후보 히스테리시스와 선택 수명 계약은 그대로 유지한다. Sensor Snapshot은 후보 공급원으로 사용하지 않는다.
 
 ---
 
@@ -173,7 +180,27 @@ P0 범위에서 제외한다. P1에서 후보 목록 순환 방식으로 추가�
 
 고정 픽셀 반경만 사용하는 방식은 울트라와이드와 해상도 차이에 취약하므로 주 기준으로 사용하지 않는다.
 
-### 5.3 타겟 포인트
+### 5.3 후보 Registry
+
+후보 갱신 주기마다 전체 World Actor를 순회하지 않는다.
+
+현재 P0 구현 계약:
+
+- `UCFTargetRegistrySubsystem`이 World 단위 후보 공급 책임을 가진다.
+- World 기존 Actor는 초기 bootstrap에서 정확히 한 번만 전체 순회한다.
+- 이후 spawn되는 Actor는 World spawn delegate로 증분 등록한다.
+- streaming Level이 추가되면 해당 Level Actor만 검사한다.
+- Registry는 `TWeakObjectPtr<AActor>`로 Actor 수명을 소유하지 않는다.
+- 후보 snapshot 요청 시 파괴·제거된 weak reference를 prune한다.
+- Registry에는 `ICFTargetSelectable` 구현 Actor만 보관한다.
+- 자기 자신, 관계, 분류, 파괴 상태와 현재 선택 컨텍스트 필터는 기존 `CanUseActorAsTarget`에서 계속 판정한다.
+- 직접 조준 Trace가 맞춘 유효 Targetable은 Registry 반영 타이밍과 무관하게 현재 후보 배열에 즉시 보강한다.
+- Registry의 `TSet` 순회 순서는 후보 우선순위를 결정하지 않는다. 최종 후보는 기존 결정적 정렬 규칙으로 다시 평가한다.
+- Sensor contact/snapshot을 Registry 대체재로 사용하지 않는다. Sensor와 TargetSelect의 책임은 계속 분리한다.
+
+성능 진단의 `RuntimeWorldActorScanCount`는 이전 공개 진단 호환을 위해 유지하지만, 반복 후보 갱신에서는 `0`이어야 한다. 현재 Registry snapshot 규모는 `RuntimeRegistryTargetableCount`로 관측한다.
+
+### 5.4 타겟 포인트
 
 액터 원점만으로 선택 위치를 평가하지 않는다.
 
