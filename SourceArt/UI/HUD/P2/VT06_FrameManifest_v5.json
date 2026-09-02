@@ -1,0 +1,54 @@
+{
+  "version": "1.4.0",
+  "status": "PreUserPassCandidate",
+  "source": {
+    "path": "SourceArt/UI/HUD/VT/VT_VehPanel01.jpg",
+    "size": [
+      1280,
+      594
+    ],
+    "sha256": "cf5b0a57b76f9c41272ee01ed752d263a7b01a78bf02e9cb9dc042d000df6b6b"
+  },
+  "target": {
+    "size": [
+      896,
+      416
+    ],
+    "uniform_scale": 0.7,
+    "crop": false,
+    "stretch": false
+  },
+  "frame_master_owns": [
+    "outer_shell",
+    "corner_detail",
+    "top_accent",
+    "lower_outer_base"
+  ],
+  "intentionally_excluded": [
+    "rpm_dynamic_content",
+    "speed_digits_and_unit",
+    "gear_value_and_local_frame",
+    "vehicle_silhouette",
+    "armor_direction_cards_and_values",
+    "shield_integrity_labels_values_and_fills",
+    "defense_row_local_frames",
+    "temporary_safe_area_boxes",
+    "temporary_upper_central_seam",
+    "temporary_main_defense_separator",
+    "temporary_shared_surface_boxes"
+  ],
+  "outputs": {
+    "frame_candidate": {
+      "path": "SourceArt/UI/HUD/P2/VT06_FrameMaster_v5.png",
+      "sha256": "e560caafd4597534769364df4ff5ad8fe7c5fa22e4407f00d6fc012c226a59a5"
+    },
+    "review": {
+      "path": "SourceArt/UI/HUD/P2/Review/VT06_FrameReview_v5.png",
+      "sha256": "45b18df65c2315682f35934b5bc80a6e3419751e0be53b725045cc0e4e48d306"
+    }
+  },
+  "ue_import": false,
+  "ue_asset_mutation": false,
+  "content_reposition": false,
+  "user_visual_pass": false
+}

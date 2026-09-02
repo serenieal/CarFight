@@ -1,0 +1,85 @@
+{
+  "target_id": "VT-VEH-01",
+  "slice": "RPM-S1 Source Mask Pack",
+  "status": "LOCAL_SOURCE_PACK_READY_USER_REVIEW_PENDING",
+  "qa_pass": true,
+  "canvas": [
+    724,
+    467
+  ],
+  "tick_count": 21,
+  "progress_level_count": 21,
+  "red_start_ratio": 0.85,
+  "red_zone_storage": "derived from R progress + G tick; not stored as runtime channel",
+  "ratio_results": {
+    "0.00": {
+      "expected": 0,
+      "actual": 0
+    },
+    "0.25": {
+      "expected": 5,
+      "actual": 5
+    },
+    "0.50": {
+      "expected": 10,
+      "actual": 10
+    },
+    "0.85": {
+      "expected": 17,
+      "actual": 17
+    },
+    "1.00": {
+      "expected": 21,
+      "actual": 21
+    }
+  },
+  "production_import_candidate": {
+    "asset_name": "T_UI_RPMMaskPack",
+    "filename": "T_UI_RPMMaskPack.png",
+    "sha256": "6cc32459a972a79c6aa50983050aa5fdb8656a4efa5a7caa9475fda66def8777",
+    "size": [
+      724,
+      467
+    ],
+    "mode": "RGBA",
+    "sRGB": false,
+    "channels": {
+      "R": "21-step progress map",
+      "G": "21-tick mask",
+      "B": "guide-rail mask",
+      "A": "constant 255 opaque safety channel"
+    }
+  },
+  "runtime_contract": {
+    "widget": "WBP_CFSpeedGauge.Image_RPMGauge",
+    "material": "M_UI_RPMGauge",
+    "runtime_parameter": "RPMRatio",
+    "red_start_parameter": "RedStartRatio=0.85",
+    "texture_sample_count": 1,
+    "separate_tick_widgets": 0,
+    "track_off": "G channel × inactive brightness",
+    "rpm_label_owner": "TextBlock",
+    "x1000_visible": false,
+    "numeric_scale_visible": false
+  },
+  "working_reference_assets": {
+    "T_UI_RpmRedMask": {
+      "role": "QA/reference only; runtime red is derived",
+      "sha256": "8eb54889a4007ea73730cce3d3d1f7c77e51f2b884b14d7c8879c5d09003132c"
+    },
+    "VT02_RpmLabelRef": {
+      "role": "typography reference only; do not import",
+      "sha256": "fcda86b73164244e88a92a0eacc4ec229b539c0877b56bff5f32291a8f02060d"
+    }
+  },
+  "reviews": {
+    "runtime_review": {
+      "filename": "VT02_RpmRuntimePack_Review_FINAL3.png",
+      "sha256": "8669de6f9ba74ebd11754f62547852daad835bca951f13043722aa26cdf01461"
+    },
+    "channel_review": {
+      "filename": "VT02_RPMMaskPack_Review_FINAL.png",
+      "sha256": "41d58d5f0dfd9c399d2f4fe77a84d1d479ffc3c04e2f19163fb8c05b06a551c4"
+    }
+  }
+}
