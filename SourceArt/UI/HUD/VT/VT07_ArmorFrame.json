@@ -1,0 +1,45 @@
+{
+  "asset_id": "VT07_ArmorFrame",
+  "version": "1.0.0",
+  "role": "VehiclePanelArmorBodyMapLocalStaticFrame",
+  "source_type": "ExplicitPathJSON",
+  "canvas": {"width": 422, "height": 272, "origin": "TopLeft", "background": "Transparent"},
+  "runtime_policy": {
+    "independent_runtime_state": false,
+    "planned_runtime_pack": "SingleStaticTexture",
+    "baked_text": false,
+    "baked_runtime_values": false,
+    "separate_accent_layer": false
+  },
+  "palette": {
+    "surface_deep": "#071017",
+    "surface_mid": "#101A20",
+    "metal_dark": "#38434A",
+    "metal_mid": "#69767C",
+    "metal_high": "#B1BDC1",
+    "amber": "#E9A52C",
+    "amber_dim": "#79551B",
+    "cyan_dim": "#155C69"
+  },
+  "elements": [
+    {"id":"ModuleShell","kind":"FilledPath","fill_role":"metal_dark","fill_opacity":0.96,"path_d":"M 30 2 L 398 2 L 420 24 L 420 248 L 398 270 L 28 270 L 2 244 L 2 28 Z"},
+    {"id":"InnerSurface","kind":"FilledPath","fill_role":"surface_deep","fill_opacity":0.98,"path_d":"M 38 14 L 390 14 L 408 32 L 408 240 L 390 258 L 36 258 L 14 236 L 14 36 Z"},
+    {"id":"UpperBevel","kind":"FilledPath","fill_role":"metal_mid","fill_opacity":0.65,"path_d":"M 42 14 L 390 14 L 399 23 L 55 23 Z"},
+    {"id":"LowerBevel","kind":"FilledPath","fill_role":"metal_mid","fill_opacity":0.40,"path_d":"M 40 249 L 389 249 L 380 258 L 36 258 L 27 249 Z"},
+    {"id":"LeftMachineFace","kind":"FilledPath","fill_role":"surface_mid","fill_opacity":0.74,"path_d":"M 14 61 L 27 46 L 38 46 L 33 92 L 33 194 L 41 226 L 28 226 L 14 212 Z"},
+    {"id":"RightMachineFace","kind":"FilledPath","fill_role":"surface_mid","fill_opacity":0.70,"path_d":"M 408 62 L 395 47 L 385 47 L 390 91 L 390 196 L 382 226 L 395 226 L 408 212 Z"},
+    {"id":"TopAmberAccent","kind":"FilledPath","fill_role":"amber","fill_opacity":0.95,"path_d":"M 245 18 L 356 18 L 348 25 L 237 25 Z"},
+    {"id":"TopAmberTail","kind":"FilledPath","fill_role":"amber_dim","fill_opacity":0.82,"path_d":"M 363 18 L 390 18 L 399 27 L 352 27 Z"},
+    {"id":"RightAmberIndex","kind":"FilledPath","fill_role":"amber","fill_opacity":0.86,"path_d":"M 398 68 L 408 80 L 408 106 L 402 106 L 395 94 Z"},
+    {"id":"LowerCyanIndex","kind":"FilledPath","fill_role":"cyan_dim","fill_opacity":0.62,"path_d":"M 76 251 L 164 251 L 157 258 L 68 258 Z"},
+    {"id":"CradleTopLeft","kind":"StrokePath","stroke_role":"metal_mid","stroke_opacity":0.50,"stroke_width":1.5,"path_d":"M 78 65 L 78 49 L 94 35 L 153 35"},
+    {"id":"CradleTopRight","kind":"StrokePath","stroke_role":"metal_mid","stroke_opacity":0.50,"stroke_width":1.5,"path_d":"M 270 35 L 329 35 L 345 49 L 345 65"},
+    {"id":"CradleBottomLeft","kind":"StrokePath","stroke_role":"metal_mid","stroke_opacity":0.42,"stroke_width":1.5,"path_d":"M 78 205 L 78 222 L 94 238 L 151 238"},
+    {"id":"CradleBottomRight","kind":"StrokePath","stroke_role":"metal_mid","stroke_opacity":0.42,"stroke_width":1.5,"path_d":"M 272 238 L 329 238 L 345 222 L 345 205"},
+    {"id":"CradleIndexLeft","kind":"FilledPath","fill_role":"amber_dim","fill_opacity":0.62,"path_d":"M 69 111 L 76 101 L 81 101 L 81 132 L 76 138 L 69 138 Z"},
+    {"id":"CradleIndexRight","kind":"FilledPath","fill_role":"amber_dim","fill_opacity":0.62,"path_d":"M 354 136 L 347 142 L 342 142 L 342 111 L 347 105 L 354 105 Z"},
+    {"id":"InnerTopRail","kind":"StrokePath","stroke_role":"metal_high","stroke_opacity":0.46,"stroke_width":1.4,"path_d":"M 58 31 L 365 31 L 384 49"},
+    {"id":"InnerBottomRail","kind":"StrokePath","stroke_role":"metal_high","stroke_opacity":0.28,"stroke_width":1.2,"path_d":"M 54 241 L 365 241 L 384 222"}
+  ],
+  "hard_rules": ["NoText","NoRuntimeValues","NoTemporarySafeAreaBox","NoArmorValueBake","NoFullClosedLayoutDebugBox","NoSeparateDecorativeLayerWithoutRuntimeReason"]
+}

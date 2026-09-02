@@ -1,0 +1,40 @@
+{
+  "asset_id": "VT07_SpeedFrame",
+  "version": "1.0.0",
+  "role": "VehiclePanelSpeedRpmLocalStaticFrame",
+  "source_type": "ExplicitPathJSON",
+  "canvas": {"width": 422, "height": 272, "origin": "TopLeft", "background": "Transparent"},
+  "runtime_policy": {
+    "independent_runtime_state": false,
+    "planned_runtime_pack": "SingleStaticTexture",
+    "baked_text": false,
+    "baked_runtime_values": false,
+    "separate_accent_layer": false
+  },
+  "palette": {
+    "surface_deep": "#071017",
+    "surface_mid": "#101C24",
+    "metal_dark": "#34434D",
+    "metal_mid": "#60727D",
+    "metal_high": "#A9BBC3",
+    "cyan": "#28D5EC",
+    "cyan_dim": "#176C7A"
+  },
+  "elements": [
+    {"id":"ModuleShell","kind":"FilledPath","fill_role":"metal_dark","fill_opacity":0.96,"path_d":"M 18 2 L 392 2 L 420 28 L 420 242 L 392 270 L 24 270 L 2 248 L 2 22 Z"},
+    {"id":"InnerSurface","kind":"FilledPath","fill_role":"surface_deep","fill_opacity":0.98,"path_d":"M 28 14 L 386 14 L 408 36 L 408 234 L 384 258 L 34 258 L 14 238 L 14 34 Z"},
+    {"id":"UpperBevel","kind":"FilledPath","fill_role":"metal_mid","fill_opacity":0.70,"path_d":"M 30 14 L 386 14 L 397 25 L 46 25 Z"},
+    {"id":"LowerBevel","kind":"FilledPath","fill_role":"metal_mid","fill_opacity":0.42,"path_d":"M 32 247 L 382 247 L 371 258 L 34 258 L 23 247 Z"},
+    {"id":"LeftMachineFace","kind":"FilledPath","fill_role":"surface_mid","fill_opacity":0.78,"path_d":"M 14 56 L 26 42 L 38 42 L 32 92 L 32 198 L 40 232 L 26 232 L 14 218 Z"},
+    {"id":"RightMachineFace","kind":"FilledPath","fill_role":"surface_mid","fill_opacity":0.72,"path_d":"M 408 58 L 396 44 L 386 44 L 391 104 L 391 196 L 383 230 L 397 230 L 408 216 Z"},
+    {"id":"TopAccent","kind":"FilledPath","fill_role":"cyan","fill_opacity":0.96,"path_d":"M 62 18 L 178 18 L 169 25 L 70 25 Z"},
+    {"id":"TopAccentTail","kind":"FilledPath","fill_role":"cyan_dim","fill_opacity":0.80,"path_d":"M 184 18 L 242 18 L 235 25 L 176 25 Z"},
+    {"id":"LeftAccentIndex","kind":"FilledPath","fill_role":"cyan","fill_opacity":0.88,"path_d":"M 14 82 L 22 68 L 28 68 L 24 96 L 18 105 L 14 105 Z"},
+    {"id":"BottomAccent","kind":"FilledPath","fill_role":"cyan_dim","fill_opacity":0.72,"path_d":"M 258 251 L 354 251 L 347 258 L 250 258 Z"},
+    {"id":"InnerTopRail","kind":"StrokePath","stroke_role":"metal_high","stroke_opacity":0.52,"stroke_width":1.5,"path_d":"M 47 33 L 368 33 L 385 49"},
+    {"id":"InnerBottomRail","kind":"StrokePath","stroke_role":"metal_high","stroke_opacity":0.32,"stroke_width":1.25,"path_d":"M 44 237 L 366 237 L 383 220"},
+    {"id":"LeftOpenRail","kind":"StrokePath","stroke_role":"metal_mid","stroke_opacity":0.54,"stroke_width":1.5,"path_d":"M 42 53 L 34 67 L 34 112 M 34 184 L 34 220 L 45 232"},
+    {"id":"RightOpenRail","kind":"StrokePath","stroke_role":"metal_mid","stroke_opacity":0.45,"stroke_width":1.5,"path_d":"M 381 54 L 389 69 L 389 110 M 389 186 L 389 218 L 378 232"}
+  ],
+  "hard_rules": ["NoText","NoRuntimeValues","NoTemporarySafeAreaBox","NoRPMTrackDuplication","NoSeparateDecorativeLayerWithoutRuntimeReason"]
+}

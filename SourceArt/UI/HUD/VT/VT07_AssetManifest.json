@@ -1,0 +1,25 @@
+{
+  "id": "VT07_VehiclePanelAssetFirst",
+  "version": "0.3.0",
+  "status": "USER_REJECT_REFERENCE_FIDELITY_FAILURE",
+  "production_visual_target": "VT-VEH-01",
+  "technical_generation": "PASS",
+  "user_visual_pass": false,
+  "user_reject_reason": [
+    "Overall visual quality far below approved historical VehiclePanel direction",
+    "Left Speed and right Armor read as two cheap independent boxes",
+    "Reference composition, integrated mechanical language and detail density were not preserved",
+    "Existing runtime elements looked assembled rather than designed as one VehiclePanel"
+  ],
+  "rejected_candidates": [
+    "VT07_SpeedFrame.json",
+    "VT07_SpeedFrame.png",
+    "VT07_ArmorFrame.json",
+    "VT07_ArmorFrame.png",
+    "VT07_VehPanelReview.png"
+  ],
+  "reuse_in_successor": false,
+  "successor": "VT08_InteriorMaster",
+  "ue_import": false,
+  "production_asset_mutation": false
+}

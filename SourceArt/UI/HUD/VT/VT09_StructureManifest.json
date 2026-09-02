@@ -1,0 +1,28 @@
+{
+  "id": "VT09_ReferenceStructureReview",
+  "version": "0.1.0",
+  "status": "REFERENCE_STRUCTURE_REVIEW_READY_USER_PENDING",
+  "source": {
+    "path": "SourceArt/UI/HUD/VT/VT_VehPanel01.jpg",
+    "size": [1280, 594],
+    "sha256": "cf5b0a57b76f9c41272ee01ed752d263a7b01a78bf02e9cb9dc042d000df6b6b"
+  },
+  "target_scale": 0.7,
+  "target_size": [896, 416],
+  "outputs": [
+    {
+      "path": "SourceArt/UI/HUD/VT/VT09_StructureOverlay_v1.png",
+      "sha256": "644fe69d5a4b18a4992bd42f7bd1e953cda84b478a8f87a66f8fdeaf6152f251"
+    },
+    {
+      "path": "SourceArt/UI/HUD/VT/VT09_StructureTrace_v1.png",
+      "sha256": "e767cf858fbdd50e403c199591fb4f57a6aeebd5da9624efa2dafd8fcdc025bb"
+    }
+  ],
+  "method": "ReferencePixelDerived_Sobel_NMS_Hysteresis",
+  "invented_geometry": false,
+  "temporary_layout_boxes": false,
+  "ue_import": false,
+  "production_asset_mutation": false,
+  "current_gate": "USER_REFERENCE_STRUCTURE_REVIEW"
+}

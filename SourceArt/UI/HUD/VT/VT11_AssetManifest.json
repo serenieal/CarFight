@@ -1,0 +1,64 @@
+{
+  "id": "VT11_ProductionCleanup",
+  "version": "0.1.0",
+  "status": "CLEANUP_CANDIDATE_READY_USER_REVIEW_PENDING",
+  "feature": "CF-FQ-039",
+  "source_stage": "VT10_ProductionFirstStaticAssets",
+  "production_visual_target": "VT-VEH-01",
+  "cleanup_contract": {
+    "geometry_change": false,
+    "alpha_change": false,
+    "runtime_hole_change": false,
+    "photo_noise_reduction": true,
+    "limited_palette": true,
+    "invented_ui_geometry": false,
+    "ue_import": false,
+    "designer_mutation": false
+  },
+  "assets": [
+    {
+      "path": "SourceArt/UI/HUD/VT/VT11_FrameOverlay_Clean.png",
+      "size": [896, 416],
+      "sha256": "abe0d2c3257a57cc0bffdc822a2c375bafba3c73ee16942240c011c635f3540d",
+      "alpha_mismatch_vs_vt10": 0,
+      "visible_pixels": 98229,
+      "rgb_colors_before": 148,
+      "rgb_colors_after": 19,
+      "planned_ue_identity": "T_UI_VehFrameOverlay"
+    },
+    {
+      "path": "SourceArt/UI/HUD/VT/VT11_SpeedFrame_Clean.png",
+      "size": [422, 272],
+      "sha256": "8501b37ea3e4e938b6a21d8f681893532f27763daeddac23d481670b4e5b8766",
+      "alpha_mismatch_vs_vt10": 0,
+      "visible_pixels": 51097,
+      "rgb_colors_before": 256,
+      "rgb_colors_after": 20,
+      "planned_ue_identity": "T_UI_SpeedFrame"
+    },
+    {
+      "path": "SourceArt/UI/HUD/VT/VT11_ArmorFrame_Clean.png",
+      "size": [422, 272],
+      "sha256": "86079df1114a6ca116478e771534b5ab3c0d8bae604807ec24b960e545c8c56a",
+      "alpha_mismatch_vs_vt10": 0,
+      "visible_pixels": 33244,
+      "rgb_colors_before": 151,
+      "rgb_colors_after": 24,
+      "planned_ue_identity": "T_UI_ArmorFrame"
+    }
+  ],
+  "review": {
+    "path": "SourceArt/UI/HUD/VT/VT11_CleanupReview.png",
+    "size": [1900, 1510],
+    "sha256": "54ac0f6c9a0c8a68e5e210cb7e146a324c2081f90cd6ca2e9838ee8696762e86",
+    "purpose": "VT10 extraction vs VT11 cleanup side-by-side only"
+  },
+  "reused_runtime_authority": [
+    "Image_RPMGauge + M_UI_RPMGauge + RPMRatio",
+    "Text_Speed / Text_SpeedUnit / Text_Gear",
+    "WBP_CFArmorSector x6",
+    "Vehicle-specific silhouette catalog",
+    "Existing Defense source/material family"
+  ],
+  "current_gate": "USER_PRODUCTION_CLEANUP_REVIEW"
+}

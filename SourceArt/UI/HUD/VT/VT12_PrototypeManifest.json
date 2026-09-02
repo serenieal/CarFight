@@ -1,0 +1,64 @@
+{
+  "id": "VT12_ActualAssetPrototype",
+  "version": "0.1.0",
+  "status": "ACTUAL_ASSET_PROTOTYPE_READY_USER_COMPOSITION_REVIEW_PENDING",
+  "feature": "CF-FQ-039",
+  "production_visual_target": "VT-VEH-01",
+  "canvas": [896, 416],
+  "composition": {
+    "upper_speed_width": 422,
+    "upper_gap": 12,
+    "upper_armor_width": 422,
+    "speed_origin": [20, 20],
+    "armor_origin": [454, 20],
+    "defense_rows_y": [302, 356]
+  },
+  "prototype_uses": [
+    "VT11_FrameOverlay_Clean",
+    "VT11_SpeedFrame_Clean",
+    "VT11_ArmorFrame_Clean",
+    "T_UI_RPMMaskPack actual R/G/B channel semantics",
+    "runtime sample Speed/Gear Text",
+    "VT05_VehSil_Sedan",
+    "VT04_ArmorPlate",
+    "VT04_ArmorIcon_Arrow",
+    "VT04_ArmorIcon_Chevron2",
+    "VT06_DefBarFrame",
+    "VT06_DefFillMask",
+    "VT06_DefHex"
+  ],
+  "armor_direction_contract": {
+    "vehicle_facing": "left",
+    "front": "image_left",
+    "rear": "image_right",
+    "right": "image_top",
+    "left": "image_bottom",
+    "top": "upper_left",
+    "bottom": "lower_right",
+    "left_arrow": "down",
+    "right_arrow": "up"
+  },
+  "runtime_sample_only": {
+    "rpm_ratio": 0.68,
+    "speed_kmh": 76,
+    "gear": "3",
+    "armor_ratios": [0.84, 0.72, 0.91, 0.66, 0.78, 0.58],
+    "shield_ratio": 0.78,
+    "integrity_ratio": 0.64
+  },
+  "outputs": {
+    "prototype": {
+      "path": "SourceArt/UI/HUD/VT/VT12_VehPanelPrototype.png",
+      "sha256": "c4fcc5caf0019e3e112d39828b86258a9a4a5b92e352b46f001c5c5d94bba6af"
+    },
+    "reference_compare": {
+      "path": "SourceArt/UI/HUD/VT/VT12_ReferenceCompare.png",
+      "sha256": "1d8a1d39629700608a8daac929d5b58687296289d8b236f93d7249bfc4fbbde3"
+    }
+  },
+  "prototype_is_production_texture": false,
+  "ue_import": false,
+  "designer_mutation": false,
+  "production_asset_mutation": false,
+  "current_gate": "USER_SPEED_RPM_ARMOR_COMPOSITION_REVIEW"
+}

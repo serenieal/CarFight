@@ -1,0 +1,61 @@
+{
+  "id": "VT10_ProductionFirstStaticAssets",
+  "version": "0.1.0",
+  "status": "STATIC_ASSET_3_CREATED_USER_REVIEW_PENDING",
+  "feature": "CF-FQ-039",
+  "production_visual_target": "VT-VEH-01",
+  "source": {
+    "path": "SourceArt/UI/HUD/VT/VT_VehPanel01.jpg",
+    "size": [1280, 594],
+    "sha256": "cf5b0a57b76f9c41272ee01ed752d263a7b01a78bf02e9cb9dc042d000df6b6b",
+    "target_scale": 0.7
+  },
+  "principle": "ProductionAssetFirst_ReferencePixelsOnly_NoInventedVisualPixels",
+  "assets": [
+    {
+      "source_file": "VT10_FrameOverlay.png",
+      "size": [896, 416],
+      "sha256": "64a1054a57a69b54a7b14f178dfd957d396331e283c873ee643e53784905279f",
+      "planned_ue_identity": "T_UI_VehFrameOverlay",
+      "planned_consumer": "Image_FrameOverlay",
+      "owns": "Outer mechanical shell and target-derived outer ornament",
+      "runtime_data_baked": false
+    },
+    {
+      "source_file": "VT10_SpeedFrame.png",
+      "size": [422, 272],
+      "sha256": "a072a0a6e00bbfae4849f817198614d58bf529132f1a6237b5a8d7ab1505f0ec",
+      "planned_ue_identity": "T_UI_SpeedFrame",
+      "planned_consumer": "WBP_CFSpeedGauge.Image_SpeedFrame",
+      "owns": "Target-derived static Speed/RPM module surface and bevel only",
+      "runtime_data_baked": false,
+      "runtime_holes": ["RPM track/ticks", "Speed digits/unit", "Gear frame/value"]
+    },
+    {
+      "source_file": "VT10_ArmorFrame.png",
+      "size": [422, 272],
+      "sha256": "445e03f380a42f7ad4f99a8c844d54f09109dc2a1d9a2d98d04bb02567d1b11f",
+      "planned_ue_identity": "T_UI_ArmorFrame",
+      "planned_consumer": "WBP_CFArmorBodyMap.Image_ArmorFrame",
+      "owns": "Target-derived static Armor module surface/backdrop/frame",
+      "runtime_data_baked": false,
+      "runtime_holes": ["Vehicle silhouette", "Armor sectors 6", "ARMOR label"]
+    }
+  ],
+  "reused_runtime_authority": [
+    "Image_RPMGauge + M_UI_RPMGauge + RPMRatio",
+    "Text_Speed / Text_SpeedUnit / Text_Gear",
+    "WBP_CFArmorSector x6",
+    "Vehicle-specific silhouette catalog",
+    "Existing Defense source/material family"
+  ],
+  "qa_board": {
+    "path": "SourceArt/UI/HUD/VT/VT10_StaticAssetsReview.png",
+    "size": [1280, 900],
+    "sha256": "02dfd56b37c8b5c70eb3cc06e7ae430e895c80d46700fdd9ab4b942ac266d344"
+  },
+  "ue_import": false,
+  "production_asset_mutation": false,
+  "designer_mutation": false,
+  "current_gate": "USER_STATIC_ASSET_REVIEW"
+}
