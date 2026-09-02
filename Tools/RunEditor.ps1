@@ -1,11 +1,15 @@
 # CarFight Unreal Editor Browser 실행 래퍼.
-# Version: v1.3.0
+# Version: v1.5.0
 # Changelog:
+# - v1.5.0: ValidateOnly가 canonical RunEditor.bat의 Unreal MCP start flag, 8100 port variable, port override flag를 직접 검사해 launcher/Ready contract 회귀를 offline에서 탐지하도록 보강했습니다.
+# - v1.4.0: Canonical RunEditor.bat가 Unreal MCP StartServer + port 8100을 launcher contract로 보장하므로 Ready wait가 per-user Editor Auto Start 설정에 의존하지 않도록 계약을 명시했습니다.
 # - v1.3.0: Ready가 증명된 exact CarFight Editor PID를 `editor_process_id` evidence marker로 출력해 Project Runtime이 동일 Consumer process identity를 저장할 수 있게 했다.
 # - v1.2.0: 선택적 Ready 대기를 추가해 exact CarFight Editor 프로세스의 8100 listener ownership까지 확인한 뒤 Browser lifecycle start를 완료할 수 있게 했다.
 # - v1.1.0: Browser process.run용 검증 전용 모드와 정확한 CarFight Editor 프로세스 확인을 추가했다.
 # - v1.0.0: 기존 Tools/RunEditor.bat를 그대로 사용하는 PowerShell 래퍼를 추가했다.
 # Migration:
+# - v1.5.0부터 `-ValidateOnly`는 launcher 파일 존재뿐 아니라 MCP 8100 시작 계약까지 검사하며 누락 시 fail-closed합니다.
+# - v1.4.0부터 canonical RunEditor.bat가 `-ModelContextProtocolStartServer -ModelContextProtocolPort=8100`을 항상 전달합니다. EditorPerProjectUserSettings의 Auto Start/Port 값은 canonical lifecycle prerequisite가 아닙니다.
 # - 공식 수동 실행 진입점과 기본 RunEditor.ps1 호출은 기존처럼 프로세스 출현까지만 기다린다. Browser fixed preset만 -WaitForReady를 server-owned 인자로 사용해 8100 Ready까지 보장한다.
 # - `editor_process_id`는 이미 Ready ownership이 증명된 exact Consumer process의 관측 evidence일 뿐 lifecycle authority나 force/Save 권한을 추가하지 않는다.
 
@@ -71,9 +75,33 @@ if (-not (Test-Path -LiteralPath $ProjectPath -PathType Leaf)) {
 }
 
 if ($ValidateOnly) {
+    # Canonical BAT launcher의 현재 UTF-8 텍스트입니다.
+    $RunEditorBatText = [System.IO.File]::ReadAllText($RunEditorBat, [System.Text.UTF8Encoding]::new($false))
+    # Unreal MCP 서버를 user setting과 무관하게 시작시키는 필수 command-line flag입니다.
+    $RequiredMcpStartFlag = '-ModelContextProtocolStartServer'
+    # CarFight canonical Unreal MCP listener port를 고정하는 BAT 변수 선언입니다.
+    $RequiredMcpPortVariable = 'set "CARFIGHT_MCP_PORT=8100"'
+    # BAT 변수를 Editor command line에 전달하는 필수 port override flag입니다.
+    $RequiredMcpPortFlag = '-ModelContextProtocolPort=%CARFIGHT_MCP_PORT%'
+
+    if (-not $RunEditorBatText.Contains($RequiredMcpStartFlag)) {
+        throw "Canonical RunEditor.bat에 Unreal MCP start flag가 없습니다: $RequiredMcpStartFlag"
+    }
+
+    if (-not $RunEditorBatText.Contains($RequiredMcpPortVariable)) {
+        throw "Canonical RunEditor.bat에 CarFight MCP port 8100 계약이 없습니다: $RequiredMcpPortVariable"
+    }
+
+    if (-not $RunEditorBatText.Contains($RequiredMcpPortFlag)) {
+        throw "Canonical RunEditor.bat에 Unreal MCP port override flag가 없습니다: $RequiredMcpPortFlag"
+    }
+
     Write-Output 'status=validated'
     Write-Output 'canonical_launcher_present=true'
     Write-Output 'project_present=true'
+    Write-Output 'mcp_start_flag_present=true'
+    Write-Output 'mcp_port_8100_contract_present=true'
+    Write-Output 'mcp_port_override_flag_present=true'
     Write-Output "wait_for_ready_enabled=$([bool]$WaitForReady)"
     exit 0
 }
