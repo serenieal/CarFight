@@ -1,12 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.165.0
+// Version: 2.166.0
 // Date: 2026-09-01
-// Description: CarFight 싱글플레이 차량 Pawn 구현 / WSA deterministic Wheel Visual full-transform seam
+// Description: CarFight 싱글플레이 차량 Pawn 구현 / ESH-01 vehicle-specific Engine TorqueCurve runtime apply seam
 // Changelog:
+// - v2.166.0: VehicleData opt-in EngineTorqueCurve를 공용 validator/mapper로 Chaos EngineSetup에 적용하고, opt-out hot-apply는 Movement archetype의 authored Curve로 복원해 이전 차량 Curve 잔류를 방지.
 // - v2.165.0: Wheel Visual authored base를 Location/Rotation/Scale 전체로 캡처해 매 Apply 시작 시 복원하고, OnConstruction은 fresh SCS authored transform을 재캡처하도록 cache invalidation 추가. Legacy/Socket/Manual hot-reinit 잔류 transform을 제거.
 // - v2.164.1: Right fallback orientation을 Mesh scale/Legacy AutoCenter보다 먼저 확정해 center correction도 최종 Right orientation 기준으로 계산되게 순서 교정.
 // - v2.164.0: FL-only shared Wheel fallback에서 FR/RR Wheel_Mesh에 authored base 기준 local Roll180을 source-aware 적용하고 per-wheel spin handedness를 WheelSync에 전달. 반복 Apply/re-init 누적을 막기 위해 authored base rotation을 1회 캡처.
+// - v2.163.0: Guided Builder Step 8처럼 VehicleData를 runtime에서 교체한 뒤 InitializeVehicleRuntime()을 재호출할 때 SM_Body ChassisMesh가 이전 차량으로 남던 문제를 교정. 재초기화 초기에 ApplyVehicleVisualConfig를 명시 호출해 새 VehicleData의 차체 Visual을 Layout/WheelSync보다 먼저 확정.
+// - v2.162.0: Legacy TargetSelectWidgetClass의 constructor LoadClass hard-load를 제거해 Reticle/TargetSelect Class 해석을 CFUISubsystem Config Soft Class 단일 소유권으로 정리.
+// - v2.161.0: 제거된 WBP_VehicleDebug Text API와 Pawn 직접 소유 Reticle/TargetSelect 호환 wrapper·영구 null instance cache 정리 경로를 제거. HUD/Panel 및 UISubsystem 소유 UI 경로는 변경 없음.
 // - v2.160.0: WSA-P0-03 Socket mode에서 Wheel_Mesh_*에 USER RelativeScale을 exact set하고 FR/RL/RR null mesh는 FL을 fallback. Legacy AutoScale과 이중 적용하지 않음.
 // - v2.159.0: WSA-P0-02 Pawn legacy socket capture가 component/world scale 대신 underlying UStaticMeshSocket::RelativeScale을 FCFWheelAnchorPose에 보존.
 // - v2.158.0: VB-P0-05 설계 검수 교정으로 invalid Chassis/Transmission을 다른 Movement 값보다 먼저 거부해 partial runtime mutation을 제거하고 Shift RPM integer semantic을 runtime에서도 검증.
@@ -110,6 +114,7 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth Visual/Shell 적용 전 기준선을 깨끗하게 만들기 위해 차량 진단 로그와 Owner 표시 안정화 기본값을 False로 통일.
 // Migration:
+// - v2.162.0 AimReticleWidgetClass/TargetSelectWidgetClass와 Legacy ZOrder UPROPERTY는 저장 직렬화 호환을 위해 유지하지만 Pawn runtime은 Class를 hard-load하거나 Legacy ZOrder를 소비하지 않습니다. UI Class와 Layer ZOrder는 CFUISubsystem이 소유합니다.
 // - v2.158.0부터 ChassisWidth/ChassisHeight 또는 complete Transmission payload가 invalid이면 ApplyVehicleMovementConfig는 어떤 Movement mutation도 수행하지 않는다. Shift RPM은 Chaos 내부 uint32 의미에 맞는 비음수 정수값이어야 한다.
 // - v2.157.0부터 ChassisWidth/ChassisHeight 또는 Transmission setup이 실제 live setup과 달라 PhysicsState 재생성이 필요하면 현재 chassis 선속도/각속도를 복원한다. 새 public hot setter를 만들지 않으며 기존 ApplyVehicleMovementConfig lifecycle 안에서만 수행한다.
 // - v2.157.0 ReverseGearRatios는 UE 5.8 Source 계약대로 positive magnitude만 허용한다. invalid 배열은 abs/자동 보정하지 않고 Transmission 적용을 건너뛰며 diagnostic summary를 남긴다.
@@ -198,6 +203,7 @@
 #include "CFDamageData.h"
 #include "CFTurretMountData.h"
 #include "CFVehicleData.h"
+#include "CFVehicleEngineCurveUtils.h"
 #include "CFVehicleAimComp.h"
 #include "CFVehicleCameraComp.h"
 #include "CFVehicleDriveComp.h"
@@ -215,8 +221,6 @@
 #include "CFWheelSyncComp.h"
 #include "CFWheelSizeUtils.h"
 #include "CarFightVehicleUtils.h"
-#include "UI/CFAimReticleWidget.h"
-#include "UI/CFTargetSelectWidget.h"
 #include "UI/CFUISubsystem.h"
 
 #include "ChaosVehicleWheel.h"
@@ -1204,11 +1208,9 @@ ACFVehiclePawn::ACFVehiclePawn()
 	bShowDriveStateTransitionSummary = true;
 	bShowVehicleDebugHud = true;
 	bShowVehicleDebugPanel = true;
-	bShowVehicleDebugText = false;
 	bShowVehicleDebugEvents = false;
 	DriveStateDebugMessageDuration = 0.0f;
 	bShowAimReticle = true;
-	AimReticleZOrder = 10;
 
 	// [v2.48.2] Owner 표시 루트 안정화 기본 사용 여부입니다.
 	bEnableOwnerVisualStabilization = false;
@@ -1332,10 +1334,6 @@ ACFVehiclePawn::ACFVehiclePawn()
 		InputAction_StartActiveScan = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_ActiveScan.IA_ActiveScan"));
 	}
 
-	if (!TargetSelectWidgetClass)
-	{
-		TargetSelectWidgetClass = LoadClass<UCFTargetSelectWidget>(nullptr, TEXT("/Game/CarFight/UI/WBP_TargetSelect.WBP_TargetSelect_C"));
-	}
 }
 
 // [v2.118.0] 현재 차량이 주어진 컨텍스트에서 선택 가능한지 반환합니다.
@@ -1521,9 +1519,6 @@ void ACFVehiclePawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
 #if WITH_EDITOR
 	LogEditorPIEVehicleRuntimeProbe(this, TEXT("EndPlay.AfterReset"));
 #endif
-
-	DestroyTargetSelectWidget();
-	DestroyAimReticleWidget();
 
 	Super::EndPlay(EndPlayReason);
 }
@@ -1762,6 +1757,9 @@ bool ACFVehiclePawn::InitializeVehicleRuntime()
 	{
 		VehicleAmmoComp->ResetAmmoRuntime();
 	}
+
+	// [v2.163.0] VehicleData 자체가 runtime에서 교체될 수 있으므로 새 ChassisMesh를 Layout/WheelSync보다 먼저 SM_Body에 재적용합니다.
+	ApplyVehicleVisualConfig();
 	ApplyVehicleDataConfig();
 
 	// [v2.68.0] VehicleData 기반 공통 설정 적용 직후의 요약 문자열입니다.
@@ -2112,128 +2110,9 @@ bool ACFVehiclePawn::ShouldShowAimReticle() const
 	return bShowAimReticle && bHasViewportContext && IsLocallyControlled();
 }
 
-// [v2.148.0] 현재 Pawn이 UISubsystem Current Pawn일 때 UISubsystem 소유 Aim Reticle을 호환 반환합니다.
-UCFAimReticleWidget* ACFVehiclePawn::CreateAimReticleWidget()
-{
-	if (AimReticleWidgetInstance)
-	{
-		DestroyAimReticleWidget();
-	}
-
-	// [v2.148.0] 현재 Pawn의 LocalPlayer를 확인할 소유 PlayerController입니다.
-	APlayerController* OwningPlayerController = Cast<APlayerController>(GetController());
-	if (!OwningPlayerController)
-	{
-		return nullptr;
-	}
-
-	// [v2.148.0] UISubsystem을 소유하는 현재 LocalPlayer입니다.
-	ULocalPlayer* LocalPlayer = OwningPlayerController->GetLocalPlayer();
-	if (!LocalPlayer)
-	{
-		return nullptr;
-	}
-
-	// [v2.148.0] UI-P0-04 AimReticle 단일 수명을 소유하는 LocalPlayer UISubsystem입니다.
-	UCFUISubsystem* UISubsystem = LocalPlayer->GetSubsystem<UCFUISubsystem>();
-	if (!UISubsystem || UISubsystem->GetCurrentPawn() != this)
-	{
-		return nullptr;
-	}
-
-	// [v2.148.0] 현재 HUD Layer에 UISubsystem이 소유하고 있는 단일 Aim Reticle 인스턴스입니다.
-	UCFAimReticleWidget* SubsystemAimReticleWidget = UISubsystem->GetAimReticleWidget();
-	if (!SubsystemAimReticleWidget)
-	{
-		return nullptr;
-	}
-
-	SubsystemAimReticleWidget->SetVehiclePawnRef(this);
-	SubsystemAimReticleWidget->SetVisibility(ShouldShowAimReticle() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
-	return SubsystemAimReticleWidget;
-}
-
-// [v2.148.0] UI-P0-04 이전 Pawn 직접 생성 Reticle 인스턴스만 안전하게 정리합니다.
-void ACFVehiclePawn::DestroyAimReticleWidget()
-{
-	if (!AimReticleWidgetInstance)
-	{
-		return;
-	}
-
-	AimReticleWidgetInstance->SetVehiclePawnRef(nullptr);
-	AimReticleWidgetInstance->RemoveFromParent();
-	AimReticleWidgetInstance = nullptr;
-}
-
-// [v2.148.0] 현재 Pawn에 연결된 UISubsystem 소유 Reticle의 표시 상태를 호환 갱신합니다.
-void ACFVehiclePawn::RefreshAimReticleWidget()
-{
-	(void)CreateAimReticleWidget();
-}
-
 bool ACFVehiclePawn::ShouldShowTargetSelectHud() const
 {
 	return bShowTargetSelectHud && GetNetMode() != NM_DedicatedServer && IsLocallyControlled();
-}
-
-// [v2.149.0] 현재 Pawn이 UISubsystem Current Pawn일 때 UISubsystem 소유 TargetSelect Marker를 호환 반환합니다.
-UCFTargetSelectWidget* ACFVehiclePawn::CreateTargetSelectWidget()
-{
-	if (TargetSelectWidgetInstance)
-	{
-		DestroyTargetSelectWidget();
-	}
-
-	// [v2.149.0] 현재 Pawn의 LocalPlayer를 확인할 소유 PlayerController입니다.
-	APlayerController* OwningPlayerController = Cast<APlayerController>(GetController());
-	if (!OwningPlayerController)
-	{
-		return nullptr;
-	}
-
-	// [v2.149.0] UISubsystem을 소유하는 현재 LocalPlayer입니다.
-	ULocalPlayer* LocalPlayer = OwningPlayerController->GetLocalPlayer();
-	if (!LocalPlayer)
-	{
-		return nullptr;
-	}
-
-	// [v2.149.0] UI-P0-05 TargetSelect Marker 단일 수명을 소유하는 LocalPlayer UISubsystem입니다.
-	UCFUISubsystem* UISubsystem = LocalPlayer->GetSubsystem<UCFUISubsystem>();
-	if (!UISubsystem || UISubsystem->GetCurrentPawn() != this)
-	{
-		return nullptr;
-	}
-
-	// [v2.149.0] 현재 Game Layer에 UISubsystem이 소유하고 있는 단일 TargetSelect Marker 인스턴스입니다.
-	UCFTargetSelectWidget* SubsystemTargetSelectWidget = UISubsystem->GetTargetSelectWidget();
-	if (!SubsystemTargetSelectWidget)
-	{
-		return nullptr;
-	}
-
-	SubsystemTargetSelectWidget->SetVehiclePawnRef(this);
-	SubsystemTargetSelectWidget->SetVisibility(ShouldShowTargetSelectHud() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
-	SubsystemTargetSelectWidget->RefreshFromTargetSelect();
-	return SubsystemTargetSelectWidget;
-}
-
-void ACFVehiclePawn::DestroyTargetSelectWidget()
-{
-	if (!TargetSelectWidgetInstance)
-	{
-		return;
-	}
-	TargetSelectWidgetInstance->SetVehiclePawnRef(nullptr);
-	TargetSelectWidgetInstance->RemoveFromParent();
-	TargetSelectWidgetInstance = nullptr;
-}
-
-// [v2.149.0] 현재 Pawn에 연결된 UISubsystem 소유 Target Marker의 표시 상태를 호환 갱신합니다.
-void ACFVehiclePawn::RefreshTargetSelectWidget()
-{
-	(void)CreateTargetSelectWidget();
 }
 
 
@@ -3484,14 +3363,47 @@ void ACFVehiclePawn::ApplyVehicleMovementConfig()
 		&& VehicleMovementConfig.TransmissionEfficiency <= 1.0f
 		&& (!VehicleMovementConfig.bUseAutomaticGears || VehicleMovementConfig.ChangeDownRPM <= VehicleMovementConfig.ChangeUpRPM);
 
-	// [v2.158.0] complete setup validation 실패 시 Engine/Differential/Steering을 포함해 어떤 Movement 값도 부분 적용하지 않습니다.
-	if (!bChassisGeometryValid || !bTransmissionConfigValid)
+	// [v2.166.0] vehicle-specific Engine Torque Curve opt-in payload의 구조 검증 결과입니다.
+	FString EngineTorqueCurveError;
+	const bool bEngineTorqueCurveValid = !VehicleMovementConfig.bUseEngineTorqueCurve
+		|| FCFVehicleEngineCurveUtils::ValidateCurve(VehicleMovementConfig.EngineTorqueCurve, EngineTorqueCurveError);
+
+	// [v2.166.0] complete setup validation 실패 시 Engine/Differential/Steering을 포함해 어떤 Movement 값도 부분 적용하지 않습니다.
+	if (!bChassisGeometryValid || !bTransmissionConfigValid || !bEngineTorqueCurveValid)
 	{
-		LastVehicleRuntimeSummary = TEXT("VehicleRuntime: MovementConfig invalid; runtime movement mutation skipped. Chassis dimensions must be positive finite, ratios positive finite, Shift RPM non-negative integers, FinalRatio>0, time>=0, Efficiency=0..1.");
+		LastVehicleRuntimeSummary = bEngineTorqueCurveValid
+			? TEXT("VehicleRuntime: MovementConfig invalid; runtime movement mutation skipped. Chassis dimensions must be positive finite, ratios positive finite, Shift RPM non-negative integers, FinalRatio>0, time>=0, Efficiency=0..1.")
+			: FString::Printf(TEXT("VehicleRuntime: EngineTorqueCurve invalid; runtime movement mutation skipped. %s"), *EngineTorqueCurveError);
 		return;
 	}
 
-	// [v2.157.0] Width/Height는 DragArea setup-time derived 값이고 Transmission은 simulation setup-time 값이므로 live state 재생성 필요 여부를 assignment 전에 계산합니다.
+	// [v2.166.0] 현재 live setup을 복사한 뒤 VehicleData가 소유하는 Engine scalar와 Curve만 prospective하게 덮습니다.
+	FVehicleEngineConfig ProposedEngineSetup = ResolvedVehicleMovementComponent->EngineSetup;
+	ProposedEngineSetup.MaxTorque = VehicleMovementConfig.EngineMaxTorque;
+	ProposedEngineSetup.MaxRPM = VehicleMovementConfig.EngineMaxRPM;
+	ProposedEngineSetup.EngineIdleRPM = VehicleMovementConfig.EngineIdleRPM;
+	ProposedEngineSetup.EngineBrakeEffect = VehicleMovementConfig.EngineBrakeEffect;
+	ProposedEngineSetup.EngineRevUpMOI = VehicleMovementConfig.EngineRevUpMOI;
+	ProposedEngineSetup.EngineRevDownRate = VehicleMovementConfig.EngineRevDownRate;
+
+	if (VehicleMovementConfig.bUseEngineTorqueCurve)
+	{
+		if (!FCFVehicleEngineCurveUtils::ApplyCurveToChaos(VehicleMovementConfig.EngineTorqueCurve, ProposedEngineSetup, EngineTorqueCurveError))
+		{
+			LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: EngineTorqueCurve apply preparation failed; runtime movement mutation skipped. %s"), *EngineTorqueCurveError);
+			return;
+		}
+	}
+	else if (const UChaosWheeledVehicleMovementComponent* AuthoredMovementArchetype = Cast<UChaosWheeledVehicleMovementComponent>(ResolvedVehicleMovementComponent->GetArchetype()))
+	{
+		// [v2.166.0] 같은 Pawn에 vehicle-specific Curve 차량을 적용했다가 legacy/opt-out 차량으로 교체해도 이전 Curve가 남지 않도록 BP/SCS authored archetype Curve로 복원합니다.
+		ProposedEngineSetup.TorqueCurve = AuthoredMovementArchetype->EngineSetup.TorqueCurve;
+	}
+
+	// [v2.166.0] 실제 Curve shape가 달라졌을 때만 setup-time PhysicsState 재생성 조건에 포함합니다.
+	const bool bEngineTorqueCurveChanged = !FCFVehicleEngineCurveUtils::AreTorqueCurvesEquivalent(ResolvedVehicleMovementComponent->EngineSetup, ProposedEngineSetup);
+
+	// [v2.157.0] Width/Height는 DragArea setup-time derived 값이고 Transmission/Engine Curve는 simulation setup-time 값이므로 live state 재생성 필요 여부를 assignment 전에 계산합니다.
 	const bool bSetupRequiresPhysicsRecreate = !FMath::IsNearlyEqual(ResolvedVehicleMovementComponent->ChassisWidth, VehicleMovementConfig.ChassisWidth)
 		|| !FMath::IsNearlyEqual(ResolvedVehicleMovementComponent->ChassisHeight, VehicleMovementConfig.ChassisHeight)
 		|| ResolvedVehicleMovementComponent->TransmissionSetup.bUseAutomaticGears != VehicleMovementConfig.bUseAutomaticGears
@@ -3502,7 +3414,8 @@ void ACFVehiclePawn::ApplyVehicleMovementConfig()
 		|| !FMath::IsNearlyEqual(ResolvedVehicleMovementComponent->TransmissionSetup.ChangeUpRPM, VehicleMovementConfig.ChangeUpRPM)
 		|| !FMath::IsNearlyEqual(ResolvedVehicleMovementComponent->TransmissionSetup.ChangeDownRPM, VehicleMovementConfig.ChangeDownRPM)
 		|| !FMath::IsNearlyEqual(ResolvedVehicleMovementComponent->TransmissionSetup.GearChangeTime, VehicleMovementConfig.GearChangeTime)
-		|| !FMath::IsNearlyEqual(ResolvedVehicleMovementComponent->TransmissionSetup.TransmissionEfficiency, VehicleMovementConfig.TransmissionEfficiency);
+		|| !FMath::IsNearlyEqual(ResolvedVehicleMovementComponent->TransmissionSetup.TransmissionEfficiency, VehicleMovementConfig.TransmissionEfficiency)
+		|| bEngineTorqueCurveChanged;
 
 	// [v2.157.0] PhysicsState 재생성 전 chassis 속도를 보존할 inherited vehicle mesh입니다.
 	USkeletalMeshComponent* VehicleMeshComponent = GetMesh();
@@ -3523,12 +3436,8 @@ void ACFVehiclePawn::ApplyVehicleMovementConfig()
 	ResolvedVehicleMovementComponent->DownforceCoefficient = VehicleMovementConfig.DownforceCoefficient;
 	ResolvedVehicleMovementComponent->bEnableCenterOfMassOverride = VehicleMovementConfig.bEnableCenterOfMassOverride;
 	ResolvedVehicleMovementComponent->CenterOfMassOverride = VehicleMovementConfig.CenterOfMassOverride;
-	ResolvedVehicleMovementComponent->EngineSetup.MaxTorque = VehicleMovementConfig.EngineMaxTorque;
-	ResolvedVehicleMovementComponent->EngineSetup.MaxRPM = VehicleMovementConfig.EngineMaxRPM;
-	ResolvedVehicleMovementComponent->EngineSetup.EngineIdleRPM = VehicleMovementConfig.EngineIdleRPM;
-	ResolvedVehicleMovementComponent->EngineSetup.EngineBrakeEffect = VehicleMovementConfig.EngineBrakeEffect;
-	ResolvedVehicleMovementComponent->EngineSetup.EngineRevUpMOI = VehicleMovementConfig.EngineRevUpMOI;
-	ResolvedVehicleMovementComponent->EngineSetup.EngineRevDownRate = VehicleMovementConfig.EngineRevDownRate;
+	// [v2.166.0] scalar + optional vehicle-specific/opt-out-restored Curve를 한 번에 적용해 EngineSetup partial mutation을 피합니다.
+	ResolvedVehicleMovementComponent->EngineSetup = ProposedEngineSetup;
 	ResolvedVehicleMovementComponent->DifferentialSetup.DifferentialType = VehicleMovementConfig.DifferentialType;
 	ResolvedVehicleMovementComponent->DifferentialSetup.FrontRearSplit = VehicleMovementConfig.FrontRearSplit;
 	ResolvedVehicleMovementComponent->TransmissionSetup.bUseAutomaticGears = VehicleMovementConfig.bUseAutomaticGears;
@@ -3564,7 +3473,7 @@ void ACFVehiclePawn::ApplyVehicleMovementConfig()
 		}
 	}
 
-	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: MovementProfile=%s, RuntimeTorque=%.1f, ConfigMaxRPM=%.1f, ThrottleScale=%.2f, Chassis=%.1fx%.1f, Drag=%.2f, Downforce=%.2f, Differential=%s, ForwardGears=%d, ReverseGears=%d, FinalRatio=%.3f, PhysicsRecreate=%s, SteeringType=%s, RuntimeSetters=EngineTorque/Drag/Downforce/DiffSplit"), *VehicleMovementConfig.MovementProfileName.ToString(), VehicleMovementConfig.EngineMaxTorque, VehicleMovementConfig.EngineMaxRPM, VehicleMovementConfig.ThrottleInputScale, VehicleMovementConfig.ChassisWidth, VehicleMovementConfig.ChassisHeight, VehicleMovementConfig.DragCoefficient, VehicleMovementConfig.DownforceCoefficient, *UEnum::GetValueAsString(VehicleMovementConfig.DifferentialType), VehicleMovementConfig.TransmissionRatios.ForwardGearRatios.Num(), VehicleMovementConfig.TransmissionRatios.ReverseGearRatios.Num(), VehicleMovementConfig.FinalRatio, bCanRecreateLivePhysics ? TEXT("True") : TEXT("False"), *UEnum::GetValueAsString(VehicleMovementConfig.SteeringType));
+	LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: MovementProfile=%s, RuntimeTorque=%.1f, ConfigMaxRPM=%.1f, EngineCurve=%s(%d), ThrottleScale=%.2f, Chassis=%.1fx%.1f, Drag=%.2f, Downforce=%.2f, Differential=%s, ForwardGears=%d, ReverseGears=%d, FinalRatio=%.3f, PhysicsRecreate=%s, SteeringType=%s, RuntimeSetters=EngineTorque/Drag/Downforce/DiffSplit"), *VehicleMovementConfig.MovementProfileName.ToString(), VehicleMovementConfig.EngineMaxTorque, VehicleMovementConfig.EngineMaxRPM, VehicleMovementConfig.bUseEngineTorqueCurve ? TEXT("VehicleSpecific") : TEXT("AuthoredArchetype"), VehicleMovementConfig.bUseEngineTorqueCurve ? VehicleMovementConfig.EngineTorqueCurve.Points.Num() : 0, VehicleMovementConfig.ThrottleInputScale, VehicleMovementConfig.ChassisWidth, VehicleMovementConfig.ChassisHeight, VehicleMovementConfig.DragCoefficient, VehicleMovementConfig.DownforceCoefficient, *UEnum::GetValueAsString(VehicleMovementConfig.DifferentialType), VehicleMovementConfig.TransmissionRatios.ForwardGearRatios.Num(), VehicleMovementConfig.TransmissionRatios.ReverseGearRatios.Num(), VehicleMovementConfig.FinalRatio, bCanRecreateLivePhysics ? TEXT("True") : TEXT("False"), *UEnum::GetValueAsString(VehicleMovementConfig.SteeringType));
 }
 
 void ACFVehiclePawn::ApplyVehicleWheelPhysicsConfig()
@@ -4227,39 +4136,10 @@ FCFVehicleDebugRuntime ACFVehiclePawn::GetVehicleDebugRuntime() const
 	return GetVehicleDebugSnapshot().Runtime;
 }
 
-FText ACFVehiclePawn::GetDebugTextSingleLine() const
-{
-	return FText::FromString(BuildVehicleDebugSummary(false, true, bShowDriveStateTransitionSummary, true));
-}
-
-FText ACFVehiclePawn::GetDebugTextMultiLine() const
-{
-	return FText::FromString(BuildVehicleDebugSummary(true, true, bShowDriveStateTransitionSummary, true));
-}
-
-FText ACFVehiclePawn::GetDebugTextByDisplayMode() const
-{
-	if (DriveStateDebugDisplayMode == ECFVehicleDebugDisplayMode::Off)
-	{
-		return FText::GetEmpty();
-	}
-	if (DriveStateDebugDisplayMode == ECFVehicleDebugDisplayMode::MultiLine)
-	{
-		return GetDebugTextMultiLine();
-	}
-	return GetDebugTextSingleLine();
-}
-
 bool ACFVehiclePawn::ShouldShowVehicleDebugUi() const
 {
 	// [v2.21.0] VehicleDebug HUD/Panel은 Viewport가 있는 로컬 제어 Pawn에서만 표시합니다.
 	return bEnableDriveStateOnScreenDebug && (GetNetMode() != NM_DedicatedServer) && IsLocallyControlled();
-}
-
-bool ACFVehiclePawn::ShouldShowDebugWidget() const
-{
-	// [v2.14.3] 레거시 WBP_VehicleDebug 제거 전환을 위해 기존 Text Widget 표시는 항상 비활성화합니다.
-	return false;
 }
 
 bool ACFVehiclePawn::ShouldShowVehicleDebugHud() const
@@ -4272,18 +4152,6 @@ bool ACFVehiclePawn::ShouldShowVehicleDebugPanel() const
 {
 	// [v2.14.3] 상세 패널은 레거시 Text Widget과 분리된 공통 UI 표시 조건과 Panel 전용 토글을 함께 만족할 때만 표시합니다.
 	return ShouldShowVehicleDebugUi() && bShowVehicleDebugPanel;
-}
-
-bool ACFVehiclePawn::ShouldShowVehicleDebugText() const
-{
-	// [v2.14.3] 레거시 WBP_VehicleDebug 제거 전환을 위해 Legacy Text View 표시는 항상 비활성화합니다.
-	return false;
-}
-
-ESlateVisibility ACFVehiclePawn::GetDebugWidgetVisibility() const
-{
-	// [v2.14.3] 레거시 WBP_VehicleDebug 제거 전환을 위해 Visibility는 항상 Collapsed를 반환합니다.
-	return ESlateVisibility::Collapsed;
 }
 
 // [v2.48.0] 로컬 Owner 표시 안정화용 차체/휠 표시 계층을 준비합니다.

@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthTests.cpp
-// Version: v1.15.0
-// Date: 2026-08-28
-// Description: DAUTH Foundation + CF-FQ-040 VB-P0-07 persistent provenance receipt / post-state guarded Undo hardening Automation입니다.
+// Version: v1.16.0
+// Date: 2026-09-01
+// Description: DAUTH Foundation + CF-FQ-040 ESH-01 Engine TorqueCurve Registry/Reflection coverage Automation입니다.
 // Changelog:
+// - v1.16.0: Registry/Reflection 134 coverage와 Performance-owned bUseEngineTorqueCurve/atomic EngineTorqueCurve descriptor, Resolver revision 5를 검증.
 // - v1.15.0: WSA-P0-04 Gameplay Guidance의 Socket/Manual mode Legacy clamp 제외와 Socket Reference geometry conflict를 focused 검증.
 // - v1.14.0: WSA-P0-01 Registry/Reflection 132 coverage, WheelAnchor RelativeScale descriptor 4개, bUseWheelSocketScale source/dependency와 append-only intent enum을 검증.
 // - v1.13.0: BuilderCommitReceipt가 consumed canonical Claim ID 목록을 보존하고 Editor restart를 가정한 empty-caller Claim set Final Review가 receipt에서 provenance를 복원하는지 검증.
@@ -142,7 +143,7 @@ bool FCFVehicleAuthoringEditorOnlyTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// Current Registry 132개와 Current UCFVehicleData Reflection leaf 132개의 양방향 coverage 및 WSA 추가 descriptor를 검증합니다.
+// Current Registry 134개와 Current UCFVehicleData Reflection leaf 134개의 양방향 coverage 및 ESH-01 Engine Curve descriptor를 검증합니다.
 bool FCFVehicleAuthoringRegistryTest::RunTest(const FString& Parameters)
 {
 	// Coverage가 발견한 상세 오류 목록입니다.
@@ -197,8 +198,39 @@ bool FCFVehicleAuthoringRegistryTest::RunTest(const FString& Parameters)
 		return Descriptor.GetCanonicalPattern() == TEXT("VehicleMovementConfig.TransmissionRatios.ReverseGearRatios");
 	}));
 
-	// [v1.14.0] 132-leaf field/hash contract는 기존 127-leaf approval과 구분되는 Resolver revision 3을 사용합니다.
+	// [v1.16.0] vehicle-specific Engine Torque Curve opt-in flag descriptor입니다.
+	const FCFVehicleFieldDescriptor* EngineCurveFlagDescriptor = FCFVehicleFieldRegistry::GetDescriptors().FindByPredicate([](const FCFVehicleFieldDescriptor& Descriptor)
+	{
+		return Descriptor.GetCanonicalPattern() == TEXT("VehicleMovementConfig.bUseEngineTorqueCurve");
+	});
+	if (TestNotNull(TEXT("bUseEngineTorqueCurve Registry descriptor exists"), EngineCurveFlagDescriptor))
+	{
+		TestEqual(TEXT("bUseEngineTorqueCurve owner domain Performance"), EngineCurveFlagDescriptor->PrimaryProfileDomain, ECFVehicleProfileDomain::Performance);
+		TestEqual(TEXT("bUseEngineTorqueCurve resolve rule PerformanceProfileDirect"), EngineCurveFlagDescriptor->ResolveRule, ECFVehicleResolveRule::PerformanceProfileDirect);
+		TestTrue(TEXT("bUseEngineTorqueCurve depends on Profile.Performance"), EngineCurveFlagDescriptor->RequiredDependencies.Contains(FName(TEXT("Profile.Performance"))));
+	}
+
+	// [v1.16.0] 내부 Points를 별도 leaf로 쪼개지 않는 atomic Engine Torque Curve descriptor입니다.
+	const FCFVehicleFieldDescriptor* EngineCurveDescriptor = FCFVehicleFieldRegistry::GetDescriptors().FindByPredicate([](const FCFVehicleFieldDescriptor& Descriptor)
+	{
+		return Descriptor.GetCanonicalPattern() == TEXT("VehicleMovementConfig.EngineTorqueCurve");
+	});
+	if (TestNotNull(TEXT("EngineTorqueCurve atomic Registry descriptor exists"), EngineCurveDescriptor))
+	{
+		TestEqual(TEXT("EngineTorqueCurve owner domain Performance"), EngineCurveDescriptor->PrimaryProfileDomain, ECFVehicleProfileDomain::Performance);
+		TestEqual(TEXT("EngineTorqueCurve resolve rule PerformanceProfileDirect"), EngineCurveDescriptor->ResolveRule, ECFVehicleResolveRule::PerformanceProfileDirect);
+		TestTrue(TEXT("EngineTorqueCurve depends on Profile.Performance"), EngineCurveDescriptor->RequiredDependencies.Contains(FName(TEXT("Profile.Performance"))));
+	}
+	TestFalse(TEXT("EngineTorqueCurve.Points is not an independent Registry leaf"), FCFVehicleFieldRegistry::GetDescriptors().ContainsByPredicate([](const FCFVehicleFieldDescriptor& Descriptor)
+	{
+		return Descriptor.GetCanonicalPattern() == TEXT("VehicleMovementConfig.EngineTorqueCurve.Points");
+	}));
+
+	// [v1.14.0] 132-leaf WSA field/hash contract는 기존 127-leaf approval과 구분되는 Resolver revision 3 이상을 사용합니다.
 	TestTrue(TEXT("WSA 132-leaf schema requires Resolver revision 3 or newer"), FCFVehicleResolver::CurrentResolverContractRevision >= 3);
+
+	// [v1.16.0] ESH-01 134-leaf Engine Curve field/hash contract는 Resolver revision 5로 이전 approval/receipt를 stale 처리합니다.
+	TestEqual(TEXT("ESH-01 134-leaf schema uses Resolver revision 5"), FCFVehicleResolver::CurrentResolverContractRevision, 5);
 
 	// [v1.14.0] 기존 enum ordinal을 보존하고 SocketScaleFromChassis를 마지막 값으로 append-only 추가했는지 검증합니다.
 	TestEqual(TEXT("AutoScaleToPhysicsRadius enum ordinal preserved"), static_cast<uint8>(ECFWheelVisualIntentMode::AutoScaleToPhysicsRadius), static_cast<uint8>(2));

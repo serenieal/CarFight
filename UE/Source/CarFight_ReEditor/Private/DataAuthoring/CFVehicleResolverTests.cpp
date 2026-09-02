@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleResolverTests.cpp
-// Version: v1.5.0
-// Date: 2026-08-28
-// Description: DAUTH-P0-08E/F Pure Resolver + WSA-P0-02 Socket Scale derived physics Automation입니다.
+// Version: v1.6.0
+// Date: 2026-09-01
+// Description: DAUTH-P0-08E/F Pure Resolver + CF-FQ-040 ESH-01 Engine TorqueCurve Profile mapping Automation입니다.
 // Changelog:
+// - v1.6.0: Performance Profile EngineTorqueCurve opt-in source mapping, atomic materialization, invalid curve fail-closed와 Resolver revision 5 회귀검증 추가.
 // - v1.5.0: WSA-P0-05 Recipe SoftObject ChassisMesh → Target Object canonical reference가 R15 materialized readback hash와 일치하는 회귀검증 추가.
 // - v1.4.0: WSA-P0-04 SocketScaleFromChassis의 FL-only shared Wheel fallback을 Resolver에서 직접 회귀검증.
 // - v1.3.0: WSA-P0-02 SocketScaleFromChassis Radius/Width, narrow fingerprint, invalid scale/axle mismatch와 AssetAdoption source를 focused 검증.
@@ -307,6 +308,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVehicleResolverEngineCurveTest,
+	"CarFight.DataAuthoring.CF_FQ_040.ESH_01.Resolver.EngineTorqueCurve",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCFVehicleResolverPrecedenceTest,
 	"CarFight.DataAuthoring.DAUTH_P0_08.Resolver.PrecedenceTrace",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -407,6 +413,66 @@ bool FCFVehicleResolverDeterminismTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Preview context does not bypass Definition validation"), PreviewResult.ResolveStatus, ECFVehicleResolveStatus::Blocked);
 	TestEqual(TEXT("Preview context cannot change Source signature"), PreviewResult.SourceSignature, FirstResult.SourceSignature);
 	TestEqual(TEXT("Preview context cannot change Definition hash"), PreviewResult.ResolvedDefinitionHash, FirstResult.ResolvedDefinitionHash);
+	return true;
+}
+
+// ESH-01 Performance Profile의 vehicle-specific Engine Torque Curve가 atomic source로 resolve되고 invalid payload가 fail-closed되는지 검증합니다.
+bool FCFVehicleResolverEngineCurveTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// ESH-01 synthetic managed request입니다.
+	FCFVehicleResolveRequest Request;
+	FString BuildError;
+	if (!TestTrue(TEXT("ESH-01 managed Resolver request builds"), CFVehicleResolverTestsPrivate::BuildManagedRequest(Request, BuildError)))
+	{
+		AddError(BuildError);
+		return false;
+	}
+	TestEqual(TEXT("ESH-01 uses Resolver revision 5"), FCFVehicleResolver::CurrentResolverContractRevision, 5);
+
+	// vehicle-specific Engine Curve opt-in complete payload입니다.
+	Request.Profiles.PerformanceData.bUseEngineTorqueCurve = true;
+	Request.Profiles.PerformanceData.EngineTorqueCurve.Points.Reset();
+	FCFVehicleEngineTorquePoint Point0;
+	Point0.EngineRPM = 0.0f;
+	Point0.TorqueMultiplier = 0.25f;
+	Request.Profiles.PerformanceData.EngineTorqueCurve.Points.Add(Point0);
+	FCFVehicleEngineTorquePoint Point1;
+	Point1.EngineRPM = 3000.0f;
+	Point1.TorqueMultiplier = 1.0f;
+	Request.Profiles.PerformanceData.EngineTorqueCurve.Points.Add(Point1);
+	FCFVehicleEngineTorquePoint Point2;
+	Point2.EngineRPM = 6500.0f;
+	Point2.TorqueMultiplier = 0.35f;
+	Request.Profiles.PerformanceData.EngineTorqueCurve.Points.Add(Point2);
+
+	// Wheel adoption 미완료는 별도 blocker지만 Engine Curve R2 mapping은 끝까지 계산되어야 합니다.
+	FCFVehicleResolveResult ValidResult;
+	TestTrue(TEXT("ESH-01 valid Engine Curve Resolve executes"), FCFVehicleResolver::Resolve(Request, ValidResult));
+	TestFalse(TEXT("Valid Engine Curve has no curve validation blocker"), CFVehicleResolverTestsPrivate::HasIssueCode(ValidResult.ResolverValidation, TEXT("PerformanceEngineTorqueCurveInvalid")));
+
+	const FCFVehicleSourceTrace* CurveFlagTrace = CFVehicleResolverTestsPrivate::FindTrace(ValidResult, TEXT("VehicleMovementConfig.bUseEngineTorqueCurve"));
+	if (TestNotNull(TEXT("bUseEngineTorqueCurve source trace exists"), CurveFlagTrace))
+	{
+		TestEqual(TEXT("bUseEngineTorqueCurve effective source is Performance Profile"), CurveFlagTrace->Layers[CurveFlagTrace->EffectiveLayerIndex].SourceType, ECFVehicleSourceType::PerformanceProfile);
+	}
+
+	const FCFVehicleSourceTrace* CurveTrace = CFVehicleResolverTestsPrivate::FindTrace(ValidResult, TEXT("VehicleMovementConfig.EngineTorqueCurve"));
+	if (TestNotNull(TEXT("EngineTorqueCurve atomic source trace exists"), CurveTrace))
+	{
+		TestEqual(TEXT("EngineTorqueCurve effective source is Performance Profile"), CurveTrace->Layers[CurveTrace->EffectiveLayerIndex].SourceType, ECFVehicleSourceType::PerformanceProfile);
+	}
+	TestNotNull(TEXT("EngineTorqueCurve resolved field exists"), CFVehicleResolverTestsPrivate::FindResolvedField(ValidResult, TEXT("VehicleMovementConfig.EngineTorqueCurve")));
+	TestFalse(TEXT("Atomic curve does not emit Points child trace"), CFVehicleResolverTestsPrivate::FindTrace(ValidResult, TEXT("VehicleMovementConfig.EngineTorqueCurve.Points")) != nullptr);
+
+	// 동일 RPM duplicate는 공통 Engine Curve validator가 fail-closed해야 합니다.
+	FCFVehicleResolveRequest InvalidRequest = Request;
+	InvalidRequest.Profiles.PerformanceData.EngineTorqueCurve.Points[2].EngineRPM = 3000.0f;
+	FCFVehicleResolveResult InvalidResult;
+	TestTrue(TEXT("ESH-01 invalid Engine Curve Resolve still returns diagnostic result"), FCFVehicleResolver::Resolve(InvalidRequest, InvalidResult));
+	TestTrue(TEXT("Invalid Engine Curve emits fail-closed blocker"), CFVehicleResolverTestsPrivate::HasIssueCode(InvalidResult.ResolverValidation, TEXT("PerformanceEngineTorqueCurveInvalid")));
+
 	return true;
 }
 
@@ -563,7 +629,7 @@ bool FCFVehicleResolverSocketScaleTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
-	TestEqual(TEXT("WSA-P0-02 Resolver contract revision"), FCFVehicleResolver::CurrentResolverContractRevision, 4);
+	TestTrue(TEXT("WSA-P0-02 Resolver contract revision remains represented"), FCFVehicleResolver::CurrentResolverContractRevision >= 4);
 	Request.Recipe.WheelVisualIntent.Mode = ECFWheelVisualIntentMode::SocketScaleFromChassis;
 	// Socket mode는 Legacy radius measure mode를 무시해야 하므로 의도적으로 AxisY를 둡니다.
 	Request.Profiles.BaseData.WheelMeshRadiusMeasureMode = ECFWheelMeshRadiusMeasureMode::AxisY;

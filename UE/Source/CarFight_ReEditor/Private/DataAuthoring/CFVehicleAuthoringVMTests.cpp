@@ -1,10 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringVMTests.cpp
-// Version: v1.21.0
-// Date: 2026-08-28
+// Version: v1.25.0
+// Date: 2026-08-31
 // Description: DAUTH-P0-09~12 Vehicle Authoring Workspace + WSA Builder integration 보호 Automation입니다.
 // Changelog:
+// - v1.25.0: Step 1 existing Evidence와 다른 ResearchDraft load → Reference Evidence Refresh R1 Preview/Commit → old Reference token Stale → explicit 재승인 flow를 generic VM integration으로 추가.
+// - v1.24.0: PhysicsDraft schema v2를 반영하고 일반 two-record creation은 LegacyCompatible, Guided Builder Mesh creation은 VehicleSpecificRequired policy를 부여하는 회귀를 추가.
+// - v1.23.0: Builder top-level refresh fail-closed가 false만 반환하고 OutError를 비우지 않도록 회귀 보호. Resolver Blocked 시 USER-facing 오류 문자열이 반드시 surface되는지 검증.
+// - v1.22.0: actual Wagon Step 4 deadlock 회귀로 bUseLayoutOverrides=false + valid Socket truth의 Ready/NotCaptured forward navigation 허용과 captured-layout Stale 차단을 검증.
 // - v1.21.0: actual Wagon E2E 회귀로 Recipe-only revision 6이 있는 Managed NewVehicle의 private Profile 0/4 bootstrap selection/refresh 허용을 BuilderShell에 추가.
 // - v1.20.0: WSA-P0-04 BuilderShell에 Socket mode canonical Wheel, Socket Scale/axle validation, Scale-only Layout stale 회귀를 추가.
 // - v1.19.0: E2E에서 발견된 Step 2 Wheel Mesh 지정 UX의 typed Recipe-only commit, FL missing Blocked, FL restore Complete, VehicleData hash 불변 회귀검증을 추가.
@@ -924,7 +928,7 @@ namespace CFVehicleAuthoringVMTestsPrivate
 		FBuilderPhysicsDraftFileGuard PhysicsDraftGuard(BuilderViewModel.GetPhysicsProposalDraftPath());
 		// Persistent Builder receipt를 생성할 typed prerequisite draft입니다.
 		FCFBuilderPhysicsDraft PhysicsDraft;
-		PhysicsDraft.SchemaRevision = 1;
+		PhysicsDraft.SchemaRevision = 2;
 		PhysicsDraft.RecipeId = Fixture.Recipe->RecipeId;
 		PhysicsDraft.TargetDefinitionPath = FSoftObjectPath(Fixture.TargetVehicleData);
 		PhysicsDraft.EvidenceId = OutEvidence->EvidenceId;
@@ -1026,6 +1030,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCFVehicleBuilderStep1FlowTest,
 	"CarFight.DataAuthoring.CF_FQ_040.VB_P0_09.BuilderStep1Reference",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVehicleBuilderEvidenceRefreshVMTest,
+	"CarFight.DataAuthoring.CF_FQ_040.VB_P0_09.BuilderEvidenceRefreshVM",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -1649,6 +1658,44 @@ bool FCFVehicleBuilderShellTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("WSA persisted OneVector scales keep Layout current"), CanonicalLayoutStep->State, ECFVehicleBuilderStepState::Complete);
 	}
 
+	// actual Wagon처럼 아직 Target Layout Apply 전이지만 current Socket truth는 유효한 Step 4 Ready/NotCaptured 상태를 재현합니다.
+	const bool OriginalUseLayoutOverridesForDeferredProgress = BuilderFixture.TargetVehicleData->VehicleLayoutConfig.bUseLayoutOverrides;
+	BuilderFixture.TargetVehicleData->VehicleLayoutConfig.bUseLayoutOverrides = false;
+	if (!TestTrue(TEXT("Step 4 deferred Layout refresh succeeds"), ManagedBuilderViewModel.RefreshCurrentState(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	const FCFVehicleBuilderStepView* DeferredLayoutStep = ManagedBuilderViewModel.FindStepView(ECFVehicleBuilderStepId::LayoutCapture);
+	if (TestNotNull(TEXT("Step 4 deferred Layout projection exists"), DeferredLayoutStep))
+	{
+		TestEqual(TEXT("Step 4 uncaptured valid Socket truth is Ready"), DeferredLayoutStep->State, ECFVehicleBuilderStepState::Ready);
+	}
+	int32 DeferredLayoutStepIndex = INDEX_NONE;
+	for (int32 StepIndex = 0; StepIndex < ManagedBuilderViewModel.GetStepViews().Num(); ++StepIndex)
+	{
+		if (ManagedBuilderViewModel.GetStepViews()[StepIndex].StepId == ECFVehicleBuilderStepId::LayoutCapture)
+		{
+			DeferredLayoutStepIndex = StepIndex;
+			break;
+		}
+	}
+	TestTrue(TEXT("Step 4 deferred Layout step index found"), DeferredLayoutStepIndex != INDEX_NONE);
+	if (DeferredLayoutStepIndex != INDEX_NONE)
+	{
+		TestTrue(TEXT("Step 4 Ready/NotCaptured page is selectable"), ManagedBuilderViewModel.SelectVisibleStep(DeferredLayoutStepIndex));
+		TestTrue(TEXT("Step 4 Ready/NotCaptured allows forward navigation"), ManagedBuilderViewModel.CanAdvanceFromCurrentStep());
+		TestTrue(TEXT("Step 4 Ready/NotCaptured moves to Step 5"), ManagedBuilderViewModel.MoveNextStep());
+		TestEqual(TEXT("Deferred Layout forward destination is Physics Proposal"), ManagedBuilderViewModel.GetCurrentStep().StepId, ECFVehicleBuilderStepId::PhysicsProposal);
+		ManagedBuilderViewModel.MovePreviousStep();
+	}
+	BuilderFixture.TargetVehicleData->VehicleLayoutConfig.bUseLayoutOverrides = OriginalUseLayoutOverridesForDeferredProgress;
+	if (!TestTrue(TEXT("Step 4 deferred Layout fixture restore succeeds"), ManagedBuilderViewModel.RefreshCurrentState(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
 	UStaticMeshSocket* WsaSocketFL = BuilderFixture.ChassisMesh ? BuilderFixture.ChassisMesh->FindSocket(TEXT("Wheel_Anchor_FL")) : nullptr;
 	UStaticMeshSocket* WsaSocketFR = BuilderFixture.ChassisMesh ? BuilderFixture.ChassisMesh->FindSocket(TEXT("Wheel_Anchor_FR")) : nullptr;
 	if (!TestNotNull(TEXT("WSA FL socket exists"), WsaSocketFL) || !TestNotNull(TEXT("WSA FR socket exists"), WsaSocketFR))
@@ -1668,11 +1715,18 @@ bool FCFVehicleBuilderShellTest::RunTest(const FString& Parameters)
 	{
 		TestEqual(TEXT("WSA valid equal axle Socket Scale stays Complete"), ScaleChangedSocketStep->State, ECFVehicleBuilderStepState::Complete);
 		TestEqual(TEXT("WSA scale-only authored change makes Layout stale"), ScaleChangedLayoutStep->State, ECFVehicleBuilderStepState::Stale);
+		if (DeferredLayoutStepIndex != INDEX_NONE)
+		{
+			TestTrue(TEXT("Stale Layout page remains selectable for review"), ManagedBuilderViewModel.SelectVisibleStep(DeferredLayoutStepIndex));
+			TestFalse(TEXT("Stale captured Layout cannot advance"), ManagedBuilderViewModel.CanAdvanceFromCurrentStep());
+		}
 	}
 
 	WsaSocketFL->RelativeScale = FVector(0.72, 1.12, 0.70);
 	// Invalid USER Scale은 Resolver/Workspace Preview 자체를 Block하므로 RefreshCurrentState=false가 정상이다. Builder Step state는 실패 경로에서도 rebuild된다.
+	Error.Reset();
 	TestFalse(TEXT("WSA X/Z mismatch blocks top-level refresh fail-closed"), ManagedBuilderViewModel.RefreshCurrentState(Error));
+	TestFalse(TEXT("Builder refresh fail-closed surfaces non-empty USER error"), Error.IsEmpty());
 	const FCFVehicleBuilderStepView* InvalidScaleSocketStep = ManagedBuilderViewModel.FindStepView(ECFVehicleBuilderStepId::SocketGuide);
 	if (TestNotNull(TEXT("WSA invalid scale SocketGuide exists"), InvalidScaleSocketStep))
 	{
@@ -1747,6 +1801,162 @@ bool FCFVehicleBuilderShellTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("Builder P0-03 SocketGuide blocks duplicate Wheel role binding"), DuplicateSocketStep->State, ECFVehicleBuilderStepState::Blocked);
 		TestEqual(TEXT("Builder P0-03 LayoutCapture blocks when SocketGuide prerequisite fails"), DuplicateLayoutStep->State, ECFVehicleBuilderStepState::Blocked);
 	}
+	return true;
+}
+
+// Guided Builder Step 1에서 differing ResearchDraft를 Existing Evidence Refresh R1로 안전하게 반영하는 VM 전체 flow를 검증합니다.
+bool FCFVehicleBuilderEvidenceRefreshVMTest::RunTest(const FString& Parameters)
+{
+	using namespace CFVehicleAuthoringVMTestsPrivate;
+
+	// Existing managed Vehicle truth를 제공하는 integration fixture입니다.
+	FWorkspaceFixture Fixture;
+	// Fixture/VM/fingerprint diagnostic입니다.
+	FString Error;
+	if (!TestTrue(TEXT("Evidence Refresh VM managed fixture builds"), BuildImportedFixture(Fixture, Error))
+		|| !TestTrue(TEXT("Evidence Refresh VM private Profile fixture attaches"), AttachBuilderPrivateProfiles(Fixture, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	// Random fixture Recipe 전용 local review token cleanup guard입니다.
+	FBuilderReferenceTokenGuard TokenGuard(Fixture.Recipe->RecipeId);
+	// Builder selection row입니다.
+	const FCFVehicleListEntry Entry = BuildListEntry(Fixture, true);
+	// 실제 Guided Shell이 사용하는 ViewModel입니다.
+	FCFVehicleBuilderVM BuilderViewModel;
+	if (!TestTrue(TEXT("Evidence Refresh VM managed Vehicle selects"), BuilderViewModel.SelectVehicle(Entry, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	// USER의 실제 ResearchDraft.json을 보존하는 file guard입니다.
+	FBuilderResearchDraftFileGuard DraftFileGuard(BuilderViewModel.GetResearchDraftPath());
+	// 최초 persistent Evidence를 만들 initial Research Draft입니다.
+	FCFBuilderResearchDraft InitialDraft;
+	InitialDraft.SchemaRevision = 1;
+	InitialDraft.RecipeId = Fixture.Recipe->RecipeId;
+	InitialDraft.TargetDefinitionPath = FSoftObjectPath(Fixture.TargetVehicleData);
+	InitialDraft.EvidencePayload = BuildBuilderStep1EvidencePayload();
+	InitialDraft.ResearchLabel = TEXT("VB-P0-09 Evidence Refresh initial");
+	if (!TestTrue(TEXT("Evidence Refresh VM initial Draft writes"), DraftFileGuard.WriteDraft(InitialDraft, Error))
+		|| !TestTrue(TEXT("Evidence Refresh VM initial Draft loads"), BuilderViewModel.LoadResearchDraft(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	// Missing Evidence만 생성하는 existing Companion mutation0 preview입니다.
+	FCFBuilderCompanionPreview CompanionPreview;
+	if (!TestTrue(TEXT("Evidence Refresh VM prerequisite Companion preview succeeds"), BuilderViewModel.PrepareResearchCompanions(CompanionPreview, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	// Persistent initial Evidence terminal result입니다.
+	FCFBuilderCompanionResult CompanionResult;
+	if (!TestTrue(TEXT("Evidence Refresh VM prerequisite Companion commit succeeds"), BuilderViewModel.ExecutePreparedResearchCompanions(CompanionResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	if (!TestTrue(TEXT("Evidence Refresh VM initial Reference review succeeds"), BuilderViewModel.AcceptCurrentReferenceSet(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	// Refresh 전 persistent Evidence입니다.
+	UCFVehicleRefEvidence* Evidence = BuilderViewModel.GetCurrentReferenceEvidence();
+	if (!TestNotNull(TEXT("Evidence Refresh VM current Evidence exists"), Evidence))
+	{
+		return false;
+	}
+	// Refresh 전 stable Evidence identity입니다.
+	const FGuid EvidenceIdBefore = Evidence->EvidenceId;
+	// Refresh 전 USER-reviewed semantic fingerprint입니다.
+	const FString EvidenceFingerprintBefore = Evidence->EvidenceFingerprint;
+
+	// Later research에서 새 FACT를 추가한 complete replacement Draft입니다.
+	FCFBuilderResearchDraft UpdatedDraft = InitialDraft;
+	UpdatedDraft.ResearchLabel = TEXT("VB-P0-09 Evidence Refresh updated");
+	// Later research에서 확보한 generic power FACT입니다.
+	FCFRefClaim& PowerClaim = UpdatedDraft.EvidencePayload.Claims.AddDefaulted_GetRef();
+	PowerClaim.ClaimId = TEXT("CLAIM-BUILDER-STEP1-POWER");
+	PowerClaim.ReferenceVehicleId = UpdatedDraft.EvidencePayload.ReferenceVehicles[0].ReferenceVehicleId;
+	PowerClaim.FactKey = TEXT("Engine.MaxPower");
+	PowerClaim.ValueKind = ECFRefValueKind::Number;
+	PowerClaim.NumberValue = 180.0;
+	PowerClaim.UnitId = TEXT("kW");
+	PowerClaim.SourceValueText = TEXT("180 kW");
+	PowerClaim.Provenance = ECFRefProvenance::FACT;
+	PowerClaim.CitationIds = {UpdatedDraft.EvidencePayload.Sources[0].SourceId};
+	PowerClaim.ConfidenceScore = 0.95f;
+	PowerClaim.ResolutionState = ECFRefClaimResolution::Canonical;
+	UpdatedDraft.EvidencePayload.ResearchNotes = TEXT("VB-P0-09 Evidence Refresh updated Automation only.");
+
+	if (!TestTrue(TEXT("Evidence Refresh VM updated Draft writes"), DraftFileGuard.WriteDraft(UpdatedDraft, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	// Current Evidence와 다른 complete Draft여도 load 자체는 refresh candidate로 허용해야 합니다.
+	if (!TestTrue(TEXT("Evidence Refresh VM differing Draft loads as refresh candidate"), BuilderViewModel.LoadResearchDraft(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	// Existing Evidence complete replacement mutation0 R1 preview입니다.
+	FCFBuilderEvidenceRefreshPreview RefreshPreview;
+	if (!TestTrue(TEXT("Evidence Refresh VM mutation0 preview succeeds"), BuilderViewModel.PrepareReferenceEvidenceRefresh(RefreshPreview, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("Evidence Refresh VM current claim count is one"), RefreshPreview.CurrentClaimCount, 1);
+	TestEqual(TEXT("Evidence Refresh VM prospective claim count is two"), RefreshPreview.ProspectiveClaimCount, 2);
+	TestNotEqual(TEXT("Evidence Refresh VM prospective fingerprint differs"), RefreshPreview.ProspectiveEvidenceFingerprint, EvidenceFingerprintBefore);
+	TestFalse(TEXT("Evidence Refresh VM preview does not save"), RefreshPreview.Operation.Mutation.bSavePerformed);
+
+	// VM이 exact preview에 one-shot USER AuthoringWrite approval을 붙여 실행한 terminal result입니다.
+	FCFBuilderEvidenceRefreshResult RefreshResult;
+	if (!TestTrue(TEXT("Evidence Refresh VM approved commit succeeds"), BuilderViewModel.ExecutePreparedEvidenceRefresh(RefreshResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestTrue(TEXT("Evidence Refresh VM marks Evidence changed"), RefreshResult.Operation.Mutation.bEvidenceChanged);
+	TestFalse(TEXT("Evidence Refresh VM commit does not save"), RefreshResult.Operation.Mutation.bSavePerformed);
+	TestEqual(TEXT("Evidence Refresh VM preserves EvidenceId"), Evidence->EvidenceId, EvidenceIdBefore);
+	TestEqual(TEXT("Evidence Refresh VM persistent claim count becomes two"), Evidence->Claims.Num(), 2);
+	TestEqual(TEXT("Evidence Refresh VM commits preview fingerprint"), Evidence->EvidenceFingerprint, RefreshPreview.ProspectiveEvidenceFingerprint);
+
+	// Old USER Reference acceptance token must become stale against the new fingerprint.
+	const FCFVehicleBuilderStepView* StaleReferenceStep = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::IdentityReference);
+	if (!TestNotNull(TEXT("Evidence Refresh VM stale Reference projection exists"), StaleReferenceStep))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Evidence Refresh VM requires Reference re-review after refresh"), StaleReferenceStep->State, ECFVehicleBuilderStepState::Stale);
+
+	if (!TestTrue(TEXT("Evidence Refresh VM new Reference Set explicit re-review succeeds"), BuilderViewModel.AcceptCurrentReferenceSet(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	// New fingerprint review 뒤 Step 1이 다시 Complete인지 확인합니다.
+	const FCFVehicleBuilderStepView* ReacceptedReferenceStep = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::IdentityReference);
+	if (!TestNotNull(TEXT("Evidence Refresh VM reaccepted Reference projection exists"), ReacceptedReferenceStep))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Evidence Refresh VM Step 1 completes after new fingerprint review"), ReacceptedReferenceStep->State, ECFVehicleBuilderStepState::Complete);
+
+	// Asset Registry에 등록된 unsaved test Evidence를 후속 Automation에서 보이지 않도록 제거합니다.
+	CleanupRegisteredAsset(Evidence);
 	return true;
 }
 
@@ -2037,7 +2247,7 @@ bool FCFVehicleBuilderStep5PhysicsTest::RunTest(const FString& Parameters)
 	FBuilderPhysicsDraftFileGuard PhysicsDraftGuard(BuilderViewModel.GetPhysicsProposalDraftPath());
 	// AI가 current accepted Evidence에서 작성한 complete typed Physics Proposal fixture입니다.
 	FCFBuilderPhysicsDraft PhysicsDraft;
-	PhysicsDraft.SchemaRevision = 1;
+	PhysicsDraft.SchemaRevision = 2;
 	PhysicsDraft.RecipeId = Fixture.Recipe->RecipeId;
 	PhysicsDraft.TargetDefinitionPath = FSoftObjectPath(Fixture.TargetVehicleData);
 	PhysicsDraft.EvidenceId = CompanionResult.CreatedEvidence->EvidenceId;
@@ -2283,7 +2493,7 @@ bool FCFVehicleBuilderStep7ReviewTest::RunTest(const FString& Parameters)
 	FBuilderPhysicsDraftFileGuard PhysicsDraftGuard(BuilderViewModel.GetPhysicsProposalDraftPath());
 	// Target Definition에 실제 Diff를 만들 complete typed Physics Proposal입니다.
 	FCFBuilderPhysicsDraft PhysicsDraft;
-	PhysicsDraft.SchemaRevision = 1;
+	PhysicsDraft.SchemaRevision = 2;
 	PhysicsDraft.RecipeId = Fixture.Recipe->RecipeId;
 	PhysicsDraft.TargetDefinitionPath = FSoftObjectPath(Fixture.TargetVehicleData);
 	PhysicsDraft.EvidenceId = CompanionResult.CreatedEvidence->EvidenceId;
@@ -3906,6 +4116,7 @@ bool FCFVehicleP11MeshCreateTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("Recipe binds exact created Definition"), CreateResult.CreatedRecipe->TargetVehicleData.Get(), CreateResult.CreatedDefinition);
 		TestEqual(TEXT("Recipe stores explicit candidate Chassis intent"), CreateResult.CreatedRecipe->AssetIntent.ChassisMesh.Get(), CandidateMesh);
 		TestTrue(TEXT("New Recipe starts managed"), CreateResult.CreatedRecipe->ImportState.ManageState == ECFVehicleManageState::Managed);
+		TestEqual(TEXT("Generic record creation preserves LegacyCompatible Transmission policy"), CreateResult.CreatedRecipe->BuilderTransmissionPolicy, ECFBuilderTransmissionPolicy::LegacyCompatible);
 		TestTrue(TEXT("VehicleBase Profile is not inferred"), CreateResult.CreatedRecipe->ProfileBindings.VehicleBaseProfile.IsNull());
 		TestTrue(TEXT("Drivetrain Profile is not inferred"), CreateResult.CreatedRecipe->ProfileBindings.DrivetrainProfile.IsNull());
 		TestTrue(TEXT("Handling Profile is not inferred"), CreateResult.CreatedRecipe->ProfileBindings.HandlingProfile.IsNull());
@@ -3918,6 +4129,48 @@ bool FCFVehicleP11MeshCreateTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Two-record creation reports created assets"), CreateResult.Operation.Mutation.bCreatedAssets);
 	TestFalse(TEXT("Two-record creation never auto-saves"), CreateResult.Operation.Mutation.bSavePerformed);
 	TestFalse(TEXT("Two-record creation never automatically retries"), CreateResult.Operation.Mutation.bAutomaticRetryPerformed);
+
+	// 같은 Mesh-only candidate를 Guided Builder 신규 차량 생성 경로로 검증할 ViewModel입니다.
+	FCFVehicleBuilderVM GuidedBuilderViewModel;
+	// Guided 신규 record creation의 exact package/object identity입니다.
+	const FString GuidedDefinitionPackageName = NewDefinitionPackageName + TEXT("_Guided");
+	const FString GuidedRecipePackageName = NewRecipePackageName + TEXT("_Guided");
+	const FString GuidedDefinitionAssetName = FString(TEXT("DA_Vehicle_")) + UniqueToken + TEXT("_Guided");
+	const FString GuidedRecipeAssetName = FString(TEXT("DA_Recipe_")) + UniqueToken + TEXT("_Guided");
+	// Guided Builder가 만든 mutation0 record proposal입니다.
+	FCFVehicleRecordCreatePreview GuidedCreatePreview;
+	// Guided creation / commit diagnostic입니다.
+	FString GuidedCreateError;
+	if (CandidateEntry
+		&& TestTrue(TEXT("Guided Builder selects exact Mesh-only candidate"), GuidedBuilderViewModel.SelectVehicle(*CandidateEntry, GuidedCreateError))
+		&& TestTrue(TEXT("Guided Builder record creation preview succeeds"), GuidedBuilderViewModel.PrepareSelectedMeshRecordCreate(
+			GuidedDefinitionPackageName,
+			GuidedDefinitionAssetName,
+			GuidedRecipePackageName,
+			GuidedRecipeAssetName,
+			GuidedCreatePreview,
+			GuidedCreateError)))
+	{
+		// Guided Builder가 exact reviewed proposal을 commit한 terminal result입니다.
+		FCFVehicleRecordCreateResult GuidedCreateResult;
+		if (TestTrue(TEXT("Guided Builder record creation commit succeeds"), GuidedBuilderViewModel.ExecutePreparedMeshRecordCreate(GuidedCreateResult, GuidedCreateError)))
+		{
+			if (TestNotNull(TEXT("Guided Builder creates Recipe"), GuidedCreateResult.CreatedRecipe))
+			{
+				TestEqual(TEXT("Guided Builder new Recipe requires vehicle-specific Transmission"), GuidedCreateResult.CreatedRecipe->BuilderTransmissionPolicy, ECFBuilderTransmissionPolicy::VehicleSpecificRequired);
+			}
+		}
+		else
+		{
+			AddError(GuidedCreateError);
+		}
+		CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(GuidedCreateResult.CreatedRecipe);
+		CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(GuidedCreateResult.CreatedDefinition);
+	}
+	else if (!GuidedCreateError.IsEmpty())
+	{
+		AddError(GuidedCreateError);
+	}
 
 	CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(CreateResult.CreatedRecipe);
 	CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(CreateResult.CreatedDefinition);

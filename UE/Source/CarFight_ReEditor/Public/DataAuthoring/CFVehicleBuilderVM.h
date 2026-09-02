@@ -1,9 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderVM.h
-// Version: v1.12.0
-// Date: 2026-08-28
+// Version: v1.14.0
+// Date: 2026-08-31
 // Description: Guided Vehicle Builder Shell + WSA-P0-04 blocked-preview diagnostics transient ViewModel입니다.
 // Changelog:
+// - v1.14.0: Existing Reference Evidence complete replacement R1의 Preview→explicit AuthoringWrite Commit prepared state를 Step 1 ViewModel에 추가하고, differing ResearchDraft를 refresh candidate로 load할 수 있게 Companion 동일성 검증과 분리.
+// - v1.13.0: actual Wagon E2E에서 발견된 Step 4 Ready/NotCaptured navigation deadlock을 교정. Target Apply는 Step 7에 유지하면서 deferred Layout Apply가 가능한 Ready 상태만 forward-progress prerequisite로 인정.
 // - v1.12.0: actual Wagon E2E의 NewVehicle private Profile bootstrap을 위해 Recipe-only revision과 lifecycle을 분리하고 expected Resolver Blocked read 허용 helper를 추가.
 // - v1.11.0: 전체 Preview가 Blocked여도 이번 호출의 fresh Resolve read가 성공했다면 Step 2~4가 최신 Asset/Socket/Layout truth를 진단할 수 있는 내부 read-state flag 추가.
 // - v1.10.0: E2E에서 발견된 Step 2 Wheel Mesh 지정 UX 공백을 기존 typed AssetIntent Recipe-only commit으로 연결하는 Builder wrapper를 추가.
@@ -61,6 +63,12 @@ public:
 
 	// 직전 exact Companion proposal에 USER OwnershipWrite approval을 붙여 Evidence/Missing private Profiles를 commit합니다.
 	bool ExecutePreparedResearchCompanions(FCFBuilderCompanionResult& OutResult, FString& OutError);
+
+	// Loaded ResearchDraft를 current Existing Evidence complete replacement로 적용할 R1 proposal을 mutation 없이 준비합니다.
+	bool PrepareReferenceEvidenceRefresh(FCFBuilderEvidenceRefreshPreview& OutPreview, FString& OutError);
+
+	// 직전 exact Evidence Refresh proposal에 USER AuthoringWrite approval을 붙여 existing Evidence research payload만 commit합니다.
+	bool ExecutePreparedEvidenceRefresh(FCFBuilderEvidenceRefreshResult& OutResult, FString& OutError);
 
 	// Current Evidence fingerprint와 RecipeId를 USER-reviewed Reference token으로 local Editor settings에 기록합니다.
 	bool AcceptCurrentReferenceSet(FString& OutError);
@@ -172,8 +180,11 @@ public:
 	// Current page를 이전 Step으로 이동합니다.
 	void MovePreviousStep();
 
-	// Current Step이 Complete일 때만 다음 Step으로 이동합니다.
+	// Current Step이 workflow forward-progress 조건을 만족할 때 다음 Step으로 이동합니다. LayoutCapture Ready/NotCaptured는 Step 7 deferred Apply 조건에서만 허용합니다.
 	bool MoveNextStep();
+
+	// 현재 Step이 다음 단계로 진행 가능한지 단일 contract로 반환합니다.
+	bool CanAdvanceFromCurrentStep() const;
 
 	// USER가 상태를 확인할 목적으로 visible Step을 선택합니다. Locked/Unavailable은 이동하지 않습니다.
 	bool SelectVisibleStep(int32 StepIndex);
@@ -244,6 +255,9 @@ private:
 
 	// Physics Proposal 단계의 현재 Shell 연결 상태를 평가합니다.
 	void EvaluatePhysicsProposalStep();
+
+	// Step 하나가 workflow prerequisite/forward navigation을 만족하는지 공통 판정합니다.
+	bool IsStepSatisfiedForForwardProgress(const FCFVehicleBuilderStepView& Step) const;
 
 	// Gameplay Setup 단계의 현재 Shell 연결 상태를 평가합니다.
 	void EvaluateGameplaySetupStep();
@@ -335,6 +349,9 @@ private:
 	// Selection 전환/새 draft load에서 이전 prepared Companion approval을 폐기합니다.
 	void ClearPreparedResearchCompanion();
 
+	// Selection/refresh/draft 변경에서 이전 prepared Evidence Refresh approval을 폐기합니다.
+	void ClearPreparedEvidenceRefresh();
+
 	// Selection/refresh/draft 변경에서 이전 prepared Physics Proposal approval을 폐기합니다.
 	void ClearPreparedPhysicsProposal();
 
@@ -385,6 +402,15 @@ private:
 
 	// 직전 Companion proposal이 USER approval 직전까지 유효한 transient prepared state인지 여부입니다.
 	bool bHasPreparedResearchCompanion = false;
+
+	// USER confirm dialog에 표시한 직전 exact Existing Evidence Refresh request입니다.
+	FCFBuilderEvidenceRefreshRequest PreparedEvidenceRefreshRequest;
+
+	// USER confirm dialog에 표시한 직전 exact Existing Evidence Refresh preview입니다.
+	FCFBuilderEvidenceRefreshPreview PreparedEvidenceRefreshPreview;
+
+	// 직전 Evidence Refresh proposal이 USER approval 직전까지 유효한 transient prepared state인지 여부입니다.
+	bool bHasPreparedEvidenceRefresh = false;
 
 	// Current Step 5에 load된 AI Physics Proposal transient payload입니다.
 	FCFBuilderPhysicsDraft LoadedPhysicsProposalDraft;

@@ -1,12 +1,15 @@
-﻿// Version: 1.2.0
-// Date: 2026-03-18
-// Description: CarFight 차량 물리/디버그 유틸리티 라이브러리 헤더
+﻿// Version: 1.3.0
+// Date: 2026-08-29
+// Description: CarFight 차량 디버그 유틸리티 라이브러리 헤더
+// Changelog:
+// - v1.3.0: 사용 중단된 GetRealWheelTransform legacy reflection API를 제거했습니다.
+// Migration:
+// - WheelSync runtime은 UCFWheelSyncComp의 정식 Chaos wheel 경로를 사용합니다. GetRealWheelTransform 대체 호출은 필요하지 않습니다.
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
-#include "ChaosWheeledVehicleMovementComponent.h"
 #include "CFVehicleDriveComp.h"
 #include "CFVehiclePawn.h"
 #include "CarFightVehicleUtils.generated.h"
@@ -20,22 +23,6 @@ class CARFIGHT_RE_API UCarFightVehicleUtils : public UBlueprintFunctionLibrary
 	GENERATED_BODY()
 
 public:
-	/**
-	 * [v1.0] 물리 엔진의 실제 휠 상태(조향각, 회전각, 서스펜션)를 가져와 트랜스폼으로 반환합니다.
-	 * 블루프린트의 GetWheelState가 제공하지 않는 회전 데이터를 C++ 레벨에서 추출합니다.
-	 * @param MovementComponent - 대상 차량 무브먼트 컴포넌트
-	 * @param WheelIndex - 바퀴 인덱스 (0~3)
-	 * @param OutOffset - 서스펜션이 적용된 위치 오프셋 (Z축)
-	 * @param OutRotation - 조향(Yaw)과 굴러감(Pitch)이 적용된 회전값
-	 */
-	UFUNCTION(BlueprintPure, Category="CarFight|Physics", meta=(ToolTip="카오스 비히클의 실제 휠 회전/조향/서스펜션 상태를 읽어 상대 위치와 회전을 반환합니다."))
-	static void GetRealWheelTransform(
-		UChaosWheeledVehicleMovementComponent* MovementComponent,
-		int32 WheelIndex,
-		FVector& OutOffset,
-		FRotator& OutRotation
-	);
-
 	/**
 	 * [v1.1] Drive 상태 Enum을 화면/로그 친화 문자열로 변환합니다.
 	 * @param InDriveState - 변환할 Drive 상태 Enum

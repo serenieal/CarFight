@@ -1,15 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleProfileTypes.h
-// Version: v1.2.0
-// Date: 2026-08-26
-// Description: CF-FQ-040 VB-P0-05 Builder-private ownership, reference wheel geometry와 typed Transmission payload를 포함한 Profile 계약입니다.
+// Version: v1.3.0
+// Date: 2026-09-01
+// Description: CF-FQ-040 ESH-01 vehicle-specific Engine TorqueCurve typed owner를 Performance Profile에 추가한 Profile 계약입니다.
 // Scope: Profile metadata, Feel response, mass context와 Domain별 balance payload를 제공합니다.
 // Changelog:
+// - v1.3.0: Performance Profile에 bUseEngineTorqueCurve + FCFVehicleEngineTorqueCurve를 additive 추가해 vehicle-specific Engine Curve persistent owner를 확정.
 // - v1.2.0: Builder-private OwnerRecipeId, opt-in Reference Wheel Geometry, ChassisWidth와 UE 5.8 Transmission complete payload를 additive 추가.
 // - v1.1.0: UI-P0-06 explicit RedlineStartRPM을 PerformanceProfileDirect typed payload로 additive 추가. EngineMaxRPMByFeel에서 자동 유도하지 않음.
 // - v1.0.0: DAUTH-P0-08A Profile schema를 최초 구현.
 // Migration:
+// - v1.3.0 이전 Performance Profile은 bUseEngineTorqueCurve=false / EngineTorqueCurve empty 기본값으로 기존 BP/Chaos TorqueCurve를 유지합니다.
+// - 신규 Builder-private Performance Profile만 reviewed Engine Curve가 준비됐을 때 bUseEngineTorqueCurve=true로 opt-in합니다.
 // - v1.2.0 기존 Profile은 OwnerRecipeId invalid로 shared/legacy이며 Builder-private commit 대상이 아닙니다.
 // - 기존 VehicleBase Profile은 bUseReferenceWheelGeometry=false, 기존 Drivetrain Profile은 bUseTransmissionConfig=false라 새 fallback/Transmission candidate를 자동 생성하지 않습니다.
 // - Builder-private Profile은 소유 RecipeId를 명시하고 complete payload를 commit할 때 opt-in gate를 함께 설정합니다.
@@ -349,6 +352,14 @@ struct FCFPerformanceProfileData
 	// AccelerationFeel로 EngineMaxRPM을 만드는 response입니다.
 	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Performance")
 	FCFFeelResponse EngineMaxRPMByFeel;
+
+	// 이 Performance Profile이 차량별 Engine Torque Curve complete payload를 제공할지 선택합니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Performance|Engine Curve", meta=(DisplayName="차량별 토크 커브 사용", ToolTip="True이면 EngineTorqueCurve를 VehicleMovementConfig의 차량별 Engine Curve 후보로 제공합니다. 기존 Profile은 기본 False라 기존 BP/Chaos Curve를 유지합니다."))
+	bool bUseEngineTorqueCurve = false;
+
+	// MaxTorque에 곱할 차량별 normalized Engine Torque Curve complete payload입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Performance|Engine Curve", meta=(EditCondition="bUseEngineTorqueCurve", EditConditionHides, DisplayName="차량별 엔진 토크 커브", ToolTip="X=실제 RPM, Y=EngineMaxTorque에 곱할 0..1 normalized torque multiplier입니다."))
+	FCFVehicleEngineTorqueCurve EngineTorqueCurve;
 
 	// AccelerationFeel로 ThrottleInputScale을 만드는 response입니다.
 	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Performance")

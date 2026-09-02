@@ -2,10 +2,12 @@
 //
 // Version: 2.165.0
 // Date: 2026-09-01
-// Description: CarFight 싱글플레이 차량 Pawn 기준 클래스 / WSA deterministic Wheel Visual full-transform seam
+// Description: CarFight 싱글플레이 차량 Pawn 기준 클래스 / UISubsystem UI ownership 정리 / WSA deterministic Wheel Visual full-transform seam
 // Changelog:
 // - v2.165.0: Wheel Visual authored cache를 Rotation에서 Full RelativeTransform으로 확장하고 Construction fresh recapture / runtime deterministic reapply 계약을 추가.
 // - v2.164.0: FL-only shared Wheel fallback의 Right orientation 보정을 위해 authored Wheel_Mesh base rotation cache와 Wheel Visual 전용 private helper 경계를 추가. 신규 Component 분해는 하지 않고 향후 추출 가능한 seam으로 한정.
+// - v2.162.0: Legacy Reticle/TargetSelect Class·ZOrder 필드가 직렬화 호환 전용이며 Pawn runtime ownership에는 참여하지 않음을 명시.
+// - v2.161.0: 제거된 WBP_VehicleDebug Text API와 Pawn 직접 소유 Reticle/TargetSelect 호환 wrapper·영구 null instance cache를 제거. 현재 HUD/Panel structured VehicleDebug API와 UISubsystem 소유 UI 경로는 유지.
 // - v2.155.0: WSA-P0-03 Automation이 private WheelVisual/Layout 적용 경계를 public API로 열지 않고 실제 호출하도록 전용 friend를 추가.
 // - v2.154.0: Vehicle TargetSelectable의 안정 TargetId source를 VehicleData PrimaryAssetId로 고정하고 Actor instance 이름은 Identity source에서 제외. Player-facing DisplayName은 명시 source가 생기기 전 Empty를 유지.
 // - v2.153.0: IA_RadarZoom Axis1D 슬롯과 Started handler를 추가. 양수는 UISubsystem Radar Zoom In, 음수는 Zoom Out으로만 전달하고 Scanner/Sensor Range 계산은 Pawn에 추가하지 않음.
@@ -85,13 +87,14 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth 적용 전 기준선 정리를 위해 차량 NetDebug/OwnerVisual/OwnerBodyVisual 실험 플래그 기본값을 False로 통일.
 // Migration:
+// - v2.162.0 Legacy AimReticleWidgetClass/AimReticleZOrder/TargetSelectWidgetClass/TargetSelectHudZOrder는 기존 Asset 역직렬화를 위해 이름과 타입을 보존합니다. 새 설정·런타임 생성은 CFUISubsystem Config와 Layer ZOrder를 사용합니다.
 // - v2.154.0부터 차량 TargetId는 VehicleData의 유효한 PrimaryAssetId.PrimaryAssetName을 사용한다. VehicleData가 없거나 PrimaryAssetId가 invalid면 TargetId=None으로 fail-closed하며 Actor GetFName/GetName을 fallback으로 사용하지 않는다. DisplayName은 별도 Player-facing 이름 source가 생기기 전 Empty를 유지한다.
 // - v2.152.0부터 InputAction_SelectWeapon은 `/Game/CarFight/Input/IA_SelectWeapon` Axis1D를 기본 로드한다. P0 키보드 매핑은 숫자 1~9가 각각 실제 1-based selectable weapon 순번 1~9를 전달한다. Mouse Wheel은 Radar Range/Zoom 예약을 보존하고 게임패드 키는 이번 slice에서 임의 지정하지 않는다.
 // - v2.152.0 입력 값은 ordinal→index 변환 외 Gameplay 의미를 갖지 않으며 범위 밖 순번은 기존 RequestSelectWeaponIndex fail-closed 검증에 맡긴다. 새 WeaponGroup ID나 cycle cursor를 만들지 않는다.
 // - v2.151.0 Weapon Selection은 Applied Fitting이 실제 제공한 고정 순번만 받으며 별도 입력 키나 WeaponGroup ID를 만들지 않는다. 진행 중 Launcher는 기존 WeaponChanged cancel contract로 종료하고 Ammo 예약/Action Lock 정리를 재사용한다.
 // - v2.150.0 추가 friend는 WITH_DEV_AUTOMATION_TESTS에서 Heat accepted-fire 통합을 검증하기 위한 C++ 테스트 경계이며 Blueprint/런타임 공개 API를 변경하지 않는다.
-// - v2.149.0부터 BeginPlay/SetupPlayerInputComponent는 TargetSelect Marker를 직접 생성하지 않는다. bShowTargetSelectHud/ShouldShowTargetSelectHud은 UISubsystem이 현재 Pawn 표시 정책으로 계속 사용하며 Legacy Class/Instance/ZOrder 필드는 자동 생성 소유권으로 사용하지 않는다.
-// - v2.148.0부터 BeginPlay/SetupPlayerInputComponent는 AimReticle을 직접 생성하지 않는다. bShowAimReticle/ShouldShowAimReticle은 UISubsystem이 현재 Pawn 표시 정책으로 계속 사용하며 Legacy Class/Instance/ZOrder 필드는 자동 생성 소유권으로 사용하지 않는다.
+// - v2.149.0부터 BeginPlay/SetupPlayerInputComponent는 TargetSelect Marker를 직접 생성하지 않는다. bShowTargetSelectHud/ShouldShowTargetSelectHud은 UISubsystem이 현재 Pawn 표시 정책으로 계속 사용하며 Legacy Class/ZOrder 필드는 자동 생성 소유권으로 사용하지 않는다.
+// - v2.148.0부터 BeginPlay/SetupPlayerInputComponent는 AimReticle을 직접 생성하지 않는다. bShowAimReticle/ShouldShowAimReticle은 UISubsystem이 현재 Pawn 표시 정책으로 계속 사용하며 Legacy Class/ZOrder 필드는 자동 생성 소유권으로 사용하지 않는다.
 // - v2.147.0부터 InputAction_StartActiveScan은 `/Game/CarFight/Input/IA_ActiveScan`을 기본 로드한다. P0 기본 매핑은 `V` 1개이며 Boolean + Pressed 의미다. 누르면 장비의 ActiveScanDurationSec 동안 실행되고 Sensor Runtime이 자동 종료한다.
 // - InputAction_StopActiveScan은 기본 null로 유지하며 P0에서 별도 Stop 키를 만들지 않는다. RequestStopActiveScan은 장비 교체·상태 전환·향후 명시적 취소 경로에서 사용할 Gameplay command로 유지한다.
 // - v2.146.0의 RequestStartActiveScan / RequestStopActiveScan은 VehicleSensorComp의 기존 StartActiveScan / StopActiveScan에만 위임하며 SensorData 적용, Runtime 초기화, Contact/Knowledge Reset을 수행하지 않는다.
@@ -1357,34 +1360,26 @@ public:
 	float LocalAimTraceDebugDuration = 2.0f;
 
 		// [v2.148.0] UI-P0-04 이전 Pawn 소유 Reticle Class 직렬화 호환을 위해 유지하는 Legacy 설정입니다.
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(DisplayName="Aim Reticle 위젯 클래스 (AimReticleWidgetClass)", ToolTip="Legacy 직렬화 호환용 Reticle Class입니다. UI-P0-04 이후 자동 생성 소유권은 CFUISubsystem의 DefaultAimReticleWidgetClass가 담당합니다."))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(DisplayName="Aim Reticle 위젯 클래스 (AimReticleWidgetClass)", ToolTip="Legacy 저장값 역직렬화 호환용 Reticle Class입니다. Pawn runtime은 이 값을 로드·소비하지 않으며 UI-P0-04 이후 실제 Class 해석은 CFUISubsystem의 DefaultAimReticleWidgetClass가 담당합니다."))
 	TSubclassOf<UCFAimReticleWidget> AimReticleWidgetClass = nullptr;
-
-	// [v2.148.0] UI-P0-04 이전 Pawn 직접 생성 인스턴스가 남아 있을 때만 정리하는 Legacy 캐시입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(DisplayName="Aim Reticle 위젯 인스턴스 (AimReticleWidgetInstance)", ToolTip="Legacy Pawn 직접 생성 인스턴스 정리용 캐시입니다. 새 자동 수명은 CFUISubsystem이 소유하므로 정상 UI-P0-04 경로에서는 Null입니다."))
-	TObjectPtr<UCFAimReticleWidget> AimReticleWidgetInstance = nullptr;
 
 	// [v2.20.0] Aim Reticle 위젯 표시를 허용하는 토글입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(DisplayName="Aim Reticle 표시 여부 (bShowAimReticle)", ToolTip="True이면 로컬 제어 Pawn에서 Aim Reticle 위젯 표시를 허용합니다. VehicleDebug UI 토글과는 별도입니다."))
 	bool bShowAimReticle = true;
 
 		// [v2.148.0] UI-P0-04 이전 Pawn 직접 AddToViewport 순서를 보존하는 Legacy ZOrder입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(ClampMin="0", DisplayName="Aim Reticle ZOrder (AimReticleZOrder)", ToolTip="Legacy Pawn 직접 Viewport 경로의 호환값입니다. UI-P0-04 자동 경로는 CFUISubsystem의 HUD Layer 내부 ZOrder를 사용합니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(ClampMin="0", DisplayName="Aim Reticle ZOrder (AimReticleZOrder)", ToolTip="Legacy 저장값 역직렬화 호환용 ZOrder입니다. Pawn runtime은 이 값을 소비하지 않으며 UI-P0-04 이후 CFUISubsystem의 HUD Layer 내부 ZOrder를 사용합니다."))
 	int32 AimReticleZOrder = 10;
 
 		// [v2.149.0] UI-P0-05 이전 Pawn 소유 TargetSelect Class 직렬화 호환을 위해 유지하는 Legacy 설정입니다.
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|TargetSelect|HUD", meta=(DisplayName="타겟 선택 HUD 위젯 클래스 (TargetSelectWidgetClass)", ToolTip="Legacy 직렬화 호환용 TargetSelect Class입니다. UI-P0-05 이후 자동 생성 소유권은 CFUISubsystem의 DefaultTargetSelectWidgetClass가 담당합니다."))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|TargetSelect|HUD", meta=(DisplayName="타겟 선택 HUD 위젯 클래스 (TargetSelectWidgetClass)", ToolTip="Legacy 저장값 역직렬화 호환용 TargetSelect Class입니다. Pawn runtime은 이 값을 로드·소비하지 않으며 UI-P0-05 이후 실제 Class 해석은 CFUISubsystem의 DefaultTargetSelectWidgetClass가 담당합니다."))
 	TSubclassOf<UCFTargetSelectWidget> TargetSelectWidgetClass = nullptr;
-
-	// [v2.149.0] UI-P0-05 이전 Pawn 직접 생성 인스턴스가 남아 있을 때만 정리하는 Legacy 캐시입니다.
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|TargetSelect|HUD", meta=(DisplayName="타겟 선택 HUD 위젯 인스턴스 (TargetSelectWidgetInstance)", ToolTip="Legacy Pawn 직접 생성 인스턴스 정리용 캐시입니다. 새 자동 수명은 CFUISubsystem이 소유하므로 정상 UI-P0-05 경로에서는 Null입니다."))
-	TObjectPtr<UCFTargetSelectWidget> TargetSelectWidgetInstance = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|TargetSelect|HUD", meta=(DisplayName="타겟 선택 HUD 표시 여부 (bShowTargetSelectHud)", ToolTip="True이면 로컬 제어 Pawn에서 후보와 선택 타겟 HUD 표시를 허용합니다."))
 	bool bShowTargetSelectHud = true;
 
 		// [v2.149.0] UI-P0-05 이전 Pawn 직접 AddToViewport 순서를 보존하는 Legacy ZOrder입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|TargetSelect|HUD", meta=(ClampMin="0", DisplayName="타겟 선택 HUD ZOrder (TargetSelectHudZOrder)", ToolTip="Legacy Pawn 직접 Viewport 경로의 호환값입니다. UI-P0-05 자동 경로는 CFUISubsystem의 Game Layer 내부 ZOrder를 사용합니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|TargetSelect|HUD", meta=(ClampMin="0", DisplayName="타겟 선택 HUD ZOrder (TargetSelectHudZOrder)", ToolTip="Legacy 저장값 역직렬화 호환용 ZOrder입니다. Pawn runtime은 이 값을 소비하지 않으며 UI-P0-05 이후 CFUISubsystem의 Game Layer 내부 ZOrder를 사용합니다."))
 	int32 TargetSelectHudZOrder = 20;
 
 	// [v2.14.4] VehicleDebug HUD/Panel UI 표시를 허용하는 메인 토글입니다.
@@ -1406,9 +1401,6 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="VehicleDebug Panel 표시 여부 (bShowVehicleDebugPanel)", ToolTip="True이면 VehicleDebug Panel 표시를 허용합니다. 상세 패널 위젯에서 이 값을 읽어 표시 여부를 결정할 수 있습니다."))
 	bool bShowVehicleDebugPanel = true;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="VehicleDebug Text 표시 여부 (bShowVehicleDebugText)", ToolTip="레거시 WBP_VehicleDebug 제거 전환을 위해 기본적으로 비활성 상태로 유지하는 예약용 토글입니다."))
-	bool bShowVehicleDebugText = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|VehiclePawn|Debug", meta=(DisplayName="VehicleDebug 이벤트 표시 여부 (bShowVehicleDebugEvents)", ToolTip="True이면 향후 Recent Events 표시를 허용합니다. 현재 단계에서는 예약용 토글입니다."))
 	bool bShowVehicleDebugEvents = false;
@@ -1568,32 +1560,8 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(ToolTip="현재 Pawn에서 Aim Reticle 위젯을 표시할 수 있는지 반환합니다. 로컬 제어 Pawn에서만 True가 될 수 있습니다."))
 	bool ShouldShowAimReticle() const;
 
-		// [v2.148.0] 현재 Pawn이 UISubsystem의 Current Pawn일 때 UISubsystem 소유 Aim Reticle을 호환 반환합니다.
-	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(ToolTip="UI-P0-04 호환 API입니다. Pawn이 직접 위젯을 만들지 않고 현재 UISubsystem 소유 Aim Reticle을 반환하며, 현재 Possessed Pawn이 아니면 Null입니다."))
-	UCFAimReticleWidget* CreateAimReticleWidget();
-
-	// [v2.148.0] UI-P0-04 이전 Pawn 직접 생성 Reticle 인스턴스만 안전하게 정리합니다.
-	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(ToolTip="Legacy Pawn 직접 생성 Reticle 인스턴스가 남아 있을 때만 제거합니다. UISubsystem 소유 Reticle 수명은 변경하지 않습니다."))
-	void DestroyAimReticleWidget();
-
-	// [v2.148.0] 현재 Pawn에 연결된 UISubsystem 소유 Reticle의 표시 상태를 호환 갱신합니다.
-	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Aim|Reticle", meta=(ToolTip="현재 Pawn이 UISubsystem의 Current Pawn이면 UISubsystem 소유 Reticle의 Pawn 참조와 표시 상태를 갱신합니다."))
-	void RefreshAimReticleWidget();
-
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|TargetSelect|HUD", meta=(DisplayName="타겟 선택 HUD 표시 가능 여부 반환"))
 	bool ShouldShowTargetSelectHud() const;
-
-		// [v2.149.0] 현재 Pawn이 UISubsystem Current Pawn일 때 UISubsystem 소유 TargetSelect Marker를 호환 반환합니다.
-	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|TargetSelect|HUD", meta=(DisplayName="타겟 선택 HUD 생성", ToolTip="UI-P0-05 호환 API입니다. Pawn이 직접 위젯을 만들지 않고 현재 UISubsystem 소유 Target Marker를 반환하며, 현재 Possessed Pawn이 아니면 Null입니다."))
-	UCFTargetSelectWidget* CreateTargetSelectWidget();
-
-	// [v2.149.0] UI-P0-05 이전 Pawn 직접 생성 TargetSelect 인스턴스만 안전하게 정리합니다.
-	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|TargetSelect|HUD", meta=(DisplayName="타겟 선택 HUD 제거", ToolTip="Legacy Pawn 직접 생성 TargetSelect 인스턴스가 남아 있을 때만 제거합니다. UISubsystem 소유 Marker 수명은 변경하지 않습니다."))
-	void DestroyTargetSelectWidget();
-
-	// [v2.149.0] 현재 Pawn에 연결된 UISubsystem 소유 Target Marker의 표시 상태를 호환 갱신합니다.
-	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|TargetSelect|HUD", meta=(DisplayName="타겟 선택 HUD 갱신", ToolTip="현재 Pawn이 UISubsystem Current Pawn이면 UISubsystem 소유 Target Marker의 Pawn 참조와 표시 상태를 갱신합니다."))
-	void RefreshTargetSelectWidget();
 
 	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Input", meta=(ToolTip="현재 플레이어 컨트롤러 기준으로 기본 Input Mapping Context 등록을 시도합니다."))
 	bool RegisterDefaultInputMappingContext();
@@ -1672,33 +1640,15 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="상세 패널 표시용 VehicleDebug Runtime 카테고리를 반환합니다."))
 	FCFVehicleDebugRuntime GetVehicleDebugRuntime() const;
 
-	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="Debug Widget의 단일 라인 Text 바인딩에 바로 사용할 수 있는 Pawn 디버그 문자열을 반환합니다."))
-	FText GetDebugTextSingleLine() const;
-
-	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="Debug Widget의 멀티라인 Text 바인딩에 바로 사용할 수 있는 Pawn 디버그 문자열을 반환합니다."))
-	FText GetDebugTextMultiLine() const;
-
-	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="현재 DriveStateDebugDisplayMode 설정을 따라 Debug Widget Text 바인딩에 바로 사용할 수 있는 Pawn 디버그 문자열을 반환합니다. Off이면 빈 텍스트를 반환합니다."))
-	FText GetDebugTextByDisplayMode() const;
-
 	// [v2.14.3] HUD/Panel 공통 기준이 되는 VehicleDebug UI 표시 가능 여부를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="현재 VehicleDebug HUD/Panel 공통 기준이 되는 표시 가능 여부를 반환합니다. 기본 디버그 스위치가 꺼져 있으면 False를 반환합니다."))
 	bool ShouldShowVehicleDebugUi() const;
-
-	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="레거시 WBP_VehicleDebug 제거 전환을 위해 현재 Debug Widget을 표시하지 않도록 고정된 False를 반환합니다."))
-	bool ShouldShowDebugWidget() const;
 
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="현재 VehicleDebug HUD를 표시해야 하는지 여부를 반환합니다. 로컬 차량 디버그 표시 조건과 HUD 토글을 함께 검사합니다."))
 	bool ShouldShowVehicleDebugHud() const;
 
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="현재 VehicleDebug Panel을 표시해야 하는지 여부를 반환합니다. 로컬 차량 디버그 표시 조건과 Panel 토글을 함께 검사합니다."))
 	bool ShouldShowVehicleDebugPanel() const;
-
-	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="레거시 WBP_VehicleDebug 제거 전환을 위해 현재 VehicleDebug Legacy Text View를 표시하지 않도록 고정된 False를 반환합니다."))
-	bool ShouldShowVehicleDebugText() const;
-
-	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Debug", meta=(ToolTip="레거시 WBP_VehicleDebug 제거 전환을 위해 항상 Collapsed를 반환합니다."))
-	ESlateVisibility GetDebugWidgetVisibility() const;
 
 protected:
 	// [v2.61.0] 차량 Pawn의 싱글플레이 기본 복제 상태를 적용합니다.

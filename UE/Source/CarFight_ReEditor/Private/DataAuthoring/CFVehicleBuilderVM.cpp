@@ -1,9 +1,15 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderVM.cpp
-// Version: v1.12.0
-// Date: 2026-08-28
-// Description: Guided Vehicle Builder Shell ViewModel + WSA-P0-04 Wheel Size Builder integration 구현입니다.
+// Version: v1.18.0
+// Date: 2026-09-01
+// Description: Guided Vehicle Builder Shell ViewModel + ESH-02 Engine Curve proposal/review integration 구현입니다.
 // Changelog:
+// - v1.18.0: PhysicsDraft schema v3 EngineCurveReview를 Step 5 request/receipt resume에 연결하고 schema v2 legacy draft read compatibility를 유지.
+// - v1.17.0: Existing Reference Evidence complete replacement R1의 Step 1 prepared Preview→AuthoringWrite Commit flow를 추가하고, existing Evidence와 다른 ResearchDraft를 refresh candidate로 load 가능하게 분리.
+// - v1.16.0: Final Review Transmission diagnostic에 기어별 RPM retention을 표시해 generic fixed-shift spacing 검토 정보를 완성.
+// - v1.15.0: Guided Mesh 신규 record를 VehicleSpecificRequired로 생성하고 PhysicsDraft v2 TransmissionReview를 Step 5 preview/receipt resume에 연결. Final Review summary에 Transmission diagnostic을 노출.
+// - v1.14.0: Guided Builder refresh에서 Resolver가 Blocked 상태로 false를 반환하면서 OutError가 비어 USER에게 '현재 상태 확인 실패:'만 보이던 문제를 교정. Blocked/Error ResolverValidation issue를 stable IssueCode + 메시지로 surface.
+// - v1.13.0: Step 4 Ready/NotCaptured가 Step 7 deferred Layout Apply를 기다리는 정상 상태일 때만 navigation/Step 5 prerequisite로 인정해 actual Wagon E2E deadlock을 제거. Blocked/Stale은 그대로 차단.
 // - v1.12.0: actual Wagon E2E에서 Recipe-only 사전 authoring revision이 NewVehicle lifecycle을 소모하지 않게 교정하고, private Profile bootstrap 전의 expected Resolver Blocked read를 Builder selection/refresh에서 안전하게 유지.
 // - v1.11.0: SocketScaleFromChassis의 Step2 canonical Wheel, Step3 Socket Scale/axle size, Step4 RelativeScale stale 검증 추가.
 // - v1.10.0: E2E에서 발견된 Step 2 Wheel Mesh 지정 UX 공백을 existing typed AssetIntent Recipe-only commit으로 연결하고 commit 뒤 Builder state fresh 재평가를 추가.
@@ -64,6 +70,32 @@ namespace
 		case ECFVehicleBuilderStepState::Stale: return TEXT("다시 확인 필요");
 		default: return TEXT("알 수 없음");
 		}
+	}
+
+	// Resolver operation 자체는 성공했지만 ResolveStatus가 Blocked일 때 USER-facing 실패 이유를 구조화 issue에서 복원합니다.
+	FString BuildResolverFailureMessage(const FCFVehicleResolveReadResult& ResolveRead)
+	{
+		TArray<FString> BlockingIssueLines;
+		for (const FCFVehicleValidationIssue& Issue : ResolveRead.ResolveResult.ResolverValidation)
+		{
+			if (Issue.Severity != ECFVehicleValidationSeverity::Blocked
+				&& Issue.Severity != ECFVehicleValidationSeverity::Error)
+			{
+				continue;
+			}
+
+			BlockingIssueLines.Add(FString::Printf(
+				TEXT("[%s] %s"),
+				*Issue.IssueCode.ToString(),
+				Issue.Message.IsEmpty() ? TEXT("상세 메시지 없음") : *Issue.Message));
+		}
+
+		if (!BlockingIssueLines.IsEmpty())
+		{
+			return FString::Join(BlockingIssueLines, LINE_TERMINATOR);
+		}
+
+		return ResolveRead.Operation.Message;
 	}
 
 	// Gameplay Guidance 영역을 USER-facing 한국어 이름으로 변환합니다.
@@ -306,6 +338,7 @@ bool FCFVehicleBuilderVM::SelectVehicle(const FCFVehicleListEntry& Entry, FStrin
 	AcceptedReferenceEvidenceId.Invalidate();
 	AcceptedReferenceEvidenceFingerprint.Reset();
 	ClearPreparedResearchCompanion();
+	ClearPreparedEvidenceRefresh();
 	ClearPreparedPhysicsProposal();
 	bHasCurrentResolveReadForStepDiagnostics = false;
 
@@ -327,6 +360,16 @@ bool FCFVehicleBuilderVM::SelectVehicle(const FCFVehicleListEntry& Entry, FStrin
 
 	if (!bAuthoringPreviewFresh && !CanUseNewVehicleProfileBootstrapRead())
 	{
+		if (OutError.IsEmpty())
+		{
+			OutError = BuildResolverFailureMessage(AuthoringViewModel->GetResolveResult());
+			if (OutError.IsEmpty())
+			{
+				OutError = AuthoringViewModel->GetLastMessage().IsEmpty()
+					? TEXT("현재 차량 Preview가 Blocked 상태이지만 상세 Resolver 오류가 비어 있습니다.")
+					: AuthoringViewModel->GetLastMessage();
+			}
+		}
 		RebuildStepStates();
 		return false;
 	}
@@ -356,7 +399,8 @@ bool FCFVehicleBuilderVM::RefreshCurrentState(FString& OutError)
 		return true;
 	}
 
-	// Manual refresh는 직전 USER dialog용 prepared Profile approval과 Final Apply approval을 폐기하고 fresh preview를 요구합니다.
+	// Manual refresh는 직전 USER dialog용 prepared Evidence/Profile/Final Apply approval을 폐기하고 fresh preview를 요구합니다.
+	ClearPreparedEvidenceRefresh();
 	ClearPreparedPhysicsProposal();
 	ClearPreparedFinalReviewApply();
 
@@ -371,6 +415,16 @@ bool FCFVehicleBuilderVM::RefreshCurrentState(FString& OutError)
 				&& AuthoringViewModel->GetResolveResult().Operation.Status == ECFAuthoringOpStatus::Succeeded;
 			if (!CanUseNewVehicleProfileBootstrapRead())
 			{
+				if (OutError.IsEmpty())
+				{
+					OutError = BuildResolverFailureMessage(AuthoringViewModel->GetResolveResult());
+					if (OutError.IsEmpty())
+					{
+						OutError = AuthoringViewModel->GetLastMessage().IsEmpty()
+							? TEXT("현재 차량 Preview가 Blocked 상태이지만 상세 Resolver 오류가 비어 있습니다.")
+							: AuthoringViewModel->GetLastMessage();
+					}
+				}
 				RebuildStepStates();
 				return false;
 			}
@@ -411,6 +465,7 @@ bool FCFVehicleBuilderVM::PrepareSelectedMeshRecordCreate(
 	Request.RecipePackageName = RecipePackageName.TrimStartAndEnd();
 	Request.RecipeAssetName = FName(*RecipeAssetName.TrimStartAndEnd());
 	Request.ChassisMesh = TSoftObjectPtr<UStaticMesh>(AuthoringViewModel->GetSelectedEntry().ChassisMeshPath);
+	Request.bRequireVehicleSpecificTransmission = true;
 	// ProfileBindings는 의도적으로 비워 둡니다. Reference/물리/차급을 이 단계에서 추론하지 않습니다.
 	if (!AuthoringViewModel->PrepareVehicleRecordCreate(Request, OutPreview))
 	{
@@ -508,20 +563,15 @@ bool FCFVehicleBuilderVM::LoadResearchDraft(FString& OutError)
 	LoadedResearchDraft = MoveTemp(ParsedDraft);
 	bHasLoadedResearchDraft = true;
 	ClearPreparedResearchCompanion();
+	ClearPreparedEvidenceRefresh();
 
 	// Reference Research가 다시 로드되면 이미 준비된 Physics Proposal approval/draft를 현재 Evidence review보다 앞서 재사용하지 않습니다.
 	bHasLoadedPhysicsProposalDraft = false;
 	LoadedPhysicsProposalDraft = FCFBuilderPhysicsDraft();
 	ClearPreparedPhysicsProposal();
 
-	if (CurrentReferenceEvidence.IsValid() && !ValidateDraftAgainstCurrentEvidence(OutError))
-	{
-		LoadedResearchDraft = FCFBuilderResearchDraft();
-		bHasLoadedResearchDraft = false;
-		RebuildStepStates();
-		return false;
-	}
-
+	// Existing Evidence와 payload가 다르더라도 load 자체는 허용합니다. 동일성 검사는 Companion 보존 경로에서만 수행하고,
+	// differing complete ResearchDraft는 별도 Reference Evidence Refresh R1 proposal의 입력으로 사용합니다.
 	RebuildStepStates();
 	OutError.Reset();
 	return true;
@@ -664,6 +714,101 @@ bool FCFVehicleBuilderVM::ExecutePreparedResearchCompanions(FCFBuilderCompanionR
 		return false;
 	}
 
+	RebuildStepStates();
+	OutError.Reset();
+	return true;
+}
+
+// Loaded ResearchDraft를 current Existing Evidence complete replacement로 적용할 R1 proposal을 mutation 없이 준비합니다.
+bool FCFVehicleBuilderVM::PrepareReferenceEvidenceRefresh(FCFBuilderEvidenceRefreshPreview& OutPreview, FString& OutError)
+{
+	OutPreview = FCFBuilderEvidenceRefreshPreview();
+	ClearPreparedEvidenceRefresh();
+
+	// Evidence Refresh owner가 될 current managed Recipe입니다.
+	UCFVehicleRecipeData* Recipe = GetRecipe();
+	if (!Recipe || IsMeshOnlyCandidate())
+	{
+		OutError = TEXT("Reference Evidence를 갱신하려면 managed Recipe 차량을 먼저 선택해야 합니다.");
+		return false;
+	}
+	if (!CurrentReferenceEvidence.IsValid() || !CurrentReferenceEvidencePath.IsValid())
+	{
+		OutError = TEXT("갱신할 current existing Reference Evidence가 없습니다.");
+		return false;
+	}
+	if (!bHasLoadedResearchDraft)
+	{
+		OutError = FString::Printf(
+			TEXT("새 complete Research Draft가 필요합니다. 먼저 '%s'를 준비하고 'AI Research Draft 불러오기'를 실행하세요."),
+			*GetResearchDraftPath());
+		return false;
+	}
+
+	// Existing Evidence research replacement R1 request입니다.
+	FCFBuilderEvidenceRefreshRequest Request;
+	Request.Recipe = Recipe;
+	Request.EvidencePath = CurrentReferenceEvidencePath;
+	Request.ExpectedCurrentEvidenceFingerprint = CurrentReferenceEvidence->EvidenceFingerprint;
+	Request.EvidencePayload = LoadedResearchDraft.EvidencePayload;
+	Request.CallContext.CallerKind = ECFAuthoringCallerKind::SlateUI;
+	Request.CallContext.ClientOperationId = FString::Printf(
+		TEXT("VB-P0-09-EvidenceRefresh-Preview-%s"),
+		*FGuid::NewGuid().ToString(EGuidFormats::Digits));
+
+	if (!FCFVehicleAuthoringService::PreviewBuilderEvidenceRefresh(Request, OutPreview))
+	{
+		OutError = OutPreview.Operation.Message;
+		return false;
+	}
+
+	PreparedEvidenceRefreshRequest = Request;
+	PreparedEvidenceRefreshPreview = OutPreview;
+	bHasPreparedEvidenceRefresh = true;
+	OutError.Reset();
+	return true;
+}
+
+// 직전 exact Evidence Refresh proposal에 USER AuthoringWrite approval을 붙여 existing Evidence research payload만 commit합니다.
+bool FCFVehicleBuilderVM::ExecutePreparedEvidenceRefresh(FCFBuilderEvidenceRefreshResult& OutResult, FString& OutError)
+{
+	OutResult = FCFBuilderEvidenceRefreshResult();
+	if (!bHasPreparedEvidenceRefresh)
+	{
+		OutError = TEXT("먼저 current state에서 Reference Evidence 갱신 내용을 검토해야 합니다.");
+		return false;
+	}
+
+	// USER에게 직전에 보여 준 exact refresh request를 fresh commit용으로 복사합니다.
+	FCFBuilderEvidenceRefreshRequest Request = PreparedEvidenceRefreshRequest;
+	// USER가 승인한 exact mutation0 preview입니다.
+	const FCFBuilderEvidenceRefreshPreview ApprovedPreview = PreparedEvidenceRefreshPreview;
+	Request.CallContext.CallerKind = ECFAuthoringCallerKind::SlateUI;
+	Request.CallContext.ClientOperationId = FString::Printf(
+		TEXT("VB-P0-09-EvidenceRefresh-Commit-%s"),
+		*FGuid::NewGuid().ToString(EGuidFormats::Digits));
+	Request.CallContext.ApprovalClass = ECFAuthoringApprovalClass::AuthoringWrite;
+	Request.CallContext.ApprovalScopeHash = ApprovedPreview.Proposal.ProposalHash;
+	Request.CallContext.ExpectedRecipeFingerprint = ApprovedPreview.Proposal.ExpectedRecipeFingerprint;
+	Request.CallContext.ExpectedTargetDefinitionHash = ApprovedPreview.Proposal.ExpectedTargetDefinitionHash;
+	Request.CallContext.ExpectedResolverContractRevision = ApprovedPreview.Proposal.ResolverContractRevision;
+
+	// Prepared approval은 성공/실패 여부와 무관하게 one-shot으로 소비합니다.
+	ClearPreparedEvidenceRefresh();
+
+	if (!FCFVehicleAuthoringService::CommitBuilderEvidenceRefresh(Request, ApprovedPreview, OutResult))
+	{
+		OutError = OutResult.Operation.Message;
+		return false;
+	}
+
+	// Evidence fingerprint가 바뀌면 기존 PhysicsDraft/approval은 stale이므로 자동 재사용하지 않습니다.
+	bHasLoadedPhysicsProposalDraft = false;
+	LoadedPhysicsProposalDraft = FCFBuilderPhysicsDraft();
+	ClearPreparedPhysicsProposal();
+	ClearPreparedFinalReviewApply();
+
+	// Same object identity의 CurrentReferenceEvidence는 commit된 새 fingerprint를 즉시 보므로 Step 1 review token/Step 5 receipt stale을 fresh 재평가합니다.
 	RebuildStepStates();
 	OutError.Reset();
 	return true;
@@ -860,7 +1005,7 @@ FString FCFVehicleBuilderVM::GetPhysicsProposalDraftPath() const
 		TEXT("PhysicsDraft.json")));
 }
 
-// Step 5가 요구하는 Step 1~4가 모두 current Complete인지 검사합니다.
+// Step 5가 요구하는 Step 1~4가 모두 current workflow forward-progress 조건을 만족하는지 검사합니다.
 bool FCFVehicleBuilderVM::ArePhysicsProposalPrerequisitesComplete(FString& OutError) const
 {
 	// Step 5 전에 반드시 완료되어야 하는 semantic Step identity 목록입니다.
@@ -876,10 +1021,10 @@ bool FCFVehicleBuilderVM::ArePhysicsProposalPrerequisitesComplete(FString& OutEr
 	{
 		// Stable StepId로 찾은 current prerequisite projection입니다.
 		const FCFVehicleBuilderStepView* RequiredStep = FindStepView(RequiredStepId);
-		if (!RequiredStep || RequiredStep->State != ECFVehicleBuilderStepState::Complete)
+		if (!RequiredStep || !IsStepSatisfiedForForwardProgress(*RequiredStep))
 		{
 			OutError = RequiredStep
-				? FString::Printf(TEXT("Physics Proposal 전에 '%s' 단계가 Complete여야 합니다. 현재 상태: %s"),
+				? FString::Printf(TEXT("Physics Proposal 전에 '%s' 단계가 forward-progress 조건을 만족해야 합니다. 현재 상태: %s"),
 					*RequiredStep->Title.ToString(),
 					StepStateText(RequiredStep->State))
 				: TEXT("Physics Proposal prerequisite Step을 찾을 수 없습니다.");
@@ -978,7 +1123,7 @@ bool FCFVehicleBuilderVM::BuildPhysicsProposalRequest(
 		return false;
 	}
 
-	if (LoadedPhysicsProposalDraft.SchemaRevision != 1
+	if ((LoadedPhysicsProposalDraft.SchemaRevision != 2 && LoadedPhysicsProposalDraft.SchemaRevision != 3)
 		|| LoadedPhysicsProposalDraft.RecipeId != Recipe->RecipeId
 		|| LoadedPhysicsProposalDraft.TargetDefinitionPath != Recipe->TargetVehicleData.ToSoftObjectPath()
 		|| LoadedPhysicsProposalDraft.EvidenceId != Evidence->EvidenceId
@@ -1045,6 +1190,8 @@ bool FCFVehicleBuilderVM::BuildPhysicsProposalRequest(
 	OutRequest.EvidenceBinding.ExpectedEvidenceId = Evidence->EvidenceId;
 	OutRequest.EvidenceBinding.ExpectedEvidenceFingerprint = Evidence->EvidenceFingerprint;
 	OutRequest.EvidenceBinding.ConsumedClaimIds = LoadedPhysicsProposalDraft.ConsumedClaimIds;
+	OutRequest.TransmissionReview = LoadedPhysicsProposalDraft.TransmissionReview;
+	OutRequest.EngineCurveReview = LoadedPhysicsProposalDraft.EngineCurveReview;
 	OutRequest.UpstreamBuilderProposalHash = LoadedPhysicsProposalDraft.ProposalCorrelationHash;
 	OutRequest.CallContext.CallerKind = ECFAuthoringCallerKind::SlateUI;
 	OutError.Reset();
@@ -1082,6 +1229,8 @@ bool FCFVehicleBuilderVM::BuildCurrentPhysicsReceiptRequest(
 	OutRequest.EvidenceBinding.ExpectedEvidenceId = Evidence->EvidenceId;
 	OutRequest.EvidenceBinding.ExpectedEvidenceFingerprint = Evidence->EvidenceFingerprint;
 	OutRequest.EvidenceBinding.ConsumedClaimIds = Recipe->BuilderCommitReceipt.ConsumedClaimIds;
+	OutRequest.TransmissionReview = Recipe->BuilderCommitReceipt.TransmissionReview;
+	OutRequest.EngineCurveReview = Recipe->BuilderCommitReceipt.EngineCurveReview;
 
 	// Resume 검증에서는 upstream opaque correlation 자체를 authorization으로 사용하지 않습니다. Existing facade가 receipt/evidence/profile/resolver를 fresh 비교합니다.
 	OutRequest.UpstreamBuilderProposalHash = TEXT("GuidedBuilder.Step5.Resume.v1");
@@ -1138,9 +1287,14 @@ bool FCFVehicleBuilderVM::LoadPhysicsProposalDraft(FString& OutError)
 		OutError = TEXT("PhysicsDraft.json을 FCFBuilderPhysicsDraft schema로 읽을 수 없습니다.");
 		return false;
 	}
-	if (ParsedDraft.SchemaRevision != 1)
+	if (ParsedDraft.SchemaRevision != 2 && ParsedDraft.SchemaRevision != 3)
 	{
-		OutError = FString::Printf(TEXT("지원하지 않는 Physics Draft schema revision입니다: %d"), ParsedDraft.SchemaRevision);
+		OutError = FString::Printf(TEXT("지원하지 않는 Physics Draft schema revision입니다: %d. revision 2(Transmission) 또는 revision 3(Engine Curve review)가 필요합니다."), ParsedDraft.SchemaRevision);
+		return false;
+	}
+	if (ParsedDraft.SchemaRevision == 2 && ParsedDraft.ProfilePayload.PerformanceData.bUseEngineTorqueCurve)
+	{
+		OutError = TEXT("Physics Draft revision 2는 EngineCurveReview가 없으므로 bUseEngineTorqueCurve=true payload를 사용할 수 없습니다. revision 3 Proposal이 필요합니다.");
 		return false;
 	}
 	if (!ParsedDraft.RecipeId.IsValid() || ParsedDraft.RecipeId != Recipe->RecipeId)
@@ -1316,9 +1470,10 @@ FString FCFVehicleBuilderVM::BuildPhysicsProposalSummary() const
 	if (Recipe && Recipe->BuilderCommitReceipt.IsValid())
 	{
 		Summary += FString::Printf(
-			TEXT("\nPersistent Builder receipt: 있음\nConsumed Claim: %d\nEvidenceFingerprint: %s"),
+			TEXT("\nPersistent Builder receipt: 있음\nConsumed Claim: %d\nEvidenceFingerprint: %s\nEngine Curve Hash: %s"),
 			Recipe->BuilderCommitReceipt.ConsumedClaimIds.Num(),
-			*Recipe->BuilderCommitReceipt.EvidenceFingerprint);
+			*Recipe->BuilderCommitReceipt.EvidenceFingerprint,
+			Recipe->BuilderCommitReceipt.EngineCurveProposalHash.IsEmpty() ? TEXT("<BaselineInherited>") : *Recipe->BuilderCommitReceipt.EngineCurveProposalHash);
 	}
 	else
 	{
@@ -1339,11 +1494,13 @@ FString FCFVehicleBuilderVM::BuildPhysicsProposalSummary() const
 		}
 
 		Summary += FString::Printf(
-			TEXT("\n\nLoaded AI Proposal: %s\n%s\nConsumed Claim: %s\nDraft EvidenceFingerprint: %s"),
+			TEXT("\n\nLoaded AI Proposal: %s\n%s\nConsumed Claim: %s\nDraft EvidenceFingerprint: %s\nEngine Curve: %s / Points=%d"),
 			LoadedPhysicsProposalDraft.ProposalLabel.IsEmpty() ? TEXT("<label 없음>") : *LoadedPhysicsProposalDraft.ProposalLabel,
 			*LoadedPhysicsProposalDraft.UserFacingSummary,
 			ClaimList.IsEmpty() ? TEXT("<없음>") : *ClaimList,
-			*LoadedPhysicsProposalDraft.ExpectedEvidenceFingerprint);
+			*LoadedPhysicsProposalDraft.ExpectedEvidenceFingerprint,
+			LoadedPhysicsProposalDraft.ProfilePayload.PerformanceData.bUseEngineTorqueCurve ? TEXT("VehicleSpecific") : TEXT("BaselineInherited"),
+			LoadedPhysicsProposalDraft.ProfilePayload.PerformanceData.EngineTorqueCurve.Points.Num());
 	}
 	else
 	{
@@ -1769,6 +1926,14 @@ void FCFVehicleBuilderVM::ClearPreparedResearchCompanion()
 	bHasPreparedResearchCompanion = false;
 }
 
+// Selection/refresh/draft 변경에서 이전 prepared Evidence Refresh approval을 폐기합니다.
+void FCFVehicleBuilderVM::ClearPreparedEvidenceRefresh()
+{
+	PreparedEvidenceRefreshRequest = FCFBuilderEvidenceRefreshRequest();
+	PreparedEvidenceRefreshPreview = FCFBuilderEvidenceRefreshPreview();
+	bHasPreparedEvidenceRefresh = false;
+}
+
 // Selection/refresh/draft 변경에서 이전 prepared Physics Proposal approval을 폐기합니다.
 void FCFVehicleBuilderVM::ClearPreparedPhysicsProposal()
 {
@@ -1792,18 +1957,44 @@ void FCFVehicleBuilderVM::ClearFinalReviewUndoToken()
 	bHasFinalReviewUndoToken = false;
 }
 
+// Step 하나가 현재 workflow에서 다음 단계 prerequisite를 만족하는지 공통 판정합니다.
+bool FCFVehicleBuilderVM::IsStepSatisfiedForForwardProgress(const FCFVehicleBuilderStepView& Step) const
+{
+	if (Step.State == ECFVehicleBuilderStepState::Complete)
+	{
+		return true;
+	}
+
+	// LayoutCapture의 Ready는 current Socket truth가 유효하지만 Target Layout Apply가 Step 7로 defer된 NotCaptured 상태에서만 forward-progress를 허용합니다.
+	if (Step.StepId == ECFVehicleBuilderStepId::LayoutCapture
+		&& Step.State == ECFVehicleBuilderStepState::Ready
+		&& AuthoringViewModel.IsValid())
+	{
+		const UCFVehicleData* TargetVehicleData = AuthoringViewModel->GetTargetVehicleData();
+		return TargetVehicleData && !TargetVehicleData->VehicleLayoutConfig.bUseLayoutOverrides;
+	}
+
+	return false;
+}
+
+// 현재 Step이 다음 단계로 진행 가능한지 반환합니다.
+bool FCFVehicleBuilderVM::CanAdvanceFromCurrentStep() const
+{
+	return StepViews.IsValidIndex(CurrentStepIndex)
+		&& StepViews.IsValidIndex(CurrentStepIndex + 1)
+		&& IsStepSatisfiedForForwardProgress(StepViews[CurrentStepIndex]);
+}
+
 // Current page를 이전 Step으로 이동합니다.
 void FCFVehicleBuilderVM::MovePreviousStep()
 {
 	CurrentStepIndex = FMath::Max(0, CurrentStepIndex - 1);
 }
 
-// Current Step이 Complete일 때만 다음 Step으로 이동합니다.
+// Current Step이 workflow forward-progress 조건을 만족할 때 다음 Step으로 이동합니다.
 bool FCFVehicleBuilderVM::MoveNextStep()
 {
-	if (!StepViews.IsValidIndex(CurrentStepIndex)
-		|| StepViews[CurrentStepIndex].State != ECFVehicleBuilderStepState::Complete
-		|| !StepViews.IsValidIndex(CurrentStepIndex + 1))
+	if (!CanAdvanceFromCurrentStep())
 	{
 		return false;
 	}
@@ -2549,8 +2740,8 @@ void FCFVehicleBuilderVM::EvaluateLayoutCaptureStep()
 	if (!TargetVehicleData->VehicleLayoutConfig.bUseLayoutOverrides)
 	{
 		SetStep(ECFVehicleBuilderStepId::LayoutCapture, ECFVehicleBuilderStepState::Ready,
-			FString::Printf(TEXT("Layout Capture 가능 상태입니다. current ChassisLayoutFingerprint=%s. 아직 VehicleLayoutConfig.bUseLayoutOverrides=false이므로 NotCaptured입니다."), *Assets.ChassisLayoutFingerprint),
-			TEXT("Capture 자체는 이 read-only evaluator가 실행하지 않습니다. 후속 reviewed mutation/apply 경로에서 current Socket truth를 캡처하세요."),
+			FString::Printf(TEXT("Layout Capture 준비 완료입니다. current ChassisLayoutFingerprint=%s. VehicleLayoutConfig.bUseLayoutOverrides=false이므로 아직 Target에는 NotCaptured 상태이며 실제 Layout Apply는 Step 7에서 수행합니다."), *Assets.ChassisLayoutFingerprint),
+			TEXT("현재 Socket truth는 Step 5 이후 proposal에 사용할 수 있습니다. 이 Ready/NotCaptured 상태에서는 다음 단계 진행을 허용하며, 실제 Target Layout capture/apply는 Step 7 Final Review에서 explicit USER 승인으로 수행합니다."),
 			true);
 		return;
 	}
@@ -3118,6 +3309,46 @@ FString FCFVehicleBuilderVM::BuildFinalReviewSummary() const
 			FinalReviewResult.Provenance.IssueText.IsEmpty()
 				? TEXT("<provenance diagnostic 없음>")
 				: *FinalReviewResult.Provenance.IssueText);
+	}
+
+	if (FinalReviewResult.TransmissionDiagnostic.bEvaluated)
+	{
+		Summary += FString::Printf(
+			TEXT("\n\nTransmission Review: %s\n- ProposalHash: %s"),
+			FinalReviewResult.TransmissionDiagnostic.bVehicleSpecificRequired ? TEXT("VehicleSpecificRequired") : TEXT("LegacyCompatible"),
+			FinalReviewResult.TransmissionDiagnostic.TransmissionProposalHash.IsEmpty()
+				? TEXT("<Legacy/미검토>")
+				: *FinalReviewResult.TransmissionDiagnostic.TransmissionProposalHash);
+
+		for (const FCFBuilderTransmissionGearDiagnostic& GearDiagnostic : FinalReviewResult.TransmissionDiagnostic.Gears)
+		{
+			// USER가 고정 ChangeUpRPM 조합을 이해할 수 있게 표시할 한 gear diagnostic row입니다.
+			const FString ShiftSpeedText = GearDiagnostic.bShiftSpeedAvailable
+				? (FMath::IsNearlyEqual(GearDiagnostic.ShiftSpeedMinKmh, GearDiagnostic.ShiftSpeedMaxKmh, 0.01f)
+					? FString::Printf(TEXT("%.1f km/h"), GearDiagnostic.ShiftSpeedMinKmh)
+					: FString::Printf(TEXT("%.1f~%.1f km/h"), GearDiagnostic.ShiftSpeedMinKmh, GearDiagnostic.ShiftSpeedMaxKmh))
+				: TEXT("Unavailable");
+			// 다음 기어가 없는 top gear의 post-shift 표현입니다.
+			const FString PostShiftText = GearDiagnostic.bPostShiftAvailable
+				? FString::Printf(TEXT("%.0f RPM (Retention %.3f / Down margin %.0f)"), GearDiagnostic.PostShiftRPM, GearDiagnostic.RpmRetention, GearDiagnostic.DownshiftMarginRPM)
+				: TEXT("N/A");
+			Summary += FString::Printf(
+				TEXT("\n- %d단: Ratio %.4f | Overall %.4f | Shift@UpRPM %s | 변속 후 %s"),
+				GearDiagnostic.GearNumber,
+				GearDiagnostic.GearRatio,
+				GearDiagnostic.OverallRatio,
+				*ShiftSpeedText,
+				*PostShiftText);
+		}
+		for (const FString& TransmissionWarning : FinalReviewResult.TransmissionDiagnostic.Warnings)
+		{
+			Summary += FString::Printf(TEXT("\n- Warning: %s"), *TransmissionWarning);
+		}
+		for (const FString& TransmissionBlocker : FinalReviewResult.TransmissionDiagnostic.Blockers)
+		{
+			Summary += FString::Printf(TEXT("\n- Blocker: %s"), *TransmissionBlocker);
+		}
+		Summary += TEXT("\n- 예상 차속은 runtime 변속 조건이 아니라 무슬립 기구학 sanity diagnostic입니다.");
 	}
 
 	if (FinalReviewResult.bCanApply)

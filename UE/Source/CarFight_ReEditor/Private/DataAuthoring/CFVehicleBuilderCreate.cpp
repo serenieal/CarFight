@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleBuilderCreate.cpp
-// Version: v1.3.0
-// Date: 2026-08-27
+// Version: v1.4.0
+// Date: 2026-08-31
 // Description: CF-FQ-040 VB-P0-05 baseline-safe Builder companion + deterministic prospective Profile identity preview/create 구현입니다.
 // Scope: Existing Definition+Recipe에 Reference Evidence + Builder-private VehicleBase/Drivetrain/Handling/Performance Profile을 보완합니다.
 // Changelog:
+// - v1.4.0: prospective Resolver 실패 시 generic internal Error 대신 첫 actionable IssueCode/FieldPath/Message를 보존해 actual 0/4 bootstrap blocker 진단 가능하게 강화.
 // - v1.3.0: 새 Evidence를 빈 companion으로 만들지 않고 initial Research payload + fixed EvidenceId를 Preview/approval/Commit에 binding하며 prospective Evidence fingerprint를 proposal hash에 포함.
 // - v1.2.0: Missing Profile prospective resolve가 transient UObject path를 SourceSignature/approval hash에 섞지 않도록 preview에서 확정한 persistent Profile path + typed seed snapshot으로 Pure Resolver를 실행.
 // - v1.1.0: Missing private Profile은 complete initial typed payload로만 seed하고, CompleteExisting 모드는 current/prospective Resolver Definition hash 동일성을 강제해 companion 보완만으로 기존 차량 주행 특성이 바뀌는 것을 차단.
@@ -346,6 +347,61 @@ namespace CFVehicleBuilderCreatePrivate
 		return true;
 	}
 
+	// Resolver result에서 USER/Automation이 바로 원인을 찾을 수 있는 첫 actionable issue를 반환합니다.
+	FString BuildResolverFailureDiagnostic(const FCFVehicleResolveResult& ResolveResult)
+	{
+		struct FIssueBucket
+		{
+			const TCHAR* Label;
+			const TArray<FCFVehicleValidationIssue>* Issues;
+		};
+		const FIssueBucket Buckets[] =
+		{
+			{TEXT("Recipe"), &ResolveResult.RecipeValidation},
+			{TEXT("Resolver"), &ResolveResult.ResolverValidation},
+			{TEXT("Definition"), &ResolveResult.DefinitionValidation}
+		};
+
+		const ECFVehicleValidationSeverity WantedSeverities[] =
+		{
+			ECFVehicleValidationSeverity::Error,
+			ECFVehicleValidationSeverity::Blocked
+		};
+		for (const ECFVehicleValidationSeverity WantedSeverity : WantedSeverities)
+		{
+			for (const FIssueBucket& Bucket : Buckets)
+			{
+				for (const FCFVehicleValidationIssue& Issue : *Bucket.Issues)
+				{
+					if (Issue.Severity != WantedSeverity)
+					{
+						continue;
+					}
+
+					FString FieldPath = Issue.FieldPath.ToCanonicalString(true);
+					if (FieldPath.IsEmpty())
+					{
+						FieldPath = Issue.ValidatorFieldPath;
+					}
+					const FString FieldSuffix = FieldPath.IsEmpty()
+						? FString()
+						: FString::Printf(TEXT(" [%s]"), *FieldPath);
+					const FString MessageSuffix = Issue.Message.IsEmpty()
+						? FString()
+						: FString::Printf(TEXT(": %s"), *Issue.Message);
+					return FString::Printf(
+						TEXT("%s/%s%s%s"),
+						Bucket.Label,
+						*Issue.IssueCode.ToString(),
+						*FieldSuffix,
+						*MessageSuffix);
+				}
+			}
+		}
+
+		return TEXT("구조화된 Error/Blocked issue가 없습니다.");
+	}
+
 	// Current 또는 transient Recipe를 shared Resolver facade로 계산하고 exact ResolveResult를 반환합니다.
 	bool ResolveRecipe(
 		UCFVehicleRecipeData& Recipe,
@@ -550,12 +606,16 @@ namespace CFVehicleBuilderCreatePrivate
 		FCFVehicleResolveResult ProspectiveResolveResult;
 		if (!FCFVehicleResolver::Resolve(ProspectiveResolveRequest, ProspectiveResolveResult))
 		{
-			OutError = TEXT("Builder companion prospective Shared Pure Resolver가 internal Error로 실패했습니다.");
+			OutError = FString::Printf(
+				TEXT("Builder companion prospective Shared Pure Resolver가 internal Error로 실패했습니다. %s"),
+				*BuildResolverFailureDiagnostic(ProspectiveResolveResult));
 			return false;
 		}
 		if (ProspectiveResolveResult.ResolveStatus != ECFVehicleResolveStatus::Success)
 		{
-			OutError = TEXT("Builder companion prospective Resolver 결과가 Success가 아닙니다.");
+			OutError = FString::Printf(
+				TEXT("Builder companion prospective Resolver 결과가 Success가 아닙니다. %s"),
+				*BuildResolverFailureDiagnostic(ProspectiveResolveResult));
 			return false;
 		}
 		OutPreview.ProspectiveResolvedDefinitionHash = ProspectiveResolveResult.ResolvedDefinitionHash;

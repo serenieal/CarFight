@@ -107,6 +107,17 @@ public:
 		const FCFBuilderCompanionRequest& Request,
 		FCFBuilderCompanionResult& OutResult);
 
+	// Existing Reference Evidence complete research payload replacement를 current fingerprint/Recipe/Target에 binding해 mutation0 R1 preview합니다.
+	static bool PreviewBuilderEvidenceRefresh(
+		const FCFBuilderEvidenceRefreshRequest& Request,
+		FCFBuilderEvidenceRefreshPreview& OutPreview);
+
+	// Fresh preview + AuthoringWrite approval 뒤 exact existing Evidence research payload만 transaction commit하고 Save는 수행하지 않습니다.
+	static bool CommitBuilderEvidenceRefresh(
+		const FCFBuilderEvidenceRefreshRequest& Request,
+		const FCFBuilderEvidenceRefreshPreview& ApprovedPreview,
+		FCFBuilderEvidenceRefreshResult& OutResult);
+
 	// Gameplay Setup의 Durability/Defense/DestroyedFx/Hardpoint/Mount/DriveState/WheelVisual/Fitting completeness와 USER 수동 Socket 안내를 R0로 반환합니다.
 	static bool ReadBuilderGameplayGuidance(
 		const FCFBuilderGameplayGuidanceRequest& Request,

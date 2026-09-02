@@ -1,11 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleBuilderCommit.cpp
-// Version: v1.4.0
-// Date: 2026-08-28
-// Description: CF-FQ-040 Builder private Profile commit + WSA-P0-04 Socket Scale wheel authority guard 구현입니다.
+// Version: v1.6.0
+// Date: 2026-09-01
+// Description: CF-FQ-040 Builder private Profile commit + ESH-02 Engine Curve provenance/hash guard 구현입니다.
 // Scope: fresh Evidence + Recipe binding + OwnerRecipeId + 4 current fingerprints + prospective Resolver/Target state를 exact approval scope에 묶습니다.
 // Changelog:
+// - v1.6.0: vehicle-specific Performance Engine Curve review를 fresh Evidence/consumed Claim에 검증하고 complete Curve payload와 deterministic EngineCurveProposalHash로 persistent receipt에 binding.
+// - v1.5.0: VehicleSpecificRequired Recipe의 Transmission Core field-level review를 fresh Evidence에 검증하고 complete Drivetrain payload와 deterministic TransmissionProposalHash로 receipt에 binding. Fixed-shift blocker diagnostic을 Step 5 preview에서 fail-closed.
 // - v1.4.0: SocketScaleFromChassis에서 VehicleBase Reference wheel geometry 5필드의 Builder mutation을 baseline-preserve fail-closed로 차단.
 // - v1.3.0: BuilderCommitReceipt에 consumed canonical Claim ID 목록 자체를 lexical order로 보존해 Editor restart 뒤 Final Review provenance resume를 지원.
 // - v1.2.0: accepted proposal/Evidence/Claim set/4 Profile fingerprint를 Recipe BuilderCommitReceipt에 persistent binding하고, receipt-only migration과 PostEditChange/final fingerprint readback/rollback을 추가.
@@ -18,6 +20,8 @@
 
 #include "DataAuthoring/CFVehicleAuthoringService.h"
 
+#include "CFBuilderEngineUtil.h"
+#include "CFBuilderTransUtil.h"
 #include "CFVehicleData.h"
 #include "Containers/StringConv.h"
 #include "DataAuthoring/CFDrivetrainProfile.h"
@@ -677,6 +681,13 @@ namespace CFVehicleBuilderCommitPrivate
 			&& Receipt.HandlingFingerprint == Preview.ProspectiveFingerprints.HandlingFingerprint
 			&& Receipt.PerformanceFingerprint == Preview.ProspectiveFingerprints.PerformanceFingerprint
 			&& Receipt.ProspectiveResolvedDefinitionHash == Preview.ProspectiveResolvedDefinitionHash
+			&& Receipt.TransmissionPolicy == Request.Recipe->BuilderTransmissionPolicy
+			&& Receipt.TransmissionProposalHash == Preview.TransmissionProposalHash
+			&& (Preview.TransmissionProposalHash.IsEmpty()
+				|| CFBuilderTransUtil::BuildTransmissionProposalHash(Receipt.TransmissionReview, Request.Payload.DrivetrainData) == Preview.TransmissionProposalHash)
+			&& Receipt.EngineCurveProposalHash == Preview.EngineCurveProposalHash
+			&& (Preview.EngineCurveProposalHash.IsEmpty()
+				|| CFBuilderEngineUtil::BuildEngineCurveProposalHash(Receipt.EngineCurveReview, Request.Payload.PerformanceData) == Preview.EngineCurveProposalHash)
 			&& Receipt.ResolverContractRevision == Preview.Proposal.ResolverContractRevision;
 	}
 
@@ -698,6 +709,11 @@ namespace CFVehicleBuilderCommitPrivate
 		Receipt.HandlingFingerprint = Preview.ProspectiveFingerprints.HandlingFingerprint;
 		Receipt.PerformanceFingerprint = Preview.ProspectiveFingerprints.PerformanceFingerprint;
 		Receipt.ProspectiveResolvedDefinitionHash = Preview.ProspectiveResolvedDefinitionHash;
+		Receipt.TransmissionPolicy = Request.Recipe->BuilderTransmissionPolicy;
+		Receipt.TransmissionProposalHash = Preview.TransmissionProposalHash;
+		Receipt.TransmissionReview = Request.TransmissionReview;
+		Receipt.EngineCurveProposalHash = Preview.EngineCurveProposalHash;
+		Receipt.EngineCurveReview = Request.EngineCurveReview;
 		Receipt.ResolverContractRevision = Preview.Proposal.ResolverContractRevision;
 		return Receipt;
 	}
@@ -742,6 +758,9 @@ namespace CFVehicleBuilderCommitPrivate
 		AppendToken(Payload, TEXT("PerformanceProspective"), ProspectiveFingerprints.PerformanceFingerprint);
 		AppendToken(Payload, TEXT("ProspectiveSourceSignature"), ProspectiveSourceSignature);
 		AppendToken(Payload, TEXT("ProspectiveResolvedDefinitionHash"), ProspectiveResolvedDefinitionHash);
+		AppendToken(Payload, TEXT("TransmissionPolicy"), FString::FromInt(static_cast<uint8>(Request.Recipe->BuilderTransmissionPolicy)));
+		AppendToken(Payload, TEXT("TransmissionProposalHash"), CFBuilderTransUtil::BuildTransmissionProposalHash(Request.TransmissionReview, Request.Payload.DrivetrainData));
+		AppendToken(Payload, TEXT("EngineCurveProposalHash"), CFBuilderEngineUtil::BuildEngineCurveProposalHash(Request.EngineCurveReview, Request.Payload.PerformanceData));
 		AppendToken(Payload, TEXT("ResolverRevision"), FString::FromInt(FCFVehicleResolver::CurrentResolverContractRevision));
 		return HashUtf8Payload(Payload);
 	}
@@ -768,6 +787,37 @@ bool FCFVehicleAuthoringService::PreviewBuilderProfiles(
 	if (!ValidateCurrentEvidence(Request, OutPreview.EvidenceFingerprint, OutPreview.Operation))
 	{
 		return false;
+	}
+
+	// Field-level Transmission provenance를 검증할 current Evidence입니다.
+	FString TransmissionEvidenceError;
+	// Request exact path에서 다시 읽은 current Evidence object입니다.
+	UCFVehicleRefEvidence* TransmissionEvidence = LoadEvidence(Request.EvidenceBinding.EvidencePath, TransmissionEvidenceError);
+	if (!TransmissionEvidence)
+	{
+		return Block(OutPreview.Operation, ECFAuthoringErrorCode::InvalidSemanticInput, TransmissionEvidenceError);
+	}
+	if (!CFBuilderTransUtil::ValidateTransmissionReview(
+		Request.Recipe->BuilderTransmissionPolicy,
+		Request.TransmissionReview,
+		Request.Payload.DrivetrainData,
+		*TransmissionEvidence,
+		Request.EvidenceBinding.ConsumedClaimIds,
+		TransmissionEvidenceError))
+	{
+		return Block(OutPreview.Operation, ECFAuthoringErrorCode::ValidationBlocked, TransmissionEvidenceError);
+	}
+
+	// ESH-02 Performance Engine Curve review를 같은 fresh Evidence/consumed Claim authority에 binding해 검증합니다.
+	FString EngineCurveValidationError;
+	if (!CFBuilderEngineUtil::ValidateEngineCurveReview(
+		Request.EngineCurveReview,
+		Request.Payload.PerformanceData,
+		*TransmissionEvidence,
+		Request.EvidenceBinding.ConsumedClaimIds,
+		EngineCurveValidationError))
+	{
+		return Block(OutPreview.Operation, ECFAuthoringErrorCode::ValidationBlocked, EngineCurveValidationError);
 	}
 
 	// Complete prospective typed payload의 fail-closed validation diagnostic입니다.
@@ -806,6 +856,37 @@ bool FCFVehicleAuthoringService::PreviewBuilderProfiles(
 	}
 	OutPreview.ProspectiveSourceSignature = ProspectiveResolveResult.SourceSignature;
 	OutPreview.ProspectiveResolvedDefinitionHash = ProspectiveResolveResult.ResolvedDefinitionHash;
+	OutPreview.TransmissionProposalHash = CFBuilderTransUtil::BuildTransmissionProposalHash(Request.TransmissionReview, Request.Payload.DrivetrainData);
+	OutPreview.EngineCurveProposalHash = CFBuilderEngineUtil::BuildEngineCurveProposalHash(Request.EngineCurveReview, Request.Payload.PerformanceData);
+	CFBuilderEngineUtil::BuildEngineCurveDiagnostic(
+		Request.EngineCurveReview,
+		OutPreview.EngineCurveProposalHash,
+		Request.Payload.PerformanceData,
+		OutPreview.EngineCurveDiagnostic);
+	if (!OutPreview.EngineCurveDiagnostic.Blockers.IsEmpty())
+	{
+		return Block(
+			OutPreview.Operation,
+			ECFAuthoringErrorCode::ValidationBlocked,
+			FString::Join(OutPreview.EngineCurveDiagnostic.Blockers, TEXT(" | ")));
+	}
+
+	CFBuilderTransUtil::BuildTransmissionDiagnostic(
+		Request.Recipe->BuilderTransmissionPolicy,
+		Request.TransmissionReview,
+		OutPreview.TransmissionProposalHash,
+		Request.Payload.DrivetrainData,
+		Request.Payload.PerformanceData,
+		ProspectiveResolveResult,
+		OutPreview.TransmissionDiagnostic);
+	if (Request.Recipe->BuilderTransmissionPolicy == ECFBuilderTransmissionPolicy::VehicleSpecificRequired
+		&& !OutPreview.TransmissionDiagnostic.Blockers.IsEmpty())
+	{
+		return Block(
+			OutPreview.Operation,
+			ECFAuthoringErrorCode::ValidationBlocked,
+			FString::Join(OutPreview.TransmissionDiagnostic.Blockers, TEXT(" | ")));
+	}
 
 	OutPreview.Operation.CurrentRecipeFingerprint = RecipeFingerprint;
 	OutPreview.Operation.CurrentTargetDefinitionHash = TargetDefinitionHash;

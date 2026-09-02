@@ -1,9 +1,17 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderTab.cpp
-// Version: v1.9.0
-// Date: 2026-08-28
+// Version: v1.17.0
+// Date: 2026-08-31
 // Description: Guided Vehicle Builder Slate Shell 구현입니다.
 // Changelog:
+// - v1.17.0: Step 1에 Existing Reference Evidence complete replacement R1 전용 검토 버튼/dialog을 추가하고 fingerprint/count/mutation boundary/receipt stale 영향을 USER 승인 전에 표시.
+// - v1.16.0: Builder-wide Transmission diagnostic에 상향변속 RPM retention을 함께 표시해 기어 간 spacing sanity review를 명확화.
+// - v1.15.0: Step 5 Physics Proposal USER review에 TransmissionProposalHash와 기어별 ChangeUpRPM 예상 차속/post-shift RPM diagnostic을 표시. 값은 runtime shift trigger가 아님을 명시.
+// - v1.14.0: Resolver fail-closed로 SelectVehicle가 false를 반환해도 이미 전환된 current selection/Recipe 기준으로 Step 2 pending picker를 재동기화해 이전 차량 표시가 남지 않도록 보강.
+// - v1.13.0: 차량 선택/refresh/commit 뒤 Step 2 ObjectPicker subtree를 current Recipe pending state로 재생성해 이전 차량 Chassis/Wheel 표시가 남는 stale presentation을 교정.
+// - v1.12.0: actual Wagon Final Review에서 28건 Field Diff가 AutoHeight TextBlock으로 무한 확장되어 하단이 잘리는 문제를 교정. Final Review 상세 Diff 영역만 고정 높이 ScrollBox로 제한하고 Apply/Undo/경계 안내는 항상 노출.
+// - v1.11.0: Step 4 Ready/NotCaptured를 Step 7 deferred Apply 정상 상태로 표시하고 Next 버튼이 ViewModel의 단일 forward-progress contract를 사용하도록 교정.
+// - v1.10.0: USER 피드백에 따라 작업 대상 색상을 identity hash 팔레트에서 관리 상태 의미 기반 고정색으로 전환하고 같은 분류끼리 모아 정렬. 제목은 중립색, 분류 배지만 의미색을 사용.
 // - v1.9.0: E2E에서 발견된 Step 2 Wheel Mesh 지정 UX 공백을 StaticMesh object picker + explicit typed AssetIntent Recipe-only 반영 UI로 교정.
 // - v1.8.0: USER 피드백에 따라 작업 대상 row를 identity 기반 고정 accent 색+관리 상태 배지로 구분하고 Step 3을 필수·선택 Socket 이름/복사/차체 메시 열기까지 포함하는 실제 소켓 준비 단계로 강화.
 // - v1.7.0: VB-P0-09 Step 8 existing VB-P0-08 benchmark를 non-blocking child process로 실행/회수하고 active PIE transient test-drive + exact USER Driving PASS UX를 연결.
@@ -68,41 +76,58 @@ namespace
 	{
 		if (Entry.bMeshOnlyCandidate)
 		{
-			return TEXT("MESH 후보");
+			return TEXT("메시 후보");
 		}
 
 		switch (Entry.ManageState)
 		{
-		case ECFVehicleManageState::Managed: return TEXT("관리됨");
-		case ECFVehicleManageState::PartiallyManaged: return TEXT("부분 관리");
-		case ECFVehicleManageState::LegacyImported: return TEXT("레거시");
-		case ECFVehicleManageState::Unmanaged: return TEXT("미관리");
+		case ECFVehicleManageState::Managed: return TEXT("관리 DA");
+		case ECFVehicleManageState::PartiallyManaged: return TEXT("부분관리 DA");
+		case ECFVehicleManageState::LegacyImported: return TEXT("레거시 DA");
+		case ECFVehicleManageState::Unmanaged: return TEXT("미관리 DA");
 		default: return TEXT("기타");
 		}
 	}
 
-	// Vehicle Browser row마다 새로고침해도 바뀌지 않는 identity 기반 accent 색상을 반환합니다.
+	// Vehicle Browser row의 분류가 항상 같은 의미색을 사용하도록 category 기반 accent를 반환합니다.
 	FLinearColor VehicleRowAccentColor(const FCFVehicleListEntry& Entry)
 	{
-		// Mesh 후보는 Chassis path, managed row는 Definition path를 stable identity로 사용합니다.
-		const FString StableIdentity = Entry.bMeshOnlyCandidate
-			? Entry.ChassisMeshPath.ToString()
-			: Entry.DefinitionPath.ToString();
-		// 서로 인접한 row를 육안으로 구분하기 위한 고정 accent palette입니다.
-		static const FLinearColor AccentPalette[] =
+		if (Entry.bMeshOnlyCandidate)
 		{
-			FLinearColor(0.35f, 0.75f, 1.00f, 1.0f),
-			FLinearColor(0.45f, 0.88f, 0.55f, 1.0f),
-			FLinearColor(1.00f, 0.72f, 0.30f, 1.0f),
-			FLinearColor(0.85f, 0.52f, 0.95f, 1.0f),
-			FLinearColor(0.35f, 0.90f, 0.85f, 1.0f),
-			FLinearColor(1.00f, 0.52f, 0.52f, 1.0f),
-			FLinearColor(0.72f, 0.72f, 1.00f, 1.0f),
-			FLinearColor(0.92f, 0.82f, 0.42f, 1.0f)
-		};
-		// Stable identity hash를 palette index로 축약한 값입니다.
-		const uint32 PaletteIndex = GetTypeHash(StableIdentity) % UE_ARRAY_COUNT(AccentPalette);
-		return AccentPalette[PaletteIndex];
+			return FLinearColor(0.32f, 0.72f, 1.00f, 1.0f); // 파랑: 아직 VehicleData가 없는 Mesh 후보
+		}
+
+		switch (Entry.ManageState)
+		{
+		case ECFVehicleManageState::Managed:
+			return FLinearColor(0.38f, 0.86f, 0.48f, 1.0f); // 초록: 정상 관리 DA
+		case ECFVehicleManageState::PartiallyManaged:
+			return FLinearColor(0.95f, 0.78f, 0.28f, 1.0f); // 노랑: 일부 관리 계약만 갖춘 DA
+		case ECFVehicleManageState::LegacyImported:
+			return FLinearColor(1.00f, 0.56f, 0.24f, 1.0f); // 주황: 레거시 import DA
+		case ECFVehicleManageState::Unmanaged:
+			return FLinearColor(0.96f, 0.38f, 0.34f, 1.0f); // 빨강: 아직 Recipe 관리 밖의 DA
+		default:
+			return FLinearColor(0.70f, 0.70f, 0.74f, 1.0f); // 회색: 기타/알 수 없음
+		}
+	}
+
+	// 작업 대상 목록을 관리 상태별로 모으기 위한 stable category rank입니다.
+	int32 VehicleRowCategorySortRank(const FCFVehicleListEntry& Entry)
+	{
+		if (Entry.bMeshOnlyCandidate)
+		{
+			return 40;
+		}
+
+		switch (Entry.ManageState)
+		{
+		case ECFVehicleManageState::Managed: return 0;
+		case ECFVehicleManageState::PartiallyManaged: return 10;
+		case ECFVehicleManageState::LegacyImported: return 20;
+		case ECFVehicleManageState::Unmanaged: return 30;
+		default: return 50;
+		}
 	}
 
 	// Vehicle Browser row의 가장 읽기 쉬운 primary identity를 반환합니다.
@@ -127,8 +152,8 @@ namespace
 		}
 
 		return Entry.RecipePath.IsValid()
-			? FString::Printf(TEXT("Managed | %s"), *Entry.RecipePath.ToString())
-			: TEXT("Unmanaged VehicleData");
+			? FString::Printf(TEXT("Recipe | %s"), *Entry.RecipePath.ToString())
+			: TEXT("Recipe 없음 | 미관리 VehicleData");
 	}
 }
 
@@ -503,6 +528,16 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 											.OnClicked(this, &SCFVehicleBuilderTab::HandleAcceptReferenceSet)
 									]
 								]
+
+								+ SVerticalBox::Slot()
+								.AutoHeight()
+								.Padding(0.0f, 8.0f, 0.0f, 0.0f)
+								[
+									SNew(SButton)
+										.Text(LOCTEXT("RefreshReferenceEvidence", "Reference Evidence 갱신 검토"))
+										.ToolTipText(LOCTEXT("RefreshReferenceEvidenceTooltip", "현재 existing Evidence와 다른 complete ResearchDraft를 mutation0 R1 preview한 뒤, explicit AuthoringWrite 승인 시에만 research payload를 교체합니다. EvidenceId/Recipe/Target binding과 Profile/VehicleData는 유지하고 자동 저장하지 않습니다."))
+										.OnClicked(this, &SCFVehicleBuilderTab::HandleReferenceEvidenceRefresh)
+								]
 							]
 						]
 
@@ -540,56 +575,15 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 								.AutoHeight()
 								.Padding(0.0f, 2.0f, 0.0f, 6.0f)
 								[
-									SNew(SHorizontalBox)
-
-									+ SHorizontalBox::Slot()
-									.AutoWidth()
-									.VAlign(VAlign_Center)
-									.Padding(0.0f, 0.0f, 8.0f, 0.0f)
+									SAssignNew(MeshPreparationPickerHost, SBox)
 									[
-										SNew(SBox)
-										.WidthOverride(150.0f)
-										[
-											SNew(STextBlock)
-												.Text(LOCTEXT("ChassisMeshPickerLabel", "차체 메시 [필수]"))
-												.Font(FCoreStyle::GetDefaultFontStyle("Bold", 9))
-										]
-									]
-
-									+ SHorizontalBox::Slot()
-									.FillWidth(1.0f)
-									[
-										SNew(SObjectPropertyEntryBox)
-											.AllowedClass(UStaticMesh::StaticClass())
-											.ObjectPath(this, &SCFVehicleBuilderTab::GetPendingChassisMeshPath)
-											.OnObjectChanged(this, &SCFVehicleBuilderTab::HandleChassisMeshChanged)
-											.AllowClear(false)
+										BuildMeshPreparationPickerFields()
 									]
 								]
 
-								+ SVerticalBox::Slot()
-								.AutoHeight()
-								[
-									BuildWheelMeshPickerRow(0, LOCTEXT("WheelMeshRoleFL", "FL / 앞왼쪽"), true)
-								]
 
-								+ SVerticalBox::Slot()
-								.AutoHeight()
-								[
-									BuildWheelMeshPickerRow(1, LOCTEXT("WheelMeshRoleFR", "FR / 앞오른쪽"), false)
-								]
 
-								+ SVerticalBox::Slot()
-								.AutoHeight()
-								[
-									BuildWheelMeshPickerRow(2, LOCTEXT("WheelMeshRoleRL", "RL / 뒤왼쪽"), false)
-								]
 
-								+ SVerticalBox::Slot()
-								.AutoHeight()
-								[
-									BuildWheelMeshPickerRow(3, LOCTEXT("WheelMeshRoleRR", "RR / 뒤오른쪽"), false)
-								]
 
 								+ SVerticalBox::Slot()
 								.AutoHeight()
@@ -859,9 +853,19 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 								.AutoHeight()
 								.Padding(0.0f, 0.0f, 0.0f, 10.0f)
 								[
-									SNew(STextBlock)
-										.Text(this, &SCFVehicleBuilderTab::GetFinalReviewSummaryText)
-										.AutoWrapText(true)
+									// Final Review는 수십 개 Field Diff를 표시할 수 있으므로 상세 본문만 bounded scroll 영역으로 제한합니다.
+									SNew(SBox)
+									.HeightOverride(430.0f)
+									[
+										SNew(SScrollBox)
+
+										+ SScrollBox::Slot()
+										[
+											SNew(STextBlock)
+												.Text(this, &SCFVehicleBuilderTab::GetFinalReviewSummaryText)
+												.AutoWrapText(true)
+										]
+									]
 								]
 
 								+ SVerticalBox::Slot()
@@ -1082,6 +1086,22 @@ FReply SCFVehicleBuilderTab::HandleRefreshVehicles()
 		VehicleRows.Add(MakeShared<FCFVehicleListEntry>(Entry));
 	}
 
+	// 같은 관리 분류끼리 모으고, 같은 분류 안에서는 표시 이름으로 정렬해 색상의 의미와 목록 구조를 일치시킵니다.
+	VehicleRows.Sort([](const FVehicleRowPtr& Left, const FVehicleRowPtr& Right)
+	{
+		if (!Left.IsValid() || !Right.IsValid())
+		{
+			return Left.IsValid();
+		}
+		const int32 LeftRank = VehicleRowCategorySortRank(*Left);
+		const int32 RightRank = VehicleRowCategorySortRank(*Right);
+		if (LeftRank != RightRank)
+		{
+			return LeftRank < RightRank;
+		}
+		return VehicleRowTitle(*Left) < VehicleRowTitle(*Right);
+	});
+
 	if (VehicleListView.IsValid())
 	{
 		VehicleListView->RequestListRefresh();
@@ -1104,12 +1124,17 @@ void SCFVehicleBuilderTab::HandleVehicleSelectionChanged(FVehicleRowPtr Selected
 	FString Error;
 	if (!ViewModel->SelectVehicle(*SelectedItem, Error))
 	{
+		// Resolver fail-closed여도 selection/Recipe binding은 current target으로 전환됐을 수 있으므로 이전 차량 picker 표시를 남기지 않습니다.
+		SyncCreationFieldsFromSelection();
+		SyncMeshPreparationFieldsFromRecipe();
+		RefreshMeshPreparationPickerPresentation();
 		LastStatusText = FText::FromString(FString::Printf(TEXT("대상 선택 실패: %s"), *Error));
 		return;
 	}
 
 	SyncCreationFieldsFromSelection();
 	SyncMeshPreparationFieldsFromRecipe();
+	RefreshMeshPreparationPickerPresentation();
 	LastStatusText = FText::FromString(FString::Printf(
 		TEXT("선택: %s | 현재 Step 상태를 authoritative truth에서 다시 계산했습니다."),
 		*VehicleRowTitle(*SelectedItem)));
@@ -1152,7 +1177,7 @@ TSharedRef<ITableRow> SCFVehicleBuilderTab::HandleGenerateVehicleRow(FVehicleRow
 				[
 					SNew(STextBlock)
 						.Text(FText::FromString(Item.IsValid() ? VehicleRowTitle(*Item) : TEXT("<invalid>")))
-						.ColorAndOpacity(AccentColor)
+						.ColorAndOpacity(FLinearColor(0.92f, 0.92f, 0.94f, 1.0f))
 						.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
 				]
 			]
@@ -1223,21 +1248,25 @@ FReply SCFVehicleBuilderTab::HandleRefreshCurrentStep()
 	FString Error;
 	if (!ViewModel->RefreshCurrentState(Error))
 	{
+		// Resolve fail-closed여도 current Recipe 자체는 유효할 수 있으므로 stale ObjectPicker 표시를 남기지 않습니다.
+		SyncMeshPreparationFieldsFromRecipe();
+		RefreshMeshPreparationPickerPresentation();
 		LastStatusText = FText::FromString(FString::Printf(TEXT("현재 상태 확인 실패: %s"), *Error));
 		return FReply::Handled();
 	}
 
 	SyncMeshPreparationFieldsFromRecipe();
+	RefreshMeshPreparationPickerPresentation();
 	LastStatusText = LOCTEXT("RefreshPass", "현재 상태를 fresh read했습니다. 자동 저장/적용은 수행하지 않았습니다.");
 	return FReply::Handled();
 }
 
-// Complete인 현재 Step에서만 다음 Step으로 이동합니다.
+// ViewModel forward-progress contract를 만족하는 현재 Step에서 다음 Step으로 이동합니다.
 FReply SCFVehicleBuilderTab::HandleNextStep()
 {
 	if (ViewModel.IsValid() && ViewModel->MoveNextStep())
 	{
-		LastStatusText = LOCTEXT("MovedNext", "완료된 단계의 다음 화면으로 이동했습니다.");
+		LastStatusText = LOCTEXT("MovedNext", "현재 단계의 forward-progress 조건을 확인하고 다음 화면으로 이동했습니다.");
 	}
 	return FReply::Handled();
 }
@@ -1404,6 +1433,75 @@ FReply SCFVehicleBuilderTab::HandleResearchCompanionReview()
 	return FReply::Handled();
 }
 
+// Step 1 loaded ResearchDraft로 Existing Reference Evidence complete replacement R1을 검토하고 explicit USER 승인 뒤 commit합니다.
+FReply SCFVehicleBuilderTab::HandleReferenceEvidenceRefresh()
+{
+	if (!ViewModel.IsValid())
+	{
+		return FReply::Handled();
+	}
+
+	// Current Evidence + loaded ResearchDraft로 만든 mutation0 R1 preview입니다.
+	FCFBuilderEvidenceRefreshPreview Preview;
+	// Preview/commit diagnostic입니다.
+	FString Error;
+	if (!ViewModel->PrepareReferenceEvidenceRefresh(Preview, Error))
+	{
+		LastStatusText = FText::FromString(FString::Printf(TEXT("Reference Evidence 갱신 검토 실패: %s"), *Error));
+		return FReply::Handled();
+	}
+
+	if (Preview.Operation.Status == ECFAuthoringOpStatus::NoChange)
+	{
+		LastStatusText = LOCTEXT("ReferenceEvidenceRefreshNoChange", "Loaded Research Draft와 current Reference Evidence가 동일합니다. 갱신할 내용이 없습니다.");
+		return FReply::Handled();
+	}
+
+	// USER가 current→prospective Evidence semantic 변경과 mutation boundary를 확인할 review 문구입니다.
+	const FText ReviewText = FText::FromString(FString::Printf(
+		TEXT(
+			"Guided Builder — Reference Evidence 갱신 검토\n\n"
+			"Current EvidenceFingerprint:\n%s\n\n"
+			"Prospective EvidenceFingerprint:\n%s\n\n"
+			"Claim 수: %d → %d\n"
+			"Unknown Fact 수: %d → %d\n\n"
+			"EvidenceId: 유지\n"
+			"Recipe/Target binding: 유지\n"
+			"Profile mutation: 안 함\n"
+			"Recipe mutation: 안 함\n"
+			"VehicleData mutation/Apply: 안 함\n"
+			"자동 저장: 안 함\n"
+			"자동 재시도: 안 함\n\n"
+			"중요: EvidenceFingerprint가 바뀌면 기존 Reference review token과 Builder Profile receipt는 stale이 됩니다.\n"
+			"갱신 후 이 Reference Set을 다시 확인하고 Physics Proposal을 새 Evidence 기준으로 다시 검토해야 합니다.\n\n"
+			"Loaded Research Draft의 complete research payload로 existing Evidence를 교체하시겠습니까?"),
+		*Preview.CurrentEvidenceFingerprint,
+		*Preview.ProspectiveEvidenceFingerprint,
+		Preview.CurrentClaimCount,
+		Preview.ProspectiveClaimCount,
+		Preview.CurrentUnknownFactCount,
+		Preview.ProspectiveUnknownFactCount));
+
+	if (FMessageDialog::Open(EAppMsgType::YesNo, ReviewText) != EAppReturnType::Yes)
+	{
+		LastStatusText = LOCTEXT("ReferenceEvidenceRefreshCancelled", "Reference Evidence 갱신을 취소했습니다. Prepared approval은 실행하지 않았습니다.");
+		return FReply::Handled();
+	}
+
+	// Explicit USER-approved Evidence Refresh terminal result입니다.
+	FCFBuilderEvidenceRefreshResult Result;
+	if (!ViewModel->ExecutePreparedEvidenceRefresh(Result, Error))
+	{
+		LastStatusText = FText::FromString(FString::Printf(TEXT("Reference Evidence 갱신 실패: %s"), *Error));
+		return FReply::Handled();
+	}
+
+	LastStatusText = FText::FromString(FString::Printf(
+		TEXT("Reference Evidence research payload를 갱신했습니다. EvidenceId/Recipe/Target/Profile/VehicleData는 유지했고 자동 저장하지 않았습니다. 이 Reference Set을 다시 확인한 뒤 새 Physics Proposal을 검토하세요.\n%s"),
+		*Result.Operation.Message));
+	return FReply::Handled();
+}
+
 // Step 1 current Evidence summary/fingerprint를 USER가 확인한 뒤 local Reference review token을 갱신합니다.
 FReply SCFVehicleBuilderTab::HandleAcceptReferenceSet()
 {
@@ -1496,6 +1594,7 @@ FReply SCFVehicleBuilderTab::HandleCommitMeshPreparation()
 	}
 
 	SyncMeshPreparationFieldsFromRecipe();
+	RefreshMeshPreparationPickerPresentation();
 	LastStatusText = FText::FromString(FString::Printf(
 		TEXT("Mesh 설정을 Recipe에 반영했습니다. VehicleData Apply/자동 저장은 하지 않았습니다. %s"),
 		*CommitResult.Message));
@@ -1521,6 +1620,57 @@ void SCFVehicleBuilderTab::HandleWheelMeshChanged(const FAssetData& AssetData, c
 	PendingWheelMeshPaths[WheelRoleIndex] = AssetData.IsValid()
 		? AssetData.GetSoftObjectPath()
 		: FSoftObjectPath();
+}
+
+// Step 2 Chassis + FL/FR/RL/RR StaticMesh picker 묶음을 current pending state로 새로 만듭니다.
+TSharedRef<SWidget> SCFVehicleBuilderTab::BuildMeshPreparationPickerFields()
+{
+	return SNew(SVerticalBox)
+
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(0.0f, 0.0f, 0.0f, 4.0f)
+		[
+			SNew(SHorizontalBox)
+
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(0.0f, 0.0f, 8.0f, 0.0f)
+			[
+				SNew(SBox)
+				.WidthOverride(150.0f)
+				[
+					SNew(STextBlock)
+						.Text(LOCTEXT("ChassisMeshPickerLabel", "차체 메시 [필수]"))
+						.Font(FCoreStyle::GetDefaultFontStyle("Bold", 9))
+				]
+			]
+
+			+ SHorizontalBox::Slot()
+			.FillWidth(1.0f)
+			[
+				SNew(SObjectPropertyEntryBox)
+					.AllowedClass(UStaticMesh::StaticClass())
+					.ObjectPath(this, &SCFVehicleBuilderTab::GetPendingChassisMeshPath)
+					.OnObjectChanged(this, &SCFVehicleBuilderTab::HandleChassisMeshChanged)
+					.AllowClear(false)
+			]
+		]
+
+		+ SVerticalBox::Slot().AutoHeight()[BuildWheelMeshPickerRow(0, LOCTEXT("WheelMeshRoleFL", "FL / 앞왼쪽"), true)]
+		+ SVerticalBox::Slot().AutoHeight()[BuildWheelMeshPickerRow(1, LOCTEXT("WheelMeshRoleFR", "FR / 앞오른쪽"), false)]
+		+ SVerticalBox::Slot().AutoHeight()[BuildWheelMeshPickerRow(2, LOCTEXT("WheelMeshRoleRL", "RL / 뒤왼쪽"), false)]
+		+ SVerticalBox::Slot().AutoHeight()[BuildWheelMeshPickerRow(3, LOCTEXT("WheelMeshRoleRR", "RR / 뒤오른쪽"), false)];
+}
+
+// 차량 선택/refresh/commit 뒤 ObjectPicker presentation을 current Recipe pending state로 재생성합니다.
+void SCFVehicleBuilderTab::RefreshMeshPreparationPickerPresentation()
+{
+	if (MeshPreparationPickerHost.IsValid())
+	{
+		MeshPreparationPickerHost->SetContent(BuildMeshPreparationPickerFields());
+	}
 }
 
 // Step 2 Wheel Mesh role 한 행의 StaticMesh picker UI를 만듭니다.
@@ -1872,6 +2022,36 @@ FReply SCFVehicleBuilderTab::HandlePhysicsProposalReview()
 		ConsumedClaimList += ClaimId.ToString();
 	}
 
+	// USER가 확인할 fixed-shift Transmission diagnostic 요약입니다.
+	FString TransmissionDiagnosticText = FString::Printf(
+		TEXT("Transmission ProposalHash: %s\n"),
+		Preview.TransmissionProposalHash.IsEmpty() ? TEXT("<Legacy/미검토>") : *Preview.TransmissionProposalHash);
+	for (const FCFBuilderTransmissionGearDiagnostic& GearDiagnostic : Preview.TransmissionDiagnostic.Gears)
+	{
+		// WSA-owned current wheel radius로 계산한 이론 shift-speed 표현입니다.
+		const FString ShiftSpeedText = GearDiagnostic.bShiftSpeedAvailable
+			? (FMath::IsNearlyEqual(GearDiagnostic.ShiftSpeedMinKmh, GearDiagnostic.ShiftSpeedMaxKmh, 0.01f)
+				? FString::Printf(TEXT("%.1f km/h"), GearDiagnostic.ShiftSpeedMinKmh)
+				: FString::Printf(TEXT("%.1f~%.1f km/h"), GearDiagnostic.ShiftSpeedMinKmh, GearDiagnostic.ShiftSpeedMaxKmh))
+			: TEXT("Unavailable");
+		// 다음 기어가 존재할 때만 계산하는 post-shift RPM 표현입니다.
+		const FString PostShiftText = GearDiagnostic.bPostShiftAvailable
+			? FString::Printf(TEXT("%.0f RPM / Retention %.3f / Down margin %.0f"), GearDiagnostic.PostShiftRPM, GearDiagnostic.RpmRetention, GearDiagnostic.DownshiftMarginRPM)
+			: TEXT("N/A");
+		TransmissionDiagnosticText += FString::Printf(
+			TEXT("%d단 | Ratio %.4f | Overall %.4f | Shift@UpRPM %s | 변속 후 %s\n"),
+			GearDiagnostic.GearNumber,
+			GearDiagnostic.GearRatio,
+			GearDiagnostic.OverallRatio,
+			*ShiftSpeedText,
+			*PostShiftText);
+	}
+	for (const FString& TransmissionWarning : Preview.TransmissionDiagnostic.Warnings)
+	{
+		TransmissionDiagnosticText += FString::Printf(TEXT("Warning: %s\n"), *TransmissionWarning);
+	}
+	TransmissionDiagnosticText += TEXT("※ 예상 차속은 runtime 변속 조건이 아니라 고정 ChangeUpRPM 조합의 무슬립 sanity diagnostic입니다.\n");
+
 	// USER가 숫자 세부 구조를 직접 이해하지 않아도 proposal 의미와 exact mutation boundary를 확인할 review 문구입니다.
 	const FText ReviewText = FText::FromString(FString::Printf(
 		TEXT(
@@ -1882,6 +2062,7 @@ FReply SCFVehicleBuilderTab::HandlePhysicsProposalReview()
 			"EvidenceFingerprint:\n%s\n\n"
 			"%s\n%s\n%s\n%s\n\n"
 			"Prospective ResolvedDefinitionHash:\n%s\n\n"
+			"Transmission diagnostic:\n%s\n"
 			"실제 변경 범위:\n"
 			"- current Recipe에 exact owner로 binding된 Builder-private 4 Profile만 대상\n"
 			"- Recipe BuilderCommitReceipt provenance metadata는 갱신될 수 있음\n"
@@ -1899,7 +2080,8 @@ FReply SCFVehicleBuilderTab::HandlePhysicsProposalReview()
 		*BuildProfileChangeLine(TEXT("Drivetrain"), Preview.CurrentFingerprints.DrivetrainFingerprint, Preview.ProspectiveFingerprints.DrivetrainFingerprint),
 		*BuildProfileChangeLine(TEXT("Handling"), Preview.CurrentFingerprints.HandlingFingerprint, Preview.ProspectiveFingerprints.HandlingFingerprint),
 		*BuildProfileChangeLine(TEXT("Performance"), Preview.CurrentFingerprints.PerformanceFingerprint, Preview.ProspectiveFingerprints.PerformanceFingerprint),
-		*Preview.ProspectiveResolvedDefinitionHash));
+		*Preview.ProspectiveResolvedDefinitionHash,
+		*TransmissionDiagnosticText));
 
 	if (FMessageDialog::Open(EAppMsgType::YesNo, ReviewText) != EAppReturnType::Yes)
 	{
@@ -2519,8 +2701,7 @@ bool SCFVehicleBuilderTab::CanMoveNext() const
 		return false;
 	}
 
-	return ViewModel->GetCurrentStep().State == ECFVehicleBuilderStepState::Complete
-		&& ViewModel->GetStepViews().IsValidIndex(ViewModel->GetCurrentStepIndex() + 1);
+	return ViewModel->CanAdvanceFromCurrentStep();
 }
 
 #undef LOCTEXT_NAMESPACE

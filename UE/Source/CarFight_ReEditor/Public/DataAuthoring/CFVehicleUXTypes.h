@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleUXTypes.h
-// Version: v1.0.0
-// Date: 2026-08-18
+// Version: v1.1.0
+// Date: 2026-08-31
 // Description: DAUTH-P0-11 Frozen 24.90~24.94 Workspace completeness용 Common Authoring facade C++ value contract입니다.
 // Scope: Shared Profile B2 adapter, External Drift 3-way review/recovery, New Vehicle/Mesh-only record creation을 위한 Editor-only typed value를 제공합니다.
 // Changelog:
+// - v1.1.0: Guided Builder가 새로 만드는 two-record Recipe에 VehicleSpecificRequired Transmission policy를 exact proposal hash에 binding할 opt-in request flag를 추가. 일반 creation 기본값은 false로 Legacy 호환 유지.
 // - v1.0.0: Frozen 24.91~24.94 public value contract 최초 구현.
 // Migration:
 // - AI typed semantic contract를 확장하지 않으며 Shared Profile payload write는 SlateUI/Automation에만 허용합니다.
@@ -198,6 +199,9 @@ struct FCFVehicleRecordCreateRequest
 
 	// 사용자가 explicit하게 지정한 5 Profile bindings입니다. 빈 binding은 추론하지 않습니다.
 	FCFVehicleProfileBindings ProfileBindings;
+
+	// Guided Builder 신규 차량이면 Final Review에서 vehicle-specific Transmission을 강제합니다. 일반/Legacy creation은 기본 false입니다.
+	bool bRequireVehicleSpecificTransmission = false;
 
 	// SlateUI 또는 Automation만 허용하며 P0 AI record-creation contract는 새로 열지 않습니다.
 	ECFAuthoringCallerKind CallerKind = ECFAuthoringCallerKind::Unknown;

@@ -1,11 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAIContract.h
-// Version: v1.13.0
-// Date: 2026-08-27
-// Description: DAUTH Common Authoring Service + CF-FQ-040 Builder provenance receipt / Final Review / post-state guarded Undo hardening contract입니다.
+// Version: v1.18.0
+// Date: 2026-09-01
+// Description: DAUTH Common Authoring Service + CF-FQ-040 ESH-03 WheelTorqueCrossoverShift diagnostic contract입니다.
 // Scope: Section 25 R0~R3 risk, approval, read/query와 normal Workspace Mesh-only candidate projection을 제공합니다.
 // Changelog:
+// - v1.18.0: vehicle-specific Engine Curve + gear ratios로 adjacent gear Wheel-Torque crossover와 fixed common ChangeUpRPM recommendation을 계산하는 typed diagnostic을 TransmissionDiagnostic에 추가.
+// - v1.17.0: PhysicsDraft schema v3에 EngineCurveReview를 추가하고 Profile Preview/Final Review에 EngineCurveProposalHash/Diagnostic projection을 additive 추가.
+// - v1.16.0: Existing Reference Evidence complete research replacement를 fresh fingerprint/AuthoringWrite approval에 binding하는 Builder Evidence Refresh R1 request/preview/result와 mutation footprint를 추가.
+// - v1.15.0: Builder-wide fixed-shift diagnostic row에 RpmRetention을 명시적으로 추가해 문서/Step5/FinalReview projection contract를 일치시킴.
+// - v1.14.0: Guided 신규 차량 Transmission remediation을 위해 PhysicsDraft/commit/final-review contract에 field-level Transmission review hash와 fixed-shift diagnostic projection을 추가.
 // - v1.13.0: VB-P0-09 Step 5에서 current accepted Evidence + complete Builder-private 4 Profile proposal을 AI→Guided Shell에 넘기는 transient FCFBuilderPhysicsDraft contract를 추가.
 // - v1.12.0: VB-P0-09 Step 1에서 initial Reference Research payload/EvidenceId를 Companion approval에 binding하고 AI→Shell ResearchDraft typed handoff를 추가.
 // - v1.11.0: Final Review provenance를 persistent BuilderCommitReceipt/current 4 Profile fingerprint에 binding하고, Undo token에 semantic Recipe + post-Apply Target/AppliedState stale guard를 추가.
@@ -36,6 +41,7 @@
 #include "DataAuthoring/CFVehicleImportService.h"
 #include "DataAuthoring/CFVehicleResolverTypes.h"
 #include "DataAuthoring/CFVehicleRefEvidence.h"
+#include "DataAuthoring/CFVehicleRecipeData.h"
 #include "CFVehicleAIContract.generated.h"
 
 class UCFVehicleData;
@@ -208,9 +214,13 @@ struct FCFAuthoringMutationFootprint
 	UPROPERTY()
 	bool bTargetChanged = false;
 
-	// Shared Profile payload가 persistent mutation됐는지 여부입니다. P0-08I에서는 항상 false입니다.
+	// Shared/Profile payload가 persistent mutation됐는지 여부입니다.
 	UPROPERTY()
 	bool bProfileChanged = false;
+
+	// Existing Reference Evidence research payload가 persistent mutation됐는지 여부입니다.
+	UPROPERTY()
+	bool bEvidenceChanged = false;
 
 	// 새 persistent asset이 생성됐는지 여부입니다. P0-08I에서는 항상 false입니다.
 	UPROPERTY()
@@ -1334,15 +1344,123 @@ struct FCFBuilderResearchDraft
 	FString ResearchLabel;
 };
 
+/** Existing Reference Evidence research payload를 complete replacement하는 reviewed R1 request입니다. Evidence identity/ownership binding은 변경하지 않습니다. */
+USTRUCT()
+struct FCFBuilderEvidenceRefreshRequest
+{
+	GENERATED_BODY()
+
+	// Refresh 대상 Evidence를 소유하는 exact managed Recipe입니다.
+	UPROPERTY()
+	TObjectPtr<UCFVehicleRecipeData> Recipe = nullptr;
+
+	// Current Recipe에 exact binding된 existing Reference Evidence object path입니다.
+	UPROPERTY()
+	FSoftObjectPath EvidencePath;
+
+	// Draft 작성 시점에 읽은 current Evidence fingerprint입니다. Preview/Commit stale guard입니다.
+	UPROPERTY()
+	FString ExpectedCurrentEvidenceFingerprint;
+
+	// 기존 research payload 전체를 대체할 normalized FACT/DERIVED complete payload입니다. GAME_BIAS는 Initial Research와 동일하게 금지합니다.
+	UPROPERTY()
+	FCFVehicleRefEvidencePayload EvidencePayload;
+
+	// Preview caller identity와 Commit AuthoringWrite approval/current Recipe/Target state를 전달합니다.
+	UPROPERTY()
+	FCFAuthoringCallContext CallContext;
+};
+
+/** Existing Reference Evidence refresh의 mutation0 R1 preview입니다. */
+USTRUCT()
+struct FCFBuilderEvidenceRefreshPreview
+{
+	GENERATED_BODY()
+
+	// Common typed preview result입니다.
+	UPROPERTY()
+	FCFAuthoringOpResult Operation;
+
+	// Commit에 binding할 exact AuthoringWrite proposal입니다.
+	UPROPERTY()
+	FCFAuthoringProposal Proposal;
+
+	// Preview에서 fresh 재계산한 current Evidence fingerprint입니다.
+	UPROPERTY()
+	FString CurrentEvidenceFingerprint;
+
+	// Complete replacement payload를 transient Evidence에 적용해 계산한 prospective fingerprint입니다.
+	UPROPERTY()
+	FString ProspectiveEvidenceFingerprint;
+
+	// USER review를 위한 current canonical Claim 수입니다.
+	UPROPERTY()
+	int32 CurrentClaimCount = 0;
+
+	// USER review를 위한 prospective canonical/candidate Claim 전체 수입니다.
+	UPROPERTY()
+	int32 ProspectiveClaimCount = 0;
+
+	// USER review를 위한 current Unknown Fact 수입니다.
+	UPROPERTY()
+	int32 CurrentUnknownFactCount = 0;
+
+	// USER review를 위한 prospective Unknown Fact 수입니다.
+	UPROPERTY()
+	int32 ProspectiveUnknownFactCount = 0;
+};
+
+/** Existing Reference Evidence refresh terminal result입니다. */
+USTRUCT()
+struct FCFBuilderEvidenceRefreshResult
+{
+	GENERATED_BODY()
+
+	// Common typed terminal result입니다.
+	UPROPERTY()
+	FCFAuthoringOpResult Operation;
+
+	// Commit 뒤 fresh readback한 Evidence fingerprint입니다.
+	UPROPERTY()
+	FString EvidenceFingerprint;
+};
+
+/** Builder Step 5 / Final Review가 공유하는 vehicle-specific Engine Curve provenance/fidelity diagnostic입니다. */
+USTRUCT()
+struct FCFBuilderEngineCurveDiagnostic
+{
+	GENERATED_BODY()
+
+	// Engine Curve provenance/fidelity 검증을 수행했는지 여부입니다.
+	UPROPERTY()
+	bool bEvaluated = false;
+
+	// Current Performance payload가 vehicle-specific Engine Curve를 실제 사용하도록 opt-in했는지 여부입니다.
+	UPROPERTY()
+	bool bVehicleSpecificCurveEnabled = false;
+
+	// Current reviewed Engine Curve proposal hash입니다. BaselineInherited/legacy에서는 비어 있을 수 있습니다.
+	UPROPERTY()
+	FString EngineCurveProposalHash;
+
+	// USER가 확인해야 하지만 Profile commit/Final Review를 즉시 막지는 않는 diagnostic입니다.
+	UPROPERTY()
+	TArray<FString> Warnings;
+
+	// Invalid/stale provenance 또는 enabled curve payload contradiction으로 commit/Final Review를 막는 diagnostic입니다.
+	UPROPERTY()
+	TArray<FString> Blockers;
+};
+
 /** AI가 current accepted Reference Evidence를 근거로 작성한 Step 5 complete 4-Profile Physics Proposal transient draft입니다. Persistent SSOT나 approval token이 아닙니다. */
 USTRUCT()
 struct FCFBuilderPhysicsDraft
 {
 	GENERATED_BODY()
 
-	// Physics Draft JSON schema revision입니다.
+	// Physics Draft JSON schema revision입니다. v2부터 Transmission review, v3부터 Engine Curve review가 포함됩니다.
 	UPROPERTY()
-	int32 SchemaRevision = 1;
+	int32 SchemaRevision = 3;
 
 	// 이 Physics Draft가 exact binding된 managed Recipe identity입니다.
 	UPROPERTY()
@@ -1368,6 +1486,14 @@ struct FCFBuilderPhysicsDraft
 	UPROPERTY()
 	TArray<FName> ConsumedClaimIds;
 
+	// Vehicle-specific Transmission이 필요한 Guided 차량에서 field-level FACT/DERIVED/GAME_BIAS 근거를 보존하는 review metadata입니다.
+	UPROPERTY()
+	FCFBuilderTransmissionReview TransmissionReview;
+
+	// Vehicle-specific Engine Curve가 FACT/DERIVED/GAME_BIAS 중 어떤 근거로 작성됐는지 보존하는 review metadata입니다.
+	UPROPERTY()
+	FCFBuilderEngineCurveReview EngineCurveReview;
+
 	// Upstream AI proposal correlation을 stable하게 구분하는 opaque deterministic hash입니다.
 	UPROPERTY()
 	FString ProposalCorrelationHash;
@@ -1379,6 +1505,222 @@ struct FCFBuilderPhysicsDraft
 	// USER가 Chaos 세부 숫자를 몰라도 차량 특성 변화 방향을 이해할 수 있게 AI가 작성한 설명입니다.
 	UPROPERTY()
 	FString UserFacingSummary;
+};
+
+/** 한 forward gear의 고정 ChangeUpRPM 기반 kinematic sanity diagnostic입니다. */
+USTRUCT()
+struct FCFBuilderTransmissionGearDiagnostic
+{
+	GENERATED_BODY()
+
+	// 1부터 시작하는 forward gear 번호입니다.
+	UPROPERTY()
+	int32 GearNumber = 0;
+
+	// 현재 proposed forward gear ratio입니다.
+	UPROPERTY()
+	float GearRatio = 0.0f;
+
+	// GearRatio * FinalRatio 전체 감속비입니다.
+	UPROPERTY()
+	float OverallRatio = 0.0f;
+
+	// Current effective powered-wheel radius로 이론 shift speed를 계산할 수 있는지 여부입니다.
+	UPROPERTY()
+	bool bShiftSpeedAvailable = false;
+
+	// Powered wheel radius 범위 중 작은 반경에서 계산한 ChangeUpRPM 기준 예상 차속입니다.
+	UPROPERTY()
+	float ShiftSpeedMinKmh = 0.0f;
+
+	// Powered wheel radius 범위 중 큰 반경에서 계산한 ChangeUpRPM 기준 예상 차속입니다.
+	UPROPERTY()
+	float ShiftSpeedMaxKmh = 0.0f;
+
+	// 다음 forward gear가 존재해 post-shift RPM을 계산할 수 있는지 여부입니다.
+	UPROPERTY()
+	bool bPostShiftAvailable = false;
+
+	// 동일 차속에서 다음 기어로 상향 변속 직후의 이론 RPM입니다.
+	UPROPERTY()
+	float PostShiftRPM = 0.0f;
+
+	// NextGearRatio / CurrentGearRatio로 표현한 상향변속 RPM 유지 비율입니다.
+	UPROPERTY()
+	float RpmRetention = 0.0f;
+
+	// PostShiftRPM - ChangeDownRPM 여유입니다.
+	UPROPERTY()
+	float DownshiftMarginRPM = 0.0f;
+};
+
+/** 한 adjacent forward gear pair의 Engine Curve 기반 Wheel-Torque crossover diagnostic입니다. */
+USTRUCT()
+struct FCFBuilderWheelTorquePairDiagnostic
+{
+	GENERATED_BODY()
+
+	// 현재 forward gear 번호입니다.
+	UPROPERTY()
+	int32 FromGearNumber = 0;
+
+	// 다음 forward gear 번호입니다.
+	UPROPERTY()
+	int32 ToGearNumber = 0;
+
+	// 실제 wheel-torque crossover를 EngineMaxRPM 이내에서 찾았는지 여부입니다.
+	UPROPERTY()
+	bool bCrossoverFound = false;
+
+	// Crossover가 EngineMaxRPM까지 나타나지 않아 EngineMaxRPM을 usable shift limit으로 사용했는지 여부입니다.
+	UPROPERTY()
+	bool bLimitedByEngineMaxRPM = false;
+
+	// CurrentWheelTorque와 NextWheelTorque가 같아지거나 EngineMaxRPM limit에 도달한 current-gear RPM입니다.
+	UPROPERTY()
+	float CrossoverRPM = 0.0f;
+
+	// CrossoverRPM에서 다음 gear로 바뀌었을 때의 동일 차속 post-shift RPM입니다.
+	UPROPERTY()
+	float CrossoverPostShiftRPM = 0.0f;
+
+	// CrossoverRPM 시점 current gear theoretical wheel torque Nm입니다.
+	UPROPERTY()
+	float CurrentWheelTorqueNm = 0.0f;
+
+	// CrossoverRPM 시점 next gear theoretical wheel torque Nm입니다.
+	UPROPERTY()
+	float NextWheelTorqueNm = 0.0f;
+
+	// WSA-authoritative powered-wheel radius로 crossover road speed를 계산할 수 있는지 여부입니다.
+	UPROPERTY()
+	bool bCrossoverSpeedAvailable = false;
+
+	// Powered-wheel radius 범위의 작은 반경에서 계산한 crossover road speed입니다.
+	UPROPERTY()
+	float CrossoverSpeedMinKmh = 0.0f;
+
+	// Powered-wheel radius 범위의 큰 반경에서 계산한 crossover road speed입니다.
+	UPROPERTY()
+	float CrossoverSpeedMaxKmh = 0.0f;
+
+	// Builder가 제안한 single common ChangeUpRPM에서 current gear wheel torque입니다.
+	UPROPERTY()
+	float RecommendedCurrentWheelTorqueNm = 0.0f;
+
+	// Builder가 제안한 single common ChangeUpRPM에서 next gear wheel torque입니다.
+	UPROPERTY()
+	float RecommendedNextWheelTorqueNm = 0.0f;
+
+	// common threshold에서 더 큰 wheel torque 대비 current/next 차이 비율입니다. 0에 가까울수록 crossover에 가깝습니다.
+	UPROPERTY()
+	float RecommendedRelativeTorqueGap = 0.0f;
+
+	// common threshold에서 다음 gear로 바뀐 직후 RPM입니다.
+	UPROPERTY()
+	float RecommendedPostShiftRPM = 0.0f;
+
+	// WSA-authoritative powered-wheel radius로 common threshold road speed를 계산할 수 있는지 여부입니다.
+	UPROPERTY()
+	bool bRecommendedSpeedAvailable = false;
+
+	// 작은 powered-wheel radius에서 계산한 common threshold road speed입니다.
+	UPROPERTY()
+	float RecommendedSpeedMinKmh = 0.0f;
+
+	// 큰 powered-wheel radius에서 계산한 common threshold road speed입니다.
+	UPROPERTY()
+	float RecommendedSpeedMaxKmh = 0.0f;
+};
+
+/** P0 single ChangeUpRPM을 위한 Engine Curve 기반 Wheel-Torque crossover 전체 diagnostic입니다. */
+USTRUCT()
+struct FCFBuilderWheelTorqueShiftDiagnostic
+{
+	GENERATED_BODY()
+
+	// Engine Curve/gear ratio 기반 계산을 수행했는지 여부입니다.
+	UPROPERTY()
+	bool bEvaluated = false;
+
+	// 차량별 Engine Curve가 실제로 활성화되어 이 diagnostic의 authority가 있는지 여부입니다.
+	UPROPERTY()
+	bool bVehicleSpecificEngineCurveAvailable = false;
+
+	// 공통 threshold recommendation 계산 방법의 stable ID입니다.
+	UPROPERTY()
+	FName MethodId = NAME_None;
+
+	// deterministic 계산 방법 revision입니다.
+	UPROPERTY()
+	int32 MethodRevision = 0;
+
+	// 탐색을 시작한 current-gear RPM입니다.
+	UPROPERTY()
+	int32 SearchStartRPM = 0;
+
+	// 탐색 상한인 EngineMaxRPM입니다.
+	UPROPERTY()
+	int32 SearchEndRPM = 0;
+
+	// 모든 gear pair의 relative torque gap squared mean이 최소가 되는 single common ChangeUpRPM recommendation입니다.
+	UPROPERTY()
+	int32 RecommendedChangeUpRPM = 0;
+
+	// RecommendedChangeUpRPM에서 adjacent gear pair relative torque gap squared 평균입니다.
+	UPROPERTY()
+	float MeanSquaredRelativeTorqueGap = 0.0f;
+
+	// RecommendedChangeUpRPM에서 adjacent gear pair 중 가장 큰 relative torque gap입니다.
+	UPROPERTY()
+	float MaxRelativeTorqueGap = 0.0f;
+
+	// Adjacent forward gear pair별 crossover/result입니다.
+	UPROPERTY()
+	TArray<FCFBuilderWheelTorquePairDiagnostic> Pairs;
+
+	// 계산은 가능하지만 USER가 확인해야 하는 제약/근사입니다.
+	UPROPERTY()
+	TArray<FString> Warnings;
+
+	// 계산 authority가 없어 recommendation을 사용할 수 없는 이유입니다.
+	UPROPERTY()
+	TArray<FString> Blockers;
+};
+
+/** Builder Step 5 / Final Review가 공유하는 vehicle-specific Transmission sanity diagnostic입니다. */
+USTRUCT()
+struct FCFBuilderTransmissionDiagnostic
+{
+	GENERATED_BODY()
+
+	// Diagnostic 계산을 수행했는지 여부입니다.
+	UPROPERTY()
+	bool bEvaluated = false;
+
+	// Current Recipe가 vehicle-specific Transmission을 의무화하는지 여부입니다.
+	UPROPERTY()
+	bool bVehicleSpecificRequired = false;
+
+	// Current accepted Transmission proposal hash입니다. LegacyCompatible에서는 비어 있을 수 있습니다.
+	UPROPERTY()
+	FString TransmissionProposalHash;
+
+	// Forward gear별 fixed ChangeUpRPM kinematic result입니다.
+	UPROPERTY()
+	TArray<FCFBuilderTransmissionGearDiagnostic> Gears;
+
+	// Vehicle-specific Engine Curve가 준비됐을 때 계산하는 adjacent-gear Wheel Torque crossover + common ChangeUpRPM recommendation입니다.
+	UPROPERTY()
+	FCFBuilderWheelTorqueShiftDiagnostic WheelTorqueShift;
+
+	// USER가 확인해야 하지만 Apply를 막지는 않는 diagnostic입니다.
+	UPROPERTY()
+	TArray<FString> Warnings;
+
+	// Step 5 commit 또는 Final Review completion을 막는 diagnostic입니다.
+	UPROPERTY()
+	TArray<FString> Blockers;
 };
 
 /** Existing Definition+Recipe에 Evidence + private 4 Profile을 붙이는 R2 Builder request입니다. */
@@ -1719,6 +2061,14 @@ struct FCFBuilderProfileCommitRequest
 	UPROPERTY()
 	FCFBuilderEvidenceBinding EvidenceBinding;
 
+	// Vehicle-specific Transmission 완료가 필요한 경우 field-level reviewed provenance입니다.
+	UPROPERTY()
+	FCFBuilderTransmissionReview TransmissionReview;
+
+	// Vehicle-specific Engine Curve provenance/fidelity를 fresh Evidence에 binding할 reviewed metadata입니다.
+	UPROPERTY()
+	FCFBuilderEngineCurveReview EngineCurveReview;
+
 	// 상위 Builder proposal과의 correlation/binding hash입니다.
 	UPROPERTY()
 	FString UpstreamBuilderProposalHash;
@@ -1761,6 +2111,22 @@ struct FCFBuilderProfileCommitPreview
 	// Prospective complete payload의 resolved Definition hash입니다.
 	UPROPERTY()
 	FString ProspectiveResolvedDefinitionHash;
+
+	// Prospective Drivetrain payload + field-level review의 deterministic hash입니다.
+	UPROPERTY()
+	FString TransmissionProposalHash;
+
+	// Prospective Performance Engine Curve payload + reviewed provenance의 deterministic hash입니다.
+	UPROPERTY()
+	FString EngineCurveProposalHash;
+
+	// USER가 Step 5에서 함께 검토할 Engine Curve provenance/fidelity diagnostic입니다.
+	UPROPERTY()
+	FCFBuilderEngineCurveDiagnostic EngineCurveDiagnostic;
+
+	// USER가 Step 5에서 함께 검토할 fixed-shift kinematic diagnostic입니다.
+	UPROPERTY()
+	FCFBuilderTransmissionDiagnostic TransmissionDiagnostic;
 };
 
 /** BuildApplyApprovalProposal / ApplyResolvedVehicle가 공유하는 R3 typed request입니다. */
@@ -1869,6 +2235,14 @@ struct FCFBuilderFinalReviewResult
 	// accepted Evidence consumed canonical Claim provenance입니다.
 	UPROPERTY()
 	FCFBuilderProvenanceSummary Provenance;
+
+	// Current Recipe policy/receipt/Drivetrain/fixed-shift kinematics를 fresh 재검사한 Transmission diagnostic입니다.
+	UPROPERTY()
+	FCFBuilderTransmissionDiagnostic TransmissionDiagnostic;
+
+	// Current persistent receipt/Performance Profile/Reference Evidence를 fresh 재검사한 Engine Curve diagnostic입니다.
+	UPROPERTY()
+	FCFBuilderEngineCurveDiagnostic EngineCurveDiagnostic;
 
 	// Final Review에서 표시할 warning 수입니다.
 	UPROPERTY()

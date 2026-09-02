@@ -1,11 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleRecipeData.h
-// Version: v1.3.0
-// Date: 2026-08-27
-// Description: Vehicle Authoring Intent + Builder profile provenance receipt의 persistent Editor-only Recipe DataAsset입니다.
+// Version: v1.5.0
+// Date: 2026-09-01
+// Description: Vehicle Authoring Intent + Builder Transmission/Engine Curve provenance receipt의 persistent Editor-only Recipe DataAsset입니다.
 // Scope: Target binding, Asset/Profile/Feel/Mass/Hardpoint/Mount/Default/Override/Import/Applied authoring truth를 보관합니다.
 // Changelog:
+// - v1.5.0: ESH-02 vehicle-specific Engine Curve review disposition, evidence/method binding, deterministic proposal hash receipt metadata를 additive 추가.
+// - v1.4.0: Guided 신규 차량의 vehicle-specific Transmission 완료 Gate를 위해 persistent BuilderTransmissionPolicy와 field-level Transmission review receipt를 추가. 기존 Asset 기본값은 LegacyCompatible로 보존.
 // - v1.3.0: Editor restart 뒤 Final Review provenance를 정확히 복원할 수 있도록 BuilderCommitReceipt에 canonical ConsumedClaimIds 목록을 non-semantic metadata로 추가.
 // - v1.2.0: Builder-private 4 Profile commit과 accepted Evidence/Claim set을 persistent하게 연결하는 non-semantic BuilderCommitReceipt를 추가.
 // - v1.1.0: Recipe 복제 시 원본 Guid를 상속하지 않고 새 RecipeId를 발급하도록 PostDuplicate 계약을 추가.
@@ -13,6 +15,8 @@
 // Migration:
 // - Runtime UCFVehicleData에 Recipe reference나 provenance를 추가하지 않습니다.
 // - BuilderCommitReceipt는 Recipe semantic fingerprint에서 제외되는 provenance metadata이며 Profile/Evidence가 바뀌면 Final Review에서 stale로 판정합니다.
+// - BuilderTransmissionPolicy의 serialized default는 LegacyCompatible입니다. 기존 Recipe/Legacy 차량에 vehicle-specific Transmission을 자동 강제하지 않습니다.
+// - ESH-02 이전 receipt는 EngineCurveProposalHash가 비어 있고 EngineCurveReview가 BaselineInherited 기본값이므로 기존 차량에 vehicle-specific Engine Curve를 자동 강제하지 않습니다.
 // - IsEditorOnly()=true로 Recipe package의 Never-Cook 의도를 명시합니다.
 
 #pragma once
@@ -21,6 +25,135 @@
 #include "Engine/DataAsset.h"
 #include "DataAuthoring/CFVehicleAuthoringTypes.h"
 #include "CFVehicleRecipeData.generated.h"
+
+/** Builder Final Review에서 Legacy compatibility와 Guided 신규 차량의 vehicle-specific Transmission 의무를 구분합니다. */
+UENUM(BlueprintType)
+enum class ECFBuilderTransmissionPolicy : uint8
+{
+	LegacyCompatible,
+	VehicleSpecificRequired
+};
+
+/** Transmission component가 어떤 근거로 현재 값을 갖는지 표시합니다. */
+UENUM(BlueprintType)
+enum class ECFBuilderTransmissionDisposition : uint8
+{
+	EvidenceDirect,
+	EvidenceDerived,
+	BaselineInherited,
+	GameBias
+};
+
+/** 하나의 Transmission semantic field에 대한 reviewed provenance입니다. */
+USTRUCT(BlueprintType)
+struct FCFBuilderTransmissionComponentReview
+{
+	GENERATED_BODY()
+
+	// ForwardGearRatios 같은 stable Transmission semantic key입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Builder Transmission")
+	FName SemanticKey = NAME_None;
+
+	// FACT/DERIVED/Baseline/GAME_BIAS 중 current 값의 작성 근거입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Builder Transmission")
+	ECFBuilderTransmissionDisposition Disposition = ECFBuilderTransmissionDisposition::BaselineInherited;
+
+	// FACT/DERIVED/GAME_BIAS 입력으로 실제 소비한 canonical Evidence Claim ID입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Builder Transmission")
+	TArray<FName> EvidenceClaimIds;
+
+	// GAME_BIAS가 actual value Unknown을 보존하면서 사용한 Unknown Fact ID입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Builder Transmission")
+	TArray<FName> UnknownFactIds;
+
+	// DERIVED/GAME_BIAS 계산 방법의 stable ID입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Builder Transmission")
+	FName MethodId = NAME_None;
+
+	// 계산 방법의 deterministic revision입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Builder Transmission")
+	int32 MethodRevision = 0;
+
+	// 계산 방법이 소비한 deterministic parameter key/value입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Builder Transmission")
+	TMap<FName, FString> MethodParameters;
+};
+
+/** Engine Curve proposal이 어떤 근거로 현재 curve shape를 갖는지 표시합니다. */
+UENUM(BlueprintType)
+enum class ECFBuilderEngineCurveDisposition : uint8
+{
+	EvidenceDirect,
+	EvidenceDerived,
+	BaselineInherited,
+	GameBias
+};
+
+/** 한 complete vehicle-specific Engine Curve proposal의 reviewed provenance입니다. */
+USTRUCT(BlueprintType)
+struct FCFBuilderEngineCurveReview
+{
+	GENERATED_BODY()
+
+	// Engine Curve review schema revision입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Builder Engine Curve")
+	int32 SchemaRevision = 1;
+
+	// FACT/DERIVED/Baseline/GAME_BIAS 중 current curve shape의 작성 근거입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Builder Engine Curve")
+	ECFBuilderEngineCurveDisposition Disposition = ECFBuilderEngineCurveDisposition::BaselineInherited;
+
+	// Engine Curve 작성에 실제 소비한 canonical Evidence Claim ID입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Builder Engine Curve")
+	TArray<FName> EvidenceClaimIds;
+
+	// GAME_BIAS가 실제 curve 미공개 상태를 보존하면서 사용한 Unknown Fact ID입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Builder Engine Curve")
+	TArray<FName> UnknownFactIds;
+
+	// DERIVED/GAME_BIAS curve 생성 방법의 stable ID입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Builder Engine Curve")
+	FName MethodId = NAME_None;
+
+	// Curve 생성 방법의 deterministic revision입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Builder Engine Curve")
+	int32 MethodRevision = 0;
+
+	// Curve 생성 방법이 소비한 deterministic parameter key/value입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Builder Engine Curve")
+	TMap<FName, FString> MethodParameters;
+
+	// BaselineInherited가 아닌 실제 reviewed Engine Curve proposal인지 반환합니다.
+	bool IsVehicleSpecificReview() const
+	{
+		return Disposition != ECFBuilderEngineCurveDisposition::BaselineInherited;
+	}
+};
+
+/** 한 complete Drivetrain Transmission proposal의 field-level reviewed provenance입니다. */
+USTRUCT(BlueprintType)
+struct FCFBuilderTransmissionReview
+{
+	GENERATED_BODY()
+
+	// Transmission review schema revision입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Builder Transmission")
+	int32 SchemaRevision = 1;
+
+	// Evidence가 알려준 forward gear count입니다. 0이면 Unknown이며 proposed gear count 자체가 GAME_BIAS일 수 있습니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Builder Transmission")
+	int32 ExpectedForwardGearCount = 0;
+
+	// Transmission semantic별 reviewed provenance 목록입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Builder Transmission")
+	TArray<FCFBuilderTransmissionComponentReview> Components;
+
+	// 실제 reviewed Transmission metadata가 존재하는지 반환합니다.
+	bool IsPresent() const
+	{
+		return !Components.IsEmpty();
+	}
+};
 
 /** Builder-private 4 Profile에 실제 commit된 accepted Evidence proposal을 증명하는 persistent non-semantic receipt입니다. */
 USTRUCT(BlueprintType)
@@ -71,6 +204,26 @@ struct FCFVehicleBuilderCommitReceipt
 	// Accepted complete Profile payload의 prospective resolved Definition hash입니다.
 	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")
 	FString ProspectiveResolvedDefinitionHash;
+
+	// Accepted Profile proposal 당시 Recipe의 exact Builder Transmission policy입니다. 정책 raw drift를 Final Review에서 탐지합니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")
+	ECFBuilderTransmissionPolicy TransmissionPolicy = ECFBuilderTransmissionPolicy::LegacyCompatible;
+
+	// Accepted vehicle-specific Transmission review + Drivetrain payload의 deterministic hash입니다. LegacyCompatible에서는 비어 있을 수 있습니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")
+	FString TransmissionProposalHash;
+
+	// Editor restart 뒤에도 field-level Transmission provenance를 fresh 재검증할 persistent review metadata입니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")
+	FCFBuilderTransmissionReview TransmissionReview;
+
+	// Accepted vehicle-specific Engine Curve review + Performance payload의 deterministic hash입니다. BaselineInherited/legacy에서는 비어 있을 수 있습니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")
+	FString EngineCurveProposalHash;
+
+	// Editor restart 뒤에도 Engine Curve provenance를 fresh 재검증할 persistent review metadata입니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")
+	FCFBuilderEngineCurveReview EngineCurveReview;
 
 	// Accepted proposal이 사용한 Resolver contract revision입니다.
 	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Receipt")
@@ -169,6 +322,10 @@ public:
 	// 마지막 successful Apply의 deterministic provenance baseline입니다.
 	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Applied", meta=(DisplayName="마지막 적용 상태"))
 	FCFVehicleAppliedState AppliedState;
+
+	// Guided Builder가 이 Recipe의 vehicle-specific Transmission 완료를 Final Review에서 강제할지 결정합니다. 기존 Recipe 기본값은 LegacyCompatible입니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder", meta=(DisplayName="Builder 변속기 정책", ToolTip="LegacyCompatible은 기존 차량 호환 동작을 보존합니다. VehicleSpecificRequired는 Guided Builder 신규 차량이 Final Review 전에 차량별 Transmission Proposal을 완료하도록 강제합니다."))
+	ECFBuilderTransmissionPolicy BuilderTransmissionPolicy = ECFBuilderTransmissionPolicy::LegacyCompatible;
 
 	// Builder-private 4 Profile에 실제 commit된 Evidence/Claim provenance receipt입니다. Recipe semantic fingerprint에는 포함되지 않습니다.
 	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder", meta=(DisplayName="Builder Commit Receipt"))

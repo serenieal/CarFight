@@ -1,11 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleResolver.cpp
-// Version: v1.5.2
-// Date: 2026-08-28
-// Description: DAUTH-P0-08E/F Frozen R0~R16 Pure Resolver + WSA-P0-02 Socket Scale derived Wheel physics 구현입니다.
+// Version: v1.6.0
+// Date: 2026-09-01
+// Description: DAUTH-P0-08E/F Frozen R0~R16 Pure Resolver + ESH-01 vehicle-specific Engine TorqueCurve Profile mapping 구현입니다.
 // Scope: Snapshot-only source candidate/precedence와 R15 transient Materializer/Validator orchestration을 제공합니다.
 // Changelog:
+// - v1.6.0: Performance Profile의 bUseEngineTorqueCurve/atomic EngineTorqueCurve를 R2에 연결하고 opt-in payload를 공통 Runtime validator로 fail-closed 검증.
+// - v1.5.3: SoftClass Profile → hard TSubclassOf Definition 변환에서 /Game Blueprint Generated Class를 UClass qualifier로 고정하던 오류를 교정. /Script native class는 Class, content generated class는 BlueprintGeneratedClass canonical qualifier를 사용해 R15 hash readback을 일치시킴.
 // - v1.5.2: Recipe SoftObject reference를 Target hard Object leaf로 encode할 때 target class-qualified canonical text로 정규화해 R15 hash roundtrip을 복원.
 // - v1.5.1: R15 Definition hash readback mismatch에 첫 불일치 leaf의 path/type/value 진단을 추가해 원인 추적 가능하게 교정.
 // - v1.5.0: WSA-P0-04 공용 Wheel 계약에 맞춰 SocketScaleFromChassis R6에서 FR/RL/RR 미지정 시 FL Wheel Snapshot을 deterministic fallback으로 재사용.
@@ -24,12 +26,14 @@
 #include "DataAuthoring/CFVehicleResolver.h"
 
 #include "CFVehicleData.h"
+#include "CFVehicleEngineCurveUtils.h"
 #include "CFWheelSizeUtils.h"
 #include "Containers/StringConv.h"
 #include "DataAuthoring/CFVehicleFieldCodec.h"
 #include "DataAuthoring/CFVehicleFieldRegistry.h"
 #include "DataAuthoring/CFVehicleMaterializer.h"
 #include "DataAuthoring/CFVehicleSnapshotBuilder.h"
+#include "Engine/BlueprintGeneratedClass.h"
 #include "Misc/SecureHash.h"
 #include "UObject/UnrealType.h"
 
@@ -256,6 +260,50 @@ namespace CFVehicleResolverPrivate
 
 		// Target Definition leaf의 exact reflection type signature입니다.
 		OutValue.PropertyTypeSignature = FCFVehicleFieldCodec::BuildTypeSignature(*TargetProperty);
+
+		// Builder Drivetrain Profile의 SoftClass를 Target TSubclassOf hard Class leaf로 투영하는 source/target property입니다.
+		const FSoftClassProperty* SourceSoftClassProperty = CastField<FSoftClassProperty>(&SourceProperty);
+		const FClassProperty* TargetClassProperty = CastField<FClassProperty>(TargetProperty);
+		if (SourceSoftClassProperty && TargetClassProperty)
+		{
+			if (!SourceSoftClassProperty->MetaClass
+				|| !TargetClassProperty->MetaClass
+				|| !SourceSoftClassProperty->MetaClass->IsChildOf(TargetClassProperty->MetaClass))
+			{
+				OutError = FString::Printf(
+					TEXT("SoftClass source MetaClass와 Target Class MetaClass가 호환되지 않습니다: Source=%s Target=%s"),
+					*GetPathNameSafe(SourceSoftClassProperty->MetaClass),
+					*GetPathNameSafe(TargetClassProperty->MetaClass));
+				return false;
+			}
+
+			const FString SourceClassPathText = SourceValue.CanonicalValueText.TrimStartAndEnd();
+			if (SourceClassPathText.IsEmpty() || SourceClassPathText == TEXT("None"))
+			{
+				OutValue.CanonicalValueText = TEXT("None");
+				OutError.Reset();
+				return true;
+			}
+
+			const FSoftObjectPath SourceClassPath(SourceClassPathText);
+			if (!SourceClassPath.IsValid())
+			{
+				OutError = FString::Printf(TEXT("SoftClass canonical path가 유효하지 않습니다: %s"), *SourceClassPathText);
+				return false;
+			}
+
+			// Native /Script class object은 UClass, Content Blueprint generated class object은 UBlueprintGeneratedClass로 ExportText됩니다.
+			// Asset을 live load하지 않고 snapshot class path 종류만으로 동일 canonical qualifier를 선택합니다.
+			const UClass* ClassObjectType = SourceClassPath.ToString().StartsWith(TEXT("/Script/"))
+				? UClass::StaticClass()
+				: UBlueprintGeneratedClass::StaticClass();
+			OutValue.CanonicalValueText = FString::Printf(
+				TEXT("%s'%s'"),
+				*GetPathNameSafe(ClassObjectType),
+				*SourceClassPath.ToString());
+			OutError.Reset();
+			return true;
+		}
 
 		// Recipe AssetIntent처럼 SoftObject reference를 hard Object Definition leaf로 투영하는 source property입니다.
 		const FSoftObjectProperty* SourceSoftObjectProperty = CastField<FSoftObjectProperty>(&SourceProperty);
@@ -994,6 +1042,39 @@ namespace CFVehicleResolverPrivate
 		return true;
 	}
 
+	// Performance Profile의 vehicle-specific Engine Torque Curve payload를 fail-closed 검증합니다.
+	bool ValidateEngineTorqueCurveProfile(FResolverContext& Context)
+	{
+		// 검증할 Performance Profile payload입니다.
+		const FCFPerformanceProfileData& Data = Context.Request.Profiles.PerformanceData;
+		if (!Data.bUseEngineTorqueCurve)
+		{
+			return true;
+		}
+
+		// EngineTorqueCurve atomic field를 validation issue의 대표 위치로 사용합니다.
+		const FCFVehicleFieldPath ValidationPath = FindScalarPath(TEXT("VehicleMovementConfig.EngineTorqueCurve"));
+		FString CurveError;
+		if (!FCFVehicleEngineCurveUtils::ValidateCurve(Data.EngineTorqueCurve, CurveError))
+		{
+			AddIssue(
+				Context,
+				Context.Result.ResolverValidation,
+				ECFVehicleValidationSeverity::Blocked,
+				TEXT("PerformanceEngineTorqueCurveInvalid"),
+				CurveError,
+				&ValidationPath);
+			return false;
+		}
+		return true;
+	}
+
+	// Target field가 vehicle-specific Engine Torque Curve atomic payload인지 반환합니다.
+	bool IsEngineTorqueCurvePayloadField(const FString& CanonicalPattern)
+	{
+		return CanonicalPattern == TEXT("VehicleMovementConfig.EngineTorqueCurve");
+	}
+
 	// Target field가 VehicleBase Reference wheel geometry opt-in 대상인지 반환합니다.
 	bool IsReferenceWheelGeometryField(const FString& CanonicalPattern)
 	{
@@ -1021,6 +1102,8 @@ namespace CFVehicleResolverPrivate
 	{
 		// Enabled complete Transmission payload가 잘못되면 Profile stage 자체를 fail-closed로 유지합니다.
 		const bool bTransmissionPayloadValid = ValidateTransmissionProfile(Context);
+		// Enabled vehicle-specific Engine Torque Curve가 잘못되면 Profile stage 자체를 fail-closed로 유지합니다.
+		const bool bEngineTorqueCurveValid = ValidateEngineTorqueCurveProfile(Context);
 		for (const FCFVehicleFieldDescriptor& Descriptor : FCFVehicleFieldRegistry::GetDescriptors())
 		{
 			if (Descriptor.PrimaryProfileDomain == ECFVehicleProfileDomain::None || !Descriptor.StablePathPattern.CollectionPropertyName.IsNone())
@@ -1060,6 +1143,12 @@ namespace CFVehicleResolverPrivate
 			{
 				continue;
 			}
+			// Opt-in이 꺼져 있으면 Curve payload 자체는 후보를 만들지 않습니다. bUseEngineTorqueCurve=false flag는 정상 candidate로 남겨 hot-apply 시 이전 vehicle-specific Curve를 해제할 수 있게 합니다.
+			if (IsEngineTorqueCurvePayloadField(CanonicalPattern)
+				&& (!Context.Request.Profiles.PerformanceData.bUseEngineTorqueCurve || !bEngineTorqueCurveValid))
+			{
+				continue;
+			}
 
 			// Profile layer가 제공할 exact scalar target path입니다.
 			const FCFVehicleFieldPath& TargetPath = Descriptor.StablePathPattern;
@@ -1083,7 +1172,7 @@ namespace CFVehicleResolverPrivate
 				continue;
 			}
 
-			// Direct Profile field는 target leaf name과 typed payload property name이 동일합니다. Atomic TransmissionRatios도 Drivetrain payload의 동일 이름 FStructProperty로 통째로 codec 처리합니다.
+			// Direct Profile field는 target leaf name과 typed payload property name이 동일합니다. Atomic TransmissionRatios/EngineTorqueCurve도 payload의 동일 이름 FStructProperty로 통째로 codec 처리합니다.
 			const FName TargetLeafName = TargetPath.PropertyChain.IsEmpty() ? NAME_None : TargetPath.PropertyChain.Last();
 			if (TargetLeafName.IsNone() || !FindFProperty<FProperty>(PayloadStruct, TargetLeafName))
 			{

@@ -1,9 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderTab.h
-// Version: v1.9.0
-// Date: 2026-08-28
+// Version: v1.11.0
+// Date: 2026-08-31
 // Description: CF-FQ-040 Guided Vehicle Builder의 Editor Slate Shell입니다.
 // Changelog:
+// - v1.11.0: Step 1 Existing Reference Evidence complete replacement R1의 별도 검토 버튼/handler를 추가해 Companion 생성과 Evidence 갱신 UX를 분리.
+// - v1.10.0: Step 2 picker presentation 재생성 host/helper를 추가해 차량 selection 전환 시 이전 ObjectPicker 표시 캐시가 current Recipe로 교체되도록 보강.
 // - v1.9.0: E2E에서 발견된 Step 2 Wheel Mesh 지정 UX 공백을 StaticMesh object picker + explicit Recipe-only 반영 UI로 교정.
 // - v1.8.0: USER 피드백에 따라 작업 대상 row를 identity 기반 고정 accent 색+관리 상태 배지로 구분하고 Step 3에 필수·선택 Socket 이름/복사/차체 메시 열기 작업 패널을 추가.
 // - v1.7.0: VB-P0-09 Step 8 existing VB-P0-08 benchmark를 non-blocking child process로 실행/회수하고 active PIE transient test-drive + exact USER Driving PASS UX를 연결.
@@ -27,6 +29,7 @@ struct FAssetData;
 struct FCFVehicleListEntry;
 class FCFVehicleBuilderVM;
 template<typename ItemType> class SListView;
+class SBox;
 class SEditableTextBox;
 class SVerticalBox;
 
@@ -82,6 +85,9 @@ private:
 	// Step 1 Evidence + Missing private Profiles의 R2 proposal을 검토하고 explicit USER 승인 뒤 commit합니다.
 	FReply HandleResearchCompanionReview();
 
+	// Step 1 loaded ResearchDraft로 Existing Reference Evidence complete replacement R1을 검토하고 explicit USER 승인 뒤 commit합니다.
+	FReply HandleReferenceEvidenceRefresh();
+
 	// Step 1 current Evidence summary/fingerprint를 USER가 확인한 뒤 local Reference review token을 갱신합니다.
 	FReply HandleAcceptReferenceSet();
 
@@ -94,8 +100,15 @@ private:
 	// Step 2 Wheel StaticMesh object picker 변경을 role별 pending 값에만 반영합니다.
 	void HandleWheelMeshChanged(const FAssetData& AssetData, int32 WheelRoleIndex);
 
+	// Step 2 Chassis + FL/FR/RL/RR StaticMesh picker 묶음을 current pending state로 새로 만듭니다.
+	TSharedRef<SWidget> BuildMeshPreparationPickerFields();
+
 	// Step 2 Wheel Mesh role 한 행의 StaticMesh picker UI를 만듭니다.
 	TSharedRef<SWidget> BuildWheelMeshPickerRow(int32 WheelRoleIndex, const FText& RoleLabel, bool bRequired);
+
+	// 차량 선택/refresh/commit 뒤 ObjectPicker presentation을 current Recipe pending state로 재생성합니다.
+	void RefreshMeshPreparationPickerPresentation();
+
 
 	// Step 2 Mesh 준비 전용 UI 표시 조건입니다.
 	EVisibility GetMeshPreparationVisibility() const;
@@ -267,6 +280,10 @@ private:
 
 	// Step 2에서 explicit 반영 전까지 FL/FR/RL/RR 순서로 보관하는 pending Wheel StaticMesh path입니다.
 	TArray<FSoftObjectPath> PendingWheelMeshPaths;
+
+	// Step 2 ObjectPicker subtree를 current Recipe 기준으로 교체할 host입니다.
+	TSharedPtr<SBox> MeshPreparationPickerHost;
+
 
 	// 마지막 read/action 결과를 USER에게 보여주는 status text입니다.
 	FText LastStatusText;

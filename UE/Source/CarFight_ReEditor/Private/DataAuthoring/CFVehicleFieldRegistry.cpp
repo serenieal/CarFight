@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleFieldRegistry.cpp
-// Version: v1.6.0
-// Date: 2026-08-28
-// Description: Current 132 VehicleData leaf pattern Registry와 WSA Wheel Socket Scale source/dependency metadata를 포함한 Reflection coverage 구현입니다.
+// Version: v1.7.0
+// Date: 2026-09-01
+// Description: Current 134 VehicleData leaf pattern Registry와 ESH-01 Engine TorqueCurve atomic source/dependency metadata를 포함한 Reflection coverage 구현입니다.
 // Changelog:
+// - v1.7.0: bUseEngineTorqueCurve와 FCFVehicleEngineTorqueCurve를 PerformanceProfileDirect 2개 leaf로 추가하고 EngineTorqueCurve를 atomic struct로 등록.
 // - v1.6.0: WSA-P0-01 RelativeScale 4 leaf + bUseWheelSocketScale 1 leaf를 추가하고 SocketScale flag dependency를 Project Default + Recipe.WheelVisualIntent로 고정해 coverage를 127→132로 확장.
 // - v1.5.0: VB-P0-05 설계 검수 교정으로 FCFVehicleTransmissionRatios를 atomic leaf로 복원해 Forward/Reverse ratio provenance가 분리되지 않게 하고 coverage를 128→127로 정정.
 // - v1.4.0: CF-FQ-040 VB-P0-05 ChassisWidth/Transmission 10개 leaf를 추가하고 wheel geometry를 BaseProfileMeasurementPolicy로 전환해 VehicleBase fallback + AssetDerived 우선 계약을 연결.
@@ -382,13 +383,14 @@ namespace CFVehicleFieldRegistryPrivate
 		return Result;
 	}
 
-	// FVector/FRotator/FTransform과 complete Transmission ratio-set은 Registry에서 내부 component가 아니라 하나의 atomic leaf value로 취급합니다.
+	// FVector/FRotator/FTransform, complete Transmission ratio-set, Engine Torque Curve는 Registry에서 내부 component가 아니라 하나의 atomic leaf value로 취급합니다.
 	bool IsAtomicStruct(const UScriptStruct* Struct)
 	{
 		return Struct == TBaseStructure<FVector>::Get()
 			|| Struct == TBaseStructure<FRotator>::Get()
 			|| Struct == TBaseStructure<FTransform>::Get()
-			|| Struct == FCFVehicleTransmissionRatios::StaticStruct();
+			|| Struct == FCFVehicleTransmissionRatios::StaticStruct()
+			|| Struct == FCFVehicleEngineTorqueCurve::StaticStruct();
 	}
 
 	// Reflection struct를 재귀 순회해 scalar leaf pattern을 추가합니다.
@@ -436,10 +438,10 @@ namespace CFVehicleFieldRegistryPrivate
 		DiscoverStructLeaves(InnerStructProperty->Struct, Prefix, OutPatterns);
 	}
 
-	// Current exact 132 leaf descriptor를 생성합니다.
+	// Current exact 134 leaf descriptor를 생성합니다.
 	TArray<FCFVehicleFieldDescriptor> BuildDescriptors()
 	{
-		// Current 132 leaf seed입니다. 숫자값은 없고 ownership/rule metadata만 기술합니다.
+		// Current 134 leaf seed입니다. 숫자값은 없고 ownership/rule metadata만 기술합니다.
 		static const FDescriptorSeed Seeds[] =
 		{
 			{TEXT("VehicleVisualConfig.ChassisMesh"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::RecipeAssetIntent, ECFVehicleAdoptGroup::VisualAssets, false, false, false},
@@ -528,6 +530,8 @@ namespace CFVehicleFieldRegistryPrivate
 			{TEXT("VehicleMovementConfig.bEnableCenterOfMassOverride"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::DerivedGate, ECFVehicleAdoptGroup::TechnicalHandling, false, false, false},
 			{TEXT("VehicleMovementConfig.CenterOfMassOverride"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::CompatibilityDefaultOrAdvanced, ECFVehicleAdoptGroup::TechnicalHandling, true, false, false},
 						{TEXT("VehicleMovementConfig.EngineMaxTorque"), ECFVehicleProfileDomain::Performance, ECFVehicleResolveRule::AccelerationFeelDerived, ECFVehicleAdoptGroup::Performance, true, false, false},
+			{TEXT("VehicleMovementConfig.bUseEngineTorqueCurve"), ECFVehicleProfileDomain::Performance, ECFVehicleResolveRule::PerformanceProfileDirect, ECFVehicleAdoptGroup::Performance, true, false, false},
+			{TEXT("VehicleMovementConfig.EngineTorqueCurve"), ECFVehicleProfileDomain::Performance, ECFVehicleResolveRule::PerformanceProfileDirect, ECFVehicleAdoptGroup::Performance, true, false, false},
 			{TEXT("VehicleMovementConfig.EngineMaxRPM"), ECFVehicleProfileDomain::Performance, ECFVehicleResolveRule::AccelerationFeelDerived, ECFVehicleAdoptGroup::Performance, true, false, false},
 			{TEXT("VehicleMovementConfig.RedlineStartRPM"), ECFVehicleProfileDomain::Performance, ECFVehicleResolveRule::PerformanceProfileDirect, ECFVehicleAdoptGroup::Performance, true, false, false},
 			{TEXT("VehicleMovementConfig.EngineIdleRPM"), ECFVehicleProfileDomain::Performance, ECFVehicleResolveRule::PerformanceProfileDirect, ECFVehicleAdoptGroup::Performance, true, false, false},
@@ -612,7 +616,7 @@ namespace CFVehicleFieldRegistryPrivate
 	}
 }
 
-// Current P0 descriptor 132개를 canonical 순서로 반환합니다.
+// Current P0 descriptor 134개를 canonical 순서로 반환합니다.
 const TArray<FCFVehicleFieldDescriptor>& FCFVehicleFieldRegistry::GetDescriptors()
 {
 	// 최초 호출 시 한 번 구성되는 immutable descriptor cache입니다.

@@ -1,11 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleBuilderReview.cpp
-// Version: v1.2.0
-// Date: 2026-08-27
-// Description: CF-FQ-040 VB-P0-07 Final Review provenance receipt / one-resolve / post-state guarded Undo hardening 구현입니다.
+// Version: v1.4.0
+// Date: 2026-09-01
+// Description: CF-FQ-040 Final Review + ESH-02 Engine Curve persistent provenance fresh validation 구현입니다.
 // Scope: Existing Validation/External Drift/Gameplay/Diff/Reference Evidence를 aggregate하고 기존 R3 Apply lane과 Unreal standard Undo를 재사용합니다.
 // Changelog:
+// - v1.4.0: persistent EngineCurveReview/hash를 current Performance Profile/Evidence/consumed Claim에 fresh 재검증하고 fidelity warning/provenance blocker를 Final Review readiness에 합산.
+// - v1.3.0: VehicleSpecificRequired Recipe에서 persistent TransmissionReview/hash를 current Drivetrain/Evidence에 fresh 재검증하고 fixed-shift diagnostic blocker/warning을 Final Review Apply readiness에 합산. LegacyCompatible 경로는 기존 동작 보존.
 // - v1.2.0: Final Review caller가 ConsumedClaimIds를 비운 resume read에서는 persistent BuilderCommitReceipt의 canonical Claim ID 목록을 사용하고, caller가 명시한 목록은 기존 hash exact-match로 계속 tamper 차단.
 // - v1.1.0: provenance를 persistent BuilderCommitReceipt/current 4 Profile fingerprint에 binding하고, Final Review one-resolve projection과 Undo post-Apply state guard를 추가.
 // - v1.0.0: ReadBuilderFinalReview / ApplyBuilderFinalReview / UndoBuilderFinalApply 최초 구현.
@@ -16,6 +18,8 @@
 
 #include "DataAuthoring/CFVehicleAuthoringService.h"
 
+#include "CFBuilderEngineUtil.h"
+#include "CFBuilderTransUtil.h"
 #include "CFVehicleData.h"
 #include "Containers/StringConv.h"
 #include "DataAuthoring/CFDrivetrainProfile.h"
@@ -502,6 +506,147 @@ bool FCFVehicleAuthoringService::ReadBuilderFinalReview(
 		OutResult.Provenance,
 		OutResult.WarningCount,
 		OutResult.BlockingIssueCount);
+
+	// Current Recipe가 binding한 exact private Drivetrain Profile입니다.
+	UCFDrivetrainProfile* CurrentDrivetrainProfile = Recipe->ProfileBindings.DrivetrainProfile.LoadSynchronous();
+	// ESH-03 Wheel-Torque crossover와 ESH-02 provenance가 함께 소비할 current private Performance Profile입니다.
+	UCFPerformanceProfile* CurrentPerformanceProfile = Recipe->ProfileBindings.PerformanceProfile.LoadSynchronous();
+	// Persistent receipt가 binding한 current Reference Evidence입니다.
+	UCFVehicleRefEvidence* CurrentTransmissionEvidence = CFVehicleBuilderReviewPrivate::LoadEvidence(Request.EvidenceBinding.EvidencePath);
+	if (!CurrentDrivetrainProfile || !CurrentPerformanceProfile || !CurrentTransmissionEvidence)
+	{
+		if (Recipe->BuilderTransmissionPolicy == ECFBuilderTransmissionPolicy::VehicleSpecificRequired)
+		{
+			OutResult.TransmissionDiagnostic.bEvaluated = true;
+			OutResult.TransmissionDiagnostic.bVehicleSpecificRequired = true;
+			OutResult.TransmissionDiagnostic.Blockers.Add(TEXT("Transmission.ProvenanceUnbound: current Drivetrain Profile 또는 Reference Evidence를 읽을 수 없습니다."));
+			++OutResult.BlockingIssueCount;
+		}
+	}
+	else
+	{
+		// Current persistent Builder receipt입니다.
+		const FCFVehicleBuilderCommitReceipt& TransmissionReceipt = Recipe->BuilderCommitReceipt;
+		// Accepted Profile receipt 이후 Builder policy가 raw drift했는지 여부입니다.
+		const bool bTransmissionPolicyMismatch = TransmissionReceipt.IsValid()
+			&& TransmissionReceipt.TransmissionPolicy != Recipe->BuilderTransmissionPolicy;
+
+		// Current receipt review/payload에서 다시 계산한 deterministic Transmission hash입니다.
+		const FString CurrentTransmissionHash = CFBuilderTransUtil::BuildTransmissionProposalHash(
+			TransmissionReceipt.TransmissionReview,
+			CurrentDrivetrainProfile->Data);
+		// Field-level provenance validation diagnostic입니다.
+		FString TransmissionValidationError;
+		// Current policy의 field-level provenance가 fresh Evidence/Claim/payload와 일치하는지 여부입니다.
+		const bool bTransmissionReviewValid = CFBuilderTransUtil::ValidateTransmissionReview(
+			Recipe->BuilderTransmissionPolicy,
+			TransmissionReceipt.TransmissionReview,
+			CurrentDrivetrainProfile->Data,
+			*CurrentTransmissionEvidence,
+			TransmissionReceipt.ConsumedClaimIds,
+			TransmissionValidationError);
+
+		CFBuilderTransUtil::BuildTransmissionDiagnostic(
+			Recipe->BuilderTransmissionPolicy,
+			TransmissionReceipt.TransmissionReview,
+			CurrentTransmissionHash,
+			CurrentDrivetrainProfile->Data,
+			CurrentPerformanceProfile->Data,
+			ResolveRead.ResolveResult,
+			OutResult.TransmissionDiagnostic);
+
+		if (bTransmissionPolicyMismatch)
+		{
+			OutResult.TransmissionDiagnostic.Blockers.Add(TEXT("Transmission.ProvenanceUnbound: Builder Transmission policy가 accepted Profile receipt 이후 변경되었습니다. fresh Physics Proposal review/commit이 필요합니다."));
+		}
+
+		if (Recipe->BuilderTransmissionPolicy == ECFBuilderTransmissionPolicy::VehicleSpecificRequired
+			&& (!bTransmissionReviewValid
+				|| TransmissionReceipt.TransmissionProposalHash.IsEmpty()
+				|| TransmissionReceipt.TransmissionProposalHash != CurrentTransmissionHash))
+		{
+			// Provenance validation 또는 persistent hash binding 실패를 대표할 single blocker text입니다.
+			const FString ProvenanceBlocker = !bTransmissionReviewValid
+				? TransmissionValidationError
+				: TEXT("Transmission.ProvenanceUnbound: persistent TransmissionProposalHash가 current reviewed Drivetrain payload와 일치하지 않습니다.");
+			if (!OutResult.TransmissionDiagnostic.Blockers.Contains(ProvenanceBlocker))
+			{
+				OutResult.TransmissionDiagnostic.Blockers.Add(ProvenanceBlocker);
+			}
+		}
+
+		OutResult.WarningCount += OutResult.TransmissionDiagnostic.Warnings.Num();
+		if (Recipe->BuilderTransmissionPolicy == ECFBuilderTransmissionPolicy::VehicleSpecificRequired)
+		{
+			OutResult.BlockingIssueCount += OutResult.TransmissionDiagnostic.Blockers.Num();
+		}
+		else if (bTransmissionPolicyMismatch)
+		{
+			++OutResult.BlockingIssueCount;
+		}
+	}
+
+	// ESH-02 current private Performance Profile과 persistent receipt Engine Curve provenance를 fresh 검증합니다.
+	if (!CurrentPerformanceProfile || !CurrentTransmissionEvidence)
+	{
+		OutResult.EngineCurveDiagnostic.bEvaluated = true;
+		if (Recipe->BuilderCommitReceipt.EngineCurveProposalHash.IsEmpty())
+		{
+			OutResult.EngineCurveDiagnostic.Warnings.Add(TEXT("Performance.EngineCurveFidelityPartial: current Performance Profile 또는 Reference Evidence를 읽을 수 없어 vehicle-specific Engine Curve completion을 증명할 수 없습니다."));
+			++OutResult.WarningCount;
+		}
+		else
+		{
+			OutResult.EngineCurveDiagnostic.Blockers.Add(TEXT("Performance.EngineCurveProvenanceUnbound: accepted Engine Curve receipt가 있지만 current Performance Profile 또는 Reference Evidence를 읽을 수 없습니다."));
+			++OutResult.BlockingIssueCount;
+		}
+	}
+	else
+	{
+		const FCFVehicleBuilderCommitReceipt& EngineCurveReceipt = Recipe->BuilderCommitReceipt;
+		const FString CurrentEngineCurveHash = CFBuilderEngineUtil::BuildEngineCurveProposalHash(
+			EngineCurveReceipt.EngineCurveReview,
+			CurrentPerformanceProfile->Data);
+
+		FString EngineCurveValidationError;
+		const bool bEngineCurveReviewValid = CFBuilderEngineUtil::ValidateEngineCurveReview(
+			EngineCurveReceipt.EngineCurveReview,
+			CurrentPerformanceProfile->Data,
+			*CurrentTransmissionEvidence,
+			EngineCurveReceipt.ConsumedClaimIds,
+			EngineCurveValidationError);
+
+		CFBuilderEngineUtil::BuildEngineCurveDiagnostic(
+			EngineCurveReceipt.EngineCurveReview,
+			CurrentEngineCurveHash,
+			CurrentPerformanceProfile->Data,
+			OutResult.EngineCurveDiagnostic);
+
+		// Enabled vehicle-specific Curve는 persistent reviewed hash가 current payload와 exact 일치해야 합니다.
+		if (CurrentPerformanceProfile->Data.bUseEngineTorqueCurve
+			&& (!bEngineCurveReviewValid
+				|| EngineCurveReceipt.EngineCurveProposalHash.IsEmpty()
+				|| EngineCurveReceipt.EngineCurveProposalHash != CurrentEngineCurveHash))
+		{
+			const FString ProvenanceBlocker = !bEngineCurveReviewValid
+				? EngineCurveValidationError
+				: TEXT("Performance.EngineCurveProvenanceUnbound: persistent EngineCurveProposalHash가 current reviewed Performance payload와 일치하지 않습니다.");
+			if (!OutResult.EngineCurveDiagnostic.Blockers.Contains(ProvenanceBlocker))
+			{
+				OutResult.EngineCurveDiagnostic.Blockers.Add(ProvenanceBlocker);
+			}
+		}
+
+		// Curve를 raw로 끈 경우에도 과거 accepted vehicle-specific receipt가 남아 있으면 stale provenance로 취급합니다.
+		if (!CurrentPerformanceProfile->Data.bUseEngineTorqueCurve
+			&& !EngineCurveReceipt.EngineCurveProposalHash.IsEmpty())
+		{
+			OutResult.EngineCurveDiagnostic.Blockers.Add(TEXT("Performance.EngineCurveProvenanceUnbound: accepted Engine Curve receipt 이후 bUseEngineTorqueCurve가 비활성화되었습니다. fresh Physics Proposal review/commit이 필요합니다."));
+		}
+
+		OutResult.WarningCount += OutResult.EngineCurveDiagnostic.Warnings.Num();
+		OutResult.BlockingIssueCount += OutResult.EngineCurveDiagnostic.Blockers.Num();
+	}
 
 	OutResult.bHasExternalDrift = OutResult.Drift.StaleReport.bHasExternalDrift;
 	if (OutResult.bHasExternalDrift)

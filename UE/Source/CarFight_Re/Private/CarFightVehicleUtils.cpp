@@ -1,44 +1,10 @@
-﻿// Version: 4.2.0
-// Date: 2026-03-31
-// Description: CarFight 차량 물리/디버그 유틸리티 구현
-// Patch: v4.2.4 - VehicleLayout 레거시 명칭 정리 및 Runtime 요약 호환 유지
+﻿// Version: 4.2.5
+// Date: 2026-08-29
+// Description: CarFight 차량 디버그 유틸리티 구현
+// Changelog: v4.2.5 - 사용 중단된 GetRealWheelTransform reflection 구현과 미사용 AppendWrappedDebugSummaryLines 제거
+// Migration: WheelSync runtime은 UCFWheelSyncComp의 정식 Chaos wheel 경로를 계속 사용하며 동작 변경 없음
 
 #include "CarFightVehicleUtils.h"
-
-#include "ChaosWheeledVehicleMovementComponent.h"
-
-// 정적 변수 캐싱: 매 프레임 검색하면 느리므로, 처음에 한 번 찾은 위치를 저장해둡니다.
-static FArrayProperty* CachedTransformArrayProp = nullptr;
-static bool bHasAttemptedCache = false;
-
-// 긴 요약 문자열을 지정한 라벨로 여러 줄에 나눠 붙입니다.
-static void AppendWrappedDebugSummaryLines(
-	FString& InOutDebugSummary,
-	const FString& InSummaryText,
-	const TCHAR* InFirstLabel,
-	const TCHAR* InNextLabel)
-{
-	// 구분자 기준으로 분리한 디버그 요약 조각 배열입니다.
-	TArray<FString> SummaryParts;
-	InSummaryText.ParseIntoArray(SummaryParts, TEXT(" | "), true);
-
-	if (SummaryParts.Num() <= 0)
-	{
-		return;
-	}
-
-	// 첫 줄에 출력할 요약 조각 문자열입니다.
-	const FString& FirstSummaryPart = SummaryParts[0];
-	InOutDebugSummary += FString::Printf(TEXT("\n%s : %s"), InFirstLabel, *FirstSummaryPart);
-
-	// 두 번째 줄부터 순서대로 출력할 요약 인덱스입니다.
-	for (int32 SummaryPartIndex = 1; SummaryPartIndex < SummaryParts.Num(); ++SummaryPartIndex)
-	{
-		// 현재 줄에 출력할 요약 조각 문자열입니다.
-		const FString& CurrentSummaryPart = SummaryParts[SummaryPartIndex];
-		InOutDebugSummary += FString::Printf(TEXT("\n%s : %s"), InNextLabel, *CurrentSummaryPart);
-	}
-}
 
 // 요약 문자열에서 특정 접두사의 값을 찾아 반환합니다.
 static FString ExtractSummaryValueByPrefix(
@@ -237,67 +203,6 @@ static void AppendCompactTransitionSummaryLines(
 		const FString CompactTransitionSummaryText = FString::Join(CompactTransitionParts, TEXT(" | "));
 		InOutDebugSummary += FString::Printf(TEXT("\nTransition   : %s"), *CompactTransitionSummaryText);
 	}
-}
-
-void UCarFightVehicleUtils::GetRealWheelTransform(
-	UChaosWheeledVehicleMovementComponent* MovementComponent,
-	int32 WheelIndex,
-	FVector& OutOffset,
-	FRotator& OutRotation)
-{
-	// 1. 초기화
-	OutOffset = FVector::ZeroVector;
-	OutRotation = FRotator::ZeroRotator;
-
-	if (!MovementComponent)
-	{
-		return;
-	}
-
-	// 2. 변수 찾기 (최초 1회 실행)
-	if (!bHasAttemptedCache)
-	{
-		bHasAttemptedCache = true;
-		UClass* TargetClass = UChaosVehicleMovementComponent::StaticClass();
-
-		// A. "InterpolatedWheelTransforms" (UE 5.0 ~ 5.4 이름) 검색
-		CachedTransformArrayProp = FindFProperty<FArrayProperty>(TargetClass, FName("InterpolatedWheelTransforms"));
-
-		// B. 만약 없다면 "WheelTransforms" (UE 5.5+ 변경 가능성) 검색
-		if (!CachedTransformArrayProp)
-		{
-			CachedTransformArrayProp = FindFProperty<FArrayProperty>(TargetClass, FName("WheelTransforms"));
-		}
-	}
-
-	// 3. 찾은 변수에서 데이터 꺼내기
-	if (CachedTransformArrayProp)
-	{
-		// 컴포넌트 메모리 주소에서 배열의 위치를 찾습니다.
-		void* TransformArrayAddress = CachedTransformArrayProp->ContainerPtrToValuePtr<void>(MovementComponent);
-
-		// FScriptArrayHelper: 리플렉션 배열을 다루는 도우미
-		FScriptArrayHelper TransformArrayHelper(CachedTransformArrayProp, TransformArrayAddress);
-
-		if (TransformArrayHelper.IsValidIndex(WheelIndex))
-		{
-			// 배열의 i번째 요소(FTransform)를 가져옵니다.
-			const FTransform* WheelWorldTransform = reinterpret_cast<const FTransform*>(TransformArrayHelper.GetRawPtr(WheelIndex));
-
-			if (WheelWorldTransform)
-			{
-				// 4. 상대 좌표 변환 (차체 기준)
-				const FTransform VehicleTransform = MovementComponent->UpdatedComponent ? MovementComponent->UpdatedComponent->GetComponentTransform() : FTransform::Identity;
-				const FTransform RelativeWheelTransform = WheelWorldTransform->GetRelativeTransform(VehicleTransform);
-
-				OutOffset = RelativeWheelTransform.GetLocation();
-				OutRotation = RelativeWheelTransform.Rotator();
-				return;
-			}
-		}
-	}
-
-	// 4. (실패 시 폴백) 리플렉션도 실패하면 기본값을 반환합니다.
 }
 
 FString UCarFightVehicleUtils::ConvDriveStateToDisplayString(ECFVehicleDriveState InDriveState)

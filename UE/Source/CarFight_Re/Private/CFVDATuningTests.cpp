@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.3.0
-// Date: 2026-08-28
-// Description: CF-FQ-015 VehicleData + WSA-P0-04 Wheel Size authority Validator/Runtime 계약 자동화 테스트
-// Scope: Transient UCFVehicleData만 사용해 Movement flag, 피팅 질량, MountProfile↔Hardpoint와 Wheel auto-scale 검증 계약을 고정합니다.
+// Version: 1.5.0
+// Date: 2026-09-01
+// Description: CF-FQ-015 VehicleData + CF-FQ-040 ESH-01 Engine TorqueCurve Runtime 계약 자동화 테스트
+// Scope: Transient UCFVehicleData만 사용해 Movement flag, Engine Curve hot-apply, 피팅 질량, MountProfile↔Hardpoint와 Wheel auto-scale 검증 계약을 고정합니다.
 // Changelog:
+// - v1.5.0: VD-P0-03에 bUseEngineTorqueCurve false baseline 보존, vehicle-specific Curve exact apply, same-Pawn true→false authored archetype Curve 복원 regression을 추가.
+// - v1.4.0: Guided Builder Step 8 runtime VehicleData 교체 회귀로 InitializeVehicleRuntime()이 기존 SM_Body mesh를 새 VehicleVisualConfig.ChassisMesh로 교체하는 VD-P0-04 RuntimeReinitializeVisualContract 추가.
 // - v1.3.0: SocketScale/Legacy AutoScale conflict, invalid X/Z scale, axle mismatch와 Socket mode Legacy clamp 비적용 검증 추가.
 // - v1.2.0: 실제 ACFVehiclePawn의 ApplyVehicleDataConfig를 호출해 bUseMovementOverrides=false에서도 핵심 Movement 값이 적용되고 DriveState override on/off가 보존되는 VD-P0-03 RuntimeApplyContract를 추가.
 // - v1.1.0: CarFight.VehicleData.VD_P0_02.RepresentativeCompare를 추가해 Movement/WheelVisual/Fitting mass 비교 FieldPath를 결정론적으로 검증.
@@ -22,6 +24,9 @@
 #include "CFVehiclePawn.h"
 
 #include "ChaosWheeledVehicleMovementComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Curves/RichCurve.h"
+#include "Engine/StaticMesh.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/AutomationEditorCommon.h"
 
@@ -329,6 +334,17 @@ bool FCFVDATuningRuntimeApplyTest::RunTest(const FString& Parameters)
 	}
 
 	RuntimeVehicleData->VehicleMovementConfig.bUseMovementOverrides = false;
+
+	// [v1.5.0] opt-in false 초기 적용이 보존해야 할 BP/Chaos authored TorqueCurve 기준값입니다.
+	const FRichCurve* InitialTorqueCurve = MovementComponent->EngineSetup.TorqueCurve.GetRichCurveConst();
+	if (!TestNotNull(TEXT("VD-P0-03 초기 Engine TorqueCurve 존재"), InitialTorqueCurve))
+	{
+		VehiclePawn->Destroy();
+		return false;
+	}
+	const float InitialTorqueAt3000Rpm = InitialTorqueCurve->Eval(3000.0f);
+
+	RuntimeVehicleData->VehicleMovementConfig.bUseEngineTorqueCurve = false;
 	RuntimeVehicleData->VehicleMovementConfig.EngineMaxTorque = 1234.0f;
 	RuntimeVehicleData->VehicleMovementConfig.EngineMaxRPM = 6789.0f;
 	RuntimeVehicleData->VehicleMovementConfig.DragCoefficient = 0.42f;
@@ -357,6 +373,12 @@ bool FCFVDATuningRuntimeApplyTest::RunTest(const FString& Parameters)
 
 	TestTrue(TEXT("Movement override false에서도 EngineMaxTorque 적용"), FMath::IsNearlyEqual(MovementComponent->EngineSetup.MaxTorque, 1234.0f));
 	TestTrue(TEXT("Movement override false에서도 EngineMaxRPM 적용"), FMath::IsNearlyEqual(MovementComponent->EngineSetup.MaxRPM, 6789.0f));
+	const FRichCurve* PreservedTorqueCurve = MovementComponent->EngineSetup.TorqueCurve.GetRichCurveConst();
+	TestNotNull(TEXT("Engine Curve opt-out 후 authored Curve 존재"), PreservedTorqueCurve);
+	if (PreservedTorqueCurve)
+	{
+		TestTrue(TEXT("Engine Curve opt-out은 초기 authored Curve를 보존"), FMath::IsNearlyEqual(PreservedTorqueCurve->Eval(3000.0f), InitialTorqueAt3000Rpm));
+	}
 	TestTrue(TEXT("Movement override false에서도 Drag 적용"), FMath::IsNearlyEqual(MovementComponent->DragCoefficient, 0.42f));
 	TestTrue(TEXT("Movement override false에서도 Downforce 적용"), FMath::IsNearlyEqual(MovementComponent->DownforceCoefficient, 0.73f));
 	TestEqual(TEXT("Movement override false에서도 DifferentialType 적용"), MovementComponent->DifferentialSetup.DifferentialType, EVehicleDifferential::RearWheelDrive);
@@ -388,6 +410,105 @@ bool FCFVDATuningRuntimeApplyTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("DriveState override false에서 기존 IdleEnter 유지"), FMath::IsNearlyEqual(DriveComp->IdleEnterSpeedThresholdKmh, 9.9f));
 	TestTrue(TEXT("DriveState override false에서 기존 ActiveInput 유지"), FMath::IsNearlyEqual(DriveComp->ActiveInputThreshold, 0.33f));
 	TestTrue(TEXT("DriveState override false에서 기존 hysteresis 유지"), DriveComp->bEnableDriveStateHysteresis);
+
+	// [v1.5.0] vehicle-specific Engine Torque Curve를 같은 transient Pawn에 hot-apply합니다.
+	RuntimeVehicleData->VehicleMovementConfig.bUseEngineTorqueCurve = true;
+	RuntimeVehicleData->VehicleMovementConfig.EngineTorqueCurve.Points.Reset();
+	FCFVehicleEngineTorquePoint CurvePoint0;
+	CurvePoint0.EngineRPM = 0.0f;
+	CurvePoint0.TorqueMultiplier = 0.20f;
+	RuntimeVehicleData->VehicleMovementConfig.EngineTorqueCurve.Points.Add(CurvePoint0);
+	FCFVehicleEngineTorquePoint CurvePoint1;
+	CurvePoint1.EngineRPM = 3000.0f;
+	CurvePoint1.TorqueMultiplier = 1.00f;
+	RuntimeVehicleData->VehicleMovementConfig.EngineTorqueCurve.Points.Add(CurvePoint1);
+	FCFVehicleEngineTorquePoint CurvePoint2;
+	CurvePoint2.EngineRPM = 6000.0f;
+	CurvePoint2.TorqueMultiplier = 0.40f;
+	RuntimeVehicleData->VehicleMovementConfig.EngineTorqueCurve.Points.Add(CurvePoint2);
+	VehiclePawn->ApplyVehicleDataConfig();
+
+	const FRichCurve* VehicleSpecificTorqueCurve = MovementComponent->EngineSetup.TorqueCurve.GetRichCurveConst();
+	TestNotNull(TEXT("vehicle-specific Engine TorqueCurve 적용 후 Curve 존재"), VehicleSpecificTorqueCurve);
+	if (VehicleSpecificTorqueCurve)
+	{
+		// [v1.5.0] FRichCurve 평가값은 key 저장값과 의미상 동일해도 보간 계산의 부동소수 오차가 존재할 수 있으므로 명시적 1e-4 허용오차로 계약을 검증합니다.
+		constexpr float CurveEvaluationTolerance = 0.0001f;
+		TestTrue(TEXT("vehicle-specific Curve 0RPM exact"), FMath::IsNearlyEqual(VehicleSpecificTorqueCurve->Eval(0.0f), 0.20f, CurveEvaluationTolerance));
+		TestTrue(TEXT("vehicle-specific Curve 3000RPM exact"), FMath::IsNearlyEqual(VehicleSpecificTorqueCurve->Eval(3000.0f), 1.00f, CurveEvaluationTolerance));
+		TestTrue(TEXT("vehicle-specific Curve 6000RPM exact"), FMath::IsNearlyEqual(VehicleSpecificTorqueCurve->Eval(6000.0f), 0.40f, CurveEvaluationTolerance));
+	}
+
+	// [v1.5.0] 같은 Pawn에서 opt-out 차량으로 전환하면 직전 vehicle-specific Curve가 아니라 authored archetype Curve로 돌아와야 합니다.
+	RuntimeVehicleData->VehicleMovementConfig.bUseEngineTorqueCurve = false;
+	VehiclePawn->ApplyVehicleDataConfig();
+	const FRichCurve* RestoredTorqueCurve = MovementComponent->EngineSetup.TorqueCurve.GetRichCurveConst();
+	TestNotNull(TEXT("Engine Curve true→false 전환 후 Curve 존재"), RestoredTorqueCurve);
+	if (RestoredTorqueCurve)
+	{
+		TestTrue(TEXT("Engine Curve true→false는 authored archetype Curve 복원"), FMath::IsNearlyEqual(RestoredTorqueCurve->Eval(3000.0f), InitialTorqueAt3000Rpm));
+	}
+
+	VehiclePawn->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVDATuningRuntimeReinitializeVisualTest,
+	"CarFight.VehicleData.VD_P0_04.RuntimeReinitializeVisualContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// Runtime에서 VehicleData를 교체한 뒤 InitializeVehicleRuntime을 다시 호출하면 새 ChassisMesh가 기존 SM_Body에 반영되는지 검증합니다.
+bool FCFVDATuningRuntimeReinitializeVisualTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// Content Asset 없이 재초기화 Visual 경로만 검증할 Transient Automation World입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("VD-P0-04 Transient World 생성"), TestWorld))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters PawnSpawnParameters;
+	PawnSpawnParameters.Name = TEXT("VDP004VehiclePawn");
+	ACFVehiclePawn* VehiclePawn = TestWorld->SpawnActor<ACFVehiclePawn>(
+		ACFVehiclePawn::StaticClass(),
+		FVector::ZeroVector,
+		FRotator::ZeroRotator,
+		PawnSpawnParameters);
+	if (!TestNotNull(TEXT("VD-P0-04 VehiclePawn 생성"), VehiclePawn))
+	{
+		return false;
+	}
+
+	// Blueprint의 SM_Body 역할을 대신할 transient 차체 시각 컴포넌트입니다.
+	UStaticMeshComponent* BodyMeshComponent = NewObject<UStaticMeshComponent>(VehiclePawn, TEXT("SM_Body"));
+	if (!TestNotNull(TEXT("VD-P0-04 SM_Body 생성"), BodyMeshComponent))
+	{
+		VehiclePawn->Destroy();
+		return false;
+	}
+	BodyMeshComponent->RegisterComponent();
+
+	// 기존 차량과 새 차량을 구분할 transient mesh identity입니다. Render data는 필요하지 않습니다.
+	UStaticMesh* ExistingChassisMesh = NewObject<UStaticMesh>(GetTransientPackage(), TEXT("VDP004_ExistingChassis"));
+	UStaticMesh* ReplacementChassisMesh = NewObject<UStaticMesh>(GetTransientPackage(), TEXT("VDP004_ReplacementChassis"));
+	BodyMeshComponent->SetStaticMesh(ExistingChassisMesh);
+
+	// Step 8의 transient duplicate와 같은 역할을 하는 새 VehicleData입니다.
+	UCFVehicleData* ReplacementVehicleData = NewObject<UCFVehicleData>(GetTransientPackage(), TEXT("DA_VD_P0_04_Replacement"));
+	if (!TestNotNull(TEXT("VD-P0-04 Replacement VehicleData 생성"), ReplacementVehicleData))
+	{
+		VehiclePawn->Destroy();
+		return false;
+	}
+	ReplacementVehicleData->VehicleVisualConfig.ChassisMesh = ReplacementChassisMesh;
+	VehiclePawn->VehicleData = ReplacementVehicleData;
+
+	// 이 transient fixture는 전체 Physics runtime ready를 요구하지 않습니다. Visual은 readiness 판정 전에 적용되어야 합니다.
+	VehiclePawn->InitializeVehicleRuntime();
+	TestTrue(TEXT("VD-P0-04 runtime VehicleData 재초기화가 ChassisMesh를 교체"), BodyMeshComponent->GetStaticMesh() == ReplacementChassisMesh);
 
 	VehiclePawn->Destroy();
 	return true;

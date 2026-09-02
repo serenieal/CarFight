@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.30.0
-// Date: 2026-08-28
-// Description: CF-FQ-040 WSA-P0-03 WheelVisual FL runtime fallback 계약을 명시
+// Version: 1.31.0
+// Date: 2026-09-01
+// Description: CF-FQ-040 ESH-01 vehicle-specific Engine TorqueCurve typed payload를 VehicleMovement Runtime authority에 추가
 // Scope: 차량 시각 자산, Wheel Class 참조, VehicleMovement/WheelVisual/Layout, 피팅 질량, 최대 체력과 선택적 방어 설정을 함께 다룹니다.
 // Changelog:
+// - v1.31.0: bUseEngineTorqueCurve + RPM/normalized torque point 기반 EngineTorqueCurve typed payload를 additive 추가. 기본 false/empty로 기존 BP/Chaos TorqueCurve를 보존.
 // - v1.30.0: WheelMeshFR/RL/RR이 비어 있으면 런타임에서 WheelMeshFL을 재사용하는 실제 fallback 계약을 Tooltip에 명시.
 // - v1.29.0: FCFWheelAnchorPose.RelativeScale과 WheelVisualConfig.bUseWheelSocketScale을 additive 추가. 기존 자산은 OneVector/false 기본값으로 기존 시각·물리 동작을 유지.
 // - v1.28.0: ChassisWidth와 UE 5.8 FVehicleTransmissionConfig 대응 typed Transmission fields를 additive 추가. ReverseGearRatios는 positive magnitude 저장 계약을 사용.
@@ -25,6 +26,8 @@
 // - v1.14.0: VehicleLayoutConfig와 WheelAnchor 포즈 구조를 추가해 차량별 시각 휠 기준 위치를 DataAsset에서 관리.
 // - v1.13.0: VehicleMovement 기본값 재정렬 및 레거시 실험값 자동 마이그레이션 추가.
 // Migration:
+// - v1.31.0 이전 VehicleData는 bUseEngineTorqueCurve=false / EngineTorqueCurve empty 기본값으로 기존 BP/Chaos EngineSetup.TorqueCurve를 그대로 유지한다.
+// - Vehicle-specific Engine Curve를 사용할 차량만 bUseEngineTorqueCurve=true와 2개 이상의 strictly increasing RPM / 0..1 TorqueMultiplier point를 명시한다.
 // - v1.29.0 이전 VehicleData는 WheelAnchor RelativeScale=OneVector, bUseWheelSocketScale=false 기본값으로 기존 Wheel_Anchor/Wheel_Mesh 동작과 Legacy AutoScale 정책을 그대로 유지한다.
 // - v1.28.0 기존 VehicleData는 UE 5.8 Source Build 기본값과 같은 ChassisWidth=180, Automatic/AutoReverse=true, FinalRatio=3.08, Forward=[2.85,2.02,1.35,1.0], Reverse=[2.86], Up=4500, Down=2000, GearTime=0.4, Efficiency=0.9를 사용하므로 새 필드 부재만으로 기존 주행 결과를 바꾸지 않는다.
 // - ReverseGearRatios는 방향 부호가 아닌 positive magnitude만 저장한다. UE 5.8 GetGearRatio()가 reverse 방향에서 음수 부호를 적용하므로 raw 배열에 음수를 저장하지 않는다.
@@ -201,6 +204,32 @@ struct FCFVehicleTransmissionRatios
 	TArray<float> ReverseGearRatios;
 };
 
+/** 차량별 Engine Torque Curve 한 점입니다. X=실제 Engine RPM, Y=MaxTorque에 곱할 정규화 토크 배율입니다. */
+USTRUCT(BlueprintType)
+struct FCFVehicleEngineTorquePoint
+{
+	GENERATED_BODY()
+
+	// UE 5.8 Chaos TorqueCurve의 X축 실제 Engine RPM입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Engine Curve", meta=(ClampMin="0.0", Units="rpm", DisplayName="엔진 RPM (EngineRPM)", ToolTip="Torque Curve의 X축 실제 엔진 RPM입니다. 배열 안에서 strictly increasing이어야 합니다."))
+	float EngineRPM = 0.0f;
+
+	// EngineSetup.MaxTorque에 곱해지는 0..1 정규화 토크 배율입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Engine Curve", meta=(ClampMin="0.0", ClampMax="1.0", DisplayName="토크 배율 (TorqueMultiplier)", ToolTip="UE 5.8 Chaos EngineSetup.MaxTorque에 곱해지는 정규화 토크 배율입니다. 0.0~1.0 범위입니다."))
+	float TorqueMultiplier = 0.0f;
+};
+
+/** 차량별 Engine Torque Curve complete typed payload입니다. Registry에서는 내부 Points가 아니라 하나의 atomic value로 취급합니다. */
+USTRUCT(BlueprintType)
+struct FCFVehicleEngineTorqueCurve
+{
+	GENERATED_BODY()
+
+	// 실제 RPM 오름차순으로 저장하는 normalized torque point 목록입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Engine Curve", meta=(DisplayName="토크 커브 포인트 (Points)", ToolTip="최소 2개 point가 필요하며 EngineRPM은 strictly increasing, TorqueMultiplier는 0.0~1.0이어야 합니다."))
+	TArray<FCFVehicleEngineTorquePoint> Points;
+};
+
 USTRUCT(BlueprintType)
 struct FCFVehicleMovementConfig
 {
@@ -317,7 +346,15 @@ struct FCFVehicleMovementConfig
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ClampMin="0.0", DisplayName="엔진 최대 토크 (EngineMaxTorque)", ToolTip="EngineSetup.MaxTorque 값입니다."))
 	float EngineMaxTorque = 750.0f;
 
-		UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ClampMin="0.0", DisplayName="엔진 최대 RPM (EngineMaxRPM)", ToolTip="EngineSetup.MaxRPM에 실제 적용되는 물리 엔진 최대 RPM입니다. HUD Redline 시작값으로 자동 재해석하지 않습니다."))
+	// [v1.31.0] True일 때만 이 VehicleData의 EngineTorqueCurve를 Chaos EngineSetup.TorqueCurve에 적용합니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Engine Curve", meta=(DisplayName="차량별 토크 커브 사용 (bUseEngineTorqueCurve)", ToolTip="True이면 EngineTorqueCurve의 RPM/정규화 토크 point를 Chaos EngineSetup.TorqueCurve에 적용합니다. False이면 기존 BP/Chaos TorqueCurve를 그대로 유지합니다."))
+	bool bUseEngineTorqueCurve = false;
+
+	// [v1.31.0] MaxTorque에 곱할 차량별 normalized Engine Torque Curve입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Engine Curve", meta=(EditCondition="bUseEngineTorqueCurve", EditConditionHides, DisplayName="차량별 엔진 토크 커브 (EngineTorqueCurve)", ToolTip="X=실제 RPM, Y=EngineMaxTorque에 곱할 0..1 normalized torque multiplier입니다. 최소 2개 point가 필요합니다."))
+	FCFVehicleEngineTorqueCurve EngineTorqueCurve;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(ClampMin="0.0", DisplayName="엔진 최대 RPM (EngineMaxRPM)", ToolTip="EngineSetup.MaxRPM에 실제 적용되는 물리 엔진 최대 RPM입니다. HUD Redline 시작값으로 자동 재해석하지 않습니다."))
 	float EngineMaxRPM = 7000.0f;
 
 	// [v1.27.0] HUD Tachometer의 85% Red Zone 시작 위치에 매핑할 차량별 실제 레드라인 시작 RPM입니다.
