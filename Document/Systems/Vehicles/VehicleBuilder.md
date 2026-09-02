@@ -1,10 +1,10 @@
 # Vehicle Builder
 
-- 문서 버전: v1.0.0
+- 문서 버전: v1.1.1
 - 최근 갱신일: 2026-09-02
 - 문서 상태: Current Implementation
-- 적용 범위: `CF-FQ-040 Guided Vehicle Builder`, Guided Builder Editor Shell, Builder-private Authoring ownership, Data Authoring Backend/Advanced Workspace 연계
-- 완료 기반: `VB-P0-09 End-to-End USER Acceptance PASS` + `VB-P0-10 Current System Promotion Complete`
+- 적용 범위: `CF-FQ-040 Guided Vehicle Builder`, `CF-FQ-042 Vehicle Builder 신규 차량 생성 UX`, Guided Builder Editor Shell, Builder-private Authoring ownership, Data Authoring Backend/Advanced Workspace 연계
+- 완료 기반: `VB-P0-09 End-to-End USER Acceptance PASS` + `VB-P0-10 Current System Promotion Complete` + `VBCUX-P0-05 USER Acceptance PASS`
 
 ---
 
@@ -89,6 +89,56 @@ Advanced Workspace 진입
 ```
 
 한 화면에 VehicleData 전체 필드를 펼치는 방식이 아니라 **현재 단계에 필요한 정보와 행동만 노출**한다.
+
+#### 3.1.1 신규 차량 Creation Entry
+
+`CF-FQ-042` 완료 뒤 Guided Shell은 기존 차량을 선택하는 화면이면서 동시에 **새 차량을 처음부터 시작하는 정상 진입점**이다.
+
+```text
+fresh Builder open
+→ Stable Step 8개가 Browser refresh 전부터 표시
+→ [+ 새 차량 만들기]
+→ Blank Start 또는 optional Chassis StaticMesh 선택
+→ Vehicle ID 기반 생성 검토
+→ explicit approval
+→ 새 VehicleData + Recipe 생성
+→ exact fresh Browser row로 새 target adoption
+→ 기존 Step 1~8 제작 흐름 계속
+```
+
+Creation Entry의 현재 계약:
+
+```text
+Blank Chassis 허용
+임의 StaticMesh 허용
+이미 다른 VehicleData가 사용하는 Chassis Mesh 재사용 허용
+Mesh-only Candidate Quick Start도 같은 canonical create request 사용
+모든 Guided 신규 차량 TransmissionPolicy = VehicleSpecificRequired
+선택한 Chassis는 생성 시 Recipe.AssetIntent.ChassisMesh에만 기록
+새 VehicleData.VehicleVisualConfig.ChassisMesh 자동 Apply 안 함
+실제 Chassis 반영은 Step 7 DefinitionApply가 소유
+Preview → explicit approval → commit 재사용
+자동 Save 안 함
+자동 DefinitionApply 안 함
+생성 성공 뒤 exact Definition+Recipe Browser row/highlight 동기화
+post-create adoption만 실패하면 생성 성공을 롤백하지 않고 partial success로 구분
+```
+
+현재 `Vehicle ID`는 중앙 Vehicle Registry의 게임 전역 ID가 아니라 **Builder가 Definition/Recipe Asset identity를 deterministic하게 만들기 위한 creation naming token**이다. 일반 경로에서는 `DA_Vehicle_<VehicleId>` / `DA_Recipe_<VehicleId>`를 제안하고, 빈값·공백·경로 구분자·비ASCII 등 invalid 입력은 silent sanitize하지 않고 fail-closed한다. package/object exact override는 접힌 Advanced 설정으로 남는다. 차량/무기 통합 데이터 Registry가 아직 없으므로 이 ID를 SaveGame/Network/Ownership의 통합 Primary Key로 해석하지 않는다.
+
+USER Acceptance에서 Vehicle ID 직접 입력 방식은 기능적으로 PASS했지만, USER가 매번 내부 ID를 직접 정해야 하는 관리 부담을 지적했다. 이는 `CF-FQ-042` 완료를 막는 결함으로 보지 않고, 향후 통합 데이터 identity 또는 Builder naming UX를 확장할 때 재검토할 비차단 UX 피드백으로 보존한다.
+
+Final audit에서 기존 차량을 선택한 상태로 `+ 새 차량 만들기`에 진입한 뒤 Browser refresh를 실행하면 stale Authoring selection이 Slate row로 복원되며 New Vehicle mode가 해제될 수 있는 P1을 발견했다. 현재 계약은 `BeginNewVehicleEntry()`가 이전 Authoring selection/cache를 selection level에서 해제하고, Slate refresh도 New Vehicle mode 동안 기존 row highlight를 자동 복원하지 않는 것으로 교정됐다. Browser cache와 persistent Asset은 유지하며 Vehicle ID/Blank-or-Chassis transient 입력과 Step 1 진입은 refresh 뒤에도 보존한다.
+
+재사용 Chassis Mesh는 Mesh-owned geometry도 함께 공유한다.
+
+```text
+Wheel_Anchor_* Socket 위치/RelativeScale
+WSA가 읽는 Socket 기반 wheel geometry
+Chassis Mesh의 다른 Socket/Hardpoint geometry
+```
+
+같은 시각 Mesh를 사용하되 wheelbase/Socket geometry가 달라야 하면 별도 Chassis Mesh variant가 필요하다. per-Vehicle Socket geometry override는 현재 Builder 범위가 아니다.
 
 ### 3.2 Builder ViewModel
 
@@ -463,14 +513,28 @@ Document/Systems/Vehicles/VehicleCoreDecisions.md
 ```text
 Document/Plan/Archive/VehicleBuilder/VehicleBuilderPlan.md
 Document/Plan/Archive/VehicleBuilder/VehicleBuilderRoadmap.md
+Document/Plan/VehicleBuilderCreationUX/VehicleBuilderCreationUXPlan.md
 Document/Plan/Archive/README.md
 ```
 
-대표 Plan은 `CF-FQ-040 Done → Historical + Archived Path`로 `Document/Plan/Archive/VehicleBuilder/`에 보존한다.
+`CF-FQ-040` 대표 Plan은 `Done → Historical + Archived Path`로 `Document/Plan/Archive/VehicleBuilder/`에 보존한다. `CF-FQ-042` 대표 Plan은 Current route에서 내려온 `Historical + Retained Path`로 기존 `VehicleBuilderCreationUX/` 경로를 보존한다.
 
 ---
 
 ## 13. Changelog
+
+### v1.1.1 - 2026-09-02
+
+- CF-FQ-042 final audit P1을 교정해 기존 managed 차량 선택 → `+ 새 차량 만들기` → Vehicle ID 입력 → Browser refresh에서도 New Vehicle mode와 Vehicle ID가 유지되고 old Authoring selection이 복원되지 않도록 Current 계약을 보강했다.
+- `BeginNewVehicleEntry()`가 이전 Authoring selection을 해제하고 Slate refresh가 New Vehicle mode에서 row highlight를 복원하지 않는 이중 방어를 기록했다. Product Asset/Save/DefinitionApply/Runtime mutation은 없다.
+- USER manual Editor build PASS 후 `CF_FQ_040.VB_P0_09.BuilderShell` 1/0, `CF_FQ_042` 3/0, `DAUTH_P0_11.FrozenUX.MeshCreate` 1/0 focused/affected Automation PASS를 확인했다.
+
+### v1.1.0 - 2026-09-02
+
+- `CF-FQ-042 / VBCUX-P0-05 USER Acceptance` A Blank Start, B 기존 Chassis 재사용, C 미사용 Mesh Quick Start를 실제 Guided Builder UI에서 USER PASS로 닫고 신규 차량 Creation Entry를 Current System으로 승격했다.
+- Stable Step 8개 pre-refresh 표시, selection-independent `+ 새 차량 만들기`, Blank/Unused/Reused Mesh 공통 create request, `VehicleSpecificRequired`, Recipe-only initial Chassis intent, no-auto-save/no-auto-DefinitionApply, exact Browser adoption과 partial-success/no-hidden-rollback 계약을 Current로 기록했다.
+- reused Chassis Mesh가 Socket/WSA/Hardpoint geometry를 공유한다는 제약과 per-Vehicle Socket override Scope Out을 Current 계약으로 승격했다.
+- 현재 Vehicle ID를 중앙 데이터 Registry의 영구 PK가 아니라 Definition/Recipe 생성용 naming token으로 명확히 하고, USER의 직접 ID 입력 관리 부담 피드백은 비차단 후속 UX 검토 대상으로 보존했다.
 
 ### Maintenance - 2026-09-02
 

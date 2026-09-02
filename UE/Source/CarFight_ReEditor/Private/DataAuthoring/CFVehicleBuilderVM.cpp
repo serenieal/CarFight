@@ -1,9 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderVM.cpp
-// Version: v1.18.0
-// Date: 2026-09-01
-// Description: Guided Vehicle Builder Shell ViewModel + ESH-02 Engine Curve proposal/review integration 구현입니다.
+// Version: v1.22.0
+// Date: 2026-09-02
+// Description: Guided Vehicle Builder Shell ViewModel + CF-FQ-042 Vehicle ID naming/create 구현입니다.
 // Changelog:
+// - v1.22.0: 기존 차량 선택 상태에서 + 새 차량 만들기 진입 시 Authoring selection을 함께 해제해 Browser refresh가 이전 차량을 자동 복원하며 New Vehicle mode를 해제하는 회귀를 차단.
+// - v1.21.0: Vehicle ID ASCII alnum/_ validation과 deterministic DA_Vehicle_/DA_Recipe_ default identity builder를 추가해 Explicit New Vehicle과 Mesh Candidate Quick Start가 같은 naming owner를 사용하도록 연결.
+// - v1.20.0: Blank/Arbitrary/Reused/Mesh-only creation을 공통 Guided request로 통합하고, 생성 성공 뒤 exact Browser row를 fresh read해 Builder current target adoption을 검증.
+// - v1.19.0: 생성자에서 Stable 8-Step을 즉시 초기화하고, selection-independent 신규 차량 진입 state와 no-selection Step 1 guidance를 추가.
 // - v1.18.0: PhysicsDraft schema v3 EngineCurveReview를 Step 5 request/receipt resume에 연결하고 schema v2 legacy draft read compatibility를 유지.
 // - v1.17.0: Existing Reference Evidence complete replacement R1의 Step 1 prepared Preview→AuthoringWrite Commit flow를 추가하고, existing Evidence와 다른 ResearchDraft를 refresh candidate로 load 가능하게 분리.
 // - v1.16.0: Final Review Transmission diagnostic에 기어별 RPM retention을 표시해 generic fixed-shift spacing 검토 정보를 완성.
@@ -25,6 +29,10 @@
 // - v1.1.0: Mesh-only 후보의 safe VehicleData+Recipe Preview→explicit commit을 기존 Authoring VM에 그대로 위임.
 // - v1.0.0: 기존 Authoring VM selection을 재사용하고, 아직 provider가 연결되지 않은 Step을 정직하게 Locked/Ready로 표시.
 // Migration:
+// - v1.22.0부터 Explicit New Vehicle 진입은 이전 Authoring selection/cache를 selection level에서 해제합니다. Browser cache 자체는 유지하며 Asset 생성/Save/Apply는 수행하지 않습니다.
+// - v1.21.0부터 Guided 신규 차량의 일반 naming은 Vehicle ID 한 칸을 기본 owner로 사용합니다. invalid 입력은 sanitize하지 않고 fail-closed하며, package/name collision·최종 경로·type 판정은 기존 PreviewVehicleRecords/ValidateNewAssetIdentity authority를 유지합니다.
+// - v1.20.0부터 explicit New Vehicle과 Mesh-only Quick Start는 동일 Guided creation helper를 사용하며 VehicleSpecificRequired를 강제합니다. 생성 Chassis는 Recipe AssetIntent에만 기록하고 VehicleData Apply/Save는 0입니다. 생성 성공과 post-create Builder adoption 실패는 분리합니다.
+// - v1.19.0 신규 차량 진입은 transient Builder state만 변경하며 CreateVehicleRecords/VehicleData Apply/Save를 호출하지 않습니다. 실제 Blank/ChassisMesh 생성은 후속 VBCUX Gate가 연결합니다.
 // - Recipe-only AuthoringRevision은 NewVehicle→CompleteExisting lifecycle 전환 근거로 사용하지 않습니다. Import/Apply/Builder Profile commit, private Profile, Evidence가 실제 lifecycle 경계를 소유합니다.
 // - Step Complete를 임의 bool로 저장하지 않습니다. 새로고침할 때 current truth에서 다시 파생합니다.
 
@@ -284,6 +292,13 @@ namespace
 	}
 }
 
+// Browser refresh 전에도 Stable Step 8개가 존재하도록 transient Builder 상태를 초기화합니다.
+FCFVehicleBuilderVM::FCFVehicleBuilderVM()
+{
+	InitializeSteps();
+	RebuildStepStates();
+}
+
 // Asset Registry 기반 차량/메시 후보 목록을 기존 Authoring VM으로 새로 읽습니다.
 bool FCFVehicleBuilderVM::RefreshVehicles(FString& OutError)
 {
@@ -299,6 +314,8 @@ bool FCFVehicleBuilderVM::RefreshVehicles(FString& OutError)
 		return false;
 	}
 
+	// Constructor에서 이미 생성된 Stable Step projection을 authoritative Browser truth로 다시 평가합니다.
+	// 비정상적으로 비어 있더라도 기존 fail-safe를 유지해 presentation을 복구합니다.
 	if (StepViews.IsEmpty())
 	{
 		InitializeSteps();
@@ -310,6 +327,9 @@ bool FCFVehicleBuilderVM::RefreshVehicles(FString& OutError)
 // 목록 row 하나를 current Builder target으로 선택하고 fresh authoring context를 읽습니다.
 bool FCFVehicleBuilderVM::SelectVehicle(const FCFVehicleListEntry& Entry, FString& OutError)
 {
+	// 실제 Browser row를 선택하면 explicit 신규 제작 진입 상태를 종료하고 selected vehicle workflow로 복귀합니다.
+	ResetNewVehicleEntryState();
+
 	if (!AuthoringViewModel.IsValid())
 	{
 		OutError = TEXT("Builder 내부 Authoring ViewModel이 없습니다.");
@@ -443,6 +463,162 @@ bool FCFVehicleBuilderVM::RefreshCurrentState(FString& OutError)
 	return true;
 }
 
+// 기존 Browser selection과 독립적인 신규 차량 제작 진입 상태를 시작합니다.
+void FCFVehicleBuilderVM::BeginNewVehicleEntry()
+{
+	// 이전 managed/mesh Browser selection이 refresh 뒤 다시 살아나 New Vehicle mode를 해제하지 않도록 Authoring selection 자체를 끊습니다.
+	if (AuthoringViewModel.IsValid())
+	{
+		AuthoringViewModel->ClearSelection();
+	}
+
+	ResetNewVehicleEntryState();
+	NewVehicleEntryState.bActive = true;
+	CurrentStepIndex = FMath::Max(0, FindStepIndexById(ECFVehicleBuilderStepId::IdentityReference));
+	RebuildStepStates();
+}
+
+// 현재 Builder가 명시적 신규 차량 제작 진입 상태인지 반환합니다.
+bool FCFVehicleBuilderVM::IsNewVehicleEntryActive() const
+{
+	return NewVehicleEntryState.bActive;
+}
+
+// 명시적 신규 차량을 Chassis 없는 Blank Start로 전환합니다.
+void FCFVehicleBuilderVM::SetNewVehicleBlankStart()
+{
+	if (!NewVehicleEntryState.bActive)
+	{
+		return;
+	}
+
+	NewVehicleEntryState.StartMode = ENewVehicleStartMode::Blank;
+	NewVehicleEntryState.OptionalChassisMeshPath.Reset();
+	RebuildStepStates();
+}
+
+// 명시적 신규 차량의 optional Chassis StaticMesh exact object path를 설정합니다. Invalid/empty path는 Blank Start로 되돌립니다.
+void FCFVehicleBuilderVM::SetNewVehicleChassisMeshPath(const FSoftObjectPath& ChassisMeshPath)
+{
+	if (!NewVehicleEntryState.bActive)
+	{
+		return;
+	}
+
+	if (!ChassisMeshPath.IsValid())
+	{
+		SetNewVehicleBlankStart();
+		return;
+	}
+
+	NewVehicleEntryState.StartMode = ENewVehicleStartMode::ChassisMesh;
+	NewVehicleEntryState.OptionalChassisMeshPath = ChassisMeshPath;
+	RebuildStepStates();
+}
+
+// Explicit New Vehicle/Mesh Candidate Quick Start가 공유하는 Vehicle ID transient 입력을 저장하고 Unreal Asset-safe 규칙을 검증합니다.
+bool FCFVehicleBuilderVM::SetVehicleCreationId(const FString& VehicleId, FString& OutError)
+{
+	NewVehicleEntryState.VehicleId = VehicleId;
+	return ValidateVehicleCreationId(NewVehicleEntryState.VehicleId, OutError);
+}
+
+// 현재 Guided 신규 차량 creation Vehicle ID transient 입력을 반환합니다.
+const FString& FCFVehicleBuilderVM::GetVehicleCreationId() const
+{
+	return NewVehicleEntryState.VehicleId;
+}
+
+// Vehicle ID 하나에서 canonical default Definition/Recipe package/object identity 네 값을 deterministic하게 만듭니다.
+bool FCFVehicleBuilderVM::BuildDefaultVehicleRecordIdentity(
+	const FString& VehicleId,
+	FString& OutDefinitionPackageName,
+	FString& OutDefinitionAssetName,
+	FString& OutRecipePackageName,
+	FString& OutRecipeAssetName,
+	FString& OutError) const
+{
+	OutDefinitionPackageName.Reset();
+	OutDefinitionAssetName.Reset();
+	OutRecipePackageName.Reset();
+	OutRecipeAssetName.Reset();
+
+	if (!ValidateVehicleCreationId(VehicleId, OutError))
+	{
+		return false;
+	}
+
+	// 일반 Guided 신규 차량 identity가 위치하는 canonical Authoring package root입니다.
+	const FString AuthoringPackageRoot = TEXT("/Game/CarFight/Data/Authoring/");
+	// VehicleData object/package에 사용할 deterministic 이름입니다.
+	OutDefinitionAssetName = TEXT("DA_Vehicle_") + VehicleId;
+	// Recipe object/package에 사용할 deterministic 이름입니다.
+	OutRecipeAssetName = TEXT("DA_Recipe_") + VehicleId;
+	OutDefinitionPackageName = AuthoringPackageRoot + OutDefinitionAssetName;
+	OutRecipePackageName = AuthoringPackageRoot + OutRecipeAssetName;
+	OutError.Reset();
+	return true;
+}
+
+// 명시적 신규 차량이 현재 사용할 optional Chassis StaticMesh exact object path를 반환합니다.
+const FSoftObjectPath& FCFVehicleBuilderVM::GetNewVehicleChassisMeshPath() const
+{
+	return NewVehicleEntryState.OptionalChassisMeshPath;
+}
+
+// Builder-owned 신규 차량 state로 기존 two-record 생성 proposal을 mutation0 준비합니다.
+bool FCFVehicleBuilderVM::PrepareNewVehicleRecordCreate(
+	const FString& DefinitionPackageName,
+	const FString& DefinitionAssetName,
+	const FString& RecipePackageName,
+	const FString& RecipeAssetName,
+	FCFVehicleRecordCreatePreview& OutPreview,
+	FString& OutError)
+{
+	if (!IsNewVehicleEntryActive())
+	{
+		OutError = TEXT("먼저 '+ 새 차량 만들기'로 신규 차량 제작 모드에 들어가야 합니다.");
+		return false;
+	}
+
+	return PrepareGuidedVehicleRecordCreate(
+		DefinitionPackageName,
+		DefinitionAssetName,
+		RecipePackageName,
+		RecipeAssetName,
+		NewVehicleEntryState.OptionalChassisMeshPath,
+		OutPreview,
+		OutError);
+}
+
+// 직전 exact 신규 차량 proposal을 commit하고 record creation과 post-create exact Builder adoption 결과를 분리해 반환합니다.
+bool FCFVehicleBuilderVM::ExecutePreparedNewVehicleRecordCreate(
+	FCFVehicleRecordCreateResult& OutResult,
+	bool& bOutBuilderAdopted,
+	FString& OutAdoptionError,
+	FString& OutError)
+{
+	bOutBuilderAdopted = false;
+	OutAdoptionError.Reset();
+	OutError.Reset();
+
+	if (!AuthoringViewModel.IsValid())
+	{
+		OutError = TEXT("Builder 내부 Authoring ViewModel이 없습니다.");
+		return false;
+	}
+
+	if (!AuthoringViewModel->ExecutePreparedVehicleCreate(OutResult))
+	{
+		OutError = OutResult.Operation.Message;
+		return false;
+	}
+
+	// Record creation은 이미 성공했습니다. 이후 adoption 실패는 created Asset rollback 사유가 아니므로 별도 결과로 보존합니다.
+	bOutBuilderAdopted = AdoptCreatedVehicleRecords(OutResult, OutAdoptionError);
+	return true;
+}
+
 // 선택된 Mesh-only 후보에 대해 기존 two-record 생성 proposal을 mutation0으로 준비합니다.
 bool FCFVehicleBuilderVM::PrepareSelectedMeshRecordCreate(
 	const FString& DefinitionPackageName,
@@ -458,15 +634,63 @@ bool FCFVehicleBuilderVM::PrepareSelectedMeshRecordCreate(
 		return false;
 	}
 
-	// 기존 safe two-record 생성 요청입니다.
+	return PrepareGuidedVehicleRecordCreate(
+		DefinitionPackageName,
+		DefinitionAssetName,
+		RecipePackageName,
+		RecipeAssetName,
+		AuthoringViewModel->GetSelectedEntry().ChassisMeshPath,
+		OutPreview,
+		OutError);
+}
+
+// 직전 exact proposal에 explicit OwnershipWrite approval을 붙여 기존 two-record 생성 경로로 commit합니다.
+bool FCFVehicleBuilderVM::ExecutePreparedMeshRecordCreate(FCFVehicleRecordCreateResult& OutResult, FString& OutError)
+{
+	// 기존 Quick Start caller도 신규 차량과 동일한 commit/adoption 경로를 재사용합니다.
+	bool bBuilderAdopted = false;
+	// Record creation 이후 Builder adoption 실패 진단입니다.
+	FString AdoptionError;
+	if (!ExecutePreparedNewVehicleRecordCreate(OutResult, bBuilderAdopted, AdoptionError, OutError))
+	{
+		return false;
+	}
+
+	if (!bBuilderAdopted)
+	{
+		OutError = FString::Printf(TEXT("Vehicle records는 생성됐지만 Builder adoption에 실패했습니다: %s"), *AdoptionError);
+	}
+	return true;
+}
+
+// Blank/Arbitrary/Mesh-only Quick Start가 공유하는 Guided two-record creation request를 기존 Authoring facade에 준비합니다.
+bool FCFVehicleBuilderVM::PrepareGuidedVehicleRecordCreate(
+	const FString& DefinitionPackageName,
+	const FString& DefinitionAssetName,
+	const FString& RecipePackageName,
+	const FString& RecipeAssetName,
+	const FSoftObjectPath& OptionalChassisMeshPath,
+	FCFVehicleRecordCreatePreview& OutPreview,
+	FString& OutError)
+{
+	if (!AuthoringViewModel.IsValid())
+	{
+		OutError = TEXT("Builder 내부 Authoring ViewModel이 없습니다.");
+		return false;
+	}
+
+	// 모든 Guided 신규 차량이 공유하는 safe two-record 생성 요청입니다.
 	FCFVehicleRecordCreateRequest Request;
 	Request.DefinitionPackageName = DefinitionPackageName.TrimStartAndEnd();
 	Request.DefinitionAssetName = FName(*DefinitionAssetName.TrimStartAndEnd());
 	Request.RecipePackageName = RecipePackageName.TrimStartAndEnd();
 	Request.RecipeAssetName = FName(*RecipeAssetName.TrimStartAndEnd());
-	Request.ChassisMesh = TSoftObjectPtr<UStaticMesh>(AuthoringViewModel->GetSelectedEntry().ChassisMeshPath);
+	if (OptionalChassisMeshPath.IsValid())
+	{
+		Request.ChassisMesh = TSoftObjectPtr<UStaticMesh>(OptionalChassisMeshPath);
+	}
 	Request.bRequireVehicleSpecificTransmission = true;
-	// ProfileBindings는 의도적으로 비워 둡니다. Reference/물리/차급을 이 단계에서 추론하지 않습니다.
+	// ProfileBindings는 의도적으로 비워 둡니다. Reference/물리/차급은 후속 Builder 단계가 소유합니다.
 	if (!AuthoringViewModel->PrepareVehicleRecordCreate(Request, OutPreview))
 	{
 		OutError = AuthoringViewModel->GetLastMessage();
@@ -477,18 +701,68 @@ bool FCFVehicleBuilderVM::PrepareSelectedMeshRecordCreate(
 	return true;
 }
 
-// 직전 exact proposal에 explicit OwnershipWrite approval을 붙여 기존 two-record 생성 경로로 commit합니다.
-bool FCFVehicleBuilderVM::ExecutePreparedMeshRecordCreate(FCFVehicleRecordCreateResult& OutResult, FString& OutError)
+// 생성된 exact Definition/Recipe를 Browser fresh row로 다시 찾아 Builder current target으로 adoption합니다.
+bool FCFVehicleBuilderVM::AdoptCreatedVehicleRecords(
+	const FCFVehicleRecordCreateResult& CreateResult,
+	FString& OutError)
 {
-	if (!AuthoringViewModel.IsValid())
+	if (!CreateResult.CreatedDefinition || !CreateResult.CreatedRecipe)
 	{
-		OutError = TEXT("Builder 내부 Authoring ViewModel이 없습니다.");
+		OutError = TEXT("생성 결과에 exact Created Definition/Recipe가 없습니다.");
 		return false;
 	}
 
-	if (!AuthoringViewModel->ExecutePreparedVehicleCreate(OutResult))
+	// 생성된 unsaved VehicleData exact object path입니다.
+	const FSoftObjectPath CreatedDefinitionPath(CreateResult.CreatedDefinition);
+	// 생성된 unsaved Recipe exact object path입니다.
+	const FSoftObjectPath CreatedRecipePath(CreateResult.CreatedRecipe);
+
+	// Asset Registry refresh 전에도 loaded unsaved object로 선택 가능한 exact 생성 row입니다.
+	FCFVehicleListEntry CreatedEntry;
+	CreatedEntry.DefinitionPath = CreatedDefinitionPath;
+	CreatedEntry.RecipePath = CreatedRecipePath;
+	CreatedEntry.RecipeId = CreateResult.CreatedRecipe->RecipeId;
+	CreatedEntry.ManageState = CreateResult.CreatedRecipe->ImportState.ManageState;
+
+	// Builder의 NewVehicle bootstrap-aware selection 경로로 먼저 exact created target을 adoption합니다.
+	FString SelectError;
+	if (!SelectVehicle(CreatedEntry, SelectError))
 	{
-		OutError = OutResult.Operation.Message;
+		OutError = FString::Printf(TEXT("records created / Builder adoption failed: created object selection 실패: %s"), *SelectError);
+		return false;
+	}
+
+	// AssetCreated 이후 Browser를 fresh read해 실제 Browser row가 exact created identity로 나타나는지 검증합니다.
+	FString RefreshError;
+	if (!RefreshVehicles(RefreshError))
+	{
+		OutError = FString::Printf(TEXT("records created / Builder adoption failed: Browser refresh 실패: %s"), *RefreshError);
+		return false;
+	}
+
+	// Fresh Browser에서 exact Created Definition+Recipe를 동시에 가리키는 row만 adoption 후보로 인정합니다.
+	const FCFVehicleListEntry* FreshCreatedEntry = GetVehicleEntries().FindByPredicate(
+		[&CreatedDefinitionPath, &CreatedRecipePath](const FCFVehicleListEntry& Entry)
+		{
+			return Entry.DefinitionPath == CreatedDefinitionPath && Entry.RecipePath == CreatedRecipePath;
+		});
+	if (!FreshCreatedEntry)
+	{
+		OutError = TEXT("records created / Builder adoption failed: fresh Browser에서 exact created Definition+Recipe row를 찾지 못했습니다.");
+		return false;
+	}
+
+	// Browser authority의 exact fresh row로 selection을 한 번 더 정규화해 transient Builder state와 Step projection을 동기화합니다.
+	if (!SelectVehicle(*FreshCreatedEntry, SelectError))
+	{
+		OutError = FString::Printf(TEXT("records created / Builder adoption failed: fresh Browser row selection 실패: %s"), *SelectError);
+		return false;
+	}
+
+	const FCFVehicleListEntry& AdoptedEntry = GetSelectedEntry();
+	if (AdoptedEntry.DefinitionPath != CreatedDefinitionPath || AdoptedEntry.RecipePath != CreatedRecipePath)
+	{
+		OutError = TEXT("records created / Builder adoption failed: current Builder selection identity가 created records와 다릅니다.");
 		return false;
 	}
 
@@ -2190,6 +2464,47 @@ bool FCFVehicleBuilderVM::IsMeshOnlyCandidate() const
 	return AuthoringViewModel.IsValid() && AuthoringViewModel->IsMeshOnlyCandidate();
 }
 
+// Vehicle ID가 기본 naming에 사용할 영문자/숫자/_ 전용 Unreal Asset-safe identifier인지 검사합니다.
+bool FCFVehicleBuilderVM::ValidateVehicleCreationId(const FString& VehicleId, FString& OutError) const
+{
+	if (VehicleId.IsEmpty())
+	{
+		OutError = TEXT("Vehicle ID를 입력하세요. 영문자, 숫자, _만 사용할 수 있습니다.");
+		return false;
+	}
+
+	if (VehicleId != VehicleId.TrimStartAndEnd())
+	{
+		OutError = TEXT("Vehicle ID 앞뒤에는 공백을 사용할 수 없습니다. 영문자, 숫자, _만 사용하세요.");
+		return false;
+	}
+
+	for (const TCHAR Character : VehicleId)
+	{
+		// Vehicle ID 기본 naming에서 허용하는 ASCII 영문자입니다.
+		const bool bIsAsciiLetter = (Character >= TEXT('A') && Character <= TEXT('Z'))
+			|| (Character >= TEXT('a') && Character <= TEXT('z'));
+		// Vehicle ID 기본 naming에서 허용하는 ASCII 숫자입니다.
+		const bool bIsAsciiDigit = Character >= TEXT('0') && Character <= TEXT('9');
+		if (!bIsAsciiLetter && !bIsAsciiDigit && Character != TEXT('_'))
+		{
+			OutError = FString::Printf(
+				TEXT("Vehicle ID에 사용할 수 없는 문자가 있습니다: '%c'. 영문자, 숫자, _만 사용하세요."),
+				Character);
+			return false;
+		}
+	}
+
+	OutError.Reset();
+	return true;
+}
+
+// 신규 차량 제작 transient state를 기본 비활성 상태로 되돌립니다.
+void FCFVehicleBuilderVM::ResetNewVehicleEntryState()
+{
+	NewVehicleEntryState = FNewVehicleEntryState();
+}
+
 // 단일 Step Definition 목록에서 현재 presentation projection을 생성합니다.
 void FCFVehicleBuilderVM::InitializeSteps()
 {
@@ -2228,7 +2543,7 @@ void FCFVehicleBuilderVM::RebuildStepStates()
 	}
 
 	EvaluateIdentityReferenceStep();
-	if (!HasSelection() || IsMeshOnlyCandidate() || !GetRecipe())
+	if (IsNewVehicleEntryActive() || !HasSelection() || IsMeshOnlyCandidate() || !GetRecipe())
 	{
 		CurrentStepIndex = StepViews.IsEmpty() ? 0 : FMath::Clamp(CurrentStepIndex, 0, StepViews.Num() - 1);
 		return;
@@ -2284,11 +2599,21 @@ void FCFVehicleBuilderVM::EvaluateStepById(const ECFVehicleBuilderStepId StepId)
 // 차량/Reference 단계의 current state를 평가합니다.
 void FCFVehicleBuilderVM::EvaluateIdentityReferenceStep()
 {
+	if (IsNewVehicleEntryActive())
+	{
+		SetStep(ECFVehicleBuilderStepId::IdentityReference, ECFVehicleBuilderStepState::Ready,
+			TEXT("새 차량 제작 시작 모드입니다. 아직 VehicleData/Recipe Asset은 생성하지 않았습니다."),
+			TEXT("신규 차량 진입이 준비됐습니다. 후속 생성 UX에서 빈 차량 또는 Chassis Mesh 시작 방식과 Vehicle ID를 지정해 생성 검토를 이어갑니다."),
+			true);
+		CurrentStepIndex = FMath::Max(0, FindStepIndexById(ECFVehicleBuilderStepId::IdentityReference));
+		return;
+	}
+
 	if (!HasSelection())
 	{
 		SetStep(ECFVehicleBuilderStepId::IdentityReference, ECFVehicleBuilderStepState::Ready,
-			TEXT("차량 데이터 또는 아직 차량 데이터가 없는 차체 메시 후보를 선택합니다."),
-			TEXT("왼쪽 대상 목록에서 작업할 차량 또는 메시 후보를 선택하세요."),
+			TEXT("기존 차량/메시 후보를 선택하거나 새 차량 제작을 시작할 수 있습니다."),
+			TEXT("기존 차량/메시 후보를 선택하거나 '+ 새 차량 만들기'로 새 차량 제작을 시작하세요."),
 			true);
 		CurrentStepIndex = FMath::Max(0, FindStepIndexById(ECFVehicleBuilderStepId::IdentityReference));
 		return;

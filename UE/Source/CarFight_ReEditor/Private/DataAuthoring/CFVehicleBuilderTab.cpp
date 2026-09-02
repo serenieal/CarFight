@@ -1,9 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderTab.cpp
-// Version: v1.17.0
-// Date: 2026-08-31
-// Description: Guided Vehicle Builder Slate Shell 구현입니다.
+// Version: v1.21.0
+// Date: 2026-09-02
+// Description: Guided Vehicle Builder Slate Shell + CF-FQ-042 Vehicle ID/Candidate Quick Start UX 구현입니다.
 // Changelog:
+// - v1.21.0: Explicit New Vehicle mode에서 Browser refresh가 stale current row를 Slate selection으로 복원하지 않도록 row highlight 복원 조건을 방어적으로 제한.
+// - v1.20.0: Step 1 일반 naming을 Vehicle ID 한 칸으로 전환하고 deterministic default identity, 실시간 validation, 접힌 Advanced Asset 경로 override와 Mesh Candidate Quick Start label을 연결.
+// - v1.19.0: Explicit New Vehicle Step 1에 Blank/optional StaticMesh picker와 공통 Preview→승인→Commit→exact Browser row highlight/adoption reporting을 연결.
+// - v1.18.0: 좌측 작업 대상에 '+ 새 차량 만들기'를 추가하고 BuilderVM transient 신규 제작 상태와 연결. pre-refresh Stable Step 8개를 최초 Slate tree에서 즉시 표시.
 // - v1.17.0: Step 1에 Existing Reference Evidence complete replacement R1 전용 검토 버튼/dialog을 추가하고 fingerprint/count/mutation boundary/receipt stale 영향을 USER 승인 전에 표시.
 // - v1.16.0: Builder-wide Transmission diagnostic에 상향변속 RPM retention을 함께 표시해 기어 간 spacing sanity review를 명확화.
 // - v1.15.0: Step 5 Physics Proposal USER review에 TransmissionProposalHash와 기어별 ChangeUpRPM 예상 차속/post-shift RPM diagnostic을 표시. 값은 runtime shift trigger가 아님을 명시.
@@ -23,6 +27,10 @@
 // - v1.1.0: Step 1 Mesh-only 후보에 기존 two-record Preview→explicit USER approval→commit UI를 연결. Profile/차급/물리 추론과 Save는 계속 0.
 // - v1.0.0: 별도 Guided Shell에서 차량 선택 → 8 Step 상태 확인 → Back/Refresh/Next를 제공하고 Advanced Workspace는 보존.
 // Migration:
+// - v1.21.0부터 Explicit New Vehicle mode에서는 Browser refresh가 기존 row selection/highlight를 자동 복원하지 않습니다. 새 record adoption 성공 뒤에는 기존 exact row 복원 경로를 그대로 사용합니다.
+// - v1.20.0부터 일반 Guided creation은 Vehicle ID가 기본 입력이며 Definition/Recipe package/object 네 칸은 접힌 `고급 Asset 경로 설정` override로 이동합니다. invalid ID는 sanitize하지 않고 fail-closed하며 최종 collision/path/type는 existing Preview authority가 재검증합니다.
+// - v1.19.0 Explicit New Vehicle은 P0-02에서 기존 4개 package/name 입력을 임시 재사용하며 Vehicle ID 단일 naming은 P0-03으로 남깁니다. optional Chassis는 사용 중 Mesh도 허용하고 Recipe AssetIntent에만 기록하며 VehicleData Apply/Save는 하지 않습니다.
+// - v1.18.0 신규 차량 entry는 UI/BuilderVM transient state만 전환하며 Asset 생성/Save/VehicleData Apply는 수행하지 않습니다. Blank/ChassisMesh 생성 입력은 후속 VBCUX Gate에서 연결합니다.
 // - Step 8 benchmark는 existing RunBuilderBench.ps1/VB-P0-08 authority만 사용하며 saved Target을 요구합니다. USER test-drive는 active PIE transient duplicate만 적용하고 Product Asset 자동 Save/Reference threshold 자동 판정은 하지 않습니다.
 // - Step 7 Target mutation은 existing ReadBuilderFinalReview → explicit DefinitionApply → ApplyBuilderFinalReview R3만 사용합니다. Undo는 Apply가 발급한 exact guarded token만 사용하며 auto Save/retry는 없습니다.
 // - Step 6은 existing ReadBuilderGameplayGuidance R0만 소비하며 Socket 생성·이동, Target VehicleData Apply, Save를 수행하지 않습니다. USER Socket 위치 authority와 Step 7 Apply ownership을 유지합니다.
@@ -46,6 +54,7 @@
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SExpandableArea.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
@@ -280,6 +289,16 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 					]
 
 					+ SVerticalBox::Slot()
+					.AutoHeight()
+					.Padding(0.0f, 0.0f, 6.0f, 8.0f)
+					[
+						SNew(SButton)
+							.Text(LOCTEXT("BeginNewVehicle", "+ 새 차량 만들기"))
+							.ToolTipText(LOCTEXT("BeginNewVehicleTooltip", "기존 목록 선택과 독립적인 신규 차량 제작 모드로 들어갑니다. 이 버튼만으로 Asset을 생성하거나 저장/적용하지 않습니다."))
+							.OnClicked(this, &SCFVehicleBuilderTab::HandleBeginNewVehicleEntry)
+					]
+
+					+ SVerticalBox::Slot()
 					.FillHeight(0.45f)
 					.Padding(0.0f, 0.0f, 6.0f, 10.0f)
 					[
@@ -411,41 +430,126 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 
 								+ SVerticalBox::Slot()
 								.AutoHeight()
-								.Padding(0.0f, 2.0f)
+								.Padding(0.0f, 0.0f, 0.0f, 10.0f)
 								[
-									SAssignNew(NewDefinitionPackageTextBox, SEditableTextBox)
-										.HintText(LOCTEXT("DefinitionPackageHint", "VehicleData package: /Game/.../DA_Vehicle_Name"))
+									SNew(SBorder)
+										.Visibility(this, &SCFVehicleBuilderTab::GetNewVehicleCreationOptionsVisibility)
+										.Padding(10.0f)
+										[
+											SNew(SVerticalBox)
+
+											+ SVerticalBox::Slot()
+											.AutoHeight()
+											.Padding(0.0f, 0.0f, 0.0f, 6.0f)
+											[
+												SNew(STextBlock)
+													.Text(LOCTEXT("NewVehicleStartModeHeader", "신규 차량 시작 방식"))
+													.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
+											]
+
+											+ SVerticalBox::Slot()
+											.AutoHeight()
+											.Padding(0.0f, 0.0f, 0.0f, 8.0f)
+											[
+												SNew(STextBlock)
+													.Text(LOCTEXT("NewVehicleStartModeIntro", "차체 메시를 비우면 Blank Start입니다. 원하는 StaticMesh를 지정하면 Recipe AssetIntent에만 기록합니다. 이미 다른 차량이 사용하는 Mesh도 허용하며 새 VehicleData에는 지금 자동 적용하지 않습니다."))
+													.AutoWrapText(true)
+											]
+
+											+ SVerticalBox::Slot()
+											.AutoHeight()
+											.Padding(0.0f, 0.0f, 0.0f, 6.0f)
+											[
+												SNew(SObjectPropertyEntryBox)
+													.AllowedClass(UStaticMesh::StaticClass())
+													.ObjectPath(this, &SCFVehicleBuilderTab::GetNewVehicleChassisMeshPath)
+													.OnObjectChanged(this, &SCFVehicleBuilderTab::HandleNewVehicleChassisMeshChanged)
+													.AllowClear(true)
+											]
+
+											+ SVerticalBox::Slot()
+											.AutoHeight()
+											[
+												SNew(STextBlock)
+													.Text_Lambda([this]()
+													{
+														if (!ViewModel.IsValid() || !ViewModel->GetNewVehicleChassisMeshPath().IsValid())
+														{
+															return LOCTEXT("NewVehicleBlankMode", "현재 시작 방식: Blank — Chassis Mesh 없음");
+														}
+														return FText::FromString(FString::Printf(TEXT("현재 시작 방식: Chassis Mesh — %s"), *ViewModel->GetNewVehicleChassisMeshPath().ToString()));
+													})
+													.AutoWrapText(true)
+											]
+										]
+								]
+
+								+ SVerticalBox::Slot()
+								.AutoHeight()
+								.Padding(0.0f, 2.0f, 0.0f, 4.0f)
+								[
+									SNew(STextBlock)
+										.Text(LOCTEXT("VehicleIdLabel", "Vehicle ID"))
+										.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
 								]
 
 								+ SVerticalBox::Slot()
 								.AutoHeight()
 								.Padding(0.0f, 2.0f)
 								[
-									SAssignNew(NewDefinitionNameTextBox, SEditableTextBox)
-										.HintText(LOCTEXT("DefinitionNameHint", "VehicleData Asset 이름"))
-								]
-
-								+ SVerticalBox::Slot()
-								.AutoHeight()
-								.Padding(0.0f, 2.0f)
-								[
-									SAssignNew(NewRecipePackageTextBox, SEditableTextBox)
-										.HintText(LOCTEXT("RecipePackageHint", "Recipe package: /Game/.../DA_Recipe_Name"))
+									SAssignNew(NewVehicleIdTextBox, SEditableTextBox)
+										.HintText(LOCTEXT("VehicleIdHint", "예: WagonPolice, Wagon_Police, SUV01"))
+										.ToolTipText(LOCTEXT("VehicleIdTooltip", "Vehicle ID만 입력하면 VehicleData/Recipe package와 object 이름을 자동 제안합니다. 영문자, 숫자, _만 사용할 수 있습니다."))
+										.OnTextChanged(this, &SCFVehicleBuilderTab::HandleVehicleIdTextChanged)
 								]
 
 								+ SVerticalBox::Slot()
 								.AutoHeight()
 								.Padding(0.0f, 2.0f, 0.0f, 8.0f)
 								[
-									SAssignNew(NewRecipeNameTextBox, SEditableTextBox)
-										.HintText(LOCTEXT("RecipeNameHint", "Recipe Asset 이름"))
+									SNew(STextBlock)
+										.Text(this, &SCFVehicleBuilderTab::GetVehicleIdValidationText)
+										.AutoWrapText(true)
+								]
+
+								+ SVerticalBox::Slot()
+								.AutoHeight()
+								.Padding(0.0f, 2.0f, 0.0f, 8.0f)
+								[
+									SNew(SExpandableArea)
+										.InitiallyCollapsed(true)
+										.AreaTitle(LOCTEXT("AdvancedCreateIdentityTitle", "고급 Asset 경로 설정"))
+										.BodyContent()
+										[
+											SNew(SVerticalBox)
+											+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 2.0f)
+											[
+												SAssignNew(NewDefinitionPackageTextBox, SEditableTextBox)
+													.HintText(LOCTEXT("DefinitionPackageHint", "VehicleData package: /Game/.../DA_Vehicle_Name"))
+											]
+											+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 2.0f)
+											[
+												SAssignNew(NewDefinitionNameTextBox, SEditableTextBox)
+													.HintText(LOCTEXT("DefinitionNameHint", "VehicleData Asset 이름"))
+											]
+											+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 2.0f)
+											[
+												SAssignNew(NewRecipePackageTextBox, SEditableTextBox)
+													.HintText(LOCTEXT("RecipePackageHint", "Recipe package: /Game/.../DA_Recipe_Name"))
+											]
+											+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 2.0f)
+											[
+												SAssignNew(NewRecipeNameTextBox, SEditableTextBox)
+													.HintText(LOCTEXT("RecipeNameHint", "Recipe Asset 이름"))
+											]
+										]
 								]
 
 								+ SVerticalBox::Slot()
 								.AutoHeight()
 								[
 									SNew(SButton)
-										.Text(LOCTEXT("CreateFromMesh", "생성 내용 검토"))
+										.Text(this, &SCFVehicleBuilderTab::GetCreateVehicleButtonText)
 										.ToolTipText(LOCTEXT("CreateFromMeshTooltip", "먼저 mutation0 Preview를 만들고, 별도 확인창에서 승인할 때만 VehicleData+Recipe를 생성합니다. 자동 저장하지 않습니다."))
 										.OnClicked(this, &SCFVehicleBuilderTab::HandleCreateVehicleFromMesh)
 								]
@@ -1105,11 +1209,70 @@ FReply SCFVehicleBuilderTab::HandleRefreshVehicles()
 	if (VehicleListView.IsValid())
 	{
 		VehicleListView->RequestListRefresh();
+
+		// ViewModel current selection과 같은 fresh Browser row를 다시 찾아 좌측 highlight도 exact identity로 맞춥니다.
+		if (!ViewModel->IsNewVehicleEntryActive() && ViewModel->HasSelection())
+		{
+			// 현재 Builder가 authoritative하게 선택한 exact target입니다.
+			const FCFVehicleListEntry& CurrentEntry = ViewModel->GetSelectedEntry();
+			// fresh Browser row 중 current target과 exact identity가 같은 row입니다.
+			FVehicleRowPtr CurrentRow;
+			for (const FVehicleRowPtr& Row : VehicleRows)
+			{
+				if (!Row.IsValid())
+				{
+					continue;
+				}
+
+				// Managed row는 Definition+Recipe exact pair가 모두 같아야 합니다.
+				const bool bSameManagedIdentity = CurrentEntry.DefinitionPath.IsValid()
+					&& Row->DefinitionPath == CurrentEntry.DefinitionPath
+					&& Row->RecipePath == CurrentEntry.RecipePath;
+				// Mesh-only row는 후보 flag와 Chassis exact path가 모두 같아야 합니다.
+				const bool bSameMeshCandidate = CurrentEntry.bMeshOnlyCandidate
+					&& Row->bMeshOnlyCandidate
+					&& Row->ChassisMeshPath == CurrentEntry.ChassisMeshPath;
+				if (bSameManagedIdentity || bSameMeshCandidate)
+				{
+					CurrentRow = Row;
+					break;
+				}
+			}
+
+			if (CurrentRow.IsValid())
+			{
+				VehicleListView->SetSelection(CurrentRow, ESelectInfo::Direct);
+				VehicleListView->RequestScrollIntoView(CurrentRow);
+			}
+		}
 	}
 
 	LastStatusText = FText::FromString(FString::Printf(
 		TEXT("대상 %d개를 fresh read했습니다. Product Asset/VehicleData는 변경하지 않았습니다."),
 		VehicleRows.Num()));
+	return FReply::Handled();
+}
+
+// 기존 Browser selection과 독립적으로 신규 차량 제작 진입 상태를 시작합니다.
+FReply SCFVehicleBuilderTab::HandleBeginNewVehicleEntry()
+{
+	if (!ViewModel.IsValid())
+	{
+		LastStatusText = LOCTEXT("BeginNewVehicleMissingVM", "Builder ViewModel이 없습니다.");
+		return FReply::Handled();
+	}
+
+	ViewModel->BeginNewVehicleEntry();
+	ViewModel->SetNewVehicleBlankStart();
+	SyncCreationFieldsFromSelection();
+	if (VehicleListView.IsValid())
+	{
+		VehicleListView->ClearSelection();
+	}
+
+	LastStatusText = LOCTEXT(
+		"BeginNewVehicleReady",
+		"새 차량 제작 모드로 들어왔습니다. 아직 Asset 생성/Save/VehicleData Apply는 수행하지 않았습니다.");
 	return FReply::Handled();
 }
 
@@ -1271,37 +1434,62 @@ FReply SCFVehicleBuilderTab::HandleNextStep()
 	return FReply::Handled();
 }
 
-// Mesh-only 후보에서 VehicleData+Recipe 생성 proposal을 검토하고 explicit 승인 뒤 commit합니다.
+// Explicit New Vehicle 또는 Mesh-only Quick Start의 VehicleData+Recipe proposal을 검토하고 explicit 승인 뒤 공통 commit/adoption 경로를 실행합니다.
 FReply SCFVehicleBuilderTab::HandleCreateVehicleFromMesh()
 {
-	if (!ViewModel.IsValid() || !ViewModel->IsMeshOnlyCandidate()
+	if (!ViewModel.IsValid()
+		|| (!ViewModel->IsNewVehicleEntryActive() && !ViewModel->IsMeshOnlyCandidate())
+		|| !NewVehicleIdTextBox.IsValid()
 		|| !NewDefinitionPackageTextBox.IsValid() || !NewDefinitionNameTextBox.IsValid()
 		|| !NewRecipePackageTextBox.IsValid() || !NewRecipeNameTextBox.IsValid())
 	{
 		return FReply::Handled();
 	}
 
-	// Mutation0 two-record creation preview입니다.
-	FCFVehicleRecordCreatePreview Preview;
+	// Explicit New Vehicle와 기존 Mesh-only Quick Start를 구분하는 현재 진입 상태입니다.
+	const bool bExplicitNewVehicle = ViewModel->IsNewVehicleEntryActive();
 	// Preview/build diagnostic입니다.
 	FString Error;
-	if (!ViewModel->PrepareSelectedMeshRecordCreate(
-		NewDefinitionPackageTextBox->GetText().ToString(),
-		NewDefinitionNameTextBox->GetText().ToString(),
-		NewRecipePackageTextBox->GetText().ToString(),
-		NewRecipeNameTextBox->GetText().ToString(),
-		Preview,
-		Error))
+	if (!ViewModel->SetVehicleCreationId(NewVehicleIdTextBox->GetText().ToString(), Error))
+	{
+		VehicleIdValidationText = FText::FromString(Error);
+		LastStatusText = FText::FromString(FString::Printf(TEXT("Vehicle ID 오류: %s"), *Error));
+		return FReply::Handled();
+	}
+
+	// Mutation0 two-record creation preview입니다.
+	FCFVehicleRecordCreatePreview Preview;
+	// 현재 진입 방식에 맞는 canonical Guided create request를 준비했는지 여부입니다.
+	const bool bPreviewReady = bExplicitNewVehicle
+		? ViewModel->PrepareNewVehicleRecordCreate(
+			NewDefinitionPackageTextBox->GetText().ToString(),
+			NewDefinitionNameTextBox->GetText().ToString(),
+			NewRecipePackageTextBox->GetText().ToString(),
+			NewRecipeNameTextBox->GetText().ToString(),
+			Preview,
+			Error)
+		: ViewModel->PrepareSelectedMeshRecordCreate(
+			NewDefinitionPackageTextBox->GetText().ToString(),
+			NewDefinitionNameTextBox->GetText().ToString(),
+			NewRecipePackageTextBox->GetText().ToString(),
+			NewRecipeNameTextBox->GetText().ToString(),
+			Preview,
+			Error);
+	if (!bPreviewReady)
 	{
 		LastStatusText = FText::FromString(FString::Printf(TEXT("생성 검토 실패: %s"), *Error));
 		return FReply::Handled();
 	}
 
-	const FCFVehicleListEntry& SelectedEntry = ViewModel->GetSelectedEntry();
+	// Review dialog에 표시할 optional Chassis exact object path입니다. Empty면 Blank Start입니다.
+	const FSoftObjectPath ReviewChassisMeshPath = bExplicitNewVehicle
+		? ViewModel->GetNewVehicleChassisMeshPath()
+		: ViewModel->GetSelectedEntry().ChassisMeshPath;
 	// USER가 실제 생성 범위를 읽고 승인할 review 문구입니다.
 	const FText ReviewText = FText::FromString(FString::Printf(
-		TEXT("Guided Builder — 신규 차량 레코드 생성 검토\n\n차체 메시: %s\n생성할 VehicleData: %s\n생성할 Recipe: %s\n\nReference Evidence: 아직 생성 안 함\nprivate Profile 4종: 아직 생성 안 함\n차급 자동 추론: 안 함\n물리/밸런스 자동 추론: 안 함\nVehicleData 자동 Apply: 안 함\n자동 저장: 안 함\n\n지금은 Builder의 core 2-record만 생성합니다. 계속하시겠습니까?"),
-		*SelectedEntry.ChassisMeshPath.ToString(),
+		TEXT("Guided Builder — 신규 차량 레코드 생성 검토\n\n시작 방식: %s\n차체 메시: %s\n생성할 VehicleData: %s\n생성할 Recipe: %s\nTransmission 정책: VehicleSpecificRequired\n\nReference Evidence: 아직 생성 안 함\nprivate Profile 4종: 아직 생성 안 함\n차급 자동 추론: 안 함\n물리/밸런스 자동 추론: 안 함\n새 VehicleData Chassis 자동 Apply: 안 함\n자동 저장: 안 함\n\nMesh가 지정된 경우 새 Recipe AssetIntent에만 기록합니다. 이미 다른 차량이 사용하는 Mesh도 허용합니다. 지금은 Builder의 core 2-record만 생성합니다. 계속하시겠습니까?"),
+		ReviewChassisMeshPath.IsValid() ? TEXT("Chassis Mesh") : TEXT("Blank"),
+		ReviewChassisMeshPath.IsValid() ? *ReviewChassisMeshPath.ToString() : TEXT("없음"),
 		*Preview.ProspectiveDefinitionPath.ToString(),
 		*Preview.ProspectiveRecipePath.ToString()));
 
@@ -1313,15 +1501,37 @@ FReply SCFVehicleBuilderTab::HandleCreateVehicleFromMesh()
 
 	// Explicit USER approval이 붙은 exact two-record terminal result입니다.
 	FCFVehicleRecordCreateResult Result;
-	if (!ViewModel->ExecutePreparedMeshRecordCreate(Result, Error))
+	// Record creation 이후 exact Browser/Builder adoption 성공 여부입니다.
+	bool bBuilderAdopted = false;
+	// Record creation과 분리해서 보고할 post-create adoption diagnostic입니다.
+	FString AdoptionError;
+	if (!ViewModel->ExecutePreparedNewVehicleRecordCreate(Result, bBuilderAdopted, AdoptionError, Error))
 	{
 		LastStatusText = FText::FromString(FString::Printf(TEXT("VehicleData+Recipe 생성 실패: %s"), *Error));
 		return FReply::Handled();
 	}
 
+	// 생성된 Asset은 이미 존재합니다. Browser row copy/highlight를 fresh read하되 adoption 실패를 생성 실패로 오인하지 않습니다.
 	HandleRefreshVehicles();
+	if (!bBuilderAdopted)
+	{
+		// 생성 성공 뒤 rollback하지 않고 exact Created record와 adoption 오류를 분리해 표시합니다.
+		const FString CreatedDefinitionPath = Result.CreatedDefinition ? FSoftObjectPath(Result.CreatedDefinition).ToString() : TEXT("<null>");
+		// 생성 성공 뒤 rollback하지 않고 exact Created Recipe를 표시합니다.
+		const FString CreatedRecipePath = Result.CreatedRecipe ? FSoftObjectPath(Result.CreatedRecipe).ToString() : TEXT("<null>");
+		LastStatusText = FText::FromString(FString::Printf(
+			TEXT("VehicleData+Recipe records는 생성됐지만 Builder adoption에 실패했습니다. 생성 Asset은 롤백하지 않았고 자동 저장/VehicleData Apply도 하지 않았습니다.\n%s\nDefinition=%s\nRecipe=%s"),
+			*AdoptionError,
+			*CreatedDefinitionPath,
+			*CreatedRecipePath));
+		return FReply::Handled();
+	}
+
+	SyncCreationFieldsFromSelection();
+	SyncMeshPreparationFieldsFromRecipe();
+	RefreshMeshPreparationPickerPresentation();
 	LastStatusText = FText::FromString(FString::Printf(
-		TEXT("VehicleData+Recipe를 생성했습니다. 자동 저장은 하지 않았습니다. 새 managed 차량을 선택한 뒤 Step 2 Mesh 준비 → Step 3 소켓 준비를 확인하세요. Reference Evidence/Companion은 차량 / Reference 단계에서 별도로 진행합니다.\n%s"),
+		TEXT("VehicleData+Recipe를 생성하고 exact 새 managed 차량을 Builder current target/Browser row로 adoption했습니다. 자동 저장과 VehicleData Chassis Apply는 하지 않았습니다. Step 1 Reference 준비 후 정상 Builder 단계를 진행하세요.\n%s"),
 		*Result.Operation.Message));
 	return FReply::Handled();
 }
@@ -1599,6 +1809,18 @@ FReply SCFVehicleBuilderTab::HandleCommitMeshPreparation()
 		TEXT("Mesh 설정을 Recipe에 반영했습니다. VehicleData Apply/자동 저장은 하지 않았습니다. %s"),
 		*CommitResult.Message));
 	return FReply::Handled();
+}
+
+// Explicit New Vehicle의 optional Chassis StaticMesh picker 변경을 BuilderVM canonical creation state에 반영합니다.
+void SCFVehicleBuilderTab::HandleNewVehicleChassisMeshChanged(const FAssetData& AssetData)
+{
+	if (!ViewModel.IsValid() || !ViewModel->IsNewVehicleEntryActive())
+	{
+		return;
+	}
+
+	ViewModel->SetNewVehicleChassisMeshPath(
+		AssetData.IsValid() ? AssetData.GetSoftObjectPath() : FSoftObjectPath());
 }
 
 // Step 2 Chassis StaticMesh object picker 변경을 pending 값에만 반영합니다.
@@ -2340,41 +2562,151 @@ FReply SCFVehicleBuilderTab::HandleAcceptUserDriving()
 	return FReply::Handled();
 }
 
-// 선택한 Mesh 후보 이름으로 사람이 수정할 수 있는 package/name 제안값을 채웁니다.
-void SCFVehicleBuilderTab::SyncCreationFieldsFromSelection()
+// Vehicle ID 입력 변경을 BuilderVM canonical transient state에 반영하고 valid할 때 default package/object identity를 갱신합니다.
+void SCFVehicleBuilderTab::HandleVehicleIdTextChanged(const FText& NewText)
 {
-	if (!NewDefinitionPackageTextBox.IsValid() || !NewDefinitionNameTextBox.IsValid()
+	if (!ViewModel.IsValid())
+	{
+		ClearCreationIdentityFields();
+		VehicleIdValidationText = LOCTEXT("VehicleIdMissingVM", "Builder ViewModel이 없어 Vehicle ID를 검증할 수 없습니다.");
+		return;
+	}
+
+	// USER가 입력한 exact Vehicle ID 문자열입니다. Invalid 문자를 임의 sanitize하지 않습니다.
+	const FString VehicleId = NewText.ToString();
+	// Vehicle ID validation diagnostic입니다.
+	FString Error;
+	if (!ViewModel->SetVehicleCreationId(VehicleId, Error))
+	{
+		ClearCreationIdentityFields();
+		VehicleIdValidationText = FText::FromString(Error);
+		return;
+	}
+
+	ApplyDefaultCreationIdentityFromVehicleId();
+}
+
+// Current Vehicle ID로 deterministic default Definition/Recipe package/object 네 값을 Advanced 입력란에 채웁니다.
+void SCFVehicleBuilderTab::ApplyDefaultCreationIdentityFromVehicleId()
+{
+	if (!ViewModel.IsValid()
+		|| !NewDefinitionPackageTextBox.IsValid() || !NewDefinitionNameTextBox.IsValid()
 		|| !NewRecipePackageTextBox.IsValid() || !NewRecipeNameTextBox.IsValid())
 	{
 		return;
 	}
 
-	if (!ViewModel.IsValid() || !ViewModel->IsMeshOnlyCandidate())
+	// Default VehicleData package identity입니다.
+	FString DefinitionPackageName;
+	// Default VehicleData object name입니다.
+	FString DefinitionAssetName;
+	// Default Recipe package identity입니다.
+	FString RecipePackageName;
+	// Default Recipe object name입니다.
+	FString RecipeAssetName;
+	// Default identity build diagnostic입니다.
+	FString Error;
+	if (!ViewModel->BuildDefaultVehicleRecordIdentity(
+		ViewModel->GetVehicleCreationId(),
+		DefinitionPackageName,
+		DefinitionAssetName,
+		RecipePackageName,
+		RecipeAssetName,
+		Error))
 	{
-		NewDefinitionPackageTextBox->SetText(FText::GetEmpty());
-		NewDefinitionNameTextBox->SetText(FText::GetEmpty());
-		NewRecipePackageTextBox->SetText(FText::GetEmpty());
-		NewRecipeNameTextBox->SetText(FText::GetEmpty());
+		ClearCreationIdentityFields();
+		VehicleIdValidationText = FText::FromString(Error);
 		return;
 	}
 
-	// Mesh 이름에서 semantic inference 없이 파일명 stem만 가져옵니다.
-	FString Stem = ViewModel->GetSelectedEntry().ChassisMeshPath.GetAssetName();
-	Stem.RemoveFromStart(TEXT("SM_"));
-	if (Stem.IsEmpty())
+	NewDefinitionPackageTextBox->SetText(FText::FromString(DefinitionPackageName));
+	NewDefinitionNameTextBox->SetText(FText::FromString(DefinitionAssetName));
+	NewRecipePackageTextBox->SetText(FText::FromString(RecipePackageName));
+	NewRecipeNameTextBox->SetText(FText::FromString(RecipeAssetName));
+	VehicleIdValidationText = FText::FromString(FString::Printf(
+		TEXT("기본 경로 제안: %s / %s. 충돌과 최종 경로 유효성은 생성 검토 Preview가 다시 확인합니다."),
+		*DefinitionPackageName,
+		*RecipePackageName));
+}
+
+// Advanced Definition/Recipe package/object 입력 네 값을 모두 비웁니다.
+void SCFVehicleBuilderTab::ClearCreationIdentityFields()
+{
+	if (NewDefinitionPackageTextBox.IsValid())
 	{
-		Stem = TEXT("Vehicle");
+		NewDefinitionPackageTextBox->SetText(FText::GetEmpty());
+	}
+	if (NewDefinitionNameTextBox.IsValid())
+	{
+		NewDefinitionNameTextBox->SetText(FText::GetEmpty());
+	}
+	if (NewRecipePackageTextBox.IsValid())
+	{
+		NewRecipePackageTextBox->SetText(FText::GetEmpty());
+	}
+	if (NewRecipeNameTextBox.IsValid())
+	{
+		NewRecipeNameTextBox->SetText(FText::GetEmpty());
+	}
+}
+
+// Current Vehicle ID validation 안내를 표시합니다.
+FText SCFVehicleBuilderTab::GetVehicleIdValidationText() const
+{
+	return VehicleIdValidationText;
+}
+
+// Explicit New Vehicle과 Mesh Candidate Quick Start를 구분하는 생성 검토 버튼 문구를 반환합니다.
+FText SCFVehicleBuilderTab::GetCreateVehicleButtonText() const
+{
+	return ViewModel.IsValid() && !ViewModel->IsNewVehicleEntryActive() && ViewModel->IsMeshOnlyCandidate()
+		? LOCTEXT("CreateFromMeshCandidate", "이 Mesh로 새 차량 만들기 — 검토")
+		: LOCTEXT("CreateNewVehicleReview", "생성 내용 검토");
+}
+
+// Explicit New Vehicle은 빈 Vehicle ID로 초기화하고 Mesh Candidate는 Mesh stem 기반 Vehicle ID 제안값을 채웁니다.
+void SCFVehicleBuilderTab::SyncCreationFieldsFromSelection()
+{
+	if (!NewVehicleIdTextBox.IsValid())
+	{
+		return;
 	}
 
-	// USER가 수정 가능한 VehicleData 이름 제안입니다.
-	const FString DefinitionName = TEXT("DA_Vehicle_") + Stem;
-	// USER가 수정 가능한 Recipe 이름 제안입니다.
-	const FString RecipeName = TEXT("DA_Recipe_") + Stem;
-	NewDefinitionPackageTextBox->SetText(FText::FromString(TEXT("/Game/CarFight/Data/Authoring/") + DefinitionName));
-	NewDefinitionNameTextBox->SetText(FText::FromString(DefinitionName));
-	NewRecipePackageTextBox->SetText(FText::FromString(TEXT("/Game/CarFight/Data/Authoring/") + RecipeName));
-	NewRecipeNameTextBox->SetText(FText::FromString(RecipeName));
+	if (!ViewModel.IsValid())
+	{
+		NewVehicleIdTextBox->SetText(FText::GetEmpty());
+		ClearCreationIdentityFields();
+		return;
+	}
+
+	if (ViewModel->IsNewVehicleEntryActive())
+	{
+		NewVehicleIdTextBox->SetText(FText::GetEmpty());
+		ClearCreationIdentityFields();
+		VehicleIdValidationText = LOCTEXT("VehicleIdEmptyGuide", "Vehicle ID를 입력하세요. 영문자, 숫자, _만 사용할 수 있습니다.");
+		return;
+	}
+
+	if (!ViewModel->IsMeshOnlyCandidate())
+	{
+		NewVehicleIdTextBox->SetText(FText::GetEmpty());
+		ClearCreationIdentityFields();
+		VehicleIdValidationText = FText::GetEmpty();
+		return;
+	}
+
+	// Mesh 이름에서 semantic inference 없이 Vehicle ID 제안용 파일명 stem만 가져옵니다.
+	FString CandidateVehicleId = ViewModel->GetSelectedEntry().ChassisMeshPath.GetAssetName();
+	CandidateVehicleId.RemoveFromStart(TEXT("SM_"));
+	if (CandidateVehicleId.IsEmpty())
+	{
+		CandidateVehicleId = TEXT("Vehicle");
+	}
+
+	NewVehicleIdTextBox->SetText(FText::FromString(CandidateVehicleId));
 }
+
+
 
 // Current Recipe AssetIntent를 Step 2 pending picker 값으로 동기화합니다.
 void SCFVehicleBuilderTab::SyncMeshPreparationFieldsFromRecipe()
@@ -2427,21 +2759,38 @@ FString SCFVehicleBuilderTab::GetPendingWheelMeshPath(const int32 WheelRoleIndex
 		: FString();
 }
 
-// Step 1의 Mesh-only 생성 UI 표시 조건입니다.
+// Step 1의 Explicit New Vehicle 또는 Mesh-only Quick Start 생성 UI 표시 조건입니다.
 EVisibility SCFVehicleBuilderTab::GetMeshCreationVisibility() const
 {
 	return ViewModel.IsValid()
-		&& ViewModel->IsMeshOnlyCandidate()
+		&& (ViewModel->IsNewVehicleEntryActive() || ViewModel->IsMeshOnlyCandidate())
 		&& !ViewModel->GetStepViews().IsEmpty()
 		&& ViewModel->GetCurrentStep().StepId == ECFVehicleBuilderStepId::IdentityReference
 		? EVisibility::Visible
 		: EVisibility::Collapsed;
 }
 
+// Explicit New Vehicle 전용 Blank/optional Chassis picker 영역 표시 조건입니다.
+EVisibility SCFVehicleBuilderTab::GetNewVehicleCreationOptionsVisibility() const
+{
+	return ViewModel.IsValid() && ViewModel->IsNewVehicleEntryActive()
+		? EVisibility::Visible
+		: EVisibility::Collapsed;
+}
+
+// Explicit New Vehicle의 current optional Chassis StaticMesh object path 문자열을 반환합니다.
+FString SCFVehicleBuilderTab::GetNewVehicleChassisMeshPath() const
+{
+	return ViewModel.IsValid() && ViewModel->GetNewVehicleChassisMeshPath().IsValid()
+		? ViewModel->GetNewVehicleChassisMeshPath().ToString()
+		: FString();
+}
+
 // Step 1 managed Recipe의 Reference/Companion UI 표시 조건입니다.
 EVisibility SCFVehicleBuilderTab::GetReferenceFlowVisibility() const
 {
 	return ViewModel.IsValid()
+		&& !ViewModel->IsNewVehicleEntryActive()
 		&& ViewModel->HasSelection()
 		&& !ViewModel->IsMeshOnlyCandidate()
 		&& ViewModel->GetRecipe()
@@ -2606,6 +2955,11 @@ FReply SCFVehicleBuilderTab::HandleOpenAdvancedWorkspace()
 // 현재 선택을 USER-facing 한 줄로 표시합니다.
 FText SCFVehicleBuilderTab::GetSelectionText() const
 {
+	if (ViewModel.IsValid() && ViewModel->IsNewVehicleEntryActive())
+	{
+		return LOCTEXT("NewVehicleSelection", "대상: 새 차량 만들기 (신규 제작 시작)");
+	}
+
 	if (!ViewModel.IsValid() || !ViewModel->HasSelection())
 	{
 		return LOCTEXT("NoSelection", "대상: 선택 안 됨");

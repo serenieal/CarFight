@@ -1,6 +1,6 @@
 # CarFight — 03_FeatureQueue
 
-> 문서 버전: v1.56.65
+> 문서 버전: v1.56.71
 > 최근 갱신일(Asia/Seoul): 2026-09-02
 > 문서 상태: Current
 > 역할: CarFight의 **Feature 후보 / 착수 판단 / 현재 상태 / 완료 후 Current owner**를 한 곳에서 관리한다.
@@ -99,11 +99,11 @@ FeatureQueue는 상세 설계서나 검증 로그가 아니다.
 | `CF-FQ-035` | 인벤토리 Foundation | P1 | Paused | Technical checkpoint 보존 / USER Field UI·Mobility Pending | InventoryFoundation + 관련 Systems 후속 |
 | `CF-FQ-036` | 차량 센서·Contact Intelligence Runtime | P1 | Done | Sensor Runtime 완료, Scanner와 Current 통합 | `Systems/Targeting/SensorContact.md v1.2.0` |
 | `CF-FQ-037` | 차량 스캐너 입력·장비 통합 | P1 | Done | SCAN-P0-00~07 / USER PIE PASS | `Systems/Targeting/SensorContact.md v1.2.0` |
-| `CF-FQ-038` | 차량 데이터 Authoring 시스템 | P2 | Paused | `Document/Plan/DataAuthoring/DataAuthoringPlan.md v0.2.52` / `Document/Plan/DataAuthoring/DataAuthoringRoadmap.md v0.1.56` / Deprecated transition Technical Complete / `Systems/Vehicles/VehicleBuilder.md v1.0.0` 기준 Builder Backend + Advanced Workspace 역할 고정 / P0-12 USER PASS 7/8 / UA-08 quantitative comparison Deferred / DEL6 compatibility retirement Pending | 완료 시 VehicleDataAuthoring 신규 Systems 후보 |
+| `CF-FQ-038` | 차량 데이터 Authoring 시스템 | P2 | Paused | `Document/Plan/DataAuthoring/DataAuthoringPlan.md v0.2.52` / `Document/Plan/DataAuthoring/DataAuthoringRoadmap.md v0.1.56` / Deprecated transition Technical Complete / `Systems/Vehicles/VehicleBuilder.md v1.1.1` 기준 Builder Backend + Advanced Workspace 역할 고정 / P0-12 USER PASS 7/8 / UA-08 quantitative comparison Deferred / DEL6 compatibility retirement Pending | 완료 시 VehicleDataAuthoring 신규 Systems 후보 |
 | `CF-FQ-039` | Production UI Visual Rework | P1 | Active | `Document/Plan/InGameUIVisual/InGameUIVisualPlan.md v0.1.29` / `VPR-P0-01 VT07 VehiclePanel Asset-First whole-panel Review Ready / USER Visual PASS Pending / UE Import 0 / Production Asset mutation 0` | 완료 시 `Systems/UI/InGameUI.md` Visual ownership 갱신 + Production UI Asset 기준 |
-| `CF-FQ-040` | Guided Vehicle Builder | P2 | Done | VB-P0-10 Current System Promotion Complete / VB-P0-09 End-to-End USER Acceptance PASS / WSA P0 Complete / ESH-01~06 Final Audit Clean PASS / representative Plan은 `Document/Plan/Archive/VehicleBuilder/` Historical + Archived Path | `Systems/Vehicles/VehicleBuilder.md v1.0.0` |
+| `CF-FQ-040` | Guided Vehicle Builder | P2 | Done | VB-P0-10 Current System Promotion Complete / VB-P0-09 End-to-End USER Acceptance PASS / WSA P0 Complete / ESH-01~06 Final Audit Clean PASS / representative Plan은 `Document/Plan/Archive/VehicleBuilder/` Historical + Archived Path | `Systems/Vehicles/VehicleBuilder.md v1.1.1` |
 | `CF-FQ-041` | 런타임 콘텐츠 적용 메뉴 | P2 | Ready | `Document/Plan/RuntimeApply/RuntimeApplyPlan.md v0.1.5` / `RTA-P0-01 Technical PASS` / next `RTA-P0-02 Vehicle Runtime Apply` / Hard Reference Runtime Catalog+bounded Cook+actual runtime load PASS / Builder Step 8 same-Pawn Vehicle reinitialize 재사용 / Equipment post-apply seam Pending | 완료 시 Runtime Apply 재사용 계약을 관련 Vehicle/Fitting/UI Systems에 승격 |
-| `CF-FQ-042` | Vehicle Builder 신규 차량 생성 UX | P2 | Ready | `Document/Plan/VehicleBuilderCreationUX/VehicleBuilderCreationUXPlan.md v0.1.1` / Design Audit Correction PASS / Implementation Ready / next `VBCUX-P0-01 Step Navigation / Explicit New Vehicle Entry UX` / CF-FQ-040 Done 보호 / Wagon·ESH 재오픈 0 | 완료 시 `Systems/Vehicles/VehicleBuilder.md` Creation Entry / Guided Shell 계약 갱신 |
+| `CF-FQ-042` | Vehicle Builder 신규 차량 생성 UX | P2 | Done | `VBCUX-P0-05 USER Acceptance PASS` / A Blank Start + B 기존 Chassis 재사용 + C 미사용 Mesh Quick Start PASS / final audit P1 old-selection refresh restore 교정 + focused/affected 5/0 PASS / `Document/Plan/VehicleBuilderCreationUX/VehicleBuilderCreationUXPlan.md v0.2.1` Historical + Retained Path / Vehicle ID 직접 입력 관리 부담은 비차단 UX 피드백 | `Systems/Vehicles/VehicleBuilder.md v1.1.1` |
 
 ---
 
@@ -117,7 +117,6 @@ FeatureQueue는 상세 설계서나 검증 로그가 아니다.
 | --- | --- | --- |
 | `CF-FQ-030` | Ready | `CF-TC-027 Manual PIE` |
 | `CF-FQ-041` | Ready | `RTA-P0-02 Vehicle Runtime Apply` |
-| `CF-FQ-042` | Ready | `VBCUX-P0-01 Step Navigation / Explicit New Vehicle Entry UX` |
 | `CF-FQ-029` | Paused | `LM-P0-06 USER PIE` |
 | `CF-FQ-038` | Paused | non-blocking `DEL6 compatibility retirement` 또는 `UA-08 quantitative comparison Deferred` |
 | `CF-FQ-034` | Paused | `FIT-P0-07D USER Driving Feel Comparison` |
@@ -148,6 +147,41 @@ Feature가 Done되면 Current System 링크와 남은 Deferred/Pending 경계만
 ---
 
 ## 7. Changelog
+
+### v1.56.71 - 2026-09-02
+
+- CF-FQ-042 final audit P1 old-selection refresh restore 문제를 교정하고 USER manual Editor build PASS + BuilderShell 1/0 + CF_FQ_042 3/0 + MeshCreate 1/0 Automation PASS를 완료 evidence에 반영했다.
+- Feature는 Done을 유지하며 Current owner를 `Systems/Vehicles/VehicleBuilder.md v1.1.1`, Historical Plan을 v0.2.1로 동기화했다.
+
+### v1.56.70 - 2026-09-02
+
+- `CF-FQ-042 / VBCUX-P0-05 USER Acceptance` A/B/C 실제 Builder 시나리오를 모두 USER PASS로 닫고 Feature를 P2 / Done으로 전환했다.
+- Current owner를 `Systems/Vehicles/VehicleBuilder.md v1.1.0`으로 승격하고 대표 Plan은 `VehicleBuilderCreationUXPlan.md v0.2.0` Historical + Retained Path로 보존한다.
+- Vehicle ID 직접 입력 관리 부담은 비차단 UX 피드백으로 남기고, CF-FQ-039 Active / CF-FQ-041 Ready / CF-FQ-040 Done과 Wagon·WSA·ESH·Vehicle Runtime evidence는 변경하지 않았다.
+
+### v1.56.69 - 2026-09-02
+
+- `CF-FQ-042 / VBCUX-P0-04` Focused Regression Technical PASS를 반영했다.
+- collision/wrong type/partial-success no-rollback/fresh Browser exact row를 보강하고 최종 official build와 CF-FQ-042 3건 + MeshCreate + BuilderShell regression을 PASS했다. Product behavior/Asset Save/DefinitionApply/Vehicle Runtime mutation은 0이다.
+- 대표 Plan을 v0.1.5로 갱신하고 next를 `VBCUX-P0-05 USER Acceptance`로 전진했다. CF-FQ-039 Active와 CF-FQ-040 Done/Wagon/WSA/ESH evidence는 변경하지 않았다.
+
+### v1.56.68 - 2026-09-02
+
+- `CF-FQ-042 / VBCUX-P0-03` Vehicle ID Naming / Candidate Quick Start 구현과 Technical Validation PASS를 반영했다.
+- Vehicle ID 단일 naming, deterministic default identity, invalid ID fail-closed, Advanced override와 Mesh Candidate 공통 Preview 경로를 검증했다. Product Asset Save/DefinitionApply/Vehicle Runtime mutation은 0이다.
+- 대표 Plan을 v0.1.4로 갱신하고 next를 `VBCUX-P0-04 Focused Regression`으로 전진했다. CF-FQ-039 Active와 CF-FQ-040 Done/Wagon/WSA/ESH evidence는 변경하지 않았다.
+
+### v1.56.67 - 2026-09-02
+
+- `CF-FQ-042 / VBCUX-P0-02` Blank / Arbitrary Mesh Record Creation 구현과 Technical Validation PASS를 반영했다.
+- Blank/Unused/Reused Chassis 공통 Guided create request, VehicleSpecificRequired, Recipe-only Chassis intent와 exact created target adoption을 검증했다. Product Asset Save/DefinitionApply/Vehicle Runtime mutation은 0이다.
+- 대표 Plan을 v0.1.3으로 갱신하고 next를 `VBCUX-P0-03 Vehicle ID Naming / Candidate Quick Start`로 전진했다. CF-FQ-039 Active와 CF-FQ-040 Done/Wagon/WSA/ESH evidence는 변경하지 않았다.
+
+### v1.56.66 - 2026-09-02
+
+- `CF-FQ-042 / VBCUX-P0-01` Step Navigation / Explicit New Vehicle Entry UX 구현과 Technical Validation PASS를 반영했다.
+- pre-refresh Stable Step exact8, selection-independent `+ 새 차량 만들기`, BuilderVM-owned transient New Vehicle state와 refresh preservation을 검증했다. Product Asset Save/VehicleData Apply/Vehicle Runtime mutation은 0이다.
+- 대표 Plan을 v0.1.2로 갱신하고 next를 `VBCUX-P0-02 Blank / Arbitrary Mesh Record Creation`으로 전진했다. CF-FQ-039 Active와 CF-FQ-040 Done/Wagon/WSA/ESH evidence는 변경하지 않았다.
 
 ### v1.56.65 - 2026-09-02
 

@@ -1,10 +1,15 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringVMTests.cpp
-// Version: v1.25.0
-// Date: 2026-08-31
-// Description: DAUTH-P0-09~12 Vehicle Authoring Workspace + WSA Builder integration 보호 Automation입니다.
+// Version: v1.30.0
+// Date: 2026-09-02
+// Description: Vehicle Authoring Workspace + Guided Builder integration 보호 Automation입니다.
 // Changelog:
+// - v1.30.0: CF-FQ-042 final audit P1 회귀로 기존 managed 차량 선택 → Explicit New Vehicle → Vehicle ID 입력 → Browser refresh가 New Vehicle state/ID를 유지하고 old Authoring selection을 복원하지 않는지 BuilderShell에 추가.
+// - v1.29.0: CF-FQ-042 VBCUX-P0-04 focused regression으로 Vehicle record path collision, wrong Chassis type, post-create adoption partial-success/no-hidden-rollback과 exact Browser row presence를 추가.
+// - v1.28.0: CF-FQ-042 VBCUX-P0-03 Vehicle ID valid/invalid deterministic naming과 Mesh Candidate Quick Start의 동일 naming helper 사용 회귀를 추가.
+// - v1.27.0: CF-FQ-042 VBCUX-P0-02 Blank/Reused Chassis Guided creation, VehicleSpecificRequired, Recipe-only Chassis intent, new VehicleData non-Apply, exact Builder adoption 회귀를 추가.
+// - v1.26.0: CF-FQ-042 VBCUX-P0-01 pre-refresh exact 8-Step, no-selection 신규 제작 guidance, explicit New Vehicle transient entry와 refresh 유지 회귀를 BuilderShell에 추가.
 // - v1.25.0: Step 1 existing Evidence와 다른 ResearchDraft load → Reference Evidence Refresh R1 Preview/Commit → old Reference token Stale → explicit 재승인 flow를 generic VM integration으로 추가.
 // - v1.24.0: PhysicsDraft schema v2를 반영하고 일반 two-record creation은 LegacyCompatible, Guided Builder Mesh creation은 VehicleSpecificRequired policy를 부여하는 회귀를 추가.
 // - v1.23.0: Builder top-level refresh fail-closed가 false만 반환하고 OutError를 비우지 않도록 회귀 보호. Resolver Blocked 시 USER-facing 오류 문자열이 반드시 surface되는지 검증.
@@ -32,6 +37,7 @@
 // - v1.1.0: P0-10 Reference Compare, typed Layout/Driving Feel+Undo, Measurement/Adoption, legacy Wizard managed-target guard parity 검증 추가.
 // - v1.0.0: ViewModel↔facade parity, preview mutation0, Initial Import mutation boundary, Apply/standard Undo, stale approval fail-closed 검증 추가.
 // Migration:
+// - v1.30.0 regression은 transient Builder/Authoring selection과 Browser refresh만 검증하며 Product Asset 생성/Save/Apply를 추가하지 않습니다.
 // - 테스트 fixture만 직접 UCFVehicleData를 구성하며 production UI/ViewModel은 FCFVehicleAuthoringService facade만 사용합니다.
 // - Content Asset/file save를 수행하지 않으며 Initial Import asset은 테스트 종료 시 Asset Registry에서 제거합니다.
 
@@ -98,6 +104,21 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCFVehicleP11MeshCreateTest,
 	"CarFight.DataAuthoring.DAUTH_P0_11.FrozenUX.MeshCreate",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVBCUXP002RecordCreationTest,
+	"CarFight.DataAuthoring.CF_FQ_042.VBCUX_P0_02.RecordCreation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVBCUXP003NamingTest,
+	"CarFight.DataAuthoring.CF_FQ_042.VBCUX_P0_03.Naming",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVBCUXP004FocusedRegressionTest,
+	"CarFight.DataAuthoring.CF_FQ_042.VBCUX_P0_04.FocusedRegression",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 #include "DataAuthoring/CFDrivetrainProfile.h"
@@ -1414,6 +1435,16 @@ bool FCFVehicleBuilderShellTest::RunTest(const FString& Parameters)
 
 	// 실제 Guided Shell이 사용하는 transient ViewModel입니다.
 	FCFVehicleBuilderVM BuilderViewModel;
+	// Browser refresh 전에 생성자만으로 존재해야 하는 Stable Step projection입니다.
+	const TArray<FCFVehicleBuilderStepView>& PreRefreshSteps = BuilderViewModel.GetStepViews();
+	TestEqual(TEXT("Guided Builder has exact 8 Step definitions before Browser refresh"), PreRefreshSteps.Num(), 8);
+	// Pre-refresh no-selection Step 1입니다.
+	const FCFVehicleBuilderStepView* PreRefreshIdentityStep = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::IdentityReference);
+	if (TestNotNull(TEXT("Pre-refresh IdentityReference Step exists"), PreRefreshIdentityStep))
+	{
+		TestEqual(TEXT("Pre-refresh IdentityReference is Ready"), PreRefreshIdentityStep->State, ECFVehicleBuilderStepState::Ready);
+		TestTrue(TEXT("Pre-refresh no-selection guidance exposes explicit New Vehicle entry"), PreRefreshIdentityStep->Resolution.ToString().Contains(TEXT("+ 새 차량 만들기")));
+	}
 	// Asset Registry read diagnostic입니다.
 	FString Error;
 	if (!TestTrue(TEXT("Guided Builder target browser fresh read succeeds"), BuilderViewModel.RefreshVehicles(Error)))
@@ -1423,7 +1454,7 @@ bool FCFVehicleBuilderShellTest::RunTest(const FString& Parameters)
 	}
 
 	const TArray<FCFVehicleBuilderStepView>& Steps = BuilderViewModel.GetStepViews();
-	TestTrue(TEXT("Guided Builder contains current baseline Step definitions"), Steps.Num() >= 8);
+	TestEqual(TEXT("Guided Builder preserves exact 8 Step definitions after Browser refresh"), Steps.Num(), 8);
 	// Stable semantic identity로 찾은 current Reference Step입니다.
 	const FCFVehicleBuilderStepView* IdentityStep = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::IdentityReference);
 	// Stable semantic identity로 찾은 current Mesh Step입니다.
@@ -1446,7 +1477,28 @@ bool FCFVehicleBuilderShellTest::RunTest(const FString& Parameters)
 	{
 		TestEqual(TEXT("No-selection IdentityReference is Ready"), IdentityStep->State, ECFVehicleBuilderStepState::Ready);
 		TestEqual(TEXT("No-selection MeshPrep remains Locked"), MeshPrepStep->State, ECFVehicleBuilderStepState::Locked);
+		TestTrue(TEXT("No-selection Step 1 guidance keeps explicit New Vehicle entry"), IdentityStep->Resolution.ToString().Contains(TEXT("+ 새 차량 만들기")));
 	}
+
+	BuilderViewModel.BeginNewVehicleEntry();
+	TestTrue(TEXT("Explicit New Vehicle entry becomes active without selecting a Browser row"), BuilderViewModel.IsNewVehicleEntryActive());
+	TestEqual(TEXT("Explicit New Vehicle entry preserves exact 8 Step definitions"), BuilderViewModel.GetStepViews().Num(), 8);
+	// 신규 제작 진입 중의 Step 1입니다.
+	const FCFVehicleBuilderStepView* NewVehicleEntryIdentityStep = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::IdentityReference);
+	// 신규 제작 진입 중 잠겨 있어야 하는 Step 2입니다.
+	const FCFVehicleBuilderStepView* NewVehicleEntryMeshStep = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::MeshPrep);
+	if (NewVehicleEntryIdentityStep && NewVehicleEntryMeshStep)
+	{
+		TestEqual(TEXT("Explicit New Vehicle entry keeps IdentityReference Ready"), NewVehicleEntryIdentityStep->State, ECFVehicleBuilderStepState::Ready);
+		TestEqual(TEXT("Explicit New Vehicle entry keeps later steps Locked"), NewVehicleEntryMeshStep->State, ECFVehicleBuilderStepState::Locked);
+	}
+	if (!TestTrue(TEXT("Browser refresh succeeds while explicit New Vehicle entry is active"), BuilderViewModel.RefreshVehicles(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestTrue(TEXT("Browser refresh preserves explicit New Vehicle entry state"), BuilderViewModel.IsNewVehicleEntryActive());
+	TestEqual(TEXT("Browser refresh cannot empty or duplicate Stable Step navigation"), BuilderViewModel.GetStepViews().Num(), 8);
 
 	// 실제 module spawner를 통해 Guided Builder Slate tab을 생성합니다.
 	TSharedPtr<SDockTab> VehicleBuilderTab = FGlobalTabmanager::Get()->TryInvokeTab(VehicleBuilderTabName);
@@ -1509,6 +1561,29 @@ bool FCFVehicleBuilderShellTest::RunTest(const FString& Parameters)
 	// Existing managed Recipe/Target selection row입니다.
 	const FCFVehicleListEntry ManagedEntry = CFVehicleAuthoringVMTestsPrivate::BuildListEntry(BuilderFixture, true);
 	if (!TestTrue(TEXT("Builder P0-03 managed Vehicle selects"), ManagedBuilderViewModel.SelectVehicle(ManagedEntry, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	// Final audit P1 재현을 위해 Explicit New Vehicle 진입 전에 실제 managed Authoring selection이 존재하는지 확인합니다.
+	TestTrue(TEXT("Explicit New Vehicle refresh regression starts from an existing managed selection"), ManagedBuilderViewModel.HasSelection());
+	ManagedBuilderViewModel.BeginNewVehicleEntry();
+	TestTrue(TEXT("Explicit New Vehicle becomes active after leaving an existing managed selection"), ManagedBuilderViewModel.IsNewVehicleEntryActive());
+	TestFalse(TEXT("Explicit New Vehicle clears previous Authoring selection so Slate refresh cannot restore the old row"), ManagedBuilderViewModel.HasSelection());
+	// Browser refresh 중에도 보존돼야 하는 USER creation ID입니다.
+	const FString RefreshPreservedVehicleId = TEXT("RefreshPreserve01");
+	TestTrue(TEXT("Explicit New Vehicle accepts refresh-preservation Vehicle ID"), ManagedBuilderViewModel.SetVehicleCreationId(RefreshPreservedVehicleId, Error));
+	if (!TestTrue(TEXT("Browser refresh succeeds after leaving an existing managed selection"), ManagedBuilderViewModel.RefreshVehicles(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestTrue(TEXT("Browser refresh preserves Explicit New Vehicle mode after previous managed selection"), ManagedBuilderViewModel.IsNewVehicleEntryActive());
+	TestFalse(TEXT("Browser refresh does not restore previous Authoring selection during Explicit New Vehicle mode"), ManagedBuilderViewModel.HasSelection());
+	TestEqual(TEXT("Browser refresh preserves Explicit New Vehicle ID input"), ManagedBuilderViewModel.GetVehicleCreationId(), RefreshPreservedVehicleId);
+	// 기존 BuilderShell 회귀가 동일 managed fixture에서 계속 실행되도록 exact row를 다시 선택합니다.
+	if (!TestTrue(TEXT("Builder managed Vehicle reselects after Explicit New Vehicle refresh regression"), ManagedBuilderViewModel.SelectVehicle(ManagedEntry, Error)))
 	{
 		AddError(Error);
 		return false;
@@ -4132,16 +4207,32 @@ bool FCFVehicleP11MeshCreateTest::RunTest(const FString& Parameters)
 
 	// 같은 Mesh-only candidate를 Guided Builder 신규 차량 생성 경로로 검증할 ViewModel입니다.
 	FCFVehicleBuilderVM GuidedBuilderViewModel;
-	// Guided 신규 record creation의 exact package/object identity입니다.
-	const FString GuidedDefinitionPackageName = NewDefinitionPackageName + TEXT("_Guided");
-	const FString GuidedRecipePackageName = NewRecipePackageName + TEXT("_Guided");
-	const FString GuidedDefinitionAssetName = FString(TEXT("DA_Vehicle_")) + UniqueToken + TEXT("_Guided");
-	const FString GuidedRecipeAssetName = FString(TEXT("DA_Recipe_")) + UniqueToken + TEXT("_Guided");
+	// Mesh Candidate Quick Start가 일반 New Vehicle과 공유할 Vehicle ID입니다.
+	const FString GuidedVehicleId = TEXT("Candidate_") + UniqueToken + TEXT("_Guided");
+	// Vehicle ID에서 제안된 Guided VehicleData package identity입니다.
+	FString GuidedDefinitionPackageName;
+	// Vehicle ID에서 제안된 Guided VehicleData object name입니다.
+	FString GuidedDefinitionAssetName;
+	// Vehicle ID에서 제안된 Guided Recipe package identity입니다.
+	FString GuidedRecipePackageName;
+	// Vehicle ID에서 제안된 Guided Recipe object name입니다.
+	FString GuidedRecipeAssetName;
+	// Guided creation / naming / commit diagnostic입니다.
+	FString GuidedCreateError;
+	// Mesh Candidate가 공통 Vehicle ID naming으로 exact default identity를 준비했는지 여부입니다.
+	const bool bGuidedIdentityReady = GuidedBuilderViewModel.SetVehicleCreationId(GuidedVehicleId, GuidedCreateError)
+		&& GuidedBuilderViewModel.BuildDefaultVehicleRecordIdentity(
+			GuidedBuilderViewModel.GetVehicleCreationId(),
+			GuidedDefinitionPackageName,
+			GuidedDefinitionAssetName,
+			GuidedRecipePackageName,
+			GuidedRecipeAssetName,
+			GuidedCreateError);
+	TestTrue(TEXT("Mesh Candidate Quick Start builds identity from common Vehicle ID naming"), bGuidedIdentityReady);
 	// Guided Builder가 만든 mutation0 record proposal입니다.
 	FCFVehicleRecordCreatePreview GuidedCreatePreview;
-	// Guided creation / commit diagnostic입니다.
-	FString GuidedCreateError;
 	if (CandidateEntry
+		&& bGuidedIdentityReady
 		&& TestTrue(TEXT("Guided Builder selects exact Mesh-only candidate"), GuidedBuilderViewModel.SelectVehicle(*CandidateEntry, GuidedCreateError))
 		&& TestTrue(TEXT("Guided Builder record creation preview succeeds"), GuidedBuilderViewModel.PrepareSelectedMeshRecordCreate(
 			GuidedDefinitionPackageName,
@@ -4178,6 +4269,398 @@ bool FCFVehicleP11MeshCreateTest::RunTest(const FString& Parameters)
 	CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(KnownWheelMesh);
 	CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(CandidateMesh);
 	CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(UsedMesh);
+	return true;
+}
+
+// VBCUX-P0-02 Blank/Reused Chassis 신규 생성과 exact Builder adoption 계약을 검증합니다.
+bool FCFVBCUXP002RecordCreationTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// 서로 다른 Automation run의 package identity 충돌을 막는 unique token입니다.
+	const FString UniqueToken = FGuid::NewGuid().ToString(EGuidFormats::Digits);
+	// Reused Chassis 원본 차량과 신규 차량들이 공유할 test root입니다.
+	const FString TestRoot = TEXT("/Game/CarFight/Tests/VBCUXP002/") + UniqueToken;
+	// 다른 VehicleData가 이미 사용 중인 Chassis StaticMesh package입니다.
+	const FString SharedMeshPackageName = TestRoot + TEXT("/SM_Shared");
+	// 기존 원본 VehicleData package입니다.
+	const FString OriginalDefinitionPackageName = TestRoot + TEXT("/DA_Original");
+
+	// 이미 사용 중인 Chassis를 표현하는 package입니다.
+	UPackage* SharedMeshPackage = CreatePackage(*SharedMeshPackageName);
+	// 새 reused-mesh vehicle이 재사용할 exact StaticMesh입니다.
+	UStaticMesh* SharedMesh = NewObject<UStaticMesh>(
+		SharedMeshPackage,
+		TEXT("SM_Shared"),
+		RF_Public | RF_Standalone | RF_Transactional);
+	// 원본 VehicleData를 소유하는 package입니다.
+	UPackage* OriginalDefinitionPackage = CreatePackage(*OriginalDefinitionPackageName);
+	// SharedMesh를 이미 사용 중인 원본 VehicleData입니다.
+	UCFVehicleData* OriginalDefinition = NewObject<UCFVehicleData>(
+		OriginalDefinitionPackage,
+		TEXT("DA_Original"),
+		RF_Public | RF_Standalone | RF_Transactional);
+	if (!TestNotNull(TEXT("VBCUX P0-02 shared Chassis mesh exists"), SharedMesh)
+		|| !TestNotNull(TEXT("VBCUX P0-02 original Definition exists"), OriginalDefinition))
+	{
+		return false;
+	}
+
+	OriginalDefinition->VehicleVisualConfig.ChassisMesh = SharedMesh;
+	FAssetRegistryModule::AssetCreated(SharedMesh);
+	FAssetRegistryModule::AssetCreated(OriginalDefinition);
+	SharedMeshPackage->SetDirtyFlag(false);
+	OriginalDefinitionPackage->SetDirtyFlag(false);
+
+	// 원본 VehicleData가 보존해야 하는 exact Chassis reference입니다.
+	UStaticMesh* const OriginalChassisBeforeCreate = OriginalDefinition->VehicleVisualConfig.ChassisMesh;
+
+	// Blank Start 신규 차량 생성만 담당할 독립 Builder ViewModel입니다.
+	FCFVehicleBuilderVM BlankBuilderViewModel;
+	BlankBuilderViewModel.BeginNewVehicleEntry();
+	BlankBuilderViewModel.SetNewVehicleBlankStart();
+	TestTrue(TEXT("VBCUX P0-02 Blank Start enters explicit New Vehicle mode"), BlankBuilderViewModel.IsNewVehicleEntryActive());
+	TestFalse(TEXT("VBCUX P0-02 Blank Start has no Chassis path"), BlankBuilderViewModel.GetNewVehicleChassisMeshPath().IsValid());
+
+	// Blank VehicleData package identity입니다.
+	const FString BlankDefinitionPackageName = TestRoot + TEXT("/DA_Blank");
+	// Blank VehicleData object name입니다.
+	const FString BlankDefinitionAssetName = TEXT("DA_Blank");
+	// Blank Recipe package identity입니다.
+	const FString BlankRecipePackageName = TestRoot + TEXT("/DA_Recipe_Blank");
+	// Blank Recipe object name입니다.
+	const FString BlankRecipeAssetName = TEXT("DA_Recipe_Blank");
+	// Blank Start mutation0 create preview입니다.
+	FCFVehicleRecordCreatePreview BlankPreview;
+	// Blank create/adoption diagnostic입니다.
+	FString BlankError;
+	if (!TestTrue(TEXT("VBCUX P0-02 Blank preview succeeds"), BlankBuilderViewModel.PrepareNewVehicleRecordCreate(
+		BlankDefinitionPackageName,
+		BlankDefinitionAssetName,
+		BlankRecipePackageName,
+		BlankRecipeAssetName,
+		BlankPreview,
+		BlankError)))
+	{
+		AddError(BlankError);
+		CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(OriginalDefinition);
+		CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(SharedMesh);
+		return false;
+	}
+	TestFalse(TEXT("VBCUX P0-02 Blank preview never saves"), BlankPreview.Proposal.bSavePerformed);
+
+	// Blank Start exact terminal creation result입니다.
+	FCFVehicleRecordCreateResult BlankResult;
+	// Blank 생성 뒤 Builder exact target adoption 성공 여부입니다.
+	bool bBlankAdopted = false;
+	// Blank 생성 성공 이후 별도 adoption diagnostic입니다.
+	FString BlankAdoptionError;
+	if (!TestTrue(TEXT("VBCUX P0-02 Blank record creation succeeds"), BlankBuilderViewModel.ExecutePreparedNewVehicleRecordCreate(
+		BlankResult,
+		bBlankAdopted,
+		BlankAdoptionError,
+		BlankError)))
+	{
+		AddError(BlankError);
+		CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(BlankResult.CreatedRecipe);
+		CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(BlankResult.CreatedDefinition);
+		CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(OriginalDefinition);
+		CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(SharedMesh);
+		return false;
+	}
+	TestTrue(TEXT("VBCUX P0-02 Blank Builder adoption succeeds"), bBlankAdopted);
+	if (!bBlankAdopted && !BlankAdoptionError.IsEmpty())
+	{
+		AddError(BlankAdoptionError);
+	}
+	if (TestNotNull(TEXT("VBCUX P0-02 Blank Definition exists"), BlankResult.CreatedDefinition)
+		&& TestNotNull(TEXT("VBCUX P0-02 Blank Recipe exists"), BlankResult.CreatedRecipe))
+	{
+		TestNull(TEXT("VBCUX P0-02 Blank Recipe has no Chassis intent"), BlankResult.CreatedRecipe->AssetIntent.ChassisMesh.Get());
+		TestNull(TEXT("VBCUX P0-02 Blank Definition Chassis is not auto-applied"), BlankResult.CreatedDefinition->VehicleVisualConfig.ChassisMesh);
+		TestEqual(TEXT("VBCUX P0-02 Blank uses VehicleSpecificRequired"), BlankResult.CreatedRecipe->BuilderTransmissionPolicy, ECFBuilderTransmissionPolicy::VehicleSpecificRequired);
+		TestEqual(TEXT("VBCUX P0-02 Blank Builder selects exact created Definition"), BlankBuilderViewModel.GetSelectedEntry().DefinitionPath, FSoftObjectPath(BlankResult.CreatedDefinition));
+		TestEqual(TEXT("VBCUX P0-02 Blank Builder selects exact created Recipe"), BlankBuilderViewModel.GetSelectedEntry().RecipePath, FSoftObjectPath(BlankResult.CreatedRecipe));
+		// Post-create fresh Browser가 exact Blank Definition+Recipe row를 실제 보유하는지 여부입니다.
+		const bool bBlankBrowserRowPresent = BlankBuilderViewModel.GetVehicleEntries().ContainsByPredicate(
+			[&BlankResult](const FCFVehicleListEntry& Entry)
+			{
+				return Entry.DefinitionPath == FSoftObjectPath(BlankResult.CreatedDefinition)
+					&& Entry.RecipePath == FSoftObjectPath(BlankResult.CreatedRecipe);
+			});
+		TestTrue(TEXT("VBCUX P0-02 Blank fresh Browser contains exact created row"), bBlankBrowserRowPresent);
+	}
+	TestFalse(TEXT("VBCUX P0-02 Blank creation never auto-saves"), BlankResult.Operation.Mutation.bSavePerformed);
+
+	// Reused Chassis 신규 차량 생성만 담당할 독립 Builder ViewModel입니다.
+	FCFVehicleBuilderVM ReusedBuilderViewModel;
+	ReusedBuilderViewModel.BeginNewVehicleEntry();
+	ReusedBuilderViewModel.SetNewVehicleChassisMeshPath(FSoftObjectPath(SharedMesh));
+	TestEqual(TEXT("VBCUX P0-02 reused Chassis path is exact"), ReusedBuilderViewModel.GetNewVehicleChassisMeshPath(), FSoftObjectPath(SharedMesh));
+
+	// Reused-mesh VehicleData package identity입니다.
+	const FString ReusedDefinitionPackageName = TestRoot + TEXT("/DA_Reused");
+	// Reused-mesh VehicleData object name입니다.
+	const FString ReusedDefinitionAssetName = TEXT("DA_Reused");
+	// Reused-mesh Recipe package identity입니다.
+	const FString ReusedRecipePackageName = TestRoot + TEXT("/DA_Recipe_Reused");
+	// Reused-mesh Recipe object name입니다.
+	const FString ReusedRecipeAssetName = TEXT("DA_Recipe_Reused");
+	// Reused Chassis mutation0 create preview입니다.
+	FCFVehicleRecordCreatePreview ReusedPreview;
+	// Reused create/adoption diagnostic입니다.
+	FString ReusedError;
+	if (!TestTrue(TEXT("VBCUX P0-02 reused Chassis preview succeeds"), ReusedBuilderViewModel.PrepareNewVehicleRecordCreate(
+		ReusedDefinitionPackageName,
+		ReusedDefinitionAssetName,
+		ReusedRecipePackageName,
+		ReusedRecipeAssetName,
+		ReusedPreview,
+		ReusedError)))
+	{
+		AddError(ReusedError);
+		CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(BlankResult.CreatedRecipe);
+		CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(BlankResult.CreatedDefinition);
+		CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(OriginalDefinition);
+		CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(SharedMesh);
+		return false;
+	}
+
+	// Reused Chassis exact terminal creation result입니다.
+	FCFVehicleRecordCreateResult ReusedResult;
+	// Reused 생성 뒤 Builder exact target adoption 성공 여부입니다.
+	bool bReusedAdopted = false;
+	// Reused 생성 성공 이후 별도 adoption diagnostic입니다.
+	FString ReusedAdoptionError;
+	if (!TestTrue(TEXT("VBCUX P0-02 reused Chassis record creation succeeds"), ReusedBuilderViewModel.ExecutePreparedNewVehicleRecordCreate(
+		ReusedResult,
+		bReusedAdopted,
+		ReusedAdoptionError,
+		ReusedError)))
+	{
+		AddError(ReusedError);
+		CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(ReusedResult.CreatedRecipe);
+		CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(ReusedResult.CreatedDefinition);
+		CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(BlankResult.CreatedRecipe);
+		CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(BlankResult.CreatedDefinition);
+		CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(OriginalDefinition);
+		CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(SharedMesh);
+		return false;
+	}
+	TestTrue(TEXT("VBCUX P0-02 reused Chassis Builder adoption succeeds"), bReusedAdopted);
+	if (!bReusedAdopted && !ReusedAdoptionError.IsEmpty())
+	{
+		AddError(ReusedAdoptionError);
+	}
+	if (TestNotNull(TEXT("VBCUX P0-02 reused Chassis Definition exists"), ReusedResult.CreatedDefinition)
+		&& TestNotNull(TEXT("VBCUX P0-02 reused Chassis Recipe exists"), ReusedResult.CreatedRecipe))
+	{
+		TestEqual(TEXT("VBCUX P0-02 reused Recipe stores exact Chassis intent"), ReusedResult.CreatedRecipe->AssetIntent.ChassisMesh.Get(), SharedMesh);
+		TestNull(TEXT("VBCUX P0-02 reused Definition Chassis is not auto-applied"), ReusedResult.CreatedDefinition->VehicleVisualConfig.ChassisMesh);
+		TestEqual(TEXT("VBCUX P0-02 reused uses VehicleSpecificRequired"), ReusedResult.CreatedRecipe->BuilderTransmissionPolicy, ECFBuilderTransmissionPolicy::VehicleSpecificRequired);
+		TestEqual(TEXT("VBCUX P0-02 reused Builder selects exact created Definition"), ReusedBuilderViewModel.GetSelectedEntry().DefinitionPath, FSoftObjectPath(ReusedResult.CreatedDefinition));
+		TestEqual(TEXT("VBCUX P0-02 reused Builder selects exact created Recipe"), ReusedBuilderViewModel.GetSelectedEntry().RecipePath, FSoftObjectPath(ReusedResult.CreatedRecipe));
+		// Post-create fresh Browser가 exact reused-mesh Definition+Recipe row를 실제 보유하는지 여부입니다.
+		const bool bReusedBrowserRowPresent = ReusedBuilderViewModel.GetVehicleEntries().ContainsByPredicate(
+			[&ReusedResult](const FCFVehicleListEntry& Entry)
+			{
+				return Entry.DefinitionPath == FSoftObjectPath(ReusedResult.CreatedDefinition)
+					&& Entry.RecipePath == FSoftObjectPath(ReusedResult.CreatedRecipe);
+			});
+		TestTrue(TEXT("VBCUX P0-02 reused fresh Browser contains exact created row"), bReusedBrowserRowPresent);
+	}
+	TestEqual(TEXT("VBCUX P0-02 original VehicleData Chassis remains unchanged"), OriginalDefinition->VehicleVisualConfig.ChassisMesh.Get(), OriginalChassisBeforeCreate);
+	TestFalse(TEXT("VBCUX P0-02 reused creation never auto-saves"), ReusedResult.Operation.Mutation.bSavePerformed);
+
+	CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(ReusedResult.CreatedRecipe);
+	CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(ReusedResult.CreatedDefinition);
+	CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(BlankResult.CreatedRecipe);
+	CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(BlankResult.CreatedDefinition);
+	CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(OriginalDefinition);
+	CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(SharedMesh);
+	return true;
+}
+
+// VBCUX-P0-03 Vehicle ID validation과 deterministic default identity 계약을 검증합니다.
+bool FCFVBCUXP003NamingTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// Vehicle ID naming 계약을 독립 검증할 Builder ViewModel입니다.
+	FCFVehicleBuilderVM BuilderViewModel;
+	// Vehicle ID validation/build diagnostic입니다.
+	FString Error;
+	TestTrue(TEXT("Vehicle ID WagonPolice is valid"), BuilderViewModel.SetVehicleCreationId(TEXT("WagonPolice"), Error));
+	TestEqual(TEXT("Vehicle ID transient state preserves exact input"), BuilderViewModel.GetVehicleCreationId(), FString(TEXT("WagonPolice")));
+
+	// Default VehicleData package identity입니다.
+	FString DefinitionPackageName;
+	// Default VehicleData object name입니다.
+	FString DefinitionAssetName;
+	// Default Recipe package identity입니다.
+	FString RecipePackageName;
+	// Default Recipe object name입니다.
+	FString RecipeAssetName;
+	if (TestTrue(TEXT("Vehicle ID builds deterministic default record identity"), BuilderViewModel.BuildDefaultVehicleRecordIdentity(
+		BuilderViewModel.GetVehicleCreationId(),
+		DefinitionPackageName,
+		DefinitionAssetName,
+		RecipePackageName,
+		RecipeAssetName,
+		Error)))
+	{
+		TestEqual(TEXT("Vehicle ID default Definition package"), DefinitionPackageName, FString(TEXT("/Game/CarFight/Data/Authoring/DA_Vehicle_WagonPolice")));
+		TestEqual(TEXT("Vehicle ID default Definition object"), DefinitionAssetName, FString(TEXT("DA_Vehicle_WagonPolice")));
+		TestEqual(TEXT("Vehicle ID default Recipe package"), RecipePackageName, FString(TEXT("/Game/CarFight/Data/Authoring/DA_Recipe_WagonPolice")));
+		TestEqual(TEXT("Vehicle ID default Recipe object"), RecipeAssetName, FString(TEXT("DA_Recipe_WagonPolice")));
+	}
+	else
+	{
+		AddError(Error);
+	}
+
+	TestTrue(TEXT("Vehicle ID underscore is valid"), BuilderViewModel.SetVehicleCreationId(TEXT("Wagon_Police"), Error));
+	TestTrue(TEXT("Vehicle ID digits are valid"), BuilderViewModel.SetVehicleCreationId(TEXT("SUV01"), Error));
+	TestFalse(TEXT("Vehicle ID empty is invalid"), BuilderViewModel.SetVehicleCreationId(TEXT(""), Error));
+	TestFalse(TEXT("Vehicle ID spaces are invalid"), BuilderViewModel.SetVehicleCreationId(TEXT("Wagon Police"), Error));
+	TestFalse(TEXT("Vehicle ID path separator is invalid"), BuilderViewModel.SetVehicleCreationId(TEXT("Wagon/Police"), Error));
+	TestFalse(TEXT("Vehicle ID non-ASCII is invalid"), BuilderViewModel.SetVehicleCreationId(TEXT("왜건"), Error));
+	TestFalse(TEXT("Vehicle ID leading whitespace is invalid"), BuilderViewModel.SetVehicleCreationId(TEXT(" Wagon"), Error));
+
+	// Invalid ID가 default package identity를 생성하지 않는지 확인할 출력입니다.
+	FString InvalidDefinitionPackageName;
+	// Invalid ID가 default object identity를 생성하지 않는지 확인할 출력입니다.
+	FString InvalidDefinitionAssetName;
+	// Invalid ID가 default Recipe package identity를 생성하지 않는지 확인할 출력입니다.
+	FString InvalidRecipePackageName;
+	// Invalid ID가 default Recipe object identity를 생성하지 않는지 확인할 출력입니다.
+	FString InvalidRecipeAssetName;
+	TestFalse(TEXT("Invalid Vehicle ID fails default identity build"), BuilderViewModel.BuildDefaultVehicleRecordIdentity(
+		TEXT("Bad/Vehicle"),
+		InvalidDefinitionPackageName,
+		InvalidDefinitionAssetName,
+		InvalidRecipePackageName,
+		InvalidRecipeAssetName,
+		Error));
+	TestTrue(TEXT("Invalid Vehicle ID leaves Definition package empty"), InvalidDefinitionPackageName.IsEmpty());
+	TestTrue(TEXT("Invalid Vehicle ID leaves Recipe package empty"), InvalidRecipePackageName.IsEmpty());
+	return true;
+}
+
+// VBCUX-P0-04에서 기존 P0-01~03에 없던 fail-closed/partial-success 공백을 집중 검증합니다.
+bool FCFVBCUXP004FocusedRegressionTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// 서로 다른 Automation run 사이 package identity 충돌을 막는 unique token입니다.
+	const FString UniqueToken = FGuid::NewGuid().ToString(EGuidFormats::Digits);
+	// P0-04 전용 transient package root입니다.
+	const FString TestRoot = TEXT("/Game/CarFight/Tests/VBCUXP004/") + UniqueToken;
+
+	// Vehicle-record package collision을 검증할 Builder ViewModel입니다.
+	FCFVehicleBuilderVM CollisionBuilderViewModel;
+	CollisionBuilderViewModel.BeginNewVehicleEntry();
+	// 이미 memory에 존재하도록 선점할 Definition package 이름입니다.
+	const FString CollisionDefinitionPackageName = TestRoot + TEXT("/DA_Collision");
+	// Collision을 만들기 위해 memory에 선점한 package입니다.
+	UPackage* CollisionDefinitionPackage = CreatePackage(*CollisionDefinitionPackageName);
+	TestNotNull(TEXT("VBCUX P0-04 collision fixture package exists"), CollisionDefinitionPackage);
+	// Collision preview의 Definition object 이름입니다.
+	const FString CollisionDefinitionAssetName = TEXT("DA_Collision");
+	// Collision preview가 사용하되 충돌하지 않는 Recipe package 이름입니다.
+	const FString CollisionRecipePackageName = TestRoot + TEXT("/DA_Recipe_Collision");
+	// Collision preview의 Recipe object 이름입니다.
+	const FString CollisionRecipeAssetName = TEXT("DA_Recipe_Collision");
+	// Collision 요청의 mutation0 preview 결과입니다.
+	FCFVehicleRecordCreatePreview CollisionPreview;
+	// Collision validation diagnostic입니다.
+	FString CollisionError;
+	TestFalse(TEXT("VBCUX P0-04 existing Definition package collision is fail-closed"), CollisionBuilderViewModel.PrepareNewVehicleRecordCreate(
+		CollisionDefinitionPackageName,
+		CollisionDefinitionAssetName,
+		CollisionRecipePackageName,
+		CollisionRecipeAssetName,
+		CollisionPreview,
+		CollisionError));
+	TestTrue(TEXT("VBCUX P0-04 collision reports existing package/object"), CollisionError.Contains(TEXT("이미 존재")));
+	TestFalse(TEXT("VBCUX P0-04 collision preview creates no assets"), CollisionPreview.Operation.Mutation.bCreatedAssets);
+	TestFalse(TEXT("VBCUX P0-04 collision preview performs no save"), CollisionPreview.Operation.Mutation.bSavePerformed);
+
+	// Wrong Chassis asset type을 검증할 Builder ViewModel입니다.
+	FCFVehicleBuilderVM WrongTypeBuilderViewModel;
+	WrongTypeBuilderViewModel.BeginNewVehicleEntry();
+	// StaticMesh가 아닌 object를 담을 fixture package입니다.
+	UPackage* WrongTypePackage = CreatePackage(*(TestRoot + TEXT("/DA_NotStaticMesh")));
+	// Chassis picker path에 잘못 들어간 UCFVehicleData fixture입니다.
+	UCFVehicleData* WrongTypeObject = NewObject<UCFVehicleData>(
+		WrongTypePackage,
+		TEXT("DA_NotStaticMesh"),
+		RF_Public | RF_Standalone | RF_Transactional);
+	if (!TestNotNull(TEXT("VBCUX P0-04 wrong Chassis type fixture exists"), WrongTypeObject))
+	{
+		return false;
+	}
+	WrongTypeBuilderViewModel.SetNewVehicleChassisMeshPath(FSoftObjectPath(WrongTypeObject));
+	// Wrong-type preview 결과입니다.
+	FCFVehicleRecordCreatePreview WrongTypePreview;
+	// Wrong-type validation diagnostic입니다.
+	FString WrongTypeError;
+	TestFalse(TEXT("VBCUX P0-04 non-StaticMesh Chassis path is fail-closed"), WrongTypeBuilderViewModel.PrepareNewVehicleRecordCreate(
+		TestRoot + TEXT("/DA_WrongType"),
+		TEXT("DA_WrongType"),
+		TestRoot + TEXT("/DA_Recipe_WrongType"),
+		TEXT("DA_Recipe_WrongType"),
+		WrongTypePreview,
+		WrongTypeError));
+	TestTrue(TEXT("VBCUX P0-04 wrong Chassis type reports StaticMesh diagnostic"), WrongTypeError.Contains(TEXT("StaticMesh")));
+	TestFalse(TEXT("VBCUX P0-04 wrong Chassis type creates no assets"), WrongTypePreview.Operation.Mutation.bCreatedAssets);
+	TestFalse(TEXT("VBCUX P0-04 wrong Chassis type performs no save"), WrongTypePreview.Operation.Mutation.bSavePerformed);
+
+	// 실제 record creation은 성공했지만 Project Browser row가 존재하지 않는 상황의 adoption failure를 검증할 Builder ViewModel입니다.
+	FCFVehicleBuilderVM AdoptionFailureBuilderViewModel;
+	// /Engine/Transient 안에서 다른 Automation object와 충돌하지 않을 Definition object 이름입니다.
+	const FString TransientDefinitionObjectName = TEXT("DA_Unregistered_") + UniqueToken;
+	// /Engine/Transient 안에서 다른 Automation object와 충돌하지 않을 Recipe object 이름입니다.
+	const FString TransientRecipeObjectName = TEXT("DA_Recipe_Unregistered_") + UniqueToken;
+	// 첫 loaded-object selection은 가능하지만 Project Asset Registry Browser에는 나타나지 않아야 하는 Definition입니다.
+	UCFVehicleData* UnregisteredDefinition = NewObject<UCFVehicleData>(
+		GetTransientPackage(),
+		FName(*TransientDefinitionObjectName),
+		RF_Transactional);
+	// 첫 loaded-object selection은 가능하지만 Project Asset Registry Browser에는 나타나지 않아야 하는 Recipe입니다.
+	UCFVehicleRecipeData* UnregisteredRecipe = NewObject<UCFVehicleRecipeData>(
+		GetTransientPackage(),
+		FName(*TransientRecipeObjectName),
+		RF_Transactional);
+	if (!TestNotNull(TEXT("VBCUX P0-04 partial-success Definition fixture exists"), UnregisteredDefinition)
+		|| !TestNotNull(TEXT("VBCUX P0-04 partial-success Recipe fixture exists"), UnregisteredRecipe))
+	{
+		return false;
+	}
+	UnregisteredRecipe->TargetVehicleData = UnregisteredDefinition;
+	UnregisteredRecipe->ImportState.ManageState = ECFVehicleManageState::Managed;
+	// Record creation 성공 결과를 재현하되 Project Asset Registry에 들어갈 수 없는 transient identity를 사용한 결과입니다.
+	FCFVehicleRecordCreateResult UnregisteredCreateResult;
+	UnregisteredCreateResult.CreatedDefinition = UnregisteredDefinition;
+	UnregisteredCreateResult.CreatedRecipe = UnregisteredRecipe;
+	// Adoption failure diagnostic입니다.
+	FString AdoptionError;
+	TestFalse(TEXT("VBCUX P0-04 missing fresh Browser row fails Builder adoption"), AdoptionFailureBuilderViewModel.AdoptCreatedVehicleRecords(
+		UnregisteredCreateResult,
+		AdoptionError));
+	TestTrue(TEXT("VBCUX P0-04 adoption failure reports partial success explicitly"), AdoptionError.Contains(TEXT("records created / Builder adoption failed")));
+	TestTrue(TEXT("VBCUX P0-04 adoption failure preserves a valid created Definition object"), IsValid(UnregisteredDefinition));
+	TestTrue(TEXT("VBCUX P0-04 adoption failure preserves a valid created Recipe object"), IsValid(UnregisteredRecipe));
+	TestEqual(TEXT("VBCUX P0-04 adoption failure preserves exact Definition object"), UnregisteredCreateResult.CreatedDefinition, UnregisteredDefinition);
+	TestEqual(TEXT("VBCUX P0-04 adoption failure preserves exact Recipe object"), UnregisteredCreateResult.CreatedRecipe, UnregisteredRecipe);
+
+	// Wrong-type fixture를 test 종료 시 garbage 대상으로 정리합니다.
+	WrongTypeObject->ClearFlags(RF_Public | RF_Standalone);
+	WrongTypeObject->MarkAsGarbage();
+	// Transient partial-success Definition fixture를 test 종료 시 garbage 대상으로 정리합니다.
+	UnregisteredDefinition->MarkAsGarbage();
+	// Transient partial-success Recipe fixture를 test 종료 시 garbage 대상으로 정리합니다.
+	UnregisteredRecipe->MarkAsGarbage();
 	return true;
 }
 

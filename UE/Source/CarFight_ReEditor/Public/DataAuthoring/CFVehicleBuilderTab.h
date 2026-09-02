@@ -1,9 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderTab.h
-// Version: v1.11.0
-// Date: 2026-08-31
-// Description: CF-FQ-040 Guided Vehicle Builder의 Editor Slate Shell입니다.
+// Version: v1.14.0
+// Date: 2026-09-02
+// Description: Guided Vehicle Builder + CF-FQ-042 Vehicle ID/Candidate Quick Start Editor Slate Shell입니다.
 // Changelog:
+// - v1.14.0: Step 1 일반 naming을 Vehicle ID 한 칸으로 전환하고 deterministic default identity와 접힌 Advanced Asset 경로 override, Mesh Candidate Quick Start label/flow를 추가.
+// - v1.13.0: 신규 제작 Step 1에 optional Chassis StaticMesh picker/Blank Start와 공통 Preview→승인→Commit→exact row highlight flow를 연결.
+// - v1.12.0: 작업 대상 영역에 selection-independent '+ 새 차량 만들기' entry를 추가하고 BuilderVM transient 신규 제작 상태와 연결.
 // - v1.11.0: Step 1 Existing Reference Evidence complete replacement R1의 별도 검토 버튼/handler를 추가해 Companion 생성과 Evidence 갱신 UX를 분리.
 // - v1.10.0: Step 2 picker presentation 재생성 host/helper를 추가해 차량 selection 전환 시 이전 ObjectPicker 표시 캐시가 current Recipe로 교체되도록 보강.
 // - v1.9.0: E2E에서 발견된 Step 2 Wheel Mesh 지정 UX 공백을 StaticMesh object picker + explicit Recipe-only 반영 UI로 교정.
@@ -17,6 +20,9 @@
 // - v1.1.0: Step 1 Mesh-only 후보에 기존 safe VehicleData+Recipe Preview→명시 승인 생성 UI를 연결.
 // - v1.0.0: 차량/메시 후보 목록, 고정 8-step navigation, current-step 단일 content, Back/Refresh/Next를 추가.
 // Migration:
+// - v1.14.0부터 일반 Guided creation은 Vehicle ID 한 칸이 기본 입력이며 4개 package/name은 `고급 Asset 경로 설정` 접힘 영역의 override로 이동합니다. invalid Vehicle ID는 sanitize하지 않고 즉시 설명하며 최종 collision/path/type는 existing Preview authority가 판정합니다.
+// - v1.13.0 Explicit New Vehicle은 기존 4개 package/name 입력을 P0-02 임시 identity UI로 재사용합니다. Vehicle ID 단일 naming은 P0-03이 소유합니다. Chassis picker는 optional이며 사용 중 Mesh도 허용하고 생성 시 Recipe AssetIntent만 기록합니다.
+// - v1.12.0 신규 차량 버튼은 transient 진입만 수행하며 Asset 생성/Save/VehicleData Apply는 하지 않습니다. 기존 Mesh-only Quick Start도 그대로 유지됩니다.
 // - 기존 Vehicle Authoring Advanced Workspace를 대체하지 않고 별도 Guided entry로 병행합니다.
 
 #pragma once
@@ -55,6 +61,9 @@ private:
 	// Vehicle Browser cache를 fresh read하고 list row를 다시 만듭니다.
 	FReply HandleRefreshVehicles();
 
+	// 기존 Browser selection과 독립적으로 신규 차량 제작 진입 상태를 시작합니다.
+	FReply HandleBeginNewVehicleEntry();
+
 	// 선택 row를 current Builder target으로 전환합니다.
 	void HandleVehicleSelectionChanged(FVehicleRowPtr SelectedItem, ESelectInfo::Type SelectInfo);
 
@@ -76,8 +85,26 @@ private:
 	// Complete인 현재 Step에서만 다음 Step으로 이동합니다.
 	FReply HandleNextStep();
 
-	// Mesh-only 후보에서 VehicleData+Recipe 생성 proposal을 검토하고 explicit 승인 뒤 commit합니다.
+	// Explicit New Vehicle 또는 Mesh-only Quick Start의 VehicleData+Recipe proposal을 검토하고 explicit 승인 뒤 공통 commit/adoption 경로를 실행합니다.
 	FReply HandleCreateVehicleFromMesh();
+
+	// Vehicle ID 입력 변경을 BuilderVM canonical transient state에 반영하고 valid할 때 default package/object identity를 갱신합니다.
+	void HandleVehicleIdTextChanged(const FText& NewText);
+
+	// Current Vehicle ID로 deterministic default Definition/Recipe package/object 네 값을 Advanced 입력란에 채웁니다.
+	void ApplyDefaultCreationIdentityFromVehicleId();
+
+	// Advanced Definition/Recipe package/object 입력 네 값을 모두 비웁니다.
+	void ClearCreationIdentityFields();
+
+	// Current Vehicle ID validation 안내를 표시합니다.
+	FText GetVehicleIdValidationText() const;
+
+	// Explicit New Vehicle과 Mesh Candidate Quick Start를 구분하는 생성 검토 버튼 문구를 반환합니다.
+	FText GetCreateVehicleButtonText() const;
+
+	// Explicit New Vehicle의 optional Chassis StaticMesh picker 변경을 BuilderVM canonical creation state에 반영합니다.
+	void HandleNewVehicleChassisMeshChanged(const FAssetData& AssetData);
 
 	// Step 1 current Recipe에 exact binding된 AI Research Draft를 Project Saved에서 읽습니다.
 	FReply HandleLoadResearchDraft();
@@ -170,11 +197,17 @@ private:
 	// Step 8 exact current benchmark/Target에 USER Driving PASS를 명시적으로 기록합니다.
 	FReply HandleAcceptUserDriving();
 
-	// 선택한 Mesh 후보 이름으로 사람이 수정할 수 있는 package/name 제안값을 채웁니다.
+	// Explicit New Vehicle은 빈 Vehicle ID로 초기화하고 Mesh Candidate는 Mesh stem 기반 Vehicle ID 제안값을 채웁니다.
 	void SyncCreationFieldsFromSelection();
 
-	// Step 1의 Mesh-only 생성 UI 표시 조건입니다.
+	// Step 1의 Explicit New Vehicle 또는 Mesh-only Quick Start 생성 UI 표시 조건입니다.
 	EVisibility GetMeshCreationVisibility() const;
+
+	// Explicit New Vehicle 전용 Blank/optional Chassis picker 영역 표시 조건입니다.
+	EVisibility GetNewVehicleCreationOptionsVisibility() const;
+
+	// Explicit New Vehicle의 current optional Chassis StaticMesh object path 문자열을 반환합니다.
+	FString GetNewVehicleChassisMeshPath() const;
 
 	// Step 1 managed Recipe의 Reference/Companion UI 표시 조건입니다.
 	EVisibility GetReferenceFlowVisibility() const;
@@ -263,16 +296,19 @@ private:
 	// current definition-driven Step button container입니다.
 	TSharedPtr<SVerticalBox> StepNavigationBox;
 
-	// 신규 VehicleData package 경로 입력입니다.
+	// Guided 신규 차량 일반 naming의 단일 Vehicle ID 입력입니다.
+	TSharedPtr<SEditableTextBox> NewVehicleIdTextBox;
+
+	// 신규 VehicleData package 고급 override 입력입니다.
 	TSharedPtr<SEditableTextBox> NewDefinitionPackageTextBox;
 
-	// 신규 VehicleData Asset 이름 입력입니다.
+	// 신규 VehicleData Asset 이름 고급 override 입력입니다.
 	TSharedPtr<SEditableTextBox> NewDefinitionNameTextBox;
 
-	// 신규 Recipe package 경로 입력입니다.
+	// 신규 Recipe package 경로 고급 override 입력입니다.
 	TSharedPtr<SEditableTextBox> NewRecipePackageTextBox;
 
-	// 신규 Recipe Asset 이름 입력입니다.
+	// 신규 Recipe Asset 이름 고급 override 입력입니다.
 	TSharedPtr<SEditableTextBox> NewRecipeNameTextBox;
 
 	// Step 2에서 explicit 반영 전까지 보관하는 pending Chassis StaticMesh path입니다.
@@ -284,6 +320,9 @@ private:
 	// Step 2 ObjectPicker subtree를 current Recipe 기준으로 교체할 host입니다.
 	TSharedPtr<SBox> MeshPreparationPickerHost;
 
+
+	// Vehicle ID 실시간 validation/default naming 상태를 USER에게 설명합니다.
+	FText VehicleIdValidationText;
 
 	// 마지막 read/action 결과를 USER에게 보여주는 status text입니다.
 	FText LastStatusText;
