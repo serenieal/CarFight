@@ -1,7 +1,7 @@
 # CarFight Active Work
 
-- 문서 버전: v4.44
-- 최근 갱신일: 2026-08-29
+- 문서 버전: v4.75
+- 최근 갱신일: 2026-09-02
 - 문서 상태: Current
 - 역할: CarFight 게임 프로젝트에서 현재 실제로 진행 중인 작업을 선택하고 대표 Plan으로 연결하는 **세션 복원 projection**
 
@@ -46,24 +46,24 @@ UI Resource 방법론 실험 `URT05_Plan.md v0.8`은 Method Validation Complete�
 
 ## 3. 최근 완료
 
-### CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크 — Done
+### CF-FQ-040 Guided Vehicle Builder — Done
 
 ```text
-상태: Done
-Historical Plan: Document/Plan/Archive/InGameUIPlan.md v0.59.36
-Current owner: Document/Systems/UI/InGameUI.md v1.1.5
-Aim/FireFeedback owner: Document/Systems/UI/AimReticle.md v1.10.0
-Sensor/Target Identity owner: Document/Systems/Targeting/SensorContact.md v1.2.0
+상태: Done / VB-P0-10 Current System Promotion Complete
+Current owner: Document/Systems/Vehicles/VehicleBuilder.md v1.0.0
+Historical Plan: Document/Plan/VehicleBuilder/VehicleBuilderPlan.md v0.1.46 — Historical + Retained Path
+Historical Roadmap: Document/Plan/VehicleBuilder/VehicleBuilderRoadmap.md v0.1.38 — Historical + Retained Path
+Data Authoring 역할: Builder Backend + Advanced Workspace
 ```
 
 보존 판정:
 
-- UI-P0-02~05 USER PASS.
-- UI-P0-06~10 Technical Complete / AI Runtime Technical Validation.
-- UI-P0-11 Systems Promotion Complete.
-- 2026-08-22 post-closure remediation P1 2건 + P2 3건 Technical PASS.
-- final Official Build `bd3640c616794cd7a54cc8a8afa4b021`, broad `CarFight.UI` 44/44, `CarFight.Sensor` 14/14 PASS는 대표 Plan evidence로 보존하며 새 관련 failure 없이 반복하지 않는다.
-- UI-P0-08 Radar/Edge Visual·Zoom Feel과 D1-11-ART SpeedGauge·VehiclePanel·전체 Visual Review는 비차단 Deferred/Pending이며 USER PASS로 확대하지 않는다.
+- VB-P0-09 End-to-End USER Acceptance PASS.
+- WSA P0 Complete.
+- ESH-01~06 Complete / ESH Final Audit Clean PASS.
+- 완료 기준 Wagon은 RecipeId `05F69DD34990A868DEFFD29C1AF5B2F9`, TargetHash `0e5b48e8dcd39deba441da9237218be6`, Step8 RunId `256cd822-419e-4a3e-ac23-388b570d78c2`, persisted 206.700km/h / FinalGear6 / T200 31.183s / `target_hash_verified=true`다.
+- 위 Wagon 값은 완료 evidence이며 새 차량 tuning preset이 아니다. 새 관련 failure 없이 ESH나 Wagon 재튜닝을 반복하지 않는다.
+- CF-FQ-038은 별도 Paused lifecycle을 유지하며 DEL6/UA-08 잔여 항목을 CF-FQ-040 Done에 흡수하지 않는다.
 
 ---
 
@@ -71,11 +71,11 @@ Sensor/Target Identity owner: Document/Systems/Targeting/SensorContact.md v1.2.0
 
 | Feature | 상태 | 대표 owner / 재개 지점 | 반복 금지 범위 |
 | --- | --- | --- | --- |
-| `CF-FQ-038` 차량 데이터 Authoring | Paused | `Document/Plan/DataAuthoring/DataAuthoringPlan.md v0.2.52` + `Document/Plan/DataAuthoring/DataAuthoringRoadmap.md v0.1.56` → Deprecated transition Technical Complete / CF-FQ-040 Builder Backend·Advanced Workspace 역할 / 다음 non-blocking `DEL6 compatibility retirement` 또는 `UA-08 quantitative comparison Deferred` | P0-12 USER PASS 7/8 유지. UA-01~08·P0-08~11·DG1~DG5·deprecation validation replay 금지. DEL6 Pending이라 physical Wizard deletion 금지 |
+| `CF-FQ-038` 차량 데이터 Authoring | Paused | `Document/Plan/DataAuthoring/DataAuthoringPlan.md v0.2.52` + `Document/Plan/DataAuthoring/DataAuthoringRoadmap.md v0.1.56` → Deprecated transition Technical Complete / `Document/Systems/Vehicles/VehicleBuilder.md v1.0.0` 기준 Builder Backend + Advanced Workspace 역할 / 다음 non-blocking `DEL6 compatibility retirement` 또는 `UA-08 quantitative comparison Deferred` | P0-12 USER PASS 7/8 유지. UA-01~08·P0-08~11·DG1~DG5·deprecation validation replay 금지. DEL6 Pending이라 physical Wizard deletion 금지 |
 | `CF-FQ-034` 차량 피팅·질량 | Paused | `Document/Plan/VehicleFitting/VehicleFittingPlan.md v0.17.0` → `FIT-P0-07D USER Driving Feel Comparison` | FIT-P0-07A~07C 정량 Mobility evidence 반복 금지 |
 | `CF-FQ-029` 모듈형 런처 | Paused | `Document/Plan/LauncherMissile/LauncherMissilePlan.md v0.14.0` → `LM-P0-06 USER PIE` | LM-P0-06A Failure Policy Technical PASS 반복 금지 |
 | `CF-FQ-030` 미사일 비행·유도 | Ready | `CF-TC-027 Manual PIE Pending` | Persisted Asset Technical Verification과 Direct Runtime 기술 증거 반복 금지 |
-| `CF-FQ-040` Guided Vehicle Builder | Ready | `Document/Plan/VehicleBuilder/VehicleBuilderPlan.md v0.1.25` + `Document/Plan/VehicleBuilder/VehicleBuilderRoadmap.md v0.1.25` + `Document/Plan/VehicleBuilder/WheelSizeAuthorityPlan.md v0.1.11` + `Document/Plan/VehicleBuilder/VehicleBuilderProposalSpec.md v0.1.1` + `Document/Plan/VehicleBuilder/VehicleBuilderShellSpec.md v0.1.14` + `Document/Plan/VehicleBuilder/VehicleRefEvidenceSpec.md v0.1.1` → `VB-P0-09 In Progress / actual Wagon AI-only preparation complete / WSA-P0-06 Technical PASS / WSA-P0-07 USER Acceptance Ready / Step 1~8 Technical PASS preserved` | Actual Wagon Recipe는 shared `Wheel_FL` + `SocketScaleFromChassis` + Socket-derived Radius/Width adoption 4건 persisted. AI ResearchDraft는 2026 Volvo V60 Cross Country KR representative reference, private Profile 4종 initial seed, actual Front/Rear WheelClass와 WSA-safe wheel authority로 준비 완료했고 schema/consistency PASS다. UE Asset/Recipe/Target/Save mutation은 추가 수행하지 않았다. next는 출근 후 Step 1 Reference Set USER review → Companion explicit 생성 → Step 5 provenance/Profile proposal → Step 7 full Diff USER review/Apply → USER Save → Technical Driving + WSA-P0-07 PIE USER Acceptance. USER Scale 없는 legacy 자동 migration/AI tire-size decision/raw writer 금지 |
+| `CF-FQ-041` 런타임 콘텐츠 적용 메뉴 | Ready | `Document/Plan/RuntimeApply/RuntimeApplyPlan.md v0.1.5` → `RTA-P0-01 Technical PASS / next RTA-P0-02 Vehicle Runtime Apply` | Runtime Catalog/Settings, `/Game/CarFight/Debug` bounded Cook, persisted 기본 Catalog Vehicle 3 / Equipment 2, actual runtime load Automation까지 PASS했다. Vehicle은 Builder Step 8 same-Pawn transient reinitialize를 재사용하며 RTA-P0-02 착수 전 dirty `CFVehiclePawn` 최신 diff를 다시 확인한다. |
 | `CF-FQ-035` 인벤토리 Foundation | Paused | FeatureQueue/대표 Plan → USER Field UI·Mobility | 기존 Inventory/Fitting Technical checkpoint 반복 금지 |
 | `CF-FQ-026` 타겟 선택 | Paused | FeatureQueue/대표 Plan → `TS-P0-08 USER PIE` | TS-P0-00~07 및 Remote Technical evidence 반복 금지 |
 | `CF-FQ-015` 차량 데이터 튜닝 | Paused | FeatureQueue/대표 Plan → `VD-P0-04 USER Tuning` | VD-P0-00~03 Technical evidence 반복 금지 |
@@ -123,6 +123,183 @@ ActiveWork가 다시 상세 Build/Automation/USER 로그를 누적하거나 서�
 ---
 
 ## 8. Changelog
+
+### v4.75 - 2026-09-02
+
+- `CF-FQ-040 / VB-P0-10 Current System Promotion` 완료를 반영해 Ready 복원 row를 제거하고 최근 완료 Feature로 전환했다. Current owner는 `Systems/Vehicles/VehicleBuilder.md v1.0.0`이다.
+- 대표 Plan/Roadmap은 Historical + Retained Path로 전환하고, Data Authoring 역할은 Builder Backend + Advanced Workspace로 고정했다. CF-FQ-038 자체 Paused lifecycle은 유지한다.
+- 현재 단일 Active `CF-FQ-039`와 unrelated Paused/Ready checkpoint는 변경하지 않았다.
+
+### v4.74 - 2026-09-02
+
+- CF-FQ-040 ESH 최종감사 P1/P2 교정과 focused/affected regression 완료를 반영해 대표 owner를 Plan v0.1.45 / Roadmap v0.1.37로 동기화했다.
+- ESH-01~06은 Final Audit Clean PASS이며 next는 VB-P0-10 Current System Promotion이다. current single Active CF-FQ-039와 기타 projection은 변경하지 않았다.
+
+### v4.73 - 2026-09-02
+
+- CF-FQ-040 actual Wagon ESH-06 USER Driving PASS와 exact acceptance token 저장을 확인해 VB-P0-09 End-to-End USER Acceptance를 PASS로 닫았다.
+- 대표 owner를 Plan v0.1.44 / Roadmap v0.1.36으로 동기화하고 next를 VB-P0-10 Current System Promotion으로 전진했다. CF-FQ-040은 promotion 전까지 P2/Ready 유지다.
+
+### v4.72 - 2026-09-02
+
+- CF-FQ-040 ESH-06용 fresh Step 8 benchmark를 current TargetHash `0e5b48e8dcd39deba441da9237218be6`에 binding해 PASS했다. RunId `256cd822-419e-4a3e-ac23-388b570d78c2`이며 USER Driving Feel은 아직 미승인이다.
+- managed Editor는 Ready다. 자동 PIE start는 current GoPyMCP lifecycle/write policy 경계에서 fail-closed했으므로 next는 USER Play 1회 뒤 Wagon transient apply와 직접 주행 확인이다.
+
+### v4.71 - 2026-09-02
+
+- CF-FQ-040을 Plan v0.1.42 / Roadmap v0.1.34에 동기화했다. USER-approved fixed-common 5500 GAME_BIAS의 Profile/Receipt commit과 Target DefinitionApply가 PASS했으며 current persisted ChangeUp/Down은 5500/2000이다.
+- ESH-05 no-override persisted high-speed retest `9abcb642fe7241b585a7e7fcc1637296`가 transient 5500과 동일한 T100 6.100 / T150 13.167 / T200 31.183 / Peak206.700 / G6를 재현해 Technical PASS했다. next는 ESH-06 USER Driving PASS다.
+
+### v4.70 - 2026-09-02
+
+- CF-FQ-040 projection을 Plan v0.1.41 / Roadmap v0.1.33에 동기화했다. Engine Curve Target Apply, ESH-03 diagnostic, ESH-04 dedicated high-speed authority는 Technical PASS다.
+- transient 4500/5500/6222 비교에서 5500을 fixed-common GAME_BIAS USER Review 후보로 올렸다. persisted Product ChangeUpRPM 4500은 유지하며 별도 USER 승인 전 mutation/ESH-05 retest는 금지한다.
+
+### v4.69 - 2026-09-01
+
+- USER 승인으로 current CarFight managed Editor를 save 없이 정상 종료했다. lifecycle stop은 force kill 0 / `save_requested=false`로 완료됐다.
+- ESH-03 dormant draft safety correction을 Official Build `c3813e9aad004b6c94b7c9829f7cd119` PASS, correction focused `27773a815a9149589219d93f139a7d13` exact 2/2 PASS, ESH-02/Step5/FinalReview affected `1aa1a0bc067342d281a9994f39769329` exact 5/5 PASS로 검증했다.
+- ESH-03 정식 상태는 계속 Not Started이며 Target DefinitionApply 전 production activation/Target Apply/Save는 금지한다.
+
+### v4.68 - 2026-09-01
+
+- ESH-03 중간검수에서 Target DefinitionApply 전 production 경로에 WheelTorqueCrossoverShift가 연결된 Gate 위반과 nested blocker/warning 미전파를 확인했다.
+- ESH-03 production 호출은 default-off로 되돌리고 dormant draft만 보존했다. explicit ESH-03 opt-in에서만 nested warning/blocker를 parent TransmissionDiagnostic으로 전파하며 malformed ratio/radius/post-shift RPM을 fail-closed하도록 교정했다.
+- Wagon fixed-common recommendation의 최대 adjacent torque gap 15% 초과를 `Transmission.FixedCommonShiftFitPoor` USER Review warning으로 추가했다. 현재 Editor가 실행 중이므로 Official Build/새 Automation은 Pending이며 ESH-03는 여전히 Not Started다.
+
+### v4.67 - 2026-09-01
+
+- actual Wagon ESH-02 Engine Curve USER Review PASS 후 existing Builder 4-Profile atomic commit으로 private Profiles + Recipe receipt를 persistent 저장했다. commit process `8a5daf3b5b424124a74e6aa8dc5e0c3b` PASS다.
+- 별도 fresh Editor persisted readback을 포함한 affected regression `a6c99a34f2094f27aa65e30fe3356cd2` exact 5/5 PASS다. Target VehicleData는 여전히 Engine Curve 미적용 상태다.
+- fresh Final Review `b6e1b75eacb64f2a92b0aa2319ab9707` PASS: ResolverRevision5 / Warning12 / Blocker0 / Diff2, DefinitionApply ProposalHash `809c5523ce23971793b3a937c2d8c1c2`, DiffHash `fcdabd8842b82537ba97247698267ed4`다.
+- next는 별도 USER Target DefinitionApply 승인이다. 승인 전 Target Apply/Save와 ESH-03 WheelTorqueCrossoverShift는 금지한다.
+
+### v4.66 - 2026-09-01
+
+- CF-FQ-040을 `VehicleBuilderPlan v0.1.38 / Roadmap v0.1.29 / ProposalSpec v0.1.11`로 동기화했다.
+- ESH-01 vehicle-specific Engine TorqueCurve typed owner/runtime materialization을 Technical PASS로 기록했다.
+- ESH-02 generic contract와 actual Wagon PhysicsDraft v3 mutation0 dry-run을 PASS로 기록했다. actual Wagon `EngineCurveProposalHash=773221966499c6295f2a652a21b270a5`, Blocker 0 / GAME_BIAS USER warning 1, Product Asset mutation 0 / Save 0이다.
+- next는 Wagon Engine Curve USER Review다. 승인 전 Performance Profile commit 및 ESH-03 ShiftRPM derivation은 금지한다.
+
+### v4.65 - 2026-09-01
+
+- CF-FQ-040을 `VehicleBuilderPlan v0.1.37 / Roadmap v0.1.28 / ProposalSpec v0.1.10 / RefEvidenceSpec v0.1.3`로 동기화했다.
+- actual Wagon USER 주행 6단/약200km/h를 반영해 기존 72.991km/h 결과를 최고속 evidence로 사용하지 않는다.
+- ESH-01 vehicle-specific Engine TorqueCurve typed owner/schema는 Technical PASS다. ESH-02 generic Engine Curve contract와 actual Wagon PhysicsDraft v3 mutation0 preview도 PASS했으며 next는 Wagon Engine Curve USER Review다. 승인 전 ESH-03 WheelTorqueCrossoverShift에는 진입하지 않는다.
+- 제조사 전자식 최고속 limiter는 Evidence에만 보존하고 CarFight Runtime에는 적용하지 않는다.
+
+### v4.64 - 2026-09-01
+
+- `CF-FQ-041 / RTA-P0-01` post-review에서 Catalog DataAsset 수동 등록성을 `EditAnywhere`로 교정하고 최종 Build/focused/AssetDump 재검증 PASS를 반영했다.
+- 대표 Plan 포인터를 `RuntimeApplyPlan.md v0.1.5`로 갱신했다. RTA-P0-01 Technical PASS / next RTA-P0-02 상태와 current Active CF-FQ-039는 변경하지 않았다.
+
+### v4.63 - 2026-09-01
+
+- `CF-FQ-041 / RTA-P0-01 Runtime Catalog / Packaged Load Contract`을 Technical PASS로 전진하고 대표 Plan을 `RuntimeApplyPlan.md v0.1.4`로 갱신했다.
+- Runtime Catalog/Settings, `/Game/CarFight/Debug` bounded Cook, 기본 Catalog Vehicle 3 / Equipment 2 hard reference와 persisted runtime load focused 1/1 PASS를 확보했다.
+- next는 `RTA-P0-02 Vehicle Runtime Apply`다. CFVehiclePawn/Builder Source는 이번 Gate에서 수정하지 않았고 현재 단일 Active CF-FQ-039는 변경하지 않았다.
+
+### v4.62 - 2026-09-01
+
+- `CF-FQ-041 / RTA-P0-00 Current Runtime Apply Contract Audit`을 read-only로 PASS하고 대표 Plan을 `RuntimeApplyPlan.md v0.1.3`으로 전진했다.
+- Vehicle은 Builder Step 8 same-Pawn transient reinitialize를 재사용하고, 등록형 Hard Reference Catalog + bounded Cook을 next RTA-P0-01로 확정했다.
+- Equipment는 기존 Fitting/Chaos Mass를 재사용하되 Ammo/Turret/Launcher post-apply를 함께 동기화할 최소 Runtime Apply seam이 필요함을 확인했다. Product Source/UE Asset 구현은 아직 0이다.
+
+### v4.61 - 2026-09-01
+
+- USER 승인으로 `CF-FQ-041 런타임 콘텐츠 적용 메뉴`를 P2 / Ready로 신규 등록하고 대표 owner를 `Document/Plan/RuntimeApply/RuntimeApplyPlan.md v0.1.0`으로 연결했다.
+- Existing Vehicle/Equipment Asset Apply, 기존 VehicleDebug UI 재사용, Packaged Demo 지원, Fitting/Inventory Runtime 재사용과 P0 Scope Out을 고정했다.
+- next는 read-only `RTA-P0-00 Current Runtime Apply Contract Audit`이며 구현 0이다. 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v4.60 - 2026-09-01
+
+- CF-FQ-040 actual Wagon USER-approved DefinitionApply를 exact hash guard로 실행하고 Target+Recipe persistent save/fresh AssetDump verification까지 PASS했다. current Target은 8단 forward + reverse3.992 + Final3.20이며 Recipe AppliedDefinitionHash는 `b96d3833c9a18bb5816b34e9dbcc4785`다.
+- post-Apply benchmark `f1b8ca0c-1ec9-4cff-8162-0a180f412fea`에서 0→50 3.00s, Peak72.991km/h, PeakSpeedGear3, 0→100 미도달을 기록했다. 기존 1단 약80km/h incident는 해소됐지만 전체 성능은 follow-up이 필요하다.
+- post-Apply Builder Transmission focused `d0f8bae7daf3487e9aebb57b652eb9bb` exact 9/9 PASS다. next는 USER direct driving + low top-speed/0→100 미도달 원인 판정이며 USER Driving PASS는 보류한다.
+
+### v4.59 - 2026-09-01
+
+- CF-FQ-040 actual Wagon PhysicsDraft v2 Step5 Profile commit을 완료했다. private 4 Profile + Recipe receipt만 저장했고 Target VehicleData는 아직 legacy 4단/Final3.08로 유지한다.
+- Step7 mutation0 Final Review를 fresh 생성해 Warning 11 / Blocker 0 / External Drift 0 / Target Diff 2 / DefinitionApply 가능 상태를 확정했다. Diff는 FinalRatio 3.08→3.20, TransmissionRatios 4단+R2.86→8단+R3.992 두 건이다.
+- next는 USER explicit DefinitionApply 승인이다. 승인 전 Target mutation/save는 수행하지 않는다.
+
+### v4.58 - 2026-09-01
+
+- CF-FQ-040의 production 기본 차량 선정 전략을 특정 실존 차량 exact identity 기반으로 고정하고 `VehicleBuilderPlan.md v0.1.34`, `VehicleRefEvidenceSpec.md v0.1.2`로 연결했다.
+- USER가 AI에게 제작 후보 추천을 요청할 수 있으며 Data Availability / Builder Confidence / CarFight Value 기준으로 데이터가 풍부하고 제작 리스크가 낮은 차량을 우선한다. 가상 차량만 Archetype range를 Primary fallback으로 사용한다.
+- actual Wagon current checkpoint는 WSA reconciliation + VehicleSpecificRequired policy migration + persistent Evidence Refresh PASS / PhysicsDraft v2 USER Review Pending으로 동기화했다.
+
+### v4.57 - 2026-09-01
+
+- actual Wagon USER PIE에서 Wheel 위치/Right 방향/굴림/회전을 확인하고 USER가 PASS했다. `WheelSizeAuthorityPlan.md v0.1.19`에서 WSA-P0-07 USER PASS / Wheel Size Authority P0 Complete로 닫았다.
+- WSA current 계약을 Systems `VehicleData.md v2.2.0`, `VehicleRuntime v1.2.0`, `WheelSync v1.1.0`에 승격했다. WSA는 더 이상 CF-FQ-040 actual Wagon apply blocker가 아니다.
+- next는 Vehicle Builder lane에서 fresh Resolver/adoption evidence refresh → WSA adoption fingerprint mismatch 재평가 → actual Wagon apply 재개다. Transmission/drivetrain tuning은 별도 lane을 유지한다.
+
+### v4.56 - 2026-09-01
+
+- CF-FQ-040 WSA-P0-07 post-review P1/P2 교정을 `WheelSizeAuthorityPlan.md v0.1.18`로 반영했다. Wheel Visual authored cache를 Full RelativeTransform으로 확장하고 Legacy→Socket→Manual hot-reinit 잔류 transform과 Construction SCS fresh recapture gap을 닫았다.
+- 새 Official Build `d29ed62e7e0940bbb2e02da41e37f64f` Succeeded/Exit0, WSA focused `e3c3575fc6fc42159690082857705a49` exact 11/11 PASS다. Right fallback FR/RR absolute/delta spin과 Full Transform transition regression을 포함한다.
+- Transmission/PhysicsDraft v2 current lane과 Resolver WSA adoption fingerprint blocker는 기존 v4.55 상태 그대로 보존하며, next WSA Gate는 actual Wagon USER PIE 재확인이다.
+
+### v4.55 - 2026-08-31
+
+- CF-FQ-040 actual Wagon `ResearchDraft` prospective Evidence와 `PhysicsDraft v2`를 Product Asset mutation0으로 검증했다. VehicleSpecificRequired 8단 TransmissionReview와 proposal hash가 PASS했다.
+- Transmission diagnostic이 Blocked Resolver의 compatibility/default Wheel Radius를 WSA authority처럼 사용하던 공용 결함을 fail-closed로 교정했다. 최종 Official Build + Builder focused 9/9 + actual Wagon dry-run PASS다.
+- current Wagon Resolver는 WSA adoption fingerprint mismatch 상태이므로 actual policy/Evidence/Profile/VehicleData commit은 WSA-P0-07 authority reacceptance 뒤로 보류한다. WSA owner 문서는 수정하지 않았다.
+
+### v4.54 - 2026-08-31
+
+- CF-FQ-040 Builder-wide Transmission contract에 Existing Reference Evidence Refresh R1을 추가하고 revision double-increment 결함까지 교정한 뒤 Official Build `d822c7a28d374263a4f67658730b8818` + focused process `1d3f63dc32bc4d6b93dae330f38e352f` exact 9/9 PASS로 Technical PASS 처리했다.
+- actual Wagon fresh persisted truth는 `LegacyCompatible`, `bUseTransmissionConfig=false`, 4단 compatibility 상태 그대로이며 Product Asset mutation 0이다. 2026 MY26 supplemental transmission research를 반영한 Saved ResearchDraft를 준비하고 next를 policy-only migration → Evidence Refresh → PhysicsDraft v2 actual proposal로 유지한다.
+- WSA `WheelSizeAuthorityPlan.md v0.1.17`의 Right fallback Technical PASS / USER Reacceptance Ready 상태는 병합 보존하고 Transmission lane과 분리한다.
+
+### v4.53 - 2026-08-31
+
+- CF-FQ-040 WSA-P0-07A Right fallback orientation/spin remediation을 `WheelSizeAuthorityPlan.md v0.1.17`에서 Technical PASS로 닫았다. Official Build `2387faff9fec4f39841b59387000f2fe` Exit0, WSA focused `ca30b1afe8534e869085fa88ba1f2a34` exact 11/11 PASS다.
+- WSA technical blocker를 해제하고 next를 actual Wagon USER PIE 재확인으로 전진했다. Transmission lane과 drivetrain/shift tuning은 기존 별도 owner를 유지한다.
+
+### v4.52 - 2026-08-31
+
+- CF-FQ-040 Builder-wide Transmission contract를 semantic/value provenance와 structural payload까지 보강하고 Official Build `87fc2d61a6f1401fa5402a9fff6f3354` + focused 6/6 PASS로 **Technical PASS** 처리했다.
+- next를 fresh actual Wagon persisted evidence → pre-policy one-time policy migration → PhysicsDraft v2 actual proposal로 전진했다. Wagon은 generic contract owner가 아니라 actual regression fixture다.
+- WSA `WheelSizeAuthorityPlan.md v0.1.16`과 별도 blocker/ownership 경계는 그대로 보존했다.
+
+### v4.51 - 2026-08-31
+
+- CF-FQ-040 Transmission 작업의 canonical 범위를 Wagon 전용 remediation이 아니라 모든 신규 Guided Vehicle의 Builder-wide authoring contract로 교정하고 Plan `v0.1.29`, ProposalSpec `v0.1.5`로 동기화했다.
+- Wagon 비종속 synthetic `BuilderTransmissionContract`와 exact focused runner를 추가했다. next는 새 test source official Build → generic focused Automation이며, Wagon persisted evidence/migration은 그 이후 actual regression 단계다.
+- 동시에 진행 중인 WSA `WheelSizeAuthorityPlan.md v0.1.16`과 Pawn extraction-ready 경계는 그대로 보존했다.
+
+### v4.50 - 2026-08-31
+
+- 사용자 의도 재확인에 따라 WSA 작업 중 별도 Vehicle Pawn decomposition을 시작하지 않는다. 이번 수정은 current Pawn을 유지하면서 Wheel Visual 관련 신규 로직을 한 private seam에 응집해 향후 축소 작업을 쉽게 만드는 수준으로 한정했다.
+- 과도하게 생성했던 Architecture supporting Plan과 신규 `UCFVehicleWheelVisualComp` 즉시 신설 전제는 current route에서 제거하고 `WheelSizeAuthorityPlan.md v0.1.16`을 복원 포인터로 사용한다.
+
+### v4.49 - 2026-08-31
+
+- `CFVehiclePawn.cpp` 6,686줄 / `CFVehiclePawn.h` 1,935줄 비대화를 구조 문제로 감사하고 `Document/Plan/Architecture/VehiclePawnDecompositionPlan.md v0.1.0`을 생성했다. Pawn은 lifecycle/composition/orchestration 중심으로 축소하고 신규 domain algorithm의 Pawn 직접 추가를 금지하는 방향을 고정했다.
+- WSA-P0-07A를 VPD-P0-01의 첫 실제 ownership extraction으로 지정했다. 신규 `UCFVehicleWheelVisualComp`가 FL fallback source, Mesh/Scale apply, authored base rotation, Right orientation compensation, per-wheel spin handedness를 소유하고 Pawn은 delegate만 유지하도록 `WheelSizeAuthorityPlan.md v0.1.15`에 반영했다.
+- 현재 Pawn source가 다른 작업과 함께 dirty이므로 대규모 Translation Unit 이동은 WSA closure/dirty 안정화 전에는 하지 않는다.
+
+### v4.48 - 2026-08-31
+
+- CF-FQ-040 Wagon Transmission remediation을 대표 Plan `v0.1.28`, ProposalSpec `v0.1.4`로 동기화했다. persistent policy, PhysicsDraft v2 field-level review, Step 5/Final Review fail-closed와 fixed-shift diagnostic Source 구현 및 Official Build PASS까지 완료됐고 next는 affected focused Automation이다.
+- actual Wagon Transmission 수치/policy mutation은 아직 0이며 fresh persisted evidence 이후 one-time policy migration과 새 Physics Proposal을 진행한다. 기존 WSA-P0-07 Right fallback orientation/spin blocker와 remediation 상태는 그대로 보존했다.
+
+### v4.47 - 2026-08-31
+
+- CF-FQ-040 WSA-P0-07 Right fallback orientation/spin blocker를 `WheelSizeAuthorityPlan.md v0.1.14`에서 설계 감사해 `Design PASS / Implementation Ready`로 전진했다.
+- 구현 경계는 Pawn source-aware fallback resolve + Right Mesh child local Roll180 + WheelSync per-wheel handedness이며 persistent schema/Builder/Resolver/BP Asset 변경은 하지 않는다. 신규 focused regression 1건을 추가해 WSA exact 11 tests로 검증할 계획이다.
+
+### v4.46 - 2026-08-31
+
+- CF-FQ-040 WSA-P0-07 USER PIE에서 FL-only shared Wheel fallback의 Right side orientation/spin 처리 누락을 발견해 `WheelSizeAuthorityPlan.md v0.1.13 / WSA-P0-07 Blocked`로 반영했다.
+- FR/RR null fallback은 FL Mesh reference만 재사용하며 side-aware orientation compensation이 없고 WheelSync spin sign도 global 값만 사용한다. 이 결함만 WSA blocker로 다루고 drivetrain/shift tuning은 분리 유지한다.
+
+### v4.45 - 2026-08-31
+
+- CF-FQ-040 actual Wagon Step 7 Apply/Save와 Step 8 runtime 적용 정상 확인을 반영하고 `WheelSizeAuthorityPlan.md v0.1.12 / WSA-P0-07 USER Acceptance In Progress`로 전진했다.
+- persisted Wagon WSA truth는 4개 Socket Scale `(0.8,1.0,0.8)`, derived Radius≈40cm / Width≈25cm, SocketScale authority true / AutoScale false다. WSA는 이제 USER의 지면 접촉·휠하우스 비율·Wheel Size 시각/물리 주행 괴리 판정만 남긴다.
 
 ### v4.44 - 2026-08-29
 

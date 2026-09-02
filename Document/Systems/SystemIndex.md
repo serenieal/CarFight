@@ -1,7 +1,7 @@
 # SystemIndex
 
-- Version: 1.24.0
-- Date: 2026-08-24
+- Version: 1.25.0
+- Date: 2026-09-02
 
 - Status: Active
 - Scope: `Document/Systems/` 하위 문서 위치 안내 색인
@@ -110,6 +110,7 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 | `Document/Systems/Vehicles/VehicleAim.md` | `VehicleCamera`가 만든 조준 결과와 Weapon Aim Solution을 Local 표시·검증 상태로 관리하고, 사용자 조준점과 `CurrentMuzzleDirection` 기반 터렛 레티클 월드 지점을 분리해 제공한다. 정렬 정책, `MuzzleBlocked`와 CF-FQ-025 터렛 레티클을 사용자 PIE로 확인했다. |
 | `Document/Systems/Vehicles/VehicleCamera.md` | Look 입력을 차량 기준 누적 조준 상태로 변환하고, 카메라 모드, Aim Profile, 속도, 충돌 상태를 반영해 SpringArm, FOV, AimTrace를 계산/적용하는 차량 카메라 기능 문서다. |
 | `Document/Systems/Vehicles/VehicleCoreDecisions.md` | 현재 차량 코어의 유지 결정, 교체 결정, 임시 운영 판단을 기록하는 결정 로그 문서다. 차량 코어 변경 전 확인해야 하는 기준 문서다. |
+| `Document/Systems/Vehicles/VehicleBuilder.md` | `CF-FQ-040` 완료 기준 Guided Vehicle Builder Current System이다. 8-Step Guided Shell, Builder-private Recipe/Evidence/Profile ownership, vehicle-specific Transmission/Engine Curve provenance, Preview→explicit approval, Final Review/Undo, exact TargetHash Driving acceptance와 Data Authoring = Builder Backend + Advanced Workspace 역할 경계를 기록한다. |
 | `Document/Systems/Vehicles/VehicleData.md` | `UCFVehicleData`의 외형·Layout·Hardpoint·MountProfile·Fitting Mass·Movement·WheelVisual·Reference·Defense/Fx·DriveState 구성과 실제 Pawn 적용 순서를 기록한다. WSA 완료 기준으로 USER-authored Wheel Socket Scale → visual/physics size authority, FL shared fallback Right 예외, hot-reinit full-transform 복원 계약을 포함한다. |
 | `Document/Systems/Vehicles/VehicleDrive.md` | 차량 입력을 Chaos Vehicle Movement에 적용하고, 속도/방향/접지/입력 상태를 바탕으로 DriveState를 계산/유지하는 주행 상태 기능 문서다. |
 | `Document/Systems/Vehicles/VehiclePawnLegacy.md` | `CFModVehiclePawn / BP_ModularVehicle` 계열을 현재 주력 차량 Pawn이 아닌 레거시 계열로 정리하는 문서다. |
@@ -146,6 +147,7 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 | 인게임 UI Root·Layer 수명, Production HUD 데이터 흐름, Pause, Radar·Target·Weapon UI의 현재 구현 | `UI/InGameUI.md` |
 | 조준점/Reticle 표시, 로컬 발사 결과 피드백과 UISubsystem singleton/Rebind | `UI/AimReticle.md` |
 | 차량 코어 변경 전 결정 기준 | `Vehicles/VehicleCoreDecisions.md` |
+| Guided Vehicle Builder 8-Step 제작 흐름, AI Reference/Physics Proposal, Data Authoring Backend·Advanced Workspace 역할, Final Review/Driving acceptance | `Vehicles/VehicleBuilder.md` |
 | 차량 DataAsset 구조 | `Vehicles/VehicleData.md` |
 | 차량 BeginPlay 준비와 Ready 판정 | `Vehicles/VehicleRuntime.md` |
 | 차량 주행 입력 적용과 DriveState | `Vehicles/VehicleDrive.md` |
@@ -170,6 +172,12 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 ---
 
 ## 13. Changelog
+
+### v1.25.0 - 2026-09-02
+
+- `CF-FQ-040 / VB-P0-10 Current System Promotion` 완료를 반영해 `Vehicles/VehicleBuilder.md v1.0.0`을 Guided Vehicle Builder Current owner로 신규 등록했다.
+- 정상 신규 차량 제작은 Vehicle Builder, 공통 Recipe/Resolver/Diff/Validation/Apply/Undo/Drift 엔진과 전문가용 화면은 Data Authoring Backend + Advanced Workspace, Runtime 최종 정의는 VehicleData가 소유하는 현재 경계를 색인에 반영했다.
+- VB-P0-09 USER Acceptance와 ESH Final Audit Clean PASS를 완료 기준선으로 연결하되 CF-FQ-038 자체 잔여 lifecycle이나 Wagon tuning을 다시 열지 않는다.
 
 ### v1.24.0 - 2026-08-24
 

@@ -1,7 +1,7 @@
 # CarFight — 03_FeatureQueue
 
-> 문서 버전: v1.56.54
-> 최근 갱신일(Asia/Seoul): 2026-08-29
+> 문서 버전: v1.56.62
+> 최근 갱신일(Asia/Seoul): 2026-09-02
 > 문서 상태: Current
 > 역할: CarFight의 **Feature 후보 / 착수 판단 / 현재 상태 / 완료 후 Current owner**를 한 곳에서 관리한다.
 
@@ -99,9 +99,10 @@ FeatureQueue는 상세 설계서나 검증 로그가 아니다.
 | `CF-FQ-035` | 인벤토리 Foundation | P1 | Paused | Technical checkpoint 보존 / USER Field UI·Mobility Pending | InventoryFoundation + 관련 Systems 후속 |
 | `CF-FQ-036` | 차량 센서·Contact Intelligence Runtime | P1 | Done | Sensor Runtime 완료, Scanner와 Current 통합 | `Systems/Targeting/SensorContact.md v1.2.0` |
 | `CF-FQ-037` | 차량 스캐너 입력·장비 통합 | P1 | Done | SCAN-P0-00~07 / USER PIE PASS | `Systems/Targeting/SensorContact.md v1.2.0` |
-| `CF-FQ-038` | 차량 데이터 Authoring 시스템 | P2 | Paused | `Document/Plan/DataAuthoring/DataAuthoringPlan.md v0.2.52` / `Document/Plan/DataAuthoring/DataAuthoringRoadmap.md v0.1.56` / Deprecated transition Technical Complete / CF-FQ-040 Builder Backend·Advanced Workspace 역할 / P0-12 USER PASS 7/8 / UA-08 quantitative comparison Deferred / DEL6 compatibility retirement Pending | 완료 시 VehicleDataAuthoring 신규 Systems 후보 |
+| `CF-FQ-038` | 차량 데이터 Authoring 시스템 | P2 | Paused | `Document/Plan/DataAuthoring/DataAuthoringPlan.md v0.2.52` / `Document/Plan/DataAuthoring/DataAuthoringRoadmap.md v0.1.56` / Deprecated transition Technical Complete / `Systems/Vehicles/VehicleBuilder.md v1.0.0` 기준 Builder Backend + Advanced Workspace 역할 고정 / P0-12 USER PASS 7/8 / UA-08 quantitative comparison Deferred / DEL6 compatibility retirement Pending | 완료 시 VehicleDataAuthoring 신규 Systems 후보 |
 | `CF-FQ-039` | Production UI Visual Rework | P1 | Active | `Document/Plan/InGameUIVisual/InGameUIVisualPlan.md v0.1.29` / `VPR-P0-01 VT07 VehiclePanel Asset-First whole-panel Review Ready / USER Visual PASS Pending / UE Import 0 / Production Asset mutation 0` | 완료 시 `Systems/UI/InGameUI.md` Visual ownership 갱신 + Production UI Asset 기준 |
-| `CF-FQ-040` | Guided Vehicle Builder | P2 | Ready | `Document/Plan/VehicleBuilder/VehicleBuilderPlan.md v0.1.25` / `Document/Plan/VehicleBuilder/VehicleBuilderRoadmap.md v0.1.25` / `Document/Plan/VehicleBuilder/WheelSizeAuthorityPlan.md v0.1.11` / `Document/Plan/VehicleBuilder/VehicleBuilderProposalSpec.md v0.1.1` / `Document/Plan/VehicleBuilder/VehicleBuilderShellSpec.md v0.1.14` / `Document/Plan/VehicleBuilder/VehicleRefEvidenceSpec.md v0.1.1` / VB-P0-09 In Progress / actual Wagon AI-only preparation complete / Step 1 USER Reference Review Pending / Step 1~8 Technical PASS preserved / WSA-P0-06 Technical PASS / WSA-P0-07 USER Acceptance Ready / USER E2E Pending | 완료 시 VehicleBuilder Current System + VehicleDataAuthoring 역할 갱신 |
+| `CF-FQ-040` | Guided Vehicle Builder | P2 | Done | VB-P0-10 Current System Promotion Complete / VB-P0-09 End-to-End USER Acceptance PASS / WSA P0 Complete / ESH-01~06 Final Audit Clean PASS / representative Plan은 Historical + Retained Path | `Systems/Vehicles/VehicleBuilder.md v1.0.0` |
+| `CF-FQ-041` | 런타임 콘텐츠 적용 메뉴 | P2 | Ready | `Document/Plan/RuntimeApply/RuntimeApplyPlan.md v0.1.5` / `RTA-P0-01 Technical PASS` / next `RTA-P0-02 Vehicle Runtime Apply` / Hard Reference Runtime Catalog+bounded Cook+actual runtime load PASS / Builder Step 8 same-Pawn Vehicle reinitialize 재사용 / Equipment post-apply seam Pending | 완료 시 Runtime Apply 재사용 계약을 관련 Vehicle/Fitting/UI Systems에 승격 |
 
 ---
 
@@ -114,7 +115,7 @@ FeatureQueue는 상세 설계서나 검증 로그가 아니다.
 | Feature | 상태 | 정확한 다음 Gate |
 | --- | --- | --- |
 | `CF-FQ-030` | Ready | `CF-TC-027 Manual PIE` |
-| `CF-FQ-040` | Ready | `VB-P0-09 actual Wagon Step 1 USER Reference Review` → Companion explicit creation → Step 5/7 → USER Save → Technical Driving + WSA-P0-07 PIE USER Acceptance |
+| `CF-FQ-041` | Ready | `RTA-P0-02 Vehicle Runtime Apply` |
 | `CF-FQ-029` | Paused | `LM-P0-06 USER PIE` |
 | `CF-FQ-038` | Paused | non-blocking `DEL6 compatibility retirement` 또는 `UA-08 quantitative comparison Deferred` |
 | `CF-FQ-034` | Paused | `FIT-P0-07D USER Driving Feel Comparison` |
@@ -145,6 +146,50 @@ Feature가 Done되면 Current System 링크와 남은 Deferred/Pending 경계만
 ---
 
 ## 7. Changelog
+
+### v1.56.62 - 2026-09-02
+
+- `CF-FQ-040 / VB-P0-10 Current System Promotion`을 완료해 상태를 P2 / Done으로 전환하고 Current owner를 `Systems/Vehicles/VehicleBuilder.md v1.0.0`으로 고정했다.
+- CF-FQ-040을 Ready 재개 후보에서 제거했다. 대표 VehicleBuilder Plan/Roadmap은 semantic Historical + Retained Path로 전환하며 물리 이동은 수행하지 않는다.
+- `CF-FQ-038`은 Done으로 확대하지 않고 Paused를 유지하되, 현재 역할을 Vehicle Builder가 소비하는 Backend + 전문가용 Advanced Workspace로 명시적으로 고정했다.
+
+### v1.56.61 - 2026-09-02
+
+- CF-FQ-040 ESH final audit correction 완료를 반영했다. high-speed TargetHash는 benchmark 전 actual saved Target과 exact 검증되며 stale hash는 fail-closed한다.
+- representative owner를 VehicleBuilderPlan v0.1.45 / Roadmap v0.1.37로 동기화하고 ESH-01~06 Final Audit Clean PASS를 기록했다. P2/Ready 및 next VB-P0-10 상태는 유지한다.
+
+### v1.56.60 - 2026-09-02
+
+- CF-FQ-040 actual Wagon의 ESH-06 USER Driving PASS와 VB-P0-09 End-to-End USER Acceptance PASS를 반영했다. representative owner는 VehicleBuilderPlan v0.1.44 / Roadmap v0.1.36이다.
+- next Gate는 VB-P0-10 Current System Promotion이다. CF-FQ-040은 P2/Ready를 유지하고 promotion 완료 전 Done으로 확대하지 않는다. current Active CF-FQ-039는 변경하지 않았다.
+
+### v1.56.59 - 2026-09-02
+
+- CF-FQ-040 current owner를 VehicleBuilderPlan v0.1.42 / Roadmap v0.1.34 / WheelSizeAuthorityPlan v0.1.19로 동기화했다.
+- USER-approved 5500 fixed-common Target Apply와 ESH-05 persisted no-override retest Technical PASS를 반영했다. CF-FQ-040은 P2/Ready를 유지하고 next Gate만 ESH-06 USER Driving PASS로 전진한다. current Active CF-FQ-039는 변경하지 않았다.
+
+### v1.56.58 - 2026-09-01
+
+- `CF-FQ-041 / RTA-P0-01` post-review의 Catalog 수동 편집성 교정과 최종 Technical 재검증 PASS를 반영해 대표 Plan을 `RuntimeApplyPlan.md v0.1.5`로 갱신했다.
+- Feature 상태는 P2/Ready, next `RTA-P0-02 Vehicle Runtime Apply` 그대로이며 current Active CF-FQ-039 및 Builder 상태는 변경하지 않았다.
+
+### v1.56.57 - 2026-09-01
+
+- `CF-FQ-041 / RTA-P0-01`을 Technical PASS로 전진하고 대표 Plan을 `RuntimeApplyPlan.md v0.1.4`로 갱신했다.
+- 등록형 Runtime Catalog/Settings, `/Game/CarFight/Debug` bounded Cook, persisted Vehicle 3 / Equipment 2 hard refs와 Config 기반 actual runtime load Automation 1/1 PASS를 반영했다.
+- next Gate는 `RTA-P0-02 Vehicle Runtime Apply`이며 CF-FQ-041은 P2/Ready를 유지한다. 현재 단일 Active CF-FQ-039와 Builder 작업 상태는 변경하지 않았다.
+
+### v1.56.56 - 2026-09-01
+
+- `CF-FQ-041 / RTA-P0-00` read-only 감사 PASS를 반영하고 대표 Plan을 `RuntimeApplyPlan.md v0.1.3`으로 갱신했다.
+- 전체 Asset 자동 검색 대신 Hard Reference Runtime Catalog를 P0 Selection Source로 고정하고 next Gate를 `RTA-P0-01 Runtime Catalog / Packaged Load Contract`로 전진했다.
+- Equipment Runtime은 기존 Fitting/Chaos Mass 계약을 재사용하되 Ammo/Turret/Launcher 후처리 동기화 seam이 필요함을 확인했다. CF-FQ-041은 P2/Ready, Implementation 0을 유지하며 현재 Active CF-FQ-039는 변경하지 않았다.
+
+### v1.56.55 - 2026-09-01
+
+- USER 승인으로 `CF-FQ-041 런타임 콘텐츠 적용 메뉴`를 P2 / Ready로 신규 등록했다. 대표 Plan은 `Document/Plan/RuntimeApply/RuntimeApplyPlan.md v0.1.0`이다.
+- Existing VehicleData / EquipmentPresetData를 PIE 및 시연용 Packaged Build에서 선택·명시 Apply하는 범위, 기존 VehicleDebug UI 재사용, Fitting/Inventory Runtime 재사용 경계와 Scope Out을 고정했다.
+- 첫 Gate는 read-only `RTA-P0-00 Current Runtime Apply Contract Audit`이며 구현은 아직 0이다. 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
 
 ### v1.56.54 - 2026-08-29
 
