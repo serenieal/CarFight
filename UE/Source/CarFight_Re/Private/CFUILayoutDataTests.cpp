@@ -1,15 +1,17 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.3
-// Date: 2026-08-10
-// Description: CF-FQ-032 UI-DESIGN-GATE D1-09A Layout·Density·Font·Subsystem Fallback 자동화 테스트
-// Scope: 승인된 1080p Slot, Density Preset, Font Binding과 Config 미해석 시 Native Fallback 계약을 검증합니다.
+// Version: 1.0.4
+// Date: 2026-08-31
+// Description: CF-FQ-032 UI-DESIGN-GATE D1-09A Layout·Density·Font·Subsystem 격리 Fallback 자동화 테스트
+// Scope: 승인된 1080p Slot, Density Preset, Font Binding과 Config 미해석 시 LocalPlayer 격리 Native Fallback 계약을 검증합니다.
 // Changelog:
+// - v1.0.4: UISubsystem fallback이 전역 CDO가 아니라 Subsystem 소유 transient 객체이며 local mutation이 CDO에 전파되지 않음을 검증.
 // - v1.0.3: UE 5.8 ClassWithin 계층을 실제 Engine → LocalPlayer → LocalPlayerSubsystem 순서로 맞추도록 Fixture를 수정.
 // - v1.0.2: ULocalPlayerSubsystem의 UE 5.8 ClassWithin 계약에 맞게 Transient ULocalPlayer를 Subsystem Outer로 사용하는 Fixture로 수정.
 // - v1.0.1: UE 5.8 TArray 자기참조 안전 Assert를 피하도록 중복 Slot Fixture를 지역 복사 후 추가하도록 수정.
 // - v1.0.0: LayoutDataContract, DensityDataContract, FontBindingContract, SubsystemFallbackContract를 최초 추가.
 // Migration:
+// - v1.0.4 Fallback의 값 계약은 기존 Native defaults를 유지하지만 object identity는 전역 CDO 공유에서 LocalPlayer Subsystem 전용 instance로 변경됩니다.
 // - 테스트는 Transient UObject만 사용하며 Config, Unreal Asset, 기존 HUD와 Pause Runtime을 수정하지 않습니다.
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -170,7 +172,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"CarFight.UI.D1_09A.SubsystemFallbackContract",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-// [v1.0.0] Config Asset을 아직 해석하지 않은 Subsystem Getter가 항상 Native CDO Fallback을 반환하는지 확인합니다.
+// [v1.0.4] Config Asset을 아직 해석하지 않은 Subsystem Getter가 LocalPlayer 전용 Native fallback을 반환하고 전역 CDO mutation을 차단하는지 확인합니다.
 bool FCFUISubsystemFallbackContractTest::RunTest(const FString& Parameters)
 {
 	(void)Parameters;
@@ -195,9 +197,42 @@ bool FCFUISubsystemFallbackContractTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
-	TestTrue(TEXT("Style Native Fallback CDO"), UISubsystem->GetResolvedStyleData() == GetDefault<UCFUIStyleData>());
-	TestTrue(TEXT("Density Native Fallback CDO"), UISubsystem->GetResolvedDensityData() == GetDefault<UCFUIDensityData>());
-	TestTrue(TEXT("Layout Native Fallback CDO"), UISubsystem->GetResolvedHUDLayoutData() == GetDefault<UCFHUDLayoutData>());
+	// [v1.0.4] 이 LocalPlayer Subsystem이 소유하는 Style fallback입니다.
+	UCFUIStyleData* StyleFallback = UISubsystem->GetResolvedStyleData();
+	// [v1.0.4] 이 LocalPlayer Subsystem이 소유하는 Density fallback입니다.
+	UCFUIDensityData* DensityFallback = UISubsystem->GetResolvedDensityData();
+	// [v1.0.4] 이 LocalPlayer Subsystem이 소유하는 HUD Layout fallback입니다.
+	UCFHUDLayoutData* LayoutFallback = UISubsystem->GetResolvedHUDLayoutData();
+
+	TestNotNull(TEXT("Style LocalPlayer Fallback"), StyleFallback);
+	TestNotNull(TEXT("Density LocalPlayer Fallback"), DensityFallback);
+	TestNotNull(TEXT("Layout LocalPlayer Fallback"), LayoutFallback);
+	if (!StyleFallback || !DensityFallback || !LayoutFallback)
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("Style Fallback은 전역 CDO가 아님"), StyleFallback != GetDefault<UCFUIStyleData>());
+	TestTrue(TEXT("Density Fallback은 전역 CDO가 아님"), DensityFallback != GetDefault<UCFUIDensityData>());
+	TestTrue(TEXT("Layout Fallback은 전역 CDO가 아님"), LayoutFallback != GetDefault<UCFHUDLayoutData>());
+	TestEqual(TEXT("Style Fallback Outer는 UISubsystem"), StyleFallback->GetOuter(), static_cast<UObject*>(UISubsystem));
+	TestEqual(TEXT("Density Fallback Outer는 UISubsystem"), DensityFallback->GetOuter(), static_cast<UObject*>(UISubsystem));
+	TestEqual(TEXT("Layout Fallback Outer는 UISubsystem"), LayoutFallback->GetOuter(), static_cast<UObject*>(UISubsystem));
+
+	// [v1.0.4] local Style mutation 전 전역 CDO MinimumHitSize 기준값입니다.
+	const float GlobalStyleMinimumHitSizeBefore = GetDefault<UCFUIStyleData>()->Spacing.MinimumHitSize;
+	// [v1.0.4] local Density mutation 전 전역 CDO PanelPadding 기준값입니다.
+	const float GlobalDensityPanelPaddingBefore = GetDefault<UCFUIDensityData>()->Tokens.PanelPadding;
+	// [v1.0.4] local Layout mutation 전 전역 CDO GeometryScale 기준값입니다.
+	const float GlobalLayoutGeometryScaleBefore = GetDefault<UCFHUDLayoutData>()->GeometryScale;
+
+	StyleFallback->Spacing.MinimumHitSize = GlobalStyleMinimumHitSizeBefore + 17.0f;
+	DensityFallback->Tokens.PanelPadding = GlobalDensityPanelPaddingBefore + 11.0f;
+	LayoutFallback->GeometryScale = GlobalLayoutGeometryScaleBefore + 0.25f;
+
+	TestEqual(TEXT("Style local mutation은 전역 CDO 비변경"), GetDefault<UCFUIStyleData>()->Spacing.MinimumHitSize, GlobalStyleMinimumHitSizeBefore);
+	TestEqual(TEXT("Density local mutation은 전역 CDO 비변경"), GetDefault<UCFUIDensityData>()->Tokens.PanelPadding, GlobalDensityPanelPaddingBefore);
+	TestEqual(TEXT("Layout local mutation은 전역 CDO 비변경"), GetDefault<UCFHUDLayoutData>()->GeometryScale, GlobalLayoutGeometryScaleBefore);
 	return true;
 }
 

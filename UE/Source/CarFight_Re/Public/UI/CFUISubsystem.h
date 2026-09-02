@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.10.0
-// Date: 2026-08-21
-// Description: CarFight LocalPlayer UI 수명·레이어·Pause·Production HUD·Target Marker·Radar Zoom·Screen-edge Relation Visual 연결 Subsystem
-// Scope: 기존 UI 수명을 보존하면서 UI-P0-08 Screen-Off Selected Target Edge Marker가 공용 HUD Visual/Style Data를 주입받도록 연결합니다.
+// Version: 1.12.0
+// Date: 2026-08-31
+// Description: CarFight LocalPlayer UI 수명·레이어·Pause·Production HUD·Target Marker·안전 Native Fallback 연결 Subsystem
+// Scope: 기존 UI 수명을 보존하면서 Config 미해석 시 전역 mutable CDO를 노출하지 않는 LocalPlayer 전용 Native Fallback을 제공합니다.
 // Changelog:
+// - v1.12.0: Style/Density/HUDLayout fallback을 GetMutableDefault 전역 CDO에서 UISubsystem 소유 transient 객체로 전환해 호출자 mutation의 전역 파급을 차단.
 // - v1.10.0: USER 가독성 피드백에 따라 HUDDataProvider와 Friendly/Hostile/Unknown Style 색을 TargetSelect Screen-edge에 주입. Neutral은 Edge에서만 Unknown 회색을 공유하고 전역 NeutralColor는 변경하지 않음.
 // - v1.9.0: DefaultHUDVisualDataAsset을 Subsystem 수명에서 해석하고 RadarSelectedEdgeBracket·AccentTactical·SafeMargin만 TargetSelect Widget에 주입. WBP_TargetSelect 저장 구조와 TargetSelect Gameplay ownership은 변경하지 않음.
 // - v1.8.0: Pawn 입력 계층이 Provider 구현에 직접 결합되지 않도록 RequestRadarZoomIn/Out C++ wrapper를 추가. Scanner/Sensor detection range와 Profile은 변경하지 않음.
@@ -19,6 +20,7 @@
 // - v1.0.1: UI Root 레이어 반환 타입을 실제 ZOrder를 지원하는 CanvasPanel로 변경.
 // - v1.0.0: UI-P0-01B LocalPlayer Subsystem, World별 Root, Screen·Modal 전환과 Pawn 약한 참조를 최초 추가.
 // Migration:
+// - v1.12.0 GetResolvedStyleData/GetResolvedDensityData/GetResolvedHUDLayoutData의 반환 타입과 Blueprint API는 유지합니다. Config 미해석·검증 실패 시 반환 객체 identity만 전역 CDO에서 LocalPlayer UISubsystem 소유 transient fallback으로 변경됩니다.
 // - Pause Menu는 C++ UCFPauseMenuWidget을 사용하며 Unreal Asset을 요구하지 않는다.
 // - Pause 진입은 PlayerController가 Gameplay 입력을 중립화한 뒤 World Pause를 적용한다.
 // - 진행 중 Launcher·Projectile·Timer 상태는 취소하지 않고 World Pause 동안 정지한 뒤 해제 시 이어진다.
@@ -216,17 +218,17 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|UI|Screen", meta=(DisplayName="현재 UI 화면 상태 반환 (Get UI Screen State)", ToolTip="현재 LocalPlayer UI의 화면 상태를 반환합니다."))
 	ECFUIScreenState GetScreenState() const { return ScreenState; }
 
-	// [v1.4.0] Config에서 해석된 Style Data를 반환하고 없으면 Native CDO Fallback을 반환합니다.
+	// [v1.12.0] Config에서 해석된 Style Data를 반환하고 없으면 LocalPlayer 전용 Native fallback을 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|UI|Style", meta=(DisplayName="현재 UI Style Data 반환 (Get Resolved UI Style Data)", ToolTip="Config 기본 Style DataAsset을 반환합니다. 미설정·로드 실패·검증 실패 시 Native Safe Fallback을 반환합니다."))
-	UCFUIStyleData* GetResolvedStyleData() const;
+	UCFUIStyleData* GetResolvedStyleData();
 
-	// [v1.4.0] Config에서 해석된 Density Data를 반환하고 없으면 Native Standard CDO Fallback을 반환합니다.
+	// [v1.12.0] Config에서 해석된 Density Data를 반환하고 없으면 LocalPlayer 전용 Standard fallback을 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|UI|Style", meta=(DisplayName="현재 UI Density Data 반환 (Get Resolved UI Density Data)", ToolTip="Config 기본 Density DataAsset을 반환합니다. 미설정·로드 실패·검증 실패 시 Standard Native Fallback을 반환합니다."))
-	UCFUIDensityData* GetResolvedDensityData() const;
+	UCFUIDensityData* GetResolvedDensityData();
 
-	// [v1.4.0] Config에서 해석된 HUD Layout Data를 반환하고 없으면 D1-07 1080p Native CDO Fallback을 반환합니다.
+	// [v1.12.0] Config에서 해석된 HUD Layout Data를 반환하고 없으면 LocalPlayer 전용 1080p Native fallback을 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|UI|Style", meta=(DisplayName="현재 HUD Layout Data 반환 (Get Resolved HUD Layout Data)", ToolTip="Config 기본 HUD Layout DataAsset을 반환합니다. 미설정·로드 실패·검증 실패 시 승인된 1080p Native Fallback을 반환합니다."))
-	UCFHUDLayoutData* GetResolvedHUDLayoutData() const;
+	UCFHUDLayoutData* GetResolvedHUDLayoutData();
 
 	// [v1.0.0] Pause 공통 입력 요청 이벤트입니다.
 	UPROPERTY(BlueprintAssignable, Category="CarFight|UI|Input")
@@ -249,6 +251,9 @@ public:
 	FCFUIPauseStateChangedSignature OnPauseStateChanged;
 
 private:
+	// [v1.12.0] Config 미해석·검증 실패 시 사용할 LocalPlayer 전용 Native fallback 객체를 필요한 시점에 생성합니다.
+	void EnsureNativeFallbackData();
+
 	// [v1.9.0] Config Soft Reference의 Style·Density·HUD Layout·HUD Visual을 Subsystem 수명에서 한 번 Load·검증해 Cache합니다.
 	void ResolveDefaultUIDataAssets();
 
@@ -329,6 +334,18 @@ private:
 	TSoftClassPtr<UCFTargetSelectWidget> DefaultTargetSelectWidgetClass;
 
 
+
+	// [v1.12.0] Config Style이 없거나 무효일 때 이 LocalPlayer만 사용하는 transient Native Style fallback입니다.
+	UPROPERTY(Transient)
+	TObjectPtr<UCFUIStyleData> NativeFallbackStyleData = nullptr;
+
+	// [v1.12.0] Config Density가 없거나 무효일 때 이 LocalPlayer만 사용하는 transient Native Density fallback입니다.
+	UPROPERTY(Transient)
+	TObjectPtr<UCFUIDensityData> NativeFallbackDensityData = nullptr;
+
+	// [v1.12.0] Config HUD Layout이 없거나 무효일 때 이 LocalPlayer만 사용하는 transient Native Layout fallback입니다.
+	UPROPERTY(Transient)
+	TObjectPtr<UCFHUDLayoutData> NativeFallbackHUDLayoutData = nullptr;
 
 	// [v1.4.0] 현재 Subsystem 수명에서 한 번 해석된 Style Data 강한 Cache입니다.
 	UPROPERTY(Transient)

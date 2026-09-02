@@ -1,7 +1,7 @@
 # InGameUI
 
-- Version: 1.1.10
-- Date: 2026-08-25
+- Version: 1.1.11
+- Date: 2026-08-31
 - Status: Current / CF-FQ-032 Done / CF-FQ-039 Armor Modular Runtime/WBP + Common Plate·Direction 2-Icon Production Assetization PASS / Vehicle-specific Silhouette Source + Production Texture·VehicleData Catalog Persisted Binding PASS
 - Scope: CarFight 싱글플레이 LocalPlayer 인게임 UI Root, Production HUD, AimReticle, Target Marker, Pause, HUD ViewData/Presenter와 Visual Context의 현재 구현 계약
 
@@ -41,6 +41,8 @@ UI 수명
 - Production HUD, AimReticle, TargetSelect World Marker와 Pause Menu를 단일 인스턴스로 생성·연결·정리한다.
 - Possessed Pawn 변경 시 현재 Pawn 약한 참조를 갱신하고 AimReticle·Target Marker를 같은 수명 경계에서 Rebind한다.
 - Style, Density, HUD Layout, HUD Visual Data와 Config Widget Class를 해석해 Consumer에 주입한다.
+- Config Style/Density/HUD Layout이 없거나 검증에 실패하면 전역 mutable CDO를 반환하지 않고 각 LocalPlayer UISubsystem이 소유하는 transient Native fallback을 사용한다.
+- AimReticle/TargetSelect Widget Class와 Layer ZOrder의 runtime owner이며, `ACFVehiclePawn`의 동명 Legacy Class/ZOrder 필드는 저장 역직렬화 호환 전용이다.
 - Gameplay 판정 자체를 소유하지 않는다.
 
 ### `UCFUIRootWidget`
@@ -333,7 +335,11 @@ DefaultTargetSelectWidgetClass
 
 UISubsystem은 Style/Density/Layout을 Production Styled Widget에 Visual Context로 주입한다. Target Screen-edge 표현에는 HUD Visual Data의 Edge texture와 Style relation color / Safe Margin을 주입한다.
 
-이 연결은 Content path의 Current 기본값이며, Widget 내부가 임의로 Project path를 하드코딩해 직접 Load하는 구조로 확대하지 않는다.
+Config Asset이 비어 있거나 검증에 실패하는 경우 Style/Density/HUD Layout은 `UCFUISubsystem` 자신을 Outer로 하는 transient Native fallback 객체를 lazy 생성한다. Getter 반환 타입과 Blueprint API는 유지하지만 전역 `GetMutableDefault<>` CDO를 외부에 노출하지 않는다. 따라서 fallback Consumer가 실수로 값을 변경해도 다른 LocalPlayer나 전역 CDO에 전파되지 않는 것이 Current 계약이다.
+
+AimReticle과 TargetSelect의 실제 Class는 위 Config Soft Class를 Subsystem 수명에서 해석한다. `ACFVehiclePawn::AimReticleWidgetClass`, `AimReticleZOrder`, `TargetSelectWidgetClass`, `TargetSelectHudZOrder`는 기존 Asset 역직렬화를 위해 이름과 타입만 보존하며 Pawn constructor/runtime은 Class를 hard-load하거나 Legacy ZOrder를 소비하지 않는다.
+
+이 연결은 Content path의 Current 기본값이며, Widget 또는 Pawn 내부가 임의로 Project path를 하드코딩해 직접 Load하는 구조로 확대하지 않는다.
 
 ### 10.1 VehiclePanel persisted editable 구조
 
@@ -654,8 +660,8 @@ CF-FQ-039 VehiclePanel Production Presentation 추가 검증:
 - 확인 일시: 2026-08-22
 - 기준 엔진: Unreal Engine 5.8 Source Build
 - 주요 Source:
-  - `UE/Source/CarFight_Re/Public/UI/CFUISubsystem.h` v1.10.0
-  - `UE/Source/CarFight_Re/Private/UI/CFUISubsystem.cpp` v1.10.0
+  - `UE/Source/CarFight_Re/Public/UI/CFUISubsystem.h` v1.12.0
+  - `UE/Source/CarFight_Re/Private/UI/CFUISubsystem.cpp` v1.12.0
   - `UE/Source/CarFight_Re/Public/UI/CFUIRootWidget.h` v1.0.2
   - `UE/Source/CarFight_Re/Private/UI/CFUIRootWidget.cpp` v1.0.2
     - `UE/Source/CarFight_Re/Public/UI/CFHUDDataProvider.h` v1.10.0

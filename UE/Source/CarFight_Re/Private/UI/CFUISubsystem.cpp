@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.11.0
-// Date: 2026-08-25
-// Description: CarFight LocalPlayer UI 수명 + Production HUD Visual Data 주입 Subsystem 구현
-// Scope: 기존 UI 수명을 보존하면서 Presenter와 Target Marker가 공용 HUD Visual/Style Data를 소비하도록 연결합니다.
+// Version: 1.12.0
+// Date: 2026-08-31
+// Description: CarFight LocalPlayer UI 수명 + Production HUD Visual Data + 안전 Native Fallback Subsystem 구현
+// Scope: 기존 UI 수명을 보존하면서 Config fallback mutation을 LocalPlayer 수명 안으로 격리합니다.
 // Changelog:
+// - v1.12.0: Style/Density/HUDLayout Native fallback을 UISubsystem 소유 transient 객체로 lazy 생성해 GetMutableDefault CDO 노출을 제거.
 // - v1.11.0: Config에서 이미 해석한 ResolvedHUDVisualData를 HUDPresenter에도 주입해 VehicleData identity별 Armor Body Map silhouette 선택을 Presentation 계층에서 수행하게 함.
 // - v1.10.0: USER 가독성 피드백에 따라 HUDDataProvider와 Friendly/Hostile/Unknown Style 색을 TargetSelect Screen-edge에 주입. Neutral은 Edge에서만 Unknown 회색을 공유하며 전역 NeutralColor는 보존.
 // - v1.9.0: DefaultHUDVisualDataAsset을 해석하고 T_UI_RadarEdge 기반 RadarSelectedEdgeBracket·AccentTactical·SafeMargin을 TargetSelect Widget에 주입. WBP_TargetSelect 저장 구조와 Gameplay 선택 상태는 변경하지 않음.
@@ -19,9 +20,10 @@
 // - v1.1.0: UI-P0-02 실제 World Pause, C++ Pause Menu, Continue·Pause·Back 전환과 해제 수명을 구현.
 // - v1.0.0: UI-P0-01B Root 1개 보장, 약한 Pawn 참조와 입력 모드 연동을 최초 구현.
 // Migration:
+// - v1.12.0 Config Asset이 정상 해석되면 기존 객체를 그대로 사용합니다. Fallback에서만 객체 identity가 전역 CDO가 아닌 UISubsystem 소유 transient instance로 변경됩니다.
 // - Pause 진입은 차량 입력을 중립화하지만 Launcher·Projectile·Timer Runtime을 취소하거나 초기화하지 않는다.
 // - Pause 해제 뒤 Primary Screen이 남아 있으면 UIOnly, 없으면 GameOnly 입력으로 복귀한다.
-// - UI Data Config가 비었거나 유효하지 않으면 각 타입의 Native CDO Fallback을 사용하며 Pause·Gameplay 수명에는 영향을 주지 않는다.
+// - UI Data Config가 비었거나 유효하지 않으면 각 LocalPlayer UISubsystem이 소유하는 Native transient fallback을 사용하며 Pause·Gameplay 수명에는 영향을 주지 않는다.
 // - Production HUD Asset은 재부모화하지 않으며 CFStyledWidgetBase를 유지하고 Provider/Presenter가 Runtime ViewData만 주입합니다.
 // - v1.6.0 AimReticle은 기존 WBP_AimReticle/UCFAimReticleWidget 시각·Gameplay 읽기 계약을 그대로 사용하고, 생성·Parent·Pawn Source 수명만 UISubsystem이 소유합니다.
 // - v1.7.0 TargetSelect은 기존 후보·선택·TrackState Gameplay 소유권을 유지하고 WBP_TargetSelect의 생성·Game Layer·Pawn Source 수명만 UISubsystem이 소유합니다.
@@ -102,6 +104,9 @@ void UCFUISubsystem::Deinitialize()
 		ResolvedStyleData = nullptr;
 	ResolvedDensityData = nullptr;
 	ResolvedHUDLayoutData = nullptr;
+	NativeFallbackStyleData = nullptr;
+	NativeFallbackDensityData = nullptr;
+	NativeFallbackHUDLayoutData = nullptr;
 	ResolvedHUDVisualData = nullptr;
 		ResolvedInGameHUDWidgetClass = nullptr;
 	ResolvedAimReticleWidgetClass = nullptr;
@@ -167,22 +172,59 @@ void UCFUISubsystem::ResolveDefaultUIDataAssets()
 	}
 }
 
-// [v1.4.0] Config에서 해석된 Style Data를 반환하고 없으면 Native CDO Fallback을 반환합니다.
-UCFUIStyleData* UCFUISubsystem::GetResolvedStyleData() const
+// [v1.12.0] Config fallback이 전역 CDO를 공유하지 않도록 이 LocalPlayer Subsystem 소유 Native 객체를 필요한 시점에 생성합니다.
+void UCFUISubsystem::EnsureNativeFallbackData()
 {
-	return ResolvedStyleData ? ResolvedStyleData.Get() : GetMutableDefault<UCFUIStyleData>();
+	if (!NativeFallbackStyleData)
+	{
+		NativeFallbackStyleData = NewObject<UCFUIStyleData>(this);
+	}
+
+	if (!NativeFallbackDensityData)
+	{
+		NativeFallbackDensityData = NewObject<UCFUIDensityData>(this);
+	}
+
+	if (!NativeFallbackHUDLayoutData)
+	{
+		NativeFallbackHUDLayoutData = NewObject<UCFHUDLayoutData>(this);
+	}
 }
 
-// [v1.4.0] Config에서 해석된 Density Data를 반환하고 없으면 Native Standard CDO Fallback을 반환합니다.
-UCFUIDensityData* UCFUISubsystem::GetResolvedDensityData() const
+// [v1.12.0] Config에서 해석된 Style Data를 반환하고 없으면 이 LocalPlayer 전용 Native fallback을 반환합니다.
+UCFUIStyleData* UCFUISubsystem::GetResolvedStyleData()
 {
-	return ResolvedDensityData ? ResolvedDensityData.Get() : GetMutableDefault<UCFUIDensityData>();
+	if (ResolvedStyleData)
+	{
+		return ResolvedStyleData.Get();
+	}
+
+	EnsureNativeFallbackData();
+	return NativeFallbackStyleData.Get();
 }
 
-// [v1.4.0] Config에서 해석된 HUD Layout Data를 반환하고 없으면 D1-07 1080p Native CDO Fallback을 반환합니다.
-UCFHUDLayoutData* UCFUISubsystem::GetResolvedHUDLayoutData() const
+// [v1.12.0] Config에서 해석된 Density Data를 반환하고 없으면 이 LocalPlayer 전용 Standard fallback을 반환합니다.
+UCFUIDensityData* UCFUISubsystem::GetResolvedDensityData()
 {
-	return ResolvedHUDLayoutData ? ResolvedHUDLayoutData.Get() : GetMutableDefault<UCFHUDLayoutData>();
+	if (ResolvedDensityData)
+	{
+		return ResolvedDensityData.Get();
+	}
+
+	EnsureNativeFallbackData();
+	return NativeFallbackDensityData.Get();
+}
+
+// [v1.12.0] Config에서 해석된 HUD Layout Data를 반환하고 없으면 이 LocalPlayer 전용 1080p Native fallback을 반환합니다.
+UCFHUDLayoutData* UCFUISubsystem::GetResolvedHUDLayoutData()
+{
+	if (ResolvedHUDLayoutData)
+	{
+		return ResolvedHUDLayoutData.Get();
+	}
+
+	EnsureNativeFallbackData();
+	return NativeFallbackHUDLayoutData.Get();
 }
 
 // [v1.8.0] 현재 LocalPlayer Radar 표시 범위를 한 단계 작은 Provider Preset으로 요청합니다.
