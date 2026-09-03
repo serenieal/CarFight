@@ -1,10 +1,10 @@
 # Vehicle Builder
 
-- 문서 버전: v1.2.0
+- 문서 버전: v1.3.0
 - 최근 갱신일: 2026-09-03
 - 문서 상태: Current Implementation
-- 적용 범위: `CF-FQ-040 Guided Vehicle Builder`, `CF-FQ-042 Vehicle Builder 신규 차량 생성 UX`, `CF-FQ-043 Vehicle Builder 장비 장착점 Guidance UX`, Guided Builder Editor Shell, Builder-private Authoring ownership, Data Authoring Backend/Advanced Workspace 연계
-- 완료 기반: `VB-P0-09 End-to-End USER Acceptance PASS` + `VB-P0-10 Current System Promotion Complete` + `VBCUX-P0-05 USER Acceptance PASS` + `VMG-P0-07 USER Acceptance PASS` + `VMG-P0-08 Current System Promotion Complete`
+- 적용 범위: `CF-FQ-040 Guided Vehicle Builder`, `CF-FQ-042 Vehicle Builder 신규 차량 생성 UX`, `CF-FQ-043 Vehicle Builder 장비 장착점 Guidance UX`, `CF-FQ-044 Vehicle Builder Runtime Catalog Promotion`, Guided Builder Editor Shell, Builder-private Authoring ownership, Data Authoring Backend/Advanced Workspace 연계
+- 완료 기반: `VB-P0-09 End-to-End USER Acceptance PASS` + `VB-P0-10 Current System Promotion Complete` + `VBCUX-P0-05 USER Acceptance PASS` + `VMG-P0-07 USER Acceptance PASS` + `VMG-P0-08 Current System Promotion Complete` + `VRCP-P0-05 USER Acceptance PASS` + `VRCP-P0-06 Current System Promotion Complete`
 
 ---
 
@@ -86,6 +86,7 @@ Final Review / Apply / Undo UI
 Technical Benchmark 실행
 PIE transient test-drive 준비
 USER Driving PASS 명시 입력 + persistent Target Definition receipt
+USER Driving PASS 뒤 Default Runtime Demo Catalog 등록 시도 / 상태 / explicit retry
 Advanced Workspace 진입
 ```
 
@@ -511,6 +512,42 @@ Target path 또는 DefinitionHash drift
 
 Builder는 이 receipt를 자동 Save하지 않는다. USER PASS 뒤 Recipe Asset을 직접 저장해야 디스크에 영구 보존된다.
 
+### 9.1 Runtime Demo Catalog Promotion
+
+`CF-FQ-044` 완료 뒤 Step 8은 current USER Driving PASS와 Runtime Demo Catalog 등록 상태를 연결한다. Catalog mutation owner는 BuilderVM이 아니라 Editor 전용 `FCFVehicleCatalogPromoService`이며, `SCFVehicleBuilderTab`이 USER PASS 성공 뒤 promotion을 orchestration하고 상태/재시도를 표시한다.
+
+```text
+exact current USER Driving PASS 성공
+→ Default RuntimeTestCatalog raw resolve
+→ Catalog full validation
+→ exact persistent /Game VehicleData target validation
+→ exact UObject identity membership 확인
+→ 미등록이면 transaction 안에서 1회 add
+→ post-validation + fresh membership readback
+→ Catalog package dirty
+→ 자동 Save 안 함
+```
+
+현재 안전 계약:
+
+```text
+USER Driving PASS와 Catalog promotion 결과는 별도 outcome
+Catalog 실패가 USER Driving PASS를 rollback하지 않음
+이미 등록된 exact VehicleData는 AlreadyRegistered no-op success
+중복 entry를 만들지 않음
+invalid Catalog는 membership shortcut보다 먼저 차단
+internal failure는 이전 AllowedVehicleData 배열 + package dirty 상태로 rollback
+retry는 current HasCurrentUserDrivingAcceptance()를 다시 통과해야 함
+persistent /Game VehicleData만 등록 대상
+BuilderVM에 Catalog state/cache/mutation authority를 추가하지 않음
+```
+
+Catalog 등록 성공은 **메모리 authoring 성공**이며 저장 성공이 아니다. Builder는 Catalog를 dirty로 남기고 USER가 명시 저장한다. Packaged Runtime에서 해당 VehicleData를 확실히 소비하려면 explicit Save 뒤 persisted Catalog membership이 확인되어야 한다.
+
+RuntimeApply 후보/authorization owner는 계속 `CF-FQ-041`이다. RuntimeApply는 동일 `UCFRuntimeTestCatalogData::AllowedVehicleData`를 읽으며, cached Vehicle/Equipment option은 Catalog의 valid-entry exact sequence가 실제로 바뀔 때만 rebuild한다. 따라서 같은 Editor lifetime에서 Builder가 VehicleData를 promotion하면 RuntimeApply 차량 목록이 Editor 재시작이나 Catalog Save 없이 즉시 갱신된다.
+
+대표 closure에서 `DA_Vehicle_Wagon`을 USER가 명시 저장한 뒤 fresh AssetDump로 persisted `AllowedVehicleData` 4개 중 Wagon exact membership 1개를 확인했다. 이 persisted Wagon은 `CF-FQ-041 / RTA-P0-06 Packaged Demo`의 Builder-produced consumer candidate로 handoff된다.
+
 ---
 
 ## 10. CF-FQ-040 완료 검증 기준선
@@ -582,14 +619,22 @@ Document/Plan/Archive/VehicleBuilder/VehicleBuilderPlan.md
 Document/Plan/Archive/VehicleBuilder/VehicleBuilderRoadmap.md
 Document/Plan/VehicleBuilderCreationUX/VehicleBuilderCreationUXPlan.md
 Document/Plan/VehicleMountGuidance/VehicleMountGuidancePlan.md
+Document/Plan/VehicleRuntimeCatalogPromotion/VehicleRuntimeCatalogPromotionPlan.md
 Document/Plan/Archive/README.md
 ```
 
-`CF-FQ-040` 대표 Plan은 `Done → Historical + Archived Path`로 `Document/Plan/Archive/VehicleBuilder/`에 보존한다. `CF-FQ-042`와 `CF-FQ-043` 대표 Plan은 Current route에서 내려온 `Historical + Retained Path`로 각각 기존 `VehicleBuilderCreationUX/`, `VehicleMountGuidance/` 경로를 보존한다.
+`CF-FQ-040` 대표 Plan은 `Done → Historical + Archived Path`로 `Document/Plan/Archive/VehicleBuilder/`에 보존한다. `CF-FQ-042`, `CF-FQ-043`, `CF-FQ-044` 대표 Plan은 Current route에서 내려온 `Historical + Retained Path`로 각각 기존 `VehicleBuilderCreationUX/`, `VehicleMountGuidance/`, `VehicleRuntimeCatalogPromotion/` 경로를 보존한다.
 
 ---
 
 ## 13. Changelog
+
+### v1.3.0 - 2026-09-03
+
+- `CF-FQ-044 / VRCP-P0-06 Current System Promotion`으로 Step 8 USER Driving PASS 이후 Default RuntimeTestCatalog promotion 계약을 Vehicle Builder Current System에 승격했다.
+- Editor 전용 Promotion Service, BuilderTab orchestration, exact persistent target/full Catalog validation/idempotent membership/transaction rollback/no-auto-save와 USER PASS 분리 outcome을 Current 안전 계약으로 기록했다.
+- RuntimeApply authorization은 `CF-FQ-041`에 유지하고 Catalog valid-entry exact-sequence change-aware sync로 same-session 즉시 노출되는 경계를 기록했다.
+- USER가 Default Catalog를 explicit Save한 뒤 fresh AssetDump에서 `AllowedVehicleData` 4개와 `DA_Vehicle_Wagon` exact membership 1개를 확인했다. 이 persisted Wagon을 `RTA-P0-06 Packaged Demo` consumer candidate로 handoff했다.
 
 ### v1.2.0 - 2026-09-03
 
