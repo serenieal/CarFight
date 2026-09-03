@@ -1,9 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderVM.cpp
-// Version: v1.22.0
+// Version: v1.27.0
 // Date: 2026-09-02
 // Description: Guided Vehicle Builder Shell ViewModel + CF-FQ-042 Vehicle ID naming/create 구현입니다.
 // Changelog:
+// - v1.27.0: P0-07 UAT에서 Step 8 USER Driving PASS를 Target path/hash 기반 persistent Recipe receipt로 승격. same DefinitionHash에서는 benchmark RunId 변경/Editor 재기동에도 PASS 유지, Target drift에서만 stale. Recipe receipt dirty는 Step 8 saved Target gate를 막지 않음.
+// - v1.26.0: P0-07 UAT에서 완료 Wagon이 local Reference token 유실 후 Step 1 Ready → Step 5~8 Locked로 되감기는 회귀를 교정. exact persistent BuilderCommitReceipt EvidenceId/Fingerprint/path를 durable USER acceptance provenance로 재사용하고 Evidence drift는 Stale로 유지.
+// - v1.25.1: VMG-P0-04 코드감사에서 Step 6 전체를 read-only라고 설명하던 stale USER 문구를 교정. 8영역 Gameplay Guidance/Socket 진단만 R0 read-only이고 Standard Mount 패널의 explicit Recipe write는 허용됨을 정확히 표시.
+// - v1.25.0: CF-FQ-043 VMG-P0-04 Standard 1:1 Mount complete-draft commit을 추가. 새 Mount_<Hardpoint> ID는 Recipe/Target collision을 fail-closed하고 existing ID/bExposedModule은 stable 보존하며 EquipmentPreset CanUseOnMount를 commit 전 검증.
+// - v1.24.1: VMG-P0-03 Hardpoint Socket draft는 Resolver/R3의 fail-closed blocker를 유지한 채 Builder에서만 expected Step 3 Ready diagnostic read로 허용하도록 narrow gate를 추가.
+// - v1.24.0: CF-FQ-043 VMG-P0-03 Standard Hardpoint category→stable ID/socket creation, Recipe+Target collision-aware max+1 numbering, Mode-authoritative Step 3 evaluator와 conditional non-Hardpoint Socket projection을 추가.
+// - v1.23.0: CF-FQ-043 Guided creation에 explicit Hardpoint Plan opt-in을 binding하고 Recipe-owned Mode transaction/readback, prepared workflow invalidation, Mount/Hardpoint typed remove Builder wrapper를 추가. prepared approval만 폐기하며 완료된 DefinitionApply guarded Undo token은 보존.
 // - v1.22.0: 기존 차량 선택 상태에서 + 새 차량 만들기 진입 시 Authoring selection을 함께 해제해 Browser refresh가 이전 차량을 자동 복원하며 New Vehicle mode를 해제하는 회귀를 차단.
 // - v1.21.0: Vehicle ID ASCII alnum/_ validation과 deterministic DA_Vehicle_/DA_Recipe_ default identity builder를 추가해 Explicit New Vehicle과 Mesh Candidate Quick Start가 같은 naming owner를 사용하도록 연결.
 // - v1.20.0: Blank/Arbitrary/Reused/Mesh-only creation을 공통 Guided request로 통합하고, 생성 성공 뒤 exact Browser row를 fresh read해 Builder current target adoption을 검증.
@@ -38,6 +45,7 @@
 
 #include "DataAuthoring/CFVehicleBuilderVM.h"
 
+#include "CFEquipmentPresetData.h"
 #include "CFVehicleData.h"
 #include "CFVehiclePawn.h"
 #include "CFWheelSizeUtils.h"
@@ -48,6 +56,7 @@
 #include "DataAuthoring/CFVehicleBaseProfile.h"
 #include "DataAuthoring/CFVehicleRecipeData.h"
 #include "DataAuthoring/CFVehicleRefEvidence.h"
+#include "DataAuthoring/CFVehicleResolver.h"
 #include "Dom/JsonObject.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -60,6 +69,7 @@
 #include "Modules/ModuleManager.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
+#include "ScopedTransaction.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
 
@@ -189,6 +199,62 @@ namespace
 		SocketNames.Add(ResolveWheelSocketName(AssetIntent.BodyWheelSocketRL, TEXT("Wheel_Anchor_RL")));
 		SocketNames.Add(ResolveWheelSocketName(AssetIntent.BodyWheelSocketRR, TEXT("Wheel_Anchor_RR")));
 		return SocketNames;
+	}
+
+	// Standard Guided Hardpoint UI가 제공하는 physical location category를 deterministic 순서로 보존합니다.
+	const TArray<FName>& StandardHardpointCategories()
+	{
+		static const TArray<FName> Categories =
+		{
+			TEXT("Top"),
+			TEXT("Front"),
+			TEXT("Back"),
+			TEXT("LeftSide"),
+			TEXT("RightSide"),
+			TEXT("Bottom"),
+			TEXT("Internal")
+		};
+		return Categories;
+	}
+
+	// Standard UI에서 허용하는 physical category인지 확인합니다.
+	bool IsStandardHardpointCategory(const FName LocationCategory)
+	{
+		return StandardHardpointCategories().Contains(LocationCategory);
+	}
+
+	// <Category>_<NN> stable LocationSlotId에서 exact numeric suffix를 읽습니다.
+	bool TryParseStandardHardpointIndex(const FName LocationSlotId, const FName LocationCategory, int32& OutIndex)
+	{
+		OutIndex = 0;
+		if (LocationSlotId.IsNone() || LocationCategory.IsNone())
+		{
+			return false;
+		}
+
+		const FString Prefix = LocationCategory.ToString() + TEXT("_");
+		const FString IdText = LocationSlotId.ToString();
+		if (!IdText.StartsWith(Prefix, ESearchCase::CaseSensitive))
+		{
+			return false;
+		}
+
+		const FString NumberText = IdText.Mid(Prefix.Len());
+		if (NumberText.IsEmpty() || !NumberText.IsNumeric())
+		{
+			return false;
+		}
+
+		OutIndex = FCString::Atoi(*NumberText);
+		return OutIndex > 0;
+	}
+
+	// Standard Hardpoint의 creation-time HP_<LocationSlotId> Socket suggestion을 만듭니다.
+	FName BuildStandardHardpointSocketName(const FName LocationSlotId)
+	{
+		return LocationSlotId.IsNone()
+			? NAME_None
+			: FName(*FString::Printf(TEXT("HP_%s"), *LocationSlotId.ToString()));
 	}
 
 	// LayoutCapture equality에서 임의 tolerance 없이 FVector component를 exact 비교합니다.
@@ -378,7 +444,9 @@ bool FCFVehicleBuilderVM::SelectVehicle(const FCFVehicleListEntry& Entry, FStrin
 		LoadDrivingAcceptanceToken();
 	}
 
-	if (!bAuthoringPreviewFresh && !CanUseNewVehicleProfileBootstrapRead())
+	if (!bAuthoringPreviewFresh
+		&& !CanUseNewVehicleProfileBootstrapRead()
+		&& !CanUseHardpointSocketDraftRead())
 	{
 		if (OutError.IsEmpty())
 		{
@@ -433,7 +501,7 @@ bool FCFVehicleBuilderVM::RefreshCurrentState(FString& OutError)
 		{
 			bHasCurrentResolveReadForStepDiagnostics = OutError.IsEmpty()
 				&& AuthoringViewModel->GetResolveResult().Operation.Status == ECFAuthoringOpStatus::Succeeded;
-			if (!CanUseNewVehicleProfileBootstrapRead())
+			if (!CanUseNewVehicleProfileBootstrapRead() && !CanUseHardpointSocketDraftRead())
 			{
 				if (OutError.IsEmpty())
 				{
@@ -690,6 +758,7 @@ bool FCFVehicleBuilderVM::PrepareGuidedVehicleRecordCreate(
 		Request.ChassisMesh = TSoftObjectPtr<UStaticMesh>(OptionalChassisMeshPath);
 	}
 	Request.bRequireVehicleSpecificTransmission = true;
+	Request.bRequireExplicitHardpointPlan = true;
 	// ProfileBindings는 의도적으로 비워 둡니다. Reference/물리/차급은 후속 Builder 단계가 소유합니다.
 	if (!AuthoringViewModel->PrepareVehicleRecordCreate(Request, OutPreview))
 	{
@@ -1386,11 +1455,8 @@ bool FCFVehicleBuilderVM::BuildPhysicsProposalRequest(
 		return false;
 	}
 
-	// Step 1 USER review token이 current Evidence와 exact 일치하는지 여부입니다.
-	const bool bReferenceAccepted =
-		AcceptedReferenceRecipeId == Recipe->RecipeId
-		&& AcceptedReferenceEvidenceId == Evidence->EvidenceId
-		&& AcceptedReferenceEvidenceFingerprint == Evidence->EvidenceFingerprint;
+	// Step 1 local token 또는 matching persistent receipt가 current Evidence approval provenance를 증명하는지 여부입니다.
+	const bool bReferenceAccepted = IsCurrentReferenceAcceptedForProgress();
 	if (!bReferenceAccepted)
 	{
 		OutError = TEXT("Current Reference Evidence가 USER-reviewed exact fingerprint 상태가 아닙니다. Step 1에서 Reference Set을 다시 확인하세요.");
@@ -1533,11 +1599,8 @@ bool FCFVehicleBuilderVM::LoadPhysicsProposalDraft(FString& OutError)
 		return false;
 	}
 
-	// Step 1 USER review token이 current Evidence와 exact 일치하는지 여부입니다.
-	const bool bReferenceAccepted =
-		AcceptedReferenceRecipeId == Recipe->RecipeId
-		&& AcceptedReferenceEvidenceId == Evidence->EvidenceId
-		&& AcceptedReferenceEvidenceFingerprint == Evidence->EvidenceFingerprint;
+	// Step 1 local token 또는 matching persistent receipt가 current Evidence approval provenance를 증명하는지 여부입니다.
+	const bool bReferenceAccepted = IsCurrentReferenceAcceptedForProgress();
 	if (!bReferenceAccepted)
 	{
 		OutError = TEXT("Physics Proposal 전에 Step 1 current Reference Set USER review가 필요합니다.");
@@ -1998,6 +2061,71 @@ bool FCFVehicleBuilderVM::CanUseNewVehicleProfileBootstrapRead() const
 		&& ResolveRead.ResolveResult.ResolveStatus == ECFVehicleResolveStatus::Blocked;
 }
 
+// UseHardpoints 작성 중 exact Socket 미생성으로 HardpointSocketMissing 계열 blocker만 존재하는 diagnostic read인지 판정합니다.
+bool FCFVehicleBuilderVM::CanUseHardpointSocketDraftRead() const
+{
+	if (!AuthoringViewModel.IsValid()
+		|| !bHasCurrentResolveReadForStepDiagnostics
+		|| AuthoringViewModel->IsMeshOnlyCandidate()
+		|| !AuthoringViewModel->HasRecipe())
+	{
+		return false;
+	}
+
+	const UCFVehicleRecipeData* Recipe = GetRecipe();
+	if (!Recipe
+		|| Recipe->BuilderHardpointPlanMode != ECFBuilderHardpointPlanMode::UseHardpoints
+		|| Recipe->HardpointIntents.IsEmpty())
+	{
+		return false;
+	}
+
+	const FCFVehicleResolveReadResult& ResolveRead = AuthoringViewModel->GetResolveResult();
+	if (ResolveRead.Operation.Status != ECFAuthoringOpStatus::Succeeded
+		|| ResolveRead.ResolveResult.ResolveStatus != ECFVehicleResolveStatus::Blocked)
+	{
+		return false;
+	}
+
+	// Hardpoint 작성 중 예상 blocker 외 Error/Blocked가 하나라도 섞이면 일반 fail-closed 경로를 유지합니다.
+	int32 HardpointSocketMissingCount = 0;
+	const auto IsAllowedIssueBucket = [&HardpointSocketMissingCount](const TArray<FCFVehicleValidationIssue>& Issues)
+	{
+		for (const FCFVehicleValidationIssue& Issue : Issues)
+		{
+			if (Issue.Severity == ECFVehicleValidationSeverity::Error)
+			{
+				return false;
+			}
+			if (Issue.Severity != ECFVehicleValidationSeverity::Blocked)
+			{
+				continue;
+			}
+
+			if (Issue.IssueCode == TEXT("HardpointSocketMissing"))
+			{
+				++HardpointSocketMissingCount;
+				continue;
+			}
+			if (Issue.IssueCode == TEXT("HardpointResolvedFieldMissing"))
+			{
+				const FString CanonicalPath = Issue.FieldPath.ToCanonicalString(true);
+				if (CanonicalPath.EndsWith(TEXT(".LocalLocation")) || CanonicalPath.EndsWith(TEXT(".LocalRotation")))
+				{
+					continue;
+				}
+			}
+			return false;
+		}
+		return true;
+	};
+
+	return IsAllowedIssueBucket(ResolveRead.ResolveResult.RecipeValidation)
+		&& IsAllowedIssueBucket(ResolveRead.ResolveResult.ResolverValidation)
+		&& IsAllowedIssueBucket(ResolveRead.ResolveResult.DefinitionValidation)
+		&& HardpointSocketMissingCount > 0;
+}
+
 // Current Recipe name/RecipeId에서 deterministic missing companion asset identity 5종을 만듭니다.
 void FCFVehicleBuilderVM::FillCompanionAssetIdentities(FCFBuilderCompanionRequest& InOutRequest) const
 {
@@ -2124,6 +2252,39 @@ bool FCFVehicleBuilderVM::HasBlockingReferenceConflict() const
 		}
 	}
 	return false;
+}
+
+// Current local USER review token 또는 exact persistent Builder receipt가 current Reference Evidence 승인 provenance를 증명하는지 반환합니다.
+bool FCFVehicleBuilderVM::IsCurrentReferenceAcceptedForProgress() const
+{
+	const UCFVehicleRecipeData* Recipe = GetRecipe();
+	const UCFVehicleRefEvidence* Evidence = CurrentReferenceEvidence.Get();
+	if (!Recipe || !Evidence || !Recipe->RecipeId.IsValid() || !Evidence->EvidenceId.IsValid())
+	{
+		return false;
+	}
+
+	const bool bLocalTokenMatches =
+		AcceptedReferenceRecipeId == Recipe->RecipeId
+		&& AcceptedReferenceEvidenceId == Evidence->EvidenceId
+		&& AcceptedReferenceEvidenceFingerprint == Evidence->EvidenceFingerprint;
+	if (bLocalTokenMatches)
+	{
+		return true;
+	}
+
+	// Physics Proposal commit은 Step 1 explicit USER review를 prerequisite로 가지므로 matching persistent receipt는 Editor restart 후 durable acceptance provenance입니다.
+	const FCFVehicleBuilderCommitReceipt& Receipt = Recipe->BuilderCommitReceipt;
+	if (!Receipt.IsValid())
+	{
+		return false;
+	}
+
+	// Legacy receipt가 path를 기록하지 않은 경우에도 exact EvidenceId/Fingerprint가 동일하면 acceptance provenance는 복원할 수 있습니다.
+	const bool bPathMatches = !Receipt.EvidencePath.IsValid() || Receipt.EvidencePath == CurrentReferenceEvidencePath;
+	return bPathMatches
+		&& Receipt.EvidenceId == Evidence->EvidenceId
+		&& Receipt.EvidenceFingerprint == Evidence->EvidenceFingerprint;
 }
 
 // Current RecipeId에 저장된 USER Reference review token을 EditorPerProject settings에서 복원합니다.
@@ -2336,6 +2497,485 @@ UCFVehicleRecipeData* FCFVehicleBuilderVM::GetRecipe() const
 	return AuthoringViewModel.IsValid() ? AuthoringViewModel->GetRecipe() : nullptr;
 }
 
+// Current Recipe의 persistent Builder Hardpoint 계획 mode를 반환합니다. Recipe가 없으면 LegacyCompatible을 반환합니다.
+ECFBuilderHardpointPlanMode FCFVehicleBuilderVM::GetHardpointPlanMode() const
+{
+	// Current managed Recipe입니다.
+	const UCFVehicleRecipeData* Recipe = GetRecipe();
+	return Recipe ? Recipe->BuilderHardpointPlanMode : ECFBuilderHardpointPlanMode::LegacyCompatible;
+}
+
+// USER가 선택한 Guided Hardpoint 계획 mode를 Builder-owned Recipe transaction으로 기록하고 stale workflow approval을 폐기합니다.
+bool FCFVehicleBuilderVM::CommitHardpointPlanMode(
+	const ECFBuilderHardpointPlanMode PlanMode,
+	FCFAuthoringOpResult& OutResult,
+	FString& OutError)
+{
+	OutResult = FCFAuthoringOpResult();
+	OutResult.OperationName = TEXT("SetBuilderHardpointPlanMode");
+	OutResult.RiskClass = ECFAuthoringRiskClass::R1_AuthoringRecordWrite;
+	OutResult.ResolverContractRevision = FCFVehicleResolver::CurrentResolverContractRevision;
+	OutResult.Mutation.bSavePerformed = false;
+	OutResult.Mutation.bAutomaticRetryPerformed = false;
+
+	// Persistent Mode owner인 current managed Recipe입니다.
+	UCFVehicleRecipeData* Recipe = GetRecipe();
+	if (!AuthoringViewModel.IsValid() || !AuthoringViewModel->HasRecipe() || !Recipe)
+	{
+		OutResult.Status = ECFAuthoringOpStatus::Blocked;
+		OutResult.ErrorCode = ECFAuthoringErrorCode::RecipeNotFound;
+		OutResult.Message = TEXT("Hardpoint 계획을 기록할 current managed Recipe가 없습니다.");
+		OutError = OutResult.Message;
+		return false;
+	}
+
+	if (PlanMode == ECFBuilderHardpointPlanMode::LegacyCompatible)
+	{
+		OutResult.Status = ECFAuthoringOpStatus::Blocked;
+		OutResult.ErrorCode = ECFAuthoringErrorCode::InvalidSemanticInput;
+		OutResult.Message = TEXT("LegacyCompatible은 기존 Recipe 호환 기본값이며 Guided USER 선택으로 전환할 수 없습니다.");
+		OutError = OutResult.Message;
+		return false;
+	}
+
+	if (PlanMode != ECFBuilderHardpointPlanMode::Unspecified
+		&& PlanMode != ECFBuilderHardpointPlanMode::NoHardpoints
+		&& PlanMode != ECFBuilderHardpointPlanMode::UseHardpoints)
+	{
+		OutResult.Status = ECFAuthoringOpStatus::Blocked;
+		OutResult.ErrorCode = ECFAuthoringErrorCode::InvalidSemanticInput;
+		OutResult.Message = TEXT("지원하지 않는 Builder Hardpoint 계획 mode입니다.");
+		OutError = OutResult.Message;
+		return false;
+	}
+
+	if (PlanMode == ECFBuilderHardpointPlanMode::NoHardpoints
+		&& (!Recipe->HardpointIntents.IsEmpty() || !Recipe->MountIntents.IsEmpty()))
+	{
+		OutResult.Status = ECFAuthoringOpStatus::Blocked;
+		OutResult.ErrorCode = ECFAuthoringErrorCode::DependencyConflict;
+		OutResult.Message = TEXT("장착점 없음은 Hardpoint와 Mount가 모두 비어 있을 때만 선택할 수 있습니다. Mount를 먼저 제거하고 Hardpoint를 제거하세요.");
+		OutError = OutResult.Message;
+		return false;
+	}
+
+	if (Recipe->BuilderHardpointPlanMode == PlanMode)
+	{
+		OutResult.Status = ECFAuthoringOpStatus::NoChange;
+		OutResult.ErrorCode = ECFAuthoringErrorCode::None;
+		OutResult.Message = TEXT("Builder Hardpoint 계획 mode가 이미 요청 상태와 같습니다.");
+		OutResult.Mutation.bRecipeChanged = false;
+		OutResult.Mutation.bTargetChanged = false;
+		OutError.Reset();
+		return true;
+	}
+
+	// 실패 시 exact 복원할 이전 persistent Mode입니다.
+	const ECFBuilderHardpointPlanMode PreviousMode = Recipe->BuilderHardpointPlanMode;
+	// 실패 시 exact 복원할 이전 diagnostic revision입니다.
+	const int32 PreviousRevision = Recipe->AuthoringRevision;
+	// 실패 시 exact 복원할 Recipe package dirty 상태입니다.
+	UPackage* RecipePackage = Recipe->GetOutermost();
+	// Transaction 전 package dirty 여부입니다.
+	const bool bRecipePackageWasDirty = RecipePackage && RecipePackage->IsDirty();
+
+	FScopedTransaction Transaction(NSLOCTEXT("CarFightDataAuthoring", "SetBuilderHardpointPlanMode", "차량 Builder 하드포인트 계획 변경"));
+	Recipe->Modify();
+	Recipe->BuilderHardpointPlanMode = PlanMode;
+	Recipe->AuthoringRevision = PreviousRevision + 1;
+	Recipe->MarkPackageDirty();
+	Recipe->PostEditChange();
+
+	if (Recipe->BuilderHardpointPlanMode != PlanMode || Recipe->AuthoringRevision != PreviousRevision + 1)
+	{
+		Recipe->BuilderHardpointPlanMode = PreviousMode;
+		Recipe->AuthoringRevision = PreviousRevision;
+		Recipe->PostEditChange();
+		Transaction.Cancel();
+		if (RecipePackage)
+		{
+			RecipePackage->SetDirtyFlag(bRecipePackageWasDirty);
+		}
+		OutResult.Status = ECFAuthoringOpStatus::FailedRolledBack;
+		OutResult.ErrorCode = ECFAuthoringErrorCode::InternalError;
+		OutResult.Message = TEXT("Builder Hardpoint 계획 mode readback이 요청값과 달라 transaction을 rollback했습니다.");
+		OutError = OutResult.Message;
+		return false;
+	}
+
+	// Workflow metadata 변경으로 이전 Step 6/7 projection과 prepared DefinitionApply approval을 폐기합니다.
+	GameplayGuidanceResult = FCFBuilderGameplayGuidanceResult();
+	bHasGameplayGuidanceResult = false;
+	FinalReviewResult = FCFBuilderFinalReviewResult();
+	bHasFinalReviewResult = false;
+	ClearPreparedFinalReviewApply();
+
+	// 이미 완료된 DefinitionApply의 guarded Undo token은 별도 복구권한이므로 Mode metadata 변경만으로 폐기하지 않습니다.
+	// Advanced Workspace 내부 prepared Apply도 stale하게 만들고 current semantic preview cache를 다시 읽습니다.
+	FString PreviewRefreshError;
+	AuthoringViewModel->RefreshPreview(PreviewRefreshError);
+	bHasCurrentResolveReadForStepDiagnostics = AuthoringViewModel->GetResolveResult().Operation.Status == ECFAuthoringOpStatus::Succeeded;
+	RebuildStepStates();
+
+	OutResult.Status = ECFAuthoringOpStatus::Succeeded;
+	OutResult.ErrorCode = ECFAuthoringErrorCode::None;
+	OutResult.Message = TEXT("Builder Hardpoint 계획 mode를 Recipe에 기록했습니다. Target/StaticMesh/Save mutation은 없습니다.");
+	OutResult.AuthoringActionId = FGuid::NewGuid().ToString(EGuidFormats::Digits);
+	OutResult.Mutation.bRecipeChanged = true;
+	OutResult.Mutation.bTargetChanged = false;
+	OutResult.Mutation.bProfileChanged = false;
+	OutResult.Mutation.bCreatedAssets = false;
+	OutResult.Mutation.bPackageDirty = RecipePackage && RecipePackage->IsDirty();
+	OutResult.Mutation.bSavePerformed = false;
+	OutResult.Mutation.bAutomaticRetryPerformed = false;
+	OutError.Reset();
+	return true;
+}
+
+// Exact MountProfile stable identity 하나를 existing R1 typed remove lane으로 제거하고 Builder state를 fresh 재평가합니다.
+bool FCFVehicleBuilderVM::RemoveMountIntent(
+	const FName MountProfileId,
+	FCFAuthoringOpResult& OutResult,
+	FString& OutError)
+{
+	if (!AuthoringViewModel.IsValid() || !AuthoringViewModel->HasRecipe())
+	{
+		OutError = TEXT("Mount를 제거할 current managed Recipe가 없습니다.");
+		return false;
+	}
+	if (!AuthoringViewModel->RemoveMountIntent(MountProfileId, OutResult))
+	{
+		OutError = OutResult.Message;
+		RebuildStepStates();
+		return false;
+	}
+	if (!RefreshCurrentState(OutError))
+	{
+		return false;
+	}
+	OutError.Reset();
+	return true;
+}
+
+// Standard Hardpoint 하나의 1:1 Mount rule을 complete draft로 검증하고 stable MountProfileId를 보존/생성해 existing typed R1 lane으로 commit합니다.
+bool FCFVehicleBuilderVM::CommitStandardMountIntent(
+	const FName LocationSlotId,
+	const ECFVehicleMountType MountType,
+	const ECFVehicleWeaponSize SizeLimit,
+	const FSoftObjectPath& DefaultEquipmentPresetPath,
+	FCFMountIntent& OutIntent,
+	FCFAuthoringOpResult& OutResult,
+	FString& OutError)
+{
+	OutIntent = FCFMountIntent();
+	OutResult = FCFAuthoringOpResult();
+
+	if (!AuthoringViewModel.IsValid() || !AuthoringViewModel->HasRecipe())
+	{
+		OutError = TEXT("Standard Mount를 반영할 current managed Recipe가 없습니다.");
+		return false;
+	}
+	if (GetHardpointPlanMode() != ECFBuilderHardpointPlanMode::UseHardpoints)
+	{
+		OutResult.Status = ECFAuthoringOpStatus::Blocked;
+		OutResult.ErrorCode = ECFAuthoringErrorCode::InvalidSemanticInput;
+		OutResult.Message = TEXT("Standard Mount 반영 전에 Hardpoint Plan을 '장착 위치 사용'으로 명시해야 합니다.");
+		OutError = OutResult.Message;
+		return false;
+	}
+	if (LocationSlotId.IsNone())
+	{
+		OutResult.Status = ECFAuthoringOpStatus::Blocked;
+		OutResult.ErrorCode = ECFAuthoringErrorCode::InvalidSemanticInput;
+		OutResult.Message = TEXT("Standard Mount에는 non-None Hardpoint LocationSlotId가 필요합니다.");
+		OutError = OutResult.Message;
+		return false;
+	}
+	if (MountType == ECFVehicleMountType::None)
+	{
+		OutResult.Status = ECFAuthoringOpStatus::Blocked;
+		OutResult.ErrorCode = ECFAuthoringErrorCode::InvalidSemanticInput;
+		OutResult.Message = TEXT("MountType을 Fixed/Gimbal/Turret/Launcher/Utility 중 하나로 선택하세요.");
+		OutError = OutResult.Message;
+		return false;
+	}
+	if (MountType != ECFVehicleMountType::Utility && SizeLimit == ECFVehicleWeaponSize::None)
+	{
+		OutResult.Status = ECFAuthoringOpStatus::Blocked;
+		OutResult.ErrorCode = ECFAuthoringErrorCode::InvalidSemanticInput;
+		OutResult.Message = TEXT("Fixed/Gimbal/Turret/Launcher Mount는 Small/Medium/Large SizeLimit이 필요합니다. Utility만 None을 허용합니다.");
+		OutError = OutResult.Message;
+		return false;
+	}
+
+	UCFVehicleRecipeData* Recipe = GetRecipe();
+	const UCFVehicleData* TargetVehicleData = AuthoringViewModel->GetTargetVehicleData();
+	const bool bHardpointExists = Recipe->HardpointIntents.ContainsByPredicate([LocationSlotId](const FCFHardpointIntent& Intent)
+	{
+		return Intent.LocationSlotId == LocationSlotId;
+	});
+	if (!bHardpointExists)
+	{
+		OutResult.Status = ECFAuthoringOpStatus::Blocked;
+		OutResult.ErrorCode = ECFAuthoringErrorCode::DependencyConflict;
+		OutResult.Message = FString::Printf(TEXT("Standard Mount가 참조할 Recipe Hardpoint가 없습니다: %s"), *LocationSlotId.ToString());
+		OutError = OutResult.Message;
+		return false;
+	}
+
+	TArray<const FCFMountIntent*> ExistingMountsForHardpoint;
+	for (const FCFMountIntent& MountIntent : Recipe->MountIntents)
+	{
+		if (MountIntent.LocationSlotRef == LocationSlotId)
+		{
+			ExistingMountsForHardpoint.Add(&MountIntent);
+		}
+	}
+	if (ExistingMountsForHardpoint.Num() > 1)
+	{
+		OutResult.Status = ECFAuthoringOpStatus::Blocked;
+		OutResult.ErrorCode = ECFAuthoringErrorCode::DependencyConflict;
+		OutResult.Message = FString::Printf(
+			TEXT("%s Hardpoint에 Recipe Mount가 %d개 연결돼 있습니다. Standard 1:1 편집은 multi-Mount를 자동 축소하지 않습니다. Advanced에서 구조를 먼저 정리하세요."),
+			*LocationSlotId.ToString(),
+			ExistingMountsForHardpoint.Num());
+		OutError = OutResult.Message;
+		return false;
+	}
+
+	FName StableMountProfileId = NAME_None;
+	bool bExposedModule = true;
+	if (ExistingMountsForHardpoint.Num() == 1)
+	{
+		const FCFMountIntent& ExistingMount = *ExistingMountsForHardpoint[0];
+		if (ExistingMount.MountProfileId.IsNone())
+		{
+			OutResult.Status = ECFAuthoringOpStatus::Blocked;
+			OutResult.ErrorCode = ECFAuthoringErrorCode::InvalidSemanticInput;
+			OutResult.Message = TEXT("Existing Standard candidate Mount의 MountProfileId가 None입니다. stable identity를 Advanced에서 먼저 교정하세요.");
+			OutError = OutResult.Message;
+			return false;
+		}
+
+		int32 SameIdCount = 0;
+		for (const FCFMountIntent& CandidateMount : Recipe->MountIntents)
+		{
+			if (CandidateMount.MountProfileId == ExistingMount.MountProfileId)
+			{
+				++SameIdCount;
+			}
+		}
+		if (SameIdCount != 1)
+		{
+			OutResult.Status = ECFAuthoringOpStatus::Blocked;
+			OutResult.ErrorCode = ECFAuthoringErrorCode::DependencyConflict;
+			OutResult.Message = FString::Printf(TEXT("Existing MountProfileId가 Recipe 안에서 중복됩니다: %s"), *ExistingMount.MountProfileId.ToString());
+			OutError = OutResult.Message;
+			return false;
+		}
+
+		StableMountProfileId = ExistingMount.MountProfileId;
+		bExposedModule = ExistingMount.bExposedModule;
+	}
+	else
+	{
+		StableMountProfileId = FName(*FString::Printf(TEXT("Mount_%s"), *LocationSlotId.ToString()));
+
+		const bool bRecipeIdCollision = Recipe->MountIntents.ContainsByPredicate([StableMountProfileId](const FCFMountIntent& Intent)
+		{
+			return Intent.MountProfileId == StableMountProfileId;
+		});
+		const bool bTargetIdCollision = TargetVehicleData && TargetVehicleData->MountProfiles.ContainsByPredicate([StableMountProfileId](const FCFVehicleMountProfile& Profile)
+		{
+			return Profile.MountProfileId == StableMountProfileId;
+		});
+		if (bRecipeIdCollision || bTargetIdCollision)
+		{
+			OutResult.Status = ECFAuthoringOpStatus::Blocked;
+			OutResult.ErrorCode = ECFAuthoringErrorCode::DependencyConflict;
+			OutResult.Message = FString::Printf(
+				TEXT("새 Standard Mount identity가 current Recipe/Target과 충돌합니다: %s. 자동 suffix/rename하지 않습니다. 기존 identity ownership을 확인하세요."),
+				*StableMountProfileId.ToString());
+			OutError = OutResult.Message;
+			return false;
+		}
+	}
+
+	TSoftObjectPtr<UCFEquipmentPresetData> EquipmentPreset;
+	if (DefaultEquipmentPresetPath.IsValid())
+	{
+		UObject* PresetObject = DefaultEquipmentPresetPath.ResolveObject();
+		if (!PresetObject)
+		{
+			PresetObject = DefaultEquipmentPresetPath.TryLoad();
+		}
+		UCFEquipmentPresetData* PresetData = Cast<UCFEquipmentPresetData>(PresetObject);
+		if (!PresetData)
+		{
+			OutResult.Status = ECFAuthoringOpStatus::Blocked;
+			OutResult.ErrorCode = ECFAuthoringErrorCode::InvalidSemanticInput;
+			OutResult.Message = FString::Printf(TEXT("EquipmentPresetData를 기대 타입으로 읽을 수 없습니다: %s"), *DefaultEquipmentPresetPath.ToString());
+			OutError = OutResult.Message;
+			return false;
+		}
+		if (!PresetData->CanUseOnMount(MountType, SizeLimit))
+		{
+			OutResult.Status = ECFAuthoringOpStatus::Blocked;
+			OutResult.ErrorCode = ECFAuthoringErrorCode::ValidationBlocked;
+			OutResult.Message = FString::Printf(
+				TEXT("선택한 EquipmentPresetData가 MountType/SizeLimit과 호환되지 않습니다: %s"),
+				*DefaultEquipmentPresetPath.ToString());
+			OutError = OutResult.Message;
+			return false;
+		}
+		EquipmentPreset = TSoftObjectPtr<UCFEquipmentPresetData>(PresetData);
+	}
+
+	FCFMountIntent NewIntent;
+	NewIntent.MountProfileId = StableMountProfileId;
+	NewIntent.LocationSlotRef = LocationSlotId;
+	NewIntent.MountType = MountType;
+	NewIntent.SizeLimit = SizeLimit;
+	NewIntent.DefaultEquipmentPresetData = EquipmentPreset;
+	NewIntent.bExposedModule = bExposedModule;
+
+	if (!AuthoringViewModel->UpsertMountIntent(NewIntent, OutResult))
+	{
+		OutError = OutResult.Message;
+		RebuildStepStates();
+		return false;
+	}
+	if (!RefreshCurrentState(OutError))
+	{
+		return false;
+	}
+
+	OutIntent = NewIntent;
+	OutError.Reset();
+	return true;
+}
+
+// Exact Hardpoint stable identity 하나를 dependency-safe existing R1 typed remove lane으로 제거하고 Builder state를 fresh 재평가합니다.
+bool FCFVehicleBuilderVM::RemoveHardpointIntent(
+	const FName LocationSlotId,
+	FCFAuthoringOpResult& OutResult,
+	FString& OutError)
+{
+	if (!AuthoringViewModel.IsValid() || !AuthoringViewModel->HasRecipe())
+	{
+		OutError = TEXT("Hardpoint를 제거할 current managed Recipe가 없습니다.");
+		return false;
+	}
+	if (!AuthoringViewModel->RemoveHardpointIntent(LocationSlotId, OutResult))
+	{
+		OutError = OutResult.Message;
+		RebuildStepStates();
+		return false;
+	}
+	if (!RefreshCurrentState(OutError))
+	{
+		return false;
+	}
+	OutError.Reset();
+	return true;
+}
+
+// Standard category 하나를 stable <Category>_<NN> / HP_<LocationSlotId> Hardpoint intent로 생성해 existing typed R1 lane으로 commit합니다.
+bool FCFVehicleBuilderVM::AddStandardHardpoint(
+	const FName LocationCategory,
+	FCFHardpointIntent& OutIntent,
+	FCFAuthoringOpResult& OutResult,
+	FString& OutError)
+{
+	OutIntent = FCFHardpointIntent();
+	OutResult = FCFAuthoringOpResult();
+
+	if (!AuthoringViewModel.IsValid() || !AuthoringViewModel->HasRecipe())
+	{
+		OutError = TEXT("Standard Hardpoint를 추가할 current managed Recipe가 없습니다.");
+		return false;
+	}
+	if (GetHardpointPlanMode() != ECFBuilderHardpointPlanMode::UseHardpoints)
+	{
+		OutResult.Status = ECFAuthoringOpStatus::Blocked;
+		OutResult.ErrorCode = ECFAuthoringErrorCode::InvalidSemanticInput;
+		OutResult.Message = TEXT("Standard Hardpoint 추가 전에 '장착 위치 사용'을 명시적으로 선택해야 합니다.");
+		OutError = OutResult.Message;
+		return false;
+	}
+	if (!IsStandardHardpointCategory(LocationCategory))
+	{
+		OutResult.Status = ECFAuthoringOpStatus::Blocked;
+		OutResult.ErrorCode = ECFAuthoringErrorCode::InvalidSemanticInput;
+		OutResult.Message = FString::Printf(TEXT("Standard Guided 경로에서 지원하지 않는 위치 분류입니다: %s"), *LocationCategory.ToString());
+		OutError = OutResult.Message;
+		return false;
+	}
+
+	// Current Recipe와 relevant current Target의 stable LocationSlot identity를 함께 예약해 max-used+1을 계산합니다.
+	const UCFVehicleRecipeData* Recipe = GetRecipe();
+	const UCFVehicleData* TargetVehicleData = AuthoringViewModel->GetTargetVehicleData();
+	int32 MaximumUsedIndex = 0;
+	TSet<FName> ExistingLocationIds;
+	for (const FCFHardpointIntent& ExistingIntent : Recipe->HardpointIntents)
+	{
+		ExistingLocationIds.Add(ExistingIntent.LocationSlotId);
+		int32 ExistingIndex = 0;
+		if (TryParseStandardHardpointIndex(ExistingIntent.LocationSlotId, LocationCategory, ExistingIndex))
+		{
+			MaximumUsedIndex = FMath::Max(MaximumUsedIndex, ExistingIndex);
+		}
+	}
+	if (TargetVehicleData)
+	{
+		for (const FCFVehicleHardpointSlot& ExistingSlot : TargetVehicleData->HardpointSlots)
+		{
+			ExistingLocationIds.Add(ExistingSlot.LocationSlotId);
+			int32 ExistingIndex = 0;
+			if (TryParseStandardHardpointIndex(ExistingSlot.LocationSlotId, LocationCategory, ExistingIndex))
+			{
+				MaximumUsedIndex = FMath::Max(MaximumUsedIndex, ExistingIndex);
+			}
+		}
+	}
+
+	// 삭제된 번호를 재사용하지 않고 max-used+1부터 exact collision이 사라질 때까지 전진합니다.
+	int32 CandidateIndex = MaximumUsedIndex + 1;
+	FName CandidateLocationSlotId;
+	do
+	{
+		CandidateLocationSlotId = FName(*FString::Printf(TEXT("%s_%02d"), *LocationCategory.ToString(), CandidateIndex));
+		++CandidateIndex;
+	}
+	while (ExistingLocationIds.Contains(CandidateLocationSlotId));
+
+	FCFHardpointIntent NewIntent;
+	NewIntent.LocationSlotId = CandidateLocationSlotId;
+	NewIntent.LocationCategory = LocationCategory;
+	NewIntent.SocketName = BuildStandardHardpointSocketName(CandidateLocationSlotId);
+
+	if (!AuthoringViewModel->UpsertHardpointIntent(NewIntent, OutResult))
+	{
+		OutError = OutResult.Message;
+		RebuildStepStates();
+		return false;
+	}
+	if (!RefreshCurrentState(OutError))
+	{
+		return false;
+	}
+
+	OutIntent = NewIntent;
+	OutError.Reset();
+	return true;
+}
+
+// Step 3 Standard UI가 노출하는 physical Hardpoint category 목록을 deterministic 순서로 반환합니다.
+TArray<FName> FCFVehicleBuilderVM::GetStandardHardpointCategories() const
+{
+	return StandardHardpointCategories();
+}
+
 // Step 2의 USER 선택 Chassis/Wheel Mesh를 existing typed AssetIntent Recipe-only lane으로 반영하고 Builder state를 fresh 재평가합니다.
 bool FCFVehicleBuilderVM::CommitMeshPreparation(
 	const FCFVehicleAssetIntent& AssetIntent,
@@ -2443,6 +3083,39 @@ TArray<FName> FCFVehicleBuilderVM::GetOptionalSocketNames() const
 		return LeftName.LexicalLess(RightName);
 	});
 	return OptionalSocketNames;
+}
+
+// Step 3 Hardpoint 표와 중복되지 않는 Destroyed FX Socket 이름만 반환합니다.
+TArray<FName> FCFVehicleBuilderVM::GetConditionalNonHardpointSocketNames() const
+{
+	const UCFVehicleRecipeData* Recipe = GetRecipe();
+	if (!Recipe)
+	{
+		return {};
+	}
+
+	// Hardpoint 표가 별도로 표시하는 exact/effective Socket 이름입니다.
+	TSet<FName> HardpointSocketNames;
+	for (const FCFHardpointIntent& HardpointIntent : Recipe->HardpointIntents)
+	{
+		const FName EffectiveSocketName = !HardpointIntent.SocketName.IsNone()
+			? HardpointIntent.SocketName
+			: BuildStandardHardpointSocketName(HardpointIntent.LocationSlotId);
+		if (!EffectiveSocketName.IsNone())
+		{
+			HardpointSocketNames.Add(EffectiveSocketName);
+		}
+	}
+
+	TArray<FName> ConditionalNames;
+	for (const FName SocketName : GetOptionalSocketNames())
+	{
+		if (!HardpointSocketNames.Contains(SocketName))
+		{
+			ConditionalNames.Add(SocketName);
+		}
+	}
+	return ConditionalNames;
 }
 
 // Fresh AssetSnapshot에서 exact Chassis Socket이 현재 존재하는지 read-only로 반환합니다.
@@ -2677,25 +3350,37 @@ void FCFVehicleBuilderVM::EvaluateIdentityReferenceStep()
 		AcceptedReferenceRecipeId == Recipe->RecipeId
 		&& AcceptedReferenceEvidenceId == Evidence->EvidenceId
 		&& AcceptedReferenceEvidenceFingerprint == Evidence->EvidenceFingerprint;
-	if (bReviewTokenMatches)
+	// 완료된 Physics Proposal의 persistent receipt는 해당 Evidence가 이미 USER-reviewed workflow를 통과했다는 durable provenance입니다.
+	const FCFVehicleBuilderCommitReceipt& Receipt = Recipe->BuilderCommitReceipt;
+	const bool bReceiptPathMatches = !Receipt.EvidencePath.IsValid() || Receipt.EvidencePath == CurrentReferenceEvidencePath;
+	const bool bReceiptMatches = Receipt.IsValid()
+		&& bReceiptPathMatches
+		&& Receipt.EvidenceId == Evidence->EvidenceId
+		&& Receipt.EvidenceFingerprint == Evidence->EvidenceFingerprint;
+	if (bReviewTokenMatches || bReceiptMatches)
 	{
 		SetStep(ECFVehicleBuilderStepId::IdentityReference, ECFVehicleBuilderStepState::Complete,
-			TEXT("Current Reference Evidence가 valid하고 USER review token이 exact EvidenceFingerprint와 일치합니다."),
-			TEXT("Step 1 완료입니다. Reference review token은 Profile/Recipe write, VehicleData Apply 또는 Save 권한을 주지 않습니다."),
+			bReviewTokenMatches
+				? TEXT("Current Reference Evidence가 valid하고 local USER review token이 exact EvidenceFingerprint와 일치합니다.")
+				: TEXT("Current Reference Evidence가 valid하고 persistent Builder receipt가 exact EvidenceId/Fingerprint를 증명해 완료 상태를 복원했습니다."),
+			TEXT("Step 1 완료입니다. 이 provenance는 Reference review 완료만 증명하며 새 Profile/Recipe write, VehicleData Apply 또는 Save 권한을 주지 않습니다."),
 			true);
 		return;
 	}
 
-	// 같은 Recipe에 과거 Reference review token이 있었지만 Evidence identity/fingerprint가 달라졌는지 여부입니다.
+	// 같은 Recipe에 과거 Reference review token이 있었거나 durable receipt가 current Evidence와 달라졌으면 stale로 표시합니다.
 	const bool bHasStaleReviewToken =
 		AcceptedReferenceRecipeId == Recipe->RecipeId
 		&& AcceptedReferenceEvidenceId.IsValid()
 		&& !AcceptedReferenceEvidenceFingerprint.IsEmpty();
-	if (bHasStaleReviewToken)
+	const bool bHasStalePersistentReceipt = Receipt.IsValid() && !bReceiptMatches;
+	if (bHasStaleReviewToken || bHasStalePersistentReceipt)
 	{
 		SetStep(ECFVehicleBuilderStepId::IdentityReference, ECFVehicleBuilderStepState::Stale,
-			TEXT("과거 USER Reference review token이 current Evidence identity/fingerprint와 일치하지 않습니다."),
-			TEXT("아래 Reference 요약을 다시 확인한 뒤 '이 Reference Set으로 진행'을 눌러 current fingerprint를 새로 승인하세요."),
+			bHasStaleReviewToken
+				? TEXT("과거 USER Reference review token이 current Evidence identity/fingerprint와 일치하지 않습니다.")
+				: TEXT("Persistent Builder receipt의 accepted Evidence identity/fingerprint가 current Reference Evidence와 일치하지 않습니다."),
+			TEXT("아래 Reference 요약을 다시 확인한 뒤 '이 Reference Set으로 진행'을 눌러 current fingerprint를 새로 승인하세요. 기존 receipt는 후속 Physics 단계에서 fresh 검증됩니다."),
 			true);
 		return;
 	}
@@ -2925,18 +3610,23 @@ void FCFVehicleBuilderVM::EvaluateSocketGuideStep()
 		}
 	}
 
-	// Guidance-only Hardpoint warning 수입니다.
-	int32 HardpointWarningCount = 0;
-	// Direct LocalTransform 방식 Hardpoint 수입니다.
+	// Guided explicit-plan lane에서 Block하는 Hardpoint identity/socket 구조 오류 수입니다.
+	int32 HardpointStructuralBlockerCount = 0;
+	// Exact SocketName은 유효하지만 current Chassis에 아직 존재하지 않는 Hardpoint 수입니다.
+	int32 HardpointMissingSocketCount = 0;
+	// Current Chassis에서 exact SocketName을 찾은 Hardpoint 수입니다.
+	int32 HardpointFoundSocketCount = 0;
+	// HP_ prefix를 따르지 않는 Advanced/custom naming advisory 수입니다.
+	int32 HardpointNamingWarningCount = 0;
+	// Legacy direct LocalTransform-compatible SocketName None 수입니다.
 	int32 HardpointSocketNoneCount = 0;
 	// duplicate LocationSlotId를 찾기 위한 집합입니다.
 	TSet<FName> HardpointLocationIds;
-	// Recipe의 각 Hardpoint intent를 guidance-only validation으로 순회합니다.
 	for (const FCFHardpointIntent& HardpointIntent : Recipe->HardpointIntents)
 	{
 		if (HardpointIntent.LocationSlotId.IsNone() || HardpointLocationIds.Contains(HardpointIntent.LocationSlotId))
 		{
-			++HardpointWarningCount;
+			++HardpointStructuralBlockerCount;
 		}
 		else
 		{
@@ -2946,17 +3636,22 @@ void FCFVehicleBuilderVM::EvaluateSocketGuideStep()
 		if (HardpointIntent.SocketName.IsNone())
 		{
 			++HardpointSocketNoneCount;
+			++HardpointStructuralBlockerCount;
 			continue;
 		}
 		if (!HardpointIntent.SocketName.ToString().StartsWith(TEXT("HP_")))
 		{
-			++HardpointWarningCount;
+			++HardpointNamingWarningCount;
 		}
-		// current Chassis에서 Hardpoint intent 이름으로 찾은 Socket fact입니다.
+
 		const FCFVehicleSocketSnapshot* HardpointSocketFact = Assets.FindChassisSocket(HardpointIntent.SocketName);
-		if (!HardpointSocketFact || !HardpointSocketFact->bFound)
+		if (HardpointSocketFact && HardpointSocketFact->bFound)
 		{
-			++HardpointWarningCount;
+			++HardpointFoundSocketCount;
+		}
+		else
+		{
+			++HardpointMissingSocketCount;
 		}
 	}
 
@@ -2964,11 +3659,10 @@ void FCFVehicleBuilderVM::EvaluateSocketGuideStep()
 	{
 		SetStep(ECFVehicleBuilderStepId::SocketGuide, ECFVehicleBuilderStepState::Blocked,
 			FString::Printf(
-				TEXT("Wheel Socket 검사: %d/4 발견, distinct binding=%s. FL=%s / FR=%s / RL=%s / RR=%s. Hardpoint guidance warning=%d, SocketNone=%d."),
+				TEXT("Wheel Socket 검사: %d/4 발견, distinct binding=%s. FL=%s / FR=%s / RL=%s / RR=%s."),
 				FoundWheelSocketCount,
 				bWheelSocketBindingsDistinct ? TEXT("PASS") : TEXT("FAIL"),
-				*WheelSocketNames[0].ToString(), *WheelSocketNames[1].ToString(), *WheelSocketNames[2].ToString(), *WheelSocketNames[3].ToString(),
-				HardpointWarningCount, HardpointSocketNoneCount),
+				*WheelSocketNames[0].ToString(), *WheelSocketNames[1].ToString(), *WheelSocketNames[2].ToString(), *WheelSocketNames[3].ToString()),
 			TEXT("누락된 Wheel Socket을 Chassis Static Mesh의 소켓 매니저에서 직접 생성/배치하거나 중복 role binding을 수정한 뒤 다시 검사하세요. Builder는 Socket을 자동 생성·이동하지 않습니다."),
 			true);
 		return;
@@ -2988,14 +3682,83 @@ void FCFVehicleBuilderVM::EvaluateSocketGuideStep()
 	const bool bRoleTopologySuspicious = FrontAxleMidpoint.X <= RearAxleMidpoint.X
 		|| WheelSocketFacts[0]->RelativeLocation.Y >= WheelSocketFacts[1]->RelativeLocation.Y
 		|| WheelSocketFacts[2]->RelativeLocation.Y >= WheelSocketFacts[3]->RelativeLocation.Y;
+	// Wheel geometry는 모든 Hardpoint Mode에서 공통으로 보여 주는 USER review summary입니다.
+	const FString WheelPassSummary = FString::Printf(
+		TEXT("Wheel Socket 4/4 + distinct PASS. Wheelbase=%.2fcm, FrontTrack=%.2fcm, RearTrack=%.2fcm. Custom Wheel name=%d, topology review=%s."),
+		AuthoredWheelbaseCm, FrontTrackCm, RearTrackCm, CustomWheelSocketCount,
+		bRoleTopologySuspicious ? TEXT("필요") : TEXT("정상"));
 
-	SetStep(ECFVehicleBuilderStepId::SocketGuide, ECFVehicleBuilderStepState::Complete,
-		FString::Printf(
-			TEXT("Wheel Socket 4/4 + distinct PASS. Wheelbase=%.2fcm, FrontTrack=%.2fcm, RearTrack=%.2fcm. Custom Wheel name=%d, topology review=%s, Hardpoint guidance warning=%d, SocketNone=%d. Reference delta는 Evidence 연결 후 USER review로 표시하며 임의 threshold로 Block하지 않습니다."),
-			AuthoredWheelbaseCm, FrontTrackCm, RearTrackCm, CustomWheelSocketCount,
-			bRoleTopologySuspicious ? TEXT("필요") : TEXT("정상"), HardpointWarningCount, HardpointSocketNoneCount),
-		TEXT("Wheel Socket 준비가 완료되었습니다. Hardpoint warning은 P0-03 completion blocker가 아니며 실제 requiredness는 Gameplay Setup이 소유합니다."),
-		true);
+	switch (Recipe->BuilderHardpointPlanMode)
+	{
+	case ECFBuilderHardpointPlanMode::LegacyCompatible:
+		SetStep(ECFVehicleBuilderStepId::SocketGuide, ECFVehicleBuilderStepState::Complete,
+			FString::Printf(
+				TEXT("%s LegacyCompatible Hardpoint=%d, exact Socket found=%d, missing=%d, SocketNone=%d, naming advisory=%d. Existing/custom 구조는 자동 migration하지 않습니다."),
+				*WheelPassSummary, Recipe->HardpointIntents.Num(), HardpointFoundSocketCount, HardpointMissingSocketCount, HardpointSocketNoneCount, HardpointNamingWarningCount),
+			TEXT("기존 차량 Hardpoint/Mount 보존 계약을 유지합니다. Guided 1:1 계획을 사용하려면 명시적으로 '장착 위치 사용'으로 전환하세요."),
+			true);
+		return;
+
+	case ECFBuilderHardpointPlanMode::Unspecified:
+		SetStep(ECFVehicleBuilderStepId::SocketGuide, ECFVehicleBuilderStepState::Ready,
+			FString::Printf(TEXT("%s Hardpoint 계획 미결정. 현재 Recipe Hardpoint=%d / Mount=%d."), *WheelPassSummary, Recipe->HardpointIntents.Num(), Recipe->MountIntents.Num()),
+			TEXT("'장착점 없음' 또는 '장착 위치 사용' 중 하나를 명시적으로 선택하세요. 기존 intent가 있어도 Builder가 silent mode 전환하지 않습니다."),
+			true);
+		return;
+
+	case ECFBuilderHardpointPlanMode::NoHardpoints:
+		if (!Recipe->HardpointIntents.IsEmpty() || !Recipe->MountIntents.IsEmpty())
+		{
+			SetStep(ECFVehicleBuilderStepId::SocketGuide, ECFVehicleBuilderStepState::Blocked,
+				FString::Printf(TEXT("%s NoHardpoints와 Recipe semantic data가 충돌합니다. Hardpoint=%d / Mount=%d."), *WheelPassSummary, Recipe->HardpointIntents.Num(), Recipe->MountIntents.Num()),
+				TEXT("Mount를 먼저 제거하고 Hardpoint를 제거한 뒤 '장착점 없음'을 다시 확인하세요. 자동 cascade 삭제는 하지 않습니다."),
+				true);
+			return;
+		}
+		SetStep(ECFVehicleBuilderStepId::SocketGuide, ECFVehicleBuilderStepState::Complete,
+			FString::Printf(TEXT("%s Hardpoint Plan=NoHardpoints. 장착 위치 0개를 USER가 명시했습니다."), *WheelPassSummary),
+			TEXT("장착 위치를 사용하지 않는 차량으로 Step 3을 완료했습니다. 마음이 바뀌면 '장착 위치 사용'으로 전환할 수 있습니다."),
+			true);
+		return;
+
+	case ECFBuilderHardpointPlanMode::UseHardpoints:
+		if (Recipe->HardpointIntents.IsEmpty())
+		{
+			SetStep(ECFVehicleBuilderStepId::SocketGuide, ECFVehicleBuilderStepState::Ready,
+				FString::Printf(TEXT("%s Hardpoint Plan=UseHardpoints이지만 아직 장착 위치가 없습니다."), *WheelPassSummary),
+				TEXT("위/앞/뒤/좌/우/아래/내부 중 실제 필요한 위치를 하나 이상 추가하세요."),
+				true);
+			return;
+		}
+		if (HardpointStructuralBlockerCount > 0)
+		{
+			SetStep(ECFVehicleBuilderStepId::SocketGuide, ECFVehicleBuilderStepState::Blocked,
+				FString::Printf(TEXT("%s Hardpoint 구조 blocker=%d. Standard Guided에서는 LocationSlotId unique/non-None + SocketName non-None이 필요합니다."), *WheelPassSummary, HardpointStructuralBlockerCount),
+				TEXT("Advanced/custom intent의 중복/빈 identity를 교정하세요. Standard row의 category/identity는 생성 뒤 silent rename하지 않습니다."),
+				true);
+			return;
+		}
+		if (HardpointMissingSocketCount > 0)
+		{
+			SetStep(ECFVehicleBuilderStepId::SocketGuide, ECFVehicleBuilderStepState::Ready,
+				FString::Printf(TEXT("%s Hardpoint %d개 중 Socket %d개 확인, %d개 아직 없음. naming advisory=%d."), *WheelPassSummary, Recipe->HardpointIntents.Num(), HardpointFoundSocketCount, HardpointMissingSocketCount, HardpointNamingWarningCount),
+				TEXT("'Hardpoint Socket 편집하기'로 Chassis StaticMesh를 열어 표시된 exact HP_* Socket을 USER가 직접 생성/배치/저장한 뒤 현재 상태를 다시 확인하세요."),
+				true);
+			return;
+		}
+
+		SetStep(ECFVehicleBuilderStepId::SocketGuide, ECFVehicleBuilderStepState::Complete,
+			FString::Printf(TEXT("%s Hardpoint %d개 exact Socket PASS. naming advisory=%d."), *WheelPassSummary, Recipe->HardpointIntents.Num(), HardpointNamingWarningCount),
+			TEXT("Hardpoint 위치 준비가 완료되었습니다. 다음 단계에서도 Builder는 StaticMesh를 자동 수정하거나 저장하지 않습니다."),
+			true);
+		return;
+	default:
+		SetStep(ECFVehicleBuilderStepId::SocketGuide, ECFVehicleBuilderStepState::Blocked,
+			TEXT("지원하지 않는 Builder Hardpoint Plan Mode입니다."),
+			TEXT("Recipe Hardpoint Plan metadata를 확인하세요."),
+			true);
+		return;
+	}
 }
 
 // Layout Capture 단계의 current persisted/current socket equality를 평가합니다.
@@ -3200,11 +3963,8 @@ void FCFVehicleBuilderVM::EvaluatePhysicsProposalStep()
 		return;
 	}
 
-	// USER가 Step 1에서 review한 exact Reference identity/fingerprint가 current인지 여부입니다.
-	const bool bReferenceAccepted =
-		AcceptedReferenceRecipeId == Recipe->RecipeId
-		&& AcceptedReferenceEvidenceId == Evidence->EvidenceId
-		&& AcceptedReferenceEvidenceFingerprint == Evidence->EvidenceFingerprint;
+	// Step 1 local token 또는 matching persistent receipt가 current exact Reference identity/fingerprint를 증명하는지 여부입니다.
+	const bool bReferenceAccepted = IsCurrentReferenceAcceptedForProgress();
 	if (!bReferenceAccepted)
 	{
 		SetStep(ECFVehicleBuilderStepId::PhysicsProposal, ECFVehicleBuilderStepState::Locked,
@@ -3362,6 +4122,7 @@ bool FCFVehicleBuilderVM::BuildGameplayGuidanceRequest(
 	OutRequest.ReadRequest.TargetVehicleData = TargetVehicleData;
 	OutRequest.ReadRequest.CallerKind = ECFAuthoringCallerKind::SlateUI;
 	OutRequest.Mode = DeriveCompanionMode();
+	OutRequest.HardpointPlanMode = Recipe->BuilderHardpointPlanMode;
 	OutError.Reset();
 	return true;
 }
@@ -3421,7 +4182,7 @@ FString FCFVehicleBuilderVM::BuildGameplayGuidanceSummary() const
 		}
 	}
 
-	Summary += TEXT("\n\n이 단계는 read-only입니다. Socket 생성·이동, Target VehicleData Apply, Save는 하지 않습니다.");
+	Summary += TEXT("\n\n8영역 Gameplay Guidance와 Socket 진단은 read-only입니다. Standard Mount 패널의 명시적 반영/삭제만 Recipe MountIntents를 변경합니다. Step 3의 '추가 후 편집'은 USER가 선택한 exact SocketName을 Chassis 원점에 명시적으로 생성할 수 있지만 자동 배치/자동 저장은 하지 않습니다. Target VehicleData Apply는 수행하지 않습니다.");
 	if (GameplayGuidanceResult.PendingGameplayDiffCount > 0)
 	{
 		Summary += TEXT("\nGameplay pending diff는 Step 7 Final Review에서 explicit Apply 여부를 검토합니다.");
@@ -3503,7 +4264,7 @@ void FCFVehicleBuilderVM::EvaluateGameplaySetupStep()
 			ECFVehicleBuilderStepId::GameplaySetup,
 			ECFVehicleBuilderStepState::Ready,
 			FString::Printf(
-				TEXT("Gameplay Setup은 read-only로 연결됐으며 %d개 영역에 USER 확인/수동 작업이 남아 있습니다. Pending Gameplay Diff=%d."),
+				TEXT("Gameplay Guidance R0 기준 %d개 영역에 USER 확인/수동 작업이 남아 있습니다. Standard Mount explicit Recipe write와 별개이며 Pending Gameplay Diff=%d."),
 				GameplayGuidanceResult.NeedsReviewCount,
 				GameplayGuidanceResult.PendingGameplayDiffCount),
 			TEXT("상세 안내의 Socket/field를 확인해 USER가 필요한 작업만 수행한 뒤 '현재 상태 다시 확인'을 누르세요. Socket 위치는 USER authority입니다."),
@@ -4390,7 +5151,7 @@ FString FCFVehicleBuilderVM::BuildDrivingTestSummary() const
 		TEXT(
 			"USER Driving\n"
 			"- Active PIE에 선택 차량 transient 적용 준비: %s\n"
-			"- 이 exact benchmark/Target USER PASS: %s\n\n"
+			"- 이 exact Target Definition USER PASS: %s\n\n"
 			"직접 확인할 것:\n"
 			"1. 출발/가속 반응이 Reference와 의도한 차량 성격에 어울리는가\n"
 			"2. 조향 반응과 회전반경이 차량 크기/성격에 어울리는가\n"
@@ -4580,20 +5341,17 @@ void FCFVehicleBuilderVM::ClearDrivingAcceptanceToken()
 	AcceptedDrivingBenchmarkRunId.Reset();
 }
 
-// Current Step 8 USER Driving PASS token이 exact benchmark/Target에 일치하는지 반환합니다.
+// Current Step 8 USER Driving PASS가 persistent Target Definition receipt 또는 legacy local token으로 current Target에 일치하는지 반환합니다.
 bool FCFVehicleBuilderVM::HasCurrentUserDrivingAcceptance() const
 {
-	if (!bHasDrivingBenchmarkResult
-		|| !AcceptedDrivingRecipeId.IsValid()
-		|| AcceptedDrivingTargetDefinitionHash.IsEmpty()
-		|| AcceptedDrivingBenchmarkRunId.IsEmpty())
+	if (!bHasDrivingBenchmarkResult)
 	{
 		return false;
 	}
 
 	// Current Recipe입니다.
 	const UCFVehicleRecipeData* Recipe = GetRecipe();
-	if (!Recipe || Recipe->RecipeId != AcceptedDrivingRecipeId)
+	if (!Recipe)
 	{
 		return false;
 	}
@@ -4604,17 +5362,27 @@ bool FCFVehicleBuilderVM::HasCurrentUserDrivingAcceptance() const
 	FString TargetDefinitionHash;
 	// Read-only identity diagnostic입니다.
 	FString IdentityError;
-	if (!BuildDrivingTargetIdentity(TargetPath, TargetDefinitionHash, IdentityError))
+	if (!BuildDrivingTargetIdentity(TargetPath, TargetDefinitionHash, IdentityError)
+		|| DrivingBenchmarkResult.ExpectedTargetDefinitionHash != TargetDefinitionHash)
 	{
 		return false;
 	}
 
-	return AcceptedDrivingTargetDefinitionHash == TargetDefinitionHash
-		&& AcceptedDrivingBenchmarkRunId == DrivingBenchmarkResult.RunId
-		&& DrivingBenchmarkResult.ExpectedTargetDefinitionHash == TargetDefinitionHash;
+	// 새 durable authority: USER는 benchmark invocation이 아니라 exact Vehicle Definition을 주행해 PASS합니다.
+	const FCFVehicleBuilderDrivingAcceptanceReceipt& Receipt = Recipe->BuilderDrivingAcceptanceReceipt;
+	if (Receipt.IsValid()
+		&& Receipt.TargetVehicleDataPath == TargetPath
+		&& Receipt.TargetDefinitionHash == TargetDefinitionHash)
+	{
+		return true;
+	}
+
+	// Legacy host-local token은 migration compatibility로만 허용합니다. same Target hash면 새 benchmark RunId에서도 USER PASS 의미를 유지합니다.
+	return AcceptedDrivingRecipeId == Recipe->RecipeId
+		&& AcceptedDrivingTargetDefinitionHash == TargetDefinitionHash;
 }
 
-// Current benchmark run과 exact Target hash를 USER Driving PASS local token으로 기록합니다.
+// Current saved Target Definition을 USER Driving PASS persistent Recipe receipt + legacy local token으로 기록합니다.
 bool FCFVehicleBuilderVM::AcceptCurrentUserDriving(FString& OutError)
 {
 	if (!bHasDrivingBenchmarkResult)
@@ -4650,6 +5418,16 @@ bool FCFVehicleBuilderVM::AcceptCurrentUserDriving(FString& OutError)
 		return false;
 	}
 
+	// USER PASS는 current Target Definition에 대한 persistent non-semantic acceptance provenance입니다.
+	FScopedTransaction Transaction(NSLOCTEXT("CarFightDataAuthoring", "AcceptBuilderDriving", "차량 Builder USER 주행 PASS"));
+	Recipe->Modify();
+	Recipe->BuilderDrivingAcceptanceReceipt.TargetVehicleDataPath = TargetPath;
+	Recipe->BuilderDrivingAcceptanceReceipt.TargetDefinitionHash = TargetDefinitionHash;
+	Recipe->BuilderDrivingAcceptanceReceipt.AcceptedBenchmarkRunId = DrivingBenchmarkResult.RunId;
+	Recipe->MarkPackageDirty();
+	Recipe->PostEditChange();
+
+	// 구버전 local token도 당분간 함께 기록해 downgrade/legacy resume을 보존합니다.
 	AcceptedDrivingRecipeId = Recipe->RecipeId;
 	AcceptedDrivingTargetDefinitionHash = TargetDefinitionHash;
 	AcceptedDrivingBenchmarkRunId = DrivingBenchmarkResult.RunId;
@@ -4709,13 +5487,14 @@ void FCFVehicleBuilderVM::EvaluateDrivingTestStep()
 		return;
 	}
 
-	if (Recipe->GetOutermost()->IsDirty() || TargetVehicleData->GetOutermost()->IsDirty())
+	// Benchmark/runtime truth는 saved Target VehicleData만 필요합니다. Recipe는 USER Driving receipt 같은 non-semantic metadata 때문에 Dirty일 수 있습니다.
+	if (TargetVehicleData->GetOutermost()->IsDirty())
 	{
 		SetStep(
 			ECFVehicleBuilderStepId::DrivingTest,
 			bHasDrivingBenchmarkResult ? ECFVehicleBuilderStepState::Stale : ECFVehicleBuilderStepState::Ready,
-			TEXT("Technical Benchmark와 USER Driving은 saved Target 기준입니다. Recipe 또는 Target VehicleData가 아직 Dirty입니다."),
-			TEXT("Step 7 Apply 결과를 직접 저장한 뒤 '기술 벤치마크 실행'을 사용하세요. Builder가 자동 저장하지 않습니다."),
+			TEXT("Technical Benchmark와 USER Driving은 saved Target 기준입니다. Target VehicleData가 아직 Dirty입니다."),
+			TEXT("Step 7 Apply 결과의 Target VehicleData를 직접 저장한 뒤 '기술 벤치마크 실행'을 사용하세요. Builder가 자동 저장하지 않습니다."),
 			true);
 		return;
 	}
@@ -4751,7 +5530,7 @@ void FCFVehicleBuilderVM::EvaluateDrivingTestStep()
 			ECFVehicleBuilderStepId::DrivingTest,
 			ECFVehicleBuilderStepState::Complete,
 			FString::Printf(
-				TEXT("Technical Benchmark와 USER Driving PASS가 exact Target hash / RunId에 binding됐습니다. RunId=%s."),
+				TEXT("Technical Benchmark는 current Target에 binding됐고 USER Driving PASS는 exact Target DefinitionHash에 persistent binding됐습니다. Current RunId=%s."),
 				*DrivingBenchmarkResult.RunId),
 			TEXT("VB-P0-09 신규 차량 E2E USER Acceptance를 닫을 수 있습니다."),
 			true);

@@ -1,11 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleRecipeData.h
-// Version: v1.5.0
-// Date: 2026-09-01
+// Version: v1.7.0
+// Date: 2026-09-02
 // Description: Vehicle Authoring Intent + Builder Transmission/Engine Curve provenance receipt의 persistent Editor-only Recipe DataAsset입니다.
 // Scope: Target binding, Asset/Profile/Feel/Mass/Hardpoint/Mount/Default/Override/Import/Applied authoring truth를 보관합니다.
 // Changelog:
+// - v1.7.0: P0-07 UAT에서 USER Driving PASS를 host-local config에만 두면 완료 차량이 재기동 후 되감기는 문제를 막기 위해 Target path/hash 기반 persistent non-semantic BuilderDrivingAcceptanceReceipt를 additive 추가.
+// - v1.6.0: CF-FQ-043 Guided Hardpoint 계획 lifecycle을 CompanionMode와 분리하기 위해 BuilderHardpointPlanMode 4-state persistent Builder metadata를 additive 추가. 기존 Recipe default는 LegacyCompatible.
 // - v1.5.0: ESH-02 vehicle-specific Engine Curve review disposition, evidence/method binding, deterministic proposal hash receipt metadata를 additive 추가.
 // - v1.4.0: Guided 신규 차량의 vehicle-specific Transmission 완료 Gate를 위해 persistent BuilderTransmissionPolicy와 field-level Transmission review receipt를 추가. 기존 Asset 기본값은 LegacyCompatible로 보존.
 // - v1.3.0: Editor restart 뒤 Final Review provenance를 정확히 복원할 수 있도록 BuilderCommitReceipt에 canonical ConsumedClaimIds 목록을 non-semantic metadata로 추가.
@@ -16,6 +18,8 @@
 // - Runtime UCFVehicleData에 Recipe reference나 provenance를 추가하지 않습니다.
 // - BuilderCommitReceipt는 Recipe semantic fingerprint에서 제외되는 provenance metadata이며 Profile/Evidence가 바뀌면 Final Review에서 stale로 판정합니다.
 // - BuilderTransmissionPolicy의 serialized default는 LegacyCompatible입니다. 기존 Recipe/Legacy 차량에 vehicle-specific Transmission을 자동 강제하지 않습니다.
+// - BuilderHardpointPlanMode의 serialized default도 LegacyCompatible입니다. FQ-043 이전 Recipe는 explicit Hardpoint 계획 Gate를 자동 강제하지 않습니다.
+// - BuilderDrivingAcceptanceReceipt는 Recipe semantic fingerprint/Runtime에 포함되지 않는 USER acceptance provenance입니다. same Target DefinitionHash에서는 benchmark RunId가 바뀌어도 유지되고 Target identity/hash가 바뀌면 stale입니다.
 // - ESH-02 이전 receipt는 EngineCurveProposalHash가 비어 있고 EngineCurveReview가 BaselineInherited 기본값이므로 기존 차량에 vehicle-specific Engine Curve를 자동 강제하지 않습니다.
 // - IsEditorOnly()=true로 Recipe package의 Never-Cook 의도를 명시합니다.
 
@@ -32,6 +36,16 @@ enum class ECFBuilderTransmissionPolicy : uint8
 {
 	LegacyCompatible,
 	VehicleSpecificRequired
+};
+
+/** Guided Hardpoint 계획의 persistent Builder workflow mode입니다. Resolver semantic fingerprint에는 포함하지 않습니다. */
+UENUM(BlueprintType)
+enum class ECFBuilderHardpointPlanMode : uint8
+{
+	LegacyCompatible,
+	Unspecified,
+	NoHardpoints,
+	UseHardpoints
 };
 
 /** Transmission component가 어떤 근거로 현재 값을 갖는지 표시합니다. */
@@ -236,6 +250,31 @@ struct FCFVehicleBuilderCommitReceipt
 	}
 };
 
+/** USER가 실제 주행 후 PASS한 exact Vehicle Definition을 persistent하게 증명하는 non-semantic receipt입니다. */
+USTRUCT(BlueprintType)
+struct FCFVehicleBuilderDrivingAcceptanceReceipt
+{
+	GENERATED_BODY()
+
+	// USER가 PASS한 exact Target VehicleData path입니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Driving Receipt")
+	FSoftObjectPath TargetVehicleDataPath;
+
+	// USER가 실제 주행해 PASS한 exact Target DefinitionHash입니다. Step 8 acceptance validity의 authority입니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Driving Receipt")
+	FString TargetDefinitionHash;
+
+	// PASS 당시 current technical benchmark RunId입니다. 진단/추적용이며 same DefinitionHash에서 새 RunId가 생겨도 USER PASS 자체는 무효화하지 않습니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder Driving Receipt")
+	FString AcceptedBenchmarkRunId;
+
+	// 최소 persistent identity가 존재하는지 반환합니다.
+	bool IsValid() const
+	{
+		return TargetVehicleDataPath.IsValid() && !TargetDefinitionHash.IsEmpty();
+	}
+};
+
 /** P0 Vehicle Authoring Intent의 persistent Editor-only SSOT입니다. */
 UCLASS(BlueprintType)
 class CARFIGHT_REEDITOR_API UCFVehicleRecipeData : public UDataAsset
@@ -327,9 +366,17 @@ public:
 	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder", meta=(DisplayName="Builder 변속기 정책", ToolTip="LegacyCompatible은 기존 차량 호환 동작을 보존합니다. VehicleSpecificRequired는 Guided Builder 신규 차량이 Final Review 전에 차량별 Transmission Proposal을 완료하도록 강제합니다."))
 	ECFBuilderTransmissionPolicy BuilderTransmissionPolicy = ECFBuilderTransmissionPolicy::LegacyCompatible;
 
+	// Guided Builder의 Hardpoint 계획 의도를 persistent하게 보존합니다. 기존 Recipe 기본값은 LegacyCompatible이며 Resolver semantic fingerprint에는 포함되지 않습니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder", meta=(DisplayName="Builder 하드포인트 계획", ToolTip="LegacyCompatible은 기존 차량의 선택적 Hardpoint/Mount 동작을 보존합니다. Unspecified는 신규 Guided 차량이 아직 장착점 사용 여부를 결정하지 않은 상태입니다. NoHardpoints는 장착점 0개를 명시한 상태이고 UseHardpoints는 장착 위치를 작성하는 상태입니다."))
+	ECFBuilderHardpointPlanMode BuilderHardpointPlanMode = ECFBuilderHardpointPlanMode::LegacyCompatible;
+
 	// Builder-private 4 Profile에 실제 commit된 Evidence/Claim provenance receipt입니다. Recipe semantic fingerprint에는 포함되지 않습니다.
 	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder", meta=(DisplayName="Builder Commit Receipt"))
 	FCFVehicleBuilderCommitReceipt BuilderCommitReceipt;
+
+	// USER가 실제 주행 후 PASS한 exact Target Definition을 보존하는 non-semantic durable receipt입니다. Runtime/Resolver fingerprint에는 포함되지 않습니다.
+	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Builder", meta=(DisplayName="Builder Driving Acceptance Receipt"))
+	FCFVehicleBuilderDrivingAcceptanceReceipt BuilderDrivingAcceptanceReceipt;
 
 	// 사용자/서비스 Recipe edit의 diagnostic sequence입니다.
 	UPROPERTY(VisibleAnywhere, Category="CarFight|Data Authoring|Identity", meta=(DisplayName="Authoring Revision"))

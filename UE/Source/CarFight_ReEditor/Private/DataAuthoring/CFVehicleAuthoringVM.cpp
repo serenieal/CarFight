@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringVM.cpp
-// Version: v1.5.0
-// Date: 2026-08-18
+// Version: v1.6.0
+// Date: 2026-09-02
 // Description: DAUTH-P0-09~12 Vehicle Authoring Workspace transient ViewModel 구현입니다.
 // Changelog:
+// - v1.6.0: CF-FQ-043 RemoveMountIntent/RemoveHardpointIntent typed wrapper를 추가해 existing preview→AuthoringWrite→readback/no-save lane을 그대로 재사용.
 // - v1.5.0: P0-12 UA-06 readiness에서 UE top Undo TransactionId exact binding을 추가해 intervening Editor transaction을 잘못 Undo하지 않도록 fail-closed 보강.
 // - v1.4.0: P0-12 UA-03 Profile choice cache를 selection lifecycle에 포함해 stale 후보를 보존하지 않도록 교정.
 // - v1.3.0: Mesh-only Candidate selection과 reviewed Keep Authoring token 기반 External Drift Apply gate를 연결.
@@ -399,6 +400,26 @@ bool FCFVehicleAuthoringVM::UpsertMountIntent(const FCFMountIntent& MountIntent,
 	FCFVehicleSemanticChange Change;
 	Change.Operation = ECFVehicleSemanticOp::UpsertMountIntent;
 	Change.MountIntent = MountIntent;
+	return CommitSemanticChange(Change, OutResult);
+}
+
+// Exact MountProfile stable identity 하나를 typed Recipe-only write로 제거합니다.
+bool FCFVehicleAuthoringVM::RemoveMountIntent(const FName MountProfileId, FCFAuthoringOpResult& OutResult)
+{
+	// Exact Mount deletion identity를 보존하는 typed semantic command입니다.
+	FCFVehicleSemanticChange Change;
+	Change.Operation = ECFVehicleSemanticOp::RemoveMountIntent;
+	Change.RemoveMountProfileId = MountProfileId;
+	return CommitSemanticChange(Change, OutResult);
+}
+
+// Exact Hardpoint LocationSlot stable identity 하나를 dependency-safe typed Recipe-only write로 제거합니다.
+bool FCFVehicleAuthoringVM::RemoveHardpointIntent(const FName LocationSlotId, FCFAuthoringOpResult& OutResult)
+{
+	// Exact Hardpoint deletion identity를 보존하는 typed semantic command입니다.
+	FCFVehicleSemanticChange Change;
+	Change.Operation = ECFVehicleSemanticOp::RemoveHardpointIntent;
+	Change.RemoveHardpointLocationSlotId = LocationSlotId;
 	return CommitSemanticChange(Change, OutResult);
 }
 

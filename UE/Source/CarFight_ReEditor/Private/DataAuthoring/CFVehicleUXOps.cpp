@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleUXOps.cpp
-// Version: v1.3.0
-// Date: 2026-08-31
+// Version: v1.4.0
+// Date: 2026-09-02
 // Description: DAUTH-P0-11 Frozen 24.91~24.94 normal Workspace completeness facade 구현입니다.
 // Scope: existing Batch B2 Profile edit, External Drift 3-way recovery, Definition+Recipe record creation을 Common Authoring facade에 얇게 연결합니다.
 // Changelog:
+// - v1.4.0: CF-FQ-043 bRequireExplicitHardpointPlan=true만 two-record creation ProposalHash에 additive binding해 legacy false hash payload를 보존하고 Guided Recipe 생성 시 BuilderHardpointPlanMode=Unspecified를 기록. 일반 creation은 LegacyCompatible 보존.
 // - v1.3.0: two-record creation approval hash에 Guided vehicle-specific Transmission policy opt-in을 binding하고 생성 Recipe에 persistent policy를 설정. 일반 request 기본 false는 LegacyCompatible로 보존.
 // - v1.2.0: P0-12 UA-04 USER 피드백에 따라 Keep Authoring 성공 상태 문구를 사용자-facing 한국어로 현지화. Drift 계약과 mutation 의미 변경 없음.
 // - v1.1.0: Drift prospective simulation용 UObject duplicate가 PostDuplicate에서 새 RecipeId를 발급해 approval hash가 비결정적이던 문제를 원본 identity 복원으로 교정.
@@ -294,6 +295,10 @@ namespace CFVehicleUXOpsPrivate
 		AppendToken(Payload, TEXT("performance"), Request.ProfileBindings.PerformanceProfile.ToSoftObjectPath().ToString());
 		AppendToken(Payload, TEXT("driveState"), Request.ProfileBindings.DriveStateProfile.ToSoftObjectPath().ToString());
 		AppendToken(Payload, TEXT("vehicleSpecificTransmission"), Request.bRequireVehicleSpecificTransmission ? TEXT("1") : TEXT("0"));
+		if (Request.bRequireExplicitHardpointPlan)
+		{
+			AppendToken(Payload, TEXT("explicitHardpointPlan"), TEXT("1"));
+		}
 		AppendToken(Payload, TEXT("revision"), FString::FromInt(FCFVehicleResolver::CurrentResolverContractRevision));
 		return HashUtf8Payload(Payload);
 	}
@@ -868,6 +873,9 @@ bool FCFVehicleAuthoringService::CreateVehicleRecords(
 	Recipe->BuilderTransmissionPolicy = Request.bRequireVehicleSpecificTransmission
 		? ECFBuilderTransmissionPolicy::VehicleSpecificRequired
 		: ECFBuilderTransmissionPolicy::LegacyCompatible;
+	Recipe->BuilderHardpointPlanMode = Request.bRequireExplicitHardpointPlan
+		? ECFBuilderHardpointPlanMode::Unspecified
+		: ECFBuilderHardpointPlanMode::LegacyCompatible;
 	Recipe->ImportState.ManageState = ECFVehicleManageState::Managed;
 	FAssetRegistryModule::AssetCreated(Definition);
 	FAssetRegistryModule::AssetCreated(Recipe);

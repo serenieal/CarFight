@@ -1,9 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderTab.cpp
-// Version: v1.21.0
+// Version: v1.25.1
 // Date: 2026-09-02
 // Description: Guided Vehicle Builder Slate Shell + CF-FQ-042 Vehicle ID/Candidate Quick Start UX 구현입니다.
 // Changelog:
+// - v1.25.1: P0-07 USER UAT 인식 개선. Hardpoint row의 generic `삭제`를 `장착 위치만 삭제`로 명확화하고, Recipe row만 제거되며 Chassis StaticMesh Socket은 유지된다는 안내를 표/tooltip에 직접 노출. 삭제 로직은 변경하지 않음.
+// - v1.25.0: P0-07 USER UAT 2차 피드백. Wheel/Hardpoint `추가 후 편집`이 Socket 생성 직후 cached snapshot 때문에 stale 활성화되던 문제를 live UStaticMesh::FindSocket truth로 교정. 상단 Target/Step/State/Summary/지금 할 일을 한 고정 프레임으로 묶고 Step 3 Socket Preparation을 remaining-height scroll panel로 전환.
+// - v1.24.1: P0-07 durable USER Driving PASS가 Recipe non-semantic receipt에 기록되며 auto-save하지 않는 실제 경계를 confirmation/success 문구에 명시. DefinitionHash가 acceptance authority이고 RunId는 diagnostic-only임을 표시.
+// - v1.24.0: P0-07 UAT 피드백 반영. Wheel/Hardpoint Chassis 편집 버튼을 하나로 통합하고 missing Wheel/Hardpoint Socket을 exact 이름으로 원점 생성→편집하는 explicit no-auto-save UX를 추가. Hardpoint 이름을 read-only copy slot으로 바꾸고 `기타 조건부 Socket`을 실제 의미인 `파괴 FX Socket`으로 명확화.
+// - v1.23.1: VMG-P0-04 코드감사에서 Step 6 scope 주석을 교정. 8영역 Guidance/Socket만 read-only이며 Standard Mount 패널은 explicit typed Recipe write/remove를 소유한다는 실제 구현 경계와 일치시킴.
+// - v1.23.0: CF-FQ-043 VMG-P0-04 Step 6 Hardpoint별 Standard Mount transient draft(Type/Size/Preset), explicit commit/remove UI와 Recipe refresh sync를 추가. 기존 8영역 Guidance는 read-only diagnosis authority로 유지.
+// - v1.22.2: VMG-P0-03 Step 2 pending Chassis/Wheel Mesh open 버튼, optional FR/RL/RR→pending FL fallback, shared Chassis asset edit warning을 추가하고 Step 2/3 StaticMesh editor backend를 공통화.
+// - v1.22.1: VMG-P0-03 Legacy/custom SocketName=None row에서 HP_* 이름을 임의 합성하지 않고 stored truth/LocalTransform 보존 상태를 표시하며 삭제 안내도 실제 Socket binding 유무를 구분.
+// - v1.22.0: CF-FQ-043 VMG-P0-03 Step 3에 explicit Hardpoint Plan Mode, Standard category add/remove row, exact Socket status/copy, contextual Wheel/Hardpoint editor entry와 shared Chassis warning을 연결.
 // - v1.21.0: Explicit New Vehicle mode에서 Browser refresh가 stale current row를 Slate selection으로 복원하지 않도록 row highlight 복원 조건을 방어적으로 제한.
 // - v1.20.0: Step 1 일반 naming을 Vehicle ID 한 칸으로 전환하고 deterministic default identity, 실시간 validation, 접힌 Advanced Asset 경로 override와 Mesh Candidate Quick Start label을 연결.
 // - v1.19.0: Explicit New Vehicle Step 1에 Blank/optional StaticMesh picker와 공통 Preview→승인→Commit→exact Browser row highlight/adoption reporting을 연결.
@@ -33,7 +42,7 @@
 // - v1.18.0 신규 차량 entry는 UI/BuilderVM transient state만 전환하며 Asset 생성/Save/VehicleData Apply는 수행하지 않습니다. Blank/ChassisMesh 생성 입력은 후속 VBCUX Gate에서 연결합니다.
 // - Step 8 benchmark는 existing RunBuilderBench.ps1/VB-P0-08 authority만 사용하며 saved Target을 요구합니다. USER test-drive는 active PIE transient duplicate만 적용하고 Product Asset 자동 Save/Reference threshold 자동 판정은 하지 않습니다.
 // - Step 7 Target mutation은 existing ReadBuilderFinalReview → explicit DefinitionApply → ApplyBuilderFinalReview R3만 사용합니다. Undo는 Apply가 발급한 exact guarded token만 사용하며 auto Save/retry는 없습니다.
-// - Step 6은 existing ReadBuilderGameplayGuidance R0만 소비하며 Socket 생성·이동, Target VehicleData Apply, Save를 수행하지 않습니다. USER Socket 위치 authority와 Step 7 Apply ownership을 유지합니다.
+// - Step 6은 existing ReadBuilderGameplayGuidance R0를 read-only diagnosis로 소비하고 Standard Mount 패널의 explicit typed Recipe write/remove만 추가로 허용합니다. Step 3의 USER explicit `소켓 추가`만 StaticMesh에 exact-name Socket을 원점 생성할 수 있으며 자동 배치/자동 저장은 하지 않습니다. Target VehicleData Apply는 Step 7이 소유합니다.
 // - Step 5 persistent mutation은 existing CommitBuilderProfiles typed facade의 explicit USER-approved R1 transaction만 사용합니다. Target VehicleData Apply는 Step 7에 남기고 raw/shared Profile write와 auto Save는 수행하지 않습니다.
 // - Step 1 persistent mutation은 existing CreateBuilderCompanions typed facade의 explicit USER-approved R2 transaction만 사용합니다. raw Profile/Evidence write, VehicleData Apply와 auto Save는 수행하지 않습니다.
 
@@ -42,13 +51,16 @@
 #include "DataAuthoring/CFVehicleBuilderVM.h"
 #include "DataAuthoring/CFVehicleRecipeData.h"
 
+#include "CFEquipmentPresetData.h"
 #include "AssetRegistry/AssetData.h"
 #include "Editor.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshSocket.h"
 #include "Framework/Docking/TabManager.h"
 #include "HAL/PlatformApplicationMisc.h"
 #include "Misc/MessageDialog.h"
 #include "PropertyCustomizationHelpers.h"
+#include "ScopedTransaction.h"
 #include "Subsystems/AssetEditorSubsystem.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SEditableTextBox.h"
@@ -345,65 +357,73 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 
 						+ SVerticalBox::Slot()
 						.AutoHeight()
-						.Padding(0.0f, 0.0f, 0.0f, 4.0f)
+						.Padding(0.0f, 0.0f, 0.0f, 10.0f)
 						[
-							SNew(STextBlock)
-								.Text(this, &SCFVehicleBuilderTab::GetSelectionText)
-						]
-
-						+ SVerticalBox::Slot()
-						.AutoHeight()
-						.Padding(0.0f, 0.0f, 0.0f, 12.0f)
-						[
-							SNew(STextBlock)
-								.Text(this, &SCFVehicleBuilderTab::GetCurrentStepTitle)
-								.Font(FCoreStyle::GetDefaultFontStyle("Bold", 16))
-						]
-
-						+ SVerticalBox::Slot()
-						.AutoHeight()
-						.Padding(0.0f, 0.0f, 0.0f, 12.0f)
-						[
-							SNew(STextBlock)
-								.Text(this, &SCFVehicleBuilderTab::GetCurrentStepStateText)
-								.Font(FCoreStyle::GetDefaultFontStyle("Bold", 11))
-						]
-
-						+ SVerticalBox::Slot()
-						.FillHeight(1.0f)
-						[
-							SNew(SScrollBox)
-
-							+ SScrollBox::Slot()
-							.Padding(0.0f, 0.0f, 0.0f, 14.0f)
+							// USER가 표시한 빨간 영역: Target / 현재 Step / State / Summary / 지금 할 일을 한 프레임으로 고정합니다.
+							SNew(SBorder)
+							.Padding(12.0f)
 							[
-								SNew(STextBlock)
-									.Text(this, &SCFVehicleBuilderTab::GetCurrentStepSummaryText)
-									.AutoWrapText(true)
-							]
+								SNew(SVerticalBox)
 
-							+ SScrollBox::Slot()
-							[
-								SNew(SBorder)
-								.Padding(12.0f)
+								+ SVerticalBox::Slot()
+								.AutoHeight()
+								.Padding(0.0f, 0.0f, 0.0f, 4.0f)
 								[
-									SNew(SVerticalBox)
+									SNew(STextBlock)
+										.Text(this, &SCFVehicleBuilderTab::GetSelectionText)
+								]
 
-									+ SVerticalBox::Slot()
-									.AutoHeight()
-									[
-										SNew(STextBlock)
-											.Text(LOCTEXT("NextActionHeader", "지금 할 일"))
-											.Font(FCoreStyle::GetDefaultFontStyle("Bold", 11))
-									]
+								+ SVerticalBox::Slot()
+								.AutoHeight()
+								.Padding(0.0f, 0.0f, 0.0f, 8.0f)
+								[
+									SNew(STextBlock)
+										.Text(this, &SCFVehicleBuilderTab::GetCurrentStepTitle)
+										.Font(FCoreStyle::GetDefaultFontStyle("Bold", 16))
+								]
 
-									+ SVerticalBox::Slot()
-									.AutoHeight()
-									.Padding(0.0f, 6.0f, 0.0f, 0.0f)
+								+ SVerticalBox::Slot()
+								.AutoHeight()
+								.Padding(0.0f, 0.0f, 0.0f, 8.0f)
+								[
+									SNew(STextBlock)
+										.Text(this, &SCFVehicleBuilderTab::GetCurrentStepStateText)
+										.Font(FCoreStyle::GetDefaultFontStyle("Bold", 11))
+								]
+
+								+ SVerticalBox::Slot()
+								.AutoHeight()
+								.Padding(0.0f, 0.0f, 0.0f, 10.0f)
+								[
+									SNew(STextBlock)
+										.Text(this, &SCFVehicleBuilderTab::GetCurrentStepSummaryText)
+										.AutoWrapText(true)
+								]
+
+								+ SVerticalBox::Slot()
+								.AutoHeight()
+								[
+									SNew(SBorder)
+									.Padding(10.0f)
 									[
-										SNew(STextBlock)
-											.Text(this, &SCFVehicleBuilderTab::GetCurrentStepResolutionText)
-											.AutoWrapText(true)
+										SNew(SVerticalBox)
+
+										+ SVerticalBox::Slot()
+										.AutoHeight()
+										[
+											SNew(STextBlock)
+												.Text(LOCTEXT("NextActionHeader", "지금 할 일"))
+												.Font(FCoreStyle::GetDefaultFontStyle("Bold", 11))
+										]
+
+										+ SVerticalBox::Slot()
+										.AutoHeight()
+										.Padding(0.0f, 6.0f, 0.0f, 0.0f)
+										[
+											SNew(STextBlock)
+												.Text(this, &SCFVehicleBuilderTab::GetCurrentStepResolutionText)
+												.AutoWrapText(true)
+										]
 									]
 								]
 							]
@@ -712,14 +732,18 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 						]
 
 						+ SVerticalBox::Slot()
-						.AutoHeight()
+						.FillHeight(1.0f)
 						.Padding(0.0f, 4.0f, 0.0f, 8.0f)
 						[
 							SNew(SBorder)
 							.Visibility(this, &SCFVehicleBuilderTab::GetSocketPreparationVisibility)
 							.Padding(12.0f)
 							[
-								SNew(SVerticalBox)
+								SNew(SScrollBox)
+
+								+ SScrollBox::Slot()
+								[
+									SNew(SVerticalBox)
 
 								+ SVerticalBox::Slot()
 								.AutoHeight()
@@ -737,18 +761,27 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 									SNew(STextBlock)
 										.Text(LOCTEXT(
 											"SocketPreparationIntro",
-											"필수 Wheel Socket 4개는 현재 Recipe binding과 이름이 정확히 일치해야 합니다. 위치·회전·스케일은 차체 메시를 보고 USER가 직접 작성합니다. Builder는 Socket을 자동 생성하거나 이동하지 않습니다."))
+											"Wheel/Hardpoint Socket 이름은 한 글자라도 다르면 매칭되지 않습니다. 아래 exact 이름을 복사하거나, 누락된 경우 '추가 후 편집'을 눌러 현재 Chassis 원점에 정확한 이름의 Socket을 만들 수 있습니다. 위치·회전·스케일은 Static Mesh Editor에서 USER가 직접 맞추며 Builder는 자동 배치/자동 저장하지 않습니다."))
 										.AutoWrapText(true)
+								]
+
+								+ SVerticalBox::Slot()
+								.AutoHeight()
+								.Padding(0.0f, 0.0f, 0.0f, 6.0f)
+								[
+									SNew(SButton)
+										.Text(LOCTEXT("OpenChassisSocketEditor", "Chassis Socket 편집하기"))
+										.ToolTipText(LOCTEXT("OpenChassisSocketEditorTooltip", "Wheel과 Hardpoint 모두 같은 current Chassis StaticMesh의 Socket을 사용합니다. 메시를 열어 위치·회전·Scale을 직접 편집하고 저장하세요. +X Forward / +Y Right / +Z Up 기준입니다."))
+										.OnClicked(this, &SCFVehicleBuilderTab::HandleOpenChassisSocketEditor)
 								]
 
 								+ SVerticalBox::Slot()
 								.AutoHeight()
 								.Padding(0.0f, 0.0f, 0.0f, 10.0f)
 								[
-									SNew(SButton)
-										.Text(LOCTEXT("OpenCurrentChassisMesh", "차체 메시 열기"))
-										.ToolTipText(LOCTEXT("OpenCurrentChassisMeshTooltip", "현재 선택 차량의 Chassis StaticMesh를 Static Mesh 에디터에서 엽니다. 소켓 추가·이동·저장은 USER가 직접 수행합니다."))
-										.OnClicked(this, &SCFVehicleBuilderTab::HandleOpenCurrentChassisMesh)
+									SNew(STextBlock)
+										.Text(LOCTEXT("SharedChassisSocketWarning", "주의: Chassis Socket은 차량별 데이터가 아니라 StaticMesh 자산에 저장됩니다. 같은 Chassis Mesh를 사용하는 다른 차량도 이 Socket 위치를 공유합니다."))
+										.AutoWrapText(true)
 								]
 
 								+ SVerticalBox::Slot()
@@ -786,10 +819,38 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 
 								+ SVerticalBox::Slot()
 								.AutoHeight()
+								.Padding(0.0f, 14.0f, 0.0f, 6.0f)
+								[
+									SNew(STextBlock)
+										.Text(LOCTEXT("HardpointPlanHeader", "장비 장착 위치 / Hardpoint Plan"))
+										.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
+								]
+
+								+ SVerticalBox::Slot()
+								.AutoHeight()
+								.Padding(0.0f, 0.0f, 0.0f, 8.0f)
+								[
+									SAssignNew(HardpointPlanningHost, SBox)
+									[
+										BuildHardpointPlanningPanel()
+									]
+								]
+
+								+ SVerticalBox::Slot()
+								.AutoHeight()
+								.Padding(0.0f, 0.0f, 0.0f, 10.0f)
+								[
+									SNew(STextBlock)
+										.Text(LOCTEXT("HardpointAxisGuide", "Hardpoint Socket 축 기준: +X / Red = Forward·기본 발사 방향, +Y / Green = Right, +Z / Blue = Up. Builder는 Socket Rotation을 자동 추론하지 않습니다."))
+										.AutoWrapText(true)
+								]
+
+								+ SVerticalBox::Slot()
+								.AutoHeight()
 								.Padding(0.0f, 12.0f, 0.0f, 6.0f)
 								[
 									SNew(STextBlock)
-										.Text(LOCTEXT("OptionalSocketHeader", "선택 / 조건부 Socket"))
+										.Text(LOCTEXT("OptionalSocketHeader", "파괴 FX Socket (선택)"))
 										.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
 								]
 
@@ -807,8 +868,8 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 								.Padding(0.0f, 0.0f, 0.0f, 8.0f)
 								[
 									SNew(SButton)
-										.Text(LOCTEXT("CopyOptionalSocketNames", "선택 Socket 이름 전체 복사"))
-										.ToolTipText(LOCTEXT("CopyOptionalSocketNamesTooltip", "현재 Recipe가 사용하는 선택/조건부 Hardpoint 및 파괴 FX Socket 이름만 줄바꿈 목록으로 복사합니다."))
+										.Text(LOCTEXT("CopyOptionalSocketNames", "파괴 FX Socket 이름 복사"))
+										.ToolTipText(LOCTEXT("CopyOptionalSocketNamesTooltip", "현재 Recipe가 요구하는 파괴 FX Socket 이름을 복사합니다. 차량 파괴 효과가 별도 Socket 위치를 사용할 때만 필요합니다."))
 										.IsEnabled(this, &SCFVehicleBuilderTab::CanCopyOptionalSocketNames)
 										.OnClicked(this, &SCFVehicleBuilderTab::HandleCopyOptionalSocketNames)
 								]
@@ -819,8 +880,9 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 									SNew(STextBlock)
 										.Text(LOCTEXT(
 											"SocketPreparationBoundary",
-											"Socket 편집을 마치고 Static Mesh를 저장한 뒤 아래 '현재 상태 다시 확인'을 누르세요. 선택/조건부 Socket은 현재 Recipe가 실제로 요구할 때만 추가하면 됩니다."))
+											"Socket 편집을 마치고 Static Mesh를 직접 저장한 뒤 아래 '현재 상태 다시 확인'을 누르세요. 파괴 FX Socket은 차량이 파괴될 때 효과를 붙일 별도 위치가 필요한 경우에만 사용하면 됩니다."))
 										.AutoWrapText(true)
+									]
 								]
 							]
 						]
@@ -915,6 +977,16 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 
 								+ SVerticalBox::Slot()
 								.AutoHeight()
+								.Padding(0.0f, 0.0f, 0.0f, 10.0f)
+								[
+									SAssignNew(MountPlanningHost, SBox)
+									[
+										BuildMountPlanningPanel()
+									]
+								]
+
+								+ SVerticalBox::Slot()
+								.AutoHeight()
 								.Padding(0.0f, 0.0f, 0.0f, 8.0f)
 								[
 									SNew(STextBlock)
@@ -928,7 +1000,7 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 									SNew(STextBlock)
 										.Text(LOCTEXT(
 											"GameplaySetupBoundary",
-											"이 단계는 읽기 전용입니다. USER Socket 위치는 Static Mesh 에디터의 소켓 매니저(Socket Manager)에서 직접 관리하고, 변경 뒤 아래 '현재 상태 다시 확인'을 누르세요. Gameplay pending diff의 실제 VehicleData Apply는 Step 7 Final Review에서 별도 승인합니다."))
+											"위 Standard Mount 패널은 explicit '장착 규칙 반영/삭제'에서 Recipe MountIntents만 typed write합니다. 나머지 8영역 Guidance와 Socket 위치는 read-only입니다. Target VehicleData Apply는 Step 7 Final Review가 소유하고 Builder는 자동 Save하지 않습니다."))
 										.AutoWrapText(true)
 								]
 							]
@@ -1291,6 +1363,9 @@ void SCFVehicleBuilderTab::HandleVehicleSelectionChanged(FVehicleRowPtr Selected
 		SyncCreationFieldsFromSelection();
 		SyncMeshPreparationFieldsFromRecipe();
 		RefreshMeshPreparationPickerPresentation();
+		RefreshHardpointPlanningPresentation();
+		SyncMountPlanningDraftsFromRecipe();
+		RefreshMountPlanningPresentation();
 		LastStatusText = FText::FromString(FString::Printf(TEXT("대상 선택 실패: %s"), *Error));
 		return;
 	}
@@ -1298,6 +1373,9 @@ void SCFVehicleBuilderTab::HandleVehicleSelectionChanged(FVehicleRowPtr Selected
 	SyncCreationFieldsFromSelection();
 	SyncMeshPreparationFieldsFromRecipe();
 	RefreshMeshPreparationPickerPresentation();
+	RefreshHardpointPlanningPresentation();
+	SyncMountPlanningDraftsFromRecipe();
+	RefreshMountPlanningPresentation();
 	LastStatusText = FText::FromString(FString::Printf(
 		TEXT("선택: %s | 현재 Step 상태를 authoritative truth에서 다시 계산했습니다."),
 		*VehicleRowTitle(*SelectedItem)));
@@ -1414,12 +1492,18 @@ FReply SCFVehicleBuilderTab::HandleRefreshCurrentStep()
 		// Resolve fail-closed여도 current Recipe 자체는 유효할 수 있으므로 stale ObjectPicker 표시를 남기지 않습니다.
 		SyncMeshPreparationFieldsFromRecipe();
 		RefreshMeshPreparationPickerPresentation();
+		RefreshHardpointPlanningPresentation();
+		SyncMountPlanningDraftsFromRecipe();
+		RefreshMountPlanningPresentation();
 		LastStatusText = FText::FromString(FString::Printf(TEXT("현재 상태 확인 실패: %s"), *Error));
 		return FReply::Handled();
 	}
 
 	SyncMeshPreparationFieldsFromRecipe();
 	RefreshMeshPreparationPickerPresentation();
+	RefreshHardpointPlanningPresentation();
+	SyncMountPlanningDraftsFromRecipe();
+	RefreshMountPlanningPresentation();
 	LastStatusText = LOCTEXT("RefreshPass", "현재 상태를 fresh read했습니다. 자동 저장/적용은 수행하지 않았습니다.");
 	return FReply::Handled();
 }
@@ -1530,6 +1614,9 @@ FReply SCFVehicleBuilderTab::HandleCreateVehicleFromMesh()
 	SyncCreationFieldsFromSelection();
 	SyncMeshPreparationFieldsFromRecipe();
 	RefreshMeshPreparationPickerPresentation();
+	RefreshHardpointPlanningPresentation();
+	SyncMountPlanningDraftsFromRecipe();
+	RefreshMountPlanningPresentation();
 	LastStatusText = FText::FromString(FString::Printf(
 		TEXT("VehicleData+Recipe를 생성하고 exact 새 managed 차량을 Builder current target/Browser row로 adoption했습니다. 자동 저장과 VehicleData Chassis Apply는 하지 않았습니다. Step 1 Reference 준비 후 정상 Builder 단계를 진행하세요.\n%s"),
 		*Result.Operation.Message));
@@ -1805,6 +1892,9 @@ FReply SCFVehicleBuilderTab::HandleCommitMeshPreparation()
 
 	SyncMeshPreparationFieldsFromRecipe();
 	RefreshMeshPreparationPickerPresentation();
+	RefreshHardpointPlanningPresentation();
+	SyncMountPlanningDraftsFromRecipe();
+	RefreshMountPlanningPresentation();
 	LastStatusText = FText::FromString(FString::Printf(
 		TEXT("Mesh 설정을 Recipe에 반영했습니다. VehicleData Apply/자동 저장은 하지 않았습니다. %s"),
 		*CommitResult.Message));
@@ -1844,6 +1934,87 @@ void SCFVehicleBuilderTab::HandleWheelMeshChanged(const FAssetData& AssetData, c
 		: FSoftObjectPath();
 }
 
+// Step 2에서 explicit commit 전 pending Chassis StaticMesh를 Asset Editor에서 직접 엽니다.
+FReply SCFVehicleBuilderTab::HandleOpenPendingChassisMesh()
+{
+	return OpenStaticMeshAssetPath(
+		PendingChassisMeshPath,
+		TEXT("Step 2 pending Chassis Mesh"),
+		TEXT("아직 'Mesh 설정 반영' 전의 pending 선택값을 열었습니다. Chassis 자산 편집은 같은 StaticMesh를 쓰는 다른 차량에도 영향을 줄 수 있습니다."));
+}
+
+// Step 2에서 role별 pending Wheel StaticMesh를 열고 optional role이 비었으면 pending FL fallback을 엽니다.
+FReply SCFVehicleBuilderTab::HandleOpenPendingWheelMesh(const int32 WheelRoleIndex)
+{
+	const FSoftObjectPath EffectiveMeshPath = GetEffectivePendingWheelMeshPath(WheelRoleIndex);
+	const bool bUsesFLFallback = WheelRoleIndex > 0
+		&& PendingWheelMeshPaths.IsValidIndex(WheelRoleIndex)
+		&& !PendingWheelMeshPaths[WheelRoleIndex].IsValid()
+		&& PendingWheelMeshPaths.IsValidIndex(0)
+		&& PendingWheelMeshPaths[0].IsValid();
+
+	const TCHAR* RoleLabels[] = {TEXT("FL"), TEXT("FR"), TEXT("RL"), TEXT("RR")};
+	const FString RoleLabel = WheelRoleIndex >= 0 && WheelRoleIndex < UE_ARRAY_COUNT(RoleLabels)
+		? FString(RoleLabels[WheelRoleIndex])
+		: FString::Printf(TEXT("Role%d"), WheelRoleIndex);
+	const FString CompletionNote = bUsesFLFallback
+		? FString::Printf(TEXT("%s pending 값이 비어 있어 current pending FL Mesh fallback을 열었습니다. 아직 Recipe commit은 수행하지 않았습니다."), *RoleLabel)
+		: FString::Printf(TEXT("%s role의 pending Mesh를 열었습니다. 아직 Recipe commit은 수행하지 않았습니다."), *RoleLabel);
+
+	return OpenStaticMeshAssetPath(
+		EffectiveMeshPath,
+		FString::Printf(TEXT("Step 2 pending %s Wheel Mesh"), *RoleLabel),
+		CompletionNote);
+}
+
+// Step 2 pending Chassis Mesh open 버튼 활성 여부입니다.
+bool SCFVehicleBuilderTab::CanOpenPendingChassisMesh() const
+{
+	return PendingChassisMeshPath.IsValid();
+}
+
+// Step 2 role별 effective pending Wheel Mesh open 버튼 활성 여부입니다.
+bool SCFVehicleBuilderTab::CanOpenPendingWheelMesh(const int32 WheelRoleIndex) const
+{
+	return GetEffectivePendingWheelMeshPath(WheelRoleIndex).IsValid();
+}
+
+// Step 2 optional Wheel fallback 여부를 포함하는 동적 open tooltip입니다.
+FText SCFVehicleBuilderTab::GetPendingWheelMeshOpenTooltip(const int32 WheelRoleIndex) const
+{
+	if (!PendingWheelMeshPaths.IsValidIndex(WheelRoleIndex))
+	{
+		return LOCTEXT("PendingWheelOpenInvalidRole", "유효하지 않은 Wheel role입니다.");
+	}
+	if (PendingWheelMeshPaths[WheelRoleIndex].IsValid())
+	{
+		return LOCTEXT("PendingWheelOpenExact", "현재 Object Picker에 보이는 pending Wheel StaticMesh를 직접 엽니다. 'Mesh 설정 반영' 전이어도 이 pending 자산을 엽니다.");
+	}
+	if (WheelRoleIndex > 0 && PendingWheelMeshPaths.IsValidIndex(0) && PendingWheelMeshPaths[0].IsValid())
+	{
+		return LOCTEXT("PendingWheelOpenFallback", "이 optional Wheel role은 비어 있으므로 current pending FL Wheel Mesh fallback을 엽니다. Runtime/Builder fallback 의미를 그대로 보여 줍니다.");
+	}
+	return LOCTEXT("PendingWheelOpenMissing", "열 수 있는 pending Wheel StaticMesh가 없습니다.");
+}
+
+// Step 2 direct role path 또는 optional role의 pending FL fallback path를 반환합니다.
+FSoftObjectPath SCFVehicleBuilderTab::GetEffectivePendingWheelMeshPath(const int32 WheelRoleIndex) const
+{
+	if (!PendingWheelMeshPaths.IsValidIndex(WheelRoleIndex))
+	{
+		return FSoftObjectPath();
+	}
+	if (PendingWheelMeshPaths[WheelRoleIndex].IsValid())
+	{
+		return PendingWheelMeshPaths[WheelRoleIndex];
+	}
+	if (WheelRoleIndex > 0 && PendingWheelMeshPaths.IsValidIndex(0))
+	{
+		return PendingWheelMeshPaths[0];
+	}
+	return FSoftObjectPath();
+}
+
 // Step 2 Chassis + FL/FR/RL/RR StaticMesh picker 묶음을 current pending state로 새로 만듭니다.
 TSharedRef<SWidget> SCFVehicleBuilderTab::BuildMeshPreparationPickerFields()
 {
@@ -1871,6 +2042,7 @@ TSharedRef<SWidget> SCFVehicleBuilderTab::BuildMeshPreparationPickerFields()
 
 			+ SHorizontalBox::Slot()
 			.FillWidth(1.0f)
+			.Padding(0.0f, 0.0f, 6.0f, 0.0f)
 			[
 				SNew(SObjectPropertyEntryBox)
 					.AllowedClass(UStaticMesh::StaticClass())
@@ -1878,6 +2050,25 @@ TSharedRef<SWidget> SCFVehicleBuilderTab::BuildMeshPreparationPickerFields()
 					.OnObjectChanged(this, &SCFVehicleBuilderTab::HandleChassisMeshChanged)
 					.AllowClear(false)
 			]
+
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			[
+				SNew(SButton)
+					.Text(LOCTEXT("OpenPendingChassisMesh", "열기"))
+					.ToolTipText(LOCTEXT("OpenPendingChassisMeshTooltip", "현재 Object Picker의 pending Chassis StaticMesh를 직접 엽니다. 'Mesh 설정 반영' 전이어도 pending 자산을 엽니다."))
+					.IsEnabled(this, &SCFVehicleBuilderTab::CanOpenPendingChassisMesh)
+					.OnClicked(this, &SCFVehicleBuilderTab::HandleOpenPendingChassisMesh)
+			]
+		]
+
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(150.0f, 0.0f, 0.0f, 6.0f)
+		[
+			SNew(STextBlock)
+				.Text(LOCTEXT("Step2SharedChassisWarning", "주의: Chassis StaticMesh 자산을 직접 편집하면 같은 Chassis Mesh를 사용하는 다른 차량에도 Mesh/Socket 변경이 공유됩니다. Builder는 차량별 복사본을 자동 생성하지 않습니다."))
+				.AutoWrapText(true)
 		]
 
 		+ SVerticalBox::Slot().AutoHeight()[BuildWheelMeshPickerRow(0, LOCTEXT("WheelMeshRoleFL", "FL / 앞왼쪽"), true)]
@@ -1926,61 +2117,510 @@ TSharedRef<SWidget> SCFVehicleBuilderTab::BuildWheelMeshPickerRow(
 
 		+ SHorizontalBox::Slot()
 		.FillWidth(1.0f)
-		.Padding(0.0f, 2.0f)
+		.Padding(0.0f, 2.0f, 6.0f, 2.0f)
 		[
 			SNew(SObjectPropertyEntryBox)
 				.AllowedClass(UStaticMesh::StaticClass())
 				.ObjectPath(this, &SCFVehicleBuilderTab::GetPendingWheelMeshPath, WheelRoleIndex)
 				.OnObjectChanged(this, &SCFVehicleBuilderTab::HandleWheelMeshChanged, WheelRoleIndex)
 				.AllowClear(!bRequired)
+		]
+
+		+ SHorizontalBox::Slot()
+		.AutoWidth()
+		.VAlign(VAlign_Center)
+		.Padding(0.0f, 2.0f)
+		[
+			SNew(SButton)
+				.Text(LOCTEXT("OpenPendingWheelMesh", "열기"))
+				.ToolTipText(this, &SCFVehicleBuilderTab::GetPendingWheelMeshOpenTooltip, WheelRoleIndex)
+				.IsEnabled(this, &SCFVehicleBuilderTab::CanOpenPendingWheelMesh, WheelRoleIndex)
+				.OnClicked(this, &SCFVehicleBuilderTab::HandleOpenPendingWheelMesh, WheelRoleIndex)
 		];
 }
 
-// Step 3 current Chassis StaticMesh를 Asset Editor에서 바로 엽니다.
-FReply SCFVehicleBuilderTab::HandleOpenCurrentChassisMesh()
+// Step 3 Wheel/Hardpoint가 공유하는 current Chassis StaticMesh를 하나의 Socket 편집 진입으로 엽니다.
+FReply SCFVehicleBuilderTab::HandleOpenChassisSocketEditor()
+{
+	return OpenCurrentChassisMeshForSocketEditing();
+}
+
+// Step 3 exact missing SocketName을 current Chassis StaticMesh 원점에 explicit 생성하고 Asset Editor를 엽니다.
+FReply SCFVehicleBuilderTab::HandleAddChassisSocket(const FName SocketName)
+{
+	return AddChassisSocketAtOriginAndOpen(SocketName);
+}
+
+// Current Chassis StaticMesh를 공통 Socket 편집 문맥으로 엽니다.
+FReply SCFVehicleBuilderTab::OpenCurrentChassisMeshForSocketEditing()
 {
 	if (!ViewModel.IsValid())
 	{
 		return FReply::Handled();
 	}
 
-	// Current selected vehicle의 exact Chassis StaticMesh object path입니다.
-	const FSoftObjectPath ChassisMeshPath = ViewModel->GetCurrentChassisMeshPath();
-	if (!ChassisMeshPath.IsValid())
+	return OpenStaticMeshAssetPath(
+		ViewModel->GetCurrentChassisMeshPath(),
+		TEXT("Chassis Socket"),
+		TEXT("Wheel과 Hardpoint는 같은 committed Chassis StaticMesh의 Socket을 사용합니다. 같은 Chassis Mesh를 쓰는 다른 차량과 Socket 위치를 공유하며 Builder는 자동 배치/자동 저장하지 않습니다."));
+}
+
+// Exact missing Socket을 current Chassis에 transaction으로 추가하고 편집기를 여는 공통 backend입니다.
+FReply SCFVehicleBuilderTab::AddChassisSocketAtOriginAndOpen(const FName SocketName)
+{
+	if (!ViewModel.IsValid() || SocketName.IsNone())
 	{
-		LastStatusText = LOCTEXT("OpenChassisMissingPath", "현재 선택 차량에 열 수 있는 Chassis StaticMesh가 없습니다.");
+		LastStatusText = LOCTEXT("AddChassisSocketInvalidName", "추가할 exact SocketName이 없습니다.");
 		return FReply::Handled();
 	}
 
-	// 이미 load된 Chassis UObject 또는 exact path에서 load한 object입니다.
-	UObject* ChassisObject = ChassisMeshPath.ResolveObject();
-	if (!ChassisObject)
+	const FSoftObjectPath MeshPath = ViewModel->GetCurrentChassisMeshPath();
+	UObject* MeshObject = MeshPath.ResolveObject();
+	if (!MeshObject)
 	{
-		ChassisObject = ChassisMeshPath.TryLoad();
+		MeshObject = MeshPath.TryLoad();
 	}
-	// Static Mesh Editor로 열 exact Chassis asset입니다.
-	UStaticMesh* ChassisMesh = Cast<UStaticMesh>(ChassisObject);
-	if (!ChassisMesh)
+	UStaticMesh* StaticMesh = Cast<UStaticMesh>(MeshObject);
+	if (!StaticMesh)
 	{
-		LastStatusText = FText::FromString(FString::Printf(TEXT("Chassis StaticMesh를 열 수 없습니다: %s"), *ChassisMeshPath.ToString()));
+		LastStatusText = FText::FromString(FString::Printf(TEXT("Socket을 추가할 current Chassis StaticMesh를 읽을 수 없습니다: %s"), *MeshPath.ToString()));
 		return FReply::Handled();
 	}
 
-	// Unreal Editor의 공식 Asset Editor subsystem입니다.
+	// Exact Socket이 이미 있으면 중복 생성하지 않고 편집기만 엽니다.
+	if (StaticMesh->FindSocket(SocketName))
+	{
+		return OpenStaticMeshAssetPath(
+			MeshPath,
+			TEXT("Chassis Socket"),
+			FString::Printf(TEXT("Socket %s는 이미 존재합니다. 위치/회전만 확인하세요."), *SocketName.ToString()));
+	}
+
+	FScopedTransaction Transaction(NSLOCTEXT("CarFightDataAuthoring", "AddBuilderChassisSocket", "차량 Builder Chassis Socket 추가"));
+	StaticMesh->Modify();
+	UStaticMeshSocket* NewSocket = NewObject<UStaticMeshSocket>(StaticMesh, NAME_None, RF_Transactional);
+	if (!NewSocket)
+	{
+		Transaction.Cancel();
+		LastStatusText = LOCTEXT("AddChassisSocketCreateFailed", "StaticMesh Socket object를 만들 수 없습니다.");
+		return FReply::Handled();
+	}
+
+	NewSocket->SocketName = SocketName;
+	NewSocket->RelativeLocation = FVector::ZeroVector;
+	NewSocket->RelativeRotation = FRotator::ZeroRotator;
+	NewSocket->RelativeScale = FVector::OneVector;
+	StaticMesh->Sockets.Add(NewSocket);
+	StaticMesh->MarkPackageDirty();
+	StaticMesh->PostEditChange();
+
+	// Fresh AssetSnapshot으로 Socket found-state를 다시 읽되, Resolver 상태 오류가 Socket 생성 자체를 rollback시키지는 않습니다.
+	FString RefreshError;
+	ViewModel->RefreshCurrentState(RefreshError);
+	RefreshHardpointPlanningPresentation();
+
+	const FString RefreshSuffix = RefreshError.IsEmpty()
+		? FString()
+		: FString::Printf(TEXT(" | 상태 재확인: %s"), *RefreshError);
+	return OpenStaticMeshAssetPath(
+		MeshPath,
+		TEXT("Chassis Socket"),
+		FString::Printf(
+			TEXT("Socket %s를 원점에 exact 이름으로 추가했습니다. 위치/회전/Scale을 직접 맞춘 뒤 StaticMesh를 저장하세요. 자동 저장은 하지 않았습니다.%s"),
+			*SocketName.ToString(),
+			*RefreshSuffix));
+}
+
+// Current committed Chassis StaticMesh object의 live FindSocket truth를 반환합니다.
+bool SCFVehicleBuilderTab::IsCurrentChassisSocketPresentLive(const FName SocketName) const
+{
+	if (!ViewModel.IsValid() || SocketName.IsNone())
+	{
+		return false;
+	}
+
+	const FSoftObjectPath MeshPath = ViewModel->GetCurrentChassisMeshPath();
+	if (!MeshPath.IsValid())
+	{
+		return false;
+	}
+
+	UObject* MeshObject = MeshPath.ResolveObject();
+	if (!MeshObject)
+	{
+		MeshObject = MeshPath.TryLoad();
+	}
+	const UStaticMesh* StaticMesh = Cast<UStaticMesh>(MeshObject);
+	return StaticMesh && StaticMesh->FindSocket(SocketName) != nullptr;
+}
+
+// Exact Socket이 current Chassis에 없을 때만 `추가 후 편집` 버튼을 활성화합니다.
+bool SCFVehicleBuilderTab::CanAddCurrentChassisSocket(const FName SocketName) const
+{
+	return !SocketName.IsNone() && !IsCurrentChassisSocketPresentLive(SocketName);
+}
+
+// Step 2/3에서 exact StaticMesh path를 공통 Asset Editor backend로 엽니다.
+FReply SCFVehicleBuilderTab::OpenStaticMeshAssetPath(
+	const FSoftObjectPath& MeshPath,
+	const FString& ContextLabel,
+	const FString& CompletionNote)
+{
+	if (!MeshPath.IsValid())
+	{
+		LastStatusText = FText::FromString(FString::Printf(TEXT("%s: 열 수 있는 StaticMesh 경로가 없습니다."), *ContextLabel));
+		return FReply::Handled();
+	}
+
+	UObject* MeshObject = MeshPath.ResolveObject();
+	if (!MeshObject)
+	{
+		MeshObject = MeshPath.TryLoad();
+	}
+	UStaticMesh* StaticMesh = Cast<UStaticMesh>(MeshObject);
+	if (!StaticMesh)
+	{
+		LastStatusText = FText::FromString(FString::Printf(TEXT("%s StaticMesh를 열 수 없습니다: %s"), *ContextLabel, *MeshPath.ToString()));
+		return FReply::Handled();
+	}
+
 	UAssetEditorSubsystem* AssetEditorSubsystem = GEditor
 		? GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()
 		: nullptr;
 	if (!AssetEditorSubsystem)
 	{
-		LastStatusText = LOCTEXT("OpenChassisMissingSubsystem", "Asset Editor subsystem을 찾을 수 없습니다.");
+		LastStatusText = LOCTEXT("OpenStaticMeshMissingSubsystem", "Asset Editor subsystem을 찾을 수 없습니다.");
 		return FReply::Handled();
 	}
 
-	AssetEditorSubsystem->OpenEditorForAsset(ChassisMesh);
+	AssetEditorSubsystem->OpenEditorForAsset(StaticMesh);
 	LastStatusText = FText::FromString(FString::Printf(
-		TEXT("차체 메시를 열었습니다: %s | Builder는 Socket을 생성·이동·저장하지 않습니다."),
-		*ChassisMeshPath.ToString()));
+		TEXT("%s를 열었습니다: %s | %s"),
+		*ContextLabel,
+		*MeshPath.ToString(),
+		*CompletionNote));
 	return FReply::Handled();
+}
+
+// Step 3 Hardpoint Plan Mode를 explicit USER action으로 기록합니다.
+FReply SCFVehicleBuilderTab::HandleSetHardpointPlanMode(const ECFBuilderHardpointPlanMode PlanMode)
+{
+	if (!ViewModel.IsValid())
+	{
+		return FReply::Handled();
+	}
+
+	FCFAuthoringOpResult Result;
+	FString Error;
+	if (!ViewModel->CommitHardpointPlanMode(PlanMode, Result, Error))
+	{
+		LastStatusText = FText::FromString(FString::Printf(TEXT("Hardpoint 계획 변경 실패: %s"), *Error));
+		RefreshHardpointPlanningPresentation();
+		return FReply::Handled();
+	}
+
+	RefreshHardpointPlanningPresentation();
+	SyncMountPlanningDraftsFromRecipe();
+	RefreshMountPlanningPresentation();
+	LastStatusText = FText::FromString(Result.Message.IsEmpty()
+		? TEXT("Hardpoint 계획을 Recipe에 반영했습니다. 자동 저장/VehicleData Apply는 수행하지 않았습니다.")
+		: Result.Message);
+	return FReply::Handled();
+}
+
+// Step 3 Standard physical category에 deterministic stable Hardpoint row를 추가합니다.
+FReply SCFVehicleBuilderTab::HandleAddStandardHardpoint(const FName LocationCategory)
+{
+	if (!ViewModel.IsValid())
+	{
+		return FReply::Handled();
+	}
+
+	FCFHardpointIntent CreatedIntent;
+	FCFAuthoringOpResult Result;
+	FString Error;
+	if (!ViewModel->AddStandardHardpoint(LocationCategory, CreatedIntent, Result, Error))
+	{
+		LastStatusText = FText::FromString(FString::Printf(TEXT("Hardpoint 추가 실패: %s"), *Error));
+		RefreshHardpointPlanningPresentation();
+		return FReply::Handled();
+	}
+
+	RefreshHardpointPlanningPresentation();
+	SyncMountPlanningDraftsFromRecipe();
+	RefreshMountPlanningPresentation();
+	LastStatusText = FText::FromString(FString::Printf(
+		TEXT("장착 위치를 추가했습니다: %s / Socket %s. StaticMesh Socket은 자동 생성하지 않았습니다."),
+		*CreatedIntent.LocationSlotId.ToString(),
+		*CreatedIntent.SocketName.ToString()));
+	return FReply::Handled();
+}
+
+// Step 3 exact Recipe Hardpoint row를 typed no-cascade remove lane으로 제거합니다.
+FReply SCFVehicleBuilderTab::HandleRemoveHardpoint(const FName LocationSlotId)
+{
+	if (!ViewModel.IsValid() || LocationSlotId.IsNone())
+	{
+		return FReply::Handled();
+	}
+
+	// 삭제 전 USER에게 남은 StaticMesh Socket을 정확히 안내할 current Recipe binding입니다.
+	FName SocketName = NAME_None;
+	if (const UCFVehicleRecipeData* Recipe = ViewModel->GetRecipe())
+	{
+		if (const FCFHardpointIntent* ExistingIntent = Recipe->HardpointIntents.FindByPredicate([LocationSlotId](const FCFHardpointIntent& Intent)
+		{
+			return Intent.LocationSlotId == LocationSlotId;
+		}))
+		{
+			SocketName = ExistingIntent->SocketName;
+		}
+	}
+	FCFAuthoringOpResult Result;
+	FString Error;
+	if (!ViewModel->RemoveHardpointIntent(LocationSlotId, Result, Error))
+	{
+		LastStatusText = FText::FromString(FString::Printf(TEXT("Hardpoint 제거 실패: %s"), *Error));
+		RefreshHardpointPlanningPresentation();
+		return FReply::Handled();
+	}
+
+	RefreshHardpointPlanningPresentation();
+	SyncMountPlanningDraftsFromRecipe();
+	RefreshMountPlanningPresentation();
+	LastStatusText = SocketName.IsNone()
+		? FText::FromString(FString::Printf(
+			TEXT("%s Recipe 장착 위치를 제거했습니다. 이 row의 stored SocketName은 None이었으며 Builder는 StaticMesh를 변경하지 않았습니다."),
+			*LocationSlotId.ToString()))
+		: FText::FromString(FString::Printf(
+			TEXT("%s Recipe 장착 위치를 제거했습니다. StaticMesh Socket %s는 삭제하지 않았습니다. 필요하면 Static Mesh Editor에서 직접 관리하세요."),
+			*LocationSlotId.ToString(),
+			*SocketName.ToString()));
+	return FReply::Handled();
+}
+
+// Step 3 Hardpoint row의 exact SocketName을 클립보드에 복사합니다.
+FReply SCFVehicleBuilderTab::HandleCopyHardpointSocketName(const FName SocketName)
+{
+	if (!SocketName.IsNone())
+	{
+		const FString SocketNameText = SocketName.ToString();
+		FPlatformApplicationMisc::ClipboardCopy(*SocketNameText);
+		LastStatusText = FText::FromString(FString::Printf(TEXT("Hardpoint Socket 이름을 복사했습니다: %s"), *SocketNameText));
+	}
+	return FReply::Handled();
+}
+
+// Current Recipe/Mode에서 Step 3 Hardpoint planning subtree를 만듭니다.
+TSharedRef<SWidget> SCFVehicleBuilderTab::BuildHardpointPlanningPanel()
+{
+	TSharedRef<SVerticalBox> Panel = SNew(SVerticalBox);
+	if (!ViewModel.IsValid() || !ViewModel->GetRecipe())
+	{
+		Panel->AddSlot().AutoHeight()
+		[
+			SNew(STextBlock).Text(LOCTEXT("HardpointPlanNoRecipe", "Hardpoint 계획을 표시할 managed Recipe가 없습니다."))
+		];
+		return Panel;
+	}
+
+	const UCFVehicleRecipeData* Recipe = ViewModel->GetRecipe();
+	const ECFBuilderHardpointPlanMode PlanMode = ViewModel->GetHardpointPlanMode();
+	const TCHAR* ModeText = TEXT("알 수 없음");
+	switch (PlanMode)
+	{
+	case ECFBuilderHardpointPlanMode::LegacyCompatible: ModeText = TEXT("기존 호환 모드"); break;
+	case ECFBuilderHardpointPlanMode::Unspecified: ModeText = TEXT("미결정"); break;
+	case ECFBuilderHardpointPlanMode::NoHardpoints: ModeText = TEXT("장착점 없음"); break;
+	case ECFBuilderHardpointPlanMode::UseHardpoints: ModeText = TEXT("장착 위치 사용"); break;
+	default: break;
+	}
+
+	Panel->AddSlot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 6.0f)
+	[
+		SNew(STextBlock)
+			.Text(FText::FromString(FString::Printf(TEXT("현재 계획: %s | Recipe Hardpoint %d개 / Mount %d개"), ModeText, Recipe->HardpointIntents.Num(), Recipe->MountIntents.Num())))
+			.AutoWrapText(true)
+	];
+
+	if (PlanMode == ECFBuilderHardpointPlanMode::LegacyCompatible)
+	{
+		Panel->AddSlot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 8.0f)
+		[
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 4.0f)
+			[
+				SNew(STextBlock)
+					.Text(LOCTEXT("LegacyHardpointPlanNotice", "기존 차량은 현재 Hardpoint/Mount 구조를 자동 migration하지 않습니다. 새 Standard Guided 계획을 사용하려면 아래 버튼으로 명시적으로 opt-in하세요."))
+					.AutoWrapText(true)
+			]
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				SNew(SButton)
+					.Text(LOCTEXT("OptInUseHardpoints", "장착 위치 사용으로 전환"))
+					.OnClicked(this, &SCFVehicleBuilderTab::HandleSetHardpointPlanMode, ECFBuilderHardpointPlanMode::UseHardpoints)
+			]
+		];
+	}
+	else
+	{
+		const bool bCanChooseNoHardpoints = Recipe->HardpointIntents.IsEmpty() && Recipe->MountIntents.IsEmpty();
+		Panel->AddSlot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 8.0f)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().FillWidth(1.0f).Padding(0.0f, 0.0f, 6.0f, 0.0f)
+			[
+				SNew(SButton)
+					.Text(LOCTEXT("ChooseNoHardpoints", "장착점 없음"))
+					.ToolTipText(LOCTEXT("ChooseNoHardpointsTooltip", "Hardpoint/Mount가 모두 비어 있을 때만 차량에 장착 위치가 없음을 명시합니다. 기존 항목을 자동 삭제하지 않습니다."))
+					.IsEnabled(bCanChooseNoHardpoints && PlanMode != ECFBuilderHardpointPlanMode::NoHardpoints)
+					.OnClicked(this, &SCFVehicleBuilderTab::HandleSetHardpointPlanMode, ECFBuilderHardpointPlanMode::NoHardpoints)
+			]
+			+ SHorizontalBox::Slot().FillWidth(1.0f).Padding(6.0f, 0.0f, 0.0f, 0.0f)
+			[
+				SNew(SButton)
+					.Text(LOCTEXT("ChooseUseHardpoints", "장착 위치 사용"))
+					.IsEnabled(PlanMode != ECFBuilderHardpointPlanMode::UseHardpoints)
+					.OnClicked(this, &SCFVehicleBuilderTab::HandleSetHardpointPlanMode, ECFBuilderHardpointPlanMode::UseHardpoints)
+			]
+		];
+	}
+
+	if (PlanMode == ECFBuilderHardpointPlanMode::UseHardpoints)
+	{
+		Panel->AddSlot().AutoHeight().Padding(0.0f, 2.0f, 0.0f, 4.0f)
+		[
+			SNew(STextBlock)
+				.Text(LOCTEXT("StandardHardpointAddGuide", "추가할 물리 위치를 선택하세요. 생성 후 category/LocationSlotId는 Standard에서 고정되며 바꾸려면 삭제 후 다시 추가합니다."))
+				.AutoWrapText(true)
+		];
+
+		TSharedRef<SHorizontalBox> CategoryButtons = SNew(SHorizontalBox);
+		for (const FName Category : ViewModel->GetStandardHardpointCategories())
+		{
+			FString Label = Category.ToString();
+			if (Category == TEXT("Top")) Label = TEXT("위");
+			else if (Category == TEXT("Front")) Label = TEXT("앞");
+			else if (Category == TEXT("Back")) Label = TEXT("뒤");
+			else if (Category == TEXT("LeftSide")) Label = TEXT("왼쪽");
+			else if (Category == TEXT("RightSide")) Label = TEXT("오른쪽");
+			else if (Category == TEXT("Bottom")) Label = TEXT("아래");
+			else if (Category == TEXT("Internal")) Label = TEXT("내부");
+
+			CategoryButtons->AddSlot().AutoWidth().Padding(0.0f, 0.0f, 4.0f, 0.0f)
+			[
+				SNew(SButton)
+					.Text(FText::FromString(Label))
+					.ToolTipText(FText::FromString(FString::Printf(TEXT("%s category의 다음 stable ID를 max-used+1로 생성합니다."), *Category.ToString())))
+					.OnClicked(this, &SCFVehicleBuilderTab::HandleAddStandardHardpoint, Category)
+			];
+		}
+		Panel->AddSlot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 8.0f)[CategoryButtons];
+	}
+
+	if (Recipe->HardpointIntents.IsEmpty())
+	{
+		Panel->AddSlot().AutoHeight()
+		[
+			SNew(STextBlock)
+				.Text(PlanMode == ECFBuilderHardpointPlanMode::UseHardpoints
+					? LOCTEXT("HardpointRowsEmptyUse", "아직 장착 위치가 없습니다. 하나 이상 추가해야 Step 3을 완료할 수 있습니다.")
+					: LOCTEXT("HardpointRowsEmpty", "현재 Recipe Hardpoint row가 없습니다."))
+				.AutoWrapText(true)
+		];
+		return Panel;
+	}
+
+	Panel->AddSlot().AutoHeight().Padding(0.0f, 4.0f, 0.0f, 2.0f)
+	[
+		SNew(STextBlock).Text(LOCTEXT("HardpointRowsHeader", "현재 Recipe 장착 위치"))
+			.Font(FCoreStyle::GetDefaultFontStyle("Bold", 9))
+	];
+
+	Panel->AddSlot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 4.0f)
+	[
+		SNew(STextBlock)
+			.Text(LOCTEXT("HardpointDeleteBoundary", "삭제는 Recipe의 장착 위치 row만 제거합니다. Chassis StaticMesh의 Socket은 그대로 유지됩니다."))
+			.AutoWrapText(true)
+	];
+
+	for (const FCFHardpointIntent& Intent : Recipe->HardpointIntents)
+	{
+		// UI는 creation-time suggestion을 다시 추론하지 않고 Recipe에 실제 저장된 SocketName truth만 표시합니다.
+		const FName StoredSocketName = Intent.SocketName;
+		const FString SocketDisplayText = StoredSocketName.IsNone() ? TEXT("(없음)") : StoredSocketName.ToString();
+		const bool bCanDelete = PlanMode != ECFBuilderHardpointPlanMode::LegacyCompatible;
+
+		Panel->AddSlot().AutoHeight().Padding(0.0f, 1.0f)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0.0f, 0.0f, 8.0f, 0.0f)
+			[
+				SNew(SBox).WidthOverride(74.0f)[SNew(STextBlock).Text(FText::FromName(Intent.LocationCategory))]
+			]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0.0f, 0.0f, 8.0f, 0.0f)
+			[
+				SNew(SBox).WidthOverride(110.0f)[SNew(STextBlock).Text(FText::FromName(Intent.LocationSlotId))]
+			]
+			+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center).Padding(0.0f, 0.0f, 8.0f, 0.0f)
+			[
+				SNew(SEditableTextBox)
+					.Text(FText::FromString(SocketDisplayText))
+					.IsReadOnly(true)
+					.ToolTipText(LOCTEXT("HardpointSocketExactNameTooltip", "이 문자열이 StaticMesh SocketName과 한 글자까지 정확히 일치해야 합니다."))
+			]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0.0f, 0.0f, 8.0f, 0.0f)
+			[
+				SNew(STextBlock)
+					.Text_Lambda([this, StoredSocketName, PlanMode]()
+					{
+						if (StoredSocketName.IsNone())
+						{
+							return FText::FromString(PlanMode == ECFBuilderHardpointPlanMode::LegacyCompatible
+								? TEXT("stored LocalTransform 보존")
+								: TEXT("SocketName 없음 — 구조 교정 필요"));
+						}
+						return IsCurrentChassisSocketPresentLive(StoredSocketName)
+							? FText::FromString(TEXT("현재 있음"))
+							: FText::FromString(TEXT("없음 — 추가 필요"));
+					})
+			]
+			+ SHorizontalBox::Slot().AutoWidth().Padding(0.0f, 0.0f, 4.0f, 0.0f)
+			[
+				SNew(SButton)
+					.Text(LOCTEXT("AddHardpointSocketAndEdit", "추가 후 편집"))
+					.ToolTipText(LOCTEXT("AddHardpointSocketAndEditTooltip", "현재 Chassis에 이 exact 이름의 Socket이 없을 때 원점에 생성하고 Static Mesh Editor를 엽니다. 위치/회전은 직접 맞추고 저장하세요."))
+					.IsEnabled_Lambda([this, StoredSocketName]() { return CanAddCurrentChassisSocket(StoredSocketName); })
+					.OnClicked(this, &SCFVehicleBuilderTab::HandleAddChassisSocket, StoredSocketName)
+			]
+			+ SHorizontalBox::Slot().AutoWidth().Padding(0.0f, 0.0f, 4.0f, 0.0f)
+			[
+				SNew(SButton)
+					.Text(LOCTEXT("CopyHardpointSocket", "복사"))
+					.IsEnabled(!StoredSocketName.IsNone())
+					.OnClicked(this, &SCFVehicleBuilderTab::HandleCopyHardpointSocketName, StoredSocketName)
+			]
+			+ SHorizontalBox::Slot().AutoWidth()
+			[
+				SNew(SButton)
+					.Text(LOCTEXT("RemoveHardpointRow", "장착 위치만 삭제"))
+					.ToolTipText(LOCTEXT("RemoveHardpointRowTooltip", "Recipe의 이 Hardpoint/장착 위치 row만 삭제합니다. Chassis StaticMesh Socket은 그대로 유지됩니다. 이 Hardpoint를 참조하는 Mount가 남아 있으면 삭제는 차단됩니다."))
+					.IsEnabled(bCanDelete && !Intent.LocationSlotId.IsNone())
+					.OnClicked(this, &SCFVehicleBuilderTab::HandleRemoveHardpoint, Intent.LocationSlotId)
+			]
+		];
+	}
+
+	return Panel;
+}
+
+// Mode/add/remove/selection/refresh 뒤 Hardpoint planning subtree를 current truth로 교체합니다.
+void SCFVehicleBuilderTab::RefreshHardpointPlanningPresentation()
+{
+	if (HardpointPlanningHost.IsValid())
+	{
+		HardpointPlanningHost->SetContent(BuildHardpointPlanningPanel());
+	}
 }
 
 // Step 3 required Wheel Socket 한 개의 exact current 이름을 클립보드에 복사합니다.
@@ -2014,11 +2654,11 @@ FReply SCFVehicleBuilderTab::HandleCopyOptionalSocketNames()
 		return FReply::Handled();
 	}
 
-	// Current Recipe에서 실제 파생한 optional/conditional Socket 이름입니다.
-	const TArray<FName> OptionalSocketNames = ViewModel->GetOptionalSocketNames();
+	// Hardpoint 표와 중복되지 않는 current Recipe의 파괴 FX Socket 이름입니다.
+	const TArray<FName> OptionalSocketNames = ViewModel->GetConditionalNonHardpointSocketNames();
 	if (OptionalSocketNames.IsEmpty())
 	{
-		LastStatusText = LOCTEXT("CopyOptionalSocketEmpty", "현재 Recipe가 요구하는 선택/조건부 Socket 이름이 없습니다.");
+		LastStatusText = LOCTEXT("CopyOptionalSocketEmpty", "현재 Recipe가 요구하는 별도 파괴 FX Socket 이름이 없습니다.");
 		return FReply::Handled();
 	}
 
@@ -2034,14 +2674,17 @@ FReply SCFVehicleBuilderTab::HandleCopyOptionalSocketNames()
 	const FString ClipboardText = FString::Join(OptionalSocketNameTexts, LINE_TERMINATOR);
 	FPlatformApplicationMisc::ClipboardCopy(*ClipboardText);
 	LastStatusText = FText::FromString(FString::Printf(
-		TEXT("선택/조건부 Socket 이름 %d개를 줄바꿈 목록으로 복사했습니다."),
+		TEXT("파괴 FX Socket 이름 %d개를 줄바꿈 목록으로 복사했습니다."),
 		OptionalSocketNames.Num()));
 	return FReply::Handled();
 }
 
-// Step 3 required Wheel Socket 한 행의 역할/이름/현재 상태/복사 UI를 만듭니다.
+// Step 3 required Wheel Socket 한 행의 역할/이름/현재 상태/추가/복사 UI를 만듭니다.
 TSharedRef<SWidget> SCFVehicleBuilderTab::BuildRequiredWheelSocketRow(const int32 WheelRoleIndex, const FText& RoleLabel)
 {
+	const TArray<FName> RequiredSocketNames = ViewModel.IsValid() ? ViewModel->GetRequiredWheelSocketNames() : TArray<FName>();
+	const FName SocketName = RequiredSocketNames.IsValidIndex(WheelRoleIndex) ? RequiredSocketNames[WheelRoleIndex] : NAME_None;
+
 	return SNew(SHorizontalBox)
 
 		+ SHorizontalBox::Slot()
@@ -2065,6 +2708,7 @@ TSharedRef<SWidget> SCFVehicleBuilderTab::BuildRequiredWheelSocketRow(const int3
 			SNew(SEditableTextBox)
 				.Text(this, &SCFVehicleBuilderTab::GetRequiredWheelSocketNameText, WheelRoleIndex)
 				.IsReadOnly(true)
+				.ToolTipText(LOCTEXT("WheelSocketExactNameTooltip", "이 문자열이 StaticMesh SocketName과 한 글자까지 정확히 일치해야 합니다."))
 		]
 
 		+ SHorizontalBox::Slot()
@@ -2074,6 +2718,17 @@ TSharedRef<SWidget> SCFVehicleBuilderTab::BuildRequiredWheelSocketRow(const int3
 		[
 			SNew(STextBlock)
 				.Text(this, &SCFVehicleBuilderTab::GetRequiredWheelSocketStatusText, WheelRoleIndex)
+		]
+
+		+ SHorizontalBox::Slot()
+		.AutoWidth()
+		.Padding(0.0f, 2.0f, 4.0f, 2.0f)
+		[
+			SNew(SButton)
+				.Text(LOCTEXT("AddWheelSocketAndEdit", "추가 후 편집"))
+				.ToolTipText(LOCTEXT("AddWheelSocketAndEditTooltip", "현재 Chassis에 이 exact Wheel Socket이 없을 때 원점에 생성하고 Static Mesh Editor를 엽니다. 위치/회전/Scale은 직접 맞추고 저장하세요."))
+				.IsEnabled_Lambda([this, SocketName]() { return CanAddCurrentChassisSocket(SocketName); })
+				.OnClicked(this, &SCFVehicleBuilderTab::HandleAddChassisSocket, SocketName)
 		]
 
 		+ SHorizontalBox::Slot()
@@ -2129,12 +2784,12 @@ FText SCFVehicleBuilderTab::GetRequiredWheelSocketStatusText(const int32 WheelRo
 		return FText::FromString(TEXT("확인 불가"));
 	}
 
-	return ViewModel->IsCurrentChassisSocketFound(RequiredSocketNames[WheelRoleIndex])
+	return IsCurrentChassisSocketPresentLive(RequiredSocketNames[WheelRoleIndex])
 		? FText::FromString(TEXT("현재 있음"))
 		: FText::FromString(TEXT("없음 — 추가 필요"));
 }
 
-// Step 3 current Recipe의 optional Hardpoint/Destroyed FX Socket 상태를 표시합니다.
+// Step 3 current Recipe가 별도 위치를 요구하는 파괴 FX Socket 상태를 표시합니다.
 FText SCFVehicleBuilderTab::GetOptionalSocketGuideText() const
 {
 	if (!ViewModel.IsValid())
@@ -2142,43 +2797,32 @@ FText SCFVehicleBuilderTab::GetOptionalSocketGuideText() const
 		return FText::GetEmpty();
 	}
 
-	// Current Recipe가 실제로 가리키는 optional/conditional Socket 이름입니다.
-	const TArray<FName> OptionalSocketNames = ViewModel->GetOptionalSocketNames();
+	// Hardpoint와 중복되지 않는 current Recipe의 non-Hardpoint Socket은 현재 계약상 Destroyed FX Socket입니다.
+	const TArray<FName> OptionalSocketNames = ViewModel->GetConditionalNonHardpointSocketNames();
 	if (OptionalSocketNames.IsEmpty())
 	{
-		return FText::FromString(
-			TEXT("현재 Recipe가 요구하는 선택/조건부 Socket은 없습니다. Hardpoint가 필요해지면 Step 6 Gameplay Setup의 current Recipe 기준으로 정확한 HP_<LocationSlotId> 이름을 안내합니다."));
+		return FText::FromString(TEXT("현재 차량은 별도 파괴 FX Socket을 요구하지 않습니다. 이 항목은 무시해도 됩니다."));
 	}
 
-	// USER-facing optional Socket 상태 행입니다.
 	TArray<FString> SocketLines;
-	SocketLines.Reserve(OptionalSocketNames.Num());
+	SocketLines.Reserve(OptionalSocketNames.Num() + 1);
 	for (const FName SocketName : OptionalSocketNames)
 	{
-		// Socket prefix로 현재 역할을 읽기 쉽게 분류합니다.
-		const FString SocketNameText = SocketName.ToString();
-		// Current fresh Chassis에 이 Socket이 존재하는지 여부입니다.
 		const bool bSocketFound = ViewModel->IsCurrentChassisSocketFound(SocketName);
-		// Hardpoint/FX/기타 current binding의 USER-facing role입니다.
-		const TCHAR* SocketRole = SocketNameText.StartsWith(TEXT("HP_"))
-			? TEXT("Hardpoint")
-			: (SocketNameText.StartsWith(TEXT("FX_")) ? TEXT("파괴 FX") : TEXT("조건부"));
-
 		SocketLines.Add(FString::Printf(
-			TEXT("[선택/조건부 · %s] %s | %s"),
-			SocketRole,
-			*SocketNameText,
-			bSocketFound ? TEXT("현재 있음") : TEXT("현재 없음")));
+			TEXT("[파괴 FX] %s | %s"),
+			*SocketName.ToString(),
+			bSocketFound ? TEXT("현재 있음") : TEXT("현재 없음 — 효과를 이 위치에 붙일 경우 추가 필요")));
 	}
 
-	SocketLines.Add(TEXT("선택/조건부 Socket은 현재 Recipe/Gameplay 요구에 맞을 때만 추가하세요. Wheel Socket 4개와 달리 무조건 생성하는 항목이 아닙니다."));
+	SocketLines.Add(TEXT("이 Socket은 차량이 파괴될 때 폭발/잔해 같은 FX를 차체의 특정 위치에 붙이기 위한 것입니다. 별도 위치가 필요하지 않다면 만들지 않아도 됩니다."));
 	return FText::FromString(FString::Join(SocketLines, LINE_TERMINATOR));
 }
 
 // Step 3에서 복사할 optional Socket 이름이 하나 이상 있는지 반환합니다.
 bool SCFVehicleBuilderTab::CanCopyOptionalSocketNames() const
 {
-	return ViewModel.IsValid() && !ViewModel->GetOptionalSocketNames().IsEmpty();
+	return ViewModel.IsValid() && !ViewModel->GetConditionalNonHardpointSocketNames().IsEmpty();
 }
 
 // Step 5 current Recipe/Target/accepted Evidence에 exact binding된 AI Physics Draft를 Project Saved에서 읽습니다.
@@ -2538,6 +3182,8 @@ FReply SCFVehicleBuilderTab::HandleAcceptUserDriving()
 			"- RPM/변속/고속 반응에 명백한 이상이 없음\n"
 			"- Wheel/차체 물리에 플레이를 막는 이상이 없음\n\n"
 			"Technical benchmark 수치만 보고 PASS하는 것이 아니라 실제 주행 체감에 대한 USER 판단입니다.\n"
+			"PASS는 이 Target DefinitionHash에 persistent binding됩니다. Benchmark RunId는 진단용이며 같은 DefinitionHash에서 새 benchmark를 실행해도 PASS는 유지됩니다.\n"
+			"Builder는 자동 저장하지 않으므로 재기동 후에도 유지하려면 승인 뒤 Recipe Asset을 직접 저장해야 합니다.\n\n"
 			"이 exact 차량 상태를 USER Driving PASS로 승인하시겠습니까?"),
 		*ViewModel->GetDrivingBenchmarkResult().RunId,
 		*ViewModel->GetDrivingBenchmarkResult().ExpectedTargetDefinitionHash));
@@ -2557,7 +3203,7 @@ FReply SCFVehicleBuilderTab::HandleAcceptUserDriving()
 	}
 
 	LastStatusText = FText::FromString(FString::Printf(
-		TEXT("USER Driving PASS를 exact Target DefinitionHash + Benchmark RunId에 기록했습니다. RunId=%s. Step 8이 Complete이면 VB-P0-09 신규 차량 E2E USER Acceptance를 닫을 수 있습니다."),
+		TEXT("USER Driving PASS를 exact Target DefinitionHash에 persistent Recipe receipt로 기록했습니다. Current RunId=%s는 진단용입니다. 자동 저장하지 않았으므로 재기동 후 유지하려면 Recipe Asset을 직접 저장하세요."),
 		*ViewModel->GetDrivingBenchmarkResult().RunId));
 	return FReply::Handled();
 }
@@ -2828,6 +3474,405 @@ FText SCFVehicleBuilderTab::GetPhysicsProposalSummaryText() const
 	return ViewModel.IsValid()
 		? FText::FromString(ViewModel->BuildPhysicsProposalSummary())
 		: FText::GetEmpty();
+}
+
+// Step 6 Hardpoint별 Standard MountType transient draft를 변경합니다. Recipe mutation은 하지 않습니다.
+FReply SCFVehicleBuilderTab::HandleSelectMountDraftType(
+	const FName LocationSlotId,
+	const ECFVehicleMountType MountType)
+{
+	if (!LocationSlotId.IsNone())
+	{
+		PendingMountTypes.Add(LocationSlotId, MountType);
+		RefreshMountPlanningPresentation();
+		LastStatusText = FText::FromString(FString::Printf(
+			TEXT("%s MountType draft를 변경했습니다. 아직 Recipe에는 반영하지 않았습니다."),
+			*LocationSlotId.ToString()));
+	}
+	return FReply::Handled();
+}
+
+// Step 6 Hardpoint별 Standard SizeLimit transient draft를 변경합니다. Recipe mutation은 하지 않습니다.
+FReply SCFVehicleBuilderTab::HandleSelectMountDraftSize(
+	const FName LocationSlotId,
+	const ECFVehicleWeaponSize SizeLimit)
+{
+	if (!LocationSlotId.IsNone())
+	{
+		PendingMountSizes.Add(LocationSlotId, SizeLimit);
+		RefreshMountPlanningPresentation();
+		LastStatusText = FText::FromString(FString::Printf(
+			TEXT("%s SizeLimit draft를 변경했습니다. 아직 Recipe에는 반영하지 않았습니다."),
+			*LocationSlotId.ToString()));
+	}
+	return FReply::Handled();
+}
+
+// Step 6 Hardpoint별 optional EquipmentPreset pending picker를 변경합니다. Recipe mutation은 하지 않습니다.
+void SCFVehicleBuilderTab::HandleMountPresetChanged(
+	const FAssetData& AssetData,
+	const FName LocationSlotId)
+{
+	if (LocationSlotId.IsNone())
+	{
+		return;
+	}
+
+	PendingMountPresetPaths.Add(
+		LocationSlotId,
+		AssetData.IsValid() ? AssetData.GetSoftObjectPath() : FSoftObjectPath());
+	RefreshMountPlanningPresentation();
+	LastStatusText = FText::FromString(FString::Printf(
+		TEXT("%s EquipmentPreset draft를 변경했습니다. 아직 Recipe에는 반영하지 않았습니다."),
+		*LocationSlotId.ToString()));
+}
+
+// Step 6 Hardpoint 하나의 complete transient draft를 Standard 1:1 typed Recipe write로 반영합니다.
+FReply SCFVehicleBuilderTab::HandleCommitStandardMount(const FName LocationSlotId)
+{
+	if (!ViewModel.IsValid() || LocationSlotId.IsNone())
+	{
+		return FReply::Handled();
+	}
+
+	const ECFVehicleMountType MountType = PendingMountTypes.FindRef(LocationSlotId);
+	const ECFVehicleWeaponSize SizeLimit = PendingMountSizes.FindRef(LocationSlotId);
+	const FSoftObjectPath PresetPath = PendingMountPresetPaths.FindRef(LocationSlotId);
+
+	FCFMountIntent CommittedIntent;
+	FCFAuthoringOpResult Result;
+	FString Error;
+	if (!ViewModel->CommitStandardMountIntent(
+		LocationSlotId,
+		MountType,
+		SizeLimit,
+		PresetPath,
+		CommittedIntent,
+		Result,
+		Error))
+	{
+		LastStatusText = FText::FromString(FString::Printf(TEXT("Mount 반영 실패: %s"), *Error));
+		RefreshMountPlanningPresentation();
+		return FReply::Handled();
+	}
+
+	SyncMountPlanningDraftsFromRecipe();
+	RefreshMountPlanningPresentation();
+	LastStatusText = FText::FromString(FString::Printf(
+		TEXT("장착 규칙을 Recipe에 반영했습니다: %s → %s. Target VehicleData Apply/자동 Save는 수행하지 않았습니다."),
+		*CommittedIntent.LocationSlotRef.ToString(),
+		*CommittedIntent.MountProfileId.ToString()));
+	return FReply::Handled();
+}
+
+// Step 6 exact Recipe MountProfileId 하나를 typed remove lane으로 제거합니다.
+FReply SCFVehicleBuilderTab::HandleRemoveMount(const FName MountProfileId)
+{
+	if (!ViewModel.IsValid() || MountProfileId.IsNone())
+	{
+		return FReply::Handled();
+	}
+
+	FCFAuthoringOpResult Result;
+	FString Error;
+	if (!ViewModel->RemoveMountIntent(MountProfileId, Result, Error))
+	{
+		LastStatusText = FText::FromString(FString::Printf(TEXT("Mount 제거 실패: %s"), *Error));
+		RefreshMountPlanningPresentation();
+		return FReply::Handled();
+	}
+
+	SyncMountPlanningDraftsFromRecipe();
+	RefreshMountPlanningPresentation();
+	LastStatusText = FText::FromString(FString::Printf(
+		TEXT("%s Recipe Mount를 제거했습니다. Hardpoint/StaticMesh/Target VehicleData는 변경하지 않았고 자동 Save도 하지 않았습니다."),
+		*MountProfileId.ToString()));
+	return FReply::Handled();
+}
+
+// Step 6 current Recipe/HardpointPlanMode에서 Standard Mount planning subtree를 생성합니다.
+TSharedRef<SWidget> SCFVehicleBuilderTab::BuildMountPlanningPanel()
+{
+	TSharedRef<SVerticalBox> Panel = SNew(SVerticalBox);
+	if (!ViewModel.IsValid() || !ViewModel->GetRecipe())
+	{
+		Panel->AddSlot().AutoHeight()
+		[
+			SNew(STextBlock).Text(LOCTEXT("MountPlanNoRecipe", "Mount 규칙을 표시할 managed Recipe가 없습니다."))
+		];
+		return Panel;
+	}
+
+	const UCFVehicleRecipeData* Recipe = ViewModel->GetRecipe();
+	const ECFBuilderHardpointPlanMode PlanMode = ViewModel->GetHardpointPlanMode();
+
+	Panel->AddSlot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 6.0f)
+	[
+		SNew(STextBlock)
+			.Text(LOCTEXT("StandardMountHeader", "Standard 1:1 Mount 규칙"))
+			.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
+	];
+
+	if (PlanMode == ECFBuilderHardpointPlanMode::LegacyCompatible)
+	{
+		Panel->AddSlot().AutoHeight()
+		[
+			SNew(STextBlock)
+				.Text(FText::FromString(FString::Printf(
+					TEXT("기존 호환 모드입니다. Recipe Mount %d개 / Target 기존 구조를 custom·multi-Mount 의미 그대로 보존하며 Standard 1:1 편집을 강제하지 않습니다."),
+					Recipe->MountIntents.Num())))
+				.AutoWrapText(true)
+		];
+		return Panel;
+	}
+
+	if (PlanMode == ECFBuilderHardpointPlanMode::Unspecified)
+	{
+		Panel->AddSlot().AutoHeight()
+		[
+			SNew(STextBlock)
+				.Text(LOCTEXT("MountPlanUnspecified", "Step 3 Hardpoint Plan이 아직 미결정입니다. 먼저 '장착점 없음' 또는 '장착 위치 사용'을 명시적으로 선택하세요."))
+				.AutoWrapText(true)
+		];
+		return Panel;
+	}
+
+	if (PlanMode == ECFBuilderHardpointPlanMode::NoHardpoints)
+	{
+		Panel->AddSlot().AutoHeight()
+		[
+			SNew(STextBlock)
+				.Text(Recipe->HardpointIntents.IsEmpty() && Recipe->MountIntents.IsEmpty()
+					? LOCTEXT("MountPlanIntentionalZero", "장착점 없음이 명시되어 있어 Mount 0개가 정상 완료 상태입니다.")
+					: LOCTEXT("MountPlanNoHardpointConflict", "NoHardpoints인데 Hardpoint/Mount semantic row가 남아 있습니다. Mount → Hardpoint 순서로 제거해야 합니다."))
+				.AutoWrapText(true)
+		];
+		return Panel;
+	}
+
+	if (Recipe->HardpointIntents.IsEmpty())
+	{
+		Panel->AddSlot().AutoHeight()
+		[
+			SNew(STextBlock)
+				.Text(LOCTEXT("MountPlanNoHardpointsYet", "UseHardpoints를 선택했지만 Hardpoint가 아직 없습니다. Step 3에서 장착 위치를 하나 이상 추가하세요."))
+				.AutoWrapText(true)
+		];
+		return Panel;
+	}
+
+	Panel->AddSlot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 8.0f)
+	[
+		SNew(STextBlock)
+			.Text(LOCTEXT("MountPlanDraftBoundary", "아래 Type/Size/Preset 선택은 transient draft입니다. '장착 규칙 반영'을 눌러야 Recipe가 바뀝니다. 새 MountProfileId는 Mount_<LocationSlotId>이며 기존 1:1 Mount는 현재 ID를 유지합니다."))
+			.AutoWrapText(true)
+	];
+
+	for (const FCFHardpointIntent& HardpointIntent : Recipe->HardpointIntents)
+	{
+		const FName LocationSlotId = HardpointIntent.LocationSlotId;
+		if (LocationSlotId.IsNone())
+		{
+			continue;
+		}
+
+		TArray<const FCFMountIntent*> MountsForHardpoint;
+		for (const FCFMountIntent& MountIntent : Recipe->MountIntents)
+		{
+			if (MountIntent.LocationSlotRef == LocationSlotId)
+			{
+				MountsForHardpoint.Add(&MountIntent);
+			}
+		}
+
+		const FCFMountIntent* ExistingMount = MountsForHardpoint.Num() == 1 ? MountsForHardpoint[0] : nullptr;
+		const FName DisplayMountProfileId = ExistingMount
+			? ExistingMount->MountProfileId
+			: FName(*FString::Printf(TEXT("Mount_%s"), *LocationSlotId.ToString()));
+		const ECFVehicleMountType DraftMountType = PendingMountTypes.FindRef(LocationSlotId);
+		const ECFVehicleWeaponSize DraftSizeLimit = PendingMountSizes.FindRef(LocationSlotId);
+		const bool bDraftRuleComplete = DraftMountType != ECFVehicleMountType::None
+			&& (DraftMountType == ECFVehicleMountType::Utility || DraftSizeLimit != ECFVehicleWeaponSize::None);
+		const bool bStandardStructureEditable = MountsForHardpoint.Num() <= 1;
+
+		const auto BuildTypeButton = [this, LocationSlotId, DraftMountType](const ECFVehicleMountType Type, const TCHAR* Label)
+		{
+			const FString ButtonLabel = DraftMountType == Type
+				? FString::Printf(TEXT("[%s]"), Label)
+				: FString(Label);
+			return SNew(SButton)
+				.Text(FText::FromString(ButtonLabel))
+				.OnClicked(this, &SCFVehicleBuilderTab::HandleSelectMountDraftType, LocationSlotId, Type);
+		};
+		const auto BuildSizeButton = [this, LocationSlotId, DraftSizeLimit](const ECFVehicleWeaponSize Size, const TCHAR* Label)
+		{
+			const FString ButtonLabel = DraftSizeLimit == Size
+				? FString::Printf(TEXT("[%s]"), Label)
+				: FString(Label);
+			return SNew(SButton)
+				.Text(FText::FromString(ButtonLabel))
+				.OnClicked(this, &SCFVehicleBuilderTab::HandleSelectMountDraftSize, LocationSlotId, Size);
+		};
+
+		Panel->AddSlot().AutoHeight().Padding(0.0f, 4.0f)
+		[
+			SNew(SBorder)
+			.Padding(8.0f)
+			[
+				SNew(SVerticalBox)
+
+				+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 5.0f)
+				[
+					SNew(STextBlock)
+						.Text(FText::FromString(FString::Printf(
+							TEXT("%s → %s | 현재 연결 Mount %d개"),
+							*LocationSlotId.ToString(),
+							*DisplayMountProfileId.ToString(),
+							MountsForHardpoint.Num())))
+						.Font(FCoreStyle::GetDefaultFontStyle("Bold", 9))
+				]
+
+				+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 4.0f)
+				[
+					SNew(STextBlock)
+						.Text(MountsForHardpoint.Num() > 1
+							? LOCTEXT("MountMultiConflict", "이 Hardpoint는 multi-Mount 구조입니다. Standard 편집이 자동으로 축소하지 않습니다. Advanced에서 먼저 구조를 정리하세요.")
+							: LOCTEXT("MountTypeDraftLabel", "MountType draft"))
+						.AutoWrapText(true)
+				]
+
+				+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 5.0f)
+				[
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().AutoWidth().Padding(0.0f, 0.0f, 4.0f, 0.0f)[BuildTypeButton(ECFVehicleMountType::Fixed, TEXT("Fixed"))]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(0.0f, 0.0f, 4.0f, 0.0f)[BuildTypeButton(ECFVehicleMountType::Gimbal, TEXT("Gimbal"))]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(0.0f, 0.0f, 4.0f, 0.0f)[BuildTypeButton(ECFVehicleMountType::Turret, TEXT("Turret"))]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(0.0f, 0.0f, 4.0f, 0.0f)[BuildTypeButton(ECFVehicleMountType::Launcher, TEXT("Launcher"))]
+					+ SHorizontalBox::Slot().AutoWidth()[BuildTypeButton(ECFVehicleMountType::Utility, TEXT("Utility"))]
+				]
+
+				+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 4.0f)
+				[
+					SNew(STextBlock)
+						.Text(LOCTEXT("MountSizeDraftLabel", "SizeLimit draft — Fixed/Gimbal/Turret/Launcher는 Small 이상 필수, Utility는 None 허용"))
+						.AutoWrapText(true)
+				]
+
+				+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 6.0f)
+				[
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().AutoWidth().Padding(0.0f, 0.0f, 4.0f, 0.0f)[BuildSizeButton(ECFVehicleWeaponSize::None, TEXT("None"))]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(0.0f, 0.0f, 4.0f, 0.0f)[BuildSizeButton(ECFVehicleWeaponSize::Small, TEXT("Small"))]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(0.0f, 0.0f, 4.0f, 0.0f)[BuildSizeButton(ECFVehicleWeaponSize::Medium, TEXT("Medium"))]
+					+ SHorizontalBox::Slot().AutoWidth()[BuildSizeButton(ECFVehicleWeaponSize::Large, TEXT("Large"))]
+				]
+
+				+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 6.0f)
+				[
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0.0f, 0.0f, 8.0f, 0.0f)
+					[
+						SNew(SBox).WidthOverride(145.0f)
+						[
+							SNew(STextBlock).Text(LOCTEXT("MountPresetLabel", "기본 EquipmentPreset"))
+						]
+					]
+					+ SHorizontalBox::Slot().FillWidth(1.0f)
+					[
+						SNew(SObjectPropertyEntryBox)
+							.AllowedClass(UCFEquipmentPresetData::StaticClass())
+							.ObjectPath(this, &SCFVehicleBuilderTab::GetPendingMountPresetPath, LocationSlotId)
+							.OnObjectChanged(this, &SCFVehicleBuilderTab::HandleMountPresetChanged, LocationSlotId)
+							.AllowClear(true)
+					]
+				]
+
+				+ SVerticalBox::Slot().AutoHeight()
+				[
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().AutoWidth().Padding(0.0f, 0.0f, 6.0f, 0.0f)
+					[
+						SNew(SButton)
+							.Text(ExistingMount ? LOCTEXT("UpdateStandardMount", "장착 규칙 반영") : LOCTEXT("CreateStandardMount", "장착 규칙 생성"))
+							.ToolTipText(LOCTEXT("CommitStandardMountTooltip", "complete transient draft를 검증한 뒤 Recipe MountIntent만 typed write합니다. 새 ID 충돌은 자동 suffix하지 않고 실패합니다."))
+							.IsEnabled(bStandardStructureEditable && bDraftRuleComplete)
+							.OnClicked(this, &SCFVehicleBuilderTab::HandleCommitStandardMount, LocationSlotId)
+					]
+					+ SHorizontalBox::Slot().AutoWidth()
+					[
+						SNew(SButton)
+							.Text(LOCTEXT("RemoveStandardMount", "Mount 삭제"))
+							.ToolTipText(LOCTEXT("RemoveStandardMountTooltip", "exact Recipe MountProfileId 하나만 제거합니다. Hardpoint/StaticMesh/Target VehicleData는 건드리지 않습니다."))
+							.IsEnabled(ExistingMount && !ExistingMount->MountProfileId.IsNone())
+							.OnClicked(this, &SCFVehicleBuilderTab::HandleRemoveMount, ExistingMount ? ExistingMount->MountProfileId : NAME_None)
+					]
+				]
+			]
+		];
+	}
+
+	return Panel;
+}
+
+// Step 6 persistent Recipe의 existing 1:1 Mount 값을 transient draft로 다시 동기화합니다.
+void SCFVehicleBuilderTab::SyncMountPlanningDraftsFromRecipe()
+{
+	PendingMountTypes.Reset();
+	PendingMountSizes.Reset();
+	PendingMountPresetPaths.Reset();
+
+	if (!ViewModel.IsValid() || !ViewModel->GetRecipe())
+	{
+		return;
+	}
+
+	const UCFVehicleRecipeData* Recipe = ViewModel->GetRecipe();
+	for (const FCFHardpointIntent& HardpointIntent : Recipe->HardpointIntents)
+	{
+		if (HardpointIntent.LocationSlotId.IsNone())
+		{
+			continue;
+		}
+
+		TArray<const FCFMountIntent*> MountsForHardpoint;
+		for (const FCFMountIntent& MountIntent : Recipe->MountIntents)
+		{
+			if (MountIntent.LocationSlotRef == HardpointIntent.LocationSlotId)
+			{
+				MountsForHardpoint.Add(&MountIntent);
+			}
+		}
+
+		if (MountsForHardpoint.Num() == 1)
+		{
+			const FCFMountIntent& ExistingMount = *MountsForHardpoint[0];
+			PendingMountTypes.Add(HardpointIntent.LocationSlotId, ExistingMount.MountType);
+			PendingMountSizes.Add(HardpointIntent.LocationSlotId, ExistingMount.SizeLimit);
+			PendingMountPresetPaths.Add(HardpointIntent.LocationSlotId, ExistingMount.DefaultEquipmentPresetData.ToSoftObjectPath());
+		}
+		else
+		{
+			PendingMountTypes.Add(HardpointIntent.LocationSlotId, ECFVehicleMountType::None);
+			PendingMountSizes.Add(HardpointIntent.LocationSlotId, ECFVehicleWeaponSize::None);
+			PendingMountPresetPaths.Add(HardpointIntent.LocationSlotId, FSoftObjectPath());
+		}
+	}
+}
+
+// Step 6 transient/persistent 변경 뒤 Mount planning subtree를 current truth로 교체합니다.
+void SCFVehicleBuilderTab::RefreshMountPlanningPresentation()
+{
+	if (MountPlanningHost.IsValid())
+	{
+		MountPlanningHost->SetContent(BuildMountPlanningPanel());
+	}
+}
+
+// Step 6 Hardpoint별 pending EquipmentPreset object path 문자열을 반환합니다.
+FString SCFVehicleBuilderTab::GetPendingMountPresetPath(const FName LocationSlotId) const
+{
+	const FSoftObjectPath* PresetPath = PendingMountPresetPaths.Find(LocationSlotId);
+	return PresetPath && PresetPath->IsValid() ? PresetPath->ToString() : FString();
 }
 
 // Step 6 Gameplay Setup 전용 R0 guidance UI 표시 조건입니다.

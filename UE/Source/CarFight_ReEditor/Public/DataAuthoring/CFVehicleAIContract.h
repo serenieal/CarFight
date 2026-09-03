@@ -1,11 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAIContract.h
-// Version: v1.18.0
-// Date: 2026-09-01
+// Version: v1.20.0
+// Date: 2026-09-02
 // Description: DAUTH Common Authoring Service + CF-FQ-040 ESH-03 WheelTorqueCrossoverShift diagnostic contract입니다.
 // Scope: Section 25 R0~R3 risk, approval, read/query와 normal Workspace Mesh-only candidate projection을 제공합니다.
 // Changelog:
+// - v1.20.0: CF-FQ-043 VMG-P0-04 Gameplay Guidance R0 request에 persistent Recipe HardpointPlanMode의 transient projection을 추가. Resolver RecipeSnapshot/fingerprint에는 넣지 않고 Step 6 Mode authority만 전달.
+// - v1.19.0: CF-FQ-043 stable identity 삭제를 위해 append-only RemoveMountIntent/RemoveHardpointIntent semantic op와 exact deletion identity payload를 추가. 기존 enum ordinal은 유지.
 // - v1.18.0: vehicle-specific Engine Curve + gear ratios로 adjacent gear Wheel-Torque crossover와 fixed common ChangeUpRPM recommendation을 계산하는 typed diagnostic을 TransmissionDiagnostic에 추가.
 // - v1.17.0: PhysicsDraft schema v3에 EngineCurveReview를 추가하고 Profile Preview/Final Review에 EngineCurveProposalHash/Diagnostic projection을 additive 추가.
 // - v1.16.0: Existing Reference Evidence complete research replacement를 fresh fingerprint/AuthoringWrite approval에 binding하는 Builder Evidence Refresh R1 request/preview/result와 mutation footprint를 추가.
@@ -162,7 +164,9 @@ enum class ECFVehicleSemanticOp : uint8
 	SetWheelVisualIntent,
 	SetDriveStateMode,
 	UpsertHardpointIntent,
-	UpsertMountIntent
+	UpsertMountIntent,
+	RemoveMountIntent,
+	RemoveHardpointIntent
 };
 
 /** R1/R2/R3 request가 공유하는 read-before-write / approval context입니다. */
@@ -500,6 +504,14 @@ struct FCFVehicleSemanticChange
 	// UpsertMountIntent에서만 사용하는 Stable-ID semantic desired element입니다.
 	UPROPERTY()
 	FCFMountIntent MountIntent;
+
+	// RemoveMountIntent에서만 사용하는 exact MountProfile stable identity입니다.
+	UPROPERTY()
+	FName RemoveMountProfileId = NAME_None;
+
+	// RemoveHardpointIntent에서만 사용하는 exact LocationSlot stable identity입니다.
+	UPROPERTY()
+	FName RemoveHardpointLocationSlotId = NAME_None;
 };
 
 /** Recipe/Target 기준의 common read/resolve request입니다. */
@@ -1902,9 +1914,13 @@ struct FCFBuilderGameplayGuidanceRequest
 	UPROPERTY()
 	FCFVehicleAuthoringReadRequest ReadRequest;
 
-	// 신규 차량과 Existing Vehicle Completion의 보존 규칙을 구분합니다.
+	// 신규 차량과 Existing Vehicle Completion의 Companion lifecycle을 구분합니다. Hardpoint/Mount 정책 authority로 사용하지 않습니다.
 	UPROPERTY()
 	ECFBuilderCompanionMode Mode = ECFBuilderCompanionMode::NewVehicle;
+
+	// Recipe-owned Hardpoint/Mount Guidance lifecycle을 R0 request에 transient projection합니다. Resolver fingerprint/hash에는 포함하지 않습니다.
+	UPROPERTY()
+	ECFBuilderHardpointPlanMode HardpointPlanMode = ECFBuilderHardpointPlanMode::LegacyCompatible;
 };
 
 /** Gameplay Setup 영역 하나의 사용자 판단/조치 안내입니다. */

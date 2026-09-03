@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleBuilderGuide.cpp
-// Version: v1.2.0
+// Version: v1.3.0
 // Date: 2026-08-28
 // Description: CF-FQ-040 Gameplay guidance + WSA-P0-04 mode-aware WheelVisual validation입니다.
 // Scope: Durability, Defense, Destroyed FX, Hardpoint, Mount, DriveState, WheelVisual, Fitting mass의 current authored truth를 mutation 없이 설명합니다.
 // Changelog:
+// - v1.3.0: CF-FQ-043 VMG-P0-04 Step 6 Hardpoint/Mount authority를 CompanionMode에서 Recipe BuilderHardpointPlanMode로 분리. UseHardpoints에서 Standard 1:1, MountType/SizeLimit, EquipmentPreset CanUseOnMount를 검증하고 Legacy custom/multi-Mount는 보존.
 // - v1.2.0: Socket/Manual mode에서 Legacy AutoScale clamp를 blocker에서 제외하고 Socket Scale USER authority summary/Reference geometry conflict를 추가.
 // - v1.1.0: Final Review가 이미 계산한 fresh Resolve를 재사용할 수 있도록 projection helper를 분리해 동일 Resolver 반복 실행을 제거.
 // - v1.0.0: 기존 Resolver/Asset/Target 계약을 재사용하는 8영역 R0 guidance와 Existing Vehicle baseline-preserving Hardpoint 안내를 최초 구현.
@@ -17,6 +18,7 @@
 #include "DataAuthoring/CFVehicleAuthoringService.h"
 
 #include "CFCombatFxData.h"
+#include "CFEquipmentPresetData.h"
 #include "CFVehicleData.h"
 #include "CFVehicleDefenseData.h"
 #include "DataAuthoring/CFVehicleRecipeData.h"
@@ -541,7 +543,7 @@ bool FCFVehicleAuthoringService::BuildBuilderGameplayGuidanceFromResolve(
 	int32 HardpointNeedsReviewCount = 0;
 	if (Recipe.HardpointIntents.IsEmpty())
 	{
-		if (Request.Mode == ECFBuilderCompanionMode::CompleteExisting
+		if (Request.HardpointPlanMode == ECFBuilderHardpointPlanMode::LegacyCompatible
 			&& CurrentTarget
 			&& !CurrentTarget->HardpointSlots.IsEmpty())
 		{
@@ -618,7 +620,7 @@ bool FCFVehicleAuthoringService::BuildBuilderGameplayGuidanceFromResolve(
 			// Existing Target에 같은 stable Hardpoint가 이미 존재하는지 여부입니다.
 			const FCFVehicleHardpointSlot* ExistingSlot = CFVehicleBuilderGuidePrivate::FindCurrentHardpointSlot(CurrentTarget, HardpointIntent.LocationSlotId);
 			// Existing stored transform과 current candidate가 충돌하지 않아 보존 가능한지 여부입니다.
-			const bool bExistingTransformAccepted = Request.Mode == ECFBuilderCompanionMode::CompleteExisting
+			const bool bExistingTransformAccepted = Request.HardpointPlanMode == ECFBuilderHardpointPlanMode::LegacyCompatible
 				&& ExistingSlot
 				&& !CFVehicleBuilderGuidePrivate::HasHardpointTransformDiff(ResolveResult.FieldDiff, HardpointIntent.LocationSlotId);
 
@@ -704,65 +706,125 @@ bool FCFVehicleAuthoringService::BuildBuilderGameplayGuidanceFromResolve(
 		}
 	}
 
-	// Mount stable ID 중복을 검출하는 집합입니다.
-	TSet<FName> SeenMountIds;
-	// Recipe Hardpoint stable ID 참조 검증용 집합입니다.
-	TSet<FName> KnownHardpointIds;
-	for (const FCFHardpointIntent& HardpointIntent : Recipe.HardpointIntents)
-	{
-		if (!HardpointIntent.LocationSlotId.IsNone())
-		{
-			KnownHardpointIds.Add(HardpointIntent.LocationSlotId);
-		}
-	}
-	if (Request.Mode == ECFBuilderCompanionMode::CompleteExisting && CurrentTarget)
-	{
-		for (const FCFVehicleHardpointSlot& ExistingSlot : CurrentTarget->HardpointSlots)
-		{
-			if (!ExistingSlot.LocationSlotId.IsNone())
-			{
-				KnownHardpointIds.Add(ExistingSlot.LocationSlotId);
-			}
-		}
-	}
+	// Step 6 Mount completion authority는 Companion lifecycle과 분리된 persistent Hardpoint Plan Mode입니다.
+	const ECFBuilderHardpointPlanMode HardpointPlanMode = Request.HardpointPlanMode;
 
-	// Mount intent structural blocker가 존재하는지 여부입니다.
-	bool bMountBlocked = false;
-	if (Recipe.MountIntents.IsEmpty())
+	if (HardpointPlanMode == ECFBuilderHardpointPlanMode::Unspecified)
 	{
-		if (Request.Mode == ECFBuilderCompanionMode::CompleteExisting
-			&& CurrentTarget
-			&& !CurrentTarget->MountProfiles.IsEmpty())
+		CFVehicleBuilderGuidePrivate::AddGuidanceItem(
+			OutResult,
+			ECFBuilderGameplayArea::MountProfiles,
+			ECFBuilderGuidanceState::NeedsReview,
+			TEXT("Hardpoint Plan이 아직 미결정이라 Standard Mount 규칙을 확정할 수 없습니다."),
+			TEXT("Step 3에서 '장착점 없음' 또는 '장착 위치 사용'을 먼저 명시적으로 선택하세요. 기존 intent가 있어도 Builder가 silent mode 전환하지 않습니다."),
+			TEXT("BuilderHardpointPlanMode"),
+			true);
+	}
+	else if (HardpointPlanMode == ECFBuilderHardpointPlanMode::NoHardpoints)
+	{
+		const bool bSemanticArraysEmpty = Recipe.HardpointIntents.IsEmpty() && Recipe.MountIntents.IsEmpty();
+		CFVehicleBuilderGuidePrivate::AddGuidanceItem(
+			OutResult,
+			ECFBuilderGameplayArea::MountProfiles,
+			bSemanticArraysEmpty ? ECFBuilderGuidanceState::Complete : ECFBuilderGuidanceState::Blocked,
+			bSemanticArraysEmpty
+				? TEXT("장착점 없음이 명시되어 있어 MountProfile 0개가 intentional completion입니다.")
+				: FString::Printf(TEXT("NoHardpoints와 semantic data가 충돌합니다. Hardpoint=%d / Mount=%d."), Recipe.HardpointIntents.Num(), Recipe.MountIntents.Num()),
+			bSemanticArraysEmpty
+				? TEXT("추가 Mount 작업이 필요하지 않습니다.")
+				: TEXT("Mount를 먼저 제거하고 Hardpoint를 제거한 뒤 NoHardpoints 상태를 다시 확인하세요. 자동 cascade 삭제는 하지 않습니다."),
+			TEXT("BuilderHardpointPlanMode / MountIntents"),
+			!bSemanticArraysEmpty);
+	}
+	else if (HardpointPlanMode == ECFBuilderHardpointPlanMode::LegacyCompatible)
+	{
+		// LegacyCompatible에서는 Existing/custom/multi-Mount를 새 Standard 1:1 규칙으로 강제 migration하지 않습니다.
+		if (Recipe.MountIntents.IsEmpty() && CurrentTarget && !CurrentTarget->MountProfiles.IsEmpty())
 		{
-			// Existing Mount collection이 current authoring candidate에서 실제 변경되는지 여부입니다.
 			const bool bExistingMountDiff = CFVehicleBuilderGuidePrivate::HasDiffPrefix(ResolveResult.FieldDiff, TEXT("MountProfiles"));
 			CFVehicleBuilderGuidePrivate::AddGuidanceItem(
 				OutResult,
 				ECFBuilderGameplayArea::MountProfiles,
 				bExistingMountDiff ? ECFBuilderGuidanceState::NeedsReview : ECFBuilderGuidanceState::Complete,
 				bExistingMountDiff
-					? TEXT("Existing Vehicle의 MountProfiles가 current authoring candidate와 다릅니다.")
-					: TEXT("Recipe에 새 Mount intent는 없지만 Existing Vehicle의 MountProfiles를 current authoring/import state가 보존합니다."),
+					? TEXT("LegacyCompatible Existing Vehicle의 MountProfiles가 current authoring candidate와 다릅니다.")
+					: TEXT("Recipe에 새 Mount intent가 없어도 LegacyCompatible은 Existing Vehicle의 MountProfiles를 그대로 보존합니다."),
 				bExistingMountDiff
-					? TEXT("기존 장착 규칙을 삭제하지 말고 Legacy/Recipe ownership을 먼저 review하세요. EquipmentPreset을 임의 생성하지 않습니다.")
-					: TEXT("기존 장착 규칙을 유지합니다. 새 Builder-managed Mount를 만들 때만 stable MountProfileId와 LocationSlotRef를 추가하세요."),
+					? TEXT("기존 multi-Mount/custom ID를 자동 정리하지 말고 ownership/diff를 먼저 review하세요.")
+					: TEXT("기존 장착 규칙을 유지합니다. Standard 1:1 편집은 '장착 위치 사용'으로 명시 전환한 뒤에만 적용합니다."),
 				TEXT("MountProfiles"),
 				bExistingMountDiff);
 		}
 		else
 		{
+			TSet<FName> LegacySeenMountIds;
+			TSet<FName> LegacyKnownHardpointIds;
+			for (const FCFHardpointIntent& HardpointIntent : Recipe.HardpointIntents)
+			{
+				if (!HardpointIntent.LocationSlotId.IsNone())
+				{
+					LegacyKnownHardpointIds.Add(HardpointIntent.LocationSlotId);
+				}
+			}
+			if (CurrentTarget)
+			{
+				for (const FCFVehicleHardpointSlot& ExistingSlot : CurrentTarget->HardpointSlots)
+				{
+					if (!ExistingSlot.LocationSlotId.IsNone())
+					{
+						LegacyKnownHardpointIds.Add(ExistingSlot.LocationSlotId);
+					}
+				}
+			}
+
+			bool bLegacyMountBlocked = false;
+			for (const FCFMountIntent& MountIntent : Recipe.MountIntents)
+			{
+				if (MountIntent.MountProfileId.IsNone()
+					|| LegacySeenMountIds.Contains(MountIntent.MountProfileId)
+					|| MountIntent.LocationSlotRef.IsNone()
+					|| !LegacyKnownHardpointIds.Contains(MountIntent.LocationSlotRef))
+				{
+					bLegacyMountBlocked = true;
+					continue;
+				}
+				LegacySeenMountIds.Add(MountIntent.MountProfileId);
+			}
+
 			CFVehicleBuilderGuidePrivate::AddGuidanceItem(
 				OutResult,
 				ECFBuilderGameplayArea::MountProfiles,
-				ECFBuilderGuidanceState::Optional,
-				TEXT("전투 장착 프로파일이 없습니다. current contract에서 빈 MountProfiles는 오류가 아닙니다."),
-				TEXT("장비를 장착할 차량에서만 MountProfileId와 Hardpoint LocationSlotRef를 추가하세요. 기본 EquipmentPreset은 반드시 필요하지 않습니다."),
+				bLegacyMountBlocked ? ECFBuilderGuidanceState::Blocked : ECFBuilderGuidanceState::Complete,
+				bLegacyMountBlocked
+					? TEXT("LegacyCompatible Mount의 stable identity/reference가 구조적으로 유효하지 않습니다.")
+					: FString::Printf(TEXT("LegacyCompatible Mount %d개를 custom/multi-Mount 의미 그대로 보존합니다."), Recipe.MountIntents.Num()),
+				bLegacyMountBlocked
+					? TEXT("Advanced에서 None/duplicate MountProfileId 또는 invalid LocationSlotRef만 교정하세요. Standard 1:1로 자동 변환하지 않습니다.")
+					: TEXT("MountType/Size/custom identity를 Standard 규칙으로 강제 변경하지 않습니다."),
 				TEXT("MountIntents"),
-				false);
+				bLegacyMountBlocked);
 		}
 	}
 	else
 	{
+		// UseHardpoints Standard lane은 Recipe Hardpoint 하나당 exact Mount 하나를 요구합니다.
+		TSet<FName> KnownHardpointIds;
+		bool bHardpointIdentityInvalid = false;
+		for (const FCFHardpointIntent& HardpointIntent : Recipe.HardpointIntents)
+		{
+			if (HardpointIntent.LocationSlotId.IsNone() || KnownHardpointIds.Contains(HardpointIntent.LocationSlotId))
+			{
+				bHardpointIdentityInvalid = true;
+				continue;
+			}
+			KnownHardpointIds.Add(HardpointIntent.LocationSlotId);
+		}
+
+		TSet<FName> SeenMountIds;
+		TMap<FName, int32> MountCountByHardpoint;
+		int32 StructuralBlockerCount = bHardpointIdentityInvalid ? 1 : 0;
+		int32 RuleBlockerCount = 0;
+		int32 PresetBlockerCount = 0;
 		for (const FCFMountIntent& MountIntent : Recipe.MountIntents)
 		{
 			if (MountIntent.MountProfileId.IsNone()
@@ -770,20 +832,74 @@ bool FCFVehicleAuthoringService::BuildBuilderGameplayGuidanceFromResolve(
 				|| MountIntent.LocationSlotRef.IsNone()
 				|| !KnownHardpointIds.Contains(MountIntent.LocationSlotRef))
 			{
-				bMountBlocked = true;
+				++StructuralBlockerCount;
 				continue;
 			}
 			SeenMountIds.Add(MountIntent.MountProfileId);
+			++MountCountByHardpoint.FindOrAdd(MountIntent.LocationSlotRef);
+
+			if (MountIntent.MountType == ECFVehicleMountType::None
+				|| (MountIntent.MountType != ECFVehicleMountType::Utility && MountIntent.SizeLimit == ECFVehicleWeaponSize::None))
+			{
+				++RuleBlockerCount;
+			}
+
+			const FSoftObjectPath PresetPath = MountIntent.DefaultEquipmentPresetData.ToSoftObjectPath();
+			if (PresetPath.IsValid())
+			{
+				UObject* PresetObject = PresetPath.ResolveObject();
+				if (!PresetObject)
+				{
+					PresetObject = PresetPath.TryLoad();
+				}
+				const UCFEquipmentPresetData* PresetData = Cast<UCFEquipmentPresetData>(PresetObject);
+				if (!PresetData || !PresetData->CanUseOnMount(MountIntent.MountType, MountIntent.SizeLimit))
+				{
+					++PresetBlockerCount;
+				}
+			}
 		}
 
-		if (bMountBlocked)
+		int32 MissingMountCount = 0;
+		int32 MultiMountCount = 0;
+		for (const FName HardpointId : KnownHardpointIds)
+		{
+			const int32 MountCount = MountCountByHardpoint.FindRef(HardpointId);
+			if (MountCount == 0)
+			{
+				++MissingMountCount;
+			}
+			else if (MountCount > 1)
+			{
+				++MultiMountCount;
+			}
+		}
+
+		if (StructuralBlockerCount > 0 || MultiMountCount > 0 || RuleBlockerCount > 0 || PresetBlockerCount > 0)
 		{
 			CFVehicleBuilderGuidePrivate::AddGuidanceItem(
 				OutResult,
 				ECFBuilderGameplayArea::MountProfiles,
 				ECFBuilderGuidanceState::Blocked,
-				TEXT("MountProfileId 또는 Hardpoint LocationSlotRef 계약이 불완전합니다."),
-				TEXT("각 MountProfile에 고유 ID를 지정하고 실제 Hardpoint LocationSlotId를 참조하세요. 기본 EquipmentPresetData는 비어 있어도 허용됩니다."),
+				FString::Printf(
+					TEXT("Standard 1:1 Mount blocker: structure=%d, multi=%d, rule=%d, preset=%d."),
+					StructuralBlockerCount, MultiMountCount, RuleBlockerCount, PresetBlockerCount),
+				TEXT("각 Hardpoint에 stable Mount 1개만 두고 MountType을 지정하세요. Fixed/Gimbal/Turret/Launcher는 SizeLimit이 필요하고 Utility는 None을 허용합니다. Preset이 있으면 current CanUseOnMount 호환성을 통과해야 합니다."),
+				TEXT("MountIntents"),
+				true);
+		}
+		else if (KnownHardpointIds.IsEmpty() || MissingMountCount > 0 || Recipe.MountIntents.Num() != KnownHardpointIds.Num())
+		{
+			CFVehicleBuilderGuidePrivate::AddGuidanceItem(
+				OutResult,
+				ECFBuilderGameplayArea::MountProfiles,
+				ECFBuilderGuidanceState::NeedsReview,
+				FString::Printf(
+					TEXT("Standard Mount 작성이 덜 끝났습니다. Hardpoint=%d / Mount=%d / missing=%d."),
+					KnownHardpointIds.Num(), Recipe.MountIntents.Num(), MissingMountCount),
+				KnownHardpointIds.IsEmpty()
+					? TEXT("Step 3에서 장착 위치를 하나 이상 추가하세요.")
+					: TEXT("각 Hardpoint row에서 MountType/SizeLimit을 선택하고 '장착 규칙 반영'으로 1:1 Mount를 작성하세요."),
 				TEXT("MountIntents"),
 				true);
 		}
@@ -793,8 +909,8 @@ bool FCFVehicleAuthoringService::BuildBuilderGameplayGuidanceFromResolve(
 				OutResult,
 				ECFBuilderGameplayArea::MountProfiles,
 				ECFBuilderGuidanceState::Complete,
-				FString::Printf(TEXT("장착 프로파일 %d개가 stable Hardpoint reference를 사용합니다."), Recipe.MountIntents.Num()),
-				TEXT("EquipmentPresetData는 실제 기본 장비가 있을 때만 연결하세요. 피팅에서 별도 장비 또는 명시적 빈 장착을 선택할 수 있습니다."),
+				FString::Printf(TEXT("Standard 1:1 Mount %d개가 Hardpoint %d개와 exact 대응하고 Type/Size/Preset 호환성을 통과했습니다."), Recipe.MountIntents.Num(), KnownHardpointIds.Num()),
+				TEXT("MountProfileId는 stable identity로 유지합니다. EquipmentPresetData는 optional이며 없는 상태도 유효합니다."),
 				TEXT("MountIntents"),
 				false);
 		}

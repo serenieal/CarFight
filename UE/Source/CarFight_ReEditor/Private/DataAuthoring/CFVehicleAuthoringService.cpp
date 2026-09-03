@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringService.cpp
-// Version: v1.6.4
-// Date: 2026-08-28
+// Version: v1.7.0
+// Date: 2026-09-02
 // Description: DAUTH-P0-08I~P0-12 Common Authoring Service 구현입니다.
 // Scope: R0 read facade, semantic preview/commit, bounded Mesh-only Candidate projection, R3 shared Apply lane를 제공합니다.
 // Changelog:
+// - v1.7.0: CF-FQ-043 exact stable-id RemoveMountIntent/RemoveHardpointIntent를 기존 R1 Recipe semantic lane에 append-only 추가하고 Hardpoint dependency를 prospective/persistent 양쪽에서 no-cascade fail-closed. 새 remove identity token은 해당 operation에만 hash해 기존 semantic op hash payload를 보존.
 // - v1.6.4: Definition layer에서는 validator blocker보다 Resolver R15 internal Error code를 우선 진단해 실제 Resolve=false 원인을 보존.
 // - v1.6.3: current baseline Resolve Error 진단을 Recipe/Resolver/Definition 세 validation layer 전체에서 찾아 layer+code+path+message로 보존.
 // - v1.6.2: current baseline Pure Resolver Error도 첫 structured Resolver issue code/path/message를 보존해 원인 진단 가능하게 교정.
@@ -251,6 +252,10 @@ namespace CFVehicleAuthoringPrivate
 			return TEXT("UpsertHardpointIntent");
 		case ECFVehicleSemanticOp::UpsertMountIntent:
 			return TEXT("UpsertMountIntent");
+		case ECFVehicleSemanticOp::RemoveMountIntent:
+			return TEXT("RemoveMountIntent");
+		case ECFVehicleSemanticOp::RemoveHardpointIntent:
+			return TEXT("RemoveHardpointIntent");
 		default:
 			return TEXT("UnsupportedSemanticOperation");
 		}
@@ -1093,6 +1098,47 @@ namespace CFVehicleAuthoringPrivate
 			break;
 		}
 
+		case ECFVehicleSemanticOp::RemoveMountIntent:
+		{
+			if (Change.RemoveMountProfileId.IsNone())
+			{
+				OutErrorCode = ECFAuthoringErrorCode::InvalidSemanticInput;
+				OutError = TEXT("Mount semantic remove에는 non-None MountProfileId가 필요합니다.");
+				return false;
+			}
+			InOutSnapshot.MountIntents.RemoveAll([&Change](const FCFMountIntent& Intent)
+			{
+				return Intent.MountProfileId == Change.RemoveMountProfileId;
+			});
+			break;
+		}
+
+		case ECFVehicleSemanticOp::RemoveHardpointIntent:
+		{
+			if (Change.RemoveHardpointLocationSlotId.IsNone())
+			{
+				OutErrorCode = ECFAuthoringErrorCode::InvalidSemanticInput;
+				OutError = TEXT("Hardpoint semantic remove에는 non-None LocationSlotId가 필요합니다.");
+				return false;
+			}
+			// 삭제 대상 Hardpoint를 참조하는 prospective Mount가 남아 있는지 검사합니다.
+			const bool bReferencedByMount = InOutSnapshot.MountIntents.ContainsByPredicate([&Change](const FCFMountIntent& Intent)
+			{
+				return Intent.LocationSlotRef == Change.RemoveHardpointLocationSlotId;
+			});
+			if (bReferencedByMount)
+			{
+				OutErrorCode = ECFAuthoringErrorCode::DependencyConflict;
+				OutError = FString::Printf(TEXT("Hardpoint를 참조하는 Mount가 남아 있어 삭제할 수 없습니다: %s"), *Change.RemoveHardpointLocationSlotId.ToString());
+				return false;
+			}
+			InOutSnapshot.HardpointIntents.RemoveAll([&Change](const FCFHardpointIntent& Intent)
+			{
+				return Intent.LocationSlotId == Change.RemoveHardpointLocationSlotId;
+			});
+			break;
+		}
+
 		default:
 			OutErrorCode = ECFAuthoringErrorCode::UnsupportedOperation;
 			OutError = TEXT("지원하지 않는 Recipe semantic operation입니다.");
@@ -1192,6 +1238,20 @@ namespace CFVehicleAuthoringPrivate
 				&& FCFMountIntent::StaticStruct()->CompareScriptStruct(ExistingMount, &Change.MountIntent, 0);
 		}
 
+		case ECFVehicleSemanticOp::RemoveMountIntent:
+			return !Change.RemoveMountProfileId.IsNone()
+				&& !Recipe.MountIntents.ContainsByPredicate([&Change](const FCFMountIntent& Intent)
+				{
+					return Intent.MountProfileId == Change.RemoveMountProfileId;
+				});
+
+		case ECFVehicleSemanticOp::RemoveHardpointIntent:
+			return !Change.RemoveHardpointLocationSlotId.IsNone()
+				&& !Recipe.HardpointIntents.ContainsByPredicate([&Change](const FCFHardpointIntent& Intent)
+				{
+					return Intent.LocationSlotId == Change.RemoveHardpointLocationSlotId;
+				});
+
 		default:
 			return false;
 		}
@@ -1267,6 +1327,39 @@ namespace CFVehicleAuthoringPrivate
 			}
 			return true;
 		}
+		case ECFVehicleSemanticOp::RemoveMountIntent:
+		{
+			if (Change.RemoveMountProfileId.IsNone())
+			{
+				return false;
+			}
+			Recipe.MountIntents.RemoveAll([&Change](const FCFMountIntent& Intent)
+			{
+				return Intent.MountProfileId == Change.RemoveMountProfileId;
+			});
+			return true;
+		}
+		case ECFVehicleSemanticOp::RemoveHardpointIntent:
+		{
+			if (Change.RemoveHardpointLocationSlotId.IsNone())
+			{
+				return false;
+			}
+			// Preview 이후에도 no-cascade dependency invariant를 persistent apply에서 다시 확인합니다.
+			const bool bReferencedByMount = Recipe.MountIntents.ContainsByPredicate([&Change](const FCFMountIntent& Intent)
+			{
+				return Intent.LocationSlotRef == Change.RemoveHardpointLocationSlotId;
+			});
+			if (bReferencedByMount)
+			{
+				return false;
+			}
+			Recipe.HardpointIntents.RemoveAll([&Change](const FCFHardpointIntent& Intent)
+			{
+				return Intent.LocationSlotId == Change.RemoveHardpointLocationSlotId;
+			});
+			return true;
+		}
 		default:
 			return false;
 		}
@@ -1325,6 +1418,14 @@ namespace CFVehicleAuthoringPrivate
 		AppendToken(Payload, TEXT("MountSize"), FString::FromInt(static_cast<int32>(Change.MountIntent.SizeLimit)));
 		AppendToken(Payload, TEXT("MountPreset"), Change.MountIntent.DefaultEquipmentPresetData.ToSoftObjectPath().ToString());
 		AppendToken(Payload, TEXT("MountExposed"), Change.MountIntent.bExposedModule ? TEXT("1") : TEXT("0"));
+		if (Change.Operation == ECFVehicleSemanticOp::RemoveMountIntent)
+		{
+			AppendToken(Payload, TEXT("RemoveMountId"), Change.RemoveMountProfileId.ToString());
+		}
+		else if (Change.Operation == ECFVehicleSemanticOp::RemoveHardpointIntent)
+		{
+			AppendToken(Payload, TEXT("RemoveHardpointId"), Change.RemoveHardpointLocationSlotId.ToString());
+		}
 		return HashUtf8Payload(Payload);
 	}
 

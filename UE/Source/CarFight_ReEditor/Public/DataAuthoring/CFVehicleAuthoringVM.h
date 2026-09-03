@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringVM.h
-// Version: v1.7.0
-// Date: 2026-08-21
+// Version: v1.8.0
+// Date: 2026-09-02
 // Description: DAUTH-P0-09~12 single-Vehicle Authoring Workspace transient ViewModel입니다.
 // Scope: Selection, Profile binding/impact, Drift review/recovery, Mesh-only creation, typed Recipe intents, Apply/Undo transient UI state만 보관합니다.
 // Changelog:
+// - v1.8.0: CF-FQ-043 exact stable-id Mount/Hardpoint remove를 existing R1 semantic commit lane에 노출하는 typed ViewModel wrapper를 추가.
 // - v1.7.0: P0-12 UA-06 USER UX remediation을 위해 bound Shared Profile의 Registry allowlisted numeric current value를 read-only로 조회하는 helper를 추가.
 // - v1.6.0: P0-12 UA-07 baseline-safe Profile 검증 복구를 위해 explicit Recipe-only Profile unbind orchestration을 추가.
 // - v1.5.0: P0-12 UA-06 readiness에서 Workspace Undo를 exact UE TransactionId에 binding해 중간 Editor transaction이 끼면 fail-closed하도록 보강.
@@ -109,6 +110,12 @@ public:
 
 	// Stable-ID Mount intent를 typed Recipe write로 upsert합니다.
 	bool UpsertMountIntent(const FCFMountIntent& MountIntent, FCFAuthoringOpResult& OutResult);
+
+	// Exact MountProfile stable identity 하나를 typed Recipe-only write로 제거합니다.
+	bool RemoveMountIntent(FName MountProfileId, FCFAuthoringOpResult& OutResult);
+
+	// Exact Hardpoint LocationSlot stable identity 하나를 dependency-safe typed Recipe-only write로 제거합니다.
+	bool RemoveHardpointIntent(FName LocationSlotId, FCFAuthoringOpResult& OutResult);
 
 	// Browser row를 read-only Reference Vehicle로 선택하고 current/reference compare를 갱신합니다.
 	bool SelectReferenceVehicle(const FCFVehicleListEntry& Entry, FString& OutError);

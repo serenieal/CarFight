@@ -1,9 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderVM.h
-// Version: v1.19.0
+// Version: v1.24.0
 // Date: 2026-09-02
 // Description: Guided Vehicle Builder Shell + Vehicle ID 중심 신규 차량 naming/create transient ViewModel입니다.
 // Changelog:
+// - v1.24.0: P0-07 UAT에서 USER Driving PASS를 persistent Recipe receipt로 승격. same Target DefinitionHash에서는 benchmark RunId가 바뀌어도 PASS를 유지하고 Target identity/hash drift에서만 stale 처리하는 contract로 전환.
+// - v1.23.0: P0-07 UAT 회귀 교정. local Reference review token이 유실돼도 exact persistent BuilderCommitReceipt가 current EvidenceId/Fingerprint를 증명하면 완료 차량의 Step 1/5 forward-progress를 복원하는 durable acceptance helper를 추가.
+// - v1.22.1: CF-FQ-043 VMG-P0-06 Automation이 invalid Hardpoint identity의 Step 3 fail-closed projection을 production debug API 추가 없이 직접 재평가할 수 있도록 test-only friend seam을 추가.
+// - v1.22.0: CF-FQ-043 VMG-P0-04 Standard 1:1 Mount commit API를 추가. new Mount_<LocationSlotId> collision fail-closed, existing MountProfileId/bExposedModule stable 보존, MountType/Size/Preset compatibility를 typed commit 전에 검증.
+// - v1.21.1: VMG-P0-03 작성 중 exact Hardpoint Socket 미생성 상태만 Builder diagnostic read로 허용하는 narrow blocked-read gate를 추가. Resolver/R3 Apply blocker는 유지.
+// - v1.21.0: CF-FQ-043 VMG-P0-03 Standard Hardpoint category→stable LocationSlotId/HP_* 생성, current Recipe+Target collision-aware numbering, Step 3 conditional non-Hardpoint Socket projection을 추가.
+// - v1.20.0: CF-FQ-043 Recipe-owned HardpointPlanMode read/transaction, Guided creation explicit-plan binding과 dependency-safe typed remove Builder wrapper를 추가. Mode 변경은 prepared Final Apply를 폐기하고 no-save/no-target을 유지.
 // - v1.19.0: Explicit New Vehicle 진입 계약에 이전 Authoring selection 해제를 포함해 Browser refresh가 old row를 재선택하지 못하도록 고정.
 // - v1.18.0: VBCUX-P0-04 focused regression이 production behavior 변경 없이 private post-create adoption failure/no-rollback 계약을 직접 검증할 수 있도록 Automation 전용 friend seam을 추가.
 // - v1.17.0: Vehicle ID 영문자/숫자/_ validation과 deterministic Definition/Recipe default identity builder를 추가해 Explicit New Vehicle/Mesh Candidate가 같은 naming owner를 사용하도록 연결.
@@ -227,10 +234,10 @@ public:
 	// Active PIE player VehiclePawn에 current selected saved VehicleData의 transient duplicate를 적용해 USER test-drive를 준비합니다.
 	bool ApplySelectedVehicleToActivePIE(FString& OutError);
 
-	// Current benchmark run과 exact Target hash를 USER Driving PASS local token으로 기록합니다.
+	// Current saved Target Definition을 USER Driving PASS persistent Recipe receipt + legacy local token으로 기록합니다. benchmark RunId는 진단용으로만 보존합니다.
 	bool AcceptCurrentUserDriving(FString& OutError);
 
-	// Current Step 8 USER Driving PASS token이 exact benchmark/Target에 일치하는지 반환합니다.
+	// Current Step 8 USER Driving PASS가 persistent Target Definition receipt 또는 legacy local token으로 current Target에 일치하는지 반환합니다.
 	bool HasCurrentUserDrivingAcceptance() const;
 
 	// Current Editor session에서 선택 차량이 active PIE에 transient 적용돼 실제 USER test-drive 준비됐는지 반환합니다.
@@ -272,6 +279,34 @@ public:
 	// 현재 persistent Recipe를 반환합니다.
 	UCFVehicleRecipeData* GetRecipe() const;
 
+	// Current Recipe의 persistent Builder Hardpoint 계획 mode를 반환합니다. Recipe가 없으면 LegacyCompatible을 반환합니다.
+	ECFBuilderHardpointPlanMode GetHardpointPlanMode() const;
+
+	// USER가 선택한 Guided Hardpoint 계획 mode를 Builder-owned Recipe transaction으로 기록하고 stale workflow approval을 폐기합니다.
+	bool CommitHardpointPlanMode(ECFBuilderHardpointPlanMode PlanMode, FCFAuthoringOpResult& OutResult, FString& OutError);
+
+	// Exact MountProfile stable identity 하나를 existing R1 typed remove lane으로 제거하고 Builder state를 fresh 재평가합니다.
+	bool RemoveMountIntent(FName MountProfileId, FCFAuthoringOpResult& OutResult, FString& OutError);
+
+	// Standard Hardpoint 하나의 1:1 Mount rule을 complete draft로 검증하고 stable MountProfileId를 보존/생성해 existing typed R1 lane으로 commit합니다.
+	bool CommitStandardMountIntent(
+		FName LocationSlotId,
+		ECFVehicleMountType MountType,
+		ECFVehicleWeaponSize SizeLimit,
+		const FSoftObjectPath& DefaultEquipmentPresetPath,
+		FCFMountIntent& OutIntent,
+		FCFAuthoringOpResult& OutResult,
+		FString& OutError);
+
+	// Exact Hardpoint stable identity 하나를 dependency-safe existing R1 typed remove lane으로 제거하고 Builder state를 fresh 재평가합니다.
+	bool RemoveHardpointIntent(FName LocationSlotId, FCFAuthoringOpResult& OutResult, FString& OutError);
+
+	// Standard category 하나를 stable <Category>_<NN> / HP_<LocationSlotId> Hardpoint intent로 생성해 existing typed R1 lane으로 commit합니다.
+	bool AddStandardHardpoint(FName LocationCategory, FCFHardpointIntent& OutIntent, FCFAuthoringOpResult& OutResult, FString& OutError);
+
+	// Step 3 Standard UI가 노출하는 physical Hardpoint category 목록을 deterministic 순서로 반환합니다.
+	TArray<FName> GetStandardHardpointCategories() const;
+
 	// Step 2의 USER 선택 Chassis/Wheel Mesh를 existing typed AssetIntent Recipe-only lane으로 반영하고 Builder state를 fresh 재평가합니다.
 	bool CommitMeshPreparation(const FCFVehicleAssetIntent& AssetIntent, FCFAuthoringOpResult& OutResult, FString& OutError);
 
@@ -284,6 +319,9 @@ public:
 	// Step 3에서 선택적으로 준비할 current Recipe Hardpoint/Destroyed FX Socket 이름을 중복 없이 반환합니다.
 	TArray<FName> GetOptionalSocketNames() const;
 
+	// Step 3 Hardpoint 표와 중복되지 않는 Destroyed FX Socket 이름만 반환합니다.
+	TArray<FName> GetConditionalNonHardpointSocketNames() const;
+
 	// Fresh AssetSnapshot에서 exact Chassis Socket이 현재 존재하는지 read-only로 반환합니다.
 	bool IsCurrentChassisSocketFound(FName SocketName) const;
 
@@ -294,6 +332,12 @@ private:
 #if WITH_DEV_AUTOMATION_TESTS
 	// VBCUX-P0-04 Automation이 post-create adoption failure partial-success 계약을 production API 공개 없이 직접 검증할 수 있도록 허용합니다.
 	friend class FCFVBCUXP004FocusedRegressionTest;
+	// VMG-P0-02 Automation이 prepared Final Apply invalidation을 production debug API 추가 없이 검증할 수 있도록 허용합니다.
+	friend class FCFVMGP002RecipeStateTest;
+	// VMG-P0-06 Automation이 invalid Hardpoint identity 상태의 Step 3 evaluator를 last valid AssetSnapshot 위에서 직접 검증할 수 있도록 허용합니다.
+	friend class FCFVMGP006ContractMatrixTest;
+	// Step 8 Automation이 production AcceptCurrentUserDriving의 실제 persistent receipt write를 PIE runtime 없이 검증할 수 있도록 test-only preparation flag에 접근합니다.
+	friend class FCFVehicleBuilderStep8DrivingTest;
 #endif
 
 	// 신규 차량 제작이 어느 시작 방식을 사용할지 표현하는 transient 모드입니다.
@@ -388,10 +432,10 @@ private:
 	// Existing VB-P0-08 JSON을 읽고 current Target path/hash에 exact binding된 result만 current로 인정합니다.
 	bool RefreshDrivingBenchmarkState(FString& OutError);
 
-	// Current Recipe별 USER Driving PASS local token을 EditorPerProject settings에서 복원합니다.
+	// Legacy 호환용 Current Recipe별 USER Driving PASS local token을 EditorPerProject settings에서 복원합니다. 새 durable authority는 Recipe receipt입니다.
 	void LoadDrivingAcceptanceToken();
 
-	// Current benchmark run + Target hash USER Driving PASS token을 EditorPerProject settings에 저장합니다.
+	// Legacy 호환용 current benchmark run + Target hash USER Driving PASS token을 EditorPerProject settings에 저장합니다.
 	void SaveDrivingAcceptanceToken() const;
 
 	// Selection 전환에서 transient USER Driving token state를 비웁니다.
@@ -408,6 +452,9 @@ private:
 
 	// NewVehicle가 필수 private Profile을 아직 만들지 않아 current Resolver만 Blocked인 bootstrap read인지 판정합니다.
 	bool CanUseNewVehicleProfileBootstrapRead() const;
+
+	// UseHardpoints 작성 중 exact Socket 미생성으로 HardpointSocketMissing 계열 blocker만 존재하는 diagnostic read인지 판정합니다.
+	bool CanUseHardpointSocketDraftRead() const;
 
 	// Current Recipe name/RecipeId에서 deterministic missing companion asset identity 5종을 만듭니다.
 	void FillCompanionAssetIdentities(FCFBuilderCompanionRequest& InOutRequest) const;
@@ -447,6 +494,9 @@ private:
 
 	// Current Evidence의 unresolved Block conflict가 존재하는지 반환합니다.
 	bool HasBlockingReferenceConflict() const;
+
+	// Current local USER review token 또는 exact persistent Builder receipt가 current Reference Evidence 승인 provenance를 증명하는지 반환합니다.
+	bool IsCurrentReferenceAcceptedForProgress() const;
 
 	// Current RecipeId에 저장된 USER Reference review token을 EditorPerProject settings에서 복원합니다.
 	void LoadReferenceReviewToken();

@@ -1,9 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderTab.h
-// Version: v1.14.0
+// Version: v1.18.0
 // Date: 2026-09-02
 // Description: Guided Vehicle Builder + CF-FQ-042 Vehicle ID/Candidate Quick Start Editor Slate Shell입니다.
 // Changelog:
+// - v1.18.0: P0-07 USER UAT 2차 피드백. Wheel/Hardpoint `추가 후 편집` enable을 cached row snapshot이 아니라 live current Chassis FindSocket truth로 통일하고, Step 3 상단 status/next-action 고정 프레임 + Socket Preparation 내부 scroll 레이아웃을 지원.
+// - v1.17.0: P0-07 UAT 피드백 반영. Step 3 Wheel/Hardpoint 동일 Chassis 편집 버튼을 하나로 통합하고 exact missing Socket을 원점에 explicit 생성 후 편집하는 handler를 추가. SocketName copy/read-only slot UX와 파괴 FX Socket 명칭을 명확화.
+// - v1.16.0: CF-FQ-043 VMG-P0-04 Step 6 Standard 1:1 Mount transient draft(Type/Size/Preset) + explicit typed commit/remove panel과 presentation sync 계약을 추가.
+// - v1.15.1: VMG-P0-03 Step 2 pending Chassis/FL/FR/RL/RR Mesh 직접 열기와 optional Wheel→pending FL fallback, shared Chassis edit warning용 Slate helper 계약을 추가.
+// - v1.15.0: CF-FQ-043 VMG-P0-03 Step 3 explicit Hardpoint Plan Mode, Standard category add/remove rows, contextual Wheel/Hardpoint Socket editor entry와 shared Chassis warning presentation을 추가.
 // - v1.14.0: Step 1 일반 naming을 Vehicle ID 한 칸으로 전환하고 deterministic default identity와 접힌 Advanced Asset 경로 override, Mesh Candidate Quick Start label/flow를 추가.
 // - v1.13.0: 신규 제작 Step 1에 optional Chassis StaticMesh picker/Blank Start와 공통 Preview→승인→Commit→exact row highlight flow를 연결.
 // - v1.12.0: 작업 대상 영역에 selection-independent '+ 새 차량 만들기' entry를 추가하고 BuilderVM transient 신규 제작 상태와 연결.
@@ -33,6 +38,9 @@
 
 struct FAssetData;
 struct FCFVehicleListEntry;
+enum class ECFBuilderHardpointPlanMode : uint8;
+enum class ECFVehicleMountType : uint8;
+enum class ECFVehicleWeaponSize : uint8;
 class FCFVehicleBuilderVM;
 template<typename ItemType> class SListView;
 class SBox;
@@ -127,6 +135,24 @@ private:
 	// Step 2 Wheel StaticMesh object picker 변경을 role별 pending 값에만 반영합니다.
 	void HandleWheelMeshChanged(const FAssetData& AssetData, int32 WheelRoleIndex);
 
+	// Step 2에서 explicit commit 전 pending Chassis StaticMesh를 Asset Editor에서 직접 엽니다.
+	FReply HandleOpenPendingChassisMesh();
+
+	// Step 2에서 role별 pending Wheel StaticMesh를 열고 optional role이 비었으면 pending FL fallback을 엽니다.
+	FReply HandleOpenPendingWheelMesh(int32 WheelRoleIndex);
+
+	// Step 2 pending Chassis Mesh open 버튼 활성 여부입니다.
+	bool CanOpenPendingChassisMesh() const;
+
+	// Step 2 role별 effective pending Wheel Mesh open 버튼 활성 여부입니다.
+	bool CanOpenPendingWheelMesh(int32 WheelRoleIndex) const;
+
+	// Step 2 optional Wheel fallback 여부를 포함하는 동적 open tooltip입니다.
+	FText GetPendingWheelMeshOpenTooltip(int32 WheelRoleIndex) const;
+
+	// Step 2 direct role path 또는 optional role의 pending FL fallback path를 반환합니다.
+	FSoftObjectPath GetEffectivePendingWheelMeshPath(int32 WheelRoleIndex) const;
+
 	// Step 2 Chassis + FL/FR/RL/RR StaticMesh picker 묶음을 current pending state로 새로 만듭니다.
 	TSharedRef<SWidget> BuildMeshPreparationPickerFields();
 
@@ -149,8 +175,44 @@ private:
 	// Current Recipe AssetIntent를 Step 2 pending picker 값으로 동기화합니다.
 	void SyncMeshPreparationFieldsFromRecipe();
 
-	// Step 3 current Chassis StaticMesh를 Asset Editor에서 바로 엽니다.
-	FReply HandleOpenCurrentChassisMesh();
+	// Step 3 Wheel/Hardpoint가 공유하는 current Chassis StaticMesh를 하나의 Socket 편집 진입으로 엽니다.
+	FReply HandleOpenChassisSocketEditor();
+
+	// Step 3 exact missing SocketName을 current Chassis StaticMesh 원점에 explicit 생성하고 Asset Editor를 엽니다. 자동 저장/배치는 하지 않습니다.
+	FReply HandleAddChassisSocket(FName SocketName);
+
+	// Current Chassis StaticMesh를 공통 Socket 편집 문맥으로 엽니다.
+	FReply OpenCurrentChassisMeshForSocketEditing();
+
+	// Exact missing Socket을 current Chassis에 transaction으로 추가하고 편집기를 여는 공통 backend입니다.
+	FReply AddChassisSocketAtOriginAndOpen(FName SocketName);
+
+	// Current committed Chassis StaticMesh object의 live FindSocket truth를 반환합니다. UI button enable/status는 cached AssetSnapshot 대신 이 값을 사용합니다.
+	bool IsCurrentChassisSocketPresentLive(FName SocketName) const;
+
+	// Exact Socket이 현재 Chassis에 없을 때만 `추가 후 편집` 버튼을 활성화합니다.
+	bool CanAddCurrentChassisSocket(FName SocketName) const;
+
+	// Step 2/3에서 exact StaticMesh path를 공통 Asset Editor backend로 엽니다.
+	FReply OpenStaticMeshAssetPath(const FSoftObjectPath& MeshPath, const FString& ContextLabel, const FString& CompletionNote);
+
+	// Step 3 Hardpoint Plan Mode를 explicit USER action으로 기록합니다.
+	FReply HandleSetHardpointPlanMode(ECFBuilderHardpointPlanMode PlanMode);
+
+	// Step 3 Standard physical category에 deterministic stable Hardpoint row를 추가합니다.
+	FReply HandleAddStandardHardpoint(FName LocationCategory);
+
+	// Step 3 exact Recipe Hardpoint row를 typed no-cascade remove lane으로 제거합니다.
+	FReply HandleRemoveHardpoint(FName LocationSlotId);
+
+	// Step 3 Hardpoint row의 exact SocketName을 클립보드에 복사합니다.
+	FReply HandleCopyHardpointSocketName(FName SocketName);
+
+	// Current Recipe/Mode에서 Step 3 Hardpoint planning subtree를 만듭니다.
+	TSharedRef<SWidget> BuildHardpointPlanningPanel();
+
+	// Mode/add/remove/selection/refresh 뒤 Hardpoint planning subtree를 current truth로 교체합니다.
+	void RefreshHardpointPlanningPresentation();
 
 	// Step 3 required Wheel Socket 한 개의 exact current 이름을 클립보드에 복사합니다.
 	FReply HandleCopyRequiredWheelSocketName(int32 WheelRoleIndex);
@@ -220,6 +282,33 @@ private:
 
 	// Step 5 loaded Draft/current receipt를 USER-facing 요약으로 표시합니다.
 	FText GetPhysicsProposalSummaryText() const;
+
+	// Step 6 Hardpoint별 Standard MountType transient draft를 변경합니다. Recipe mutation은 하지 않습니다.
+	FReply HandleSelectMountDraftType(FName LocationSlotId, ECFVehicleMountType MountType);
+
+	// Step 6 Hardpoint별 Standard SizeLimit transient draft를 변경합니다. Recipe mutation은 하지 않습니다.
+	FReply HandleSelectMountDraftSize(FName LocationSlotId, ECFVehicleWeaponSize SizeLimit);
+
+	// Step 6 Hardpoint별 optional EquipmentPreset pending picker를 변경합니다. Recipe mutation은 하지 않습니다.
+	void HandleMountPresetChanged(const FAssetData& AssetData, FName LocationSlotId);
+
+	// Step 6 Hardpoint 하나의 complete transient draft를 Standard 1:1 typed Recipe write로 반영합니다.
+	FReply HandleCommitStandardMount(FName LocationSlotId);
+
+	// Step 6 exact Recipe MountProfileId 하나를 typed remove lane으로 제거합니다.
+	FReply HandleRemoveMount(FName MountProfileId);
+
+	// Step 6 current Recipe/HardpointPlanMode에서 Standard Mount planning subtree를 생성합니다.
+	TSharedRef<SWidget> BuildMountPlanningPanel();
+
+	// Step 6 persistent Recipe의 existing 1:1 Mount 값을 transient draft로 다시 동기화합니다.
+	void SyncMountPlanningDraftsFromRecipe();
+
+	// Step 6 transient/persistent 변경 뒤 Mount planning subtree를 current truth로 교체합니다.
+	void RefreshMountPlanningPresentation();
+
+	// Step 6 Hardpoint별 pending EquipmentPreset object path 문자열을 반환합니다.
+	FString GetPendingMountPresetPath(FName LocationSlotId) const;
 
 	// Step 6 Gameplay Setup 전용 R0 guidance UI 표시 조건입니다.
 	EVisibility GetGameplaySetupVisibility() const;
@@ -320,6 +409,20 @@ private:
 	// Step 2 ObjectPicker subtree를 current Recipe 기준으로 교체할 host입니다.
 	TSharedPtr<SBox> MeshPreparationPickerHost;
 
+	// Step 3 Hardpoint Mode/row subtree를 current Recipe 기준으로 교체할 host입니다.
+	TSharedPtr<SBox> HardpointPlanningHost;
+
+	// Step 6 Standard Mount planning subtree를 current Recipe/draft 기준으로 교체할 host입니다.
+	TSharedPtr<SBox> MountPlanningHost;
+
+	// Step 6 Hardpoint별 pending MountType draft입니다. explicit 반영 전에는 persistent Recipe를 변경하지 않습니다.
+	TMap<FName, ECFVehicleMountType> PendingMountTypes;
+
+	// Step 6 Hardpoint별 pending SizeLimit draft입니다. explicit 반영 전에는 persistent Recipe를 변경하지 않습니다.
+	TMap<FName, ECFVehicleWeaponSize> PendingMountSizes;
+
+	// Step 6 Hardpoint별 pending optional EquipmentPresetData path입니다.
+	TMap<FName, FSoftObjectPath> PendingMountPresetPaths;
 
 	// Vehicle ID 실시간 validation/default naming 상태를 USER에게 설명합니다.
 	FText VehicleIdValidationText;

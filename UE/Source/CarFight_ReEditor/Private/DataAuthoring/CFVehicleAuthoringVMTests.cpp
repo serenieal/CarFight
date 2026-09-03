@@ -1,10 +1,22 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringVMTests.cpp
-// Version: v1.30.0
+// Version: v1.37.0
 // Date: 2026-09-02
 // Description: Vehicle Authoring Workspace + Guided Builder integration 보호 Automation입니다.
 // Changelog:
+// - v1.37.0: P0-07 UAT Step 8 USER Driving PASS를 production persistent Recipe receipt로 검증. local config 삭제 뒤 fresh VM resume, same Target의 새 benchmark RunId에서도 PASS 유지, persistent target hash binding을 고정.
+// - v1.36.0: P0-07 UAT Wagon regression으로 persistent Builder receipt가 exact current Evidence를 증명할 때 local Reference review token 유실 후 fresh VM Step1/Step5/Step6 완료를 복원하고 Evidence drift 시 Stale로 되돌아가는 durable resume regression을 추가.
+// - v1.35.1: VMG-P0-06 F intentional-zero aggregate fixture에 Builder-private 4 Profile을 연결해 Hardpoint/Mount 외 unrelated Gameplay 영역까지 정상 complete source를 제공. Step 6 전체 Complete 기대는 유지.
+// - v1.35.0: CF-FQ-043 VMG-P0-06 coverage gap Automation을 추가. NoHardpoints Step 3/6 intentional-zero, out-of-band semantic inconsistency fail-closed와 UseHardpoints None/duplicate Hardpoint identity Step 3 Blocked를 직접 고정.
+// - v1.34.0: CF-FQ-043 VMG-P0-05 E1~E11 Existing preservation focused regression을 추가. LegacyCompatible empty Recipe intent, direct/missing Socket stored transform, custom/multi-Mount exact leaf, new Hardpoint isolated merge, exact remove dependency, Target/StaticMesh mutation0와 untouched resolved hash를 고정.
+// - v1.33.0: CF-FQ-043 VMG-P0-04 Standard 1:1 Mount의 Target ID collision, Weapon Size None 차단, Utility+None, Preset compatibility, stable ID update/remove, Step 6 Ready/Complete, no-target/no-save focused regression을 추가.
+// - v1.32.4: VMG-P0-03 missing Socket draft에서 Builder Step 3 Ready와 동시에 shared Resolver Blocked + R3 DefinitionApply approval proposal 거부가 유지되는 fail-closed 경계를 focused regression으로 고정.
+// - v1.32.3: VMG-P0-03 zero-hardpoint fixture를 ConfigureValidTarget 후 Target Hardpoint/Mount를 비운 exact Definition import로 구성해 intentional-zero/UseHardpoints+0 상태를 실제 0 semantic row에서 검증.
+// - v1.32.2: VMG-P0-03 zero-hardpoint Mode gating을 별도 empty fixture로 분리하고 Existing Top_03 collision fixture는 Unspecified-with-intent Ready → explicit UseHardpoints Complete를 검증하도록 교정.
+// - v1.32.1: VMG-P0-03 collision fixture를 valid Existing Top_03 baseline으로 교정하고 NoHardpoints completion은 별도 zero-hardpoint fixture로 분리할 준비를 반영.
+// - v1.32.0: CF-FQ-043 VMG-P0-03 Step 3 Hardpoint Plan Mode gating, valid Existing Target identity를 포함한 Recipe+Target max-used+1 stable ID, 새 Hardpoint missing Socket Ready→exact Socket Complete, no-target/no-save focused regression을 추가.
+// - v1.31.0: CF-FQ-043 VMG-P0-02 Guided creation Hardpoint Plan binding, Builder Mode transaction/readback/cache invalidation, typed remove dependency/no-cascade/no-target/no-save focused regression을 추가.
 // - v1.30.0: CF-FQ-042 final audit P1 회귀로 기존 managed 차량 선택 → Explicit New Vehicle → Vehicle ID 입력 → Browser refresh가 New Vehicle state/ID를 유지하고 old Authoring selection을 복원하지 않는지 BuilderShell에 추가.
 // - v1.29.0: CF-FQ-042 VBCUX-P0-04 focused regression으로 Vehicle record path collision, wrong Chassis type, post-create adoption partial-success/no-hidden-rollback과 exact Browser row presence를 추가.
 // - v1.28.0: CF-FQ-042 VBCUX-P0-03 Vehicle ID valid/invalid deterministic naming과 Mesh Candidate Quick Start의 동일 naming helper 사용 회귀를 추가.
@@ -121,6 +133,35 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"CarFight.DataAuthoring.CF_FQ_042.VBCUX_P0_04.FocusedRegression",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVMGP002RecipeStateTest,
+	"CarFight.DataAuthoring.CF_FQ_043.VMG_P0_02.RecipeStateTypedRemove",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVMGP003Step3HardpointTest,
+	"CarFight.DataAuthoring.CF_FQ_043.VMG_P0_03.Step3HardpointPlanning",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVMGP004Step6MountTest,
+	"CarFight.DataAuthoring.CF_FQ_043.VMG_P0_04.Step6MountPlanning",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVMGP005ExistingPreservationTest,
+	"CarFight.DataAuthoring.CF_FQ_043.VMG_P0_05.ExistingPreservation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVMGP006ContractMatrixTest,
+	"CarFight.DataAuthoring.CF_FQ_043.VMG_P0_06.ContractMatrix",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+#include "CFEquipmentPresetData.h"
+#include "CFTurretMountData.h"
+#include "CFVehicleSensorData.h"
+#include "CFWeaponData.h"
 #include "DataAuthoring/CFDrivetrainProfile.h"
 #include "DataAuthoring/CFHandlingProfile.h"
 #include "DataAuthoring/CFPerformanceProfile.h"
@@ -697,14 +738,20 @@ namespace CFVehicleAuthoringVMTestsPrivate
 		{
 		}
 
-		// Test-only local token을 제거합니다.
-		~FBuilderReferenceTokenGuard()
+		// 현재 test lifetime 중 local token을 즉시 제거해 Editor restart/token-loss 시나리오를 재현합니다.
+		void ClearNow() const
 		{
 			if (GConfig)
 			{
 				GConfig->EmptySection(*Section, GEditorPerProjectIni);
 				GConfig->Flush(false, GEditorPerProjectIni);
 			}
+		}
+
+		// Test-only local token을 제거합니다.
+		~FBuilderReferenceTokenGuard()
+		{
+			ClearNow();
 		}
 	};
 
@@ -837,14 +884,20 @@ namespace CFVehicleAuthoringVMTestsPrivate
 		{
 		}
 
-		// Test-only local Driving token을 제거합니다.
-		~FBuilderDrivingTokenGuard()
+		// Test lifetime 중 local Driving token을 즉시 제거해 host-local state 유실을 재현합니다.
+		void ClearNow() const
 		{
 			if (GConfig)
 			{
 				GConfig->EmptySection(*Section, GEditorPerProjectIni);
 				GConfig->Flush(false, GEditorPerProjectIni);
 			}
+		}
+
+		// Test-only local Driving token을 제거합니다.
+		~FBuilderDrivingTokenGuard()
+		{
+			ClearNow();
 		}
 
 		// Production AcceptCurrentUserDriving을 우회하려는 경로가 아니라 restart-resume binding만 검증할 test fixture token을 기록합니다.
@@ -2095,6 +2148,9 @@ bool FCFVehicleBuilderStep1FlowTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Builder Step 1 holds loaded transient Research Draft"), BuilderViewModel.HasLoadedResearchDraft());
 	TestTrue(TEXT("Builder Step 1 Draft load does not create Evidence"), BuilderViewModel.GetCurrentReferenceEvidence() == nullptr);
 
+	// Guided 신규 Recipe가 Step 1 Companion lifecycle 뒤에도 유지해야 할 explicit Hardpoint Plan mode fixture입니다.
+	Fixture.Recipe->BuilderHardpointPlanMode = ECFBuilderHardpointPlanMode::Unspecified;
+
 	// Exact R2 Companion mutation0 proposal입니다.
 	FCFBuilderCompanionPreview CompanionPreview;
 	if (!TestTrue(TEXT("Builder Step 1 Companion mutation0 preview succeeds"), BuilderViewModel.PrepareResearchCompanions(CompanionPreview, Error)))
@@ -2123,6 +2179,7 @@ bool FCFVehicleBuilderStep1FlowTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Builder Step 1 Companion commit never auto-saves"), CompanionResult.Operation.Mutation.bSavePerformed);
 	TestFalse(TEXT("Builder Step 1 Companion commit does not mutate Target"), CompanionResult.Operation.Mutation.bTargetChanged);
 	TestEqual(TEXT("Builder Step 1 Companion preserves Target Definition"), BuildTargetHash(*Fixture.TargetVehicleData, Error), TargetHashBeforeCompanion);
+	TestEqual(TEXT("Builder Step 1 Companion preserves explicit Hardpoint Plan mode"), Fixture.Recipe->BuilderHardpointPlanMode, ECFBuilderHardpointPlanMode::Unspecified);
 	TestNotNull(TEXT("Builder Step 1 persistent Evidence is discoverable after commit"), BuilderViewModel.GetCurrentReferenceEvidence());
 
 	// Companion commit만으로 Reference USER review가 자동 승인되지 않아야 합니다.
@@ -2412,13 +2469,24 @@ bool FCFVehicleBuilderStep5PhysicsTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Builder Step 6 R0 does not mutate Profile"), CommittedGuidance.Operation.Mutation.bProfileChanged);
 	TestFalse(TEXT("Builder Step 6 R0 never saves"), CommittedGuidance.Operation.Mutation.bSavePerformed);
 
-	// Editor restart와 같은 fresh transient VM입니다. old mutation approval 없이 persistent receipt와 local Reference token만 재사용합니다.
+	// P0-07 실제 Wagon 회귀를 재현하기 위해 local EditorPerProject Reference token을 의도적으로 제거합니다.
+	TokenGuard.ClearNow();
+
+	// Editor restart와 같은 fresh transient VM입니다. local token 없이 persistent receipt만으로 completed Reference provenance를 복원해야 합니다.
 	FCFVehicleBuilderVM ResumedBuilderViewModel;
 	if (!TestTrue(TEXT("Builder Step 5 fresh VM reselects same Vehicle"), ResumedBuilderViewModel.SelectVehicle(Entry, Error)))
 	{
 		AddError(Error);
 		return false;
 	}
+	// Fresh VM의 Step 1은 local token이 없어도 matching persistent receipt로 Complete를 복원해야 합니다.
+	const FCFVehicleBuilderStepView* ResumedReferenceStep = ResumedBuilderViewModel.FindStepView(ECFVehicleBuilderStepId::IdentityReference);
+	if (!TestNotNull(TEXT("Builder Step 1 durable-receipt resumed projection exists"), ResumedReferenceStep))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Builder Step 1 resumes Complete from exact persistent receipt without local token"), ResumedReferenceStep->State, ECFVehicleBuilderStepState::Complete);
+
 	// Fresh VM에서 persistent receipt가 current Evidence/Profile/Resolver와 일치하는 Step 5 projection입니다.
 	const FCFVehicleBuilderStepView* ResumedPhysicsStep = ResumedBuilderViewModel.FindStepView(ECFVehicleBuilderStepId::PhysicsProposal);
 	if (!TestNotNull(TEXT("Builder Step 5 resumed projection exists"), ResumedPhysicsStep))
@@ -2437,6 +2505,47 @@ bool FCFVehicleBuilderStep5PhysicsTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Builder Step 6 resumes Complete from fresh R0 truth"), ResumedGameplayStep->State, ECFVehicleBuilderStepState::Complete);
 	TestTrue(TEXT("Builder Step 6 fresh VM re-reads Gameplay Guidance"), ResumedBuilderViewModel.HasGameplayGuidanceResult());
 	TestEqual(TEXT("Builder Step 6 fresh VM still exposes 8 areas"), ResumedBuilderViewModel.GetGameplayGuidanceResult().Items.Num(), 8);
+
+	// Durable receipt fallback이 Evidence drift를 숨기면 안 됩니다. current semantic Evidence fingerprint를 잠시 바꿔 Step 1 Stale을 확인합니다.
+	UCFVehicleRefEvidence* ResumedEvidence = ResumedBuilderViewModel.GetCurrentReferenceEvidence();
+	if (!TestNotNull(TEXT("Builder Step 1 durable receipt resumed Evidence exists"), ResumedEvidence) || ResumedEvidence->Claims.IsEmpty())
+	{
+		return false;
+	}
+	const double EvidenceClaimBeforeDrift = ResumedEvidence->Claims[0].NumberValue;
+	const FString EvidenceFingerprintBeforeDrift = ResumedEvidence->EvidenceFingerprint;
+	ResumedEvidence->Claims[0].NumberValue = EvidenceClaimBeforeDrift + 1.0;
+	if (!ResumedEvidence->RefreshEvidenceFingerprint(Error))
+	{
+		AddError(Error);
+		return false;
+	}
+	if (!TestTrue(TEXT("Builder durable receipt refresh after Evidence drift succeeds"), ResumedBuilderViewModel.RefreshCurrentState(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	const FCFVehicleBuilderStepView* ReceiptStaleReferenceStep = ResumedBuilderViewModel.FindStepView(ECFVehicleBuilderStepId::IdentityReference);
+	if (!TestNotNull(TEXT("Builder durable receipt stale Reference projection exists"), ReceiptStaleReferenceStep))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Builder Step 1 becomes Stale when persistent receipt Evidence fingerprint drifts"), ReceiptStaleReferenceStep->State, ECFVehicleBuilderStepState::Stale);
+
+	// 후속 Profile drift 회귀가 original Evidence baseline에서 동작하도록 semantic state를 exact 복원합니다.
+	ResumedEvidence->Claims[0].NumberValue = EvidenceClaimBeforeDrift;
+	if (!ResumedEvidence->RefreshEvidenceFingerprint(Error)
+		|| ResumedEvidence->EvidenceFingerprint != EvidenceFingerprintBeforeDrift
+		|| !TestTrue(TEXT("Builder durable receipt refresh after Evidence restore succeeds"), ResumedBuilderViewModel.RefreshCurrentState(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	const FCFVehicleBuilderStepView* RestoredReceiptReferenceStep = ResumedBuilderViewModel.FindStepView(ECFVehicleBuilderStepId::IdentityReference);
+	if (TestNotNull(TEXT("Builder durable receipt restored Reference projection exists"), RestoredReceiptReferenceStep))
+	{
+		TestEqual(TEXT("Builder Step 1 returns Complete after Evidence exact restore"), RestoredReceiptReferenceStep->State, ECFVehicleBuilderStepState::Complete);
+	}
 
 	// Persistent receipt 이후 transaction 밖 private Profile drift 전 값입니다.
 	const float BrakeTorqueBeforeDrift = HandlingProfile->Data.FrontWheelMaxBrakeTorque;
@@ -2843,17 +2952,30 @@ bool FCFVehicleBuilderStep8DrivingTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Builder Step 8 non-persistent launch guard does not dirty Recipe"), Fixture.RecipePackage->IsDirty());
 	TestFalse(TEXT("Builder Step 8 non-persistent launch guard does not dirty Target"), Fixture.TargetPackage->IsDirty());
 
-	// Production AcceptCurrentUserDriving이 실제 PIE를 요구하는 것은 위에서 검증했으므로, 여기서는 restart resume binding만 test fixture token으로 검증합니다.
-	if (!TestTrue(
-		TEXT("Builder Step 8 test-only exact resume token writes"),
-		DrivingTokenGuard.WriteResumeToken(Fixture.Recipe->RecipeId, CurrentTargetHash, CurrentRunId, Error)))
+	// Production USER PASS write를 검증하기 위해 test-only로 actual PIE preparation flag만 충족합니다. Acceptance 자체는 production API를 그대로 호출합니다.
+	BuilderViewModel.bUserTestDrivePreparedThisSession = true;
+	if (!TestTrue(TEXT("Builder Step 8 production USER Driving PASS writes"), BuilderViewModel.AcceptCurrentUserDriving(Error)))
 	{
 		AddError(Error);
 		CleanupRegisteredAsset(Evidence);
 		return false;
 	}
+	TestTrue(TEXT("Builder Step 8 persistent Driving receipt is valid"), Fixture.Recipe->BuilderDrivingAcceptanceReceipt.IsValid());
+	TestEqual(TEXT("Builder Step 8 persistent Driving receipt target path is exact"), Fixture.Recipe->BuilderDrivingAcceptanceReceipt.TargetVehicleDataPath, FSoftObjectPath(Fixture.TargetVehicleData));
+	TestEqual(TEXT("Builder Step 8 persistent Driving receipt target hash is exact"), Fixture.Recipe->BuilderDrivingAcceptanceReceipt.TargetDefinitionHash, CurrentTargetHash);
+	TestEqual(TEXT("Builder Step 8 persistent Driving receipt remembers accepted benchmark RunId diagnostically"), Fixture.Recipe->BuilderDrivingAcceptanceReceipt.AcceptedBenchmarkRunId, CurrentRunId);
+	TestTrue(TEXT("Builder Step 8 persistent receipt marks Recipe dirty for explicit save"), Fixture.RecipePackage->IsDirty());
+	TestTrue(TEXT("Builder Step 8 accepts current Target after production USER PASS"), BuilderViewModel.HasCurrentUserDrivingAcceptance());
+	const FCFVehicleBuilderStepView* AcceptedDrivingStep = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::DrivingTest);
+	if (TestNotNull(TEXT("Builder Step 8 accepted projection exists"), AcceptedDrivingStep))
+	{
+		TestEqual(TEXT("Builder Step 8 remains Complete even though only non-semantic Recipe receipt is dirty"), AcceptedDrivingStep->State, ECFVehicleBuilderStepState::Complete);
+	}
 
-	// Editor restart와 같은 fresh VM입니다. Product mutation approval은 복원하지 않고 exact local USER acceptance만 current truth와 비교합니다.
+	// Host-local token을 지워도 persistent Recipe receipt가 restart-resume authority가 되어야 합니다.
+	DrivingTokenGuard.ClearNow();
+
+	// Editor restart와 같은 fresh VM입니다. Product mutation approval은 복원하지 않고 persistent USER acceptance receipt를 current truth와 비교합니다.
 	FCFVehicleBuilderVM ResumedBuilderViewModel;
 	// Same managed selection row입니다.
 	const FCFVehicleListEntry Entry = BuildListEntry(Fixture, true);
@@ -2871,10 +2993,10 @@ bool FCFVehicleBuilderStep8DrivingTest::RunTest(const FString& Parameters)
 		CleanupRegisteredAsset(Evidence);
 		return false;
 	}
-	TestTrue(TEXT("Builder Step 8 exact local USER acceptance resumes"), ResumedBuilderViewModel.HasCurrentUserDrivingAcceptance());
-	TestEqual(TEXT("Builder Step 8 becomes Complete only with exact benchmark-bound USER token"), ResumedDrivingStep->State, ECFVehicleBuilderStepState::Complete);
+	TestTrue(TEXT("Builder Step 8 persistent USER acceptance resumes without local config"), ResumedBuilderViewModel.HasCurrentUserDrivingAcceptance());
+	TestEqual(TEXT("Builder Step 8 becomes Complete from persistent Target Definition receipt"), ResumedDrivingStep->State, ECFVehicleBuilderStepState::Complete);
 
-	// 같은 Target이더라도 새 benchmark RunId가 생기면 이전 USER 주행 PASS를 자동 재사용하지 않아야 합니다.
+	// USER는 benchmark invocation이 아니라 Vehicle Definition을 주행해 PASS하므로 same Target의 새 benchmark RunId는 PASS를 무효화하지 않습니다.
 	const FString NewRunId = FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphensLower);
 	if (!TestTrue(
 		TEXT("Builder Step 8 new benchmark run result writes"),
@@ -2892,8 +3014,8 @@ bool FCFVehicleBuilderStep8DrivingTest::RunTest(const FString& Parameters)
 		return false;
 	}
 	TestTrue(TEXT("Builder Step 8 new run remains technically current"), ResumedBuilderViewModel.HasDrivingBenchmarkResult());
-	TestFalse(TEXT("Builder Step 8 old USER token does not cross benchmark RunId"), ResumedBuilderViewModel.HasCurrentUserDrivingAcceptance());
-	TestEqual(TEXT("Builder Step 8 returns Ready for USER Driving after new run"), NewRunDrivingStep->State, ECFVehicleBuilderStepState::Ready);
+	TestTrue(TEXT("Builder Step 8 persistent USER PASS survives new benchmark RunId on same Target"), ResumedBuilderViewModel.HasCurrentUserDrivingAcceptance());
+	TestEqual(TEXT("Builder Step 8 remains Complete after new benchmark RunId on same Target"), NewRunDrivingStep->State, ECFVehicleBuilderStepState::Complete);
 
 	// Target DefinitionHash가 달라진 stale benchmark result입니다.
 	const FString StaleTargetHash = TEXT("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
@@ -4171,6 +4293,16 @@ bool FCFVehicleP11MeshCreateTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Create Vehicle preview never saves"), CreatePreview.Proposal.bSavePerformed);
 	TestTrue(TEXT("Create Vehicle preview requires OwnershipWrite"), CreatePreview.Proposal.RequiredApprovalClass == ECFAuthoringApprovalClass::OwnershipWrite);
 
+	// 동일 creation input에서 explicit Hardpoint Plan opt-in만 바꾼 mutation0 request입니다.
+	FCFVehicleRecordCreateRequest HardpointPlanHashRequest = CreateRequest;
+	HardpointPlanHashRequest.bRequireExplicitHardpointPlan = true;
+	// Hardpoint Plan flag가 approval scope에 실제 binding되는지 확인할 두 번째 preview입니다.
+	FCFVehicleRecordCreatePreview HardpointPlanHashPreview;
+	if (TestTrue(TEXT("Create Vehicle explicit Hardpoint Plan hash preview succeeds"), FCFVehicleAuthoringService::PreviewVehicleRecords(HardpointPlanHashRequest, HardpointPlanHashPreview)))
+	{
+		TestTrue(TEXT("Hardpoint Plan creation flag changes ProposalHash"), CreatePreview.Proposal.ProposalHash != HardpointPlanHashPreview.Proposal.ProposalHash);
+	}
+
 	CreateRequest.bOwnershipWriteApproved = true;
 	CreateRequest.ApprovalScopeHash = CreatePreview.Proposal.ProposalHash;
 	// Exact reviewed two-record creation terminal result입니다.
@@ -4192,6 +4324,7 @@ bool FCFVehicleP11MeshCreateTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("Recipe stores explicit candidate Chassis intent"), CreateResult.CreatedRecipe->AssetIntent.ChassisMesh.Get(), CandidateMesh);
 		TestTrue(TEXT("New Recipe starts managed"), CreateResult.CreatedRecipe->ImportState.ManageState == ECFVehicleManageState::Managed);
 		TestEqual(TEXT("Generic record creation preserves LegacyCompatible Transmission policy"), CreateResult.CreatedRecipe->BuilderTransmissionPolicy, ECFBuilderTransmissionPolicy::LegacyCompatible);
+		TestEqual(TEXT("Generic record creation preserves LegacyCompatible Hardpoint Plan mode"), CreateResult.CreatedRecipe->BuilderHardpointPlanMode, ECFBuilderHardpointPlanMode::LegacyCompatible);
 		TestTrue(TEXT("VehicleBase Profile is not inferred"), CreateResult.CreatedRecipe->ProfileBindings.VehicleBaseProfile.IsNull());
 		TestTrue(TEXT("Drivetrain Profile is not inferred"), CreateResult.CreatedRecipe->ProfileBindings.DrivetrainProfile.IsNull());
 		TestTrue(TEXT("Handling Profile is not inferred"), CreateResult.CreatedRecipe->ProfileBindings.HandlingProfile.IsNull());
@@ -4249,6 +4382,7 @@ bool FCFVehicleP11MeshCreateTest::RunTest(const FString& Parameters)
 			if (TestNotNull(TEXT("Guided Builder creates Recipe"), GuidedCreateResult.CreatedRecipe))
 			{
 				TestEqual(TEXT("Guided Builder new Recipe requires vehicle-specific Transmission"), GuidedCreateResult.CreatedRecipe->BuilderTransmissionPolicy, ECFBuilderTransmissionPolicy::VehicleSpecificRequired);
+				TestEqual(TEXT("Guided Builder new Recipe starts explicit Hardpoint Plan as Unspecified"), GuidedCreateResult.CreatedRecipe->BuilderHardpointPlanMode, ECFBuilderHardpointPlanMode::Unspecified);
 			}
 		}
 		else
@@ -4379,6 +4513,7 @@ bool FCFVBCUXP002RecordCreationTest::RunTest(const FString& Parameters)
 		TestNull(TEXT("VBCUX P0-02 Blank Recipe has no Chassis intent"), BlankResult.CreatedRecipe->AssetIntent.ChassisMesh.Get());
 		TestNull(TEXT("VBCUX P0-02 Blank Definition Chassis is not auto-applied"), BlankResult.CreatedDefinition->VehicleVisualConfig.ChassisMesh);
 		TestEqual(TEXT("VBCUX P0-02 Blank uses VehicleSpecificRequired"), BlankResult.CreatedRecipe->BuilderTransmissionPolicy, ECFBuilderTransmissionPolicy::VehicleSpecificRequired);
+		TestEqual(TEXT("VBCUX P0-02 Blank starts Hardpoint Plan Unspecified"), BlankResult.CreatedRecipe->BuilderHardpointPlanMode, ECFBuilderHardpointPlanMode::Unspecified);
 		TestEqual(TEXT("VBCUX P0-02 Blank Builder selects exact created Definition"), BlankBuilderViewModel.GetSelectedEntry().DefinitionPath, FSoftObjectPath(BlankResult.CreatedDefinition));
 		TestEqual(TEXT("VBCUX P0-02 Blank Builder selects exact created Recipe"), BlankBuilderViewModel.GetSelectedEntry().RecipePath, FSoftObjectPath(BlankResult.CreatedRecipe));
 		// Post-create fresh Browser가 exact Blank Definition+Recipe row를 실제 보유하는지 여부입니다.
@@ -4458,6 +4593,7 @@ bool FCFVBCUXP002RecordCreationTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("VBCUX P0-02 reused Recipe stores exact Chassis intent"), ReusedResult.CreatedRecipe->AssetIntent.ChassisMesh.Get(), SharedMesh);
 		TestNull(TEXT("VBCUX P0-02 reused Definition Chassis is not auto-applied"), ReusedResult.CreatedDefinition->VehicleVisualConfig.ChassisMesh);
 		TestEqual(TEXT("VBCUX P0-02 reused uses VehicleSpecificRequired"), ReusedResult.CreatedRecipe->BuilderTransmissionPolicy, ECFBuilderTransmissionPolicy::VehicleSpecificRequired);
+		TestEqual(TEXT("VBCUX P0-02 reused starts Hardpoint Plan Unspecified"), ReusedResult.CreatedRecipe->BuilderHardpointPlanMode, ECFBuilderHardpointPlanMode::Unspecified);
 		TestEqual(TEXT("VBCUX P0-02 reused Builder selects exact created Definition"), ReusedBuilderViewModel.GetSelectedEntry().DefinitionPath, FSoftObjectPath(ReusedResult.CreatedDefinition));
 		TestEqual(TEXT("VBCUX P0-02 reused Builder selects exact created Recipe"), ReusedBuilderViewModel.GetSelectedEntry().RecipePath, FSoftObjectPath(ReusedResult.CreatedRecipe));
 		// Post-create fresh Browser가 exact reused-mesh Definition+Recipe row를 실제 보유하는지 여부입니다.
@@ -4661,6 +4797,1310 @@ bool FCFVBCUXP004FocusedRegressionTest::RunTest(const FString& Parameters)
 	UnregisteredDefinition->MarkAsGarbage();
 	// Transient partial-success Recipe fixture를 test 종료 시 garbage 대상으로 정리합니다.
 	UnregisteredRecipe->MarkAsGarbage();
+	return true;
+}
+
+// VMG-P0-02 Recipe-owned Hardpoint Plan Mode와 typed no-cascade remove 계약을 focused 검증합니다.
+bool FCFVMGP002RecipeStateTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// Existing/Legacy default와 Recipe-only mutation boundary를 검증할 imported fixture입니다.
+	CFVehicleAuthoringVMTestsPrivate::FWorkspaceFixture Fixture;
+	// Fixture/refresh/hash diagnostic입니다.
+	FString Error;
+	if (!TestTrue(TEXT("VMG-P0-02 fixture builds"), CFVehicleAuthoringVMTestsPrivate::BuildImportedFixture(Fixture, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	TestEqual(TEXT("Existing Recipe default Hardpoint Plan mode is LegacyCompatible"), Fixture.Recipe->BuilderHardpointPlanMode, ECFBuilderHardpointPlanMode::LegacyCompatible);
+
+	// Builder가 current Recipe를 선택해 Mode transaction과 stale workflow invalidation을 수행할 ViewModel입니다.
+	FCFVehicleBuilderVM BuilderViewModel;
+	// Exact managed selection row입니다.
+	const FCFVehicleListEntry Entry = CFVehicleAuthoringVMTestsPrivate::BuildListEntry(Fixture, true);
+	if (!TestTrue(TEXT("VMG-P0-02 Builder selects managed Recipe"), BuilderViewModel.SelectVehicle(Entry, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	// Mode metadata가 semantic fingerprint에서 제외되는지 비교할 baseline입니다.
+	const FString FingerprintBeforeMode = CFVehicleAuthoringVMTestsPrivate::BuildRecipeFingerprint(*Fixture.Recipe, Error);
+	// Mode metadata write가 Runtime canonical Target을 건드리지 않는지 비교할 baseline입니다.
+	const FString TargetHashBefore = CFVehicleAuthoringVMTestsPrivate::BuildTargetHash(*Fixture.TargetVehicleData, Error);
+	// Mode write가 정확히 한 번 올려야 할 diagnostic revision baseline입니다.
+	const int32 RevisionBeforeMode = Fixture.Recipe->AuthoringRevision;
+	Fixture.TargetPackage->SetDirtyFlag(false);
+	Fixture.RecipePackage->SetDirtyFlag(false);
+
+	// 이전 Final Review approval/cache가 존재하는 상황을 test-only로 재현합니다.
+	BuilderViewModel.PreparedFinalReviewResult.ApplyProposal.ProposalHash = TEXT("VMG-P0-02-Stale-Proposal");
+	BuilderViewModel.bHasPreparedFinalReviewApply = true;
+	BuilderViewModel.bHasFinalReviewResult = true;
+	BuilderViewModel.bHasGameplayGuidanceResult = true;
+	// 이미 완료된 DefinitionApply의 guarded Undo 권한은 prepared approval과 별개이므로 Mode 변경 뒤에도 보존돼야 합니다.
+	BuilderViewModel.bHasFinalReviewUndoToken = true;
+
+	// Guided 신규 lifecycle의 최초 persistent decision mode입니다.
+	FCFAuthoringOpResult ModeResult;
+	if (!TestTrue(TEXT("VMG-P0-02 Unspecified Mode commit succeeds"), BuilderViewModel.CommitHardpointPlanMode(ECFBuilderHardpointPlanMode::Unspecified, ModeResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("Mode readback is exact Unspecified"), BuilderViewModel.GetHardpointPlanMode(), ECFBuilderHardpointPlanMode::Unspecified);
+	TestEqual(TEXT("Mode commit increments AuthoringRevision once"), Fixture.Recipe->AuthoringRevision, RevisionBeforeMode + 1);
+	TestEqual(TEXT("Mode-only commit preserves semantic Recipe fingerprint"), CFVehicleAuthoringVMTestsPrivate::BuildRecipeFingerprint(*Fixture.Recipe, Error), FingerprintBeforeMode);
+	TestEqual(TEXT("Mode-only commit preserves Target Definition hash"), CFVehicleAuthoringVMTestsPrivate::BuildTargetHash(*Fixture.TargetVehicleData, Error), TargetHashBefore);
+	TestFalse(TEXT("Mode-only commit does not dirty Target package"), Fixture.TargetPackage->IsDirty());
+	TestTrue(TEXT("Mode-only commit dirties Recipe package"), Fixture.RecipePackage->IsDirty());
+	TestTrue(TEXT("Mode-only commit reports Recipe mutation"), ModeResult.Mutation.bRecipeChanged);
+	TestFalse(TEXT("Mode-only commit reports no Target mutation"), ModeResult.Mutation.bTargetChanged);
+	TestFalse(TEXT("Mode-only commit never saves"), ModeResult.Mutation.bSavePerformed);
+	TestFalse(TEXT("Mode commit invalidates prepared Final Apply"), BuilderViewModel.bHasPreparedFinalReviewApply);
+	TestFalse(TEXT("Mode commit invalidates Final Review projection"), BuilderViewModel.bHasFinalReviewResult);
+	TestFalse(TEXT("Mode commit invalidates Gameplay Guidance projection"), BuilderViewModel.bHasGameplayGuidanceResult);
+	TestTrue(TEXT("Mode commit preserves completed DefinitionApply guarded Undo token"), BuilderViewModel.bHasFinalReviewUndoToken);
+
+	// LegacyCompatible은 compatibility default이지 Guided USER 선택지가 아닙니다.
+	FCFAuthoringOpResult LegacyModeResult;
+	TestFalse(TEXT("Guided Mode commit cannot switch back to LegacyCompatible"), BuilderViewModel.CommitHardpointPlanMode(ECFBuilderHardpointPlanMode::LegacyCompatible, LegacyModeResult, Error));
+	TestEqual(TEXT("LegacyCompatible USER switch is invalid input"), LegacyModeResult.ErrorCode, ECFAuthoringErrorCode::InvalidSemanticInput);
+	TestEqual(TEXT("Rejected Legacy switch preserves Unspecified"), BuilderViewModel.GetHardpointPlanMode(), ECFBuilderHardpointPlanMode::Unspecified);
+
+	// USER가 장착 위치 사용을 명시합니다.
+	FCFAuthoringOpResult UseModeResult;
+	if (!TestTrue(TEXT("UseHardpoints Mode commit succeeds"), BuilderViewModel.CommitHardpointPlanMode(ECFBuilderHardpointPlanMode::UseHardpoints, UseModeResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("UseHardpoints Mode readback is exact"), BuilderViewModel.GetHardpointPlanMode(), ECFBuilderHardpointPlanMode::UseHardpoints);
+
+	// 기존 valid socket을 사용하는 Hardpoint+Mount semantic fixture를 구성합니다.
+	CFVehicleAuthoringVMTestsPrivate::ConfigureApplyDifference(*Fixture.Recipe);
+	Fixture.TargetPackage->SetDirtyFlag(false);
+	Fixture.RecipePackage->SetDirtyFlag(false);
+	if (!TestTrue(TEXT("VMG-P0-02 refreshes direct semantic fixture"), BuilderViewModel.RefreshCurrentState(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	// Semantic 배열이 남아 있는 동안 intentional-zero Mode는 dependency conflict로 차단돼야 합니다.
+	FCFAuthoringOpResult PrematureNoHardpointsResult;
+	TestFalse(TEXT("NoHardpoints Mode is blocked while Hardpoint/Mount remain"), BuilderViewModel.CommitHardpointPlanMode(ECFBuilderHardpointPlanMode::NoHardpoints, PrematureNoHardpointsResult, Error));
+	TestEqual(TEXT("Premature NoHardpoints reports DependencyConflict"), PrematureNoHardpointsResult.ErrorCode, ECFAuthoringErrorCode::DependencyConflict);
+	TestEqual(TEXT("Blocked NoHardpoints preserves UseHardpoints Mode"), BuilderViewModel.GetHardpointPlanMode(), ECFBuilderHardpointPlanMode::UseHardpoints);
+
+	// StaticMesh Socket은 typed remove가 절대 건드리지 않아야 하므로 exact count를 보존합니다.
+	const int32 SocketCountBeforeRemove = Fixture.ChassisMesh ? Fixture.ChassisMesh->Sockets.Num() : 0;
+	// Remove sequence 전체에서 Runtime Target이 불변인지 비교할 exact hash입니다.
+	const FString TargetHashBeforeRemove = CFVehicleAuthoringVMTestsPrivate::BuildTargetHash(*Fixture.TargetVehicleData, Error);
+
+	// Mount가 참조 중인 Hardpoint를 먼저 지우면 dependency conflict로 차단돼야 합니다.
+	FCFAuthoringOpResult BlockedHardpointRemove;
+	TestFalse(TEXT("Referenced Hardpoint remove is blocked"), BuilderViewModel.RemoveHardpointIntent(TEXT("Front_New"), BlockedHardpointRemove, Error));
+	TestEqual(TEXT("Referenced Hardpoint remove reports DependencyConflict"), BlockedHardpointRemove.ErrorCode, ECFAuthoringErrorCode::DependencyConflict);
+	TestEqual(TEXT("Blocked Hardpoint remove preserves Hardpoint count"), Fixture.Recipe->HardpointIntents.Num(), 1);
+	TestEqual(TEXT("Blocked Hardpoint remove preserves Mount count"), Fixture.Recipe->MountIntents.Num(), 1);
+
+	// Dependency를 먼저 exact Mount ID로 제거합니다.
+	FCFAuthoringOpResult MountRemoveResult;
+	if (!TestTrue(TEXT("Exact Mount remove succeeds"), BuilderViewModel.RemoveMountIntent(TEXT("M_Front_New"), MountRemoveResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestTrue(TEXT("Exact Mount remove leaves Mount array empty"), Fixture.Recipe->MountIntents.IsEmpty());
+	TestEqual(TEXT("Mount remove preserves Hardpoint"), Fixture.Recipe->HardpointIntents.Num(), 1);
+	TestFalse(TEXT("Mount remove reports no Target mutation"), MountRemoveResult.Mutation.bTargetChanged);
+	TestFalse(TEXT("Mount remove never saves"), MountRemoveResult.Mutation.bSavePerformed);
+
+	// 이제 exact Hardpoint만 제거할 수 있습니다.
+	FCFAuthoringOpResult HardpointRemoveResult;
+	if (!TestTrue(TEXT("Exact Hardpoint remove succeeds after dependency removal"), BuilderViewModel.RemoveHardpointIntent(TEXT("Front_New"), HardpointRemoveResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestTrue(TEXT("Exact Hardpoint remove leaves Hardpoint array empty"), Fixture.Recipe->HardpointIntents.IsEmpty());
+	TestEqual(TEXT("Removing last Hardpoint preserves UseHardpoints Mode"), Fixture.Recipe->BuilderHardpointPlanMode, ECFBuilderHardpointPlanMode::UseHardpoints);
+	TestFalse(TEXT("Hardpoint remove reports no Target mutation"), HardpointRemoveResult.Mutation.bTargetChanged);
+	TestFalse(TEXT("Hardpoint remove never saves"), HardpointRemoveResult.Mutation.bSavePerformed);
+	TestEqual(TEXT("Typed remove never changes StaticMesh Socket count"), Fixture.ChassisMesh ? Fixture.ChassisMesh->Sockets.Num() : 0, SocketCountBeforeRemove);
+	TestEqual(TEXT("Typed remove sequence preserves Target Definition hash"), CFVehicleAuthoringVMTestsPrivate::BuildTargetHash(*Fixture.TargetVehicleData, Error), TargetHashBeforeRemove);
+	TestFalse(TEXT("Typed remove sequence does not dirty Target package"), Fixture.TargetPackage->IsDirty());
+
+	// 이미 없는 exact Mount를 다시 지우면 transaction 없이 semantic NoChange여야 합니다.
+	FCFAuthoringOpResult MissingMountRemoveResult;
+	TestTrue(TEXT("Already-absent Mount remove returns successful NoChange"), BuilderViewModel.RemoveMountIntent(TEXT("M_Front_New"), MissingMountRemoveResult, Error));
+	TestEqual(TEXT("Already-absent Mount remove status is NoChange"), MissingMountRemoveResult.Status, ECFAuthoringOpStatus::NoChange);
+	TestFalse(TEXT("NoChange remove does not report Recipe mutation"), MissingMountRemoveResult.Mutation.bRecipeChanged);
+
+	// Hardpoint/Mount가 모두 비워진 뒤에만 USER가 intentional zero를 명시할 수 있습니다.
+	FCFAuthoringOpResult NoHardpointsResult;
+	if (!TestTrue(TEXT("NoHardpoints Mode succeeds only after semantic arrays are empty"), BuilderViewModel.CommitHardpointPlanMode(ECFBuilderHardpointPlanMode::NoHardpoints, NoHardpointsResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("NoHardpoints final Mode readback is exact"), BuilderViewModel.GetHardpointPlanMode(), ECFBuilderHardpointPlanMode::NoHardpoints);
+	TestEqual(TEXT("NoHardpoints Mode still preserves Target hash"), CFVehicleAuthoringVMTestsPrivate::BuildTargetHash(*Fixture.TargetVehicleData, Error), TargetHashBeforeRemove);
+	return true;
+}
+
+// VMG-P0-03 Step 3 explicit Mode / deterministic Standard Hardpoint / exact Socket completion을 focused 검증합니다.
+bool FCFVMGP003Step3HardpointTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+	using namespace CFVehicleAuthoringVMTestsPrivate;
+
+	// Hardpoint/Mount가 실제 0개인 별도 managed fixture로 explicit Mode completion 상태를 검증합니다.
+	FWorkspaceFixture ZeroFixture;
+	FString Error;
+	if (!TestTrue(TEXT("VMG-P0-03 zero-hardpoint Target baseline builds"), ConfigureValidTarget(ZeroFixture, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	// ConfigureValidTarget의 generic Existing Hardpoint fixture만 제거해 exact zero-hardpoint Definition을 만듭니다. StaticMesh orphan HP_* Socket은 semantic row가 아니므로 그대로 둬도 됩니다.
+	ZeroFixture.TargetVehicleData->HardpointSlots.Reset();
+	ZeroFixture.TargetVehicleData->MountProfiles.Reset();
+	ZeroFixture.TargetPackage->SetDirtyFlag(false);
+
+	FCFVehicleDefinitionSnapshot ZeroDefinition;
+	if (!TestTrue(TEXT("VMG-P0-03 zero-hardpoint Definition snapshot builds"), FCFVehicleSnapshotBuilder::BuildDefinitionSnapshot(*ZeroFixture.TargetVehicleData, ZeroDefinition, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	ZeroFixture.RecipePackage = CreateTestPackage(TEXT("CFVMGP003ZeroRecipe"));
+	if (!TestNotNull(TEXT("VMG-P0-03 zero Recipe package created"), ZeroFixture.RecipePackage))
+	{
+		return false;
+	}
+	ZeroFixture.Recipe = NewObject<UCFVehicleRecipeData>(ZeroFixture.RecipePackage, TEXT("DA_VMGP003_ZeroRecipe"), RF_Public | RF_Standalone | RF_Transactional);
+	if (!TestNotNull(TEXT("VMG-P0-03 zero Recipe created"), ZeroFixture.Recipe))
+	{
+		return false;
+	}
+	ZeroFixture.Recipe->TargetVehicleData = ZeroFixture.TargetVehicleData;
+	FCFVehicleImportResult ZeroImportResult;
+	if (!TestTrue(TEXT("VMG-P0-03 zero Definition import succeeds"), FCFVehicleImportService::ImportDefinitionSnapshot(ZeroDefinition, *ZeroFixture.Recipe, ZeroImportResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	ZeroFixture.TargetPackage->SetDirtyFlag(false);
+	ZeroFixture.RecipePackage->SetDirtyFlag(false);
+	TestTrue(TEXT("VMG-P0-03 zero fixture starts without Hardpoint intents"), ZeroFixture.Recipe->HardpointIntents.IsEmpty());
+	TestTrue(TEXT("VMG-P0-03 zero fixture starts without Mount intents"), ZeroFixture.Recipe->MountIntents.IsEmpty());
+
+	FCFVehicleBuilderVM ZeroBuilderViewModel;
+	const FCFVehicleListEntry ZeroEntry = BuildListEntry(ZeroFixture, true);
+	if (!TestTrue(TEXT("VMG-P0-03 zero fixture selects"), ZeroBuilderViewModel.SelectVehicle(ZeroEntry, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	// Guided 신규 lifecycle의 미결정 상태는 Wheel PASS여도 Step 3 forward completion을 허용하지 않습니다.
+	FCFAuthoringOpResult ZeroUnspecifiedResult;
+	if (!TestTrue(TEXT("VMG-P0-03 zero fixture Unspecified commit succeeds"), ZeroBuilderViewModel.CommitHardpointPlanMode(ECFBuilderHardpointPlanMode::Unspecified, ZeroUnspecifiedResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	const FCFVehicleBuilderStepView* ZeroUnspecifiedStep = ZeroBuilderViewModel.FindStepView(ECFVehicleBuilderStepId::SocketGuide);
+	if (TestNotNull(TEXT("Zero Unspecified Step 3 exists"), ZeroUnspecifiedStep))
+	{
+		TestEqual(TEXT("Unspecified + 0 Hardpoint is Ready"), ZeroUnspecifiedStep->State, ECFVehicleBuilderStepState::Ready);
+	}
+
+	// USER가 intentional zero를 명시하면 Hardpoint/Mount empty 상태에서 Step 3이 완료됩니다.
+	FCFAuthoringOpResult ZeroNoHardpointsResult;
+	if (!TestTrue(TEXT("VMG-P0-03 zero fixture NoHardpoints commit succeeds"), ZeroBuilderViewModel.CommitHardpointPlanMode(ECFBuilderHardpointPlanMode::NoHardpoints, ZeroNoHardpointsResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	const FCFVehicleBuilderStepView* ZeroNoHardpointsStep = ZeroBuilderViewModel.FindStepView(ECFVehicleBuilderStepId::SocketGuide);
+	if (TestNotNull(TEXT("Zero NoHardpoints Step 3 exists"), ZeroNoHardpointsStep))
+	{
+		TestEqual(TEXT("NoHardpoints + empty Hardpoint/Mount completes Step 3"), ZeroNoHardpointsStep->State, ECFVehicleBuilderStepState::Complete);
+	}
+
+	// 다시 장착 위치 사용을 선택했지만 아직 row가 없으면 정상 incomplete Ready입니다.
+	FCFAuthoringOpResult ZeroUseHardpointsResult;
+	if (!TestTrue(TEXT("VMG-P0-03 zero fixture UseHardpoints commit succeeds"), ZeroBuilderViewModel.CommitHardpointPlanMode(ECFBuilderHardpointPlanMode::UseHardpoints, ZeroUseHardpointsResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	const FCFVehicleBuilderStepView* ZeroUseStep = ZeroBuilderViewModel.FindStepView(ECFVehicleBuilderStepId::SocketGuide);
+	if (TestNotNull(TEXT("Zero UseHardpoints Step 3 exists"), ZeroUseStep))
+	{
+		TestEqual(TEXT("UseHardpoints + 0 Hardpoint is Ready"), ZeroUseStep->State, ECFVehicleBuilderStepState::Ready);
+	}
+
+	// Target existing identity까지 numbering에 참여시키기 위해 import 전에 Top_03을 가진 custom managed fixture를 구성합니다.
+	FWorkspaceFixture Fixture;
+	Error.Reset();
+	if (!TestTrue(TEXT("VMG-P0-03 target fixture builds"), ConfigureValidTarget(Fixture, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	// Existing Target에만 존재하는 Standard-looking stable identity입니다. Existing baseline 자체는 valid하도록 exact HP_Top_03 Socket도 함께 둡니다.
+	AddSocket(*Fixture.ChassisMesh, TEXT("HP_Top_03"), FVector(0.0, 0.0, 90.0));
+	FCFVehicleHardpointSlot& ReservedTop03 = Fixture.TargetVehicleData->HardpointSlots.AddDefaulted_GetRef();
+	ReservedTop03.LocationSlotId = TEXT("Top_03");
+	ReservedTop03.LocationCategory = TEXT("Top");
+	ReservedTop03.SocketName = TEXT("HP_Top_03");
+	ReservedTop03.LocalLocation = FVector(0.0, 0.0, 90.0);
+	ReservedTop03.LocalRotation = FRotator::ZeroRotator;
+
+	// 위 Target truth를 포함한 Existing Definition snapshot입니다.
+	FCFVehicleDefinitionSnapshot CurrentDefinition;
+	if (!TestTrue(TEXT("VMG-P0-03 current Definition snapshot builds"), FCFVehicleSnapshotBuilder::BuildDefinitionSnapshot(*Fixture.TargetVehicleData, CurrentDefinition, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	Fixture.RecipePackage = CreateTestPackage(TEXT("CFVMGP003Recipe"));
+	if (!TestNotNull(TEXT("VMG-P0-03 Recipe package created"), Fixture.RecipePackage))
+	{
+		return false;
+	}
+	Fixture.Recipe = NewObject<UCFVehicleRecipeData>(Fixture.RecipePackage, TEXT("DA_VMGP003_Recipe"), RF_Public | RF_Standalone | RF_Transactional);
+	if (!TestNotNull(TEXT("VMG-P0-03 Recipe created"), Fixture.Recipe))
+	{
+		return false;
+	}
+	Fixture.Recipe->TargetVehicleData = Fixture.TargetVehicleData;
+
+	// Existing import를 통해 LegacyCompatible preservation baseline을 만듭니다.
+	FCFVehicleImportResult ImportResult;
+	if (!TestTrue(TEXT("VMG-P0-03 Existing import succeeds"), FCFVehicleImportService::ImportDefinitionSnapshot(CurrentDefinition, *Fixture.Recipe, ImportResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	Fixture.TargetPackage->SetDirtyFlag(false);
+	Fixture.RecipePackage->SetDirtyFlag(false);
+
+	FCFVehicleBuilderVM BuilderViewModel;
+	const FCFVehicleListEntry Entry = BuildListEntry(Fixture, true);
+	if (!TestTrue(TEXT("VMG-P0-03 Builder selects managed fixture"), BuilderViewModel.SelectVehicle(Entry, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	const FString TargetHashBefore = BuildTargetHash(*Fixture.TargetVehicleData, Error);
+	const FCFVehicleBuilderStepView* LegacyStep = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::SocketGuide);
+	if (TestNotNull(TEXT("LegacyCompatible Step 3 exists"), LegacyStep))
+	{
+		TestEqual(TEXT("LegacyCompatible preserves old Step 3 completion after Wheel PASS"), LegacyStep->State, ECFVehicleBuilderStepState::Complete);
+	}
+
+	// Existing intent가 이미 있어도 Unspecified는 silent UseHardpoints 전환하지 않고 explicit USER decision을 요구합니다.
+	FCFAuthoringOpResult ModeResult;
+	if (!TestTrue(TEXT("VMG-P0-03 Existing-intent Unspecified Mode commit succeeds"), BuilderViewModel.CommitHardpointPlanMode(ECFBuilderHardpointPlanMode::Unspecified, ModeResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	const FCFVehicleBuilderStepView* UnspecifiedStep = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::SocketGuide);
+	if (TestNotNull(TEXT("Existing-intent Unspecified Step 3 exists"), UnspecifiedStep))
+	{
+		TestEqual(TEXT("Unspecified + existing intent remains Ready until explicit decision"), UnspecifiedStep->State, ECFVehicleBuilderStepState::Ready);
+	}
+
+	// USER가 장착 위치 사용을 명시하면 valid Existing Top_03/exact Socket baseline은 Complete가 됩니다.
+	FCFAuthoringOpResult UseHardpointsResult;
+	if (!TestTrue(TEXT("VMG-P0-03 Existing-intent UseHardpoints Mode commit succeeds"), BuilderViewModel.CommitHardpointPlanMode(ECFBuilderHardpointPlanMode::UseHardpoints, UseHardpointsResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	const FCFVehicleBuilderStepView* ExistingUseStep = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::SocketGuide);
+	if (TestNotNull(TEXT("Existing-intent UseHardpoints Step 3 exists"), ExistingUseStep))
+	{
+		TestEqual(TEXT("UseHardpoints + valid Existing Top_03 exact Socket is Complete"), ExistingUseStep->State, ECFVehicleBuilderStepState::Complete);
+	}
+
+	// Target Top_03을 예약값으로 포함해 Standard max-used+1이 Top_04를 생성해야 합니다.
+	FCFHardpointIntent Top04Intent;
+	FCFAuthoringOpResult Top04Result;
+	if (!TestTrue(TEXT("VMG-P0-03 first Standard Top add succeeds"), BuilderViewModel.AddStandardHardpoint(TEXT("Top"), Top04Intent, Top04Result, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("Target Top_03 reserves next Standard ID Top_04"), Top04Intent.LocationSlotId, FName(TEXT("Top_04")));
+	TestEqual(TEXT("Top_04 gets creation-time HP_Top_04 Socket suggestion"), Top04Intent.SocketName, FName(TEXT("HP_Top_04")));
+	TestFalse(TEXT("Standard Hardpoint add reports no Target mutation"), Top04Result.Mutation.bTargetChanged);
+	TestFalse(TEXT("Standard Hardpoint add never saves"), Top04Result.Mutation.bSavePerformed);
+	TestEqual(TEXT("Standard Hardpoint add preserves Target Definition hash"), BuildTargetHash(*Fixture.TargetVehicleData, Error), TargetHashBefore);
+
+	const FCFVehicleBuilderStepView* MissingTop04Step = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::SocketGuide);
+	if (TestNotNull(TEXT("Missing Top_04 Socket Step 3 exists"), MissingTop04Step))
+	{
+		TestEqual(TEXT("Valid authored Hardpoint with missing exact Socket is Ready"), MissingTop04Step->State, ECFVehicleBuilderStepState::Ready);
+	}
+
+	// Builder만 draft-read를 허용할 뿐 shared Resolver/R3 apply safety는 fail-closed 그대로여야 합니다.
+	FCFVehicleAuthoringReadRequest DraftReadRequest;
+	DraftReadRequest.Recipe = Fixture.Recipe;
+	DraftReadRequest.TargetVehicleData = Fixture.TargetVehicleData;
+	DraftReadRequest.CallerKind = ECFAuthoringCallerKind::Automation;
+	FCFVehicleResolveReadResult DraftResolveRead;
+	if (!TestTrue(TEXT("VMG-P0-03 missing Socket shared Resolve read succeeds structurally"), FCFVehicleAuthoringService::ResolveVehiclePreview(DraftReadRequest, DraftResolveRead)))
+	{
+		AddError(DraftResolveRead.Operation.Message);
+		return false;
+	}
+	TestEqual(TEXT("Missing Hardpoint Socket keeps shared Resolver Blocked"), DraftResolveRead.ResolveResult.ResolveStatus, ECFVehicleResolveStatus::Blocked);
+	const bool bHasHardpointSocketMissingBlocker = DraftResolveRead.ResolveResult.ResolverValidation.ContainsByPredicate([](const FCFVehicleValidationIssue& Issue)
+	{
+		return Issue.Severity == ECFVehicleValidationSeverity::Blocked && Issue.IssueCode == TEXT("HardpointSocketMissing");
+	});
+	TestTrue(TEXT("Missing Socket Resolver result retains HardpointSocketMissing blocker"), bHasHardpointSocketMissingBlocker);
+
+	FCFVehicleApplyRequest DraftApplyRequest;
+	DraftApplyRequest.Recipe = Fixture.Recipe;
+	DraftApplyRequest.TargetVehicleData = Fixture.TargetVehicleData;
+	DraftApplyRequest.ResolveRequest = DraftResolveRead.ResolveRequest;
+	DraftApplyRequest.ApprovedResolveResult = DraftResolveRead.ResolveResult;
+	DraftApplyRequest.ExpectedRecipeFingerprint = DraftResolveRead.ResolveRequest.Recipe.RecipeFingerprint;
+	DraftApplyRequest.ExpectedSourceSignature = DraftResolveRead.ResolveResult.SourceSignature;
+	DraftApplyRequest.ExpectedTargetDefinitionHash = DraftResolveRead.ResolveRequest.CurrentDefinition.DefinitionHash;
+	DraftApplyRequest.ExpectedResolvedDefinitionHash = DraftResolveRead.ResolveResult.ResolvedDefinitionHash;
+	DraftApplyRequest.ExpectedResolverContractRevision = DraftResolveRead.ResolveResult.ResolverContractRevision;
+	FCFAuthoringProposal DraftApplyProposal;
+	FCFAuthoringOpResult DraftApplyProposalResult;
+	TestFalse(TEXT("Blocked Hardpoint draft cannot create R3 DefinitionApply approval proposal"), FCFVehicleAuthoringService::BuildApplyApprovalProposal(DraftApplyRequest, DraftApplyProposal, DraftApplyProposalResult));
+	TestEqual(TEXT("Blocked Hardpoint draft R3 refusal is ValidationBlocked"), DraftApplyProposalResult.ErrorCode, ECFAuthoringErrorCode::ValidationBlocked);
+
+	// USER가 Static Mesh Editor에서 했을 법한 exact Socket 추가를 transient fixture에만 재현합니다.
+	AddSocket(*Fixture.ChassisMesh, TEXT("HP_Top_04"), FVector(0.0, 0.0, 96.0));
+	if (!TestTrue(TEXT("VMG-P0-03 refresh sees manually added Top_04 Socket"), BuilderViewModel.RefreshCurrentState(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	const FCFVehicleBuilderStepView* FoundTop04Step = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::SocketGuide);
+	if (TestNotNull(TEXT("Found Top_04 Socket Step 3 exists"), FoundTop04Step))
+	{
+		TestEqual(TEXT("All authored Hardpoint sockets found completes Step 3"), FoundTop04Step->State, ECFVehicleBuilderStepState::Complete);
+	}
+
+	// 같은 category를 다시 추가하면 삭제 번호 재사용 없이 Recipe Top_04까지 포함한 max-used+1 Top_05가 됩니다.
+	FCFHardpointIntent Top05Intent;
+	FCFAuthoringOpResult Top05Result;
+	if (!TestTrue(TEXT("VMG-P0-03 second Standard Top add succeeds"), BuilderViewModel.AddStandardHardpoint(TEXT("Top"), Top05Intent, Top05Result, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("Recipe Top_04 advances next Standard ID to Top_05"), Top05Intent.LocationSlotId, FName(TEXT("Top_05")));
+	TestEqual(TEXT("Top_05 gets stable HP_Top_05 Socket suggestion"), Top05Intent.SocketName, FName(TEXT("HP_Top_05")));
+	const FCFVehicleBuilderStepView* MissingTop05Step = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::SocketGuide);
+	if (TestNotNull(TEXT("Missing Top_05 Socket Step 3 exists"), MissingTop05Step))
+	{
+		TestEqual(TEXT("New second Hardpoint returns Step 3 to Ready until exact Socket exists"), MissingTop05Step->State, ECFVehicleBuilderStepState::Ready);
+	}
+
+	AddSocket(*Fixture.ChassisMesh, TEXT("HP_Top_05"), FVector(-10.0, 0.0, 94.0));
+	if (!TestTrue(TEXT("VMG-P0-03 refresh sees manually added Top_05 Socket"), BuilderViewModel.RefreshCurrentState(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	const FCFVehicleBuilderStepView* AllFoundStep = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::SocketGuide);
+	if (TestNotNull(TEXT("All authored sockets Step 3 exists"), AllFoundStep))
+	{
+		TestEqual(TEXT("Two authored Hardpoints with exact sockets complete Step 3"), AllFoundStep->State, ECFVehicleBuilderStepState::Complete);
+	}
+
+	// Hardpoint는 전용 표가 소유하므로 기타 조건부 Socket projection에 HP_*가 중복 노출되지 않아야 합니다.
+	for (const FName ConditionalSocketName : BuilderViewModel.GetConditionalNonHardpointSocketNames())
+	{
+		TestFalse(*FString::Printf(TEXT("Conditional Socket projection excludes Hardpoint socket %s"), *ConditionalSocketName.ToString()), ConditionalSocketName.ToString().StartsWith(TEXT("HP_")));
+	}
+
+	TestEqual(TEXT("VMG-P0-03 entire flow preserves Target Definition hash"), BuildTargetHash(*Fixture.TargetVehicleData, Error), TargetHashBefore);
+	TestFalse(TEXT("VMG-P0-03 Recipe-only flow leaves Target package clean"), Fixture.TargetPackage->IsDirty());
+	return true;
+}
+
+// VMG-P0-04 Step 6 Standard 1:1 Mount creation/update/remove와 fitting compatibility 경계를 focused 검증합니다.
+bool FCFVMGP004Step6MountTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+	using namespace CFVehicleAuthoringVMTestsPrivate;
+
+	// Existing Top_Old Hardpoint 1개, Mount 0개인 managed fixture입니다.
+	FWorkspaceFixture Fixture;
+	FString Error;
+	if (!TestTrue(TEXT("VMG-P0-04 fixture builds"), BuildImportedFixture(Fixture, Error))
+		|| !TestTrue(TEXT("VMG-P0-04 private Profile fixture attaches"), AttachBuilderPrivateProfiles(Fixture, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("VMG-P0-04 fixture has one Hardpoint"), Fixture.Recipe->HardpointIntents.Num(), 1);
+	TestTrue(TEXT("VMG-P0-04 fixture starts with zero Recipe Mount"), Fixture.Recipe->MountIntents.IsEmpty());
+
+	// Builder exact managed selection입니다.
+	FCFVehicleBuilderVM BuilderViewModel;
+	const FCFVehicleListEntry Entry = BuildListEntry(Fixture, true);
+	if (!TestTrue(TEXT("VMG-P0-04 Builder selects managed fixture"), BuilderViewModel.SelectVehicle(Entry, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	// Step 6 Standard lane authority로 전환합니다.
+	FCFAuthoringOpResult ModeResult;
+	if (!TestTrue(TEXT("VMG-P0-04 UseHardpoints Mode commit succeeds"), BuilderViewModel.CommitHardpointPlanMode(ECFBuilderHardpointPlanMode::UseHardpoints, ModeResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	const FName HardpointId(TEXT("Top_Old"));
+	const FName ExpectedMountId(TEXT("Mount_Top_Old"));
+	const FString TargetHashBefore = BuildTargetHash(*Fixture.TargetVehicleData, Error);
+	Fixture.TargetPackage->SetDirtyFlag(false);
+	Fixture.RecipePackage->SetDirtyFlag(false);
+
+	// Recipe에는 아직 없지만 current Target이 candidate MountProfileId를 이미 사용한다면 새 Standard identity 생성은 fail-closed입니다.
+	FCFVehicleMountProfile& TargetCollisionProfile = Fixture.TargetVehicleData->MountProfiles.AddDefaulted_GetRef();
+	TargetCollisionProfile.MountProfileId = ExpectedMountId;
+	TargetCollisionProfile.LocationSlotRef = HardpointId;
+	TargetCollisionProfile.MountType = ECFVehicleMountType::Turret;
+	TargetCollisionProfile.SizeLimit = ECFVehicleWeaponSize::Medium;
+
+	FCFMountIntent CollisionIntent;
+	FCFAuthoringOpResult CollisionResult;
+	TestFalse(
+		TEXT("VMG-P0-04 Target MountProfileId collision blocks new Standard Mount"),
+		BuilderViewModel.CommitStandardMountIntent(
+			HardpointId,
+			ECFVehicleMountType::Turret,
+			ECFVehicleWeaponSize::Medium,
+			FSoftObjectPath(),
+			CollisionIntent,
+			CollisionResult,
+			Error));
+	TestEqual(TEXT("Target collision reports DependencyConflict"), CollisionResult.ErrorCode, ECFAuthoringErrorCode::DependencyConflict);
+	TestTrue(TEXT("Target collision leaves Recipe Mount empty"), Fixture.Recipe->MountIntents.IsEmpty());
+	Fixture.TargetVehicleData->MountProfiles.Reset();
+	TestEqual(TEXT("Collision fixture cleanup restores Target hash"), BuildTargetHash(*Fixture.TargetVehicleData, Error), TargetHashBefore);
+	Fixture.TargetPackage->SetDirtyFlag(false);
+
+	// 일반 전투 Mount는 SizeLimit None을 허용하지 않습니다.
+	FCFMountIntent InvalidWeaponIntent;
+	FCFAuthoringOpResult InvalidWeaponResult;
+	TestFalse(
+		TEXT("VMG-P0-04 Turret with SizeLimit None is rejected"),
+		BuilderViewModel.CommitStandardMountIntent(
+			HardpointId,
+			ECFVehicleMountType::Turret,
+			ECFVehicleWeaponSize::None,
+			FSoftObjectPath(),
+			InvalidWeaponIntent,
+			InvalidWeaponResult,
+			Error));
+	TestEqual(TEXT("Weapon Size None rejection is InvalidSemanticInput"), InvalidWeaponResult.ErrorCode, ECFAuthoringErrorCode::InvalidSemanticInput);
+	TestTrue(TEXT("Rejected weapon rule leaves Recipe Mount empty"), Fixture.Recipe->MountIntents.IsEmpty());
+
+	// Utility Scanner preset은 current fitting contract에서 SizeLimit None을 허용합니다.
+	UCFVehicleSensorData* SensorData = NewObject<UCFVehicleSensorData>();
+	UCFEquipmentPresetData* ScannerPreset = NewObject<UCFEquipmentPresetData>();
+	if (!TestNotNull(TEXT("VMG-P0-04 SensorData creates"), SensorData)
+		|| !TestNotNull(TEXT("VMG-P0-04 ScannerPreset creates"), ScannerPreset))
+	{
+		return false;
+	}
+	ScannerPreset->EquipmentId = TEXT("VMGP004_Scanner");
+	ScannerPreset->RequiredMountType = ECFVehicleMountType::Utility;
+	ScannerPreset->RequiredWeaponSize = ECFVehicleWeaponSize::None;
+	ScannerPreset->DefaultSensorData = SensorData;
+	TestTrue(TEXT("VMG-P0-04 Scanner preset fits Utility None"), ScannerPreset->CanUseOnMount(ECFVehicleMountType::Utility, ECFVehicleWeaponSize::None));
+
+	FCFMountIntent UtilityIntent;
+	FCFAuthoringOpResult UtilityResult;
+	if (!TestTrue(
+		TEXT("VMG-P0-04 Utility + None + Scanner preset commit succeeds"),
+		BuilderViewModel.CommitStandardMountIntent(
+			HardpointId,
+			ECFVehicleMountType::Utility,
+			ECFVehicleWeaponSize::None,
+			FSoftObjectPath(ScannerPreset),
+			UtilityIntent,
+			UtilityResult,
+			Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("New Standard Mount uses deterministic identity"), UtilityIntent.MountProfileId, ExpectedMountId);
+	TestEqual(TEXT("New Standard Mount exact Hardpoint ref"), UtilityIntent.LocationSlotRef, HardpointId);
+	TestEqual(TEXT("Utility Mount stores Utility type"), UtilityIntent.MountType, ECFVehicleMountType::Utility);
+	TestEqual(TEXT("Utility Mount preserves allowed None size"), UtilityIntent.SizeLimit, ECFVehicleWeaponSize::None);
+	TestTrue(TEXT("Standard Mount default bExposedModule is true"), UtilityIntent.bExposedModule);
+	TestFalse(TEXT("Utility commit reports no Target mutation"), UtilityResult.Mutation.bTargetChanged);
+	TestFalse(TEXT("Utility commit never auto-saves"), UtilityResult.Mutation.bSavePerformed);
+	TestEqual(TEXT("Utility commit preserves Target hash"), BuildTargetHash(*Fixture.TargetVehicleData, Error), TargetHashBefore);
+	TestFalse(TEXT("Utility commit leaves Target package clean"), Fixture.TargetPackage->IsDirty());
+
+	// Scanner preset을 Turret에 재사용하면 current CanUseOnMount contract가 false이므로 existing stable Mount를 변경하지 않아야 합니다.
+	const FCFMountIntent UtilityPersistentBeforeInvalid = Fixture.Recipe->MountIntents[0];
+	FCFMountIntent IncompatibleIntent;
+	FCFAuthoringOpResult IncompatibleResult;
+	TestFalse(
+		TEXT("VMG-P0-04 incompatible Scanner preset on Turret is blocked"),
+		BuilderViewModel.CommitStandardMountIntent(
+			HardpointId,
+			ECFVehicleMountType::Turret,
+			ECFVehicleWeaponSize::Medium,
+			FSoftObjectPath(ScannerPreset),
+			IncompatibleIntent,
+			IncompatibleResult,
+			Error));
+	TestEqual(TEXT("Incompatible preset reports ValidationBlocked"), IncompatibleResult.ErrorCode, ECFAuthoringErrorCode::ValidationBlocked);
+	TestTrue(
+		TEXT("Incompatible preset preserves persistent Mount exactly"),
+		FCFMountIntent::StaticStruct()->CompareScriptStruct(&Fixture.Recipe->MountIntents[0], &UtilityPersistentBeforeInvalid, 0));
+
+	// 기존 Turret weapon fitting contract와 호환되는 transient preset입니다.
+	UCFTurretMountData* TurretMountData = NewObject<UCFTurretMountData>();
+	UCFWeaponData* WeaponData = NewObject<UCFWeaponData>();
+	UCFEquipmentPresetData* WeaponPreset = NewObject<UCFEquipmentPresetData>();
+	if (!TestNotNull(TEXT("VMG-P0-04 TurretMountData creates"), TurretMountData)
+		|| !TestNotNull(TEXT("VMG-P0-04 WeaponData creates"), WeaponData)
+		|| !TestNotNull(TEXT("VMG-P0-04 WeaponPreset creates"), WeaponPreset))
+	{
+		return false;
+	}
+	TurretMountData->TurretMountWeightKg = 100.0f;
+	WeaponData->WeaponSize = ECFVehicleWeaponSize::Medium;
+	WeaponData->CompatibleMountTypes.Reset();
+	WeaponData->CompatibleMountTypes.Add(ECFVehicleMountType::Turret);
+	WeaponData->WeaponMassKg = 100.0f;
+	WeaponPreset->EquipmentId = TEXT("VMGP004_Turret");
+	WeaponPreset->RequiredMountType = ECFVehicleMountType::Turret;
+	WeaponPreset->RequiredWeaponSize = ECFVehicleWeaponSize::Medium;
+	WeaponPreset->DefaultTurretMountData = TurretMountData;
+	WeaponPreset->DefaultWeaponData = WeaponData;
+	TestTrue(TEXT("VMG-P0-04 weapon preset fits Turret Medium"), WeaponPreset->CanUseOnMount(ECFVehicleMountType::Turret, ECFVehicleWeaponSize::Medium));
+
+	// 기존 Standard Mount를 수정할 때 MountProfileId는 새로 계산/rename하지 않고 exact stable identity를 유지합니다.
+	Fixture.Recipe->MountIntents[0].bExposedModule = false;
+	FCFMountIntent UpdatedTurretIntent;
+	FCFAuthoringOpResult UpdateResult;
+	if (!TestTrue(
+		TEXT("VMG-P0-04 existing Standard Mount updates with valid weapon preset"),
+		BuilderViewModel.CommitStandardMountIntent(
+			HardpointId,
+			ECFVehicleMountType::Turret,
+			ECFVehicleWeaponSize::Medium,
+			FSoftObjectPath(WeaponPreset),
+			UpdatedTurretIntent,
+			UpdateResult,
+			Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("MountProfileId stays stable across rule update"), UpdatedTurretIntent.MountProfileId, ExpectedMountId);
+	TestFalse(TEXT("Existing bExposedModule is preserved"), UpdatedTurretIntent.bExposedModule);
+	TestEqual(TEXT("Updated MountType is Turret"), UpdatedTurretIntent.MountType, ECFVehicleMountType::Turret);
+	TestEqual(TEXT("Updated SizeLimit is Medium"), UpdatedTurretIntent.SizeLimit, ECFVehicleWeaponSize::Medium);
+	TestEqual(TEXT("Updated preset path is exact"), UpdatedTurretIntent.DefaultEquipmentPresetData.ToSoftObjectPath(), FSoftObjectPath(WeaponPreset));
+	TestFalse(TEXT("Rule update reports no Target mutation"), UpdateResult.Mutation.bTargetChanged);
+	TestFalse(TEXT("Rule update never saves"), UpdateResult.Mutation.bSavePerformed);
+
+	// Step 6 R0 authority가 UseHardpoints Standard 1:1을 Complete로 판정하는지 직접 읽습니다.
+	FCFBuilderGameplayGuidanceRequest GuidanceRequest;
+	GuidanceRequest.ReadRequest.Recipe = Fixture.Recipe;
+	GuidanceRequest.ReadRequest.TargetVehicleData = Fixture.TargetVehicleData;
+	GuidanceRequest.ReadRequest.CallerKind = ECFAuthoringCallerKind::Automation;
+	GuidanceRequest.Mode = ECFBuilderCompanionMode::NewVehicle;
+	GuidanceRequest.HardpointPlanMode = ECFBuilderHardpointPlanMode::UseHardpoints;
+	FCFBuilderGameplayGuidanceResult GuidanceResult;
+	if (!TestTrue(TEXT("VMG-P0-04 gameplay guidance read succeeds"), FCFVehicleAuthoringService::ReadBuilderGameplayGuidance(GuidanceRequest, GuidanceResult)))
+	{
+		AddError(GuidanceResult.Operation.Message);
+		return false;
+	}
+	const FCFBuilderGameplayGuidanceItem* MountItem = GuidanceResult.Items.FindByPredicate([](const FCFBuilderGameplayGuidanceItem& Item)
+	{
+		return Item.Area == ECFBuilderGameplayArea::MountProfiles;
+	});
+	if (TestNotNull(TEXT("VMG-P0-04 MountProfiles guidance item exists"), MountItem))
+	{
+		TestEqual(TEXT("Valid Standard 1:1 Mount guidance is Complete"), MountItem->State, ECFBuilderGuidanceState::Complete);
+	}
+	TestFalse(TEXT("Step 6 R0 guidance does not mutate Target"), GuidanceResult.Operation.Mutation.bTargetChanged);
+	TestFalse(TEXT("Step 6 R0 guidance never saves"), GuidanceResult.Operation.Mutation.bSavePerformed);
+
+	// Exact Mount 삭제 후 Hardpoint는 남고 UseHardpoints 상태는 1:1 미완성 NeedsReview로 돌아갑니다.
+	FCFAuthoringOpResult RemoveResult;
+	if (!TestTrue(TEXT("VMG-P0-04 exact Mount remove succeeds"), BuilderViewModel.RemoveMountIntent(ExpectedMountId, RemoveResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestTrue(TEXT("Mount remove leaves Recipe Mount array empty"), Fixture.Recipe->MountIntents.IsEmpty());
+	TestEqual(TEXT("Mount remove preserves Hardpoint count"), Fixture.Recipe->HardpointIntents.Num(), 1);
+	TestEqual(TEXT("Mount remove preserves UseHardpoints Mode"), Fixture.Recipe->BuilderHardpointPlanMode, ECFBuilderHardpointPlanMode::UseHardpoints);
+	TestFalse(TEXT("Mount remove reports no Target mutation"), RemoveResult.Mutation.bTargetChanged);
+	TestFalse(TEXT("Mount remove never saves"), RemoveResult.Mutation.bSavePerformed);
+
+	FCFBuilderGameplayGuidanceResult MissingMountGuidance;
+	if (!TestTrue(TEXT("VMG-P0-04 missing Mount guidance read succeeds"), FCFVehicleAuthoringService::ReadBuilderGameplayGuidance(GuidanceRequest, MissingMountGuidance)))
+	{
+		AddError(MissingMountGuidance.Operation.Message);
+		return false;
+	}
+	const FCFBuilderGameplayGuidanceItem* MissingMountItem = MissingMountGuidance.Items.FindByPredicate([](const FCFBuilderGameplayGuidanceItem& Item)
+	{
+		return Item.Area == ECFBuilderGameplayArea::MountProfiles;
+	});
+	if (TestNotNull(TEXT("VMG-P0-04 missing Mount guidance item exists"), MissingMountItem))
+	{
+		TestEqual(TEXT("UseHardpoints with missing 1:1 Mount requires review"), MissingMountItem->State, ECFBuilderGuidanceState::NeedsReview);
+	}
+	TestEqual(TEXT("VMG-P0-04 entire Recipe-only flow preserves Target hash"), BuildTargetHash(*Fixture.TargetVehicleData, Error), TargetHashBefore);
+	TestFalse(TEXT("VMG-P0-04 entire Recipe-only flow leaves Target package clean"), Fixture.TargetPackage->IsDirty());
+	return true;
+}
+
+// VMG-P0-05 E1~E11 Existing Vehicle preservation contract를 custom/multi-Mount와 legacy pose fixture로 focused 검증합니다.
+bool FCFVMGP005ExistingPreservationTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+	using namespace CFVehicleAuthoringVMTestsPrivate;
+
+	// Resolver output에서 exact canonical path의 field를 찾는 local helper입니다.
+	auto FindResolvedField = [](const FCFVehicleResolveResult& Result, const FString& CanonicalPath) -> const FCFVehicleResolvedField*
+	{
+		return Result.SortedResolvedFields.FindByPredicate([&CanonicalPath](const FCFVehicleResolvedField& Field)
+		{
+			return Field.FieldPath.ToCanonicalString(true) == CanonicalPath;
+		});
+	};
+
+	// Definition snapshot exact field를 찾는 local helper입니다.
+	auto FindDefinitionField = [](const FCFVehicleDefinitionSnapshot& Snapshot, const FString& CanonicalPath) -> const FCFVehicleFieldEntry*
+	{
+		return Snapshot.SortedFields.FindByPredicate([&CanonicalPath](const FCFVehicleFieldEntry& Field)
+		{
+			return Field.FieldPath.ToCanonicalString(true) == CanonicalPath;
+		});
+	};
+
+	// Guidance result의 stable area row를 찾는 local helper입니다.
+	auto FindGuidanceItem = [](const FCFBuilderGameplayGuidanceResult& Result, const ECFBuilderGameplayArea Area) -> const FCFBuilderGameplayGuidanceItem*
+	{
+		return Result.Items.FindByPredicate([Area](const FCFBuilderGameplayGuidanceItem& Item)
+		{
+			return Item.Area == Area;
+		});
+	};
+
+	// -------------------------
+	// Fixture A: custom identity + same-Hardpoint multi-Mount + Legacy pins.
+	// -------------------------
+	FWorkspaceFixture Fixture;
+	FString Error;
+	if (!TestTrue(TEXT("VMG-P0-05 custom Existing Target fixture builds"), ConfigureValidTarget(Fixture, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	// Existing noncanonical custom Hardpoint가 실제 Socket authority를 갖도록 exact custom Socket을 추가합니다.
+	AddSocket(*Fixture.ChassisMesh, TEXT("Socket_Custom_Deck_A"), FVector(7.0, -3.0, 88.0));
+	// 후속 E7 새 Standard Top_01을 Builder가 추가해도 StaticMesh를 건드릴 필요가 없도록 USER-authored future Socket을 baseline부터 둡니다.
+	AddSocket(*Fixture.ChassisMesh, TEXT("HP_Top_01"), FVector(-12.0, 5.0, 93.0));
+
+	Fixture.TargetVehicleData->HardpointSlots.Reset();
+	FCFVehicleHardpointSlot& CustomHardpoint = Fixture.TargetVehicleData->HardpointSlots.AddDefaulted_GetRef();
+	CustomHardpoint.LocationSlotId = TEXT("Deck_Custom_A");
+	CustomHardpoint.LocationCategory = TEXT("LegacyDeck");
+	CustomHardpoint.SocketName = TEXT("Socket_Custom_Deck_A");
+	CustomHardpoint.LocalLocation = FVector(7.0, -3.0, 88.0);
+	CustomHardpoint.LocalRotation = FRotator(1.0, 17.0, -2.0);
+
+	Fixture.TargetVehicleData->MountProfiles.Reset();
+	FCFVehicleMountProfile& LegacyTurret = Fixture.TargetVehicleData->MountProfiles.AddDefaulted_GetRef();
+	LegacyTurret.MountProfileId = TEXT("LegacyTurretAlpha");
+	LegacyTurret.LocationSlotRef = CustomHardpoint.LocationSlotId;
+	LegacyTurret.MountType = ECFVehicleMountType::Turret;
+	LegacyTurret.SizeLimit = ECFVehicleWeaponSize::Medium;
+	LegacyTurret.DefaultEquipmentPresetData = nullptr;
+	LegacyTurret.bExposedModule = true;
+
+	FCFVehicleMountProfile& LegacyUtility = Fixture.TargetVehicleData->MountProfiles.AddDefaulted_GetRef();
+	LegacyUtility.MountProfileId = TEXT("LegacyUtilityBeta");
+	LegacyUtility.LocationSlotRef = CustomHardpoint.LocationSlotId;
+	LegacyUtility.MountType = ECFVehicleMountType::Utility;
+	LegacyUtility.SizeLimit = ECFVehicleWeaponSize::None;
+	LegacyUtility.DefaultEquipmentPresetData = nullptr;
+	LegacyUtility.bExposedModule = false;
+
+	// Existing custom/multi-Mount exact target truth입니다.
+	FCFVehicleDefinitionSnapshot ExistingDefinition;
+	if (!TestTrue(TEXT("VMG-P0-05 custom Existing Definition snapshot builds"), FCFVehicleSnapshotBuilder::BuildDefinitionSnapshot(*Fixture.TargetVehicleData, ExistingDefinition, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	const FString ExistingTargetHash = ExistingDefinition.DefinitionHash;
+
+	Fixture.RecipePackage = CreateTestPackage(TEXT("CFVMGP005Recipe"));
+	if (!TestNotNull(TEXT("VMG-P0-05 Recipe package creates"), Fixture.RecipePackage))
+	{
+		return false;
+	}
+	Fixture.Recipe = NewObject<UCFVehicleRecipeData>(
+		Fixture.RecipePackage,
+		TEXT("DA_VMGP005_Recipe"),
+		RF_Public | RF_Standalone | RF_Transactional);
+	if (!TestNotNull(TEXT("VMG-P0-05 Recipe creates"), Fixture.Recipe))
+	{
+		return false;
+	}
+	Fixture.Recipe->TargetVehicleData = Fixture.TargetVehicleData;
+
+	FCFVehicleImportResult ImportResult;
+	if (!TestTrue(TEXT("VMG-P0-05 custom Existing import succeeds"), FCFVehicleImportService::ImportDefinitionSnapshot(ExistingDefinition, *Fixture.Recipe, ImportResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	Fixture.TargetPackage->SetDirtyFlag(false);
+	Fixture.RecipePackage->SetDirtyFlag(false);
+	TestEqual(TEXT("VMG-P0-05 imported Recipe defaults LegacyCompatible"), Fixture.Recipe->BuilderHardpointPlanMode, ECFBuilderHardpointPlanMode::LegacyCompatible);
+	TestEqual(TEXT("VMG-P0-05 imported custom Hardpoint count"), Fixture.Recipe->HardpointIntents.Num(), 1);
+	TestEqual(TEXT("VMG-P0-05 imported same-Hardpoint multi-Mount count"), Fixture.Recipe->MountIntents.Num(), 2);
+
+	// E11: untouched Existing import/refresh는 exact resolved Definition identity를 유지해야 합니다.
+	FCFVehicleAuthoringReadRequest ReadRequest;
+	ReadRequest.Recipe = Fixture.Recipe;
+	ReadRequest.TargetVehicleData = Fixture.TargetVehicleData;
+	ReadRequest.CallerKind = ECFAuthoringCallerKind::Automation;
+
+	FCFVehicleResolveReadResult InitialResolve;
+	if (!TestTrue(TEXT("E11 untouched Existing initial resolve succeeds"), FCFVehicleAuthoringService::ResolveVehiclePreview(ReadRequest, InitialResolve)))
+	{
+		AddError(InitialResolve.Operation.Message);
+		return false;
+	}
+	TestEqual(TEXT("E11 untouched Existing resolved hash equals Target Definition hash"), InitialResolve.ResolveResult.ResolvedDefinitionHash, ExistingTargetHash);
+	TestEqual(TEXT("E11 untouched Existing has zero field diff"), InitialResolve.ResolveResult.FieldDiff.Num(), 0);
+
+	FCFVehicleBuilderVM BuilderViewModel;
+	const FCFVehicleListEntry Entry = BuildListEntry(Fixture, true);
+	if (!TestTrue(TEXT("E11 Builder selects custom Existing fixture"), BuilderViewModel.SelectVehicle(Entry, Error))
+		|| !TestTrue(TEXT("E11 Builder refresh-only succeeds"), BuilderViewModel.RefreshCurrentState(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	FCFVehicleResolveReadResult RefreshedResolve;
+	if (!TestTrue(TEXT("E11 refresh-only resolve succeeds"), FCFVehicleAuthoringService::ResolveVehiclePreview(ReadRequest, RefreshedResolve)))
+	{
+		AddError(RefreshedResolve.Operation.Message);
+		return false;
+	}
+	TestEqual(TEXT("E11 refresh-only preserves resolved DefinitionHash"), RefreshedResolve.ResolveResult.ResolvedDefinitionHash, InitialResolve.ResolveResult.ResolvedDefinitionHash);
+	TestEqual(TEXT("E11 refresh-only preserves zero field diff"), RefreshedResolve.ResolveResult.FieldDiff.Num(), 0);
+
+	// E10: Builder mutation 전 shared StaticMesh exact sockets와 transforms를 capture합니다.
+	UStaticMeshSocket* CustomSocketBefore = Fixture.ChassisMesh->FindSocket(TEXT("Socket_Custom_Deck_A"));
+	UStaticMeshSocket* FutureTopSocketBefore = Fixture.ChassisMesh->FindSocket(TEXT("HP_Top_01"));
+	if (!TestNotNull(TEXT("E10 custom baseline Socket exists"), CustomSocketBefore)
+		|| !TestNotNull(TEXT("E10 future Top_01 baseline Socket exists"), FutureTopSocketBefore))
+	{
+		return false;
+	}
+	const FVector CustomSocketLocationBefore = CustomSocketBefore->RelativeLocation;
+	const FRotator CustomSocketRotationBefore = CustomSocketBefore->RelativeRotation;
+	const FVector FutureTopLocationBefore = FutureTopSocketBefore->RelativeLocation;
+	const FRotator FutureTopRotationBefore = FutureTopSocketBefore->RelativeRotation;
+
+	// E1/E4/E6: FQ-043 이전 Recipe처럼 active semantic arrays를 비워도 Legacy Pins가 Existing collection 전체를 보존해야 합니다.
+	Fixture.Recipe->HardpointIntents.Reset();
+	Fixture.Recipe->MountIntents.Reset();
+	++Fixture.Recipe->AuthoringRevision;
+	Fixture.RecipePackage->SetDirtyFlag(false);
+	if (!TestTrue(TEXT("E1 LegacyCompatible empty-intent Builder refresh succeeds"), BuilderViewModel.RefreshCurrentState(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	const FCFVehicleBuilderStepView* LegacyStep3 = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::SocketGuide);
+	if (TestNotNull(TEXT("E1 LegacyCompatible Step 3 exists"), LegacyStep3))
+	{
+		TestEqual(TEXT("E1 LegacyCompatible empty intent does not add plan blocker"), LegacyStep3->State, ECFVehicleBuilderStepState::Complete);
+	}
+
+	// CompanionMode가 어느 쪽으로 파생되더라도 Hardpoint/Mount preservation은 explicit LegacyCompatible Mode가 소유합니다.
+	FCFBuilderGameplayGuidanceRequest LegacyGuidanceRequest;
+	LegacyGuidanceRequest.ReadRequest = ReadRequest;
+	LegacyGuidanceRequest.HardpointPlanMode = ECFBuilderHardpointPlanMode::LegacyCompatible;
+	LegacyGuidanceRequest.Mode = ECFBuilderCompanionMode::NewVehicle;
+
+	FCFBuilderGameplayGuidanceResult LegacyNewModeGuidance;
+	if (!TestTrue(TEXT("E1 LegacyCompatible guidance succeeds with NewVehicle companion mode"), FCFVehicleAuthoringService::ReadBuilderGameplayGuidance(LegacyGuidanceRequest, LegacyNewModeGuidance)))
+	{
+		AddError(LegacyNewModeGuidance.Operation.Message);
+		return false;
+	}
+	LegacyGuidanceRequest.Mode = ECFBuilderCompanionMode::CompleteExisting;
+	FCFBuilderGameplayGuidanceResult LegacyExistingModeGuidance;
+	if (!TestTrue(TEXT("E1 LegacyCompatible guidance succeeds with CompleteExisting companion mode"), FCFVehicleAuthoringService::ReadBuilderGameplayGuidance(LegacyGuidanceRequest, LegacyExistingModeGuidance)))
+	{
+		AddError(LegacyExistingModeGuidance.Operation.Message);
+		return false;
+	}
+
+	const FCFBuilderGameplayGuidanceItem* NewModeHardpointItem = FindGuidanceItem(LegacyNewModeGuidance, ECFBuilderGameplayArea::Hardpoints);
+	const FCFBuilderGameplayGuidanceItem* ExistingModeHardpointItem = FindGuidanceItem(LegacyExistingModeGuidance, ECFBuilderGameplayArea::Hardpoints);
+	const FCFBuilderGameplayGuidanceItem* NewModeMountItem = FindGuidanceItem(LegacyNewModeGuidance, ECFBuilderGameplayArea::MountProfiles);
+	const FCFBuilderGameplayGuidanceItem* ExistingModeMountItem = FindGuidanceItem(LegacyExistingModeGuidance, ECFBuilderGameplayArea::MountProfiles);
+	if (TestNotNull(TEXT("E1 NewMode Legacy Hardpoint row exists"), NewModeHardpointItem)
+		&& TestNotNull(TEXT("E1 ExistingMode Legacy Hardpoint row exists"), ExistingModeHardpointItem))
+	{
+		TestEqual(TEXT("E1 CompanionMode does not change Legacy Hardpoint preservation state"), NewModeHardpointItem->State, ExistingModeHardpointItem->State);
+		TestEqual(TEXT("E1 Legacy empty-intent Hardpoint preservation is Complete"), NewModeHardpointItem->State, ECFBuilderGuidanceState::Complete);
+	}
+	if (TestNotNull(TEXT("E4 NewMode Legacy Mount row exists"), NewModeMountItem)
+		&& TestNotNull(TEXT("E4 ExistingMode Legacy Mount row exists"), ExistingModeMountItem))
+	{
+		TestEqual(TEXT("E4 CompanionMode does not change Legacy Mount preservation state"), NewModeMountItem->State, ExistingModeMountItem->State);
+		TestEqual(TEXT("E4/E6 Legacy empty-intent multi-Mount preservation is Complete"), NewModeMountItem->State, ECFBuilderGuidanceState::Complete);
+	}
+
+	FCFVehicleResolveReadResult EmptyIntentResolve;
+	if (!TestTrue(TEXT("E1 LegacyCompatible empty-intent resolve succeeds"), FCFVehicleAuthoringService::ResolveVehiclePreview(ReadRequest, EmptyIntentResolve)))
+	{
+		AddError(EmptyIntentResolve.Operation.Message);
+		return false;
+	}
+	TestEqual(TEXT("E1/E4/E6 empty Recipe intents preserve exact Existing DefinitionHash"), EmptyIntentResolve.ResolveResult.ResolvedDefinitionHash, ExistingTargetHash);
+	TestEqual(TEXT("E1/E4/E6 empty Recipe intents create no Target diff"), EmptyIntentResolve.ResolveResult.FieldDiff.Num(), 0);
+
+	// E4/E5/E6/E7 비교 대상 exact Existing stable collection leaf 목록입니다.
+	const FString ExistingLeafPaths[] =
+	{
+		TEXT("HardpointSlots[LocationSlotId=Deck_Custom_A].LocationSlotId"),
+		TEXT("HardpointSlots[LocationSlotId=Deck_Custom_A].LocationCategory"),
+		TEXT("HardpointSlots[LocationSlotId=Deck_Custom_A].SocketName"),
+		TEXT("HardpointSlots[LocationSlotId=Deck_Custom_A].LocalLocation"),
+		TEXT("HardpointSlots[LocationSlotId=Deck_Custom_A].LocalRotation"),
+		TEXT("MountProfiles[MountProfileId=LegacyTurretAlpha].MountProfileId"),
+		TEXT("MountProfiles[MountProfileId=LegacyTurretAlpha].LocationSlotRef"),
+		TEXT("MountProfiles[MountProfileId=LegacyTurretAlpha].MountType"),
+		TEXT("MountProfiles[MountProfileId=LegacyTurretAlpha].SizeLimit"),
+		TEXT("MountProfiles[MountProfileId=LegacyTurretAlpha].DefaultEquipmentPresetData"),
+		TEXT("MountProfiles[MountProfileId=LegacyTurretAlpha].bExposedModule"),
+		TEXT("MountProfiles[MountProfileId=LegacyUtilityBeta].MountProfileId"),
+		TEXT("MountProfiles[MountProfileId=LegacyUtilityBeta].LocationSlotRef"),
+		TEXT("MountProfiles[MountProfileId=LegacyUtilityBeta].MountType"),
+		TEXT("MountProfiles[MountProfileId=LegacyUtilityBeta].SizeLimit"),
+		TEXT("MountProfiles[MountProfileId=LegacyUtilityBeta].DefaultEquipmentPresetData"),
+		TEXT("MountProfiles[MountProfileId=LegacyUtilityBeta].bExposedModule")
+	};
+	for (const FString& Path : ExistingLeafPaths)
+	{
+		const FCFVehicleFieldEntry* TargetField = FindDefinitionField(ExistingDefinition, Path);
+		const FCFVehicleResolvedField* ResolvedField = FindResolvedField(EmptyIntentResolve.ResolveResult, Path);
+		if (TestNotNull(*FString::Printf(TEXT("E4-E6 target field exists: %s"), *Path), TargetField)
+			&& TestNotNull(*FString::Printf(TEXT("E4-E6 resolved field exists: %s"), *Path), ResolvedField))
+		{
+			TestEqual(*FString::Printf(TEXT("E4-E6 exact type preserved: %s"), *Path), ResolvedField->Value.PropertyTypeSignature, TargetField->Value.PropertyTypeSignature);
+			TestEqual(*FString::Printf(TEXT("E4-E6 exact value preserved: %s"), *Path), ResolvedField->Value.CanonicalValueText, TargetField->Value.CanonicalValueText);
+		}
+	}
+
+	// E7: Existing pins를 유지한 채 Standard Hardpoint만 새 Builder semantic row로 추가합니다.
+	FCFAuthoringOpResult UseHardpointsResult;
+	if (!TestTrue(TEXT("E7 Legacy Existing switches explicitly to UseHardpoints"), BuilderViewModel.CommitHardpointPlanMode(ECFBuilderHardpointPlanMode::UseHardpoints, UseHardpointsResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	FCFHardpointIntent NewTopIntent;
+	FCFAuthoringOpResult AddTopResult;
+	if (!TestTrue(TEXT("E7 new Standard Top hardpoint add succeeds"), BuilderViewModel.AddStandardHardpoint(TEXT("Top"), NewTopIntent, AddTopResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("E7 custom Existing identity does not affect Standard Top numbering"), NewTopIntent.LocationSlotId, FName(TEXT("Top_01")));
+	TestEqual(TEXT("E7 new Standard Socket suggestion is exact"), NewTopIntent.SocketName, FName(TEXT("HP_Top_01")));
+	TestFalse(TEXT("E7 new Hardpoint commit does not mutate Target"), AddTopResult.Mutation.bTargetChanged);
+	TestFalse(TEXT("E7 new Hardpoint commit never saves"), AddTopResult.Mutation.bSavePerformed);
+
+	FCFVehicleResolveReadResult AddedHardpointResolve;
+	if (!TestTrue(TEXT("E7 resolve after new Standard Hardpoint succeeds"), FCFVehicleAuthoringService::ResolveVehiclePreview(ReadRequest, AddedHardpointResolve)))
+	{
+		AddError(AddedHardpointResolve.Operation.Message);
+		return false;
+	}
+	TestNotEqual(TEXT("E7 new Hardpoint intentionally changes prospective resolved hash"), AddedHardpointResolve.ResolveResult.ResolvedDefinitionHash, ExistingTargetHash);
+	for (const FString& Path : ExistingLeafPaths)
+	{
+		const FCFVehicleFieldEntry* TargetField = FindDefinitionField(ExistingDefinition, Path);
+		const FCFVehicleResolvedField* ResolvedField = FindResolvedField(AddedHardpointResolve.ResolveResult, Path);
+		if (TestNotNull(*FString::Printf(TEXT("E7 existing target field exists: %s"), *Path), TargetField)
+			&& TestNotNull(*FString::Printf(TEXT("E7 existing resolved field survives: %s"), *Path), ResolvedField))
+		{
+			TestEqual(*FString::Printf(TEXT("E7 unrelated Existing type unchanged: %s"), *Path), ResolvedField->Value.PropertyTypeSignature, TargetField->Value.PropertyTypeSignature);
+			TestEqual(*FString::Printf(TEXT("E7 unrelated Existing value unchanged: %s"), *Path), ResolvedField->Value.CanonicalValueText, TargetField->Value.CanonicalValueText);
+		}
+	}
+
+	// E8: 새 Builder Hardpoint의 Standard Mount를 만들고 dependency guard → exact Mount remove → exact Hardpoint remove 순서를 검증합니다.
+	FCFMountIntent NewTopMount;
+	FCFAuthoringOpResult AddMountResult;
+	if (!TestTrue(
+		TEXT("E8 Standard Mount for new Top_01 succeeds"),
+		BuilderViewModel.CommitStandardMountIntent(
+			NewTopIntent.LocationSlotId,
+			ECFVehicleMountType::Utility,
+			ECFVehicleWeaponSize::None,
+			FSoftObjectPath(),
+			NewTopMount,
+			AddMountResult,
+			Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("E8 new Standard Mount identity is deterministic"), NewTopMount.MountProfileId, FName(TEXT("Mount_Top_01")));
+
+	FCFAuthoringOpResult ReferencedRemoveResult;
+	TestFalse(TEXT("E8 referenced Hardpoint exact remove is blocked"), BuilderViewModel.RemoveHardpointIntent(NewTopIntent.LocationSlotId, ReferencedRemoveResult, Error));
+	TestEqual(TEXT("E8 referenced Hardpoint reports DependencyConflict"), ReferencedRemoveResult.ErrorCode, ECFAuthoringErrorCode::DependencyConflict);
+	TestEqual(TEXT("E8 dependency block preserves new Mount row"), Fixture.Recipe->MountIntents.Num(), 1);
+
+	FCFAuthoringOpResult ExactMountRemoveResult;
+	if (!TestTrue(TEXT("E8 exact new Mount remove succeeds"), BuilderViewModel.RemoveMountIntent(NewTopMount.MountProfileId, ExactMountRemoveResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestTrue(TEXT("E8 exact Mount remove leaves no unrelated Recipe Mount rows"), Fixture.Recipe->MountIntents.IsEmpty());
+	TestEqual(TEXT("E8 exact Mount remove preserves new Hardpoint row"), Fixture.Recipe->HardpointIntents.Num(), 1);
+
+	FCFAuthoringOpResult ExactHardpointRemoveResult;
+	if (!TestTrue(TEXT("E8 exact new Hardpoint remove succeeds after Mount removal"), BuilderViewModel.RemoveHardpointIntent(NewTopIntent.LocationSlotId, ExactHardpointRemoveResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestTrue(TEXT("E8 exact Hardpoint remove leaves Recipe Hardpoint array empty"), Fixture.Recipe->HardpointIntents.IsEmpty());
+	TestEqual(TEXT("E8 remove last Hardpoint preserves UseHardpoints Mode"), Fixture.Recipe->BuilderHardpointPlanMode, ECFBuilderHardpointPlanMode::UseHardpoints);
+
+	// E9: Step3/6 Recipe authoring 전체에서 Target VehicleData는 exact unchanged입니다.
+	TestEqual(TEXT("E9 P0-05 entire authoring flow preserves Target Definition hash"), BuildTargetHash(*Fixture.TargetVehicleData, Error), ExistingTargetHash);
+	TestFalse(TEXT("E9 P0-05 entire authoring flow leaves Target package clean"), Fixture.TargetPackage->IsDirty());
+
+	// E10: Builder는 shared StaticMesh Socket을 생성/이동/삭제하지 않습니다.
+	UStaticMeshSocket* CustomSocketAfter = Fixture.ChassisMesh->FindSocket(TEXT("Socket_Custom_Deck_A"));
+	UStaticMeshSocket* FutureTopSocketAfter = Fixture.ChassisMesh->FindSocket(TEXT("HP_Top_01"));
+	if (TestNotNull(TEXT("E10 custom Socket survives"), CustomSocketAfter)
+		&& TestNotNull(TEXT("E10 future Top Socket survives"), FutureTopSocketAfter))
+	{
+		TestEqual(TEXT("E10 custom Socket object identity unchanged"), CustomSocketAfter, CustomSocketBefore);
+		TestEqual(TEXT("E10 custom Socket location unchanged"), CustomSocketAfter->RelativeLocation, CustomSocketLocationBefore);
+		TestEqual(TEXT("E10 custom Socket rotation unchanged"), CustomSocketAfter->RelativeRotation, CustomSocketRotationBefore);
+		TestEqual(TEXT("E10 Top Socket object identity unchanged"), FutureTopSocketAfter, FutureTopSocketBefore);
+		TestEqual(TEXT("E10 Top Socket location unchanged"), FutureTopSocketAfter->RelativeLocation, FutureTopLocationBefore);
+		TestEqual(TEXT("E10 Top Socket rotation unchanged"), FutureTopSocketAfter->RelativeRotation, FutureTopRotationBefore);
+	}
+
+	// 마지막 Builder semantic row 삭제 뒤 Legacy pins만으로 prospective identity가 다시 exact Existing으로 복귀해야 합니다.
+	FCFVehicleResolveReadResult RestoredResolve;
+	if (!TestTrue(TEXT("E11 post-remove Existing resolve succeeds"), FCFVehicleAuthoringService::ResolveVehiclePreview(ReadRequest, RestoredResolve)))
+	{
+		AddError(RestoredResolve.Operation.Message);
+		return false;
+	}
+	TestEqual(TEXT("E11 post-remove resolved identity returns exact Existing hash"), RestoredResolve.ResolveResult.ResolvedDefinitionHash, ExistingTargetHash);
+	TestEqual(TEXT("E11 post-remove Existing diff returns zero"), RestoredResolve.ResolveResult.FieldDiff.Num(), 0);
+
+	// -------------------------
+	// Fixture B: direct LocalTransform + missing Socket advisory preservation.
+	// -------------------------
+	FWorkspaceFixture PoseFixture;
+	Error.Reset();
+	if (!TestTrue(TEXT("VMG-P0-05 pose Existing Target fixture builds"), ConfigureValidTarget(PoseFixture, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	PoseFixture.TargetVehicleData->HardpointSlots.Reset();
+	PoseFixture.TargetVehicleData->MountProfiles.Reset();
+
+	FCFVehicleHardpointSlot& DirectPose = PoseFixture.TargetVehicleData->HardpointSlots.AddDefaulted_GetRef();
+	DirectPose.LocationSlotId = TEXT("DirectPose_A");
+	DirectPose.LocationCategory = TEXT("LegacyDirect");
+	DirectPose.SocketName = NAME_None;
+	DirectPose.LocalLocation = FVector(3.0, 4.0, 91.0);
+	DirectPose.LocalRotation = FRotator(5.0, 25.0, -4.0);
+
+	FCFVehicleHardpointSlot& MissingSocketPose = PoseFixture.TargetVehicleData->HardpointSlots.AddDefaulted_GetRef();
+	MissingSocketPose.LocationSlotId = TEXT("MissingSocket_B");
+	MissingSocketPose.LocationCategory = TEXT("LegacyMissing");
+	MissingSocketPose.SocketName = TEXT("Socket_Does_Not_Exist_B");
+	MissingSocketPose.LocalLocation = FVector(-6.0, 2.0, 84.0);
+	MissingSocketPose.LocalRotation = FRotator(-3.0, -14.0, 6.0);
+
+	FCFVehicleDefinitionSnapshot PoseDefinition;
+	if (!TestTrue(TEXT("E2/E3 pose Definition snapshot builds"), FCFVehicleSnapshotBuilder::BuildDefinitionSnapshot(*PoseFixture.TargetVehicleData, PoseDefinition, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	const FString PoseTargetHash = PoseDefinition.DefinitionHash;
+
+	PoseFixture.RecipePackage = CreateTestPackage(TEXT("CFVMGP005PoseRecipe"));
+	PoseFixture.Recipe = PoseFixture.RecipePackage
+		? NewObject<UCFVehicleRecipeData>(PoseFixture.RecipePackage, TEXT("DA_VMGP005_PoseRecipe"), RF_Public | RF_Standalone | RF_Transactional)
+		: nullptr;
+	if (!TestNotNull(TEXT("E2/E3 pose Recipe creates"), PoseFixture.Recipe))
+	{
+		return false;
+	}
+	PoseFixture.Recipe->TargetVehicleData = PoseFixture.TargetVehicleData;
+	FCFVehicleImportResult PoseImportResult;
+	if (!TestTrue(TEXT("E2/E3 pose Existing import succeeds"), FCFVehicleImportService::ImportDefinitionSnapshot(PoseDefinition, *PoseFixture.Recipe, PoseImportResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	PoseFixture.TargetPackage->SetDirtyFlag(false);
+	PoseFixture.RecipePackage->SetDirtyFlag(false);
+
+	FCFBuilderGameplayGuidanceRequest PoseGuidanceRequest;
+	PoseGuidanceRequest.ReadRequest.Recipe = PoseFixture.Recipe;
+	PoseGuidanceRequest.ReadRequest.TargetVehicleData = PoseFixture.TargetVehicleData;
+	PoseGuidanceRequest.ReadRequest.CallerKind = ECFAuthoringCallerKind::Automation;
+	PoseGuidanceRequest.Mode = ECFBuilderCompanionMode::CompleteExisting;
+	PoseGuidanceRequest.HardpointPlanMode = ECFBuilderHardpointPlanMode::LegacyCompatible;
+
+	FCFBuilderGameplayGuidanceResult PoseGuidance;
+	if (!TestTrue(TEXT("E2/E3 Legacy pose guidance succeeds"), FCFVehicleAuthoringService::ReadBuilderGameplayGuidance(PoseGuidanceRequest, PoseGuidance)))
+	{
+		AddError(PoseGuidance.Operation.Message);
+		return false;
+	}
+	const FCFBuilderGameplayGuidanceItem* PoseHardpointItem = FindGuidanceItem(PoseGuidance, ECFBuilderGameplayArea::Hardpoints);
+	if (TestNotNull(TEXT("E2/E3 pose Hardpoint guidance row exists"), PoseHardpointItem))
+	{
+		TestEqual(TEXT("E2/E3 stored LocalTransform avoids forced migration blocker"), PoseHardpointItem->State, ECFBuilderGuidanceState::Complete);
+	}
+
+	const FCFBuilderManualSocketGuidance* DirectPoseGuidance = PoseGuidance.SocketGuidance.FindByPredicate([](const FCFBuilderManualSocketGuidance& Guidance)
+	{
+		return Guidance.Area == ECFBuilderGameplayArea::Hardpoints && Guidance.SemanticId == FName(TEXT("DirectPose_A"));
+	});
+	const FCFBuilderManualSocketGuidance* MissingPoseGuidance = PoseGuidance.SocketGuidance.FindByPredicate([](const FCFBuilderManualSocketGuidance& Guidance)
+	{
+		return Guidance.Area == ECFBuilderGameplayArea::Hardpoints && Guidance.SemanticId == FName(TEXT("MissingSocket_B"));
+	});
+	if (TestNotNull(TEXT("E2 direct LocalTransform guidance exists"), DirectPoseGuidance))
+	{
+		TestTrue(TEXT("E2 SocketName None stored LocalTransform is accepted"), DirectPoseGuidance->bExistingStoredTransformAccepted);
+	}
+	if (TestNotNull(TEXT("E3 missing Socket guidance exists"), MissingPoseGuidance))
+	{
+		TestFalse(TEXT("E3 missing authored Socket remains absent"), MissingPoseGuidance->bFoundOnChassis);
+		TestTrue(TEXT("E3 missing Socket stored LocalTransform is accepted"), MissingPoseGuidance->bExistingStoredTransformAccepted);
+	}
+
+	TestNull(TEXT("E10 direct pose suggested Socket was not auto-created"), PoseFixture.ChassisMesh->FindSocket(TEXT("HP_DirectPose_A")));
+	TestNull(TEXT("E10 missing authored Socket was not auto-created"), PoseFixture.ChassisMesh->FindSocket(TEXT("Socket_Does_Not_Exist_B")));
+	TestEqual(TEXT("E9 pose guidance preserves Target hash"), BuildTargetHash(*PoseFixture.TargetVehicleData, Error), PoseTargetHash);
+	TestFalse(TEXT("E9 pose guidance leaves Target package clean"), PoseFixture.TargetPackage->IsDirty());
+	return true;
+}
+
+// VMG-P0-06에서 이전 단계에 남은 F/G/K technical coverage gap을 direct Step/Guidance projection으로 검증합니다.
+bool FCFVMGP006ContractMatrixTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+	using namespace CFVehicleAuthoringVMTestsPrivate;
+
+	// Hardpoint/Mount 0개인 exact Existing baseline을 만들어 intentional-zero 및 out-of-band inconsistency를 검증합니다.
+	FWorkspaceFixture Fixture;
+	FString Error;
+	if (!TestTrue(TEXT("VMG-P0-06 zero Target baseline builds"), ConfigureValidTarget(Fixture, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	Fixture.TargetVehicleData->HardpointSlots.Reset();
+	Fixture.TargetVehicleData->MountProfiles.Reset();
+
+	FCFVehicleDefinitionSnapshot ZeroDefinition;
+	if (!TestTrue(TEXT("VMG-P0-06 zero Definition snapshot builds"), FCFVehicleSnapshotBuilder::BuildDefinitionSnapshot(*Fixture.TargetVehicleData, ZeroDefinition, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	Fixture.RecipePackage = CreateTestPackage(TEXT("CFVMGP006Recipe"));
+	Fixture.Recipe = Fixture.RecipePackage
+		? NewObject<UCFVehicleRecipeData>(Fixture.RecipePackage, TEXT("DA_VMGP006_Recipe"), RF_Public | RF_Standalone | RF_Transactional)
+		: nullptr;
+	if (!TestNotNull(TEXT("VMG-P0-06 Recipe creates"), Fixture.Recipe))
+	{
+		return false;
+	}
+	Fixture.Recipe->TargetVehicleData = Fixture.TargetVehicleData;
+
+	FCFVehicleImportResult ImportResult;
+	if (!TestTrue(TEXT("VMG-P0-06 zero Definition import succeeds"), FCFVehicleImportService::ImportDefinitionSnapshot(ZeroDefinition, *Fixture.Recipe, ImportResult, Error))
+		|| !TestTrue(TEXT("VMG-P0-06 zero fixture private Profiles attach"), AttachBuilderPrivateProfiles(Fixture, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	Fixture.TargetPackage->SetDirtyFlag(false);
+	Fixture.RecipePackage->SetDirtyFlag(false);
+
+	FCFVehicleBuilderVM BuilderViewModel;
+	const FCFVehicleListEntry Entry = BuildListEntry(Fixture, true);
+	if (!TestTrue(TEXT("VMG-P0-06 Builder selects zero fixture"), BuilderViewModel.SelectVehicle(Entry, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	const FString TargetHashBefore = BuildTargetHash(*Fixture.TargetVehicleData, Error);
+
+	// F: USER intentional-zero Mode는 empty semantic arrays에서 Step 3과 Step 6 모두 forward-complete 가능해야 합니다.
+	FCFAuthoringOpResult NoHardpointsResult;
+	if (!TestTrue(TEXT("F NoHardpoints explicit commit succeeds on empty arrays"), BuilderViewModel.CommitHardpointPlanMode(ECFBuilderHardpointPlanMode::NoHardpoints, NoHardpointsResult, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	const FCFVehicleBuilderStepView* NoHardpointsStep3 = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::SocketGuide);
+	if (TestNotNull(TEXT("F NoHardpoints Step 3 exists"), NoHardpointsStep3))
+	{
+		TestEqual(TEXT("F NoHardpoints + empty arrays completes Step 3"), NoHardpointsStep3->State, ECFVehicleBuilderStepState::Complete);
+	}
+
+	FCFBuilderGameplayGuidanceRequest NoHardpointsGuidanceRequest;
+	NoHardpointsGuidanceRequest.ReadRequest.Recipe = Fixture.Recipe;
+	NoHardpointsGuidanceRequest.ReadRequest.TargetVehicleData = Fixture.TargetVehicleData;
+	NoHardpointsGuidanceRequest.ReadRequest.CallerKind = ECFAuthoringCallerKind::Automation;
+	NoHardpointsGuidanceRequest.Mode = ECFBuilderCompanionMode::NewVehicle;
+	NoHardpointsGuidanceRequest.HardpointPlanMode = ECFBuilderHardpointPlanMode::NoHardpoints;
+
+	FCFBuilderGameplayGuidanceResult NoHardpointsGuidance;
+	if (!TestTrue(TEXT("F NoHardpoints Step 6 guidance read succeeds"), FCFVehicleAuthoringService::ReadBuilderGameplayGuidance(NoHardpointsGuidanceRequest, NoHardpointsGuidance)))
+	{
+		AddError(NoHardpointsGuidance.Operation.Message);
+		return false;
+	}
+	const FCFBuilderGameplayGuidanceItem* IntentionalZeroMountItem = NoHardpointsGuidance.Items.FindByPredicate([](const FCFBuilderGameplayGuidanceItem& Item)
+	{
+		return Item.Area == ECFBuilderGameplayArea::MountProfiles;
+	});
+	if (TestNotNull(TEXT("F intentional-zero Mount guidance item exists"), IntentionalZeroMountItem))
+	{
+		TestEqual(TEXT("F NoHardpoints Mount guidance is Complete"), IntentionalZeroMountItem->State, ECFBuilderGuidanceState::Complete);
+	}
+	TestTrue(TEXT("F NoHardpoints Step 6 aggregate can complete"), NoHardpointsGuidance.bCanCompleteGameplayStep);
+
+	// G: Advanced/out-of-band data가 NoHardpoints와 충돌하면 UI commit guard를 우회했더라도 Step 3/6이 fail-closed여야 합니다.
+	FCFHardpointIntent& ConflictIntent = Fixture.Recipe->HardpointIntents.AddDefaulted_GetRef();
+	ConflictIntent.LocationSlotId = TEXT("Top_Conflict");
+	ConflictIntent.LocationCategory = TEXT("Top");
+	ConflictIntent.SocketName = TEXT("HP_Top_Old");
+	++Fixture.Recipe->AuthoringRevision;
+
+	if (!TestTrue(TEXT("G out-of-band NoHardpoints conflict refresh succeeds structurally"), BuilderViewModel.RefreshCurrentState(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	const FCFVehicleBuilderStepView* ConflictStep3 = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::SocketGuide);
+	if (TestNotNull(TEXT("G conflict Step 3 exists"), ConflictStep3))
+	{
+		TestEqual(TEXT("G NoHardpoints + semantic intent blocks Step 3"), ConflictStep3->State, ECFVehicleBuilderStepState::Blocked);
+	}
+
+	FCFBuilderGameplayGuidanceResult ConflictGuidance;
+	if (!TestTrue(TEXT("G NoHardpoints conflict Step 6 guidance read succeeds"), FCFVehicleAuthoringService::ReadBuilderGameplayGuidance(NoHardpointsGuidanceRequest, ConflictGuidance)))
+	{
+		AddError(ConflictGuidance.Operation.Message);
+		return false;
+	}
+	const FCFBuilderGameplayGuidanceItem* ConflictMountItem = ConflictGuidance.Items.FindByPredicate([](const FCFBuilderGameplayGuidanceItem& Item)
+	{
+		return Item.Area == ECFBuilderGameplayArea::MountProfiles;
+	});
+	if (TestNotNull(TEXT("G conflict Mount guidance item exists"), ConflictMountItem))
+	{
+		TestEqual(TEXT("G NoHardpoints + semantic intent blocks Step 6"), ConflictMountItem->State, ECFBuilderGuidanceState::Blocked);
+	}
+	TestFalse(TEXT("G conflict Step 6 cannot complete"), ConflictGuidance.bCanCompleteGameplayStep);
+
+	// K: invalid Advanced identity는 Resolver success 여부와 무관하게 Step 3 evaluator 자체가 Blocked로 투영해야 합니다.
+	Fixture.Recipe->BuilderHardpointPlanMode = ECFBuilderHardpointPlanMode::UseHardpoints;
+	Fixture.Recipe->HardpointIntents.Reset();
+	FCFHardpointIntent& DuplicateA = Fixture.Recipe->HardpointIntents.AddDefaulted_GetRef();
+	DuplicateA.LocationSlotId = TEXT("Top_Duplicate");
+	DuplicateA.LocationCategory = TEXT("Top");
+	DuplicateA.SocketName = TEXT("HP_Top_Old");
+	FCFHardpointIntent& DuplicateB = Fixture.Recipe->HardpointIntents.AddDefaulted_GetRef();
+	DuplicateB = DuplicateA;
+
+	// Last valid ResolveRequest의 unchanged AssetSnapshot 위에서 test-only evaluator를 직접 실행합니다.
+	BuilderViewModel.bHasCurrentResolveReadForStepDiagnostics = true;
+	BuilderViewModel.EvaluateSocketGuideStep();
+	const FCFVehicleBuilderStepView* DuplicateStep3 = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::SocketGuide);
+	if (TestNotNull(TEXT("K duplicate identity Step 3 exists"), DuplicateStep3))
+	{
+		TestEqual(TEXT("K duplicate LocationSlotId blocks Step 3"), DuplicateStep3->State, ECFVehicleBuilderStepState::Blocked);
+	}
+
+	Fixture.Recipe->HardpointIntents.Reset();
+	FCFHardpointIntent& NoneIdentity = Fixture.Recipe->HardpointIntents.AddDefaulted_GetRef();
+	NoneIdentity.LocationSlotId = NAME_None;
+	NoneIdentity.LocationCategory = TEXT("Top");
+	NoneIdentity.SocketName = TEXT("HP_Top_Old");
+	BuilderViewModel.bHasCurrentResolveReadForStepDiagnostics = true;
+	BuilderViewModel.EvaluateSocketGuideStep();
+	const FCFVehicleBuilderStepView* NoneStep3 = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::SocketGuide);
+	if (TestNotNull(TEXT("K None identity Step 3 exists"), NoneStep3))
+	{
+		TestEqual(TEXT("K None LocationSlotId blocks Step 3"), NoneStep3->State, ECFVehicleBuilderStepState::Blocked);
+	}
+
+	// Y: validation-only flow still owns no Target Apply/Save/StaticMesh mutation.
+	TestEqual(TEXT("Y P0-06 validation preserves Target hash"), BuildTargetHash(*Fixture.TargetVehicleData, Error), TargetHashBefore);
+	TestFalse(TEXT("Y P0-06 validation leaves Target package clean"), Fixture.TargetPackage->IsDirty());
+	TestFalse(TEXT("Y P0-06 Mode commit never auto-saves"), NoHardpointsResult.Mutation.bSavePerformed);
 	return true;
 }
 

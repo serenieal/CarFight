@@ -1,10 +1,10 @@
 # Vehicle Builder
 
-- 문서 버전: v1.1.1
-- 최근 갱신일: 2026-09-02
+- 문서 버전: v1.2.0
+- 최근 갱신일: 2026-09-03
 - 문서 상태: Current Implementation
-- 적용 범위: `CF-FQ-040 Guided Vehicle Builder`, `CF-FQ-042 Vehicle Builder 신규 차량 생성 UX`, Guided Builder Editor Shell, Builder-private Authoring ownership, Data Authoring Backend/Advanced Workspace 연계
-- 완료 기반: `VB-P0-09 End-to-End USER Acceptance PASS` + `VB-P0-10 Current System Promotion Complete` + `VBCUX-P0-05 USER Acceptance PASS`
+- 적용 범위: `CF-FQ-040 Guided Vehicle Builder`, `CF-FQ-042 Vehicle Builder 신규 차량 생성 UX`, `CF-FQ-043 Vehicle Builder 장비 장착점 Guidance UX`, Guided Builder Editor Shell, Builder-private Authoring ownership, Data Authoring Backend/Advanced Workspace 연계
+- 완료 기반: `VB-P0-09 End-to-End USER Acceptance PASS` + `VB-P0-10 Current System Promotion Complete` + `VBCUX-P0-05 USER Acceptance PASS` + `VMG-P0-07 USER Acceptance PASS` + `VMG-P0-08 Current System Promotion Complete`
 
 ---
 
@@ -78,13 +78,14 @@ Builder는 새로운 Runtime 차량 정의 체계나 별도 raw writer를 만들
 Stable Step 기반 단계 이동
 현재 Step의 상태/Blocker/해결 방법 표시
 Reference Draft 검토와 승인 UI
-Mesh/Socket 준비 안내
+Mesh/Socket 준비 안내와 current Chassis Socket 편집 진입
+Hardpoint Plan Mode / Standard Hardpoint / MountProfile Guidance
 Physics Proposal 검토와 승인 UI
 Gameplay Guidance 표시
 Final Review / Apply / Undo UI
 Technical Benchmark 실행
 PIE transient test-drive 준비
-USER Driving PASS 명시 입력
+USER Driving PASS 명시 입력 + persistent Target Definition receipt
 Advanced Workspace 진입
 ```
 
@@ -140,6 +141,57 @@ Chassis Mesh의 다른 Socket/Hardpoint geometry
 
 같은 시각 Mesh를 사용하되 wheelbase/Socket geometry가 달라야 하면 별도 Chassis Mesh variant가 필요하다. per-Vehicle Socket geometry override는 현재 Builder 범위가 아니다.
 
+#### 3.1.2 Hardpoint / Mount / Socket Guidance
+
+`CF-FQ-043` 완료 뒤 Step 3/6은 신규 차량의 장비 장착 위치와 장착 규칙을 Guided 흐름 안에서 직접 계획할 수 있다.
+
+```text
+BuilderHardpointPlanMode
+= LegacyCompatible / Unspecified / NoHardpoints / UseHardpoints
+
+Standard Hardpoint
+= LocationSlotId <Category>_<NN>
+= SocketName HP_<LocationSlotId>
+
+Standard Mount
+= Mount_<LocationSlotId>
+= Hardpoint 1:1 기본 규칙
+```
+
+핵심 계약:
+
+```text
+FQ-043 이전 Recipe는 LegacyCompatible default로 기존 custom/multi-Mount 구조를 보존
+Guided 신규 Recipe는 explicit Hardpoint 계획 전 Unspecified
+마지막 Hardpoint 삭제가 NoHardpoints를 자동 승인하지 않음
+Hardpoint 삭제는 Recipe row만 삭제하고 Chassis StaticMesh Socket은 유지
+참조 Mount가 남은 Hardpoint 삭제는 DependencyConflict
+MountProfileId / LocationSlotId는 생성 후 silent rename하지 않음
+Utility + SizeLimit None은 current valid
+weapon Mount는 SizeLimit None 차단
+optional EquipmentPreset은 CanUseOnMount 검증
+```
+
+Wheel/Hardpoint Socket은 같은 current Chassis StaticMesh를 사용한다.
+
+```text
+[Chassis Socket 편집하기]
+= Wheel/Hardpoint 공통 Static Mesh Editor 진입
+
+exact SocketName
+= read-only text + copy
+
+[추가 후 편집]
+= USER explicit action
+= current Chassis 원점에 exact 이름 Socket 1개 생성
+= 중복 생성 금지
+= 자동 rename / 자동 transform 추론 / 자동 Save 금지
+```
+
+`추가 후 편집` 활성 여부와 표시 상태는 cached Builder snapshot이 아니라 current `UStaticMesh::FindSocket()` live truth를 사용한다. 같은 Chassis Mesh를 재사용하는 차량은 Socket geometry를 공유하므로 편집 전 shared-Chassis 경고를 노출한다.
+
+`파괴 FX Socket (선택)`은 차량 파괴 시 폭발/잔해 효과를 별도 위치에 붙일 때만 필요하다. 별도 위치가 필요하지 않으면 만들지 않아도 된다.
+
 ### 3.2 Builder ViewModel
 
 `FCFVehicleBuilderVM`은 transient workflow state와 Step evaluator를 소유한다.
@@ -151,7 +203,7 @@ persistent truth를 복제하지 않음
 fresh Authoring read를 기준으로 Step 상태 재평가
 Stable StepId로 semantic step을 식별
 fixed index에 의미를 결합하지 않음
-stale approval/token을 restart 뒤 자동 부활시키지 않음
+stale transient approval/token을 restart 뒤 자동 부활시키지 않음; exact current truth와 일치하는 persistent Builder/Driving receipt만 durable provenance로 복원 허용
 새 writer를 만들지 않음
 ```
 
@@ -169,6 +221,7 @@ UCFVehicleRecipeData
 + Builder provenance receipt
 + vehicle-specific Transmission review receipt
 + vehicle-specific Engine Curve review receipt
++ USER Driving Target Definition acceptance receipt
 
 UCFVehicleRefEvidence
 = 실존 차량 Reference identity/source/claim/conflict/unknown Evidence
@@ -211,10 +264,10 @@ Builder가 current identity/fingerprint/hash를 다시 확인하고 Preview를 �
 | --- | --- | --- |
 | 1 | Identity / Reference | 차량 record 선택·생성, ResearchDraft, Reference Evidence/Companion review, Reference USER acceptance |
 | 2 | Mesh Prep | Chassis/Wheel Mesh 준비와 typed AssetIntent 반영 |
-| 3 | Socket Guide | Wheel Socket 필수 이름/존재 확인, Hardpoint/Destroyed FX optional guidance |
+| 3 | Socket Guide | Wheel/Hardpoint exact 이름·live 존재 확인, unified Chassis Socket editor, explicit add-at-origin, optional Destroyed FX guidance |
 | 4 | Layout Capture | current Socket truth와 persisted Layout의 readiness/current/stale 판정 |
 | 5 | Physics Proposal | accepted Evidence 기반 private 4 Profile typed proposal Preview/Commit |
-| 6 | Gameplay Setup | Gameplay/Hardpoint/Fitting/default completeness와 USER Socket guidance |
+| 6 | Gameplay Setup | Gameplay/Hardpoint/Fitting/default completeness, Standard 1:1 Mount rule, MountType/SizeLimit/EquipmentPreset guidance |
 | 7 | Final Review | fresh Resolve/Validation/Drift/전체 Diff/provenance 검토 후 explicit DefinitionApply, guarded Undo |
 | 8 | Driving Test | saved Target exact benchmark, PIE transient test-drive, explicit USER Driving acceptance |
 
@@ -373,13 +426,16 @@ Hardpoint Socket 배치
 Builder가 수행하는 영역:
 
 ```text
-필요 이름 안내
-존재/중복/유효성 검사
+필요 exact 이름 안내와 복사 UX
+live 존재/중복/유효성 검사
 current Socket/Layout 상태 표시
+Wheel/Hardpoint 공통 Chassis Socket Editor 진입
+USER explicit missing Socket add-at-origin
 필요한 Reference 비교 정보 제공
 ```
 
-Wheel center 자동 검출, Hardpoint 자동 배치, Mesh surface 추론은 Current Builder 범위가 아니다.
+Builder는 Socket을 자동 배치하지 않는다. `추가 후 편집`은 USER가 명시적으로 선택한 exact 이름 Socket 1개를 원점에 추가할 뿐이며 위치·회전·Scale 조정과 Save는 USER가 소유한다.
+Wheel center 자동 검출, Hardpoint 자동 geometry 배치, Mesh surface 추론은 Current Builder 범위가 아니다.
 
 상세 Current Runtime 계약은 다음 문서를 따른다.
 
@@ -441,8 +497,19 @@ expected == actual
 PIE test-drive는 current selected VehicleData의 transient duplicate를 active Player VehiclePawn에 적용한다.
 이 transient 적용은 Product Asset 저장이나 DefinitionApply를 대신하지 않는다.
 
-USER Driving PASS는 current Recipe + current TargetHash + current Benchmark RunId에 exact binding된 local acceptance token이다.
-Target/benchmark가 바뀌면 기존 acceptance를 current로 인정하지 않는다.
+USER Driving PASS는 `UCFVehicleRecipeData::BuilderDrivingAcceptanceReceipt`에 **exact Target VehicleData path + Target DefinitionHash**로 persistent binding된다.
+Benchmark RunId는 PASS 당시 진단/추적 정보이며 same DefinitionHash에서 benchmark를 다시 실행해 RunId가 바뀌어도 USER PASS 자체는 유지한다.
+
+```text
+same Target path + same DefinitionHash
+→ Editor 재기동 / local config 유실 / 새 benchmark RunId에서도 PASS 유지
+
+Target path 또는 DefinitionHash drift
+→ acceptance stale
+→ USER Driving PASS 다시 필요
+```
+
+Builder는 이 receipt를 자동 Save하지 않는다. USER PASS 뒤 Recipe Asset을 직접 저장해야 디스크에 영구 보존된다.
 
 ---
 
@@ -514,14 +581,23 @@ Document/Systems/Vehicles/VehicleCoreDecisions.md
 Document/Plan/Archive/VehicleBuilder/VehicleBuilderPlan.md
 Document/Plan/Archive/VehicleBuilder/VehicleBuilderRoadmap.md
 Document/Plan/VehicleBuilderCreationUX/VehicleBuilderCreationUXPlan.md
+Document/Plan/VehicleMountGuidance/VehicleMountGuidancePlan.md
 Document/Plan/Archive/README.md
 ```
 
-`CF-FQ-040` 대표 Plan은 `Done → Historical + Archived Path`로 `Document/Plan/Archive/VehicleBuilder/`에 보존한다. `CF-FQ-042` 대표 Plan은 Current route에서 내려온 `Historical + Retained Path`로 기존 `VehicleBuilderCreationUX/` 경로를 보존한다.
+`CF-FQ-040` 대표 Plan은 `Done → Historical + Archived Path`로 `Document/Plan/Archive/VehicleBuilder/`에 보존한다. `CF-FQ-042`와 `CF-FQ-043` 대표 Plan은 Current route에서 내려온 `Historical + Retained Path`로 각각 기존 `VehicleBuilderCreationUX/`, `VehicleMountGuidance/` 경로를 보존한다.
 
 ---
 
 ## 13. Changelog
+
+### v1.2.0 - 2026-09-03
+
+- `CF-FQ-043 / VMG-P0-08 Current System Promotion`으로 Hardpoint/Mount/Socket Guidance를 Vehicle Builder Current 계약에 승격했다.
+- Recipe-owned 4-state Hardpoint Plan Mode, stable Standard Hardpoint/Mount identity, Utility/Size/Preset validation, Legacy/custom/multi-Mount preservation과 dependency-safe no-cascade delete를 Current로 기록했다.
+- Wheel/Hardpoint 공통 `Chassis Socket 편집하기`, exact SocketName copy, USER explicit `추가 후 편집` add-at-origin/no-auto-save, live `FindSocket()` 상태, shared Chassis warning과 optional Destroyed FX Socket 의미를 Current UX로 승격했다.
+- USER Driving PASS를 host-local RunId token이 아니라 persistent Target path + DefinitionHash receipt로 보존하는 현재 계약을 기록했다. same DefinitionHash에서는 Editor 재기동/새 benchmark RunId에도 유지하고 Definition drift에서만 stale 처리한다.
+- CF-FQ-043 final technical baseline은 `CarFight.DataAuthoring 100/100 PASS`; USER는 Socket/Naming과 Wagon Step 8 re-accept/save/Complete를 PASS했고 fresh AssetDump에서 persisted `BuilderDrivingAcceptanceReceipt`를 확인했다.
 
 ### v1.1.1 - 2026-09-02
 

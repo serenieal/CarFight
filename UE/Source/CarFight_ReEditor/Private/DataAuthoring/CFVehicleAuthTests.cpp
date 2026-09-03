@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthTests.cpp
-// Version: v1.16.0
-// Date: 2026-09-01
+// Version: v1.17.0
+// Date: 2026-09-02
 // Description: DAUTH Foundation + CF-FQ-040 ESH-01 Engine TorqueCurve Registry/Reflection coverage Automation입니다.
 // Changelog:
+// - v1.17.0: CF-FQ-043 VMG-P0-04 이후 Gameplay Guidance Hardpoint/Mount authority가 CompanionMode와 분리되므로 NewVehicle 회귀는 UseHardpoints, Existing stored-transform 회귀는 LegacyCompatible을 request에 명시.
 // - v1.16.0: Registry/Reflection 134 coverage와 Performance-owned bUseEngineTorqueCurve/atomic EngineTorqueCurve descriptor, Resolver revision 5를 검증.
 // - v1.15.0: WSA-P0-04 Gameplay Guidance의 Socket/Manual mode Legacy clamp 제외와 Socket Reference geometry conflict를 focused 검증.
 // - v1.14.0: WSA-P0-01 Registry/Reflection 132 coverage, WheelAnchor RelativeScale descriptor 4개, bUseWheelSocketScale source/dependency와 append-only intent enum을 검증.
@@ -1043,6 +1044,7 @@ bool FCFVehicleBuilderGameplayGuideTest::RunTest(const FString& Parameters)
 	NewVehicleRequest.ReadRequest.TargetVehicleData = TargetVehicleData;
 	NewVehicleRequest.ReadRequest.CallerKind = ECFAuthoringCallerKind::Automation;
 	NewVehicleRequest.Mode = ECFBuilderCompanionMode::NewVehicle;
+	NewVehicleRequest.HardpointPlanMode = ECFBuilderHardpointPlanMode::UseHardpoints;
 	// 정상 수동 Socket을 가진 첫 guidance 결과입니다.
 	FCFBuilderGameplayGuidanceResult ReadyResult;
 	const bool bReadyRead = FCFVehicleAuthoringService::ReadBuilderGameplayGuidance(NewVehicleRequest, ReadyResult);
@@ -1188,6 +1190,7 @@ bool FCFVehicleBuilderGameplayGuideTest::RunTest(const FString& Parameters)
 	// Existing Vehicle Completion mode로 같은 current truth를 다시 평가합니다.
 	FCFBuilderGameplayGuidanceRequest ExistingRequest = NewVehicleRequest;
 	ExistingRequest.Mode = ECFBuilderCompanionMode::CompleteExisting;
+	ExistingRequest.HardpointPlanMode = ECFBuilderHardpointPlanMode::LegacyCompatible;
 	// Existing stored transform baseline-preservation guidance 결과입니다.
 	FCFBuilderGameplayGuidanceResult ExistingResult;
 	const bool bExistingRead = FCFVehicleAuthoringService::ReadBuilderGameplayGuidance(ExistingRequest, ExistingResult);

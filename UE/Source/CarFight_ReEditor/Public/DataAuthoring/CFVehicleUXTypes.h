@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleUXTypes.h
-// Version: v1.1.0
-// Date: 2026-08-31
+// Version: v1.2.0
+// Date: 2026-09-02
 // Description: DAUTH-P0-11 Frozen 24.90~24.94 Workspace completeness용 Common Authoring facade C++ value contract입니다.
 // Scope: Shared Profile B2 adapter, External Drift 3-way review/recovery, New Vehicle/Mesh-only record creation을 위한 Editor-only typed value를 제공합니다.
 // Changelog:
+// - v1.2.0: CF-FQ-043 Guided 신규 Recipe의 explicit Hardpoint 계획 Gate를 R2 creation ProposalHash에 binding하는 bRequireExplicitHardpointPlan opt-in을 추가. 일반 creation 기본값은 false.
 // - v1.1.0: Guided Builder가 새로 만드는 two-record Recipe에 VehicleSpecificRequired Transmission policy를 exact proposal hash에 binding할 opt-in request flag를 추가. 일반 creation 기본값은 false로 Legacy 호환 유지.
 // - v1.0.0: Frozen 24.91~24.94 public value contract 최초 구현.
 // Migration:
@@ -202,6 +203,9 @@ struct FCFVehicleRecordCreateRequest
 
 	// Guided Builder 신규 차량이면 Final Review에서 vehicle-specific Transmission을 강제합니다. 일반/Legacy creation은 기본 false입니다.
 	bool bRequireVehicleSpecificTransmission = false;
+
+	// Guided Builder 신규 차량이면 Hardpoint 사용 여부를 명시적으로 결정하도록 새 Recipe를 Unspecified mode로 생성합니다. 일반/Legacy creation은 기본 false입니다.
+	bool bRequireExplicitHardpointPlan = false;
 
 	// SlateUI 또는 Automation만 허용하며 P0 AI record-creation contract는 새로 열지 않습니다.
 	ECFAuthoringCallerKind CallerKind = ECFAuthoringCallerKind::Unknown;
