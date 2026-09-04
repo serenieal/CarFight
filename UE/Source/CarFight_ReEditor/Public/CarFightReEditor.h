@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.4.0
-// Date: 2026-08-27
+// Version: 1.5.0
+// Date: 2026-09-03
 // Description: CarFight Editor 전용 도구 모듈 진입점입니다.
-// Scope: Guided Vehicle Builder, Current Vehicle Authoring Workspace 기본 메뉴와 Deprecated Vehicle DA Wizard hidden tab을 담당합니다.
+// Scope: Guided Vehicle Builder, Vehicle Authoring, Data Asset Manager 기본 메뉴와 Deprecated Vehicle DA Wizard hidden tab을 담당합니다.
 // Changelog:
+// - v1.5.0: CF-FQ-045 DAM-P0-03 Data Asset Manager Nomad Tab/Window 메뉴 진입점을 추가.
 // - v1.4.0: CF-FQ-040 Guided Vehicle Builder Nomad Tab/Window 메뉴 진입점을 추가.
 // - v1.3.0: DAUTH Deprecated Gate DG1~DG5 PASS 후 Legacy Wizard의 기본 메뉴 진입을 제거하고 hidden tab identity만 DEL Gate 전까지 보존.
 // - v1.2.0: P0-12 UA-01 한국어 우선 Vehicle Authoring 탭/메뉴 표시와 문서 버전을 동기화.
@@ -38,10 +39,13 @@ private:
 	// Vehicle Authoring Workspace 탭 인스턴스를 생성합니다.
 	TSharedRef<SDockTab> HandleSpawnAuthoringTab(const FSpawnTabArgs& InSpawnTabArgs);
 
+	// Data Asset Manager 탭 인스턴스를 생성합니다.
+	TSharedRef<SDockTab> HandleSpawnDataAssetManagerTab(const FSpawnTabArgs& InSpawnTabArgs);
+
 	// Vehicle DA Wizard 탭 인스턴스를 생성합니다.
 	TSharedRef<SDockTab> HandleSpawnVDAWizardTab(const FSpawnTabArgs& InSpawnTabArgs);
 
-	// Level Editor Window 메뉴에 Guided Builder와 Current Vehicle Authoring Workspace 진입을 추가합니다.
+	// Level Editor Window 메뉴에 Guided Builder, Vehicle Authoring, Data Asset Manager 진입을 추가합니다.
 	void RegisterMenus();
 
 	// 등록된 Guided Vehicle Builder 탭을 엽니다.
@@ -49,6 +53,9 @@ private:
 
 	// 등록된 Vehicle Authoring Workspace 탭을 엽니다.
 	void OpenAuthoringTab();
+
+	// 등록된 Data Asset Manager 탭을 엽니다.
+	void OpenDataAssetManagerTab();
 
 	// DEL Gate 전 compatibility를 위해 등록된 Deprecated Vehicle DA Wizard hidden tab을 엽니다.
 	void OpenVDAWizardTab();

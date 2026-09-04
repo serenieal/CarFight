@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.4.0
-// Date: 2026-08-27
+// Version: 1.5.0
+// Date: 2026-09-03
 // Description: CarFight Editor 전용 도구 모듈 구현입니다.
-// Scope: Guided Vehicle Builder, Vehicle Authoring Workspace와 Deprecated Vehicle DA Wizard hidden tab 등록을 담당합니다.
+// Scope: Guided Vehicle Builder, Vehicle Authoring, Data Asset Manager와 Deprecated Vehicle DA Wizard hidden tab 등록을 담당합니다.
 // Changelog:
+// - v1.5.0: CF-FQ-045 DAM-P0-03 CarFight.DataAssetManager Nomad Tab과 Window 메뉴 진입을 추가.
 // - v1.4.0: CF-FQ-040 VB-P0-09 준비를 위해 별도 CarFight.VehicleBuilder Guided Shell 탭과 Window 메뉴 진입을 추가.
 // - v1.3.0: DAUTH DG1~DG5 PASS에 따라 Legacy Vehicle DA Wizard의 기본 Window 메뉴 진입만 제거. hidden tab spawner와 spawn 함수는 DEL Gate 전까지 유지.
 // - v1.2.0: P0-12 UA-01 사용자 피드백에 따라 Vehicle Authoring 탭/메뉴 표시명을 한국어 우선으로 변경. 내부 Tab ID는 유지.
@@ -19,7 +20,7 @@
 #include "CFVDAWizardTab.h"
 #include "DataAuthoring/CFVehicleAuthoringTab.h"
 #include "DataAuthoring/CFVehicleBuilderTab.h"
-
+#include "DataManagement/CFDAManagementTab.h"
 
 #include "Framework/Docking/TabManager.h"
 #include "ToolMenus.h"
@@ -34,6 +35,9 @@ namespace
 
 	// Vehicle Authoring Workspace 탭 등록에 사용할 고정 탭 식별자입니다.
 	static const FName VehicleAuthoringTabName(TEXT("CarFight.VehicleAuthoring"));
+
+	// Data Asset Manager 탭 등록에 사용할 고정 탭 식별자입니다.
+	static const FName DataAssetManagerTabName(TEXT("CarFight.DataAssetManager"));
 
 	// Vehicle DA Wizard 탭 등록에 사용할 기존 고정 탭 식별자입니다.
 	static const FName VDAWizardTabName(TEXT("CarFight.VehicleDAWizard"));
@@ -52,6 +56,12 @@ void FCarFightReEditorModule::StartupModule()
 		VehicleAuthoringTabName,
 		FOnSpawnTab::CreateRaw(this, &FCarFightReEditorModule::HandleSpawnAuthoringTab))
 		.SetDisplayName(LOCTEXT("VehicleAuthoringTabTitle", "차량 데이터 제작"))
+		.SetMenuType(ETabSpawnerMenuType::Hidden);
+
+	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(
+		DataAssetManagerTabName,
+		FOnSpawnTab::CreateRaw(this, &FCarFightReEditorModule::HandleSpawnDataAssetManagerTab))
+		.SetDisplayName(LOCTEXT("DataAssetManagerTabTitle", "CarFight 데이터 관리"))
 		.SetMenuType(ETabSpawnerMenuType::Hidden);
 
 	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(
@@ -75,6 +85,7 @@ void FCarFightReEditorModule::ShutdownModule()
 
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(VehicleBuilderTabName);
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(VehicleAuthoringTabName);
+	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(DataAssetManagerTabName);
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(VDAWizardTabName);
 }
 
@@ -95,6 +106,16 @@ TSharedRef<SDockTab> FCarFightReEditorModule::HandleSpawnAuthoringTab(const FSpa
 		.TabRole(ETabRole::NomadTab)
 		[
 			SNew(SCFVehicleAuthoringTab)
+		];
+}
+
+// Data Asset Manager 탭 인스턴스를 생성합니다.
+TSharedRef<SDockTab> FCarFightReEditorModule::HandleSpawnDataAssetManagerTab(const FSpawnTabArgs& InSpawnTabArgs)
+{
+	return SNew(SDockTab)
+		.TabRole(ETabRole::NomadTab)
+		[
+			SNew(SCFDAManagementTab)
 		];
 }
 
@@ -137,6 +158,13 @@ void FCarFightReEditorModule::RegisterMenus()
 		FSlateIcon(),
 		FUIAction(FExecuteAction::CreateRaw(this, &FCarFightReEditorModule::OpenAuthoringTab)));
 
+	CarFightSection.AddMenuEntry(
+		TEXT("OpenDataAssetManagerTab"),
+		LOCTEXT("OpenDataAssetManagerTabLabel", "CarFight 데이터 관리"),
+		LOCTEXT("OpenDataAssetManagerTabTooltip", "CarFight DataAsset을 Domain/Type/Asset/Health/Reference 기준으로 탐색하고 검사합니다."),
+		FSlateIcon(),
+		FUIAction(FExecuteAction::CreateRaw(this, &FCarFightReEditorModule::OpenDataAssetManagerTab)));
+
 }
 
 // 등록된 Guided Vehicle Builder 탭을 엽니다.
@@ -149,6 +177,12 @@ void FCarFightReEditorModule::OpenBuilderTab()
 void FCarFightReEditorModule::OpenAuthoringTab()
 {
 	FGlobalTabmanager::Get()->TryInvokeTab(VehicleAuthoringTabName);
+}
+
+// 등록된 Data Asset Manager 탭을 엽니다.
+void FCarFightReEditorModule::OpenDataAssetManagerTab()
+{
+	FGlobalTabmanager::Get()->TryInvokeTab(DataAssetManagerTabName);
 }
 
 // 등록된 Vehicle DA Wizard 탭을 엽니다.
