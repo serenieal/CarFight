@@ -1,14 +1,15 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.1
-// Date: 2026-09-01
+// Version: 1.0.2
+// Date: 2026-09-02
 // Description: CF-FQ-041 RTA-P0-01 Runtime Test Catalog 계약 회귀
 // Scope: Empty/Valid/Null/Duplicate 목록과 Config locator의 기본 경로 계약을 검증합니다.
 // Changelog:
+// - v1.0.2: RTA-P0-05 fitting-ready E2E 차량 추가를 반영해 기본 Catalog 차량 4 / 장비 2와 DA_VehicleDefense_TestSUV exact membership을 검증.
 // - v1.0.1: persisted 기본 Catalog를 Runtime Settings 경로로 실제 로드해 차량 3 / 장비 2와 runtime validation을 검증.
 // - v1.0.0: Catalog runtime validation과 DefaultGame Config path 회귀를 추가.
 // Migration:
-// - persisted .uasset은 Config locator를 통한 runtime load Automation과 AssetDump persisted evidence를 함께 사용합니다.
+// - 기본 Catalog 차량 수는 RTA-P0-05 이후 4개이며 DA_VehicleDefense_TestSUV를 포함해야 합니다. persisted .uasset은 Config locator runtime load Automation과 AssetDump evidence를 함께 사용합니다.
 
 #include "CFRuntimeTestCatalogData.h"
 #include "CFRuntimeTestSettings.h"
@@ -17,6 +18,7 @@
 #include "CFVehicleData.h"
 #include "Misc/AutomationTest.h"
 #include "UObject/Package.h"
+#include "UObject/UObjectGlobals.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -76,8 +78,20 @@ bool FCFRuntimeTestCatalogContractTest::RunTest(const FString& Parameters)
 		UCFRuntimeTestCatalogData* LoadedDefaultCatalog = RuntimeTestSettings->LoadDefaultCatalog();
 		if (TestNotNull(TEXT("기본 Catalog Runtime load"), LoadedDefaultCatalog))
 		{
-			TestEqual(TEXT("기본 Catalog 차량 수"), LoadedDefaultCatalog->AllowedVehicleData.Num(), 3);
+			TestEqual(TEXT("기본 Catalog 차량 수"), LoadedDefaultCatalog->AllowedVehicleData.Num(), 4);
 			TestEqual(TEXT("기본 Catalog 장비 수"), LoadedDefaultCatalog->AllowedEquipmentPresetData.Num(), 2);
+
+			// [v1.0.2] RTA-P0-05 성공형 Equipment E2E의 기준 차량으로 Catalog에 등록되어야 하는 persisted VehicleData입니다.
+			UCFVehicleData* FittingReadyVehicleData = LoadObject<UCFVehicleData>(
+				nullptr,
+				TEXT("/Game/CarFight/Vehicles/Data/Defense/DA_VehicleDefense_TestSUV.DA_VehicleDefense_TestSUV"));
+			if (TestNotNull(TEXT("기본 Catalog fitting-ready 차량 load"), FittingReadyVehicleData))
+			{
+				TestTrue(
+					TEXT("기본 Catalog에 DA_VehicleDefense_TestSUV exact membership"),
+					LoadedDefaultCatalog->AllowedVehicleData.Contains(FittingReadyVehicleData));
+			}
+
 			TestTrue(TEXT("기본 Catalog Runtime validation"), LoadedDefaultCatalog->IsRuntimeTestCatalogUsable());
 		}
 	}

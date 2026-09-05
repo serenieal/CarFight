@@ -1,9 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.33.0
-// Date: 2026-08-05
-// Description: VehicleDebug Panel용 C++ 부모 위젯 클래스 구현입니다.
+// Version: 1.34.1
+// Date: 2026-09-02
+// Description: VehicleDebug Panel용 C++ 부모 위젯 / RTA Runtime Apply dedicated child integration 구현
 // Changelog:
+// - v1.34.1: P0에 필요 없는 RuntimeApplyWidgetClass override를 제거하고 C++ 기본 UCFRuntimeApplyWidget으로 child 생성 경로를 단순화.
+// - v1.34.0: RuntimeApply Navigation을 추가하고 선택 시 Generic Section 대신 UCFRuntimeApplyWidget 전용 interactive child를 표시. 기존 섹션 복귀 시 generic child 재부착도 보장.
 // - v1.33.0: 동적 Navigation에 선택 대상 전용 섹션을 추가해 TargetSelect 표시 정보와 대상 방어·내구도 상태를 매 프레임 갱신.
 // - v1.32.0: Weapon 섹션에 VehicleDefenseComp 준비·Fallback·현재 Shield·6방향 Armor 상태와 마지막 전체 피해 결과를 추가.
 // - v1.31.0: 탄종 독립 터렛 레티클 유효성, 월드 위치와 비교 거리를 표시하고 기존 Weapon Preview 행을 Legacy로 구분.
@@ -35,6 +37,7 @@
 // - v1.8.2: Aim 검증 하위 섹션 표시명을 서버 조준에서 로컬 발사 검증 기준으로 변경.
 // - v1.8.1: 싱글플레이 기준에 맞춰 Aim 디버그 패널의 복제 시각 표시 문구를 Aim 시각 표시로 변경.
 // Migration:
+// - v1.34.0 RuntimeApply는 기존 SelectedSectionHost를 재사용하며 WBP Asset 변경이 없다. Widget은 Current/Selected/Explicit Apply만 소유하고 Vehicle/Fitting mutation은 Runtime Apply service에 위임한다.
 // - Target 섹션은 기존 동적 Section 렌더링 경로를 사용하므로 WBP 에셋 수정 없이 새 Navigation 항목과 하위 방어·내구도 정보를 표시한다.
 // - 터렛 레티클 검증은 신규 Turret Reticle 세 행을 사용하며 기존 Weapon Preview 행은 과거 구현 확인용 Legacy Debug로만 해석한다.
 // - Weapon Reticle Mode 표시는 Aim Solution 결과만 읽으며 Debug Panel에서 무기 모드 판정이나 Trace를 다시 수행하지 않는다.
@@ -57,12 +60,13 @@
 // - 기존 Weapon 섹션 ID와 FireOrigin 하위 섹션은 유지하고 WeaponData 하위 섹션만 추가한다.
 // - 기존 Overview / Drive / Input / Camera / Aim / Runtime 섹션은 유지하고 Weapon 섹션만 Navigation에 추가한다.
 // - Aim 검증/시각 상태 FieldId는 aim_validation / aim_visual 접두어를 기준으로 사용한다.
-// Scope: VehicleDebug Overview / Drive / Input / Camera / Aim / Target / Weapon / Runtime 카테고리를 읽어 Navigation + Selected Section 기반 표시와 기존 fallback 표시를 안정적으로 지원합니다.
+// Scope: VehicleDebug Overview / Drive / Input / Camera / Aim / Target / Weapon / Runtime / RuntimeApply Navigation과 dedicated interactive child를 안정적으로 지원합니다.
 
 #include "UI/CFVehicleDebugPanelWidget.h"
 
 #include "CFVehicleAimComp.h"
 #include "Blueprint/WidgetTree.h"
+#include "UI/CFRuntimeApplyWidget.h"
 #include "UI/CFVehicleDebugNavItemWidget.h"
 #include "UI/CFVehicleDebugSectionWidget.h"
 
@@ -166,6 +170,12 @@ void UCFVehicleDebugPanelWidget::SetVehiclePawnRef(ACFVehiclePawn* InVehiclePawn
 {
 	// [v1.0.0] Panel이 읽을 차량 Pawn 참조를 저장합니다.
 	VehiclePawnRef = InVehiclePawnRef;
+
+	// [v1.34.0] 이미 생성된 RuntimeApply child가 있으면 Panel과 동일 Pawn source를 즉시 전달합니다.
+	if (RuntimeApplyWidget)
+	{
+		RuntimeApplyWidget->SetVehiclePawnRef(VehiclePawnRef);
+	}
 
 	RefreshFromPawn();
 	UpdatePanelVisibility();
@@ -1445,6 +1455,38 @@ void UCFVehicleDebugPanelWidget::RefreshSelectedSectionWidget()
 		return;
 	}
 
+	// [v1.34.0] RuntimeApply만 Generic Field renderer 대신 전용 interactive child를 사용합니다.
+	if (SelectedSectionViewData->SectionId == TEXT("RuntimeApply"))
+	{
+		if (!RuntimeApplyWidget)
+		{
+			if (APlayerController* OwningPlayerController = GetOwningPlayer())
+			{
+				RuntimeApplyWidget = CreateWidget<UCFRuntimeApplyWidget>(
+					OwningPlayerController,
+					UCFRuntimeApplyWidget::StaticClass());
+			}
+			else if (WidgetTree)
+			{
+				RuntimeApplyWidget = CreateWidget<UCFRuntimeApplyWidget>(
+					WidgetTree,
+					UCFRuntimeApplyWidget::StaticClass());
+			}
+		}
+
+		if (RuntimeApplyWidget)
+		{
+			if (RuntimeApplyWidget->GetParent() != VerticalBox_SelectedSectionHost)
+			{
+				VerticalBox_SelectedSectionHost->ClearChildren();
+				VerticalBox_SelectedSectionHost->AddChildToVerticalBox(RuntimeApplyWidget);
+			}
+
+			RuntimeApplyWidget->SetVehiclePawnRef(VehiclePawnRef);
+		}
+		return;
+	}
+
 	if (!SelectedSectionWidget)
 	{
 		if (APlayerController* OwningPlayerController = GetOwningPlayer())
@@ -1465,6 +1507,13 @@ void UCFVehicleDebugPanelWidget::RefreshSelectedSectionWidget()
 
 	if (SelectedSectionWidget)
 	{
+		// [v1.34.0] RuntimeApply child를 표시한 뒤 Generic Section으로 돌아온 경우 기존 캐시를 host에 다시 붙입니다.
+		if (SelectedSectionWidget->GetParent() != VerticalBox_SelectedSectionHost)
+		{
+			VerticalBox_SelectedSectionHost->ClearChildren();
+			VerticalBox_SelectedSectionHost->AddChildToVerticalBox(SelectedSectionWidget);
+		}
+
 		SelectedSectionWidget->SetSectionViewData(*SelectedSectionViewData);
 	}
 }
@@ -1491,6 +1540,7 @@ FCFVehicleDebugPanelViewData UCFVehicleDebugPanelWidget::BuildVehicleDebugPanelV
 	PanelViewData.AddTopLevelSection(BuildTargetSectionViewData(CachedTarget));
 	PanelViewData.AddTopLevelSection(BuildWeaponSectionViewData(CachedWeapon));
 	PanelViewData.AddTopLevelSection(BuildRuntimeSectionViewData(CachedRuntime));
+	PanelViewData.AddTopLevelSection(BuildRuntimeApplySectionViewData());
 	return PanelViewData;
 }
 
@@ -2110,6 +2160,26 @@ TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildWeap
 	WeaponSectionViewData->AddChildSection(FireOriginSectionViewData);
 
 	return WeaponSectionViewData;
+}
+
+// [v1.34.0] 전용 interactive child를 선택할 RuntimeApply Navigation Section ViewData를 생성합니다.
+TSharedRef<FCFVehicleDebugSectionViewData> UCFVehicleDebugPanelWidget::BuildRuntimeApplySectionViewData() const
+{
+	// [v1.34.0] Navigation/선택 모델에는 존재하지만 본문 렌더링은 dedicated child가 담당할 RuntimeApply Section입니다.
+	TSharedRef<FCFVehicleDebugSectionViewData> RuntimeApplySectionViewData =
+		FCFVehicleDebugSectionViewData::MakeSection(
+			TEXT("RuntimeApply"),
+			TEXT("런타임 적용"),
+			ECFVehicleDebugSectionKind::Category,
+			true);
+
+	RuntimeApplySectionViewData->NavigationGroup = ECFVehicleDebugNavGroup::Diagnostics;
+	RuntimeApplySectionViewData->NavigationOrder = 10;
+	RuntimeApplySectionViewData->bShowInNavigation = true;
+	RuntimeApplySectionViewData->BadgeText = TEXT("Apply");
+	RuntimeApplySectionViewData->BodyText =
+		TEXT("등록된 Runtime Catalog의 차량/장비를 선택한 뒤 명시적 Apply 버튼으로 현재 차량에 적용합니다.");
+	return RuntimeApplySectionViewData;
 }
 
 // [v1.5.0] Runtime 카테고리용 Section ViewData를 생성합니다.

@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.166.0
-// Date: 2026-09-01
-// Description: CarFight 싱글플레이 차량 Pawn 구현 / ESH-01 vehicle-specific Engine TorqueCurve runtime apply seam
+// Version: 2.167.0
+// Date: 2026-09-02
+// Description: CarFight 싱글플레이 차량 Pawn 구현 / Engine TorqueCurve / RTA Fitting-dependent Runtime refresh seam
 // Changelog:
+// - v2.167.0: RTA-P0-03 장비 hot apply/복구가 전체 차량 재초기화 없이 현재 Applied Fitting의 Ammo·TurretVisual·Launcher를 다시 구성하고 CombatReady를 readback하는 C++ refresh seam을 추가.
 // - v2.166.0: VehicleData opt-in EngineTorqueCurve를 공용 validator/mapper로 Chaos EngineSetup에 적용하고, opt-out hot-apply는 Movement archetype의 authored Curve로 복원해 이전 차량 Curve 잔류를 방지.
 // - v2.165.0: Wheel Visual authored base를 Location/Rotation/Scale 전체로 캡처해 매 Apply 시작 시 복원하고, OnConstruction은 fresh SCS authored transform을 재캡처하도록 cache invalidation 추가. Legacy/Socket/Manual hot-reinit 잔류 transform을 제거.
 // - v2.164.1: Right fallback orientation을 Mesh scale/Legacy AutoCenter보다 먼저 확정해 center correction도 최종 Right orientation 기준으로 계산되게 순서 교정.
@@ -114,6 +115,7 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth Visual/Shell 적용 전 기준선을 깨끗하게 만들기 위해 차량 진단 로그와 Owner 표시 안정화 기본값을 False로 통일.
 // Migration:
+// - v2.167.0 RefreshFittingDependentRuntime은 현재 Applied Fitting을 이미 Commit한 뒤에만 사용합니다. Drive/Wheel/Health/Fitting을 재초기화하지 않으며 Ammo는 Snapshot의 InitialSortieAmmoLoads 기준으로 재구성하고 임의 탄약 수량을 만들지 않습니다.
 // - v2.162.0 AimReticleWidgetClass/TargetSelectWidgetClass와 Legacy ZOrder UPROPERTY는 저장 직렬화 호환을 위해 유지하지만 Pawn runtime은 Class를 hard-load하거나 Legacy ZOrder를 소비하지 않습니다. UI Class와 Layer ZOrder는 CFUISubsystem이 소유합니다.
 // - v2.158.0부터 ChassisWidth/ChassisHeight 또는 complete Transmission payload가 invalid이면 ApplyVehicleMovementConfig는 어떤 Movement mutation도 수행하지 않는다. Shift RPM은 Chaos 내부 uint32 의미에 맞는 비음수 정수값이어야 한다.
 // - v2.157.0부터 ChassisWidth/ChassisHeight 또는 Transmission setup이 실제 live setup과 달라 PhysicsState 재생성이 필요하면 현재 chassis 선속도/각속도를 복원한다. 새 public hot setter를 만들지 않으며 기존 ApplyVehicleMovementConfig lifecycle 안에서만 수행한다.
@@ -1737,6 +1739,129 @@ bool ACFVehiclePawn::RegisterDefaultInputMappingContext()
 	}
 	EnhancedInputSubsystem->AddMappingContext(DefaultInputMappingContext, InputMappingPriority);
 	return true;
+}
+
+// [v2.167.0] 현재 Applied Fitting 기준으로 장비 의존 Ammo·TurretVisual·Launcher와 CombatReady만 다시 구성합니다.
+bool ACFVehiclePawn::RefreshFittingDependentRuntime()
+{
+	// [v2.167.0] Fitting Commit이 완료되어 장비 Runtime 입력을 readback할 수 있는지 여부입니다.
+	const bool bFittingRuntimeApplied = VehicleFittingComp && VehicleFittingComp->HasAppliedRuntimeInput();
+	if (!bFittingRuntimeApplied)
+	{
+		bVehicleCombatRuntimeReady = false;
+		LastVehicleRuntimeSummary = TEXT("FittingDependentRuntime: Failed, AppliedFittingRuntimeMissing");
+		return false;
+	}
+
+	// [v2.167.0] 이전 장전·예비·예약·Reload 상태가 새 Snapshot에 잔류하지 않게 비울 Ammo Runtime입니다.
+	if (VehicleAmmoComp)
+	{
+		VehicleAmmoComp->ResetAmmoRuntime();
+	}
+
+	// [v2.167.0] Ammo 기본 서브오브젝트 존재와 finite Snapshot 초기화 결과를 합친 탄약 준비 상태입니다.
+	bool bAmmoReady = VehicleAmmoComp != nullptr;
+
+	// [v2.167.0] 현재 Applied Snapshot에 실제 finite Ammo Runtime이 필요한 무기가 하나라도 있는지 여부입니다.
+	bool bFiniteAmmoRuntimeRequired = false;
+
+	// [v2.167.0] 현재 Applied Runtime이 Snapshot 모드인지 여부입니다.
+	const bool bHasAppliedFittingSnapshot = VehicleFittingComp->HasAppliedFittingSnapshot();
+	if (bHasAppliedFittingSnapshot)
+	{
+		// [v2.167.0] 새 Ammo/Turret/Launcher를 구성할 현재 Applied Fitting Snapshot입니다.
+		const FCFVehicleFittingSnapshot AppliedFittingSnapshot = VehicleFittingComp->GetAppliedFittingSnapshot();
+
+		// [v2.167.0] WeaponInstanceId별 독립 장전 상태를 만들 finite 무기 초기화 입력입니다.
+		TArray<FCFWeaponAmmoInitialization> WeaponAmmoInitializations;
+		for (const FCFResolvedFittingMount& ResolvedMount : AppliedFittingSnapshot.ResolvedMounts)
+		{
+			// [v2.167.0] 이 Mount에 Snapshot이 실제 해결한 WeaponData입니다.
+			UCFWeaponData* ResolvedWeaponData = ResolvedMount.WeaponData;
+			if (!IsValid(ResolvedWeaponData) || ResolvedWeaponData->bUseInfiniteAmmoForDebug)
+			{
+				continue;
+			}
+
+			bFiniteAmmoRuntimeRequired = true;
+			if (!ResolvedWeaponData->UsesFiniteAmmoRuntime() || ResolvedMount.MountProfileId.IsNone())
+			{
+				bAmmoReady = false;
+				continue;
+			}
+
+			// [v2.167.0] 같은 WeaponData를 여러 Mount에 장착해도 Loaded 상태를 독립 소유할 초기화 입력입니다.
+			FCFWeaponAmmoInitialization WeaponAmmoInitialization;
+			WeaponAmmoInitialization.WeaponInstanceId = ResolvedMount.MountProfileId;
+			WeaponAmmoInitialization.WeaponData = ResolvedWeaponData;
+			WeaponAmmoInitialization.InitialLoadedAmmoCountOverride = INDEX_NONE;
+			WeaponAmmoInitializations.Add(WeaponAmmoInitialization);
+		}
+
+		// [v2.167.0] 명시적 출격 탄약 또는 finite WeaponInstance 때문에 실제 Ammo Runtime 구성이 필요한지 여부입니다.
+		const bool bShouldInitializeAmmoRuntime = !AppliedFittingSnapshot.InitialSortieAmmoLoads.IsEmpty()
+			|| !WeaponAmmoInitializations.IsEmpty();
+		if (bAmmoReady && bShouldInitializeAmmoRuntime)
+		{
+			bAmmoReady = VehicleAmmoComp
+				&& VehicleAmmoComp->InitializeAmmoRuntime(
+					this,
+					AppliedFittingSnapshot.InitialSortieAmmoLoads,
+					WeaponAmmoInitializations);
+		}
+		else if (bFiniteAmmoRuntimeRequired)
+		{
+			bAmmoReady = false;
+		}
+	}
+
+	// [v2.167.0] Snapshot 또는 Legacy 복구 후 현재 Weapon Runtime Source에 맞게 단일 활성 Turret Visual을 재구성합니다.
+	ApplyVehicleTurretVisualConfig();
+
+	// [v2.167.0] 최종 Weapon Runtime에 Launcher를 다시 연결한 결과입니다.
+	const bool bLauncherReady = LauncherComp
+		? LauncherComp->InitializeLauncherRuntime(this, VehicleWeaponComp)
+		: false;
+
+	// [v2.167.0] 장비 교체 뒤에도 기존 Aim Runtime이 준비 상태인지 readback합니다.
+	const bool bAimReady = VehicleAimComp && VehicleAimComp->IsAimRuntimeReady();
+
+	// [v2.167.0] Fitting Commit 결과 Weapon Runtime이 준비 상태인지 readback합니다.
+	const bool bWeaponReady = VehicleWeaponComp && VehicleWeaponComp->IsWeaponRuntimeReady();
+
+	// [v2.167.0] 기존 전투 입력 계약에 필요한 TargetSelectComp가 존재하는지 여부입니다.
+	const bool bTargetSelectReady = TargetSelectComp != nullptr;
+
+	bVehicleCombatRuntimeReady = bVehicleCoreRuntimeReady
+		&& bAimReady
+		&& bWeaponReady
+		&& bAmmoReady
+		&& bLauncherReady
+		&& bTargetSelectReady;
+
+	// [v2.167.0] 기존 호환 RuntimeReady는 장비 hot apply에서도 CoreReady와 동일 의미를 유지합니다.
+	bVehicleRuntimeReady = bVehicleCoreRuntimeReady;
+
+	// [v2.167.0] 현재 Ammo 상태를 finite 준비/무한탄 호환/실패로 구분한 bounded readback입니다.
+	const TCHAR* AmmoRuntimeState = !VehicleAmmoComp
+		? TEXT("Missing")
+		: (!bAmmoReady
+			? TEXT("Failed")
+			: (VehicleAmmoComp->IsAmmoRuntimeInitialized() ? TEXT("Ready") : TEXT("InfiniteCompatibility")));
+
+	LastVehicleRuntimeSummary = FString::Printf(
+		TEXT("FittingDependentRuntime: Fitting=%s, Aim=%s, Weapon=%s, Ammo=%s, Launcher=%s, TargetSelect=%s, CoreReady=%s, CombatReady=%s | %s | %s"),
+		bHasAppliedFittingSnapshot ? TEXT("Snapshot") : TEXT("Legacy"),
+		bAimReady ? TEXT("Ready") : TEXT("Missing"),
+		bWeaponReady ? TEXT("Ready") : TEXT("Missing"),
+		AmmoRuntimeState,
+		bLauncherReady ? TEXT("Ready") : TEXT("Missing"),
+		bTargetSelectReady ? TEXT("Ready") : TEXT("Missing"),
+		bVehicleCoreRuntimeReady ? TEXT("True") : TEXT("False"),
+		bVehicleCombatRuntimeReady ? TEXT("True") : TEXT("False"),
+		VehicleFittingComp ? *VehicleFittingComp->GetLastFittingRuntimeSummary() : TEXT("FittingRuntime: ComponentMissing"),
+		*LastTurretVisualSummary);
+	return bVehicleCombatRuntimeReady;
 }
 
 // [v2.68.0] VehicleData와 표시 계층을 준비한 뒤 WheelSync가 최종 앵커 기준을 캡처할 수 있게 런타임을 초기화합니다.

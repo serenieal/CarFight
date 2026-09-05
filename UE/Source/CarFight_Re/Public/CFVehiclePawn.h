@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.165.0
-// Date: 2026-09-01
-// Description: CarFight 싱글플레이 차량 Pawn 기준 클래스 / UISubsystem UI ownership 정리 / WSA deterministic Wheel Visual full-transform seam
+// Version: 2.166.0
+// Date: 2026-09-02
+// Description: CarFight 싱글플레이 차량 Pawn 기준 클래스 / UISubsystem UI ownership 정리 / WSA Wheel Visual / RTA Fitting-dependent Runtime refresh seam
 // Changelog:
+// - v2.166.0: RTA-P0-03 장비 hot apply가 전체 차량 Runtime을 재초기화하지 않고 Applied Fitting 기반 Ammo·TurretVisual·Launcher와 CombatReady만 재구성하는 C++ 전용 refresh seam을 추가.
 // - v2.165.0: Wheel Visual authored cache를 Rotation에서 Full RelativeTransform으로 확장하고 Construction fresh recapture / runtime deterministic reapply 계약을 추가.
 // - v2.164.0: FL-only shared Wheel fallback의 Right orientation 보정을 위해 authored Wheel_Mesh base rotation cache와 Wheel Visual 전용 private helper 경계를 추가. 신규 Component 분해는 하지 않고 향후 추출 가능한 seam으로 한정.
 // - v2.162.0: Legacy Reticle/TargetSelect Class·ZOrder 필드가 직렬화 호환 전용이며 Pawn runtime ownership에는 참여하지 않음을 명시.
@@ -1568,6 +1569,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn", meta=(ToolTip="Drive / WheelSync 캐시와 준비를 다시 시도합니다."))
 	bool InitializeVehicleRuntime();
+
+	// [v2.166.0] 이미 Commit된 Fitting Snapshot 기준으로 Ammo·TurretVisual·Launcher와 CombatReady만 다시 구성합니다.
+	bool RefreshFittingDependentRuntime();
 
 #if WITH_EDITOR
 	// [v2.74.0] SM_Body 차체 메시 소켓에서 휠 앵커와 선택 하드포인트 위치를 캡처해 VehicleData에 기록합니다.

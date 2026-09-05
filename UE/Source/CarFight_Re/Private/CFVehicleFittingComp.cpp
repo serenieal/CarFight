@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.6.0
-// Date: 2026-08-18
-// Description: CF-FQ-033~037 출격·Field 피팅 Runtime Apply·원자 Rollback + UI-P0-06 Weapon Selection Source 구현
+// Version: 1.7.0
+// Date: 2026-09-02
+// Description: CF-FQ-033~041 출격·Field/Debug 피팅 Runtime Apply·원자 Rollback + UI-P0-06 Weapon Selection Source 구현
 // Scope: Legacy·Snapshot Prepare, Weapon·Defense·Sensor 원자 Commit과 Applied Snapshot의 실제 weapon-bearing mount 고정 순서를 Weapon Selection Runtime으로 전달합니다.
 // Changelog:
+// - v1.7.0: RTA-P0-03 보상 복구가 기존 실제-차량 RuntimeApplyAdapter를 재사용하도록 vehicle-facing Applied Checkpoint Restore wrapper를 추가.
 // - v1.6.0: Snapshot의 weapon-bearing ResolvedMounts 전체를 고정 순서로 WeaponComp에 전달하고 requested active mount를 SelectedWeaponIndex로 보존. 내부 MountProfileId는 UI 의미로 승격하지 않음.
 // - v1.5.0: SCAN-P0-04 Sensor Runtime participant를 Commit/Restore/Checkpoint에 추가하고 Snapshot Weapon 선택에서 Scanner-only Mount를 제외.
 // - v1.4.0: Commit 실패 시 내부 Weapon·Defense Rollback 성공 여부를 명시 상태로 기록해 상위 Field Coordinator가 RecoveryFailed를 구분할 수 있게 함.
@@ -21,6 +22,7 @@
 // - v1.3.0 Field 보상 복원의 Weapon·Defense와 Applied Snapshot에 v1.5.0부터 Sensor Runtime도 포함한다. 질량 변경 후보의 적용·복원은 상위 FFIT-P0-04 ICFFieldFitMassRuntime 경계가 소유한다.
 // - Snapshot scanner-less는 ApplySensorData(nullptr)로 Fallback을 적용하고 Legacy 경로는 기존 SensorData Source를 보존한다.
 // - v1.6.0 Snapshot에 실제 weapon-bearing mount가 둘 이상이면 WeaponComp Selection Runtime을 초기화한다. 기존 single weapon/legacy 경로 의미는 유지한다.
+// - v1.7.0 상위 Runtime Apply 보상은 이 컴포넌트가 이미 사용하는 실제-차량 Adapter를 통해 Weapon·Defense·Sensor와 Applied Snapshot을 함께 복원한다.
 
 #include "CFVehicleFittingComp.h"
 
@@ -589,6 +591,29 @@ bool UCFVehicleFittingComp::CommitPreparedSortieFittingToVehicle(ACFVehiclePawn*
 
 				FCFVehicleFittingRuntimeApplyAdapter RuntimeApplyAdapter(OwnerVehiclePawn, PreparedRuntimeInput.VehicleData, VehicleWeaponComp, VehicleDefenseComp);
 	return CommitPreparedSortieFitting(RuntimeApplyAdapter);
+}
+
+// [v1.7.0] 실제 차량 Runtime을 직전 Applied Checkpoint로 보상 복원합니다.
+bool UCFVehicleFittingComp::RestoreAppliedRuntimeCheckpointToVehicle(
+	ACFVehiclePawn* OwnerVehiclePawn,
+	UCFVehicleWeaponComp* VehicleWeaponComp,
+	UCFVehicleDefenseComp* VehicleDefenseComp,
+	const FCFFittingRuntimeCheckpoint& RuntimeCheckpoint)
+{
+	if (!RuntimeCheckpoint.IsValid())
+	{
+		RuntimeApplyState = ECFFittingRuntimeApplyState::ApplyFailed;
+		LastFittingRuntimeSummary = TEXT("FittingRuntime: VehicleCompensationRestoreFailed, CheckpointInvalid");
+		return false;
+	}
+
+	// [v1.7.0] Checkpoint가 참조하는 VehicleData를 기준으로 기존 실제-차량 participant를 연결할 Adapter입니다.
+	FCFVehicleFittingRuntimeApplyAdapter RuntimeApplyAdapter(
+		OwnerVehiclePawn,
+		RuntimeCheckpoint.AppliedRuntimeInput.VehicleData,
+		VehicleWeaponComp,
+		VehicleDefenseComp);
+	return RestoreAppliedRuntimeCheckpoint(RuntimeApplyAdapter, RuntimeCheckpoint);
 }
 
 // [v1.3.0] Inventory Commit보다 먼저 Runtime을 적용할 때 실패 보상용 직전 Applied 입력을 캡처합니다.

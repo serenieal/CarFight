@@ -1,9 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.33.0
-// Date: 2026-08-05
-// Description: VehicleDebug Panel용 C++ 부모 위젯 클래스입니다.
+// Version: 1.34.1
+// Date: 2026-09-02
+// Description: VehicleDebug Panel용 C++ 부모 위젯 클래스 / RTA Runtime Apply 전용 Navigation child integration
 // Changelog:
+// - v1.34.1: P0에 불필요한 RuntimeApplyWidgetClass reflected override를 제거하고 C++ 기본 UCFRuntimeApplyWidget으로 고정해 UHT dependency와 설정 표면을 최소화.
+// - v1.34.0: RuntimeApply Navigation 섹션과 전용 UCFRuntimeApplyWidget child slot을 추가하고 기존 Generic Section ViewData는 read-only 구조로 유지.
 // - v1.33.0: 현재 선택 대상의 표시 정보, 추적 상태, Shield·6방향 Armor·재생 상태와 Integrity를 보여주는 Target Navigation 섹션을 추가.
 // - v1.25.0: Weapon 섹션에 EquipmentPresetData 지정 여부 / ID / 호환성 / 요약 표시를 추가.
 // - v1.24.0: Weapon 섹션에 마지막 Damage HitContext Debug 표시를 추가.
@@ -23,6 +25,8 @@
 // - v1.10.0: Weapon 섹션에 활성 WeaponData ID, 호환성, 요약 표시를 추가.
 // - v1.9.0: VehicleDebug Weapon 카테고리를 Navigation 섹션으로 추가해 WeaponComp 런타임과 FireOrigin 상태를 표시.
 // Migration:
+// - v1.34.1 RuntimeApply child는 P0에서 C++ 기본 클래스로 고정합니다. WBP 스타일 override가 실제 필요해질 때 별도 UI 작업으로 추가합니다.
+// - v1.34.0 RuntimeApply는 기존 VerticalBox_SelectedSectionHost에 전용 C++ child를 교체 표시하므로 WBP_VehicleDebugPanel Asset 수정이 필요 없다. Vehicle/Equipment mutation은 child가 Runtime Apply service에 위임한다.
 // - Target 섹션은 기존 동적 Section 레이아웃에 C++ ViewData로 추가되므로 WBP_VehicleDebugPanel의 위젯 트리나 Blueprint 그래프를 수정할 필요가 없다.
 // - EquipmentPresetData 표시는 Debug 전용이며 FireOrigin / Projectile / Damage 판정을 변경하지 않는다.
 // - Base 메쉬 표시는 Debug 전용이며 FireOrigin / Projectile / Damage 판정을 변경하지 않는다.
@@ -39,7 +43,7 @@
 // - 기존 WeaponData 표시 구조는 유지하고 발사 제한 원본값은 분당 발사속도로 표시한다.
 // - 기존 Weapon 섹션 ID와 필드는 유지하고 WeaponData 하위 섹션만 추가한다.
 // - 기존 WBP 바인딩 위젯은 유지하고, 동적 Section 레이아웃에서 Weapon 섹션을 추가로 표시한다.
-// Scope: VehicleDebug Overview / Drive / Input / Camera / Aim / Target / Weapon / Runtime 카테고리를 읽어 Navigation + Selected Section 기반 표시와 기존 fallback 표시를 안정적으로 지원합니다.
+// Scope: VehicleDebug Overview / Drive / Input / Camera / Aim / Target / Weapon / Runtime / RuntimeApply Navigation을 지원하며 RuntimeApply만 전용 interactive child를 사용합니다.
 
 #pragma once
 
@@ -53,6 +57,7 @@ class UTextBlock;
 class UWidget;
 class UVerticalBox;
 class APlayerController;
+class UCFRuntimeApplyWidget;
 class UCFVehicleDebugNavItemWidget;
 class UCFVehicleDebugSectionWidget;
 
@@ -392,9 +397,13 @@ private:
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UCFVehicleDebugNavItemWidget>> NavigationItemWidgetArray;
 
-	// [v1.7.0] 선택된 Section 표시용 위젯 캐시입니다.
+	// [v1.7.0] 선택된 Generic Section 표시용 위젯 캐시입니다.
 	UPROPERTY(Transient)
 	TObjectPtr<UCFVehicleDebugSectionWidget> SelectedSectionWidget = nullptr;
+
+	// [v1.34.0] RuntimeApply Section 선택 시 재사용할 전용 interactive child 위젯 캐시입니다.
+	UPROPERTY(Transient)
+	TObjectPtr<UCFRuntimeApplyWidget> RuntimeApplyWidget = nullptr;
 
 	// [v1.2.3] WBP에서 이름이 맞는 위젯들을 찾아 C++ 멤버 참조를 보강합니다.
 	void ResolveWidgetReferences();
@@ -500,6 +509,9 @@ private:
 
 	// [v1.9.0] Weapon 카테고리용 Section ViewData를 생성합니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> BuildWeaponSectionViewData(const FCFVehicleDebugWeapon& InWeapon) const;
+
+	// [v1.34.0] 전용 interactive child를 선택할 RuntimeApply Navigation Section ViewData를 생성합니다.
+	TSharedRef<FCFVehicleDebugSectionViewData> BuildRuntimeApplySectionViewData() const;
 
 	// [v1.5.0] Runtime 카테고리용 Section ViewData를 생성합니다.
 	TSharedRef<FCFVehicleDebugSectionViewData> BuildRuntimeSectionViewData(const FCFVehicleDebugRuntime& InRuntime) const;

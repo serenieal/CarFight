@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.6.0
-// Date: 2026-08-18
-// Description: CF-FQ-033~037 출격·Field 피팅 Runtime Apply·원자 Rollback 상태 + UI-P0-06 Weapon Selection Source 컴포넌트
+// Version: 1.7.0
+// Date: 2026-09-02
+// Description: CF-FQ-033~041 출격·Field/Debug 피팅 Runtime Apply·원자 Rollback 상태 + UI-P0-06 Weapon Selection Source 컴포넌트
 // Scope: Legacy·Snapshot 입력 준비, Initial Mass 검증, Weapon·Defense·Sensor 원자 Commit·Rollback, Applied Snapshot과 Player-facing Weapon Selection의 실제 mounted source를 소유합니다.
 // Changelog:
+// - v1.7.0: RTA-P0-03 상위 Runtime Apply 서비스가 기존 private 실제-차량 Adapter를 중복 구현하지 않고 성공 Commit 뒤 직전 Applied Checkpoint를 보상 복원할 수 있는 vehicle-facing C++ wrapper를 추가.
 // - v1.6.0: UI-P0-06 Applied Fitting Snapshot의 weapon-bearing ResolvedMounts 고정 순서를 WeaponComp 선택 Runtime 입력으로 전달. 내부 MountProfileId는 Runtime identity로만 유지하고 UI 표시 의미로 승격하지 않음.
 // - v1.5.0: SCAN-P0-04 ResolvedSensorData를 Fitting Runtime Sensor 입력으로 승격하고 Weapon·Defense와 같은 Commit/Checkpoint/Compensation 경계에 포함.
 // - v1.4.0: Commit 실패 시 내부 Weapon·Defense Rollback이 실제 성공했는지 C++ 전용 상태로 기록해 상위 Coordinator가 RecoveryFailed를 구분할 수 있게 함.
@@ -21,6 +22,7 @@
 // - v1.3.0 Checkpoint/Restore의 기존 Weapon·Defense와 Applied Snapshot 보상에 v1.5.0부터 Sensor Runtime 입력도 함께 포함한다. Field Mass Reapply는 FFIT-P0-04의 별도 ICFFieldFitMassRuntime 경계가 소유한다.
 // - Legacy VehicleData 경로는 기존 SensorData Source를 강제로 비우지 않는다. 유효 Snapshot의 ResolvedSensorData가 null이면 scanner-less Fallback 적용을 명시적으로 요청한다.
 // - v1.6.0 Snapshot Weapon Selection은 ResolvedMounts의 기존 결정론적 순서를 그대로 사용한다. MountProfileId는 내부 Ammo/FireOrigin identity일 뿐 Player-facing WeaponGroup 이름으로 노출하지 않는다.
+// - v1.7.0 vehicle-facing Checkpoint Restore는 기존 FCFVehicleFittingRuntimeApplyAdapter를 그대로 사용하며 새 Weapon/Defense/Sensor 적용 규칙을 만들지 않는다.
 
 #pragma once
 
@@ -267,6 +269,13 @@ public:
 
 	// [v1.3.0] 성공한 후보 Runtime Commit을 직전 Applied Checkpoint로 보상 복원하고 Applied Snapshot 상태도 함께 되돌립니다.
 	bool RestoreAppliedRuntimeCheckpoint(ICFFittingRuntimeApplyAdapter& RuntimeApplyAdapter, const FCFFittingRuntimeCheckpoint& RuntimeCheckpoint);
+
+	// [v1.7.0] 실제 차량 Weapon·Defense·Sensor Runtime을 직전 Applied Checkpoint로 보상 복원합니다.
+	bool RestoreAppliedRuntimeCheckpointToVehicle(
+		ACFVehiclePawn* OwnerVehiclePawn,
+		UCFVehicleWeaponComp* VehicleWeaponComp,
+		UCFVehicleDefenseComp* VehicleDefenseComp,
+		const FCFFittingRuntimeCheckpoint& RuntimeCheckpoint);
 
 	// [v1.0.0] 하위 Runtime을 변경하지 않고 Prepared 입력만 취소합니다.
 	UFUNCTION(BlueprintCallable, Category="CarFight|Fitting|Runtime")
