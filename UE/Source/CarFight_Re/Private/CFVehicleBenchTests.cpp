@@ -1,11 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleBenchTests.cpp
-// Version: v1.17.0
-// Date: 2026-09-02
+// Version: v1.18.1
+// Date: 2026-09-04
 // Description: CF-FQ-040 VB-P0-08 saved VehicleData Technical Driving Benchmark와 ESH-04 dedicated high-speed benchmark authority를 제공합니다.
 // Scope: M_VehicleBenchmark production no-fitting Legacy Mass straight-line authority와 선택적 transient ChangeUpRPM A/B/C를 제공하며 Product Asset/Map 저장 mutation은 수행하지 않습니다.
 // Changelog:
+// - v1.18.1: P0-07E 중간검수 교정. command-line progress write target을 ProjectSaved/CarFight canonical sidecar exact path로 제한하고 temp write 실패 시 잔여 임시 파일을 best-effort 정리합니다.
+// - v1.18.0: VBHAI-P0-07E에서 optional exact RunId + absolute progress sidecar path를 받아 VB-P0-08 내부 16 phase를 USER-facing 7단계 coarse progress로 투영합니다. 각 coarse 단계는 run당 최대 1회만 temp→replace write를 시도하고 write 실패는 warning만 남겨 benchmark terminal PASS/FAIL authority와 분리합니다.
 // - v1.17.0: fixed ChangeUpRPM A/B 판정용 0→100/150/200 km/h first-reach time telemetry를 추가. 최고속/사용 gear만으로 shift 후보를 오판하지 않고 WOT acceleration evidence를 함께 비교합니다.
 // - v1.16.0: ESH-03 후보를 Product mutation 없이 검증할 optional CFHighSpeedChangeUpRPMOverride를 추가. saved VehicleData를 transient duplicate한 뒤 duplicate의 ChangeUpRPM만 변경하며 effective ChangeUp/Down/AutomaticGears를 summary에 기록.
 // - v1.15.0: ESH-04가 VehicleFittingData=None production 경로와 달리 BaseVehicleMassKg=1886을 BeginPlay 뒤 강제 Reapply하던 fixture divergence를 제거. fresh BeginPlay가 확정한 Legacy configured/actual mass를 그대로 보존하고 summary에 기록.
@@ -29,6 +31,8 @@
 // - v1.1.0: Fitting 미지정 시 invalid transient Fitting Snapshot을 만들지 않고 VehicleData.BaseVehicleMassKg를 explicit runtime mass target으로 사용하며, 50/100km/h 미도달은 차량 성능 관측 결과(-1)로 남기고 기술 실패로 오판하지 않도록 교정.
 // - v1.0.0: arbitrary saved VehicleData + optional FittingData command-line target을 deferred-spawn하는 Builder benchmark Automation 최초 구현.
 // Migration:
+// - v1.18.1부터 progress path 인자가 canonical ProjectSaved/CarFight sidecar와 exact 일치하지 않으면 progress 표시만 비활성화하고 benchmark 본체는 계속합니다.
+// - v1.18.0 progress writer는 `CFBuilderBenchmarkRunId`와 `CFBuilderBenchmarkProgressPath`가 둘 다 유효할 때만 활성화됩니다. 기존 direct Automation 호출은 두 인자를 생략하면 progress write 없이 이전 동작을 유지합니다.
 // - Reference fact와의 PASS/FAIL threshold를 이 테스트가 임의 생성하지 않습니다. 이 테스트는 기술적으로 유효한 runtime metric만 기록합니다.
 // - Product VehicleData/Fitting/Map/PhysicsAsset을 저장하거나 수정하지 않습니다. 모든 runtime 변경은 fresh PIE lifetime에만 존재합니다.
 // - USER Driving feel PASS를 대체하지 않습니다.
@@ -50,11 +54,17 @@
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerStart.h"
+#include "Dom/JsonObject.h"
+#include "HAL/FileManager.h"
 #include "HAL/PlatformTime.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/CommandLine.h"
+#include "Misc/FileHelper.h"
 #include "Misc/Parse.h"
+#include "Misc/Paths.h"
+#include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
 #include "Tests/AutomationEditorCommon.h"
 #include "UObject/UObjectGlobals.h"
 
@@ -123,6 +133,19 @@ namespace
 		Done
 	};
 
+	/** VB-P0-08 내부 phase를 USER-facing 7단계 progress로 묶는 Runtime-private group입니다. */
+	enum class ECFBuilderBenchmarkProgressGroup : uint8
+	{
+		None,
+		Preparing,
+		Acceleration,
+		TopSpeed,
+		Braking,
+		Steering,
+		TurningRadius,
+		Finalizing
+	};
+
 	/** 한 saved VehicleData를 fresh PIE의 새 BP_CFVehiclePawn에 주입해 실제 Chaos mobility를 계측합니다. */
 	class FCFBuilderDrivingBenchmarkCommand final : public IAutomationLatentCommand
 	{
@@ -132,11 +155,15 @@ namespace
 			FAutomationTestBase* InTest,
 			const FString& InVehicleDataPath,
 			const FString& InFittingDataPath,
-			const FString& InLabel)
+			const FString& InLabel,
+			const FString& InRunId,
+			const FString& InProgressFilePath)
 			: Test(InTest)
 			, VehicleDataPath(InVehicleDataPath)
 			, FittingDataPath(InFittingDataPath)
 			, Label(InLabel)
+			, RunId(InRunId)
+			, ProgressFilePath(InProgressFilePath)
 			, CommandStartTimeSeconds(FPlatformTime::Seconds())
 		{
 		}
@@ -144,6 +171,8 @@ namespace
 		// fresh PIE를 한 프레임씩 진행하며 benchmark state machine을 실행합니다.
 		virtual bool Update() override
 		{
+			AttemptCurrentProgressWrite();
+
 			if (Phase == ECFBuilderDrivingBenchmarkPhase::Done)
 			{
 				return true;
@@ -232,6 +261,190 @@ namespace
 		}
 
 	private:
+		// Current internal benchmark phase를 USER-facing coarse progress group으로 변환합니다.
+		ECFBuilderBenchmarkProgressGroup ResolveCurrentProgressGroup() const
+		{
+			switch (Phase)
+			{
+			case ECFBuilderDrivingBenchmarkPhase::WaitForPIE:
+			case ECFBuilderDrivingBenchmarkPhase::SettleBeforeAcceleration:
+				return ECFBuilderBenchmarkProgressGroup::Preparing;
+			case ECFBuilderDrivingBenchmarkPhase::MeasureAcceleration:
+				return ECFBuilderBenchmarkProgressGroup::Acceleration;
+			case ECFBuilderDrivingBenchmarkPhase::MeasureTopSpeed:
+				return ECFBuilderBenchmarkProgressGroup::TopSpeed;
+			case ECFBuilderDrivingBenchmarkPhase::PrepareBraking:
+			case ECFBuilderDrivingBenchmarkPhase::ReachBrakingSpeed:
+			case ECFBuilderDrivingBenchmarkPhase::MeasureBraking:
+				return ECFBuilderBenchmarkProgressGroup::Braking;
+			case ECFBuilderDrivingBenchmarkPhase::PrepareYaw:
+			case ECFBuilderDrivingBenchmarkPhase::SettleBeforeYaw:
+			case ECFBuilderDrivingBenchmarkPhase::ReachYawSpeed:
+			case ECFBuilderDrivingBenchmarkPhase::MeasureYaw:
+				return ECFBuilderBenchmarkProgressGroup::Steering;
+			case ECFBuilderDrivingBenchmarkPhase::PrepareTurning:
+			case ECFBuilderDrivingBenchmarkPhase::SettleBeforeTurning:
+			case ECFBuilderDrivingBenchmarkPhase::ReachTurningSpeed:
+			case ECFBuilderDrivingBenchmarkPhase::MeasureTurning:
+				return ECFBuilderBenchmarkProgressGroup::TurningRadius;
+			case ECFBuilderDrivingBenchmarkPhase::Finish:
+				return ECFBuilderBenchmarkProgressGroup::Finalizing;
+			case ECFBuilderDrivingBenchmarkPhase::Done:
+			default:
+				return ECFBuilderBenchmarkProgressGroup::None;
+			}
+		}
+
+		// Coarse progress group의 stable JSON key와 1-based index를 반환합니다.
+		bool ResolveProgressDescriptor(
+			const ECFBuilderBenchmarkProgressGroup ProgressGroup,
+			const TCHAR*& OutPhaseKey,
+			int32& OutPhaseIndex) const
+		{
+			OutPhaseKey = TEXT("");
+			OutPhaseIndex = 0;
+			switch (ProgressGroup)
+			{
+			case ECFBuilderBenchmarkProgressGroup::Preparing:
+				OutPhaseKey = TEXT("preparing");
+				OutPhaseIndex = 1;
+				return true;
+			case ECFBuilderBenchmarkProgressGroup::Acceleration:
+				OutPhaseKey = TEXT("acceleration");
+				OutPhaseIndex = 2;
+				return true;
+			case ECFBuilderBenchmarkProgressGroup::TopSpeed:
+				OutPhaseKey = TEXT("top_speed");
+				OutPhaseIndex = 3;
+				return true;
+			case ECFBuilderBenchmarkProgressGroup::Braking:
+				OutPhaseKey = TEXT("braking");
+				OutPhaseIndex = 4;
+				return true;
+			case ECFBuilderBenchmarkProgressGroup::Steering:
+				OutPhaseKey = TEXT("steering");
+				OutPhaseIndex = 5;
+				return true;
+			case ECFBuilderBenchmarkProgressGroup::TurningRadius:
+				OutPhaseKey = TEXT("turning_radius");
+				OutPhaseIndex = 6;
+				return true;
+			case ECFBuilderBenchmarkProgressGroup::Finalizing:
+				OutPhaseKey = TEXT("finalizing");
+				OutPhaseIndex = 7;
+				return true;
+			case ECFBuilderBenchmarkProgressGroup::None:
+			default:
+				return false;
+			}
+		}
+
+		// 한 coarse progress snapshot을 same-directory temp file 뒤 destination replace로 best-effort 기록합니다.
+		bool WriteProgressSnapshot(
+			const ECFBuilderBenchmarkProgressGroup ProgressGroup,
+			FString& OutError) const
+		{
+			OutError.Reset();
+
+			// JSON에 기록할 stable phase key입니다.
+			const TCHAR* PhaseKey = TEXT("");
+			// JSON에 기록할 1-based phase index입니다.
+			int32 PhaseIndex = 0;
+			if (!ResolveProgressDescriptor(ProgressGroup, PhaseKey, PhaseIndex))
+			{
+				OutError = TEXT("VB-P0-08 progress group을 JSON descriptor로 변환할 수 없습니다.");
+				return false;
+			}
+
+			// Progress sidecar root JSON object입니다.
+			const TSharedRef<FJsonObject> ProgressObject = MakeShared<FJsonObject>();
+			ProgressObject->SetStringField(TEXT("schema_version"), TEXT("carfight_vehicle_builder_benchmark_progress_v1"));
+			ProgressObject->SetStringField(TEXT("run_id"), RunId);
+			ProgressObject->SetStringField(TEXT("phase_key"), PhaseKey);
+			ProgressObject->SetNumberField(TEXT("phase_index"), PhaseIndex);
+			ProgressObject->SetNumberField(TEXT("phase_count"), 7);
+
+			// UTF-8로 저장할 serialized progress JSON입니다.
+			FString ProgressJson;
+			// Compact/default JSON writer입니다.
+			const TSharedRef<TJsonWriter<>> JsonWriter = TJsonWriterFactory<>::Create(&ProgressJson);
+			if (!FJsonSerializer::Serialize(ProgressObject, JsonWriter))
+			{
+				OutError = TEXT("VB-P0-08 progress JSON serialize에 실패했습니다.");
+				return false;
+			}
+
+			// Destination과 같은 directory에 두는 unique temporary file입니다.
+			const FString TemporaryProgressPath = FString::Printf(
+				TEXT("%s.%s.tmp"),
+				*ProgressFilePath,
+				*FGuid::NewGuid().ToString(EGuidFormats::Digits));
+			if (!FFileHelper::SaveStringToFile(
+				ProgressJson,
+				*TemporaryProgressPath,
+				FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
+			{
+				// Partial temp가 남았을 가능성까지 best-effort 정리합니다. 실패해도 benchmark terminal authority에는 영향이 없습니다.
+				IFileManager::Get().Delete(*TemporaryProgressPath, false, true, true);
+				OutError = FString::Printf(TEXT("VB-P0-08 progress temp write에 실패했습니다: %s"), *TemporaryProgressPath);
+				return false;
+			}
+
+			// Same-directory temp를 canonical destination으로 replace하는 terminal file operation 결과입니다.
+			const bool bMoved = IFileManager::Get().Move(
+				*ProgressFilePath,
+				*TemporaryProgressPath,
+				true,
+				true,
+				false,
+				true);
+			if (!bMoved)
+			{
+				IFileManager::Get().Delete(*TemporaryProgressPath, false, true, true);
+				OutError = FString::Printf(TEXT("VB-P0-08 progress temp→destination replace에 실패했습니다: %s"), *ProgressFilePath);
+				return false;
+			}
+			return true;
+		}
+
+		// Current coarse group 진입 시 run당 한 번만 progress write를 시도하고 실패를 benchmark terminal 결과와 분리합니다.
+		void AttemptCurrentProgressWrite()
+		{
+			if (RunId.IsEmpty() || ProgressFilePath.IsEmpty())
+			{
+				return;
+			}
+
+			// Current internal phase가 속한 coarse USER progress group입니다.
+			const ECFBuilderBenchmarkProgressGroup CurrentProgressGroup = ResolveCurrentProgressGroup();
+			if (CurrentProgressGroup == ECFBuilderBenchmarkProgressGroup::None
+				|| CurrentProgressGroup == LastAttemptedProgressGroup)
+			{
+				return;
+			}
+
+			// 실패하더라도 같은 group에서 per-frame retry하지 않도록 write 전에 attempted state를 먼저 갱신합니다.
+			LastAttemptedProgressGroup = CurrentProgressGroup;
+			++ProgressWriteAttemptCount;
+			if (ProgressWriteAttemptCount > 7)
+			{
+				if (Test)
+				{
+					Test->AddWarning(TEXT("VB-P0-08 progress write attempt가 7회를 초과해 추가 sidecar write를 생략했습니다."));
+				}
+				return;
+			}
+
+			// Best-effort sidecar write diagnostic입니다.
+			FString ProgressWriteError;
+			if (!WriteProgressSnapshot(CurrentProgressGroup, ProgressWriteError) && Test)
+			{
+				Test->AddWarning(FString::Printf(
+					TEXT("VB-P0-08 progress sidecar write warning: %s"),
+					*ProgressWriteError));
+			}
+		}
+
 		// 현재 Engine Context에서 actual PIE World를 찾습니다.
 		UWorld* FindPIEWorld() const
 		{
@@ -1002,6 +1215,14 @@ namespace
 		FString FittingDataPath;
 		// 사람이 식별할 benchmark label입니다.
 		FString Label;
+		// Guided/runner가 전달한 exact benchmark run identity입니다. 비어 있으면 progress writer를 사용하지 않습니다.
+		FString RunId;
+		// Guided Step 8이 polling할 canonical absolute progress sidecar path입니다. 비어 있으면 progress writer를 사용하지 않습니다.
+		FString ProgressFilePath;
+		// 동일 coarse group에서 write failure가 나도 per-frame retry하지 않기 위한 마지막 attempted group입니다.
+		ECFBuilderBenchmarkProgressGroup LastAttemptedProgressGroup = ECFBuilderBenchmarkProgressGroup::None;
+		// 한 benchmark run에서 실제 sidecar write를 시도한 coarse group 수입니다.
+		int32 ProgressWriteAttemptCount = 0;
 		// benchmark 준비 wall-clock 시작 시각입니다.
 		double CommandStartTimeSeconds = 0.0;
 		// current PIE world입니다.
@@ -2192,11 +2413,72 @@ bool FCFVehicleBuilderDrivingBenchmarkTest::RunTest(const FString& Parameters)
 		Label = TEXT("BuilderVehicle");
 	}
 
+	// Optional Guided progress exact RunId입니다. standalone direct Automation 호출은 생략할 수 있습니다.
+	FString RunId;
+	// Optional Guided progress canonical absolute sidecar path입니다.
+	FString ProgressFilePath;
+	// RunId 인자 존재 여부입니다.
+	const bool bHasRunId = FParse::Value(FCommandLine::Get(), TEXT("CFBuilderBenchmarkRunId="), RunId) && !RunId.IsEmpty();
+	// Progress path 인자 존재 여부입니다.
+	const bool bHasProgressPath = FParse::Value(FCommandLine::Get(), TEXT("CFBuilderBenchmarkProgressPath="), ProgressFilePath) && !ProgressFilePath.IsEmpty();
+	if (bHasRunId != bHasProgressPath)
+	{
+		AddWarning(TEXT("VB-P0-08 progress transport는 RunId와 ProgressPath가 함께 필요합니다. 진행 표시만 비활성화하고 benchmark는 계속합니다."));
+		RunId.Reset();
+		ProgressFilePath.Reset();
+	}
+	else if (bHasRunId && bHasProgressPath)
+	{
+		// Canonical lowercase-hyphenated RunId로 normalize할 parsed GUID입니다.
+		FGuid ParsedRunId;
+		if (!FGuid::Parse(RunId, ParsedRunId))
+		{
+			AddWarning(TEXT("VB-P0-08 progress RunId가 GUID가 아닙니다. 진행 표시만 비활성화하고 benchmark는 계속합니다."));
+			RunId.Reset();
+			ProgressFilePath.Reset();
+		}
+		else if (FPaths::IsRelative(ProgressFilePath))
+		{
+			AddWarning(TEXT("VB-P0-08 progress path는 absolute path여야 합니다. 진행 표시만 비활성화하고 benchmark는 계속합니다."));
+			RunId.Reset();
+			ProgressFilePath.Reset();
+		}
+		else
+		{
+			// Runtime writer가 허용할 ProjectSaved/CarFight canonical sidecar exact path입니다.
+			FString CanonicalProgressFilePath = FPaths::ConvertRelativePathToFull(FPaths::Combine(
+				FPaths::ProjectSavedDir(),
+				TEXT("CarFight"),
+				TEXT("VehicleBuilderBenchmarkProgress.json")));
+			// Command-line에서 받은 absolute path의 normalized 비교본입니다.
+			FString NormalizedRequestedProgressPath = FPaths::ConvertRelativePathToFull(ProgressFilePath);
+			FPaths::NormalizeFilename(CanonicalProgressFilePath);
+			FPaths::NormalizeFilename(NormalizedRequestedProgressPath);
+			if (!NormalizedRequestedProgressPath.Equals(CanonicalProgressFilePath, ESearchCase::IgnoreCase))
+			{
+				AddWarning(TEXT("VB-P0-08 progress path가 canonical ProjectSaved/CarFight sidecar와 다릅니다. 진행 표시만 비활성화하고 benchmark는 계속합니다."));
+				RunId.Reset();
+				ProgressFilePath.Reset();
+			}
+			else
+			{
+				RunId = ParsedRunId.ToString(EGuidFormats::DigitsWithHyphensLower);
+				ProgressFilePath = MoveTemp(CanonicalProgressFilePath);
+			}
+		}
+	}
+
 	// 기존 production test map을 읽기 전용 technical road/physics fixture로 재사용합니다.
 	const FString BenchmarkMapPath = TEXT("/Game/Maps/M_VehicleDefensePIE");
 	ADD_LATENT_AUTOMATION_COMMAND(FEditorLoadMap(BenchmarkMapPath));
 	ADD_LATENT_AUTOMATION_COMMAND(FStartPIECommand(false));
-	ADD_LATENT_AUTOMATION_COMMAND(FCFBuilderDrivingBenchmarkCommand(this, VehicleDataPath, FittingDataPath, Label));
+	ADD_LATENT_AUTOMATION_COMMAND(FCFBuilderDrivingBenchmarkCommand(
+		this,
+		VehicleDataPath,
+		FittingDataPath,
+		Label,
+		RunId,
+		ProgressFilePath));
 	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
 	return true;
 }

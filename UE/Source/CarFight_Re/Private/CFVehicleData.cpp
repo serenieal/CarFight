@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.20.0
-// Date: 2026-08-28
-// Description: VehicleData 소켓 캡처가 WSA Wheel Socket RelativeScale까지 보존하도록 확장
+// Version: 1.21.0
+// Date: 2026-09-03
+// Description: VehicleData PostLoad legacy Mount 보강과 current Standard Mount 공존 정합성 교정
 // Scope: CFVehicleData 에디터 캡처, PostLoad 기반 마이그레이션, 프로젝트 기준 기본값 정렬, 에디터 저장 유도
 // Changelog:
+// - v1.21.0: CF-FQ-047 P0-06. Top_01에 이미 어떤 MountProfile이든 연결되어 있으면 legacy RoofTurret_MediumOrLarge를 PostLoad에서 중복 보강하지 않도록 migration gate를 좁힘.
 // - v1.20.0: WSA-P0-02 Wheel_Anchor 소켓 캡처에서 StaticMeshSocket RelativeScale을 FCFWheelAnchorPose에 저장.
 // - v1.19.0: Top_01 하드포인트가 있는 기존 자산에 RoofTurret_MediumOrLarge MountProfile을 1회 보강.
 // - v1.18.0: 차체 StaticMesh 소켓에서 HardpointSlots의 선택 캡처 소켓을 LocalTransform으로 기록.
@@ -13,7 +14,7 @@
 // - v1.13.0: 레거시 VehicleMovement 실험값을 현재 프로젝트 차량 기준값으로 자동 보정.
 // Migration:
 // - 기존 HardpointSlots를 유지하고, MountProfiles는 LocationSlotRef로 하드포인트 슬롯을 참조한다.
-// - Top_01 하드포인트가 없거나 RoofTurret_MediumOrLarge 프로파일이 이미 있으면 MountProfiles를 변경하지 않는다.
+// - Top_01 하드포인트가 없거나 Top_01을 이미 참조하는 MountProfile이 하나라도 있으면 legacy RoofTurret_MediumOrLarge를 보강하지 않는다.
 // - HardpointSlots가 비어 있으면 휠 레이아웃만 캡처하며 오류로 처리하지 않는다.
 // - HardpointSlots의 SocketName이 비어 있으면 해당 슬롯의 기존 LocalTransform을 유지한다.
 // - 기존 자산은 ThrottleInputScale 기본값 1.0으로 기존 입력 체감을 유지한다.
@@ -156,13 +157,12 @@ namespace CFVehicleDataMigration
 		return false;
 	}
 
-	// 지정한 전투 장착 프로파일 ID가 VehicleData에 이미 선언되어 있는지 확인합니다.
-	bool HasMountProfileId(const TArray<FCFVehicleMountProfile>& MountProfiles, const FName MountProfileId)
+	// 지정한 하드포인트 위치 슬롯을 참조하는 MountProfile이 이미 선언되어 있는지 확인합니다.
+	bool HasMountProfileForLocationSlot(const TArray<FCFVehicleMountProfile>& MountProfiles, const FName LocationSlotId)
 	{
-		// 검사할 전투 장착 프로파일입니다.
 		for (const FCFVehicleMountProfile& MountProfile : MountProfiles)
 		{
-			if (MountProfile.MountProfileId == MountProfileId)
+			if (MountProfile.LocationSlotRef == LocationSlotId)
 			{
 				return true;
 			}
@@ -171,16 +171,15 @@ namespace CFVehicleDataMigration
 		return false;
 	}
 
-	// P0 기본 지붕 터렛 프로파일을 기존 VehicleData에 보강해야 하는지 판단합니다.
+	// P0 legacy 기본 지붕 터렛 프로파일을 기존 VehicleData에 보강해야 하는지 판단합니다.
 	bool ShouldSeedP0RoofTurretProfile(const TArray<FCFVehicleHardpointSlot>& HardpointSlots, const TArray<FCFVehicleMountProfile>& MountProfiles)
 	{
-		// P0 기본 터렛 프로파일이 참조할 하드포인트 슬롯 ID입니다.
+		// Legacy default가 연결되는 P0 하드포인트 슬롯 ID입니다.
 		const FName P0LocationSlotId = TEXT("Top_01");
 
-		// P0 기본 터렛 프로파일을 식별하는 ID입니다.
-		const FName P0MountProfileId = TEXT("RoofTurret_MediumOrLarge");
-
-		return HasHardpointSlotId(HardpointSlots, P0LocationSlotId) && !HasMountProfileId(MountProfiles, P0MountProfileId);
+		// 이미 Standard/custom Mount가 Top_01 의미를 소유하면 legacy default를 추가하지 않습니다.
+		return HasHardpointSlotId(HardpointSlots, P0LocationSlotId)
+			&& !HasMountProfileForLocationSlot(MountProfiles, P0LocationSlotId);
 	}
 }
 

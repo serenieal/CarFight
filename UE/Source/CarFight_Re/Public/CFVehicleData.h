@@ -43,7 +43,7 @@
 // - 자동 휠 메시 스케일을 쓸 차량만 DA의 WheelVisualConfig에서 옵션을 명시적으로 켠다.
 // - 자동 스케일 사용 차량은 기본적으로 메시 바운드 중심도 Wheel_Mesh 원점에 맞춘다. 기존 수동 위치를 유지해야 하면 bAutoCenterWheelMeshBoundsToOrigin=false로 끈다.
 // - MountProfiles는 기존 HardpointSlots를 대체하지 않고 LocationSlotRef로 참조한다.
-// - Top_01 하드포인트가 있는 기존 자산은 PostLoad에서 RoofTurret_MediumOrLarge 기본 프로파일을 1회 보강한다.
+// - Top_01 하드포인트가 있고 해당 슬롯을 참조하는 MountProfile이 전혀 없는 legacy 자산만 PostLoad에서 RoofTurret_MediumOrLarge 기본 프로파일을 1회 보강한다.
 // - 기존 차량 DataAsset의 HardpointSlots는 빈 배열로 시작하며, 빈 배열은 오류가 아니다.
 // - 하드포인트 SocketName은 선택 캡처 입력이며, 비어 있으면 기존 LocalTransform을 유지한다.
 // - 기존 VehicleMovementConfig는 ThrottleInputScale=1.0 기본값으로 기존 스로틀 입력 체감을 유지한다.
