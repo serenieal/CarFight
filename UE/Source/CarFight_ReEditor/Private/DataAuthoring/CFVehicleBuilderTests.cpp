@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleBuilderTests.cpp
-// Version: v1.16.0
-// Date: 2026-09-02
+// Version: v1.17.0
+// Date: 2026-09-03
 // Description: CF-FQ-040 Builder write lane + ESH-02/03 vehicle-specific Engine Curve/Transmission provenance focused Automation입니다.
 // Scope: R2 companion, Evidence Refresh, R1 Profile commit/receipt, Transmission contract와 Engine Curve FACT/DERIVED/GAME_BIAS review/hash 및 post-DefinitionApply persistent Target을 직접 검증합니다.
 // Changelog:
+// - v1.17.0: actual Wagon ResearchDraft/Evidence가 이미 semantic 동기화된 current state에서는 Evidence Refresh preview가 NoChange/equal fingerprint임을 검증하고, WagonTransmissionDraft의 PhysicsDraft expectation을 current SchemaRevision 3 + current accepted Evidence binding으로 갱신.
 // - v1.16.0: actual Wagon persisted expectation을 ESH-03 USER-approved ChangeUpRPM 5500 Target DefinitionApply 뒤 상태로 갱신. Transmission receipt e1be..., Target hash 0e5b..., Target/Drivetrain 5500/2000을 exact 검증.
 // - v1.15.0: actual Wagon mutation0 PhysicsDraft preview가 Engine Curve hash뿐 아니라 current TransmissionProposalHash도 Saved JSON/log에 노출해 ESH-03 fixed-common proposal exact identity를 재사용 가능하게 함.
 // - v1.14.0: actual Wagon persisted test를 pre-Apply Target=false invariant에서 post-DefinitionApply Target=true + exact 6-point Curve + AppliedState hash/revision readback으로 전환.
@@ -1100,7 +1101,8 @@ bool FCFVehicleBuilderWagonDraftTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Actual Wagon preview is R1"), Preview.Proposal.RiskClass, ECFAuthoringRiskClass::R1_AuthoringRecordWrite);
 	TestEqual(TEXT("Actual Wagon preview requires AuthoringWrite"), Preview.Proposal.RequiredApprovalClass, ECFAuthoringApprovalClass::AuthoringWrite);
 	TestFalse(TEXT("Actual Wagon prospective fingerprint is non-empty"), Preview.ProspectiveEvidenceFingerprint.IsEmpty());
-	TestNotEqual(TEXT("Actual Wagon refreshed Research changes Evidence fingerprint"), Preview.ProspectiveEvidenceFingerprint, Preview.CurrentEvidenceFingerprint);
+	TestEqual(TEXT("Actual Wagon synchronized Research preview reports NoChange"), Preview.Operation.Status, ECFAuthoringOpStatus::NoChange);
+	TestEqual(TEXT("Actual Wagon synchronized Research preserves Evidence fingerprint"), Preview.ProspectiveEvidenceFingerprint, Preview.CurrentEvidenceFingerprint);
 	TestFalse(TEXT("Actual Wagon dry-run performs no Evidence mutation"), Preview.Operation.Mutation.bEvidenceChanged);
 	TestFalse(TEXT("Actual Wagon dry-run performs no Recipe mutation"), Preview.Operation.Mutation.bRecipeChanged);
 	TestFalse(TEXT("Actual Wagon dry-run performs no Target mutation"), Preview.Operation.Mutation.bTargetChanged);
@@ -1120,7 +1122,7 @@ bool FCFVehicleBuilderWagonDraftTest::RunTest(const FString& Parameters)
 	}
 	TestEqual(TEXT("Actual Wagon target hash remains unchanged"), TargetAfter.DefinitionHash, TargetBefore.DefinitionHash);
 
-	// Canonical AI PhysicsDraft v2 path입니다.
+	// Canonical AI PhysicsDraft v3 path입니다.
 	const FString PhysicsDraftPath = FPaths::ConvertRelativePathToFull(FPaths::Combine(
 		FPaths::ProjectSavedDir(),
 		TEXT("CarFight"),
@@ -1128,24 +1130,24 @@ bool FCFVehicleBuilderWagonDraftTest::RunTest(const FString& Parameters)
 		TEXT("PhysicsDraft.json")));
 	// UTF-8 PhysicsDraft JSON 원문입니다.
 	FString PhysicsDraftJson;
-	if (!TestTrue(TEXT("Actual Wagon PhysicsDraft v2 exists"), FFileHelper::LoadFileToString(PhysicsDraftJson, *PhysicsDraftPath)))
+	if (!TestTrue(TEXT("Actual Wagon PhysicsDraft v3 exists"), FFileHelper::LoadFileToString(PhysicsDraftJson, *PhysicsDraftPath)))
 	{
 		return false;
 	}
 
-	// Typed PhysicsDraft v2 proposal입니다.
+	// Typed PhysicsDraft v3 proposal입니다.
 	FCFBuilderPhysicsDraft PhysicsDraft;
 	if (!TestTrue(
-		TEXT("Actual Wagon PhysicsDraft v2 deserializes"),
+		TEXT("Actual Wagon PhysicsDraft v3 deserializes"),
 		FJsonObjectConverter::JsonObjectStringToUStruct(PhysicsDraftJson, &PhysicsDraft, 0, 0)))
 	{
 		return false;
 	}
-	TestEqual(TEXT("Actual Wagon PhysicsDraft schema is v2"), PhysicsDraft.SchemaRevision, 2);
+	TestEqual(TEXT("Actual Wagon PhysicsDraft schema is v3"), PhysicsDraft.SchemaRevision, 3);
 	TestEqual(TEXT("Actual Wagon PhysicsDraft RecipeId matches"), PhysicsDraft.RecipeId, Recipe->RecipeId);
 	TestEqual(TEXT("Actual Wagon PhysicsDraft Target matches"), PhysicsDraft.TargetDefinitionPath, FSoftObjectPath(Target));
 	TestEqual(TEXT("Actual Wagon PhysicsDraft EvidenceId matches persistent identity"), PhysicsDraft.EvidenceId, Evidence->EvidenceId);
-	TestEqual(TEXT("Actual Wagon PhysicsDraft binds prospective Evidence fingerprint"), PhysicsDraft.ExpectedEvidenceFingerprint, Preview.ProspectiveEvidenceFingerprint);
+	TestEqual(TEXT("Actual Wagon PhysicsDraft binds current accepted Evidence fingerprint"), PhysicsDraft.ExpectedEvidenceFingerprint, Evidence->EvidenceFingerprint);
 	TestFalse(TEXT("Actual Wagon PhysicsDraft correlation hash is present"), PhysicsDraft.ProposalCorrelationHash.IsEmpty());
 	TestEqual(TEXT("Actual Wagon PhysicsDraft expects eight forward gears"), PhysicsDraft.TransmissionReview.ExpectedForwardGearCount, 8);
 	TestEqual(TEXT("Actual Wagon PhysicsDraft contains nine transmission review components"), PhysicsDraft.TransmissionReview.Components.Num(), 9);
@@ -1201,7 +1203,7 @@ bool FCFVehicleBuilderWagonDraftTest::RunTest(const FString& Parameters)
 	// Future one-time policy migration 후 적용될 exact VehicleSpecificRequired Transmission contract를 current Product Asset mutation 없이 검증합니다.
 	FString TransmissionReviewError;
 	if (!TestTrue(
-		TEXT("Actual Wagon PhysicsDraft v2 passes VehicleSpecificRequired TransmissionReview"),
+		TEXT("Actual Wagon PhysicsDraft v3 passes VehicleSpecificRequired TransmissionReview"),
 		CFBuilderTransUtil::ValidateTransmissionReview(
 			ECFBuilderTransmissionPolicy::VehicleSpecificRequired,
 			PhysicsDraft.TransmissionReview,

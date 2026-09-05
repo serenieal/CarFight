@@ -1,12 +1,16 @@
 # CarFight CF-FQ-040 VB-P0-08 Technical Driving Benchmark runner.
-# Version: v1.3.0
-# Date: 2026-08-27
+# Version: v1.4.1
+# Date: 2026-09-04
 # Changelog:
+# - v1.4.1: P0-07E 중간검수 교정. Windows path에 불필요한 quote replacement를 제거하고 Start-Process ArgumentList에 전달할 progress path 인자를 단일 quoted value로 고정합니다.
+# - v1.4.0: VBHAI-P0-07E에서 canonical progress sidecar stale 파일을 launch 전에 제거하고 exact RunId + absolute progress path를 UnrealEditor benchmark runtime까지 전달합니다. Progress sidecar는 terminal result authority가 아니며 writer 실패가 최종 benchmark PASS/FAIL을 바꾸지 않습니다.
 # - v1.3.0: VB-P0-09 Step 8 Guided Shell이 current saved Target과 결과를 exact binding하도록 optional RunId/ExpectedTargetDefinitionHash/completed UTC provenance를 result envelope에 additive 추가.
 # - v1.2.0: UE 5.8 Source-confirmed -UseFixedTimeStep -FPS=60을 benchmark process에 적용해 Chaos vehicle 계측을 고정 60Hz simulation step으로 실행하고 반복 편차를 줄임.
 # - v1.1.0: Start-Process -Wait의 descendant-process 대기를 제거하고 exact UnrealEditor Process 객체 WaitForExit()만 사용해 TestExit 이후 wrapper가 terminal로 회수되도록 교정.
 # - v1.0.0: saved VehicleData + optional FittingData를 fresh PIE Builder benchmark Automation에 전달하고 machine-readable JSON으로 추출.
 # Migration:
+# - v1.4.1은 progress command-line quoting만 교정하며 경로·schema·terminal result 계약은 변경하지 않습니다.
+# - v1.4.0 progress sidecar는 `UE/Saved/CarFight/VehicleBuilderBenchmarkProgress.json` 한 파일만 사용합니다. 새 run 전에 stale 파일을 제거하고 runtime에 absolute path를 전달하며 final result JSON/Automation exit code 계약은 그대로 유지합니다.
 # - Product Asset/Map/Config를 저장하지 않습니다.
 # - Reference 성능과의 PASS/FAIL threshold를 이 runner가 임의 생성하지 않습니다.
 
@@ -42,7 +46,9 @@ $EditorExecutable = 'D:\UnrealEngine_Source\Engine\Binaries\Win64\UnrealEditor.e
 $AutomationLogPath = Join-Path $RepositoryRoot 'UE\Saved\Logs\CFVehicleBuilderBench.log'
 # Browser/AI가 회수할 machine-readable 결과 JSON입니다.
 $ResultJsonPath = Join-Path $RepositoryRoot 'UE\Saved\CarFight\VehicleBuilderBenchmarkResult.json'
-# 결과 JSON 상위 폴더입니다.
+# Guided Step 8이 running process 동안 읽는 coarse progress sidecar JSON입니다.
+$ProgressJsonPath = Join-Path $RepositoryRoot 'UE\Saved\CarFight\VehicleBuilderBenchmarkProgress.json'
+# 결과/progress JSON 상위 폴더입니다.
 $ResultDirectory = Split-Path -Parent $ResultJsonPath
 # 실행할 exact Automation test path입니다.
 $TestFilter = 'CarFight.VehicleBuilder.CF_FQ_040.VB_P0_08.TechnicalDrivingBenchmark'
@@ -76,6 +82,10 @@ if (Test-Path -LiteralPath $AutomationLogPath -PathType Leaf) {
 if (Test-Path -LiteralPath $ResultJsonPath -PathType Leaf) {
     Remove-Item -LiteralPath $ResultJsonPath -Force
 }
+if (Test-Path -LiteralPath $ProgressJsonPath -PathType Leaf) {
+    # 이전 run의 progress가 새 exact RunId 상태처럼 보이지 않도록 launch 전에 stale sidecar를 제거합니다.
+    Remove-Item -LiteralPath $ProgressJsonPath -Force
+}
 
 # exact Automation Controller command입니다.
 $AutomationCommand = "Automation RunTests $TestFilter"
@@ -83,6 +93,10 @@ $AutomationCommand = "Automation RunTests $TestFilter"
 $VehicleDataArgument = "-CFBuilderBenchmarkVehicleData=$VehicleDataPath"
 # Label command-line argument입니다.
 $LabelArgument = "-CFBuilderBenchmarkLabel=$Label"
+# Guided/standalone 양쪽에서 확정된 exact benchmark run identity입니다.
+$RunIdArgument = "-CFBuilderBenchmarkRunId=$($ParsedRunId.ToString('D'))"
+# Runtime progress writer가 same-directory temp→replace로 쓸 canonical absolute sidecar path입니다.
+$ProgressPathArgument = '-CFBuilderBenchmarkProgressPath="{0}"' -f $ProgressJsonPath
 # optional Fitting command-line argument입니다.
 $FittingArgument = if ([string]::IsNullOrWhiteSpace($FittingDataPath)) { $null } else { "-CFBuilderBenchmarkFittingData=$FittingDataPath" }
 
@@ -97,6 +111,8 @@ $EditorArguments = @(
     '-FPS=60',
     $VehicleDataArgument,
     $LabelArgument,
+    $RunIdArgument,
+    $ProgressPathArgument,
     ('-ExecCmds="{0}"' -f $AutomationCommand),
     '-TestExit="Automation Test Queue Empty"',
     "-abslog=$AutomationLogPath",
@@ -188,6 +204,7 @@ $ResultJson = $Result | ConvertTo-Json -Depth 8
 [System.IO.File]::WriteAllText($ResultJsonPath, $ResultJson, [System.Text.UTF8Encoding]::new($false))
 
 Write-Output "RESULT_JSON=$ResultJsonPath"
+Write-Output "PROGRESS_JSON=$ProgressJsonPath"
 Write-Output "RUN_ID=$($ParsedRunId.ToString('D'))"
 Write-Output "EXPECTED_TARGET_DEFINITION_HASH=$ExpectedTargetDefinitionHash"
 Write-Output "ENGINE_EXIT_CODE=$EngineExitCode"

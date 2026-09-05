@@ -1,9 +1,20 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderTab.h
-// Version: v1.18.0
-// Date: 2026-09-02
-// Description: Guided Vehicle Builder + CF-FQ-042 Vehicle ID/Candidate Quick Start Editor Slate Shell입니다.
+// Version: v1.28.1
+// Date: 2026-09-04
+// Description: CF-FQ-046 사용자 정보 구조 + CF-FQ-047 Hardpoint/Mount/Physics provenance / Step 8 Progress·Driving Apply·Explicit Recipe Save UI 계약입니다.
 // Changelog:
+// - v1.28.1: P0-07E Source 중간검수 교정. 7/7 결과 정리 단계가 terminal 성공 전에 100%로 오인되지 않도록 progress percent를 완료된 단계 수 기준으로 표시하는 계약을 명확화하고 header description을 실제 P0-07E 범위와 동기화.
+// - v1.28.0: VBHAI-P0-07E에서 PowerShell child lifetime에 결합된 0.5초 coarse benchmark progress cache/elapsed UI와 persistent acceptance receipt 기반 exact current Recipe explicit Save UX 계약을 추가.
+// - v1.27.0: VBHAI-P0-07B에서 Step 8 PIE Apply 버튼의 typed stable blocker/준비 완료 상태를 USER 문장으로 직접 노출하고 버튼 enable과 production Apply guard가 같은 VM preflight를 사용하도록 계약 추가.
+// - v1.26.0: CF-FQ-047 P0-06. downstream Hardpoint/Mount 변경으로 Physics receipt의 전체 resolved hash만 stale한 경우 private Profile 4개 유지 + receipt-only explicit revalidation UI를 추가.
+// - v1.24.0: CF-FQ-047 VBHAI-P0-02. Step 3에서 canonical unbound HP_*를 advisory로 표시하고 UseHardpoints에서만 exact existing Socket adoption action을 노출.
+// - v1.23.0: VBIUX-P0-03/04. Step 5/6 수치·장착 의미 설명과 Step 7/8 Before→After·기술 측정·직접 주행·데모 차량 목록 USER presentation을 추가하고 raw hash/path/backend 원문은 진단 정보로 격리.
+// - v1.22.1: Browser row callback 시그니처가 사용하는 ITableRow/STableViewBase forward declaration을 복구해 standalone compile 오류를 교정.
+// - v1.22.0: CF-FQ-046 VBIUX-P0-02. Step 1~4 USER summary/detail/diagnostic과 Step 4 전용 Layout panel getter를 추가하고 공통 top frame이 raw VM Summary/Resolution을 직접 사용하지 않도록 presentation contract를 확장.
+// - v1.21.0: Step 5 상세 표시가 raw 진단 덤프 대신 엔진/변속기/구동/브레이크/질량의 실제 의미와 수치만 보여주도록 presentation contract를 교정.
+// - v1.20.0: Step 5/6에 초보자용 요약 getter를 추가하고 기존 정밀 진단 요약은 접힌 기술 상세로 분리. Step 6 전체 scroll presentation을 지원하되 BuilderVM/backend 계약은 변경하지 않음.
+// - v1.19.0: VRCP-P0-03 Step 8 USER Driving PASS 성공 뒤 Runtime Catalog promotion을 orchestration하고 fresh membership 상태/explicit retry UX를 제공하는 Tab-only 계약을 추가. BuilderVM에는 Catalog state/mutation을 추가하지 않음.
 // - v1.18.0: P0-07 USER UAT 2차 피드백. Wheel/Hardpoint `추가 후 편집` enable을 cached row snapshot이 아니라 live current Chassis FindSocket truth로 통일하고, Step 3 상단 status/next-action 고정 프레임 + Socket Preparation 내부 scroll 레이아웃을 지원.
 // - v1.17.0: P0-07 UAT 피드백 반영. Step 3 Wheel/Hardpoint 동일 Chassis 편집 버튼을 하나로 통합하고 exact missing Socket을 원점에 explicit 생성 후 편집하는 handler를 추가. SocketName copy/read-only slot UX와 파괴 FX Socket 명칭을 명확화.
 // - v1.16.0: CF-FQ-043 VMG-P0-04 Step 6 Standard 1:1 Mount transient draft(Type/Size/Preset) + explicit typed commit/remove panel과 presentation sync 계약을 추가.
@@ -25,6 +36,14 @@
 // - v1.1.0: Step 1 Mesh-only 후보에 기존 safe VehicleData+Recipe Preview→명시 승인 생성 UI를 연결.
 // - v1.0.0: 차량/메시 후보 목록, 고정 8-step navigation, current-step 단일 content, Back/Refresh/Next를 추가.
 // Migration:
+// - v1.28.1 progress bar는 terminal success percent가 아니라 완료된 coarse 단계 비율을 표시합니다. 실제 성공은 기존 final result JSON + process exit code authority가 계속 판정합니다.
+// - v1.28.0 progress polling은 Tab-local process orchestration이며 disk read를 Slate getter에 넣지 않습니다. Recipe Save는 USER click으로 current Recipe package 1개만 저장하며 CF-FQ-046 공통 Page Shell/scroll owner는 변경하지 않습니다.
+// - v1.27.0 Step 8 Driving Apply readiness는 local Step 8 presentation만 확장하며 CF-FQ-046 공통 Page Shell/scroll owner, PIE lifecycle, Product Save 권한을 변경하지 않습니다.
+// - v1.23.0부터 Step 1~8 기본 화면은 USER presentation projection을 사용하며 backend raw Summary/Resolution/hash/path는 `진단 정보`에서만 확인합니다. 기존 Step state/Apply/Undo/Driving acceptance/Catalog authority는 변경하지 않습니다.
+// - v1.22.0부터 Step 1~4 기본 화면은 typed truth 기반 USER summary/action을 사용하고 raw VM Summary/Resolution은 접힌 `진단 정보`에서만 확인합니다. Step state/mutation authority는 변경하지 않습니다.
+// - v1.21.0 Step 5 물리 설정 상세은 AI Draft raw diagnostic 대신 실제 물리값 중심 USER presentation으로 전환됐으며 backend BuildPhysicsProposalSummary 계약은 유지합니다.
+// - v1.20.0부터 Step 5/6 기본 화면은 초보자용 행동 지침을 우선 표시하고 기존 정밀 요약은 `기술 상세 보기 (진단용)`에서 확인합니다. 저장·Apply·Recipe mutation 의미는 그대로입니다.
+// - v1.19.0부터 USER Driving PASS authority는 기존 BuilderDrivingAcceptanceReceipt/HasCurrentUserDrivingAcceptance()를 그대로 사용하며 Catalog 상태는 BuilderTab이 fresh membership으로 파생합니다. 별도 BuilderVM Catalog state는 없습니다.
 // - v1.14.0부터 일반 Guided creation은 Vehicle ID 한 칸이 기본 입력이며 4개 package/name은 `고급 Asset 경로 설정` 접힘 영역의 override로 이동합니다. invalid Vehicle ID는 sanitize하지 않고 즉시 설명하며 최종 collision/path/type는 existing Preview authority가 판정합니다.
 // - v1.13.0 Explicit New Vehicle은 기존 4개 package/name 입력을 P0-02 임시 identity UI로 재사용합니다. Vehicle ID 단일 naming은 P0-03이 소유합니다. Chassis picker는 optional이며 사용 중 Mesh도 허용하고 생성 시 Recipe AssetIntent만 기록합니다.
 // - v1.12.0 신규 차량 버튼은 transient 진입만 수행하며 Asset 생성/Save/VehicleData Apply는 하지 않습니다. 기존 Mesh-only Quick Start도 그대로 유지됩니다.
@@ -33,6 +52,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "DataAuthoring/CFVehicleBuilderTypes.h"
 #include "HAL/PlatformProcess.h"
 #include "Widgets/SCompoundWidget.h"
 
@@ -42,6 +62,9 @@ enum class ECFBuilderHardpointPlanMode : uint8;
 enum class ECFVehicleMountType : uint8;
 enum class ECFVehicleWeaponSize : uint8;
 class FCFVehicleBuilderVM;
+class ITableRow;
+class STableViewBase;
+class UCFVehicleData;
 template<typename ItemType> class SListView;
 class SBox;
 class SEditableTextBox;
@@ -60,7 +83,7 @@ public:
 	// Widget이 닫힐 때 benchmark child process handle만 해제하고 process 자체는 강제 종료하지 않습니다.
 	virtual ~SCFVehicleBuilderTab() override;
 
-	// Non-blocking Technical Benchmark child process terminal 상태를 polling하고 current Step 8 result를 fresh 회수합니다.
+	// Non-blocking 기술 주행 측정 child process terminal 상태를 polling하고 current Step 8 result를 fresh 회수합니다.
 	virtual void Tick(const FGeometry& AllottedGeometry, double InCurrentTime, float InDeltaTime) override;
 
 private:
@@ -202,6 +225,9 @@ private:
 	// Step 3 Standard physical category에 deterministic stable Hardpoint row를 추가합니다.
 	FReply HandleAddStandardHardpoint(FName LocationCategory);
 
+	// Step 3 current Chassis의 canonical existing unbound HP_* Socket을 exact stable identity로 current Recipe Hardpoint에 채택합니다.
+	FReply HandleAdoptExistingHardpointSocket(FName SocketName);
+
 	// Step 3 exact Recipe Hardpoint row를 typed no-cascade remove lane으로 제거합니다.
 	FReply HandleRemoveHardpoint(FName LocationSlotId);
 
@@ -244,6 +270,9 @@ private:
 	// Step 5 private 4 Profile mutation0 proposal을 검토하고 explicit USER 승인 뒤 existing typed commit을 실행합니다.
 	FReply HandlePhysicsProposalReview();
 
+	// Step 5 private 4 Profile은 unchanged이고 downstream resolved hash만 drift한 경우 persistent Physics receipt만 명시적으로 재검증합니다.
+	FReply HandlePhysicsReceiptRefresh();
+
 	// Step 7 fresh Final Review 전체 Diff/provenance를 검토하고 explicit USER DefinitionApply 승인 뒤 existing R3 Apply를 실행합니다.
 	FReply HandleFinalReviewApply();
 
@@ -253,11 +282,35 @@ private:
 	// Step 8 current saved Target을 existing VB-P0-08 fixed-60Hz benchmark runner로 non-blocking 실행합니다.
 	FReply HandleRunDrivingBenchmark();
 
+	// PowerShell child가 실행 중일 때 exact RunId progress sidecar를 bounded 0.5초 cadence로 polling합니다.
+	void PollDrivingBenchmarkProgress(double CurrentTimeSeconds);
+
+	// 새 benchmark 시작/terminal에서 Tab-local progress cache와 elapsed timer를 초기화합니다.
+	void ResetDrivingBenchmarkProgressState();
+
 	// Step 8 current selected VehicleData transient duplicate를 active PIE Player VehiclePawn에 적용합니다.
 	FReply HandleApplyDrivingTargetToPIE();
 
-	// Step 8 exact current benchmark/Target에 USER Driving PASS를 명시적으로 기록합니다.
+	// Step 8 current benchmark/Target에 사용자 주행 테스트 통과를 기록하고 성공 뒤 데모 차량 목록 promotion을 시도합니다.
 	FReply HandleAcceptUserDriving();
+
+	// Persistent USER Driving receipt가 fresh Target에 exact binding된 current Recipe package 하나를 USER 승인 뒤 명시 저장합니다.
+	FReply HandleSaveCurrentRecipe();
+
+	// Current persistent 사용자 주행 통과 기록을 유지한 채 데모 차량 목록 promotion만 explicit 재시도합니다.
+	FReply HandleRetryRuntimeCatalogPromotion();
+
+	// Current acceptance/Target/Default Catalog를 fresh read해 Runtime Demo Catalog 등록 상태를 표시합니다.
+	FText GetRuntimeCatalogPromotionStatusText() const;
+
+	// Current 사용자 주행 통과 기록과 persistent Target이 유효하고 아직 exact Catalog member가 아닐 때 재시도를 허용합니다.
+	bool CanRetryRuntimeCatalogPromotion() const;
+
+	// Current Recipe가 가리키는 exact persistent VehicleData를 Catalog promotion target으로 검증해 반환합니다.
+	bool TryGetCurrentCatalogPromotionTarget(UCFVehicleData*& OutTargetVehicleData, FString& OutError) const;
+
+	// Current 사용자 주행 통과 기록을 재확인한 뒤 Promotion Service를 호출하고 fresh readback 상태를 USER-facing 문자열로 반환합니다.
+	bool PromoteCurrentAcceptedVehicleToRuntimeCatalog(FString& OutStatusText);
 
 	// Explicit New Vehicle은 빈 Vehicle ID로 초기화하고 Mesh Candidate는 Mesh stem 기반 Vehicle ID 제안값을 채웁니다.
 	void SyncCreationFieldsFromSelection();
@@ -274,13 +327,31 @@ private:
 	// Step 1 managed Recipe의 Reference/Companion UI 표시 조건입니다.
 	EVisibility GetReferenceFlowVisibility() const;
 
-	// Step 1 persistent Evidence 또는 loaded Draft의 USER-facing 요약을 표시합니다.
+	// Step 1 persistent Evidence 또는 loaded Draft의 typed truth를 사용자용 기준 정보로 표시합니다.
 	FText GetReferenceSummaryText() const;
+
+	// Step 2 current Recipe AssetIntent를 사용자용 Chassis/Wheel Mesh 요약으로 표시합니다.
+	FText GetMeshPreparationSummaryText() const;
+
+	// Step 3 required Wheel Socket과 current 배치 수치를 사용자용 요약으로 표시합니다.
+	FText GetSocketPreparationSummaryText() const;
+
+	// Step 4 차량 배치 확인 전용 UI 표시 조건입니다.
+	EVisibility GetLayoutReviewVisibility() const;
+
+	// Step 4 current Socket/VehicleData 배치 수치를 사용자용 요약으로 표시합니다.
+	FText GetLayoutSummaryText() const;
+
+	// Step 1~8 raw VM/backend 문장과 hash/path/action diagnostic을 접힌 진단 정보에서만 표시합니다.
+	FText GetCurrentStepDiagnosticText() const;
 
 	// Step 5 Physics Proposal 전용 UI 표시 조건입니다.
 	EVisibility GetPhysicsProposalVisibility() const;
 
-	// Step 5 loaded Draft/current receipt를 USER-facing 요약으로 표시합니다.
+	// Step 5에서 초보자가 바로 다음 행동을 이해할 수 있는 짧은 요약을 표시합니다.
+	FText GetPhysicsProposalUserSummaryText() const;
+
+	// Step 5 loaded Draft에서 사람이 판단할 엔진/변속기/구동/브레이크/질량 설정만 구조화해 표시합니다.
 	FText GetPhysicsProposalSummaryText() const;
 
 	// Step 6 Hardpoint별 Standard MountType transient draft를 변경합니다. Recipe mutation은 하지 않습니다.
@@ -313,8 +384,14 @@ private:
 	// Step 6 Gameplay Setup 전용 R0 guidance UI 표시 조건입니다.
 	EVisibility GetGameplaySetupVisibility() const;
 
-	// Step 6의 8영역 completeness/USER Socket/pending diff를 USER-facing 요약으로 표시합니다.
+	// Step 6에서 초보자가 남은 작업과 다음 행동을 바로 이해할 수 있는 짧은 요약을 표시합니다.
+	FText GetGameplaySetupUserSummaryText() const;
+
+	// Step 6의 8영역 completeness/USER Socket/pending diff 정밀 진단 요약을 표시합니다.
 	FText GetGameplaySetupSummaryText() const;
+
+	// Step 6 Recipe authored Hardpoint↔Mount 관계를 실제 VehicleData 결과와 구분해 표시합니다.
+	FText GetGameplayMountSemanticSummaryText() const;
 
 	// Step 7 Final Review 전용 R0 review/apply/undo UI 표시 조건입니다.
 	EVisibility GetFinalReviewVisibility() const;
@@ -328,11 +405,29 @@ private:
 	// Current Editor lifetime에 exact Builder guarded Undo token이 있는지 반환합니다.
 	bool CanUndoFinalReview() const;
 
-	// Step 8 Technical Driving / USER Driving 전용 UI 표시 조건입니다.
+	// Step 8 기술 주행 측정 / 사용자 직접 주행 전용 UI 표시 조건입니다.
 	EVisibility GetDrivingTestVisibility() const;
 
-	// Step 8 saved-state/technical metrics/USER checklist를 USER-facing 요약으로 표시합니다.
+	// Step 8 saved-state/technical metrics/USER checklist + current Target Hardpoint/Mount readback을 USER-facing 요약으로 표시합니다.
 	FText GetDrivingTestSummaryText() const;
+
+	// Step 8 PIE 적용 버튼의 stable blocker 또는 준비 완료 이유를 사용자용 문장으로 표시합니다.
+	FText GetDrivingApplyReadinessText() const;
+
+	// Running benchmark의 cached coarse phase와 monotonic 경과 시간을 USER-facing 문장으로 표시합니다.
+	FText GetDrivingBenchmarkProgressText() const;
+
+	// Running benchmark의 cached coarse phase를 0~1 progress 값으로 표시하고 snapshot 전에는 unset을 반환합니다.
+	TOptional<float> GetDrivingBenchmarkProgressPercent() const;
+
+	// Benchmark process가 실행 중일 때만 progress 영역을 표시합니다.
+	EVisibility GetDrivingBenchmarkProgressVisibility() const;
+
+	// Current persistent USER Driving receipt/Recipe dirty 상태를 Save 의미와 함께 USER-facing으로 표시합니다.
+	FText GetDrivingRecipeSaveStatusText() const;
+
+	// Current Step 8 exact Recipe가 persistent receipt 기준으로 dirty일 때만 explicit Save 버튼을 활성화합니다.
+	bool CanSaveCurrentRecipe() const;
 
 	// Current Step 8에서 benchmark child process를 새로 시작할 수 있는지 반환합니다.
 	bool CanRunDrivingBenchmark() const;
@@ -430,6 +525,9 @@ private:
 	// 마지막 read/action 결과를 USER에게 보여주는 status text입니다.
 	FText LastStatusText;
 
+	// USER 기본 상태와 분리해 접힌 진단 정보에만 보여줄 마지막 backend/error 원문입니다.
+	FString LastDiagnosticText;
+
 	// Step 8 existing benchmark runner를 실행 중일 때만 보관하는 OS process handle입니다.
 	FProcHandle DrivingBenchmarkProcess;
 
@@ -438,4 +536,19 @@ private:
 
 	// Step 8 benchmark child process가 terminal 회수 전인지 여부입니다.
 	bool bDrivingBenchmarkRunning = false;
+
+	// Current exact RunId에서 마지막으로 정상 읽은 coarse progress snapshot입니다.
+	FCFVehicleBuilderBenchmarkProgress DrivingBenchmarkProgress;
+
+	// Current run에서 exact RunId progress snapshot을 하나 이상 정상 수신했는지 여부입니다.
+	bool bHasDrivingBenchmarkProgress = false;
+
+	// Current benchmark 시작 시점의 monotonic seconds입니다.
+	double DrivingBenchmarkStartedAtSeconds = 0.0;
+
+	// 다음 progress sidecar read가 허용되는 monotonic seconds입니다.
+	double NextDrivingBenchmarkProgressPollAtSeconds = 0.0;
+
+	// USER 기본 UI와 분리할 마지막 progress read/stale sidecar diagnostic입니다.
+	FString LastDrivingBenchmarkProgressReadDiagnostic;
 };

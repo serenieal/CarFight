@@ -1,17 +1,19 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleBuilderReview.cpp
-// Version: v1.4.0
-// Date: 2026-09-01
-// Description: CF-FQ-040 Final Review + ESH-02 Engine Curve persistent provenance fresh validation 구현입니다.
+// Version: v1.5.0
+// Date: 2026-09-04
+// Description: CF-FQ-040 Final Review + CF-FQ-047 durable AppliedState finalize 구현입니다.
 // Scope: Existing Validation/External Drift/Gameplay/Diff/Reference Evidence를 aggregate하고 기존 R3 Apply lane과 Unreal standard Undo를 재사용합니다.
 // Changelog:
+// - v1.5.0: VBHAI-P0-07H에서 semantic no-diff Final Review도 prepared Apply identity를 보존하고 explicit DefinitionApply scope로 service-owned Recipe AppliedState finalize를 호출하는 facade를 추가. semantic PASS 문구를 durable Step 7 완료와 분리.
 // - v1.4.0: persistent EngineCurveReview/hash를 current Performance Profile/Evidence/consumed Claim에 fresh 재검증하고 fidelity warning/provenance blocker를 Final Review readiness에 합산.
 // - v1.3.0: VehicleSpecificRequired Recipe에서 persistent TransmissionReview/hash를 current Drivetrain/Evidence에 fresh 재검증하고 fixed-shift diagnostic blocker/warning을 Final Review Apply readiness에 합산. LegacyCompatible 경로는 기존 동작 보존.
 // - v1.2.0: Final Review caller가 ConsumedClaimIds를 비운 resume read에서는 persistent BuilderCommitReceipt의 canonical Claim ID 목록을 사용하고, caller가 명시한 목록은 기존 hash exact-match로 계속 tamper 차단.
 // - v1.1.0: provenance를 persistent BuilderCommitReceipt/current 4 Profile fingerprint에 binding하고, Final Review one-resolve projection과 Undo post-Apply state guard를 추가.
 // - v1.0.0: ReadBuilderFinalReview / ApplyBuilderFinalReview / UndoBuilderFinalApply 최초 구현.
 // Migration:
+// - v1.5.0 AppliedState finalize는 FCFVehicleApplyService::FinalizeAppliedState를 사용하며 Target mutation/Save를 수행하지 않습니다. 기존 ApplyBuilderFinalReview의 actual Diff Apply 의미는 유지합니다.
 // - Target write는 기존 ApplyResolvedVehicle -> FCFVehicleApplyService만 사용합니다.
 // - Hardpoint Socket 생성/이동, raw VehicleData write, auto Save, automatic retry를 추가하지 않습니다.
 // - Provenance 수치는 consumed canonical Evidence Claim count이며 field count로 위장하지 않습니다.
@@ -28,6 +30,7 @@
 #include "DataAuthoring/CFVehicleBaseProfile.h"
 #include "DataAuthoring/CFVehicleRecipeData.h"
 #include "DataAuthoring/CFVehicleRefEvidence.h"
+#include "DataAuthoring/CFVehicleApplyService.h"
 #include "DataAuthoring/CFVehicleSnapshotBuilder.h"
 #include "DataAuthoring/CFVehicleResolver.h"
 #include "Editor.h"
@@ -41,6 +44,9 @@ namespace CFVehicleBuilderReviewPrivate
 
 	// Final Review explicit Apply operation의 stable identity입니다.
 	const FName ApplyOperationName(TEXT("ApplyBuilderFinalReview"));
+
+	// Final Review semantic no-diff AppliedState finalize operation의 stable identity입니다.
+	const FName FinalizeAppliedStateOperationName(TEXT("FinalizeBuilderAppliedState"));
 
 	// Final Review guarded Undo operation의 stable identity입니다.
 	const FName UndoOperationName(TEXT("UndoBuilderFinalApply"));
@@ -669,9 +675,13 @@ bool FCFVehicleAuthoringService::ReadBuilderFinalReview(
 	OutResult.Operation.ValidationSummary = OutResult.Validation.Operation.ValidationSummary;
 	OutResult.Operation.Mutation = FCFAuthoringMutationFootprint();
 
-	if (OutResult.bCanApply)
+	if (OutResult.bCanApply || OutResult.bCanCompleteFinalReview)
 	{
 		CFVehicleBuilderReviewPrivate::BuildPreparedApplyRequest(Request, ResolveRead, TargetVehicleData, OutResult.PreparedApplyRequest);
+	}
+
+	if (OutResult.bCanApply)
+	{
 		// Existing R3 facade가 만드는 exact Apply approval proposal입니다.
 		FCFAuthoringOpResult ProposalOperation;
 		if (!BuildApplyApprovalProposal(OutResult.PreparedApplyRequest, OutResult.ApplyProposal, ProposalOperation))
@@ -686,10 +696,107 @@ bool FCFVehicleAuthoringService::ReadBuilderFinalReview(
 	CFVehicleBuilderReviewPrivate::Succeed(
 		OutResult.Operation,
 		OutResult.bCanCompleteFinalReview
-			? TEXT("Builder Final Review PASS입니다. Target Diff가 없어 다음 Driving Test로 진행할 수 있습니다.")
+			? TEXT("Builder Final Review semantic PASS입니다. Target Diff는 없습니다. Step 7 완료 여부는 current Target/Recipe 저장 상태와 AppliedState를 별도로 확인합니다.")
 			: OutResult.bCanApply
 				? FString::Printf(TEXT("Builder Final Review가 Apply 준비됐습니다. Warning %d / Blocker 0 / Target Diff %d이며 자동 저장은 하지 않습니다."), OutResult.WarningCount, OutResult.FieldDiff.Num())
 				: FString::Printf(TEXT("Builder Final Review를 읽었습니다. Warning %d / Blocker %d / Target Diff %d입니다."), OutResult.WarningCount, OutResult.BlockingIssueCount, OutResult.FieldDiff.Num()));
+	return true;
+}
+
+// semantic no-diff Final Review의 fresh Recipe/Target/Resolve identity를 binding한 AppliedState finalize approval scope를 만듭니다.
+FString FCFVehicleAuthoringService::BuildBuilderAppliedStateFinalizeScope(const FCFBuilderFinalReviewResult& Review)
+{
+	if (!Review.bCanCompleteFinalReview
+		|| !Review.PreparedApplyRequest.Recipe
+		|| !Review.PreparedApplyRequest.TargetVehicleData)
+	{
+		return FString();
+	}
+
+	// No-diff AppliedState finalize를 exact current review identity에 binding하는 canonical payload입니다.
+	FString Payload;
+	CFVehicleBuilderReviewPrivate::AppendToken(Payload, TEXT("Operation"), CFVehicleBuilderReviewPrivate::FinalizeAppliedStateOperationName.ToString());
+	CFVehicleBuilderReviewPrivate::AppendToken(Payload, TEXT("RecipePath"), FSoftObjectPath(Review.PreparedApplyRequest.Recipe).ToString());
+	CFVehicleBuilderReviewPrivate::AppendToken(Payload, TEXT("TargetPath"), FSoftObjectPath(Review.PreparedApplyRequest.TargetVehicleData).ToString());
+	CFVehicleBuilderReviewPrivate::AppendToken(Payload, TEXT("RecipeFingerprint"), Review.PreparedApplyRequest.ExpectedRecipeFingerprint);
+	CFVehicleBuilderReviewPrivate::AppendToken(Payload, TEXT("SourceSignature"), Review.PreparedApplyRequest.ExpectedSourceSignature);
+	CFVehicleBuilderReviewPrivate::AppendToken(Payload, TEXT("CurrentTargetHash"), Review.PreparedApplyRequest.ExpectedTargetDefinitionHash);
+	CFVehicleBuilderReviewPrivate::AppendToken(Payload, TEXT("ResolvedHash"), Review.PreparedApplyRequest.ExpectedResolvedDefinitionHash);
+	CFVehicleBuilderReviewPrivate::AppendToken(Payload, TEXT("ResolverRevision"), FString::FromInt(Review.PreparedApplyRequest.ExpectedResolverContractRevision));
+	CFVehicleBuilderReviewPrivate::AppendToken(Payload, TEXT("DiffHash"), Review.DiffHash);
+	return CFVehicleBuilderReviewPrivate::HashUtf8Payload(Payload);
+}
+
+// Exact DefinitionApply approval을 fresh Final Review와 재검사한 뒤 Target mutation 없이 Recipe AppliedState만 authoritative state로 finalize합니다.
+bool FCFVehicleAuthoringService::FinalizeBuilderAppliedState(
+	const FCFBuilderFinalReviewRequest& ReviewRequest,
+	const FCFAuthoringCallContext& CallContext,
+	FCFAuthoringOpResult& OutResult)
+{
+	CFVehicleBuilderReviewPrivate::InitializeOperation(
+		OutResult,
+		CFVehicleBuilderReviewPrivate::FinalizeAppliedStateOperationName,
+		ECFAuthoringRiskClass::R3_DefinitionApply,
+		CallContext.ClientOperationId);
+
+	if (CallContext.ClientOperationId.IsEmpty()
+		|| CallContext.ApprovalClass != ECFAuthoringApprovalClass::DefinitionApply
+		|| CallContext.ApprovalScopeHash.IsEmpty())
+	{
+		return CFVehicleBuilderReviewPrivate::Block(
+			OutResult,
+			ECFAuthoringErrorCode::ApprovalRequired,
+			TEXT("AppliedState 확정에는 explicit ClientOperationId와 DefinitionApply ApprovalScopeHash가 필요합니다."));
+	}
+
+	// Mutation 직전 current UObject/Resolver truth를 다시 읽는 fresh Final Review입니다.
+	FCFBuilderFinalReviewResult FreshReview;
+	if (!ReadBuilderFinalReview(ReviewRequest, FreshReview))
+	{
+		OutResult = FreshReview.Operation;
+		OutResult.OperationName = CFVehicleBuilderReviewPrivate::FinalizeAppliedStateOperationName;
+		OutResult.RiskClass = ECFAuthoringRiskClass::R3_DefinitionApply;
+		OutResult.ClientOperationId = CallContext.ClientOperationId;
+		return false;
+	}
+	if (!FreshReview.bCanCompleteFinalReview)
+	{
+		return CFVehicleBuilderReviewPrivate::Block(
+			OutResult,
+			ECFAuthoringErrorCode::ValidationBlocked,
+			TEXT("AppliedState 확정은 current Final Review semantic Diff 0 / blocker 0 상태에서만 허용됩니다."));
+	}
+
+	// Fresh Final Review에서 다시 계산한 exact finalize scope입니다.
+	const FString FreshFinalizeScope = BuildBuilderAppliedStateFinalizeScope(FreshReview);
+	if (FreshFinalizeScope.IsEmpty() || FreshFinalizeScope != CallContext.ApprovalScopeHash)
+	{
+		return CFVehicleBuilderReviewPrivate::Block(
+			OutResult,
+			ECFAuthoringErrorCode::ApprovalScopeMismatch,
+			TEXT("AppliedState 확정 approval scope가 current fresh Final Review identity와 일치하지 않습니다."));
+	}
+
+	// Low-level Apply authority가 fresh Resolve provenance로 Recipe AppliedState만 조립/적용한 결과입니다.
+	FCFVehicleApplyResult FinalizeResult;
+	if (!FCFVehicleApplyService::FinalizeAppliedState(FreshReview.PreparedApplyRequest, FinalizeResult))
+	{
+		return CFVehicleBuilderReviewPrivate::Block(
+			OutResult,
+			ECFAuthoringErrorCode::ApplyPreconditionFailed,
+			FinalizeResult.Message.IsEmpty() ? TEXT("Recipe AppliedState 확정에 실패했습니다.") : FinalizeResult.Message);
+	}
+
+	OutResult.Mutation.bRecipeChanged = FinalizeResult.bRecipeAppliedStateUpdated;
+	OutResult.Mutation.bTargetChanged = FinalizeResult.bTargetMutationCommitted;
+	OutResult.Mutation.bSavePerformed = false;
+	OutResult.Mutation.bAutomaticRetryPerformed = false;
+	OutResult.CurrentRecipeFingerprint = FreshReview.PreparedApplyRequest.ExpectedRecipeFingerprint;
+	OutResult.CurrentTargetDefinitionHash = FreshReview.PreparedApplyRequest.ExpectedTargetDefinitionHash;
+	OutResult.CurrentSourceSignature = FreshReview.PreparedApplyRequest.ExpectedSourceSignature;
+	OutResult.CurrentResolvedDefinitionHash = FreshReview.PreparedApplyRequest.ExpectedResolvedDefinitionHash;
+	OutResult.ResolverContractRevision = FreshReview.PreparedApplyRequest.ExpectedResolverContractRevision;
+	CFVehicleBuilderReviewPrivate::Succeed(OutResult, FinalizeResult.Message);
 	return true;
 }
 

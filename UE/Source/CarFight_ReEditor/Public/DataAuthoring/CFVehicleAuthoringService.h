@@ -1,11 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringService.h
-// Version: v1.8.0
-// Date: 2026-08-27
-// Description: DAUTH Common Authoring facade + CF-FQ-040 provenance/Undo/read-once hardening entry입니다.
+// Version: v1.10.0
+// Date: 2026-09-04
+// Description: DAUTH Common Authoring facade + CF-FQ-047 Physics receipt 및 durable AppliedState finalize seam입니다.
 // Scope: Existing Snapshot/Resolver/Import/Adoption/Batch B2/Apply core orchestration과 Frozen 24.90~24.94 Workspace completeness를 제공합니다.
 // Changelog:
+// - v1.10.0: VBHAI-P0-07H에서 Final Review semantic no-diff를 fresh 재검사하고 exact DefinitionApply approval로 Recipe AppliedState만 finalize하는 service facade/scope를 추가.
+// - v1.9.0: generic Builder Profile full-exact transaction 의미를 유지하면서 resolved DefinitionHash를 제외한 Physics provenance exactness를 read-only로 조회하는 facade를 추가.
 // - v1.8.0: Builder Final Review가 one fresh Resolve를 Validation/Drift/Gameplay projection에 재사용하고 provenance receipt/post-state Undo hardening을 지원.
 // - v1.7.0: existing Validation/Drift/Gameplay/Diff/Evidence provenance를 aggregate하는 Final Review R0, exact DefinitionApply delegation과 Builder-owned top transaction guarded Undo facade를 추가.
 // - v1.6.0: current Recipe/Target/Resolver/Asset truth를 재사용해 Gameplay Setup completeness와 USER Socket/Fitting 안내를 mutation0로 반환하는 R0 facade를 추가.
@@ -16,6 +18,8 @@
 // - v1.1.0: P0-09 Initial Import reviewed R2 proposal/commit facade를 추가해 Slate가 Import Core를 직접 호출하지 않게 함.
 // - v1.0.0: Section 25 Common Authoring Service Foundation 최초 구현.
 // Migration:
+// - v1.10.0 AppliedState finalize는 Target field를 수정하거나 Save하지 않으며, 기존 ApplyBuilderFinalReview의 actual Diff Apply 의미를 변경하지 않습니다.
+// - v1.9.0 Physics provenance read는 persistent receipt를 수정/저장하지 않으며 PreviewBuilderProfiles/CommitBuilderProfiles의 full resolved DefinitionHash exact comparator는 그대로 유지합니다.
 // - Builder companion creation은 기존 CreateVehicleRecords의 Definition+Recipe core 계약을 변경하지 않고 후속 R2 operation으로 Evidence + private 4 Profile만 생성합니다.
 // - Builder-private Profile commit은 Recipe에 exact binding되고 Meta.OwnerRecipeId==RecipeId인 4 Profile만 허용하며 기존 Shared Profile B2 mutation을 대체하거나 우회하지 않습니다.
 // - Resolver/validation/source precedence를 재구현하지 않습니다.
@@ -133,6 +137,15 @@ public:
 		const FCFBuilderFinalApplyRequest& Request,
 		FCFBuilderFinalApplyResult& OutResult);
 
+	// semantic no-diff Final Review의 fresh Recipe/Target/Resolve identity를 binding한 AppliedState finalize approval scope를 만듭니다.
+	static FString BuildBuilderAppliedStateFinalizeScope(const FCFBuilderFinalReviewResult& Review);
+
+	// Exact DefinitionApply approval을 fresh Final Review와 재검사한 뒤 Target mutation 없이 Recipe AppliedState만 authoritative state로 finalize합니다.
+	static bool FinalizeBuilderAppliedState(
+		const FCFBuilderFinalReviewRequest& ReviewRequest,
+		const FCFAuthoringCallContext& CallContext,
+		FCFAuthoringOpResult& OutResult);
+
 	// ApplyBuilderFinalReview가 발급한 exact Builder-owned UE transaction이 current Undo stack top일 때만 Unreal standard Undo를 수행합니다.
 	static bool UndoBuilderFinalApply(
 		const FCFBuilderUndoRequest& Request,
@@ -142,6 +155,12 @@ public:
 	static bool PreviewBuilderProfiles(
 		const FCFBuilderProfileCommitRequest& Request,
 		FCFBuilderProfileCommitPreview& OutPreview);
+
+	// Fresh Builder Profile preview 기준으로 full resolved DefinitionHash를 제외한 Evidence/Claim/Profile/Transmission/Engine/Resolver Physics provenance가 receipt와 exact 같은지 확인합니다.
+	static bool IsBuilderPhysicsReceiptProvenanceCurrent(
+		const FCFBuilderProfileCommitRequest& Request,
+		const FCFBuilderProfileCommitPreview& Preview,
+		FString& OutDiagnostic);
 
 	// Fresh preview와 AuthoringWrite approval을 재검사한 뒤 Recipe에 binding된 private 4 Profile complete payload를 한 transaction으로 commit합니다.
 	static bool CommitBuilderProfiles(

@@ -1,10 +1,20 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringVMTests.cpp
-// Version: v1.37.0
-// Date: 2026-09-02
+// Version: v1.43.1
+// Date: 2026-09-05
 // Description: Vehicle Authoring Workspace + Guided Builder integration 보호 Automation입니다.
 // Changelog:
+// - v1.43.1: ResolverContractRevision synthetic approval-scope drift fixture를 실제 int32 contract에 맞게 +1로 교정. production 로직 변경 없음.
+// - v1.43.0: P0-07H 재감사 2차 실패를 교정. Undo mutation footprint가 package dirty/save를 강제하는 production contract를 검증하고, Recipe fingerprint drift fixture를 항상 존재하는 DrivingFeelIntent.AccelerationFeel semantic으로 전환. SourceSignature/ResolverRevision approval-scope sensitivity와 durable save 성공 뒤 refresh warning direct regression도 추가.
+// - v1.42.0: CF-FQ-047 최종 재감사에서 누락된 P0-07H guarded Undo durable persistence를 직접 검증. Undo success의 Target→Recipe exact pair save, pre-Apply diff 재생성/Complete 금지, Recipe save partial failure의 no-auto-rollback/retry와 manual Step7 recovery를 isolated /Game fixture에 추가하고 legacy /Temp Undo 기대를 durable fail-closed contract로 교정.
+// - v1.41.1: P0-07H DurableFinalCommit의 Recipe TOCTOU fixture를 fingerprint에서 의도적으로 제외되는 diagnostic AuthoringRevision 변경에서 실제 fingerprinted MountIntent semantic 변경으로 교정하고 before/after RecipeFingerprint drift를 명시 검증.
+// - v1.41.0: CF-FQ-047 최종감사 교정. P0-07H 전용 isolated `/Game` in-memory fixture와 Automation-only persistence seam으로 production PrepareFinalReviewCommit/ExecutePreparedFinalReviewCommit의 ApplyAndPersist, dirty pair ordering, partial failure/retry, SaveStateUnconfirmed, AppliedState finalize, TOCTOU를 직접 검증.
+// - v1.40.1: 기존 Step 7 transient /Temp fixture가 Apply 전/Apply 후/Undo 후 USER-facing Step 7 projection을 durable `/Game` package gate와 다르게 기대하던 stale assertion을 semantic PASS + PackageInvalid durable Blocked로 통일. Product /Game 저장 규칙을 test 편의로 약화하지 않음.
+// - v1.40.0: VBHAI-P0-07H fresh-restart 회귀로 persistent USER Driving receipt-only durable candidate가 benchmark transient cache 없이 먼저 식별되고, existing result JSON을 fresh current Target에 재검증한 뒤에만 PostDrivingReceiptSavePending으로 승격되는 순서를 Step 8 integration test에 추가.
+// - v1.39.0: VBHAI-P0-07E focused validation으로 exact RunId benchmark progress sidecar parser의 정상/invalid schema·GUID·phase·count fail-closed와 persistent USER Driving receipt 기반 Recipe Save preflight/writer의 /Temp package 차단·Save0 경계를 Step 8 regression에 추가.
+// - v1.38.1: VBHAI-P0-07B 재검수 P1 회귀로 Builder refresh 없이 live Target semantic field만 바꿔도 fresh Driving Apply identity hash가 즉시 달라지고 원복 시 복원되는지 검증.
+// - v1.38.0: CF-FQ-047 VBHAI-P0-07B에서 Step 8 Driving Apply typed blocker matrix, blocker precedence, all-valid readiness, non-persistent package blocker와 반복 stable preflight read를 추가.
 // - v1.37.0: P0-07 UAT Step 8 USER Driving PASS를 production persistent Recipe receipt로 검증. local config 삭제 뒤 fresh VM resume, same Target의 새 benchmark RunId에서도 PASS 유지, persistent target hash binding을 고정.
 // - v1.36.0: P0-07 UAT Wagon regression으로 persistent Builder receipt가 exact current Evidence를 증명할 때 local Reference review token 유실 후 fresh VM Step1/Step5/Step6 완료를 복원하고 Evidence drift 시 Stale로 되돌아가는 durable resume regression을 추가.
 // - v1.35.1: VMG-P0-06 F intentional-zero aggregate fixture에 Builder-private 4 Profile을 연결해 Hardpoint/Mount 외 unrelated Gameplay 영역까지 정상 complete source를 제공. Step 6 전체 Complete 기대는 유지.
@@ -49,6 +59,14 @@
 // - v1.1.0: P0-10 Reference Compare, typed Layout/Driving Feel+Undo, Measurement/Adoption, legacy Wizard managed-target guard parity 검증 추가.
 // - v1.0.0: ViewModel↔facade parity, preview mutation0, Initial Import mutation boundary, Apply/standard Undo, stale approval fail-closed 검증 추가.
 // Migration:
+// - v1.43.1 ResolverContractRevision은 int32이며 test synthetic drift도 integer revision semantics를 사용합니다.
+// - v1.43.0 fingerprint TOCTOU fixture는 구조가 비어 있을 수 있는 Hardpoint/Mount array에 의존하지 않고 Frozen RecipeFingerprint block에 항상 존재하는 DrivingFeelIntent scalar를 임시 변경 후 exact restore합니다. refresh-warning fixture도 test-only persistence callback에서 VM state를 끊을 뿐 Product disk write는 0입니다.
+// - v1.42.0 guarded Undo durable regression은 physical save가 차단된 isolated /Game persistence seam에서만 실행합니다. legacy /Temp Step7 fixture는 Undo mutation 자체는 성공해도 durable package gate 때문에 operation closure가 false가 되는 current production fail-closed 결과를 기대합니다.
+// - v1.41.1 AuthoringRevision은 RecipeFingerprint authority가 아니므로 TOCTOU fingerprint fixture에 사용하지 않습니다. 현재 fixture는 existing MountIntent.bExposedModule을 temporary toggle한 뒤 exact restore하며 Product Asset에는 영향이 없습니다.
+// - v1.41.0 durable transaction fixture는 `/Game/CarFight/Tests/CFVBHAI07H/...` object identity만 사용하고 physical .uasset을 생성하지 않습니다. persistence callback은 WITH_DEV_AUTOMATION_TESTS에서만 production save-state orchestration을 격리 검증하며 Product Asset Save는 0입니다.
+// - v1.40.1 Step 7 /Temp test는 legacy Apply/Undo 자체를 계속 검증하지만 durable package readiness는 `/Game`만 허용하는 production fail-closed 결과를 기대합니다. test-only package save는 추가하지 않습니다.
+// - v1.40.0 durable restart fixture는 synthetic SavedHandoff facts와 existing benchmark JSON만 사용하며 Product Asset save/apply/benchmark process 실행은 0입니다. Production persistent receipt write는 기존 Step 8 test path를 그대로 재사용합니다.
+// - v1.39.0 progress fixture는 기존 Saved sidecar를 exact 복원하며 Recipe Save fixture는 /Temp package에서 PackageInvalid로 fail-closed해 SavePackage를 호출하지 않습니다. Product Asset 저장은 0입니다.
 // - v1.30.0 regression은 transient Builder/Authoring selection과 Browser refresh만 검증하며 Product Asset 생성/Save/Apply를 추가하지 않습니다.
 // - 테스트 fixture만 직접 UCFVehicleData를 구성하며 production UI/ViewModel은 FCFVehicleAuthoringService facade만 사용합니다.
 // - Content Asset/file save를 수행하지 않으며 Initial Import asset은 테스트 종료 시 Asset Registry에서 제거합니다.
@@ -195,10 +213,10 @@ namespace CFVehicleAuthoringVMTestsPrivate
 		/** P0-09 Workspace Automation 한 건에 필요한 in-memory Recipe/Target truth입니다. */
 	struct FWorkspaceFixture
 	{
-		// Target VehicleData를 소유하는 저장하지 않는 /Temp package입니다.
+		// Target VehicleData를 소유하는 저장하지 않는 Automation package입니다.
 		UPackage* TargetPackage = nullptr;
 
-		// Recipe를 소유하는 저장하지 않는 /Temp package입니다.
+		// Recipe를 소유하는 저장하지 않는 Automation package입니다.
 		UPackage* RecipePackage = nullptr;
 
 		// ViewModel/Apply의 Runtime canonical Target fixture입니다.
@@ -211,11 +229,19 @@ namespace CFVehicleAuthoringVMTestsPrivate
 		UStaticMesh* ChassisMesh = nullptr;
 	};
 
-	// Automation object를 격리할 unique /Temp package를 만듭니다.
-	UPackage* CreateTestPackage(const TCHAR* Prefix)
+	// Automation object를 격리할 unique /Temp 또는 durable-identity /Game package를 만듭니다.
+	UPackage* CreateTestPackage(const TCHAR* Prefix, const bool bUseDurableGamePackage = false)
 	{
+		// P0-07H durable writer가 production `/Game` package identity를 검증하되 physical save는 test callback이 차단하도록 사용하는 root입니다.
+		const FString PackageRoot = bUseDurableGamePackage
+			? TEXT("/Game/CarFight/Tests/CFVBHAI07H")
+			: TEXT("/Temp");
 		// 다른 Automation run과 충돌하지 않는 unique package name입니다.
-		const FString PackageName = FString::Printf(TEXT("/Temp/%s_%s"), Prefix, *FGuid::NewGuid().ToString(EGuidFormats::Digits));
+		const FString PackageName = FString::Printf(
+			TEXT("%s/%s_%s"),
+			*PackageRoot,
+			Prefix,
+			*FGuid::NewGuid().ToString(EGuidFormats::Digits));
 		return CreatePackage(*PackageName);
 	}
 
@@ -232,9 +258,12 @@ namespace CFVehicleAuthoringVMTestsPrivate
 	}
 
 	// Existing Validator/AssetReader/Resolver를 모두 통과하는 deterministic Target baseline을 구성합니다.
-	bool ConfigureValidTarget(FWorkspaceFixture& InOutFixture, FString& OutError)
+	bool ConfigureValidTarget(
+		FWorkspaceFixture& InOutFixture,
+		FString& OutError,
+		const bool bUseDurableGamePackage = false)
 	{
-		InOutFixture.TargetPackage = CreateTestPackage(TEXT("CFDAWorkspaceTarget"));
+		InOutFixture.TargetPackage = CreateTestPackage(TEXT("CFDAWorkspaceTarget"), bUseDurableGamePackage);
 		if (!InOutFixture.TargetPackage)
 		{
 			OutError = TEXT("Workspace Target /Temp package를 만들 수 없습니다.");
@@ -318,10 +347,13 @@ namespace CFVehicleAuthoringVMTestsPrivate
 	}
 
 	// Current Definition을 shared Existing Import Core로 가져온 managed Recipe fixture를 생성합니다.
-	bool BuildImportedFixture(FWorkspaceFixture& OutFixture, FString& OutError)
+	bool BuildImportedFixture(
+		FWorkspaceFixture& OutFixture,
+		FString& OutError,
+		const bool bUseDurableGamePackage = false)
 	{
 		OutFixture = FWorkspaceFixture();
-		if (!ConfigureValidTarget(OutFixture, OutError))
+		if (!ConfigureValidTarget(OutFixture, OutError, bUseDurableGamePackage))
 		{
 			return false;
 		}
@@ -332,7 +364,7 @@ namespace CFVehicleAuthoringVMTestsPrivate
 		{
 			return false;
 		}
-		OutFixture.RecipePackage = CreateTestPackage(TEXT("CFDAWorkspaceRecipe"));
+		OutFixture.RecipePackage = CreateTestPackage(TEXT("CFDAWorkspaceRecipe"), bUseDurableGamePackage);
 		if (!OutFixture.RecipePackage)
 		{
 			OutError = TEXT("Workspace Recipe /Temp package를 만들 수 없습니다.");
@@ -870,6 +902,88 @@ namespace CFVehicleAuthoringVMTestsPrivate
 		}
 	};
 
+	/** USER의 실제 VehicleBuilderBenchmarkProgress.json을 보존하면서 Step 8 synthetic progress를 잠시 배치하는 RAII guard입니다. */
+	struct FBuilderBenchmarkProgressFileGuard
+	{
+		// Builder VM이 읽는 canonical benchmark progress path입니다.
+		FString ProgressPath;
+
+		// Test 시작 전에 progress file이 존재했는지 여부입니다.
+		bool bHadExistingFile = false;
+
+		// Test 시작 전 progress JSON 원문입니다.
+		FString PreviousContents;
+
+		// Canonical progress path와 기존 파일 상태를 캡처합니다.
+		explicit FBuilderBenchmarkProgressFileGuard(const FString& InProgressPath)
+			: ProgressPath(InProgressPath)
+		{
+			bHadExistingFile = FFileHelper::LoadFileToString(PreviousContents, *ProgressPath);
+		}
+
+		// Automation 종료 시 기존 progress sidecar를 exact 복원하거나 test-only 파일을 제거합니다.
+		~FBuilderBenchmarkProgressFileGuard()
+		{
+			if (bHadExistingFile)
+			{
+				FFileHelper::SaveStringToFile(
+					PreviousContents,
+					*ProgressPath,
+					FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+			}
+			else
+			{
+				IFileManager::Get().Delete(*ProgressPath, false, true, true);
+			}
+		}
+
+		// Step 8 progress parser가 소비할 synthetic sidecar를 UTF-8 JSON으로 기록합니다.
+		bool WriteProgress(
+			const FString& SchemaVersion,
+			const FString& RunId,
+			const FString& PhaseKey,
+			const int32 PhaseIndex,
+			const int32 PhaseCount,
+			FString& OutError) const
+		{
+			// Progress parent directory입니다.
+			const FString ParentDirectory = FPaths::GetPath(ProgressPath);
+			if (!IFileManager::Get().MakeDirectory(*ParentDirectory, true))
+			{
+				OutError = FString::Printf(TEXT("Step 8 benchmark progress test directory를 만들 수 없습니다: %s"), *ParentDirectory);
+				return false;
+			}
+
+			// Production progress schema와 같은 필드 집합을 가진 synthetic JSON입니다.
+			const FString JsonText = FString::Printf(
+				TEXT(
+					"{\n"
+					"  \"schema_version\": \"%s\",\n"
+					"  \"run_id\": \"%s\",\n"
+					"  \"phase_key\": \"%s\",\n"
+					"  \"phase_index\": %d,\n"
+					"  \"phase_count\": %d\n"
+					"}\n"),
+				*SchemaVersion,
+				*RunId,
+				*PhaseKey,
+				PhaseIndex,
+				PhaseCount);
+
+			if (!FFileHelper::SaveStringToFile(
+				JsonText,
+				*ProgressPath,
+				FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
+			{
+				OutError = FString::Printf(TEXT("Step 8 synthetic benchmark progress를 쓸 수 없습니다: %s"), *ProgressPath);
+				return false;
+			}
+
+			OutError.Reset();
+			return true;
+		}
+	};
+
 	/** Random fixture Recipe의 USER Driving acceptance config section을 test 종료 시 제거하는 RAII guard입니다. */
 	struct FBuilderDrivingTokenGuard
 	{
@@ -929,7 +1043,8 @@ namespace CFVehicleAuthoringVMTestsPrivate
 		FWorkspaceFixture& Fixture,
 		FCFVehicleBuilderVM& BuilderViewModel,
 		UCFVehicleRefEvidence*& OutEvidence,
-		FString& OutError)
+		FString& OutError,
+		const bool bExecuteFinalApply = true)
 	{
 		OutEvidence = nullptr;
 
@@ -1035,6 +1150,12 @@ namespace CFVehicleAuthoringVMTestsPrivate
 			return false;
 		}
 
+		if (!bExecuteFinalApply)
+		{
+			OutError.Reset();
+			return true;
+		}
+
 		// Final Review exact Apply proposal입니다.
 		FCFBuilderFinalReviewResult FinalReview;
 		if (!BuilderViewModel.PrepareFinalReviewApply(FinalReview, OutError))
@@ -1119,6 +1240,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCFVehicleBuilderStep7ReviewTest,
 	"CarFight.DataAuthoring.CF_FQ_040.VB_P0_09.BuilderStep7FinalReview",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVBHAIP007HDurableCommitTest,
+	"CarFight.DataAuthoring.CF_FQ_047.P0_07H.DurableFinalCommit",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -2734,7 +2860,10 @@ bool FCFVehicleBuilderStep7ReviewTest::RunTest(const FString& Parameters)
 		CleanupRegisteredAsset(CompanionResult.CreatedEvidence.Get());
 		return false;
 	}
-	TestEqual(TEXT("Builder Step 7 is Ready when reviewed Target Diff exists"), InitialFinalReviewStep->State, ECFVehicleBuilderStepState::Ready);
+	TestEqual(
+		TEXT("Builder Step 7 /Temp fixture is Blocked by durable package gate even when reviewed Target Diff exists"),
+		InitialFinalReviewStep->State,
+		ECFVehicleBuilderStepState::Blocked);
 	TestTrue(TEXT("Builder Step 7 has fresh Final Review result"), BuilderViewModel.HasFinalReviewResult());
 
 	// Existing ReadBuilderFinalReview R0 projection입니다.
@@ -2785,35 +2914,47 @@ bool FCFVehicleBuilderStep7ReviewTest::RunTest(const FString& Parameters)
 		CleanupRegisteredAsset(CompanionResult.CreatedEvidence.Get());
 		return false;
 	}
-	TestEqual(TEXT("Builder Step 7 becomes Complete after exact Apply"), AppliedFinalReviewStep->State, ECFVehicleBuilderStepState::Complete);
+	TestEqual(
+		TEXT("Builder Step 7 transient fixture stays Blocked until a safe /Game durable handoff exists"),
+		AppliedFinalReviewStep->State,
+		ECFVehicleBuilderStepState::Blocked);
 	TestTrue(TEXT("Builder Step 7 post-Apply Final Review exists"), BuilderViewModel.HasFinalReviewResult());
-	TestTrue(TEXT("Builder Step 7 post-Apply review can complete"), BuilderViewModel.GetFinalReviewResult().bCanCompleteFinalReview);
-	TestFalse(TEXT("Builder Step 7 post-Apply review requires no Apply"), BuilderViewModel.GetFinalReviewResult().bApplyRequired);
+	TestTrue(TEXT("Builder Step 7 post-Apply semantic review can complete"), BuilderViewModel.GetFinalReviewResult().bCanCompleteFinalReview);
+	TestFalse(TEXT("Builder Step 7 post-Apply semantic review requires no Apply"), BuilderViewModel.GetFinalReviewResult().bApplyRequired);
 	TestEqual(TEXT("Builder Step 7 post-Apply exact diff count is zero"), BuilderViewModel.GetFinalReviewResult().FieldDiff.Num(), 0);
+	TestEqual(
+		TEXT("Builder Step 7 /Temp fixture is rejected by durable package gate"),
+		BuilderViewModel.GetFinalCommitPreflight().SavedHandoff.Blocker,
+		ECFBuilderSavedHandoffBlocker::PackageInvalid);
+	TestEqual(
+		TEXT("Builder Step 7 /Temp fixture durable action is fail-closed"),
+		BuilderViewModel.GetFinalCommitPreflight().Action,
+		ECFBuilderFinalCommitAction::Blocked);
 	TestNotEqual(TEXT("Builder Step 7 Apply changes full Target hash"), BuildTargetHash(*Fixture.TargetVehicleData, Error), PreApplyTargetHash);
 
 	// Explicit USER guarded Undo를 모사하는 exact token terminal result입니다.
 	FCFAuthoringOpResult UndoResult;
-	if (!TestTrue(TEXT("Builder Step 7 exact guarded Undo succeeds"), BuilderViewModel.ExecuteFinalReviewUndo(UndoResult, Error)))
-	{
-		AddError(Error);
-		CleanupRegisteredAsset(CompanionResult.CreatedEvidence.Get());
-		return false;
-	}
-	TestTrue(TEXT("Builder Step 7 guarded Undo reports Target change"), UndoResult.Mutation.bTargetChanged);
-	TestTrue(TEXT("Builder Step 7 guarded Undo reports Recipe AppliedState change"), UndoResult.Mutation.bRecipeChanged);
-	TestFalse(TEXT("Builder Step 7 guarded Undo never saves"), UndoResult.Mutation.bSavePerformed);
-	TestFalse(TEXT("Builder Step 7 guarded Undo token is consumed"), BuilderViewModel.HasFinalReviewUndoToken());
+	TestFalse(
+		TEXT("Builder Step 7 /Temp guarded Undo mutation cannot claim durable success"),
+		BuilderViewModel.ExecuteFinalReviewUndo(UndoResult, Error));
+	TestTrue(TEXT("Builder Step 7 guarded Undo still reports Target mutation success"), UndoResult.Mutation.bTargetChanged);
+	TestTrue(TEXT("Builder Step 7 guarded Undo still reports Recipe AppliedState mutation success"), UndoResult.Mutation.bRecipeChanged);
+	TestFalse(TEXT("Builder Step 7 /Temp guarded Undo performs no package save"), UndoResult.Mutation.bSavePerformed);
+	TestTrue(TEXT("Builder Step 7 /Temp guarded Undo surfaces durable package error"), !Error.IsEmpty());
+	TestFalse(TEXT("Builder Step 7 guarded Undo token is consumed after actual mutation"), BuilderViewModel.HasFinalReviewUndoToken());
 	TestEqual(TEXT("Builder Step 7 guarded Undo restores exact pre-Apply Target hash"), BuildTargetHash(*Fixture.TargetVehicleData, Error), PreApplyTargetHash);
 
-	// Undo 뒤 current Target에는 다시 reviewed Diff가 있으므로 Step 7은 Ready로 돌아가야 합니다.
+	// Undo 뒤 current Target에는 reviewed Diff가 다시 생기지만 /Temp fixture이므로 USER-facing Step 7 durable projection은 계속 Blocked가 정상입니다.
 	const FCFVehicleBuilderStepView* RestoredFinalReviewStep = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::FinalReview);
 	if (!TestNotNull(TEXT("Builder Step 7 post-Undo projection exists"), RestoredFinalReviewStep))
 	{
 		CleanupRegisteredAsset(CompanionResult.CreatedEvidence.Get());
 		return false;
 	}
-	TestEqual(TEXT("Builder Step 7 returns Ready after exact guarded Undo"), RestoredFinalReviewStep->State, ECFVehicleBuilderStepState::Ready);
+	TestEqual(
+		TEXT("Builder Step 7 /Temp fixture remains Blocked after exact guarded Undo"),
+		RestoredFinalReviewStep->State,
+		ECFVehicleBuilderStepState::Blocked);
 	TestTrue(TEXT("Builder Step 7 post-Undo review can Apply again only after new review"), BuilderViewModel.GetFinalReviewResult().bCanApply);
 	TestTrue(TEXT("Builder Step 7 post-Undo diff is restored"), BuilderViewModel.GetFinalReviewResult().FieldDiff.Num() > 0);
 
@@ -2823,10 +2964,658 @@ bool FCFVehicleBuilderStep7ReviewTest::RunTest(const FString& Parameters)
 }
 
 
+// CF-FQ-047 P0-07H durable final commit의 실제 production Prepare/Execute writer와 partial persistence/fresh recovery 계약을 isolated /Game identity로 검증합니다.
+bool FCFVBHAIP007HDurableCommitTest::RunTest(const FString& Parameters)
+{
+	using namespace CFVehicleAuthoringVMTestsPrivate;
+	(void)Parameters;
+
+	// Physical .uasset을 만들지 않으면서 production /Game package identity를 사용하는 managed fixture입니다.
+	FWorkspaceFixture Fixture;
+	// Fixture/commit diagnostic입니다.
+	FString Error;
+	if (!TestTrue(TEXT("P0-07H durable /Game fixture builds"), BuildImportedFixture(Fixture, Error, true))
+		|| !TestTrue(TEXT("P0-07H private Profile fixture attaches"), AttachBuilderPrivateProfiles(Fixture, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	// P0-07H production orchestration을 직접 실행할 Builder VM입니다.
+	FCFVehicleBuilderVM BuilderViewModel;
+	// Test-only persistent storage에 존재한다고 간주할 exact package name 집합입니다.
+	TSet<FString> PersistedPackages;
+	PersistedPackages.Add(Fixture.TargetPackage->GetName());
+	PersistedPackages.Add(Fixture.RecipePackage->GetName());
+	// Production Target→Recipe ordering을 관측할 save call 순서입니다.
+	TArray<FString> SaveOrder;
+	// Raw save false를 강제할 exact package name입니다.
+	FString ForcedSaveFailurePackage;
+	// Raw save true 뒤 dirty 상태를 남겨 SaveStateUnconfirmed를 강제할 exact package name입니다.
+	FString UnconfirmedSavePackage;
+	// 다음 successful package save 직후 Authoring VM을 끊어 post-persistence refresh failure를 강제하는 test-only flag입니다.
+	bool bForcePostSaveRefreshFailure = false;
+
+	// 어떤 fresh Builder VM에도 동일한 Product-write-0 persistence seam을 설치하는 local helper입니다.
+	const auto ConfigurePersistenceSeam = [
+		&PersistedPackages,
+		&SaveOrder,
+		&ForcedSaveFailurePackage,
+		&UnconfirmedSavePackage,
+		&bForcePostSaveRefreshFailure](FCFVehicleBuilderVM& ViewModel)
+	{
+		// Physical disk write 대신 test-only persisted set을 authoritative existence로 반환합니다.
+		ViewModel.TestBuilderPackageExistsOverride = [&PersistedPackages](const FString& PackageName)
+		{
+			return PersistedPackages.Contains(PackageName);
+		};
+		// Exact production save request의 ordering/failure/clean-confirmation을 Product write 없이 격리합니다.
+		ViewModel.TestBuilderPackageSaveOverride = [
+			&PersistedPackages,
+			&SaveOrder,
+			&ForcedSaveFailurePackage,
+			&UnconfirmedSavePackage,
+			&bForcePostSaveRefreshFailure,
+			&ViewModel](
+				UPackage* Package,
+				UObject* Asset,
+				FString& OutSaveError)
+		{
+			(void)Asset;
+			// 현재 exact save request package name입니다.
+			const FString PackageName = Package ? Package->GetName() : FString();
+			SaveOrder.Add(PackageName);
+
+			if (!ForcedSaveFailurePackage.IsEmpty() && PackageName == ForcedSaveFailurePackage)
+			{
+				OutSaveError = FString::Printf(TEXT("forced raw save failure: %s"), *PackageName);
+				return false;
+			}
+			if (!UnconfirmedSavePackage.IsEmpty() && PackageName == UnconfirmedSavePackage)
+			{
+				OutSaveError.Reset();
+				return true;
+			}
+
+			if (!Package)
+			{
+				OutSaveError = TEXT("test save package is null");
+				return false;
+			}
+			Package->SetDirtyFlag(false);
+			PersistedPackages.Add(PackageName);
+			if (bForcePostSaveRefreshFailure)
+			{
+				bForcePostSaveRefreshFailure = false;
+				ViewModel.AuthoringViewModel.Reset();
+			}
+			OutSaveError.Reset();
+			return true;
+		};
+	};
+	ConfigurePersistenceSeam(BuilderViewModel);
+
+	// Step 1/5 persistent prerequisites를 만들되 legacy Step 7 Apply는 실행하지 않아 ApplyAndPersist diff를 남깁니다.
+	UCFVehicleRefEvidence* Evidence = nullptr;
+	if (!TestTrue(
+		TEXT("P0-07H durable prerequisites build without legacy final apply"),
+		PrepareBuilderStep8AppliedFixture(Fixture, BuilderViewModel, Evidence, Error, false)))
+	{
+		AddError(Error);
+		CleanupRegisteredAsset(Evidence);
+		return false;
+	}
+
+	// Prerequisite mutation은 이미 persisted baseline이었다고 가정해 P0-07H가 소유할 final commit write만 분리합니다.
+	Fixture.TargetPackage->SetDirtyFlag(false);
+	Fixture.RecipePackage->SetDirtyFlag(false);
+
+	// Initial semantic diff를 production ApplyAndPersist로 준비한 preflight입니다.
+	FCFBuilderFinalCommitPreflight ApplyPreflight;
+	// Initial semantic diff의 fresh Final Review입니다.
+	FCFBuilderFinalReviewResult ApplyReview;
+	if (!TestTrue(
+		TEXT("P0-07H ApplyAndPersist preflight prepares"),
+		BuilderViewModel.PrepareFinalReviewCommit(ApplyPreflight, ApplyReview, Error)))
+	{
+		AddError(Error);
+		CleanupRegisteredAsset(Evidence);
+		return false;
+	}
+	TestEqual(TEXT("P0-07H semantic diff selects ApplyAndPersist"), ApplyPreflight.Action, ECFBuilderFinalCommitAction::ApplyAndPersist);
+	TestTrue(TEXT("P0-07H semantic diff exists before durable commit"), ApplyReview.FieldDiff.Num() > 0);
+
+	// Approval scope가 source provenance와 resolver contract revision을 각각 exact binding하는지 pure hash sensitivity로 검증합니다.
+	const FString BaselineApprovalScope = FCFVehicleBuilderVM::BuildFinalCommitApprovalScope(ApplyPreflight);
+	// Source signature만 변경한 synthetic preflight입니다.
+	FCFBuilderFinalCommitPreflight SourceSignatureDriftPreflight = ApplyPreflight;
+	SourceSignatureDriftPreflight.SavedHandoff.SourceSignature += TEXT(":synthetic-drift");
+	TestTrue(
+		TEXT("P0-07H approval scope binds SourceSignature"),
+		FCFVehicleBuilderVM::BuildFinalCommitApprovalScope(SourceSignatureDriftPreflight) != BaselineApprovalScope);
+	// Resolver revision만 변경한 synthetic preflight입니다.
+	FCFBuilderFinalCommitPreflight ResolverRevisionDriftPreflight = ApplyPreflight;
+	++ResolverRevisionDriftPreflight.SavedHandoff.ResolverContractRevision;
+	TestTrue(
+		TEXT("P0-07H approval scope binds ResolverContractRevision"),
+		FCFVehicleBuilderVM::BuildFinalCommitApprovalScope(ResolverRevisionDriftPreflight) != BaselineApprovalScope);
+
+	SaveOrder.Reset();
+	// ApplyAndPersist terminal result입니다.
+	FCFBuilderFinalCommitResult ApplyResult;
+	if (!TestTrue(
+		TEXT("P0-07H ApplyAndPersist executes production durable writer"),
+		BuilderViewModel.ExecutePreparedFinalReviewCommit(ApplyResult, Error)))
+	{
+		AddError(Error);
+		CleanupRegisteredAsset(Evidence);
+		return false;
+	}
+	TestTrue(TEXT("P0-07H ApplyAndPersist mutates Target through existing Apply authority"), ApplyResult.bTargetApplied);
+	TestEqual(TEXT("P0-07H ApplyAndPersist saves exact pair"), SaveOrder.Num(), 2);
+	if (SaveOrder.Num() == 2)
+	{
+		TestEqual(TEXT("P0-07H ApplyAndPersist saves Target first"), SaveOrder[0], Fixture.TargetPackage->GetName());
+		TestEqual(TEXT("P0-07H ApplyAndPersist saves Recipe second"), SaveOrder[1], Fixture.RecipePackage->GetName());
+	}
+	TestTrue(TEXT("P0-07H ApplyAndPersist ends strict Step7 Complete"), BuilderViewModel.GetFinalCommitPreflight().IsStepComplete());
+	TestTrue(TEXT("P0-07H ApplyAndPersist exposes guarded Undo token"), BuilderViewModel.HasFinalReviewUndoToken());
+
+	// Guarded Undo success는 reverted Target/Recipe exact pair를 durable 저장하고 pre-Apply semantic diff를 다시 노출해야 합니다.
+	SaveOrder.Reset();
+	// Durable guarded Undo terminal result입니다.
+	FCFAuthoringOpResult DurableUndoResult;
+	if (!TestTrue(TEXT("P0-07H guarded Undo persists reverted pair"), BuilderViewModel.ExecuteFinalReviewUndo(DurableUndoResult, Error)))
+	{
+		AddError(Error);
+		CleanupRegisteredAsset(Evidence);
+		return false;
+	}
+	TestTrue(TEXT("P0-07H guarded Undo mutates Target"), DurableUndoResult.Mutation.bTargetChanged);
+	TestTrue(TEXT("P0-07H guarded Undo mutates Recipe AppliedState"), DurableUndoResult.Mutation.bRecipeChanged);
+	TestTrue(TEXT("P0-07H guarded Undo records exact package save activity"), DurableUndoResult.Mutation.bSavePerformed);
+	TestFalse(TEXT("P0-07H guarded Undo never automatic-retries"), DurableUndoResult.Mutation.bAutomaticRetryPerformed);
+	TestEqual(TEXT("P0-07H guarded Undo saves exact reverted pair"), SaveOrder.Num(), 2);
+	if (SaveOrder.Num() == 2)
+	{
+		TestEqual(TEXT("P0-07H guarded Undo saves Target first"), SaveOrder[0], Fixture.TargetPackage->GetName());
+		TestEqual(TEXT("P0-07H guarded Undo saves Recipe second"), SaveOrder[1], Fixture.RecipePackage->GetName());
+	}
+	TestFalse(TEXT("P0-07H guarded Undo leaves Target clean"), Fixture.TargetPackage->IsDirty());
+	TestFalse(TEXT("P0-07H guarded Undo leaves Recipe clean"), Fixture.RecipePackage->IsDirty());
+	TestFalse(TEXT("P0-07H guarded Undo consumes token"), BuilderViewModel.HasFinalReviewUndoToken());
+	TestFalse(TEXT("P0-07H guarded Undo never forces Step7 Complete"), BuilderViewModel.GetFinalCommitPreflight().IsStepComplete());
+	TestEqual(TEXT("P0-07H guarded Undo restores ApplyAndPersist action"), BuilderViewModel.GetFinalCommitPreflight().Action, ECFBuilderFinalCommitAction::ApplyAndPersist);
+	TestTrue(TEXT("P0-07H guarded Undo restores pre-Apply semantic diff"), BuilderViewModel.GetFinalReviewResult().FieldDiff.Num() > 0);
+
+	// 이후 partial Undo failure를 검증할 새 guarded token을 만들도록 USER가 Step7을 명시적으로 다시 적용/저장한 상황을 재현합니다.
+	FCFBuilderFinalCommitPreflight ReapplyPreflight;
+	// Re-Apply fresh review입니다.
+	FCFBuilderFinalReviewResult ReapplyReview;
+	TestTrue(TEXT("P0-07H post-Undo reapply preflight prepares"), BuilderViewModel.PrepareFinalReviewCommit(ReapplyPreflight, ReapplyReview, Error));
+	TestEqual(TEXT("P0-07H post-Undo reapply action"), ReapplyPreflight.Action, ECFBuilderFinalCommitAction::ApplyAndPersist);
+	SaveOrder.Reset();
+	// Re-Apply terminal result입니다.
+	FCFBuilderFinalCommitResult ReapplyResult;
+	TestTrue(TEXT("P0-07H post-Undo manual reapply succeeds"), BuilderViewModel.ExecutePreparedFinalReviewCommit(ReapplyResult, Error));
+	TestTrue(TEXT("P0-07H post-Undo reapply exposes new guarded token"), BuilderViewModel.HasFinalReviewUndoToken());
+
+	// Undo의 Target save 성공 뒤 Recipe save 실패를 강제해 partial persistence/no-auto-rollback/no-auto-retry를 검증합니다.
+	ForcedSaveFailurePackage = Fixture.RecipePackage->GetName();
+	SaveOrder.Reset();
+	// Recipe persistence가 실패한 guarded Undo terminal result입니다.
+	FCFAuthoringOpResult PartialUndoResult;
+	TestFalse(TEXT("P0-07H guarded Undo Recipe save failure blocks operation closure"), BuilderViewModel.ExecuteFinalReviewUndo(PartialUndoResult, Error));
+	TestTrue(TEXT("P0-07H partial Undo still reports Target mutation"), PartialUndoResult.Mutation.bTargetChanged);
+	TestTrue(TEXT("P0-07H partial Undo still reports Recipe mutation"), PartialUndoResult.Mutation.bRecipeChanged);
+	TestTrue(TEXT("P0-07H partial Undo records attempted package save activity"), PartialUndoResult.Mutation.bSavePerformed);
+	TestFalse(TEXT("P0-07H partial Undo never automatic-retries"), PartialUndoResult.Mutation.bAutomaticRetryPerformed);
+	TestEqual(TEXT("P0-07H partial Undo attempts Target then Recipe exactly once"), SaveOrder.Num(), 2);
+	if (SaveOrder.Num() == 2)
+	{
+		TestEqual(TEXT("P0-07H partial Undo Target first"), SaveOrder[0], Fixture.TargetPackage->GetName());
+		TestEqual(TEXT("P0-07H partial Undo Recipe second"), SaveOrder[1], Fixture.RecipePackage->GetName());
+	}
+	TestFalse(TEXT("P0-07H partial Undo preserves already-saved Target clean"), Fixture.TargetPackage->IsDirty());
+	TestTrue(TEXT("P0-07H partial Undo preserves failed Recipe dirty"), Fixture.RecipePackage->IsDirty());
+	TestFalse(TEXT("P0-07H partial Undo consumes mutation token without automatic retry"), BuilderViewModel.HasFinalReviewUndoToken());
+	TestFalse(TEXT("P0-07H partial Undo cannot be Step7 Complete"), BuilderViewModel.GetFinalCommitPreflight().IsStepComplete());
+	ForcedSaveFailurePackage.Reset();
+
+	// USER가 실패 진단 뒤 Step7 primary action을 다시 승인하면 partial state를 수동 복구하고 applied clean baseline으로 돌아옵니다.
+	SaveOrder.Reset();
+	// Partial Undo 뒤 manual recovery preflight입니다.
+	FCFBuilderFinalCommitPreflight UndoRecoveryPreflight;
+	// Partial Undo 뒤 manual recovery fresh review입니다.
+	FCFBuilderFinalReviewResult UndoRecoveryReview;
+	TestTrue(TEXT("P0-07H partial Undo manual recovery preflight prepares"), BuilderViewModel.PrepareFinalReviewCommit(UndoRecoveryPreflight, UndoRecoveryReview, Error));
+	TestEqual(TEXT("P0-07H partial Undo manual recovery reapplies semantic diff"), UndoRecoveryPreflight.Action, ECFBuilderFinalCommitAction::ApplyAndPersist);
+	// Partial Undo 뒤 manual recovery terminal result입니다.
+	FCFBuilderFinalCommitResult UndoRecoveryResult;
+	TestTrue(TEXT("P0-07H partial Undo manual recovery succeeds"), BuilderViewModel.ExecutePreparedFinalReviewCommit(UndoRecoveryResult, Error));
+	TestTrue(TEXT("P0-07H partial Undo manual recovery restores strict Complete"), BuilderViewModel.GetFinalCommitPreflight().IsStepComplete());
+
+	// Target-only dirty persistence를 검증합니다.
+	Fixture.TargetPackage->SetDirtyFlag(true);
+	Fixture.RecipePackage->SetDirtyFlag(false);
+	// Target-only dirty preflight입니다.
+	FCFBuilderFinalCommitPreflight TargetDirtyPreflight;
+	// Target-only dirty fresh review입니다.
+	FCFBuilderFinalReviewResult TargetDirtyReview;
+	TestTrue(TEXT("P0-07H Target-only dirty preflight prepares"), BuilderViewModel.PrepareFinalReviewCommit(TargetDirtyPreflight, TargetDirtyReview, Error));
+	TestEqual(TEXT("P0-07H Target-only dirty selects PersistDirtyPair"), TargetDirtyPreflight.Action, ECFBuilderFinalCommitAction::PersistDirtyPair);
+	SaveOrder.Reset();
+	// Target-only dirty persistence result입니다.
+	FCFBuilderFinalCommitResult TargetDirtyResult;
+	TestTrue(TEXT("P0-07H Target-only dirty persists"), BuilderViewModel.ExecutePreparedFinalReviewCommit(TargetDirtyResult, Error));
+	TestEqual(TEXT("P0-07H Target-only dirty saves one package"), SaveOrder.Num(), 1);
+	if (SaveOrder.Num() == 1)
+	{
+		TestEqual(TEXT("P0-07H Target-only dirty saves Target"), SaveOrder[0], Fixture.TargetPackage->GetName());
+	}
+
+	// Recipe-only dirty persistence를 검증합니다.
+	Fixture.TargetPackage->SetDirtyFlag(false);
+	Fixture.RecipePackage->SetDirtyFlag(true);
+	// Recipe-only dirty preflight입니다.
+	FCFBuilderFinalCommitPreflight RecipeDirtyPreflight;
+	// Recipe-only dirty fresh review입니다.
+	FCFBuilderFinalReviewResult RecipeDirtyReview;
+	TestTrue(TEXT("P0-07H Recipe-only dirty preflight prepares"), BuilderViewModel.PrepareFinalReviewCommit(RecipeDirtyPreflight, RecipeDirtyReview, Error));
+	TestEqual(TEXT("P0-07H Recipe-only dirty selects PersistDirtyPair"), RecipeDirtyPreflight.Action, ECFBuilderFinalCommitAction::PersistDirtyPair);
+	SaveOrder.Reset();
+	// Recipe-only dirty persistence result입니다.
+	FCFBuilderFinalCommitResult RecipeDirtyResult;
+	TestTrue(TEXT("P0-07H Recipe-only dirty persists"), BuilderViewModel.ExecutePreparedFinalReviewCommit(RecipeDirtyResult, Error));
+	TestEqual(TEXT("P0-07H Recipe-only dirty saves one package"), SaveOrder.Num(), 1);
+	if (SaveOrder.Num() == 1)
+	{
+		TestEqual(TEXT("P0-07H Recipe-only dirty saves Recipe"), SaveOrder[0], Fixture.RecipePackage->GetName());
+	}
+
+	// Both-dirty deterministic Target→Recipe ordering을 검증합니다.
+	Fixture.TargetPackage->SetDirtyFlag(true);
+	Fixture.RecipePackage->SetDirtyFlag(true);
+	// Both-dirty preflight입니다.
+	FCFBuilderFinalCommitPreflight BothDirtyPreflight;
+	// Both-dirty fresh review입니다.
+	FCFBuilderFinalReviewResult BothDirtyReview;
+	TestTrue(TEXT("P0-07H both-dirty preflight prepares"), BuilderViewModel.PrepareFinalReviewCommit(BothDirtyPreflight, BothDirtyReview, Error));
+	TestEqual(TEXT("P0-07H both-dirty selects PersistDirtyPair"), BothDirtyPreflight.Action, ECFBuilderFinalCommitAction::PersistDirtyPair);
+	SaveOrder.Reset();
+	// Both-dirty persistence result입니다.
+	FCFBuilderFinalCommitResult BothDirtyResult;
+	TestTrue(TEXT("P0-07H both-dirty persists"), BuilderViewModel.ExecutePreparedFinalReviewCommit(BothDirtyResult, Error));
+	TestEqual(TEXT("P0-07H both-dirty saves two packages"), SaveOrder.Num(), 2);
+	if (SaveOrder.Num() == 2)
+	{
+		TestEqual(TEXT("P0-07H both-dirty Target first"), SaveOrder[0], Fixture.TargetPackage->GetName());
+		TestEqual(TEXT("P0-07H both-dirty Recipe second"), SaveOrder[1], Fixture.RecipePackage->GetName());
+	}
+
+	// Target raw save failure가 Recipe save를 시작하지 않는지 검증합니다.
+	Fixture.TargetPackage->SetDirtyFlag(true);
+	Fixture.RecipePackage->SetDirtyFlag(true);
+	ForcedSaveFailurePackage = Fixture.TargetPackage->GetName();
+	// Target-failure preflight입니다.
+	FCFBuilderFinalCommitPreflight TargetFailurePreflight;
+	// Target-failure fresh review입니다.
+	FCFBuilderFinalReviewResult TargetFailureReview;
+	TestTrue(TEXT("P0-07H Target save failure preflight prepares"), BuilderViewModel.PrepareFinalReviewCommit(TargetFailurePreflight, TargetFailureReview, Error));
+	SaveOrder.Reset();
+	// Target raw save failure result입니다.
+	FCFBuilderFinalCommitResult TargetFailureResult;
+	TestFalse(TEXT("P0-07H Target raw save failure blocks commit"), BuilderViewModel.ExecutePreparedFinalReviewCommit(TargetFailureResult, Error));
+	TestEqual(TEXT("P0-07H Target raw save failure outcome"), TargetFailureResult.Outcome, ECFBuilderFinalCommitOutcome::TargetSaveFailed);
+	TestEqual(TEXT("P0-07H Target raw save failure attempts one save"), SaveOrder.Num(), 1);
+	if (SaveOrder.Num() == 1)
+	{
+		TestEqual(TEXT("P0-07H Target failure never reaches Recipe save"), SaveOrder[0], Fixture.TargetPackage->GetName());
+	}
+	ForcedSaveFailurePackage.Reset();
+
+	// Target success + Recipe failure partial persistence를 검증합니다.
+	Fixture.TargetPackage->SetDirtyFlag(true);
+	Fixture.RecipePackage->SetDirtyFlag(true);
+	ForcedSaveFailurePackage = Fixture.RecipePackage->GetName();
+	// Recipe-failure partial persistence preflight입니다.
+	FCFBuilderFinalCommitPreflight RecipeFailurePreflight;
+	// Recipe-failure fresh review입니다.
+	FCFBuilderFinalReviewResult RecipeFailureReview;
+	TestTrue(TEXT("P0-07H partial Recipe failure preflight prepares"), BuilderViewModel.PrepareFinalReviewCommit(RecipeFailurePreflight, RecipeFailureReview, Error));
+	SaveOrder.Reset();
+	// Target-saved Recipe-failed terminal result입니다.
+	FCFBuilderFinalCommitResult RecipeFailureResult;
+	TestFalse(TEXT("P0-07H Recipe raw save failure blocks Complete"), BuilderViewModel.ExecutePreparedFinalReviewCommit(RecipeFailureResult, Error));
+	TestEqual(TEXT("P0-07H partial failure outcome"), RecipeFailureResult.Outcome, ECFBuilderFinalCommitOutcome::TargetSavedRecipeSaveFailed);
+	TestTrue(TEXT("P0-07H partial failure records Target saved"), RecipeFailureResult.bTargetSaved);
+	TestFalse(TEXT("P0-07H partial failure keeps Recipe unsaved"), RecipeFailureResult.bRecipeSaved);
+	TestEqual(TEXT("P0-07H partial failure attempted Target then Recipe"), SaveOrder.Num(), 2);
+	ForcedSaveFailurePackage.Reset();
+
+	// Same-lifetime retry는 clean Target을 재저장하거나 DefinitionApply를 replay하지 않고 dirty Recipe만 저장해야 합니다.
+	SaveOrder.Reset();
+	// Partial persistence retry preflight입니다.
+	FCFBuilderFinalCommitPreflight RetryPreflight;
+	// Partial persistence retry fresh review입니다.
+	FCFBuilderFinalReviewResult RetryReview;
+	TestTrue(TEXT("P0-07H partial retry preflight prepares"), BuilderViewModel.PrepareFinalReviewCommit(RetryPreflight, RetryReview, Error));
+	TestEqual(TEXT("P0-07H partial retry remains PersistDirtyPair"), RetryPreflight.Action, ECFBuilderFinalCommitAction::PersistDirtyPair);
+	// Partial persistence retry result입니다.
+	FCFBuilderFinalCommitResult RetryResult;
+	TestTrue(TEXT("P0-07H partial retry succeeds"), BuilderViewModel.ExecutePreparedFinalReviewCommit(RetryResult, Error));
+	TestFalse(TEXT("P0-07H partial retry does not replay DefinitionApply"), RetryResult.bTargetApplied);
+	TestEqual(TEXT("P0-07H partial retry saves only Recipe"), SaveOrder.Num(), 1);
+	if (SaveOrder.Num() == 1)
+	{
+		TestEqual(TEXT("P0-07H partial retry exact Recipe save"), SaveOrder[0], Fixture.RecipePackage->GetName());
+	}
+
+	// Raw save success지만 dirty가 남는 비정상 상태를 typed SaveStateUnconfirmed로 분류하는지 검증합니다.
+	Fixture.TargetPackage->SetDirtyFlag(true);
+	Fixture.RecipePackage->SetDirtyFlag(false);
+	UnconfirmedSavePackage = Fixture.TargetPackage->GetName();
+	// Unconfirmed-save preflight입니다.
+	FCFBuilderFinalCommitPreflight UnconfirmedPreflight;
+	// Unconfirmed-save fresh review입니다.
+	FCFBuilderFinalReviewResult UnconfirmedReview;
+	TestTrue(TEXT("P0-07H unconfirmed save preflight prepares"), BuilderViewModel.PrepareFinalReviewCommit(UnconfirmedPreflight, UnconfirmedReview, Error));
+	SaveOrder.Reset();
+	// Raw success / state-unconfirmed terminal result입니다.
+	FCFBuilderFinalCommitResult UnconfirmedResult;
+	TestFalse(TEXT("P0-07H raw success with dirty package is not Complete"), BuilderViewModel.ExecutePreparedFinalReviewCommit(UnconfirmedResult, Error));
+	TestEqual(TEXT("P0-07H raw success dirty outcome is SaveStateUnconfirmed"), UnconfirmedResult.Outcome, ECFBuilderFinalCommitOutcome::SaveStateUnconfirmed);
+	TestTrue(TEXT("P0-07H unconfirmed save leaves Target dirty"), Fixture.TargetPackage->IsDirty());
+	UnconfirmedSavePackage.Reset();
+	Fixture.TargetPackage->SetDirtyFlag(false);
+
+	// USER confirmation 이후 package state가 바뀌면 old approval로 save하지 않는 TOCTOU fail-closed를 검증합니다.
+	Fixture.TargetPackage->SetDirtyFlag(true);
+	Fixture.RecipePackage->SetDirtyFlag(false);
+	// TOCTOU approval preflight입니다.
+	FCFBuilderFinalCommitPreflight ToctouPreflight;
+	// TOCTOU approval fresh review입니다.
+	FCFBuilderFinalReviewResult ToctouReview;
+	TestTrue(TEXT("P0-07H TOCTOU preflight prepares"), BuilderViewModel.PrepareFinalReviewCommit(ToctouPreflight, ToctouReview, Error));
+	Fixture.RecipePackage->SetDirtyFlag(true);
+	SaveOrder.Reset();
+	// TOCTOU blocked terminal result입니다.
+	FCFBuilderFinalCommitResult ToctouResult;
+	TestFalse(TEXT("P0-07H package-state TOCTOU blocks old approval"), BuilderViewModel.ExecutePreparedFinalReviewCommit(ToctouResult, Error));
+	TestEqual(TEXT("P0-07H package-state TOCTOU outcome Blocked"), ToctouResult.Outcome, ECFBuilderFinalCommitOutcome::Blocked);
+	TestEqual(TEXT("P0-07H package-state TOCTOU performs save0"), SaveOrder.Num(), 0);
+	Fixture.TargetPackage->SetDirtyFlag(false);
+	Fixture.RecipePackage->SetDirtyFlag(false);
+
+	// Fresh-restart partial persistence를 재현하도록 AppliedState만 stale한 clean/persisted Recipe를 구성합니다.
+	Fixture.Recipe->AppliedState = FCFVehicleAppliedState();
+	Fixture.RecipePackage->SetDirtyFlag(false);
+	// Editor 재시작 뒤 transient prepared/cache state가 없는 새 Builder VM을 실제로 구성합니다.
+	FCFVehicleBuilderVM RestartedBuilderViewModel;
+	ConfigurePersistenceSeam(RestartedBuilderViewModel);
+	// Fresh VM이 같은 persisted pair를 선택할 exact row입니다.
+	FCFVehicleListEntry RestartedEntry;
+	RestartedEntry.DefinitionPath = FSoftObjectPath(Fixture.TargetVehicleData);
+	RestartedEntry.RecipePath = FSoftObjectPath(Fixture.Recipe);
+	RestartedEntry.RecipeId = Fixture.Recipe->RecipeId;
+	RestartedEntry.ManageState = Fixture.Recipe->ImportState.ManageState;
+	if (!TestTrue(TEXT("P0-07H fresh VM selects persisted pair"), RestartedBuilderViewModel.SelectVehicle(RestartedEntry, Error)))
+	{
+		AddError(Error);
+		CleanupRegisteredAsset(Evidence);
+		return false;
+	}
+	// AppliedState finalize preflight입니다.
+	FCFBuilderFinalCommitPreflight FinalizePreflight;
+	// AppliedState finalize fresh review입니다.
+	FCFBuilderFinalReviewResult FinalizeReview;
+	TestTrue(TEXT("P0-07H fresh VM stale AppliedState finalize preflight prepares"), RestartedBuilderViewModel.PrepareFinalReviewCommit(FinalizePreflight, FinalizeReview, Error));
+	TestEqual(TEXT("P0-07H fresh VM stale AppliedState selects finalize"), FinalizePreflight.Action, ECFBuilderFinalCommitAction::FinalizeAppliedStateAndPersist);
+
+	// Finalize 승인 뒤 Target semantic이 바뀌면 stale approval이 write/save0으로 차단되는지 검증할 원래 Health 값입니다.
+	const float OriginalTargetHealth = Fixture.TargetVehicleData->VehicleDurabilityConfig.MaxHealth;
+	Fixture.TargetVehicleData->VehicleDurabilityConfig.MaxHealth = OriginalTargetHealth + 1.0f;
+	SaveOrder.Reset();
+	// Finalize Target-drift blocked result입니다.
+	FCFBuilderFinalCommitResult FinalizeTargetDriftResult;
+	TestFalse(TEXT("P0-07H finalize Target drift blocks old approval"), RestartedBuilderViewModel.ExecutePreparedFinalReviewCommit(FinalizeTargetDriftResult, Error));
+	TestEqual(TEXT("P0-07H finalize Target drift performs save0"), SaveOrder.Num(), 0);
+	Fixture.TargetVehicleData->VehicleDurabilityConfig.MaxHealth = OriginalTargetHealth;
+
+	// 실제 RecipeFingerprint semantic이 승인 뒤 바뀌면 old finalize approval로 write/save하지 않는지 검증합니다.
+	// Recipe semantic drift 전 exact fingerprint입니다.
+	const FString RecipeFingerprintBeforeDrift = BuildRecipeFingerprint(*Fixture.Recipe, Error);
+	TestFalse(TEXT("P0-07H pre-drift RecipeFingerprint is valid"), RecipeFingerprintBeforeDrift.IsEmpty());
+	// Drift 뒤 exact restore할 항상 존재하는 Frozen DrivingFeel scalar입니다.
+	const float OriginalAccelerationFeel = Fixture.Recipe->DrivingFeelIntent.AccelerationFeel;
+	// 0~1 범위 안에서 반드시 다른 값을 만드는 deterministic temporary semantic입니다.
+	const float DriftedAccelerationFeel = OriginalAccelerationFeel < 0.99f
+		? OriginalAccelerationFeel + 0.01f
+		: OriginalAccelerationFeel - 0.01f;
+	// Recipe-fingerprint drift용 fresh finalize preflight입니다.
+	FCFBuilderFinalCommitPreflight RecipeDriftPreflight;
+	// Recipe-fingerprint drift용 fresh review입니다.
+	FCFBuilderFinalReviewResult RecipeDriftReview;
+	TestTrue(TEXT("P0-07H recipe-fingerprint drift finalize preflight prepares"), RestartedBuilderViewModel.PrepareFinalReviewCommit(RecipeDriftPreflight, RecipeDriftReview, Error));
+	Fixture.Recipe->DrivingFeelIntent.AccelerationFeel = DriftedAccelerationFeel;
+	// Approval 이후 실제 semantic drift가 만든 fresh fingerprint입니다.
+	const FString RecipeFingerprintAfterDrift = BuildRecipeFingerprint(*Fixture.Recipe, Error);
+	TestFalse(TEXT("P0-07H post-drift RecipeFingerprint is valid"), RecipeFingerprintAfterDrift.IsEmpty());
+	TestTrue(TEXT("P0-07H semantic drift changes RecipeFingerprint"), RecipeFingerprintAfterDrift != RecipeFingerprintBeforeDrift);
+	SaveOrder.Reset();
+	// Recipe-fingerprint drift blocked result입니다.
+	FCFBuilderFinalCommitResult RecipeDriftResult;
+	TestFalse(TEXT("P0-07H recipe fingerprint drift blocks old approval"), RestartedBuilderViewModel.ExecutePreparedFinalReviewCommit(RecipeDriftResult, Error));
+	TestEqual(TEXT("P0-07H recipe fingerprint drift performs save0"), SaveOrder.Num(), 0);
+	Fixture.Recipe->DrivingFeelIntent.AccelerationFeel = OriginalAccelerationFeel;
+	TestEqual(TEXT("P0-07H RecipeFingerprint restores after drift fixture"), BuildRecipeFingerprint(*Fixture.Recipe, Error), RecipeFingerprintBeforeDrift);
+
+	// Stale AppliedState clean/persisted 상태를 production service-owned BuildAppliedState authority로 실제 복구합니다.
+	// Finalize execution preflight입니다.
+	FCFBuilderFinalCommitPreflight FinalizeExecutionPreflight;
+	// Finalize execution fresh review입니다.
+	FCFBuilderFinalReviewResult FinalizeExecutionReview;
+	TestTrue(TEXT("P0-07H fresh VM finalize execution preflight prepares"), RestartedBuilderViewModel.PrepareFinalReviewCommit(FinalizeExecutionPreflight, FinalizeExecutionReview, Error));
+	TestEqual(TEXT("P0-07H finalize execution action"), FinalizeExecutionPreflight.Action, ECFBuilderFinalCommitAction::FinalizeAppliedStateAndPersist);
+	SaveOrder.Reset();
+	// AppliedState finalize durable terminal result입니다.
+	FCFBuilderFinalCommitResult FinalizeResult;
+	// Finalize 전 Target exact hash를 고정해 Target mutation0을 결과로도 검증합니다.
+	FCFVehicleDefinitionSnapshot TargetSnapshotBeforeFinalize;
+	// Finalize 전 Target snapshot diagnostic입니다.
+	FString TargetSnapshotBeforeFinalizeError;
+	TestTrue(
+		TEXT("P0-07H Target snapshot before finalize builds"),
+		FCFVehicleSnapshotBuilder::BuildDefinitionSnapshot(*Fixture.TargetVehicleData, TargetSnapshotBeforeFinalize, TargetSnapshotBeforeFinalizeError));
+	TestTrue(TEXT("P0-07H service-owned AppliedState finalize succeeds"), RestartedBuilderViewModel.ExecutePreparedFinalReviewCommit(FinalizeResult, Error));
+	TestTrue(TEXT("P0-07H finalize records Recipe AppliedState mutation"), FinalizeResult.bAppliedStateFinalized);
+	TestFalse(TEXT("P0-07H finalize does not save Target"), FinalizeResult.bTargetSaved);
+	TestEqual(TEXT("P0-07H finalize saves only Recipe"), SaveOrder.Num(), 1);
+	if (SaveOrder.Num() == 1)
+	{
+		TestEqual(TEXT("P0-07H finalize exact Recipe save"), SaveOrder[0], Fixture.RecipePackage->GetName());
+	}
+
+	// Finalize가 기존 BuildAppliedState authority로 current Target exact hash를 재구축했는지 확인할 fresh Target snapshot입니다.
+	FCFVehicleDefinitionSnapshot FinalTargetSnapshot;
+	// Fresh Target snapshot build diagnostic입니다.
+	FString SnapshotError;
+	if (TestTrue(
+		TEXT("P0-07H final Target snapshot builds"),
+		FCFVehicleSnapshotBuilder::BuildDefinitionSnapshot(*Fixture.TargetVehicleData, FinalTargetSnapshot, SnapshotError)))
+	{
+		TestEqual(
+			TEXT("P0-07H finalized AppliedState matches current Target DefinitionHash"),
+			Fixture.Recipe->AppliedState.AppliedDefinitionHash,
+			FinalTargetSnapshot.DefinitionHash);
+		TestEqual(
+			TEXT("P0-07H finalize keeps Target DefinitionHash unchanged"),
+			FinalTargetSnapshot.DefinitionHash,
+			TargetSnapshotBeforeFinalize.DefinitionHash);
+	}
+	else
+	{
+		AddError(SnapshotError);
+	}
+
+	// Clean/persisted/exact pair는 추가 durable action 없이 Step 7 Complete여야 합니다.
+	Fixture.TargetPackage->SetDirtyFlag(false);
+	Fixture.RecipePackage->SetDirtyFlag(false);
+	// Complete-state mutation0 preflight입니다.
+	FCFBuilderFinalCommitPreflight CompletePreflight;
+	// Complete-state fresh review입니다.
+	FCFBuilderFinalReviewResult CompleteReview;
+	TestFalse(TEXT("P0-07H fresh VM clean exact pair has no executable action"), RestartedBuilderViewModel.PrepareFinalReviewCommit(CompletePreflight, CompleteReview, Error));
+	TestEqual(TEXT("P0-07H clean exact action is None"), CompletePreflight.Action, ECFBuilderFinalCommitAction::None);
+	TestTrue(TEXT("P0-07H clean exact pair is Step7 Complete"), CompletePreflight.IsStepComplete());
+
+	// Durable persistence 자체는 성공했지만 후속 Builder refresh만 실패하는 non-fatal warning contract를 직접 검증합니다.
+	FCFVehicleBuilderVM RefreshWarningViewModel;
+	ConfigurePersistenceSeam(RefreshWarningViewModel);
+	if (!TestTrue(TEXT("P0-07H refresh-warning VM selects persisted pair"), RefreshWarningViewModel.SelectVehicle(RestartedEntry, Error)))
+	{
+		AddError(Error);
+		CleanupRegisteredAsset(Evidence);
+		return false;
+	}
+	Fixture.TargetPackage->SetDirtyFlag(false);
+	Fixture.RecipePackage->SetDirtyFlag(true);
+	// Recipe-only persistence + post-save refresh warning preflight입니다.
+	FCFBuilderFinalCommitPreflight RefreshWarningPreflight;
+	// Recipe-only persistence + post-save refresh warning fresh review입니다.
+	FCFBuilderFinalReviewResult RefreshWarningReview;
+	TestTrue(TEXT("P0-07H refresh-warning preflight prepares"), RefreshWarningViewModel.PrepareFinalReviewCommit(RefreshWarningPreflight, RefreshWarningReview, Error));
+	TestEqual(TEXT("P0-07H refresh-warning action is PersistDirtyPair"), RefreshWarningPreflight.Action, ECFBuilderFinalCommitAction::PersistDirtyPair);
+	SaveOrder.Reset();
+	bForcePostSaveRefreshFailure = true;
+	// Durable save success + refresh-only failure terminal result입니다.
+	FCFBuilderFinalCommitResult RefreshWarningResult;
+	TestTrue(TEXT("P0-07H durable save success is not false-negative when refresh fails"), RefreshWarningViewModel.ExecutePreparedFinalReviewCommit(RefreshWarningResult, Error));
+	TestEqual(TEXT("P0-07H refresh failure terminal outcome is CommittedRefreshWarning"), RefreshWarningResult.Outcome, ECFBuilderFinalCommitOutcome::CommittedRefreshWarning);
+	TestTrue(TEXT("P0-07H refresh warning keeps persistent success classification"), RefreshWarningResult.IsPersistentCommitSuccess());
+	TestTrue(TEXT("P0-07H refresh warning includes diagnostic"), !RefreshWarningResult.Diagnostic.IsEmpty());
+	TestEqual(TEXT("P0-07H refresh-warning path saves only Recipe"), SaveOrder.Num(), 1);
+	if (SaveOrder.Num() == 1)
+	{
+		TestEqual(TEXT("P0-07H refresh-warning exact Recipe save"), SaveOrder[0], Fixture.RecipePackage->GetName());
+	}
+	TestFalse(TEXT("P0-07H refresh-warning Recipe is still durably clean"), Fixture.RecipePackage->IsDirty());
+
+	// Asset Registry에 등록된 unsaved test Evidence를 후속 Automation에서 보이지 않도록 제거합니다.
+	CleanupRegisteredAsset(Evidence);
+	return true;
+}
+
+
 // Guided Builder Step 8의 saved-state gate / current benchmark binding / USER Driving exact resume contract를 검증합니다.
 bool FCFVehicleBuilderStep8DrivingTest::RunTest(const FString& Parameters)
 {
 	using namespace CFVehicleAuthoringVMTestsPrivate;
+
+	// 모든 stable prerequisite가 충족된 Driving Apply 기준 facts입니다.
+	FCFVehicleBuilderVM::FDrivingApplyPreflightFacts ReadyFacts;
+	ReadyFacts.bRecipeAvailable = true;
+	ReadyFacts.bTargetAvailable = true;
+	ReadyFacts.bRecipeDirty = false;
+	ReadyFacts.bTargetDirty = false;
+	ReadyFacts.bRecipePersisted = true;
+	ReadyFacts.bTargetPersisted = true;
+	ReadyFacts.bStateReadSucceeded = true;
+	ReadyFacts.bAppliedStateCurrent = true;
+	ReadyFacts.BenchmarkState = FCFVehicleBuilderVM::EDrivingBenchmarkValidationState::Current;
+	ReadyFacts.bBenchmarkIdentityCurrent = true;
+
+	// Expected blocker와 CanApply 계약을 간단히 반복 검증하는 pure local helper입니다.
+	const auto TestPreflightBlocker = [this](
+		const TCHAR* Label,
+		const FCFVehicleBuilderVM::FDrivingApplyPreflightFacts& Facts,
+		const ECFVehicleDrivingApplyBlocker ExpectedBlocker)
+	{
+		// Stable facts를 production과 동일한 pure evaluator로 계산한 결과입니다.
+		const FCFVehicleDrivingApplyPreflight Preflight = FCFVehicleBuilderVM::EvaluateDrivingApplyPreflight(Facts);
+		TestEqual(Label, Preflight.Blocker, ExpectedBlocker);
+		TestEqual(
+			*FString::Printf(TEXT("%s CanApply matches blocker"), Label),
+			Preflight.CanApply(),
+			ExpectedBlocker == ECFVehicleDrivingApplyBlocker::None);
+	};
+
+	// 모든 stable prerequisite가 충족되면 Apply 가능한 기준 결과입니다.
+	const FCFVehicleDrivingApplyPreflight ReadyPreflight = FCFVehicleBuilderVM::EvaluateDrivingApplyPreflight(ReadyFacts);
+	TestEqual(TEXT("Builder Step 8 Driving Apply ready facts produce None blocker"), ReadyPreflight.Blocker, ECFVehicleDrivingApplyBlocker::None);
+	TestTrue(TEXT("Builder Step 8 Driving Apply ready facts can apply"), ReadyPreflight.CanApply());
+
+	// Recipe 자체가 없을 때의 blocker fixture입니다.
+	FCFVehicleBuilderVM::FDrivingApplyPreflightFacts RecipeUnavailableFacts = ReadyFacts;
+	RecipeUnavailableFacts.bRecipeAvailable = false;
+	TestPreflightBlocker(TEXT("Builder Step 8 blocker RecipeUnavailable"), RecipeUnavailableFacts, ECFVehicleDrivingApplyBlocker::RecipeUnavailable);
+
+	// Target VehicleData 자체가 없을 때의 blocker fixture입니다.
+	FCFVehicleBuilderVM::FDrivingApplyPreflightFacts TargetUnavailableFacts = ReadyFacts;
+	TargetUnavailableFacts.bTargetAvailable = false;
+	TestPreflightBlocker(TEXT("Builder Step 8 blocker TargetUnavailable"), TargetUnavailableFacts, ECFVehicleDrivingApplyBlocker::TargetUnavailable);
+
+	// Recipe에 저장되지 않은 변경이 있을 때의 blocker fixture입니다.
+	FCFVehicleBuilderVM::FDrivingApplyPreflightFacts RecipeUnsavedFacts = ReadyFacts;
+	RecipeUnsavedFacts.bRecipeDirty = true;
+	TestPreflightBlocker(TEXT("Builder Step 8 blocker RecipeUnsaved"), RecipeUnsavedFacts, ECFVehicleDrivingApplyBlocker::RecipeUnsaved);
+
+	// Target VehicleData에 저장되지 않은 변경이 있을 때의 blocker fixture입니다.
+	FCFVehicleBuilderVM::FDrivingApplyPreflightFacts TargetUnsavedFacts = ReadyFacts;
+	TargetUnsavedFacts.bTargetDirty = true;
+	TestPreflightBlocker(TEXT("Builder Step 8 blocker TargetUnsaved"), TargetUnsavedFacts, ECFVehicleDrivingApplyBlocker::TargetUnsaved);
+
+	// Recipe package가 disk에 존재하지 않을 때의 blocker fixture입니다.
+	FCFVehicleBuilderVM::FDrivingApplyPreflightFacts RecipeNotPersistedFacts = ReadyFacts;
+	RecipeNotPersistedFacts.bRecipePersisted = false;
+	TestPreflightBlocker(TEXT("Builder Step 8 blocker RecipeNotPersisted"), RecipeNotPersistedFacts, ECFVehicleDrivingApplyBlocker::RecipeNotPersisted);
+
+	// Target package가 disk에 존재하지 않을 때의 blocker fixture입니다.
+	FCFVehicleBuilderVM::FDrivingApplyPreflightFacts TargetNotPersistedFacts = ReadyFacts;
+	TargetNotPersistedFacts.bTargetPersisted = false;
+	TestPreflightBlocker(TEXT("Builder Step 8 blocker TargetNotPersisted"), TargetNotPersistedFacts, ECFVehicleDrivingApplyBlocker::TargetNotPersisted);
+
+	// Fresh Target identity를 읽지 못했을 때의 blocker fixture입니다.
+	FCFVehicleBuilderVM::FDrivingApplyPreflightFacts StateReadFailedFacts = ReadyFacts;
+	StateReadFailedFacts.bStateReadSucceeded = false;
+	TestPreflightBlocker(TEXT("Builder Step 8 blocker StateReadFailed"), StateReadFailedFacts, ECFVehicleDrivingApplyBlocker::StateReadFailed);
+
+	// Recipe AppliedState가 current Target과 다를 때의 blocker fixture입니다.
+	FCFVehicleBuilderVM::FDrivingApplyPreflightFacts AppliedStateStaleFacts = ReadyFacts;
+	AppliedStateStaleFacts.bAppliedStateCurrent = false;
+	TestPreflightBlocker(TEXT("Builder Step 8 blocker AppliedStateStale"), AppliedStateStaleFacts, ECFVehicleDrivingApplyBlocker::AppliedStateStale);
+
+	// Current Target에 대한 benchmark가 아직 없을 때의 blocker fixture입니다.
+	FCFVehicleBuilderVM::FDrivingApplyPreflightFacts BenchmarkUnavailableFacts = ReadyFacts;
+	BenchmarkUnavailableFacts.BenchmarkState = FCFVehicleBuilderVM::EDrivingBenchmarkValidationState::Unavailable;
+	BenchmarkUnavailableFacts.bBenchmarkIdentityCurrent = false;
+	TestPreflightBlocker(TEXT("Builder Step 8 blocker BenchmarkUnavailable"), BenchmarkUnavailableFacts, ECFVehicleDrivingApplyBlocker::BenchmarkUnavailable);
+
+	// Cached benchmark 자체가 stale/invalid일 때의 blocker fixture입니다.
+	FCFVehicleBuilderVM::FDrivingApplyPreflightFacts BenchmarkStaleFacts = ReadyFacts;
+	BenchmarkStaleFacts.BenchmarkState = FCFVehicleBuilderVM::EDrivingBenchmarkValidationState::StaleOrInvalid;
+	TestPreflightBlocker(TEXT("Builder Step 8 blocker BenchmarkStale cached state"), BenchmarkStaleFacts, ECFVehicleDrivingApplyBlocker::BenchmarkStale);
+
+	// Cached benchmark validation은 current지만 path/hash identity가 달라졌을 때의 blocker fixture입니다.
+	FCFVehicleBuilderVM::FDrivingApplyPreflightFacts BenchmarkIdentityStaleFacts = ReadyFacts;
+	BenchmarkIdentityStaleFacts.bBenchmarkIdentityCurrent = false;
+	TestPreflightBlocker(TEXT("Builder Step 8 blocker BenchmarkStale identity"), BenchmarkIdentityStaleFacts, ECFVehicleDrivingApplyBlocker::BenchmarkStale);
+
+	// 앞선 blocker가 여러 개 겹쳐도 RecipeUnavailable이 먼저 선택되는 precedence fixture입니다.
+	FCFVehicleBuilderVM::FDrivingApplyPreflightFacts RecipePriorityFacts = ReadyFacts;
+	RecipePriorityFacts.bRecipeAvailable = false;
+	RecipePriorityFacts.bTargetAvailable = false;
+	RecipePriorityFacts.bRecipeDirty = true;
+	RecipePriorityFacts.BenchmarkState = FCFVehicleBuilderVM::EDrivingBenchmarkValidationState::Unavailable;
+	TestPreflightBlocker(TEXT("Builder Step 8 blocker precedence starts with RecipeUnavailable"), RecipePriorityFacts, ECFVehicleDrivingApplyBlocker::RecipeUnavailable);
+
+	// State read와 이후 AppliedState/Benchmark가 동시에 invalid여도 StateReadFailed가 먼저 선택되는 precedence fixture입니다.
+	FCFVehicleBuilderVM::FDrivingApplyPreflightFacts StatePriorityFacts = ReadyFacts;
+	StatePriorityFacts.bStateReadSucceeded = false;
+	StatePriorityFacts.bAppliedStateCurrent = false;
+	StatePriorityFacts.BenchmarkState = FCFVehicleBuilderVM::EDrivingBenchmarkValidationState::Unavailable;
+	StatePriorityFacts.bBenchmarkIdentityCurrent = false;
+	TestPreflightBlocker(TEXT("Builder Step 8 blocker precedence keeps StateReadFailed before stale/benchmark"), StatePriorityFacts, ECFVehicleDrivingApplyBlocker::StateReadFailed);
 
 	// Step 8 final-applied prerequisite를 구성할 managed Vehicle fixture입니다.
 	FWorkspaceFixture Fixture;
@@ -2839,13 +3628,135 @@ bool FCFVehicleBuilderStep8DrivingTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
+	// 07B stable preflight가 AuthoringVM refresh cache가 아니라 live Target UObject 자체를 hash하는지 확인할 최초 fresh identity입니다.
+	FSoftObjectPath FreshIdentityPathBefore;
+	// 최초 live Target exact DefinitionHash입니다.
+	FString FreshIdentityHashBefore;
+	if (!TestTrue(
+		TEXT("Builder Step 8 fresh Driving Apply identity reads live Target before mutation"),
+		FCFVehicleBuilderVM::BuildFreshDrivingTargetIdentity(
+			*Fixture.TargetVehicleData,
+			FreshIdentityPathBefore,
+			FreshIdentityHashBefore,
+			Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(
+		TEXT("Builder Step 8 fresh Driving Apply identity path is exact"),
+		FreshIdentityPathBefore,
+		FSoftObjectPath(Fixture.TargetVehicleData));
+
+	// Builder Refresh를 일부러 호출하지 않은 채 live Target semantic value만 변경해 stale-cache false-ready 회귀를 재현합니다.
+	const float OriginalBaseVehicleMassKg = Fixture.TargetVehicleData->BaseVehicleMassKg;
+	Fixture.TargetVehicleData->BaseVehicleMassKg = OriginalBaseVehicleMassKg + 1.0f;
+	// Builder Refresh 없이 다시 읽은 live Target identity입니다.
+	FSoftObjectPath FreshIdentityPathAfterMutation;
+	// Builder Refresh 없이 다시 읽은 live Target DefinitionHash입니다.
+	FString FreshIdentityHashAfterMutation;
+	if (!TestTrue(
+		TEXT("Builder Step 8 fresh Driving Apply identity rereads live Target without Builder refresh"),
+		FCFVehicleBuilderVM::BuildFreshDrivingTargetIdentity(
+			*Fixture.TargetVehicleData,
+			FreshIdentityPathAfterMutation,
+			FreshIdentityHashAfterMutation,
+			Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("Builder Step 8 fresh identity keeps exact Target path after mutation"), FreshIdentityPathAfterMutation, FreshIdentityPathBefore);
+	TestNotEqual(TEXT("Builder Step 8 fresh identity detects semantic Target mutation without Builder refresh"), FreshIdentityHashAfterMutation, FreshIdentityHashBefore);
+
+	// 뒤의 기존 Step 8 fixture 의미를 보존하도록 semantic field를 원복하고 fresh hash도 정확히 복원되는지 확인합니다.
+	Fixture.TargetVehicleData->BaseVehicleMassKg = OriginalBaseVehicleMassKg;
+	// 원복 후 fresh Target object path입니다.
+	FSoftObjectPath FreshIdentityPathRestored;
+	// 원복 후 fresh Target DefinitionHash입니다.
+	FString FreshIdentityHashRestored;
+	if (!TestTrue(
+		TEXT("Builder Step 8 fresh Driving Apply identity restores after semantic value rollback"),
+		FCFVehicleBuilderVM::BuildFreshDrivingTargetIdentity(
+			*Fixture.TargetVehicleData,
+			FreshIdentityPathRestored,
+			FreshIdentityHashRestored,
+			Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("Builder Step 8 fresh identity restores exact hash"), FreshIdentityHashRestored, FreshIdentityHashBefore);
+	Fixture.TargetPackage->SetDirtyFlag(false);
+
 	// Random Recipe의 Step 1 USER Reference token을 test lifetime 동안만 보존/정리합니다.
 	FBuilderReferenceTokenGuard ReferenceTokenGuard(Fixture.Recipe->RecipeId);
 	// Random Recipe의 Step 8 USER Driving token을 test lifetime 동안만 보존/정리합니다.
 	FBuilderDrivingTokenGuard DrivingTokenGuard(Fixture.Recipe->RecipeId);
-	// USER의 실제 benchmark result JSON을 exact 복원할 file guard입니다.
+	// USER의 실제 benchmark result/progress JSON 경로를 제공할 Step 8 ViewModel입니다.
 	FCFVehicleBuilderVM BuilderViewModel;
+	// USER의 실제 benchmark result JSON을 exact 복원할 file guard입니다.
 	FBuilderBenchmarkResultFileGuard BenchmarkFileGuard(BuilderViewModel.GetDrivingBenchmarkResultPath());
+	// USER의 실제 benchmark progress JSON을 exact 복원할 file guard입니다.
+	FBuilderBenchmarkProgressFileGuard ProgressFileGuard(BuilderViewModel.GetDrivingBenchmarkProgressPath());
+
+	// P0-07E progress parser 정상 경로를 검증할 exact synthetic RunId입니다.
+	const FString ProgressRunId = FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphensLower);
+	if (!TestTrue(
+		TEXT("Builder Step 8 P0-07E valid progress sidecar writes"),
+		ProgressFileGuard.WriteProgress(
+			TEXT("carfight_vehicle_builder_benchmark_progress_v1"),
+			ProgressRunId,
+			TEXT("finalizing"),
+			7,
+			7,
+			Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	// Production reader가 반환한 정상 7/7 progress snapshot입니다.
+	FCFVehicleBuilderBenchmarkProgress ParsedProgress;
+	if (!TestTrue(TEXT("Builder Step 8 P0-07E valid progress sidecar parses"), BuilderViewModel.ReadDrivingBenchmarkProgress(ParsedProgress, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("Builder Step 8 P0-07E progress schema is exact"), ParsedProgress.SchemaVersion, FString(TEXT("carfight_vehicle_builder_benchmark_progress_v1")));
+	TestEqual(TEXT("Builder Step 8 P0-07E progress RunId is exact"), ParsedProgress.RunId, ProgressRunId);
+	TestEqual(TEXT("Builder Step 8 P0-07E finalizing phase maps exactly"), ParsedProgress.Phase, ECFVehicleBuilderBenchmarkProgressPhase::Finalizing);
+	TestEqual(TEXT("Builder Step 8 P0-07E finalizing phase index is 7"), ParsedProgress.PhaseIndex, 7);
+	TestEqual(TEXT("Builder Step 8 P0-07E progress phase count is 7"), ParsedProgress.PhaseCount, 7);
+
+	// Unknown schema는 stale/foreign sidecar로 fail-closed해야 합니다.
+	TestTrue(
+		TEXT("Builder Step 8 P0-07E invalid schema fixture writes"),
+		ProgressFileGuard.WriteProgress(TEXT("foreign_progress_v1"), ProgressRunId, TEXT("preparing"), 1, 7, Error));
+	TestFalse(TEXT("Builder Step 8 P0-07E invalid schema is rejected"), BuilderViewModel.ReadDrivingBenchmarkProgress(ParsedProgress, Error));
+
+	// RunId가 GUID가 아니면 current process identity와 비교하기 전에 fail-closed해야 합니다.
+	TestTrue(
+		TEXT("Builder Step 8 P0-07E invalid RunId fixture writes"),
+		ProgressFileGuard.WriteProgress(TEXT("carfight_vehicle_builder_benchmark_progress_v1"), TEXT("not-a-guid"), TEXT("preparing"), 1, 7, Error));
+	TestFalse(TEXT("Builder Step 8 P0-07E invalid RunId is rejected"), BuilderViewModel.ReadDrivingBenchmarkProgress(ParsedProgress, Error));
+
+	// Stable 7단계 vocabulary 밖의 phase key는 fail-closed해야 합니다.
+	TestTrue(
+		TEXT("Builder Step 8 P0-07E unknown phase fixture writes"),
+		ProgressFileGuard.WriteProgress(TEXT("carfight_vehicle_builder_benchmark_progress_v1"), ProgressRunId, TEXT("mystery_phase"), 3, 7, Error));
+	TestFalse(TEXT("Builder Step 8 P0-07E unknown phase is rejected"), BuilderViewModel.ReadDrivingBenchmarkProgress(ParsedProgress, Error));
+
+	// Phase count가 frozen 7이 아니면 다른 schema revision으로 보고 fail-closed해야 합니다.
+	TestTrue(
+		TEXT("Builder Step 8 P0-07E wrong phase count fixture writes"),
+		ProgressFileGuard.WriteProgress(TEXT("carfight_vehicle_builder_benchmark_progress_v1"), ProgressRunId, TEXT("braking"), 4, 6, Error));
+	TestFalse(TEXT("Builder Step 8 P0-07E wrong phase count is rejected"), BuilderViewModel.ReadDrivingBenchmarkProgress(ParsedProgress, Error));
+
+	// 1-based phase index 범위를 벗어난 sidecar도 fail-closed해야 합니다.
+	TestTrue(
+		TEXT("Builder Step 8 P0-07E out-of-range phase fixture writes"),
+		ProgressFileGuard.WriteProgress(TEXT("carfight_vehicle_builder_benchmark_progress_v1"), ProgressRunId, TEXT("preparing"), 0, 7, Error));
+	TestFalse(TEXT("Builder Step 8 P0-07E out-of-range phase is rejected"), BuilderViewModel.ReadDrivingBenchmarkProgress(ParsedProgress, Error));
 
 	// Step 1~7 test filter를 replay하지 않고 final-applied prerequisite만 최소 구성해 주는 Evidence입니다.
 	UCFVehicleRefEvidence* Evidence = nullptr;
@@ -2858,7 +3769,20 @@ bool FCFVehicleBuilderStep8DrivingTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
-	// Step 8 prerequisite가 실제 Final Review Complete까지 도달했는지 확인하는 current projection입니다.
+	// /Temp fixture는 P0-07H production durable package gate를 의도적으로 만족하지 못하므로 Step 8 자체 회귀만 이어가기 위한 test-only prerequisite projection helper입니다.
+	const auto RestoreTransientStep8Projection = [&BuilderViewModel]()
+	{
+		BuilderViewModel.SetStep(
+			ECFVehicleBuilderStepId::FinalReview,
+			ECFVehicleBuilderStepState::Complete,
+			TEXT("Automation-only transient Step 7 prerequisite"),
+			TEXT("Product durable package gate는 별도 P0-07H assertions가 검증합니다."),
+			true);
+		BuilderViewModel.EvaluateDrivingTestStep();
+	};
+	RestoreTransientStep8Projection();
+
+	// Step 8 legacy transient fixture가 test-only prerequisite projection에서 Final Review Complete까지 도달했는지 확인합니다.
 	const FCFVehicleBuilderStepView* FinalReviewStep = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::FinalReview);
 	if (!TestNotNull(TEXT("Builder Step 8 Final Review prerequisite exists"), FinalReviewStep))
 	{
@@ -2921,6 +3845,7 @@ bool FCFVehicleBuilderStep8DrivingTest::RunTest(const FString& Parameters)
 		CleanupRegisteredAsset(Evidence);
 		return false;
 	}
+	RestoreTransientStep8Projection();
 
 	// Exact current benchmark가 binding된 Step 8 projection입니다.
 	const FCFVehicleBuilderStepView* BenchmarkedDrivingStep = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::DrivingTest);
@@ -2940,9 +3865,42 @@ bool FCFVehicleBuilderStep8DrivingTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Builder Step 8 runner never asserts Reference threshold"), BuilderViewModel.GetDrivingBenchmarkResult().bReferenceThresholdAsserted);
 	TestFalse(TEXT("Builder Step 8 runner never asserts USER driving feel"), BuilderViewModel.GetDrivingBenchmarkResult().bUserDrivingFeelAsserted);
 
+	// 이 transient test fixture는 disk package가 아니므로 stable Apply preflight가 정확히 RecipeNotPersisted로 막아야 합니다.
+	const FCFVehicleDrivingApplyPreflight NonPersistentPreflight = BuilderViewModel.ReadDrivingApplyPreflight();
+	TestEqual(
+		TEXT("Builder Step 8 stable preflight identifies non-persistent Recipe before PIE Apply"),
+		NonPersistentPreflight.Blocker,
+		ECFVehicleDrivingApplyBlocker::RecipeNotPersisted);
+	TestFalse(TEXT("Builder Step 8 non-persistent stable preflight cannot apply"), NonPersistentPreflight.CanApply());
+
+	// Slate IsEnabled처럼 같은 state를 반복 읽어도 JSON refresh나 state mutation 없이 같은 blocker를 유지하는 두 번째 stable read입니다.
+	const FCFVehicleDrivingApplyPreflight RepeatedNonPersistentPreflight = BuilderViewModel.ReadDrivingApplyPreflight();
+	TestEqual(
+		TEXT("Builder Step 8 repeated stable preflight read is deterministic"),
+		RepeatedNonPersistentPreflight.Blocker,
+		NonPersistentPreflight.Blocker);
+	TestTrue(TEXT("Builder Step 8 repeated stable preflight read keeps benchmark cache current"), BuilderViewModel.HasDrivingBenchmarkResult());
+	TestEqual(TEXT("Builder Step 8 repeated stable preflight read keeps benchmark RunId"), BuilderViewModel.GetDrivingBenchmarkResult().RunId, CurrentRunId);
+
 	// Active PIE에 선택 차량을 실제 적용하지 않은 상태에서는 USER PASS를 프로그램적으로 위조할 수 없어야 합니다.
 	TestFalse(TEXT("Builder Step 8 USER PASS is blocked before active PIE test-drive preparation"), BuilderViewModel.AcceptCurrentUserDriving(Error));
 	TestFalse(TEXT("Builder Step 8 has no USER acceptance before actual drive"), BuilderViewModel.HasCurrentUserDrivingAcceptance());
+
+	// P0-07E explicit Recipe Save는 legacy/local token이나 benchmark 존재만으로 활성화되지 않고 persistent acceptance receipt를 요구합니다.
+	const FCFVehicleRecipeSavePreflight SavePreflightBeforeAcceptance = BuilderViewModel.ReadCurrentRecipeSavePreflight();
+	TestEqual(
+		TEXT("Builder Step 8 P0-07E Recipe Save requires persistent USER acceptance receipt"),
+		SavePreflightBeforeAcceptance.Blocker,
+		ECFVehicleRecipeSaveBlocker::AcceptanceUnavailableOrStale);
+	TestFalse(TEXT("Builder Step 8 P0-07E Recipe Save cannot save before acceptance"), SavePreflightBeforeAcceptance.CanSave());
+	// Production writer를 blocked state에서 호출해도 SavePackage에 도달하지 않는 terminal result입니다.
+	const FCFVehicleRecipeSaveResult SaveResultBeforeAcceptance = BuilderViewModel.SaveCurrentRecipeAfterDrivingAcceptance();
+	TestEqual(
+		TEXT("Builder Step 8 P0-07E Recipe writer blocks before acceptance"),
+		SaveResultBeforeAcceptance.Outcome,
+		ECFVehicleRecipeSaveOutcome::Blocked);
+	TestFalse(TEXT("Builder Step 8 P0-07E blocked Recipe writer reports no persistent save"), SaveResultBeforeAcceptance.IsPersistentSaveSuccess());
+	TestFalse(TEXT("Builder Step 8 P0-07E blocked Recipe writer does not dirty clean fixture"), Fixture.RecipePackage->IsDirty());
 
 	// Transient fixture package는 disk에 저장되어 있지 않으므로 launch preparation이 package existence gate에서도 fail-closed해야 합니다.
 	FString UnsavedPackageRunId;
@@ -2960,12 +3918,90 @@ bool FCFVehicleBuilderStep8DrivingTest::RunTest(const FString& Parameters)
 		CleanupRegisteredAsset(Evidence);
 		return false;
 	}
+	// Production acceptance 내부 RebuildStepStates()가 /Temp fixture를 durable Step 7에서 정상 차단하므로, 뒤의 legacy Step 8 receipt assertions 전에 test-only projection을 다시 복원합니다.
+	RestoreTransientStep8Projection();
 	TestTrue(TEXT("Builder Step 8 persistent Driving receipt is valid"), Fixture.Recipe->BuilderDrivingAcceptanceReceipt.IsValid());
 	TestEqual(TEXT("Builder Step 8 persistent Driving receipt target path is exact"), Fixture.Recipe->BuilderDrivingAcceptanceReceipt.TargetVehicleDataPath, FSoftObjectPath(Fixture.TargetVehicleData));
 	TestEqual(TEXT("Builder Step 8 persistent Driving receipt target hash is exact"), Fixture.Recipe->BuilderDrivingAcceptanceReceipt.TargetDefinitionHash, CurrentTargetHash);
 	TestEqual(TEXT("Builder Step 8 persistent Driving receipt remembers accepted benchmark RunId diagnostically"), Fixture.Recipe->BuilderDrivingAcceptanceReceipt.AcceptedBenchmarkRunId, CurrentRunId);
 	TestTrue(TEXT("Builder Step 8 persistent receipt marks Recipe dirty for explicit save"), Fixture.RecipePackage->IsDirty());
 	TestTrue(TEXT("Builder Step 8 accepts current Target after production USER PASS"), BuilderViewModel.HasCurrentUserDrivingAcceptance());
+
+	// P0-07H fresh-restart Step 7은 Step 8 benchmark cache보다 먼저 평가되므로 benchmark-independent receipt-only durable candidate facts를 구성합니다.
+	FCFBuilderFinalReviewResult DurableCandidateReview;
+	DurableCandidateReview.bCanCompleteFinalReview = true;
+	// Persistent USER Driving receipt 이외에는 Step 7 durable handoff가 이미 끝난 상태를 표현하는 synthetic read-only facts입니다.
+	FCFBuilderSavedHandoffPreflight DurableCandidateHandoff;
+	DurableCandidateHandoff.Blocker = ECFBuilderSavedHandoffBlocker::None;
+	DurableCandidateHandoff.RecipePath = FSoftObjectPath(Fixture.Recipe);
+	DurableCandidateHandoff.TargetPath = FSoftObjectPath(Fixture.TargetVehicleData);
+	DurableCandidateHandoff.TargetDefinitionHash = CurrentTargetHash;
+	DurableCandidateHandoff.ResolvedDefinitionHash = CurrentTargetHash;
+	DurableCandidateHandoff.bRecipeDirty = true;
+	DurableCandidateHandoff.bTargetDirty = false;
+	DurableCandidateHandoff.bRecipePersisted = true;
+	DurableCandidateHandoff.bTargetPersisted = true;
+	DurableCandidateHandoff.bAppliedStateCurrent = true;
+
+	TestTrue(
+		TEXT("VBHAI-P0-07H receipt-only candidate is recognized without benchmark cache"),
+		BuilderViewModel.IsPostDrivingReceiptCandidate(DurableCandidateReview, DurableCandidateHandoff));
+
+	// Editor restart 직후처럼 transient benchmark cache만 의도적으로 비웁니다. Persistent benchmark JSON은 current Target identity로 그대로 남아 있습니다.
+	BuilderViewModel.DrivingBenchmarkResult = FCFVehicleBuilderBenchmarkResult();
+	BuilderViewModel.bHasDrivingBenchmarkResult = false;
+	BuilderViewModel.DrivingBenchmarkValidationState = FCFVehicleBuilderVM::EDrivingBenchmarkValidationState::Unavailable;
+	TestFalse(
+		TEXT("VBHAI-P0-07H post-driving pending is not granted before fresh benchmark revalidation"),
+		BuilderViewModel.IsPostDrivingReceiptSavePending(DurableCandidateReview, DurableCandidateHandoff));
+
+	// Narrow candidate에서만 production reader가 existing benchmark JSON을 current Target path/hash에 다시 binding합니다.
+	FString DurableBenchmarkRefreshError;
+	TestTrue(
+		TEXT("VBHAI-P0-07H fresh-restart benchmark cache restores from exact persisted result"),
+		BuilderViewModel.RefreshDrivingBenchmarkState(DurableBenchmarkRefreshError));
+	TestTrue(TEXT("VBHAI-P0-07H restored benchmark cache is current"), BuilderViewModel.bHasDrivingBenchmarkResult);
+	TestTrue(
+		TEXT("VBHAI-P0-07H exact receipt plus fresh benchmark grants post-driving pending"),
+		BuilderViewModel.IsPostDrivingReceiptSavePending(DurableCandidateReview, DurableCandidateHandoff));
+
+	// Persistent receipt의 Target hash가 stale이면 benchmark cache 상태와 무관하게 downstream exception candidate 자체를 거부해야 합니다.
+	FCFBuilderSavedHandoffPreflight StaleReceiptHandoff = DurableCandidateHandoff;
+	StaleReceiptHandoff.TargetDefinitionHash = TEXT("stale-target-hash");
+	StaleReceiptHandoff.ResolvedDefinitionHash = StaleReceiptHandoff.TargetDefinitionHash;
+	TestFalse(
+		TEXT("VBHAI-P0-07H stale persistent receipt cannot become downstream durable candidate"),
+		BuilderViewModel.IsPostDrivingReceiptCandidate(DurableCandidateReview, StaleReceiptHandoff));
+
+	// P0-07E Save preflight가 exact persistent receipt까지 확인한 뒤 /Temp package를 Product save 대상에서 fail-closed하는 결과입니다.
+	const FCFVehicleRecipeSavePreflight TransientPackageSavePreflight = BuilderViewModel.ReadCurrentRecipeSavePreflight();
+	TestEqual(
+		TEXT("Builder Step 8 P0-07E exact acceptance reaches PackageInvalid on transient fixture"),
+		TransientPackageSavePreflight.Blocker,
+		ECFVehicleRecipeSaveBlocker::PackageInvalid);
+	TestFalse(TEXT("Builder Step 8 P0-07E transient Recipe package cannot save"), TransientPackageSavePreflight.CanSave());
+
+	// Production writer 자체도 같은 preflight authority를 재사용해 /Temp package에서 SavePackage 호출 전에 Blocked로 끝나야 합니다.
+	const FCFVehicleRecipeSaveResult TransientPackageSaveResult = BuilderViewModel.SaveCurrentRecipeAfterDrivingAcceptance();
+	TestEqual(
+		TEXT("Builder Step 8 P0-07E Recipe writer blocks transient package"),
+		TransientPackageSaveResult.Outcome,
+		ECFVehicleRecipeSaveOutcome::Blocked);
+	TestFalse(TEXT("Builder Step 8 P0-07E transient Recipe writer reports no persistent save"), TransientPackageSaveResult.IsPersistentSaveSuccess());
+	TestTrue(TEXT("Builder Step 8 P0-07E blocked writer leaves acceptance receipt dirty for explicit real save"), Fixture.RecipePackage->IsDirty());
+
+	// Receipt 이후 live Target semantic hash가 달라지면 PackageInvalid보다 먼저 acceptance stale blocker가 선택되어야 합니다.
+	const float SavePreflightOriginalMassKg = Fixture.TargetVehicleData->BaseVehicleMassKg;
+	Fixture.TargetVehicleData->BaseVehicleMassKg = SavePreflightOriginalMassKg + 1.0f;
+	const FCFVehicleRecipeSavePreflight StaleAcceptanceSavePreflight = BuilderViewModel.ReadCurrentRecipeSavePreflight();
+	TestEqual(
+		TEXT("Builder Step 8 P0-07E Recipe Save detects fresh Target hash drift"),
+		StaleAcceptanceSavePreflight.Blocker,
+		ECFVehicleRecipeSaveBlocker::AcceptanceUnavailableOrStale);
+	TestFalse(TEXT("Builder Step 8 P0-07E stale acceptance cannot save"), StaleAcceptanceSavePreflight.CanSave());
+	// 뒤의 persistent-resume fixture 의미를 보존하도록 direct test semantic mutation을 exact 원복합니다.
+	Fixture.TargetVehicleData->BaseVehicleMassKg = SavePreflightOriginalMassKg;
+
 	const FCFVehicleBuilderStepView* AcceptedDrivingStep = BuilderViewModel.FindStepView(ECFVehicleBuilderStepId::DrivingTest);
 	if (TestNotNull(TEXT("Builder Step 8 accepted projection exists"), AcceptedDrivingStep))
 	{
@@ -2985,6 +4021,18 @@ bool FCFVehicleBuilderStep8DrivingTest::RunTest(const FString& Parameters)
 		CleanupRegisteredAsset(Evidence);
 		return false;
 	}
+	// Fresh /Temp VM에서도 production durable disk gate와 Step 8 legacy behavior를 분리하는 test-only prerequisite projection입니다.
+	const auto RestoreResumedTransientStep8Projection = [&ResumedBuilderViewModel]()
+	{
+		ResumedBuilderViewModel.SetStep(
+			ECFVehicleBuilderStepId::FinalReview,
+			ECFVehicleBuilderStepState::Complete,
+			TEXT("Automation-only resumed transient Step 7 prerequisite"),
+			TEXT("Product durable package gate는 별도 P0-07H assertions가 검증합니다."),
+			true);
+		ResumedBuilderViewModel.EvaluateDrivingTestStep();
+	};
+	RestoreResumedTransientStep8Projection();
 
 	// Exact Target hash + RunId + RecipeId가 모두 일치해 resume된 Step 8 projection입니다.
 	const FCFVehicleBuilderStepView* ResumedDrivingStep = ResumedBuilderViewModel.FindStepView(ECFVehicleBuilderStepId::DrivingTest);
@@ -3007,6 +4055,7 @@ bool FCFVehicleBuilderStep8DrivingTest::RunTest(const FString& Parameters)
 		CleanupRegisteredAsset(Evidence);
 		return false;
 	}
+	RestoreResumedTransientStep8Projection();
 	const FCFVehicleBuilderStepView* NewRunDrivingStep = ResumedBuilderViewModel.FindStepView(ECFVehicleBuilderStepId::DrivingTest);
 	if (!TestNotNull(TEXT("Builder Step 8 new-run projection exists"), NewRunDrivingStep))
 	{
@@ -3028,6 +4077,7 @@ bool FCFVehicleBuilderStep8DrivingTest::RunTest(const FString& Parameters)
 		CleanupRegisteredAsset(Evidence);
 		return false;
 	}
+	RestoreResumedTransientStep8Projection();
 	const FCFVehicleBuilderStepView* StaleDrivingStep = ResumedBuilderViewModel.FindStepView(ECFVehicleBuilderStepId::DrivingTest);
 	if (!TestNotNull(TEXT("Builder Step 8 stale projection exists"), StaleDrivingStep))
 	{

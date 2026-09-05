@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleResolverTests.cpp
-// Version: v1.6.0
-// Date: 2026-09-01
-// Description: DAUTH-P0-08E/F Pure Resolver + CF-FQ-040 ESH-01 Engine TorqueCurve Profile mapping Automation입니다.
+// Version: v1.7.0
+// Date: 2026-09-03
+// Description: DAUTH-P0-08E/F Pure Resolver + CF-FQ-047 stable Mount legacy passthrough integrity Automation입니다.
 // Changelog:
+// - v1.7.0: CF-FQ-047 P0-06. active Standard Mount 신규 row의 hidden legacy leaf C++ default fallback과 existing same-ID current serialized passthrough source/value를 focused 검증.
 // - v1.6.0: Performance Profile EngineTorqueCurve opt-in source mapping, atomic materialization, invalid curve fail-closed와 Resolver revision 5 회귀검증 추가.
 // - v1.5.0: WSA-P0-05 Recipe SoftObject ChassisMesh → Target Object canonical reference가 R15 materialized readback hash와 일치하는 회귀검증 추가.
 // - v1.4.0: WSA-P0-04 SocketScaleFromChassis의 FL-only shared Wheel fallback을 Resolver에서 직접 회귀검증.
@@ -292,6 +293,21 @@ namespace CFVehicleResolverTestsPrivate
 		});
 	}
 
+	// Mount legacy float leaf의 exact current Definition entry를 target-compatible codec으로 만듭니다.
+	FCFVehicleFieldEntry MakeMountFloatCurrentEntry(const TCHAR* CanonicalPattern, const FName SelectorValue, const float Value)
+	{
+		FCFVehicleFieldEntry Entry;
+		Entry.FieldPath = MakeExactPath(CanonicalPattern, SelectorValue);
+		const FName LeafName = Entry.FieldPath.PropertyChain.Last();
+		const FFloatProperty* FloatProperty = FindFProperty<FFloatProperty>(FCFVehicleMountProfile::StaticStruct(), LeafName);
+		if (FloatProperty)
+		{
+			FString ExportError;
+			FCFVehicleFieldCodec::ExportValue(*FloatProperty, &Value, Entry.Value, ExportError);
+		}
+		return Entry;
+	}
+
 	// Validation bucket에 issue code가 존재하는지 검사합니다.
 	bool HasIssueCode(const TArray<FCFVehicleValidationIssue>& Issues, const FName IssueCode)
 	{
@@ -330,6 +346,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCFVehicleResolverLegacyTest,
 	"CarFight.DataAuthoring.DAUTH_P0_08.Resolver.LegacySerialized",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVehicleResolverMountLegacyFallbackTest,
+	"CarFight.DataAuthoring.CF_FQ_047.P0_06.Resolver.MountLegacyFallback",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -814,6 +835,84 @@ bool FCFVehicleResolverLegacyTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("Hidden field source is LegacySerializedPassthrough"), LegacyTrace->Layers[LegacyTrace->EffectiveLayerIndex].SourceType, ECFVehicleSourceType::LegacySerializedPassthrough);
 	}
 		return true;
+}
+
+// Active Standard Mount hidden legacy leaf가 신규 row에서는 struct default, existing row에서는 current serialized value를 deterministic passthrough하는지 검증합니다.
+bool FCFVehicleResolverMountLegacyFallbackTest::RunTest(const FString& Parameters)
+{
+	FCFVehicleResolveRequest Request;
+	FString BuildError;
+	if (!TestTrue(TEXT("Mount legacy fallback request builds"), CFVehicleResolverTestsPrivate::BuildManagedRequest(Request, BuildError)))
+	{
+		AddError(BuildError);
+		return false;
+	}
+
+	FCFVehicleResolveResult ProposalResult;
+	FCFVehicleResolver::Resolve(Request, ProposalResult);
+	CFVehicleResolverTestsPrivate::AdoptAllWheelMeasurements(Request, ProposalResult);
+
+	CFVehicleResolverTestsPrivate::AddSocket(Request.Assets, TEXT("HP_Top_01"), FVector(-50.0, 0.0, 130.0));
+	Request.Assets.ChassisSockets.Sort([](const FCFVehicleSocketSnapshot& Left, const FCFVehicleSocketSnapshot& Right)
+	{
+		return Left.SocketName.LexicalLess(Right.SocketName);
+	});
+
+	FCFHardpointIntent& HardpointIntent = Request.Recipe.HardpointIntents.AddDefaulted_GetRef();
+	HardpointIntent.LocationSlotId = TEXT("Top_01");
+	HardpointIntent.LocationCategory = TEXT("Top");
+	HardpointIntent.SocketName = TEXT("HP_Top_01");
+
+	FCFMountIntent& MountIntent = Request.Recipe.MountIntents.AddDefaulted_GetRef();
+	MountIntent.MountProfileId = TEXT("Mount_Top_01");
+	MountIntent.LocationSlotRef = TEXT("Top_01");
+	MountIntent.MountType = ECFVehicleMountType::Turret;
+	MountIntent.SizeLimit = ECFVehicleWeaponSize::Large;
+
+	const TCHAR* LegacyPattern = TEXT("MountProfiles[MountProfileId=*].YawTurnRateDegPerSec");
+	const TCHAR* ExactLegacyPath = TEXT("MountProfiles[MountProfileId=Mount_Top_01].YawTurnRateDegPerSec");
+	const FCFVehicleFieldEntry* DefaultEntry = Request.ProjectDefaults.SortedFields.FindByPredicate([](const FCFVehicleFieldEntry& Entry)
+	{
+		return Entry.FieldPath.ToCanonicalString(true) == TEXT("MountProfiles[MountProfileId=*].YawTurnRateDegPerSec");
+	});
+	if (!TestNotNull(TEXT("Mount legacy wildcard project default exists"), DefaultEntry))
+	{
+		return false;
+	}
+
+	FCFVehicleResolveResult NewRowResult;
+	TestTrue(TEXT("New Standard Mount resolve executes"), FCFVehicleResolver::Resolve(Request, NewRowResult));
+	const FCFVehicleResolvedField* NewRowLegacyField = CFVehicleResolverTestsPrivate::FindResolvedField(NewRowResult, ExactLegacyPath);
+	const FCFVehicleSourceTrace* NewRowLegacyTrace = CFVehicleResolverTestsPrivate::FindTrace(NewRowResult, ExactLegacyPath);
+	if (TestNotNull(TEXT("New Standard Mount resolves hidden legacy leaf"), NewRowLegacyField)
+		&& TestNotNull(TEXT("New Standard Mount hidden legacy trace exists"), NewRowLegacyTrace))
+	{
+		TestEqual(TEXT("New Standard Mount hidden legacy value uses struct default"), NewRowLegacyField->Value.CanonicalValueText, DefaultEntry->Value.CanonicalValueText);
+		const FCFVehicleSourceLayer& EffectiveLayer = NewRowLegacyTrace->Layers[NewRowLegacyTrace->EffectiveLayerIndex];
+		TestEqual(TEXT("New Standard Mount hidden legacy source type"), EffectiveLayer.SourceType, ECFVehicleSourceType::LegacySerializedPassthrough);
+		TestEqual(TEXT("New Standard Mount hidden legacy source id"), EffectiveLayer.SourceId, FString(TEXT("Project.CppDefaultStableMountLegacy")));
+	}
+
+	Request.bHasCurrentDefinition = true;
+	Request.CurrentDefinition.SortedFields.Reset();
+	Request.CurrentDefinition.SortedFields.Add(CFVehicleResolverTestsPrivate::MakeMountFloatCurrentEntry(LegacyPattern, TEXT("Mount_Top_01"), 123.0f));
+	FString CurrentHashError;
+	TestTrue(TEXT("Current Definition hash builds for mount legacy passthrough"), FCFVehicleSnapshotBuilder::BuildDefinitionHashFromFields(Request.CurrentDefinition.SortedFields, Request.CurrentDefinition.DefinitionHash, CurrentHashError));
+
+	FCFVehicleResolveResult ExistingRowResult;
+	TestTrue(TEXT("Existing Standard Mount resolve executes"), FCFVehicleResolver::Resolve(Request, ExistingRowResult));
+	const FCFVehicleResolvedField* ExistingLegacyField = CFVehicleResolverTestsPrivate::FindResolvedField(ExistingRowResult, ExactLegacyPath);
+	const FCFVehicleSourceTrace* ExistingLegacyTrace = CFVehicleResolverTestsPrivate::FindTrace(ExistingRowResult, ExactLegacyPath);
+	if (TestNotNull(TEXT("Existing Standard Mount resolves hidden legacy leaf"), ExistingLegacyField)
+		&& TestNotNull(TEXT("Existing Standard Mount hidden legacy trace exists"), ExistingLegacyTrace))
+	{
+		const FCFVehicleFieldEntry& CurrentEntry = Request.CurrentDefinition.SortedFields[0];
+		TestEqual(TEXT("Existing Standard Mount preserves current serialized legacy value"), ExistingLegacyField->Value.CanonicalValueText, CurrentEntry.Value.CanonicalValueText);
+		const FCFVehicleSourceLayer& EffectiveLayer = ExistingLegacyTrace->Layers[ExistingLegacyTrace->EffectiveLayerIndex];
+		TestEqual(TEXT("Existing Standard Mount hidden legacy source id"), EffectiveLayer.SourceId, FString(TEXT("CurrentDefinition.LegacySerialized")));
+	}
+
+	return true;
 }
 
 // R14 Current Definition diff와 R16 effective source/external drift를 UObject materialization 없이 검증합니다.

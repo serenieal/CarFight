@@ -1,9 +1,23 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderVM.h
-// Version: v1.24.0
-// Date: 2026-09-02
-// Description: Guided Vehicle Builder Shell + Vehicle ID 중심 신규 차량 naming/create transient ViewModel입니다.
+// Version: v1.35.0
+// Date: 2026-09-05
+// Description: Guided Vehicle Builder Shell + CF-FQ-047 Step 7 durable final commit / Step 8 fresh Target preflight seam입니다.
 // Changelog:
+// - v1.35.0: CF-FQ-047 최종 재감사 교정. guarded Undo 성공도 P0-07H durable handoff의 일부로 취급해 reverted Target/Recipe exact pair persistence를 요구하며 partial save failure는 dirty state를 보존한 채 fail-closed하는 계약으로 갱신.
+// - v1.34.0: CF-FQ-047 최종감사 교정. P0-07H durable writer를 Product Save 없이 직접 회귀검증할 Automation-only package persistence seam을 추가하고 SavePackage true 뒤 clean/persisted 확인 실패를 SaveStateUnconfirmed로 구분할 exact save-state 결과를 추가.
+// - v1.33.1: VBHAI-P0-07H fresh restart에서 Step 7이 Step 8 benchmark cache 복원보다 먼저 평가되어 post-driving receipt pending을 놓치는 순환을 막기 위해 benchmark-independent downstream receipt candidate helper를 추가.
+// - v1.33.0: VBHAI-P0-07H에서 Final Review semantic truth와 exact Target/Recipe durable handoff를 합성하는 typed preflight, Apply/finalize/dirty-pair persistence orchestration, post-driving receipt pending phase를 추가.
+// - v1.32.1: P0-07E Source 중간검수 교정. 과거 "새 writer 없음" migration 문구를 현재 exact Recipe single-package explicit Save writer 경계와 일치하도록 갱신.
+// - v1.32.0: VBHAI-P0-07E에서 exact RunId benchmark progress sidecar reader와 persistent USER Driving receipt 기반 exact current Recipe explicit Save preflight/writer를 추가.
+// - v1.31.1: VBHAI-P0-07B 재검수에서 stable preflight가 AuthoringVM cached DefinitionHash에 의존하지 않도록 live Target UObject에서 fresh Definition Snapshot identity를 만드는 private helper를 추가.
+// - v1.31.0: VBHAI-P0-07B에서 cached benchmark + persisted Recipe/Target + AppliedState identity를 한 stable read-only preflight로 평가해 Step 8 버튼과 production Apply guard가 같은 blocker authority를 사용하도록 추가.
+// - v1.30.0: Step 5 persistent receipt를 full commit transaction과 분리된 Physics compatibility로 읽어 Hardpoint/Mount-only structural drift에서는 Complete를 유지하는 read-only helper를 추가.
+// - v1.29.0: CF-FQ-047 post-P0-06 중간검수 P1 교정. successful Recipe/Profile receipt mutation 뒤 post-commit refresh 실패를 operation failure로 뒤집지 않고 transient warning으로 분리.
+// - v1.28.0: CF-FQ-047 P0-06에서 downstream Hardpoint/Mount 변경이 전체 resolved hash만 바꾼 경우 private 4 Profile payload 변경 0을 증명한 뒤 persistent Physics receipt만 explicit rebind하는 prepared path를 추가.
+// - v1.27.0: CF-FQ-047 VBHAI-P0-02. Resolver AssetSnapshot과 분리된 Chassis Socket inventory read seam과 exact existing Standard Socket adoption typed wrapper를 추가.
+// - v1.26.0: CF-FQ-046 VBIUX-P0-03에서 Step 5가 승인된 Builder-private 4 Profile의 실제 typed payload를 읽도록 ReadCurrentPrivateProfilePayload read-only seam을 추가.
+// - v1.25.0: CF-FQ-046 VBIUX-P0-02에서 Step 3/4 USER presentation이 evaluator와 동일 current Socket/Target truth를 읽도록 ReadCurrentLayoutFacts read-only seam을 추가.
 // - v1.24.0: P0-07 UAT에서 USER Driving PASS를 persistent Recipe receipt로 승격. same Target DefinitionHash에서는 benchmark RunId가 바뀌어도 PASS를 유지하고 Target identity/hash drift에서만 stale 처리하는 contract로 전환.
 // - v1.23.0: P0-07 UAT 회귀 교정. local Reference review token이 유실돼도 exact persistent BuilderCommitReceipt가 current EvidenceId/Fingerprint를 증명하면 완료 차량의 Step 1/5 forward-progress를 복원하는 durable acceptance helper를 추가.
 // - v1.22.1: CF-FQ-043 VMG-P0-06 Automation이 invalid Hardpoint identity의 Step 3 fail-closed projection을 production debug API 추가 없이 직접 재평가할 수 있도록 test-only friend seam을 추가.
@@ -33,19 +47,34 @@
 // - v1.1.0: Mesh-only 후보의 기존 two-record VehicleData+Recipe Preview/Commit 경로를 Guided Shell에 재노출.
 // - v1.0.0: 기존 FCFVehicleAuthoringVM을 재사용해 차량 목록/선택과 8-step 상태 projection을 제공.
 // Migration:
+// - v1.35.0부터 Step 7 guarded Undo는 USER 승인 뒤 backend Undo가 실제 성공하면 reverted Target→Recipe exact pair를 dirty-needed 범위로 즉시 저장합니다. 저장 실패 시 Undo 자체를 자동 rollback/retry하지 않으며 current dirty/partial persisted state를 그대로 보존해 후속 Step 7 복구가 가능하게 합니다. Save All/StaticMesh/Profile/Evidence/Catalog 권한은 추가하지 않습니다.
+// - v1.34.0 test persistence seam은 WITH_DEV_AUTOMATION_TESTS에서만 활성화되며 Shipping/production package persistence authority를 변경하지 않습니다. Production은 계속 exact /Game package + UPackage::SavePackage + clean/disk 확인을 사용합니다.
+// - v1.33.1 fresh-restart 복원은 persistent USER Driving receipt + semantic/Target/AppliedState candidate가 모두 exact일 때만 existing benchmark result JSON을 transient VM cache로 다시 검증합니다. Asset mutation/Save/benchmark 실행 권한은 추가하지 않습니다.
+// - v1.33.0 Step 7은 USER 확인 뒤 exact current Target/Recipe package만 dirty-needed 범위로 저장하며 둘 다 필요할 때 Target→Recipe 순서를 사용합니다. Save All/StaticMesh/Profile/Evidence/Catalog writer authority는 추가하지 않습니다.
+// - v1.32.1의 새 writer는 `SaveCurrentRecipeAfterDrivingAcceptance()` 하나이며 persistent USER Driving receipt가 fresh current Target에 exact binding된 current Recipe package 한 개만 USER click 뒤 저장합니다. 기존 Authoring facade의 Profile/VehicleData/StaticMesh/Catalog writer authority는 변경하지 않습니다.
+// - v1.31.1 fresh Target identity는 live VehicleData를 immutable Definition Snapshot으로 읽기만 하며 Authoring selection refresh, JSON reread, Asset mutation/Save를 수행하지 않습니다.
+// - v1.31.0 Driving Apply preflight는 RefreshDrivingBenchmarkState가 검증해 둔 cached result만 읽으며 Slate enable 평가 중 JSON을 다시 읽지 않습니다. PIE lifecycle/Save/Product mutation 권한은 추가하지 않습니다.
+// - v1.30.0 Physics compatibility는 current receipt/provenance/pending diff를 읽기만 하며 receipt 자동 재작성/Save 권한을 추가하지 않습니다. Step 8 DefinitionHash 계약은 변경하지 않습니다.
+// - v1.29.0 GetLastPostCommitRefreshWarning은 Editor-only transient diagnostic이며 persistent writer/Save 권한을 추가하지 않습니다. 기존 mutation signature와 authority는 유지합니다.
+// - v1.26.0 ReadCurrentPrivateProfilePayload는 기존 Recipe binding의 Builder-private Profile Data를 읽기만 하며 Profile/Recipe/VehicleData mutation 권한을 추가하지 않습니다.
+// - v1.25.0 ReadCurrentLayoutFacts는 current evaluator truth의 transient read-only projection이며 Layout Apply/Save/Socket mutation 권한을 추가하지 않습니다.
 // - v1.19.0부터 BeginNewVehicleEntry는 이전 Authoring selection을 해제하되 Browser cache와 persistent Asset은 유지합니다. 신규 차량 입력은 refresh 뒤에도 selection-independent 상태를 유지합니다.
 // - v1.18.0은 WITH_DEV_AUTOMATION_TESTS에서만 private adoption helper 접근을 허용하는 test seam이며 Runtime/Slate public API와 shipping behavior는 변경하지 않습니다.
 // - v1.17.0부터 일반 Guided 신규 차량 naming은 Vehicle ID 한 칸이 기본 owner입니다. 기본 identity는 /Game/CarFight/Data/Authoring/DA_Vehicle_<Id>, DA_Recipe_<Id>로 deterministic 제안하며 collision/path/type 최종 판정은 기존 PreviewVehicleRecords/ValidateNewAssetIdentity가 계속 authority입니다. Advanced override는 UI에서만 별도 노출합니다.
 // - v1.16.0부터 Blank/Arbitrary/Mesh-only Guided creation은 동일 Builder request helper를 사용하며 모두 VehicleSpecificRequired입니다. 생성 직후 Chassis는 Recipe AssetIntent에만 기록하고 VehicleData Apply/Save는 하지 않습니다. record creation 성공과 Builder adoption 실패는 별도 결과로 보고합니다.
 // - v1.15.0부터 Step definition은 BuilderVM 생성 직후 존재하며 Asset Registry refresh 성공 여부와 분리됩니다. 신규 차량 진입은 transient state만 바꾸며 Asset 생성/Save/Apply를 수행하지 않습니다.
 // - Recipe-only AuthoringRevision은 NewVehicle lifecycle을 소모하지 않으며, private Profile bootstrap은 기존 prospective Resolver/Validator를 반드시 통과해야 합니다.
-// - 새 writer를 만들지 않습니다. persistent truth와 mutation authority는 기존 Authoring facade가 계속 소유합니다.
+// - P0-07E 이전 Authoring mutation authority는 기존 Authoring facade가 계속 소유하며, P0-07E는 Step 8 explicit Recipe single-package Save authority만 별도로 추가합니다.
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "DataAuthoring/CFVehicleAuthoringVM.h"
 #include "DataAuthoring/CFVehicleBuilderTypes.h"
+
+struct FCFBuilderChassisSocketInventory;
+struct FCFBuilderPhysicsReceiptCompatibilityResult;
+class UPackage;
 
 /** P0-09 USER Acceptance용 Guided Builder Shell transient ViewModel입니다. */
 class CARFIGHT_REEDITOR_API FCFVehicleBuilderVM
@@ -163,6 +192,9 @@ public:
 	// Loaded PhysicsDraft의 complete private 4 Profile payload를 existing typed facade로 mutation0 preview합니다.
 	bool PreparePhysicsProposal(FCFBuilderProfileCommitPreview& OutPreview, FString& OutError);
 
+	// Current persistent Physics receipt와 private 4 Profile이 exact 유지되고 downstream resolved hash만 달라진 경우 receipt-only rebind preview를 준비합니다.
+	bool PrepareCurrentPhysicsReceiptRefresh(FCFBuilderProfileCommitPreview& OutPreview, FString& OutError);
+
 	// 직전 exact Physics Proposal preview에 USER AuthoringWrite approval을 붙여 private 4 Profile + Builder receipt를 commit합니다.
 	bool ExecutePreparedPhysicsProposal(FCFAuthoringOpResult& OutResult, FString& OutError);
 
@@ -174,6 +206,9 @@ public:
 
 	// Current Step 5에 load된 PhysicsDraft를 반환합니다.
 	const FCFBuilderPhysicsDraft& GetLoadedPhysicsProposalDraft() const { return LoadedPhysicsProposalDraft; }
+
+	// Current Recipe에 binding된 승인 완료 Builder-private 4 Profile의 typed payload를 read-only로 반환합니다.
+	bool ReadCurrentPrivateProfilePayload(FCFBuilderPrivateProfilePayload& OutPayload, FString& OutError) const;
 
 	// USER-facing Step 5 Proposal/receipt 상태 요약을 만듭니다.
 	FString BuildPhysicsProposalSummary() const;
@@ -193,8 +228,20 @@ public:
 	// Current Step 7의 existing R0 Final Review fresh 결과를 반환합니다.
 	const FCFBuilderFinalReviewResult& GetFinalReviewResult() const { return FinalReviewResult; }
 
-	// USER-facing Step 7 validation/drift/provenance/diff/apply readiness 요약을 만듭니다.
+	// USER-facing Step 7 validation/drift/provenance/diff/durable handoff readiness 요약을 만듭니다.
 	FString BuildFinalReviewSummary() const;
+
+	// Current Step 7이 마지막으로 평가한 semantic + durable final commit state를 반환합니다.
+	const FCFBuilderFinalCommitPreflight& GetFinalCommitPreflight() const { return FinalCommitPreflight; }
+
+	// Step 7의 current Final Review와 exact Target/Recipe durable action을 USER dialog 직전 fresh 평가해 prepared state로 보관합니다.
+	bool PrepareFinalReviewCommit(
+		FCFBuilderFinalCommitPreflight& OutPreflight,
+		FCFBuilderFinalReviewResult& OutReview,
+		FString& OutError);
+
+	// USER가 확인한 exact final-commit scope를 fresh 재검증한 뒤 Apply/finalize/Target→Recipe persistence를 실행합니다.
+	bool ExecutePreparedFinalReviewCommit(FCFBuilderFinalCommitResult& OutResult, FString& OutError);
 
 	// Step 7의 current Final Review를 fresh mutation0로 다시 읽고 exact DefinitionApply proposal을 USER dialog 직전 prepared state로 보관합니다.
 	bool PrepareFinalReviewApply(FCFBuilderFinalReviewResult& OutReview, FString& OutError);
@@ -214,6 +261,12 @@ public:
 	// Step 8이 사용하는 existing VB-P0-08 benchmark result JSON path를 반환합니다.
 	FString GetDrivingBenchmarkResultPath() const;
 
+	// Step 8 exact RunId coarse progress sidecar의 canonical JSON path를 반환합니다.
+	FString GetDrivingBenchmarkProgressPath() const;
+
+	// Canonical progress sidecar를 읽어 typed coarse progress로 변환합니다. RunId current-match 판정은 Tab process owner가 수행합니다.
+	bool ReadDrivingBenchmarkProgress(FCFVehicleBuilderBenchmarkProgress& OutProgress, FString& OutError) const;
+
 	// Current saved Target exact path/hash를 binding한 VB-P0-08 runner process launch 정보를 만듭니다.
 	bool PrepareDrivingBenchmarkLaunch(
 		FString& OutExecutable,
@@ -231,6 +284,9 @@ public:
 	// USER-facing Step 8 technical metric / saved-state / USER Driving acceptance 요약을 만듭니다.
 	FString BuildDrivingTestSummary() const;
 
+	// Step 8 PIE Apply 버튼과 production Apply가 공유하는 current saved-state/benchmark stable preflight를 mutation 없이 읽습니다.
+	FCFVehicleDrivingApplyPreflight ReadDrivingApplyPreflight() const;
+
 	// Active PIE player VehiclePawn에 current selected saved VehicleData의 transient duplicate를 적용해 USER test-drive를 준비합니다.
 	bool ApplySelectedVehicleToActivePIE(FString& OutError);
 
@@ -239,6 +295,12 @@ public:
 
 	// Current Step 8 USER Driving PASS가 persistent Target Definition receipt 또는 legacy local token으로 current Target에 일치하는지 반환합니다.
 	bool HasCurrentUserDrivingAcceptance() const;
+
+	// Persistent USER Driving receipt가 fresh current Target에 exact binding된 Recipe 하나를 explicit Save할 수 있는지 mutation 없이 읽습니다. Legacy local token은 Save authority가 아닙니다.
+	FCFVehicleRecipeSavePreflight ReadCurrentRecipeSavePreflight() const;
+
+	// USER click 뒤 exact current Recipe package 하나만 저장하고 SavePackage/dirty/post-refresh outcome을 typed result로 반환합니다.
+	FCFVehicleRecipeSaveResult SaveCurrentRecipeAfterDrivingAcceptance();
 
 	// Current Editor session에서 선택 차량이 active PIE에 transient 적용돼 실제 USER test-drive 준비됐는지 반환합니다.
 	bool IsUserTestDrivePreparedThisSession() const { return bUserTestDrivePreparedThisSession; }
@@ -325,6 +387,22 @@ public:
 	// Fresh AssetSnapshot에서 exact Chassis Socket이 현재 존재하는지 read-only로 반환합니다.
 	bool IsCurrentChassisSocketFound(FName SocketName) const;
 
+	// Step 3/4 USER presentation이 evaluator와 동일 current Socket/Target truth를 읽도록 차량 배치 사실을 반환합니다.
+	bool ReadCurrentLayoutFacts(FCFVehicleBuilderLayoutFacts& OutFacts, FString& OutError) const;
+
+	// Resolver AssetSnapshot과 분리된 Editor-only current Chassis Socket inventory를 read-only로 반환합니다.
+	bool ReadCurrentChassisSocketInventory(FCFBuilderChassisSocketInventory& OutInventory, FString& OutError) const;
+
+	// UseHardpoints 상태에서 canonical existing HP_* Socket 하나를 exact parsed stable identity로 Recipe HardpointIntent에 채택합니다. StaticMesh/Target/Save mutation은 없습니다.
+	bool AdoptExistingStandardHardpointSocket(
+		FName SocketName,
+		FCFHardpointIntent& OutIntent,
+		FCFAuthoringOpResult& OutResult,
+		FString& OutError);
+
+	// 마지막 successful Builder mutation 뒤 상태 재조회만 실패한 경우의 non-fatal warning을 반환합니다.
+	const FString& GetLastPostCommitRefreshWarning() const { return LastPostCommitRefreshWarning; }
+
 	// 현재 선택이 아직 VehicleData가 없는 Mesh-only 후보인지 반환합니다.
 	bool IsMeshOnlyCandidate() const;
 
@@ -338,7 +416,59 @@ private:
 	friend class FCFVMGP006ContractMatrixTest;
 	// Step 8 Automation이 production AcceptCurrentUserDriving의 실제 persistent receipt write를 PIE runtime 없이 검증할 수 있도록 test-only preparation flag에 접근합니다.
 	friend class FCFVehicleBuilderStep8DrivingTest;
+	// CF-FQ-047 중간검수 Automation이 successful mutation 뒤 refresh warning outcome을 production write API 추가 없이 검증하도록 허용합니다.
+	friend class FCFVBHAIPostCommitRefreshOutcomeTest;
+	// CF-FQ-047 P0-07H 최종감사 Automation이 exact /Game identity를 유지한 채 Product disk write 없이 durable final commit persistence/failure taxonomy를 직접 검증하도록 허용합니다.
+	friend class FCFVBHAIP007HDurableCommitTest;
 #endif
+
+	// Cached benchmark result가 current Target identity에 대해 마지막 refresh에서 어떤 검증 상태였는지 표현합니다.
+	enum class EDrivingBenchmarkValidationState : uint8
+	{
+		Unavailable,
+		Current,
+		StaleOrInvalid
+	};
+
+	// Driving Apply stable blocker evaluator가 소비하는 current read-only facts입니다.
+	struct FDrivingApplyPreflightFacts
+	{
+		// Current Recipe를 읽을 수 있는지 여부입니다.
+		bool bRecipeAvailable = false;
+
+		// Current Target VehicleData를 읽을 수 있는지 여부입니다.
+		bool bTargetAvailable = false;
+
+		// Current Recipe package에 저장되지 않은 변경이 있는지 여부입니다.
+		bool bRecipeDirty = false;
+
+		// Current Target package에 저장되지 않은 변경이 있는지 여부입니다.
+		bool bTargetDirty = false;
+
+		// Current Recipe package가 disk에 실제 존재하는지 여부입니다.
+		bool bRecipePersisted = false;
+
+		// Current Target package가 disk에 실제 존재하는지 여부입니다.
+		bool bTargetPersisted = false;
+
+		// Current Target path/hash identity를 fresh read하는 데 성공했는지 여부입니다.
+		bool bStateReadSucceeded = false;
+
+		// Recipe AppliedState가 fresh current Target DefinitionHash와 exact 일치하는지 여부입니다.
+		bool bAppliedStateCurrent = false;
+
+		// 마지막 benchmark refresh가 분류한 cached result validation 상태입니다.
+		EDrivingBenchmarkValidationState BenchmarkState = EDrivingBenchmarkValidationState::Unavailable;
+
+		// Cached benchmark path/hash가 fresh current Target identity와 exact 일치하는지 여부입니다.
+		bool bBenchmarkIdentityCurrent = false;
+
+		// Raw path/hash/error를 포함할 수 있는 내부 진단 정보입니다.
+		FString Diagnostic;
+	};
+
+	// Stable facts를 deterministic blocker 우선순위의 Driving Apply preflight로 변환합니다.
+	static FCFVehicleDrivingApplyPreflight EvaluateDrivingApplyPreflight(const FDrivingApplyPreflightFacts& Facts);
 
 	// 신규 차량 제작이 어느 시작 방식을 사용할지 표현하는 transient 모드입니다.
 	enum class ENewVehicleStartMode : uint8
@@ -365,6 +495,12 @@ private:
 
 	// Vehicle ID가 기본 naming에 사용할 영문자/숫자/_ 전용 Unreal Asset-safe identifier인지 검사합니다.
 	bool ValidateVehicleCreationId(const FString& VehicleId, FString& OutError) const;
+
+	// 이미 성공한 persistent mutation 뒤 refresh 실패를 operation failure로 뒤집지 않고 warning으로 확정합니다.
+	static bool FinalizeSuccessfulMutationRefresh(
+		const TArray<FString>& RefreshFailures,
+		FString& OutError,
+		FString& OutWarning);
 
 	// 신규 차량 제작 transient state를 기본 비활성 상태로 되돌립니다.
 	void ResetNewVehicleEntryState();
@@ -429,6 +565,13 @@ private:
 		FString& OutTargetDefinitionHash,
 		FString& OutError) const;
 
+	// Driving Apply stable guard용으로 live Target UObject 자체에서 fresh Definition Snapshot path/hash identity를 만듭니다.
+	static bool BuildFreshDrivingTargetIdentity(
+		const UCFVehicleData& TargetVehicleData,
+		FSoftObjectPath& OutTargetPath,
+		FString& OutTargetDefinitionHash,
+		FString& OutError);
+
 	// Existing VB-P0-08 JSON을 읽고 current Target path/hash에 exact binding된 result만 current로 인정합니다.
 	bool RefreshDrivingBenchmarkState(FString& OutError);
 
@@ -471,6 +614,11 @@ private:
 	// Current private Profile payload와 persistent Builder receipt를 existing PreviewBuilderProfiles로 fresh 검증할 read-only request를 만듭니다.
 	bool BuildCurrentPhysicsReceiptRequest(FCFBuilderProfileCommitRequest& OutRequest, FString& OutError) const;
 
+	// Current receipt/fresh preview와 pending structural diff를 single authority로 읽어 Step 5 Physics compatibility를 반환합니다.
+	FCFBuilderPhysicsReceiptCompatibilityResult EvaluateCurrentPhysicsReceiptCompatibility(
+		const FCFBuilderProfileCommitRequest& ReceiptRequest,
+		const FCFBuilderProfileCommitPreview& ReceiptPreview) const;
+
 	// Step 5가 요구하는 Step 1~4가 모두 current Complete인지 검사합니다.
 	bool ArePhysicsProposalPrerequisitesComplete(FString& OutError) const;
 
@@ -486,7 +634,37 @@ private:
 	// Current managed Recipe/Target/Evidence/receipt를 existing Final Review R0 request로 구성합니다.
 	bool BuildFinalReviewRequest(FCFBuilderFinalReviewRequest& OutRequest, FString& OutError) const;
 
-	// Selection/refresh에서 직전 Final Review DefinitionApply prepared approval을 폐기합니다.
+	// Fresh Final Review identity + live Target snapshot에서 exact Recipe/Target durable handoff facts를 읽습니다.
+	FCFBuilderSavedHandoffPreflight ReadSavedHandoffPreflight(const FCFBuilderFinalReviewResult& FreshReview) const;
+
+	// Fresh semantic Final Review와 Saved Handoff를 합성해 Step 7 exact action을 파생합니다.
+	FCFBuilderFinalCommitPreflight EvaluateFinalCommitPreflight(const FCFBuilderFinalReviewResult& FreshReview) const;
+
+	// Benchmark cache와 무관하게 persistent USER Driving receipt-only downstream dirty 후보가 exact인지 먼저 판정합니다.
+	bool IsPostDrivingReceiptCandidate(
+		const FCFBuilderFinalReviewResult& FreshReview,
+		const FCFBuilderSavedHandoffPreflight& SavedHandoff) const;
+
+	// Step 8 USER Driving receipt write만 남은 downstream Recipe dirty가 Step 7을 retroactive incomplete로 만들지 않는지 판정합니다.
+	bool IsPostDrivingReceiptSavePending(
+		const FCFBuilderFinalReviewResult& FreshReview,
+		const FCFBuilderSavedHandoffPreflight& SavedHandoff) const;
+
+	// USER dialog approval을 exact action/Recipe/Target/fresh provenance/package state에 binding한 scope hash를 생성합니다.
+	static FString BuildFinalCommitApprovalScope(const FCFBuilderFinalCommitPreflight& Preflight);
+
+	// Exact package가 persisted state인지 production disk 또는 Automation override에서 확인합니다.
+	bool DoesBuilderPackageExist(const FString& PackageName) const;
+
+	// Exact /Game package 하나만 저장하고 SavePackage success + clean/persisted를 확인합니다. Policy/ordering은 caller가 소유합니다.
+	bool SaveBuilderPackage(
+		UPackage* Package,
+		UObject* Asset,
+		bool& bOutSaved,
+		bool& bOutSaveStateUnconfirmed,
+		FString& OutError);
+
+	// Selection/refresh에서 직전 Final Review DefinitionApply/final-commit prepared approval을 폐기합니다.
 	void ClearPreparedFinalReviewApply();
 
 	// Selection이 바뀌거나 successful Undo 뒤 current lifetime guarded Undo token을 폐기합니다.
@@ -597,6 +775,9 @@ private:
 	// Current Step 7에서 existing ReadBuilderFinalReview가 반환한 fresh R0 projection입니다.
 	FCFBuilderFinalReviewResult FinalReviewResult;
 
+	// Current Step 7 semantic review와 exact package state를 합성한 final commit projection입니다.
+	FCFBuilderFinalCommitPreflight FinalCommitPreflight;
+
 	// FinalReviewResult가 current selection/refresh에서 실제 R0 read된 결과인지 여부입니다.
 	bool bHasFinalReviewResult = false;
 
@@ -609,6 +790,12 @@ private:
 	// 직전 Final Review proposal이 USER DefinitionApply approval 직전까지 유효한 transient prepared state인지 여부입니다.
 	bool bHasPreparedFinalReviewApply = false;
 
+	// USER dialog가 확인한 exact durable final commit action/scope입니다.
+	FCFBuilderFinalCommitPreflight PreparedFinalCommitPreflight;
+
+	// 직전 durable final commit approval이 mutation/save 직전 fresh revalidation 후보인지 여부입니다.
+	bool bHasPreparedFinalCommit = false;
+
 	// 마지막 successful Builder Final Apply가 current Editor lifetime에서 발급한 guarded Undo token입니다.
 	FCFBuilderUndoToken FinalReviewUndoToken;
 
@@ -620,6 +807,9 @@ private:
 
 	// DrivingBenchmarkResult가 current Target exact identity에 일치하는지 여부입니다.
 	bool bHasDrivingBenchmarkResult = false;
+
+	// RefreshDrivingBenchmarkState가 마지막으로 검증한 cached benchmark 상태입니다. ReadDrivingApplyPreflight는 JSON을 다시 읽지 않고 이 값만 소비합니다.
+	EDrivingBenchmarkValidationState DrivingBenchmarkValidationState = EDrivingBenchmarkValidationState::Unavailable;
 
 	// Benchmark result가 없거나 stale/invalid일 때 Step 8에 표시할 current diagnostic입니다.
 	FString DrivingBenchmarkStateError;
@@ -644,4 +834,15 @@ private:
 
 	// USER가 승인한 exact Evidence semantic fingerprint입니다.
 	FString AcceptedReferenceEvidenceFingerprint;
+
+	// 마지막 successful persistent Builder mutation 뒤 발생한 non-fatal 화면/참조 재조회 warning입니다.
+	FString LastPostCommitRefreshWarning;
+
+#if WITH_DEV_AUTOMATION_TESTS
+	// P0-07H Automation이 /Game identity를 유지하면서 실제 disk 존재 여부 대신 isolated persisted state를 공급하는 callback입니다.
+	TFunction<bool(const FString&)> TestBuilderPackageExistsOverride;
+
+	// P0-07H Automation이 Product Asset write 없이 production SaveBuilderPackage의 success/failure/clean 확인을 검증하는 callback입니다.
+	TFunction<bool(UPackage*, UObject*, FString&)> TestBuilderPackageSaveOverride;
+#endif
 };

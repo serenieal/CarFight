@@ -1,15 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleApplyService.h
-// Version: v1.0.0
-// Date: 2026-08-17
-// Description: DAUTH-P0-08H Apply Transaction Foundation의 public request/result와 유일한 Target writer 계약입니다.
-// Scope: Frozen Section 22.33~22.35 TOCTOU precondition, reviewed Resolve payload, atomic Apply 결과를 제공합니다.
+// Version: v1.1.0
+// Date: 2026-09-04
+// Description: DAUTH Apply Transaction Foundation의 Target writer + Recipe AppliedState finalize 계약입니다.
+// Scope: Frozen TOCTOU precondition, reviewed Resolve payload, atomic Apply와 no-diff AppliedState repair를 제공합니다.
 // Changelog:
+// - v1.1.0: VBHAI-P0-07H fresh-restart partial persistence 복구를 위해 Target mutation 없이 existing BuildAppliedState authority로 Recipe AppliedState만 finalize하는 entry point를 추가.
 // - v1.0.0: FCFVehicleApplyRequest/Result, stable failure taxonomy, FCFVehicleApplyService entry point 최초 구현.
 // Migration:
-// - Target UCFVehicleData write는 이 service만 수행합니다.
-// - Apply는 Package Dirty까지만 수행하며 Save/SavePackage를 호출하지 않습니다.
+// - Target UCFVehicleData write는 이 service만 수행합니다. FinalizeAppliedState는 Target을 수정하지 않습니다.
+// - Apply/FinalizeAppliedState 모두 Package Dirty까지만 수행하며 Save/SavePackage를 호출하지 않습니다.
 
 #pragma once
 
@@ -141,6 +142,9 @@ class CARFIGHT_REEDITOR_API FCFVehicleApplyService
 public:
 	// Reviewed Preview를 TOCTOU 재검증한 뒤 Target + Recipe AppliedState를 atomic transaction으로 적용합니다.
 	static bool Apply(const FCFVehicleApplyRequest& Request, FCFVehicleApplyResult& OutResult);
+
+	// Fresh Resolve와 이미 일치하는 Target을 재검증한 뒤 Target mutation 없이 Recipe AppliedState만 authoritative state로 finalize합니다.
+	static bool FinalizeAppliedState(const FCFVehicleApplyRequest& Request, FCFVehicleApplyResult& OutResult);
 
 private:
 	// Production Apply와 Automation rollback probe가 공유하는 실제 transaction implementation입니다.

@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAIContract.h
-// Version: v1.20.0
-// Date: 2026-09-02
-// Description: DAUTH Common Authoring Service + CF-FQ-040 ESH-03 WheelTorqueCrossoverShift diagnostic contract입니다.
+// Version: v1.21.0
+// Date: 2026-09-05
+// Description: DAUTH Common Authoring Service + CF-FQ-040/047 Builder transaction diagnostic contract입니다.
 // Scope: Section 25 R0~R3 risk, approval, read/query와 normal Workspace Mesh-only candidate projection을 제공합니다.
 // Changelog:
+// - v1.21.0: CF-FQ-047 P0-07H guarded Undo orchestration이 backend mutation 성공 뒤 exact reverted Target/Recipe package persistence를 수행할 수 있으므로 MutationFootprint.bSavePerformed 주석을 service-only false에서 higher-level explicit durable orchestration 포함 의미로 교정. Service R0~R3 자체의 no-auto-save 계약은 유지.
 // - v1.20.0: CF-FQ-043 VMG-P0-04 Gameplay Guidance R0 request에 persistent Recipe HardpointPlanMode의 transient projection을 추가. Resolver RecipeSnapshot/fingerprint에는 넣지 않고 Step 6 Mode authority만 전달.
 // - v1.19.0: CF-FQ-043 stable identity 삭제를 위해 append-only RemoveMountIntent/RemoveHardpointIntent semantic op와 exact deletion identity payload를 추가. 기존 enum ordinal은 유지.
 // - v1.18.0: vehicle-specific Engine Curve + gear ratios로 adjacent gear Wheel-Torque crossover와 fixed common ChangeUpRPM recommendation을 계산하는 typed diagnostic을 TransmissionDiagnostic에 추가.
@@ -28,6 +29,7 @@
 // - v1.1.0: P0-09 reviewed Initial Import proposal/commit을 UI와 공용 facade에서 사용할 typed R2 contract로 추가.
 // - v1.0.0: AI/UI 공용 typed request/result foundation 최초 구현.
 // Migration:
+// - v1.21.0 bSavePerformed=true는 service writer가 임의 auto-save한다는 뜻이 아닙니다. explicit USER-approved higher-level Builder durable orchestration이 exact package save를 실제 시도한 경우에만 result footprint에 기록할 수 있습니다. 기존 Service/Batch R0~R3 auto-save 금지는 유지됩니다.
 // - Raw SetField/UObject property patch/direct VehicleData write API를 제공하지 않습니다.
 // - v1.5.0의 Profile write는 Meta.OwnerRecipeId가 exact RecipeId인 Builder-private 4 Profile만 허용합니다. Invalid/mismatch owner인 shared/legacy Profile은 fail-closed이며 기존 Shared Profile 편집 경로를 우회하지 않습니다.
 // - Builder-private typed commit은 fresh Reference Evidence + current Recipe/Target/private Profile + prospective Resolver result에 binding한 4 Profile complete payload만 한 transaction으로 갱신하며 Save/SaveAll, force/skip-validation, automatic retry를 제공하지 않습니다.
@@ -234,7 +236,7 @@ struct FCFAuthoringMutationFootprint
 	UPROPERTY()
 	bool bPackageDirty = false;
 
-	// Disk save가 실제 수행됐는지 여부입니다. P0 Authoring contract에서는 항상 false입니다.
+	// 이 result를 소유한 operation에서 exact Disk save가 실제 시도됐는지 여부입니다. Core Authoring Service R0~R3는 false를 유지하며 explicit higher-level durable orchestration만 true를 기록할 수 있습니다.
 	UPROPERTY()
 	bool bSavePerformed = false;
 

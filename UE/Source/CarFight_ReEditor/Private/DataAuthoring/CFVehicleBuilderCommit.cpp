@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleBuilderCommit.cpp
-// Version: v1.6.0
-// Date: 2026-09-01
-// Description: CF-FQ-040 Builder private Profile commit + ESH-02 Engine Curve provenance/hash guard 구현입니다.
+// Version: v1.7.0
+// Date: 2026-09-04
+// Description: CF-FQ-040 Builder private Profile commit + CF-FQ-047 Physics provenance exactness 분리 구현입니다.
 // Scope: fresh Evidence + Recipe binding + OwnerRecipeId + 4 current fingerprints + prospective Resolver/Target state를 exact approval scope에 묶습니다.
 // Changelog:
+// - v1.7.0: persistent receipt의 full exact comparator와 resolved DefinitionHash를 제외한 Physics provenance comparator를 분리하고 read-only facade를 추가. generic Preview/Commit NoChange 의미는 그대로 유지.
 // - v1.6.0: vehicle-specific Performance Engine Curve review를 fresh Evidence/consumed Claim에 검증하고 complete Curve payload와 deterministic EngineCurveProposalHash로 persistent receipt에 binding.
 // - v1.5.0: VehicleSpecificRequired Recipe의 Transmission Core field-level review를 fresh Evidence에 검증하고 complete Drivetrain payload와 deterministic TransmissionProposalHash로 receipt에 binding. Fixed-shift blocker diagnostic을 Step 5 preview에서 fail-closed.
 // - v1.4.0: SocketScaleFromChassis에서 VehicleBase Reference wheel geometry 5필드의 Builder mutation을 baseline-preserve fail-closed로 차단.
@@ -14,6 +15,7 @@
 // - v1.1.0: 설계 검수 교정으로 current EvidenceId/fingerprint/consumed canonical claims를 fresh 검증하고 complete prospective 4 Profile을 Shared Resolver/Definition validation에 통과시킨 결과를 proposal hash에 binding. Current gameplay에 manual shift가 없으므로 Builder Transmission은 automatic gears + auto reverse를 요구.
 // - v1.0.0: PreviewBuilderProfiles / CommitBuilderProfiles 최초 구현. Shared/legacy Profile mutation과 raw VehicleData write를 fail-closed로 차단.
 // Migration:
+// - v1.7.0부터 Physics Step compatibility는 resolved DefinitionHash를 제외한 provenance를 별도로 읽을 수 있지만 ReceiptMatchesFreshProposal의 full exact transaction 의미와 Commit readback은 변경하지 않습니다.
 // - 이 파일은 기존 Shared Profile B2 편집 경로를 대체하지 않습니다. Meta.OwnerRecipeId가 exact RecipeId이고 Recipe가 실제 binding한 VehicleBase/Drivetrain/Handling/Performance 4 Profile에만 사용합니다.
 // - Commit은 complete typed Data 4개와 non-semantic BuilderCommitReceipt를 한 FScopedTransaction으로 갱신합니다. VehicleData/OwnerRecipeId는 수정하지 않으며 Save/automatic retry를 수행하지 않습니다.
 // - Receipt는 Recipe semantic fingerprint에서 제외되며 current Profile/Evidence가 달라지면 Final Review에서 stale로 판정됩니다.
@@ -662,8 +664,8 @@ namespace CFVehicleBuilderCommitPrivate
 		return HashUtf8Payload(BuildConsumedClaimIdString(ConsumedClaimIds));
 	}
 
-	// Current Recipe receipt가 fresh proposal/profile/evidence를 exact 증명하는지 확인합니다.
-	bool ReceiptMatchesFreshProposal(
+	// Current Recipe receipt가 resolved DefinitionHash를 제외한 fresh Physics provenance를 exact 증명하는지 확인합니다.
+	bool ReceiptMatchesFreshPhysicsProvenance(
 		const UCFVehicleRecipeData& Recipe,
 		const FCFBuilderProfileCommitRequest& Request,
 		const FCFBuilderProfileCommitPreview& Preview)
@@ -680,7 +682,6 @@ namespace CFVehicleBuilderCommitPrivate
 			&& Receipt.DrivetrainFingerprint == Preview.ProspectiveFingerprints.DrivetrainFingerprint
 			&& Receipt.HandlingFingerprint == Preview.ProspectiveFingerprints.HandlingFingerprint
 			&& Receipt.PerformanceFingerprint == Preview.ProspectiveFingerprints.PerformanceFingerprint
-			&& Receipt.ProspectiveResolvedDefinitionHash == Preview.ProspectiveResolvedDefinitionHash
 			&& Receipt.TransmissionPolicy == Request.Recipe->BuilderTransmissionPolicy
 			&& Receipt.TransmissionProposalHash == Preview.TransmissionProposalHash
 			&& (Preview.TransmissionProposalHash.IsEmpty()
@@ -689,6 +690,16 @@ namespace CFVehicleBuilderCommitPrivate
 			&& (Preview.EngineCurveProposalHash.IsEmpty()
 				|| CFBuilderEngineUtil::BuildEngineCurveProposalHash(Receipt.EngineCurveReview, Request.Payload.PerformanceData) == Preview.EngineCurveProposalHash)
 			&& Receipt.ResolverContractRevision == Preview.Proposal.ResolverContractRevision;
+	}
+
+	// Current Recipe receipt가 fresh proposal/profile/evidence와 full resolved DefinitionHash까지 exact 증명하는지 확인합니다.
+	bool ReceiptMatchesFreshProposal(
+		const UCFVehicleRecipeData& Recipe,
+		const FCFBuilderProfileCommitRequest& Request,
+		const FCFBuilderProfileCommitPreview& Preview)
+	{
+		return ReceiptMatchesFreshPhysicsProvenance(Recipe, Request, Preview)
+			&& Recipe.BuilderCommitReceipt.ProspectiveResolvedDefinitionHash == Preview.ProspectiveResolvedDefinitionHash;
 	}
 
 	// Fresh proposal 결과를 persistent non-semantic Builder receipt로 materialize합니다.
@@ -764,6 +775,30 @@ namespace CFVehicleBuilderCommitPrivate
 		AppendToken(Payload, TEXT("ResolverRevision"), FString::FromInt(FCFVehicleResolver::CurrentResolverContractRevision));
 		return HashUtf8Payload(Payload);
 	}
+}
+
+// Fresh Builder Profile preview 기준으로 full resolved DefinitionHash를 제외한 Physics provenance가 receipt와 exact 같은지 확인합니다.
+bool FCFVehicleAuthoringService::IsBuilderPhysicsReceiptProvenanceCurrent(
+	const FCFBuilderProfileCommitRequest& Request,
+	const FCFBuilderProfileCommitPreview& Preview,
+	FString& OutDiagnostic)
+{
+	using namespace CFVehicleBuilderCommitPrivate;
+
+	if (!Request.Recipe)
+	{
+		OutDiagnostic = TEXT("Physics receipt provenance를 확인할 current Recipe가 없습니다.");
+		return false;
+	}
+
+	if (!ReceiptMatchesFreshPhysicsProvenance(*Request.Recipe, Request, Preview))
+	{
+		OutDiagnostic = TEXT("Physics receipt의 기준 정보, 사용 근거, 차량 설정, 변속기, 엔진 곡선 또는 Resolver 기준이 현재 값과 달라 다시 확인해야 합니다.");
+		return false;
+	}
+
+	OutDiagnostic.Reset();
+	return true;
 }
 
 // Builder-private 4 Profile complete payload를 fresh Evidence/current owner/fingerprint/Recipe/Target/prospective Resolver에 binding해 mutation0 preview합니다.

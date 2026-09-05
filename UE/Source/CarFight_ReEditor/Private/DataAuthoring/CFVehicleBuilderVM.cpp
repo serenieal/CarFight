@@ -1,9 +1,25 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderVM.cpp
-// Version: v1.27.0
-// Date: 2026-09-02
-// Description: Guided Vehicle Builder Shell ViewModel + CF-FQ-042 Vehicle ID naming/create 구현입니다.
+// Version: v1.39.1
+// Date: 2026-09-05
+// Description: Guided Vehicle Builder Shell + CF-FQ-047 Step 7 durable final commit / Step 8 fresh saved-handoff orchestration입니다.
 // Changelog:
+// - v1.39.1: guarded Undo backend mutation이 UObject state를 실제 변경해도 package dirty flag가 자동 보장되지 않는 경로를 교정. Mutation footprint가 Target/Recipe 변경을 보고하면 해당 exact package를 명시 dirty로 전환한 뒤 durable save를 수행해 clean-but-stale disk false-complete를 차단.
+// - v1.39.0: CF-FQ-047 최종 재감사 교정. guarded Undo 성공 뒤 reverted Target/Recipe exact pair를 Target→Recipe dirty-needed 순서로 durable 저장하고, invalid package/save partial failure는 Undo mutation을 rollback/retry하지 않은 채 current dirty/partial state로 fail-closed하도록 P0-07H mandatory contract를 구현.
+// - v1.38.0: CF-FQ-047 최종감사 교정. P0-07H durable package persistence를 Automation-only override로 직접 검증할 seam을 추가하고 SavePackage success 뒤 clean/persisted 확인 실패를 SaveStateUnconfirmed typed outcome으로 분리.
+// - v1.37.1: VBHAI-P0-07H fresh restart에서 Step 7이 Step 8보다 먼저 평가될 때 valid benchmark JSON을 아직 transient cache로 복원하지 못해 post-driving receipt dirty가 Step 7을 되감던 순환을 교정. exact persistent receipt-only candidate에서만 benchmark state를 선행 fresh 복원합니다.
+// - v1.37.0: VBHAI-P0-07H에서 Final Review semantic PASS와 Target/Recipe durable 저장 완료를 분리하고, ApplyAndPersist/PersistDirtyPair/FinalizeAppliedStateAndPersist/PostDrivingReceiptSavePending typed state, exact pair-save order, fresh approval revalidation, fresh Target identity를 추가.
+// - v1.36.0: VBHAI-P0-07E에서 exact RunId benchmark progress sidecar parser와 persistent USER Driving receipt 기반 exact current Recipe explicit Save preflight/writer를 추가. SavePackage 성공과 post-refresh warning을 분리하고 다른 Asset Save authority는 추가하지 않음.
+// - v1.35.1: VBHAI-P0-07B 재검수 P1 교정. Driving Apply stable preflight가 AuthoringVM cached DefinitionHash 대신 live Target UObject의 fresh immutable Definition Snapshot hash를 비교해 외부 저장 후 Builder 미갱신 false-ready를 차단.
+// - v1.35.0: VBHAI-P0-07B에서 persisted Recipe/Target, AppliedState, cached benchmark identity를 deterministic typed blocker로 평가하는 stable preflight를 추가하고 production PIE Apply도 동일 guard를 사용하도록 통합. Slate enable read에서 benchmark JSON 재파싱 없음.
+// - v1.34.1: 승인된 receipt hash가 current prospective hash와 exact 같으면 Current Target Apply 여부와 무관하게 pending diff read 없이 Step 5 Exact로 닫아 Step 7 Apply Pending 상태의 false Blocked 가능성을 제거.
+// - v1.34.0: Step 5 persistent receipt를 full transaction exactness와 분리된 Physics provenance + structural compatibility로 평가해 Hardpoint/Mount-only drift에서는 Complete를 유지하고 receipt-only refresh도 동일 authority를 재사용.
+// - v1.33.0: CF-FQ-047 post-P0-06 중간검수 P1 교정. successful Recipe/Profile receipt mutation 뒤 post-commit refresh 실패를 non-fatal warning으로 분리해 false-negative success reporting을 제거.
+// - v1.32.0: Physics receipt-only refresh를 current Target hash 불변 + current pending diff가 HardpointSlots/MountProfiles-only인 경우로 좁혀 unrelated Definition drift를 fail-closed합니다.
+// - v1.31.0: CF-FQ-047 P0-06에서 Hardpoint/Mount downstream semantic 변경으로 전체 resolved hash만 drift한 경우 Profile payload 변화 0을 fail-closed 확인한 뒤 기존 CommitBuilderProfiles receipt-only lane을 재사용하는 prepared refresh를 추가.
+// - v1.30.0: CF-FQ-047 VBHAI-P0-02. Resolver-independent Chassis Socket inventory와 canonical existing Standard Socket adoption typed wrapper를 추가.
+// - v1.29.0: CF-FQ-046 VBIUX-P0-03. 승인 완료 Builder-private 4 Profile의 current typed Data를 USER presentation이 읽도록 ReadCurrentPrivateProfilePayload seam을 추가. Profile/Recipe/VehicleData mutation은 0.
+// - v1.28.0: CF-FQ-046 VBIUX-P0-02. Step 3/4 USER presentation과 Layout evaluator가 동일 current AssetSnapshot/Target truth를 공유하도록 ReadCurrentLayoutFacts를 추가하고 evaluator의 배치 수학을 해당 seam으로 단일화.
 // - v1.27.0: P0-07 UAT에서 Step 8 USER Driving PASS를 Target path/hash 기반 persistent Recipe receipt로 승격. same DefinitionHash에서는 benchmark RunId 변경/Editor 재기동에도 PASS 유지, Target drift에서만 stale. Recipe receipt dirty는 Step 8 saved Target gate를 막지 않음.
 // - v1.26.0: P0-07 UAT에서 완료 Wagon이 local Reference token 유실 후 Step 1 Ready → Step 5~8 Locked로 되감기는 회귀를 교정. exact persistent BuilderCommitReceipt EvidenceId/Fingerprint/path를 durable USER acceptance provenance로 재사용하고 Evidence drift는 Stale로 유지.
 // - v1.25.1: VMG-P0-04 코드감사에서 Step 6 전체를 read-only라고 설명하던 stale USER 문구를 교정. 8영역 Gameplay Guidance/Socket 진단만 R0 read-only이고 Standard Mount 패널의 explicit Recipe write는 허용됨을 정확히 표시.
@@ -36,6 +52,17 @@
 // - v1.1.0: Mesh-only 후보의 safe VehicleData+Recipe Preview→explicit commit을 기존 Authoring VM에 그대로 위임.
 // - v1.0.0: 기존 Authoring VM selection을 재사용하고, 아직 provider가 연결되지 않은 Step을 정직하게 Locked/Ready로 표시.
 // Migration:
+// - v1.39.1 Undo mutation footprint가 changed=true인 package는 기존 dirty flag 값과 무관하게 disk와 memory가 달라졌다고 간주해 명시 dirty 처리합니다. 이는 추가 mutation이 아니라 이미 성공한 Undo 결과의 persistence bookkeeping이며 Save All/다른 package 권한을 넓히지 않습니다.
+// - v1.39.0 Step 7 guarded Undo는 USER 승인 뒤 backend Undo가 실제 성공한 경우 reverted Target/Recipe exact pair의 durable persistence까지 같은 operation closure로 수행합니다. Target→Recipe 순서를 유지하며 partial save failure를 자동 rollback/retry하지 않습니다. Save All/StaticMesh/Profile/Evidence/Catalog writer authority는 추가하지 않습니다.
+// - v1.38.0 Automation persistence override는 WITH_DEV_AUTOMATION_TESTS에서만 존재하며 production SavePackage/path/disk authority는 그대로입니다. 정상 저장 실패는 기존 TargetSaveFailed/TargetSavedRecipeSaveFailed를 유지하고 raw save success 뒤 상태 확인 실패만 SaveStateUnconfirmed로 분리합니다.
+// - v1.37.1 fresh-restart 복원은 semantic Diff0 + exact persistent receipt + Target clean/persisted + Recipe dirty/persisted + AppliedState exact인 narrow candidate에서만 existing benchmark result JSON을 재검증합니다. 일반 Step 7 평가, Asset mutation/Save, benchmark 실행 semantics는 변경하지 않습니다.
+// - v1.37.0 Step 7 primary action은 exact current Target VehicleData와 Recipe 두 package만 저장하며 둘 다 필요한 경우 Target→Recipe 순서를 강제합니다. Step 8 USER Driving receipt 단독 dirty는 narrow PostDrivingReceiptSavePending으로 Step 7 Complete를 유지합니다. Save All/StaticMesh/Profile/Evidence/Catalog writer는 추가하지 않습니다.
+// - v1.36.0 progress read는 Saved sidecar를 읽는 Editor-only observation이며 benchmark terminal authority를 바꾸지 않습니다. Recipe Save는 USER click으로 exact current Recipe package 하나의 현재 미저장 변경 전체만 저장하며 Save All/Target/StaticMesh/Catalog 저장을 추가하지 않습니다.
+// - v1.34.1부터 Step 5 Exact는 receipt==current prospective identity만 요구합니다. Current Target 차이는 Step 7 Apply Pending일 수 있으며 structural pending diff read의 선행조건이 아닙니다.
+// - v1.34.0은 Step 5 eligibility read만 변경합니다. 기존 Profile Commit full-exact transaction, receipt-only explicit writer, Save authority와 Step 8 exact DefinitionHash 계약은 그대로 유지합니다.
+// - v1.33.0 post-commit refresh warning은 transient diagnostic이며 기존 Recipe/Profile writer, rollback, Save authority와 함수 시그니처는 변경하지 않습니다.
+// - v1.29.0 ReadCurrentPrivateProfilePayload는 기존 Builder-private Profile binding을 검증하고 Data를 복사해 반환할 뿐 persistent object를 수정하지 않습니다.
+// - v1.28.0 ReadCurrentLayoutFacts는 Step state/Apply를 변경하지 않는 transient read-only projection입니다. Layout evaluator는 기존 exact 비교 규칙을 그대로 재사용합니다.
 // - v1.22.0부터 Explicit New Vehicle 진입은 이전 Authoring selection/cache를 selection level에서 해제합니다. Browser cache 자체는 유지하며 Asset 생성/Save/Apply는 수행하지 않습니다.
 // - v1.21.0부터 Guided 신규 차량의 일반 naming은 Vehicle ID 한 칸을 기본 owner로 사용합니다. invalid 입력은 sanitize하지 않고 fail-closed하며, package/name collision·최종 경로·type 판정은 기존 PreviewVehicleRecords/ValidateNewAssetIdentity authority를 유지합니다.
 // - v1.20.0부터 explicit New Vehicle과 Mesh-only Quick Start는 동일 Guided creation helper를 사용하며 VehicleSpecificRequired를 강제합니다. 생성 Chassis는 Recipe AssetIntent에만 기록하고 VehicleData Apply/Save는 0입니다. 생성 성공과 post-create Builder adoption 실패는 분리합니다.
@@ -44,6 +71,8 @@
 // - Step Complete를 임의 bool로 저장하지 않습니다. 새로고침할 때 current truth에서 다시 파생합니다.
 
 #include "DataAuthoring/CFVehicleBuilderVM.h"
+
+#include "DataAuthoring/CFVehicleBuilderHardpointIntegrity.h"
 
 #include "CFEquipmentPresetData.h"
 #include "CFVehicleData.h"
@@ -57,8 +86,10 @@
 #include "DataAuthoring/CFVehicleRecipeData.h"
 #include "DataAuthoring/CFVehicleRefEvidence.h"
 #include "DataAuthoring/CFVehicleResolver.h"
+#include "DataAuthoring/CFVehicleSnapshotBuilder.h"
 #include "Dom/JsonObject.h"
 #include "Engine/Engine.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "JsonObjectConverter.h"
@@ -66,11 +97,13 @@
 #include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
+#include "Misc/SecureHash.h"
 #include "Modules/ModuleManager.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "ScopedTransaction.h"
 #include "UObject/Package.h"
+#include "UObject/SavePackage.h"
 #include "UObject/UObjectGlobals.h"
 
 namespace
@@ -414,6 +447,7 @@ bool FCFVehicleBuilderVM::SelectVehicle(const FCFVehicleListEntry& Entry, FStrin
 	ClearFinalReviewUndoToken();
 	DrivingBenchmarkResult = FCFVehicleBuilderBenchmarkResult();
 	bHasDrivingBenchmarkResult = false;
+	DrivingBenchmarkValidationState = EDrivingBenchmarkValidationState::Unavailable;
 	DrivingBenchmarkStateError.Reset();
 	bUserTestDrivePreparedThisSession = false;
 	ClearDrivingAcceptanceToken();
@@ -1737,12 +1771,216 @@ bool FCFVehicleBuilderVM::PreparePhysicsProposal(
 	return true;
 }
 
+// Current persistent receipt와 fresh preview/pending diff를 읽어 Step 5 Physics compatibility를 mutation0으로 반환합니다.
+FCFBuilderPhysicsReceiptCompatibilityResult FCFVehicleBuilderVM::EvaluateCurrentPhysicsReceiptCompatibility(
+	const FCFBuilderProfileCommitRequest& ReceiptRequest,
+	const FCFBuilderProfileCommitPreview& ReceiptPreview) const
+{
+	// Fail-closed를 기본값으로 갖는 current Step 5 compatibility 결과입니다.
+	FCFBuilderPhysicsReceiptCompatibilityResult Result;
+
+	// Current persistent Builder receipt owner입니다.
+	UCFVehicleRecipeData* Recipe = GetRecipe();
+	if (!Recipe || !Recipe->BuilderCommitReceipt.IsValid())
+	{
+		Result.Compatibility = ECFBuilderPhysicsReceiptCompatibility::Blocked;
+		Result.Diagnostic = TEXT("현재 물리 설정 승인 기록을 읽을 수 없습니다.");
+		return Result;
+	}
+
+	// Full resolved DefinitionHash를 제외한 Evidence/Claim/Profile/Transmission/Engine/Resolver provenance exactness 진단입니다.
+	FString ProvenanceDiagnostic;
+	// Physics receipt provenance가 current preview와 exact 같은지 여부입니다.
+	const bool bPhysicsProvenanceCurrent = FCFVehicleAuthoringService::IsBuilderPhysicsReceiptProvenanceCurrent(
+		ReceiptRequest,
+		ReceiptPreview,
+		ProvenanceDiagnostic);
+
+	// Receipt가 승인한 resolved Definition identity입니다.
+	const FString& ReceiptResolvedDefinitionHash = Recipe->BuilderCommitReceipt.ProspectiveResolvedDefinitionHash;
+	// Fresh preview가 읽은 current Target Definition identity입니다.
+	const FString& CurrentTargetDefinitionHash = ReceiptPreview.Proposal.ExpectedTargetDefinitionHash;
+	// Fresh preview가 만든 current prospective resolved Definition identity입니다.
+	const FString& CurrentProspectiveResolvedDefinitionHash = ReceiptPreview.ProspectiveResolvedDefinitionHash;
+
+	if (!bPhysicsProvenanceCurrent)
+	{
+		return FCFVehicleBuilderHardpointIntegrity::EvaluatePhysicsReceiptCompatibility(
+			false,
+			ReceiptResolvedDefinitionHash,
+			CurrentTargetDefinitionHash,
+			CurrentProspectiveResolvedDefinitionHash,
+			TArray<FCFVehicleFieldDiff>(),
+			ProvenanceDiagnostic);
+	}
+
+	// 승인된 prospective identity가 그대로 유지되면 Current Target Apply 여부와 무관하게 pending diff read 없이 Exact로 닫습니다.
+	if (ReceiptResolvedDefinitionHash == CurrentProspectiveResolvedDefinitionHash)
+	{
+		return FCFVehicleBuilderHardpointIntegrity::EvaluatePhysicsReceiptCompatibility(
+			true,
+			ReceiptResolvedDefinitionHash,
+			CurrentTargetDefinitionHash,
+			CurrentProspectiveResolvedDefinitionHash,
+			TArray<FCFVehicleFieldDiff>());
+	}
+
+	// Current Target 대비 authoritative pending diff를 읽을 Gameplay Guidance request입니다.
+	FCFBuilderGameplayGuidanceRequest GameplayRequest;
+	// Gameplay request 또는 pending diff read 실패 진단입니다.
+	FString PendingDiffError;
+	if (!BuildGameplayGuidanceRequest(GameplayRequest, PendingDiffError))
+	{
+		Result.Compatibility = ECFBuilderPhysicsReceiptCompatibility::Blocked;
+		Result.Diagnostic = PendingDiffError;
+		return Result;
+	}
+
+	// Shared Resolver authority가 반환하는 current pending Definition diff입니다.
+	FCFVehicleDiffReadResult PendingDiff;
+	if (!FCFVehicleAuthoringService::ReadPendingDiff(GameplayRequest.ReadRequest, PendingDiff))
+	{
+		Result.Compatibility = ECFBuilderPhysicsReceiptCompatibility::Blocked;
+		Result.Diagnostic = PendingDiff.Operation.Message.IsEmpty()
+			? TEXT("현재 차량 변경 내용을 읽을 수 없어 물리 설정 영향 여부를 안전하게 판정할 수 없습니다.")
+			: PendingDiff.Operation.Message;
+		return Result;
+	}
+
+	return FCFVehicleBuilderHardpointIntegrity::EvaluatePhysicsReceiptCompatibility(
+		true,
+		ReceiptResolvedDefinitionHash,
+		CurrentTargetDefinitionHash,
+		CurrentProspectiveResolvedDefinitionHash,
+		PendingDiff.FieldDiff);
+}
+
+// Current accepted Physics payload는 그대로 두고 downstream semantic drift로 stale해진 persistent receipt만 explicit refresh할 mutation0 preview를 준비합니다.
+bool FCFVehicleBuilderVM::PrepareCurrentPhysicsReceiptRefresh(
+	FCFBuilderProfileCommitPreview& OutPreview,
+	FString& OutError)
+{
+	OutPreview = FCFBuilderProfileCommitPreview();
+	ClearPreparedPhysicsProposal();
+
+	if (!RefreshCurrentState(OutError))
+	{
+		return false;
+	}
+	if (!ArePhysicsProposalPrerequisitesComplete(OutError))
+	{
+		return false;
+	}
+
+	// Receipt-only refresh owner인 current Recipe입니다.
+	UCFVehicleRecipeData* Recipe = GetRecipe();
+	if (!Recipe || !Recipe->BuilderCommitReceipt.IsValid())
+	{
+		OutError = TEXT("재검증할 persistent Physics receipt가 없습니다. 일반 AI Physics Proposal 검토 경로를 사용하세요.");
+		return false;
+	}
+
+	// Current private Profile payload + persistent receipt를 재사용하는 exact mutation0 request입니다.
+	FCFBuilderProfileCommitRequest Request;
+	if (!BuildCurrentPhysicsReceiptRequest(Request, OutError))
+	{
+		return false;
+	}
+	Request.CallContext.ClientOperationId = FString::Printf(
+		TEXT("VB-CF047-Physics-Receipt-Refresh-%s"),
+		*FGuid::NewGuid().ToString(EGuidFormats::Digits));
+
+	if (!FCFVehicleAuthoringService::PreviewBuilderProfiles(Request, OutPreview))
+	{
+		OutError = OutPreview.Operation.Message;
+		return false;
+	}
+
+	// 네 private Profile fingerprint가 current/prospective에서 exact 동일한지 확인합니다.
+	const bool bProfilePayloadUnchanged =
+		OutPreview.CurrentFingerprints.VehicleBaseFingerprint == OutPreview.ProspectiveFingerprints.VehicleBaseFingerprint
+		&& OutPreview.CurrentFingerprints.DrivetrainFingerprint == OutPreview.ProspectiveFingerprints.DrivetrainFingerprint
+		&& OutPreview.CurrentFingerprints.HandlingFingerprint == OutPreview.ProspectiveFingerprints.HandlingFingerprint
+		&& OutPreview.CurrentFingerprints.PerformanceFingerprint == OutPreview.ProspectiveFingerprints.PerformanceFingerprint;
+	if (!bProfilePayloadUnchanged)
+	{
+		OutError = TEXT("현재 Physics Profile payload 자체가 달라졌습니다. receipt-only 재검증을 차단하고 일반 AI Physics Proposal 검토가 필요합니다.");
+		return false;
+	}
+
+	// Existing receipt의 full Physics provenance exactness를 generic commit service와 같은 comparator로 확인합니다.
+	FString PhysicsProvenanceDiagnostic;
+	if (!FCFVehicleAuthoringService::IsBuilderPhysicsReceiptProvenanceCurrent(
+		Request,
+		OutPreview,
+		PhysicsProvenanceDiagnostic))
+	{
+		OutError = PhysicsProvenanceDiagnostic;
+		return false;
+	}
+
+	// Persistent structural boundary가 사용할 current Builder receipt입니다.
+	const FCFVehicleBuilderCommitReceipt& Receipt = Recipe->BuilderCommitReceipt;
+
+	// current Target 대비 exact pending FieldDiff를 shared Resolver authority에서 mutation0으로 읽습니다.
+	FCFBuilderGameplayGuidanceRequest GameplayRequest;
+	if (!BuildGameplayGuidanceRequest(GameplayRequest, OutError))
+	{
+		return false;
+	}
+	FCFVehicleDiffReadResult PendingDiff;
+	if (!FCFVehicleAuthoringService::ReadPendingDiff(GameplayRequest.ReadRequest, PendingDiff))
+	{
+		OutError = PendingDiff.Operation.Message.IsEmpty()
+			? TEXT("Physics receipt 재검증용 current pending Definition diff를 읽을 수 없습니다.")
+			: PendingDiff.Operation.Message;
+		return false;
+	}
+
+	// Receipt 생성 당시 resolved state가 current Target과 여전히 exact 같고, Target 대비 현재 변경이 Hardpoint/Mount에만 한정된 경우만 receipt-only rebind를 허용합니다.
+	const FCFBuilderPhysicsStructuralDriftBoundaryResult StructuralBoundary =
+		FCFVehicleBuilderHardpointIntegrity::EvaluatePhysicsStructuralDriftBoundary(
+			Receipt.ProspectiveResolvedDefinitionHash,
+			OutPreview.Proposal.ExpectedTargetDefinitionHash,
+			OutPreview.ProspectiveResolvedDefinitionHash,
+			PendingDiff.FieldDiff);
+	if (StructuralBoundary.Boundary != ECFBuilderPhysicsStructuralDriftBoundary::Equivalent)
+	{
+		OutError = StructuralBoundary.Diagnostic;
+		return false;
+	}
+
+	PreparedPhysicsProposalRequest = Request;
+	PreparedPhysicsProposalPreview = OutPreview;
+	bHasPreparedPhysicsProposal = true;
+	OutError.Reset();
+	return true;
+}
+
+// 이미 성공한 persistent mutation 뒤 refresh 실패를 operation failure로 뒤집지 않고 warning으로 확정합니다.
+bool FCFVehicleBuilderVM::FinalizeSuccessfulMutationRefresh(
+	const TArray<FString>& RefreshFailures,
+	FString& OutError,
+	FString& OutWarning)
+{
+	OutError.Reset();
+	if (RefreshFailures.IsEmpty())
+	{
+		OutWarning.Reset();
+		return true;
+	}
+
+	OutWarning = FString::Join(RefreshFailures, TEXT("\n"));
+	return true;
+}
+
 // 직전 exact Physics Proposal preview에 USER AuthoringWrite approval을 붙여 private 4 Profile + Builder receipt를 commit합니다.
 bool FCFVehicleBuilderVM::ExecutePreparedPhysicsProposal(
 	FCFAuthoringOpResult& OutResult,
 	FString& OutError)
 {
 	OutResult = FCFAuthoringOpResult();
+	LastPostCommitRefreshWarning.Reset();
 	if (!bHasPreparedPhysicsProposal)
 	{
 		OutError = TEXT("먼저 current Physics Proposal을 검토해야 합니다.");
@@ -1776,20 +2014,38 @@ bool FCFVehicleBuilderVM::ExecutePreparedPhysicsProposal(
 	LoadedPhysicsProposalDraft = FCFBuilderPhysicsDraft();
 	bHasLoadedPhysicsProposalDraft = false;
 
-	if (AuthoringViewModel.IsValid() && !AuthoringViewModel->RefreshPreview(OutError))
+	// successful persistent commit 뒤의 non-fatal refresh failures를 모읍니다.
+	TArray<FString> PostCommitRefreshFailures;
+	if (AuthoringViewModel.IsValid())
 	{
-		RebuildStepStates();
-		return false;
+		// successful commit 뒤 fresh preview read 실패 원문입니다.
+		FString PreviewRefreshError;
+		if (!AuthoringViewModel->RefreshPreview(PreviewRefreshError))
+		{
+			PostCommitRefreshFailures.Add(FString::Printf(
+				TEXT("Vehicle preview 다시 읽기: %s"),
+				PreviewRefreshError.IsEmpty() ? TEXT("<원인 정보 없음>") : *PreviewRefreshError));
+		}
 	}
-	if (!RefreshReferenceEvidenceState(OutError))
+	else
 	{
-		RebuildStepStates();
-		return false;
+		PostCommitRefreshFailures.Add(TEXT("Vehicle preview 다시 읽기: Builder Authoring ViewModel을 사용할 수 없습니다."));
+	}
+
+	// successful commit 뒤 기준 정보 refresh 실패 원문입니다.
+	FString ReferenceRefreshError;
+	if (!RefreshReferenceEvidenceState(ReferenceRefreshError))
+	{
+		PostCommitRefreshFailures.Add(FString::Printf(
+			TEXT("기준 정보 다시 읽기: %s"),
+			ReferenceRefreshError.IsEmpty() ? TEXT("<원인 정보 없음>") : *ReferenceRefreshError));
 	}
 
 	RebuildStepStates();
-	OutError.Reset();
-	return true;
+	return FinalizeSuccessfulMutationRefresh(
+		PostCommitRefreshFailures,
+		OutError,
+		LastPostCommitRefreshWarning);
 }
 
 // USER-facing Step 5 Proposal/receipt 상태 요약을 만듭니다.
@@ -2226,6 +2482,62 @@ bool FCFVehicleBuilderVM::ReadPrivateProfileCompleteness(int32& OutMissingCount,
 	return true;
 }
 
+// Current Recipe에 binding된 승인 완료 Builder-private 4 Profile의 typed payload를 read-only로 반환합니다.
+bool FCFVehicleBuilderVM::ReadCurrentPrivateProfilePayload(
+	FCFBuilderPrivateProfilePayload& OutPayload,
+	FString& OutError) const
+{
+	OutPayload = FCFBuilderPrivateProfilePayload();
+
+	// Private Profile owner와 누락 여부를 기존 completeness authority로 먼저 검증합니다.
+	int32 MissingProfileCount = 0;
+	if (!ReadPrivateProfileCompleteness(MissingProfileCount, OutError))
+	{
+		return false;
+	}
+	if (MissingProfileCount > 0)
+	{
+		OutError = FString::Printf(
+			TEXT("승인된 차량 전용 물리 프로필이 아직 %d개 부족합니다."),
+			MissingProfileCount);
+		return false;
+	}
+
+	// 네 private Profile binding owner인 current Recipe입니다.
+	const UCFVehicleRecipeData* Recipe = GetRecipe();
+	if (!Recipe)
+	{
+		OutError = TEXT("차량 전용 물리 프로필을 읽을 current Recipe가 없습니다.");
+		return false;
+	}
+
+	// Current Builder-private VehicleBase Profile입니다.
+	const UCFVehicleBaseProfile* VehicleBaseProfile = Recipe->ProfileBindings.VehicleBaseProfile.LoadSynchronous();
+	// Current Builder-private Drivetrain Profile입니다.
+	const UCFDrivetrainProfile* DrivetrainProfile = Recipe->ProfileBindings.DrivetrainProfile.LoadSynchronous();
+	// Current Builder-private Handling Profile입니다.
+	const UCFHandlingProfile* HandlingProfile = Recipe->ProfileBindings.HandlingProfile.LoadSynchronous();
+	// Current Builder-private Performance Profile입니다.
+	const UCFPerformanceProfile* PerformanceProfile = Recipe->ProfileBindings.PerformanceProfile.LoadSynchronous();
+	if (!VehicleBaseProfile || !DrivetrainProfile || !HandlingProfile || !PerformanceProfile)
+	{
+		OutError = TEXT("차량 전용 물리 프로필 4개 중 하나 이상을 읽을 수 없습니다.");
+		return false;
+	}
+
+	OutPayload.VehicleBaseProfilePath = Recipe->ProfileBindings.VehicleBaseProfile.ToSoftObjectPath();
+	OutPayload.DrivetrainProfilePath = Recipe->ProfileBindings.DrivetrainProfile.ToSoftObjectPath();
+	OutPayload.HandlingProfilePath = Recipe->ProfileBindings.HandlingProfile.ToSoftObjectPath();
+	OutPayload.PerformanceProfilePath = Recipe->ProfileBindings.PerformanceProfile.ToSoftObjectPath();
+	OutPayload.VehicleBaseData = VehicleBaseProfile->Data;
+	OutPayload.DrivetrainData = DrivetrainProfile->Data;
+	OutPayload.HandlingData = HandlingProfile->Data;
+	OutPayload.PerformanceData = PerformanceProfile->Data;
+
+	OutError.Reset();
+	return true;
+}
+
 // Current Evidence의 unresolved Block conflict 또는 proposal-blocking Unknown이 존재하는지 반환합니다.
 bool FCFVehicleBuilderVM::HasBlockingReferenceConflict() const
 {
@@ -2377,12 +2689,14 @@ void FCFVehicleBuilderVM::ClearPreparedPhysicsProposal()
 	bHasPreparedPhysicsProposal = false;
 }
 
-// Selection/refresh에서 직전 Final Review DefinitionApply prepared approval을 폐기합니다.
+// Selection/refresh에서 직전 Final Review DefinitionApply/durable final-commit prepared approval을 폐기합니다.
 void FCFVehicleBuilderVM::ClearPreparedFinalReviewApply()
 {
 	PreparedFinalReviewRequest = FCFBuilderFinalReviewRequest();
 	PreparedFinalReviewResult = FCFBuilderFinalReviewResult();
+	PreparedFinalCommitPreflight = FCFBuilderFinalCommitPreflight();
 	bHasPreparedFinalReviewApply = false;
+	bHasPreparedFinalCommit = false;
 }
 
 // Selection이 바뀌거나 successful Undo 뒤 current lifetime guarded Undo token을 폐기합니다.
@@ -3131,6 +3445,258 @@ bool FCFVehicleBuilderVM::IsCurrentChassisSocketFound(const FName SocketName) co
 	return SocketFact && SocketFact->bFound;
 }
 
+// Step 3/4 USER presentation이 evaluator와 동일 current Socket/Target truth를 읽도록 차량 배치 사실을 반환합니다.
+bool FCFVehicleBuilderVM::ReadCurrentLayoutFacts(
+	FCFVehicleBuilderLayoutFacts& OutFacts,
+	FString& OutError) const
+{
+	OutFacts = FCFVehicleBuilderLayoutFacts();
+
+	// Layout fact source owner인 current managed Recipe입니다.
+	const UCFVehicleRecipeData* Recipe = GetRecipe();
+	if (!Recipe || !AuthoringViewModel.IsValid() || !bHasCurrentResolveReadForStepDiagnostics)
+	{
+		OutError = TEXT("현재 차량 배치 정보를 읽을 수 있는 Recipe/Asset 상태가 없습니다.");
+		return false;
+	}
+
+	// Current Recipe의 persistent Asset intent입니다.
+	const FCFVehicleAssetIntent& AssetIntent = Recipe->AssetIntent;
+	// Current evaluator와 동일한 fresh/diagnostic AssetSnapshot입니다.
+	const FCFVehicleAssetSnapshot& Assets = AuthoringViewModel->GetResolveResult().ResolveRequest.Assets;
+	// FL/FR/RL/RR effective Wheel Socket 이름입니다.
+	const TArray<FName> WheelSocketNames = BuildResolvedWheelSocketNames(AssetIntent);
+	if (WheelSocketNames.Num() != 4)
+	{
+		OutError = TEXT("차량 배치에 필요한 Wheel Socket 역할 4개를 확인할 수 없습니다.");
+		return false;
+	}
+
+	// Current 4-role Wheel Socket fact입니다.
+	TArray<const FCFVehicleSocketSnapshot*> WheelSocketFacts;
+	WheelSocketFacts.Reserve(4);
+	for (const FName WheelSocketName : WheelSocketNames)
+	{
+		// Current Chassis에서 이 역할이 사용하는 exact Socket fact입니다.
+		const FCFVehicleSocketSnapshot* SocketFact = Assets.FindChassisSocket(WheelSocketName);
+		if (!SocketFact || !SocketFact->bFound)
+		{
+			OutError = FString::Printf(TEXT("필수 Wheel Socket을 현재 Chassis에서 찾을 수 없습니다: %s"), *WheelSocketName.ToString());
+			return false;
+		}
+		WheelSocketFacts.Add(SocketFact);
+	}
+
+	// +X 전방 기준 front axle midpoint입니다.
+	const FVector FrontAxleMidpoint = (WheelSocketFacts[0]->RelativeLocation + WheelSocketFacts[1]->RelativeLocation) * 0.5f;
+	// +X 전방 기준 rear axle midpoint입니다.
+	const FVector RearAxleMidpoint = (WheelSocketFacts[2]->RelativeLocation + WheelSocketFacts[3]->RelativeLocation) * 0.5f;
+
+	OutFacts.bAllWheelSocketsFound = true;
+	OutFacts.WheelbaseCm = FMath::Abs(FrontAxleMidpoint.X - RearAxleMidpoint.X);
+	OutFacts.FrontTrackCm = FMath::Abs(WheelSocketFacts[1]->RelativeLocation.Y - WheelSocketFacts[0]->RelativeLocation.Y);
+	OutFacts.RearTrackCm = FMath::Abs(WheelSocketFacts[3]->RelativeLocation.Y - WheelSocketFacts[2]->RelativeLocation.Y);
+
+	// Current persisted capture truth owner입니다.
+	const UCFVehicleData* TargetVehicleData = AuthoringViewModel->GetTargetVehicleData();
+	if (!TargetVehicleData)
+	{
+		OutError = TEXT("현재 Target VehicleData 배치 정보를 읽을 수 없습니다.");
+		return false;
+	}
+
+	OutFacts.bTargetUsesLayoutOverrides = TargetVehicleData->VehicleLayoutConfig.bUseLayoutOverrides;
+	if (OutFacts.bTargetUsesLayoutOverrides)
+	{
+		// Resolver precedence와 무관하게 비교할 current persisted VehicleLayoutConfig입니다.
+		const FCFVehicleLayoutConfig& PersistedLayout = TargetVehicleData->VehicleLayoutConfig;
+		// persisted FL/FR/RL/RR Socket binding입니다.
+		const FName PersistedWheelSocketNames[] =
+		{
+			PersistedLayout.BodyWheelSocketFL,
+			PersistedLayout.BodyWheelSocketFR,
+			PersistedLayout.BodyWheelSocketRL,
+			PersistedLayout.BodyWheelSocketRR
+		};
+		// persisted FL/FR/RL/RR Wheel Anchor pose입니다.
+		const FCFWheelAnchorPose* PersistedWheelAnchorPoses[] =
+		{
+			&PersistedLayout.WheelAnchorFL,
+			&PersistedLayout.WheelAnchorFR,
+			&PersistedLayout.WheelAnchorRL,
+			&PersistedLayout.WheelAnchorRR
+		};
+
+		// persisted/current 비교를 위해 FL/FR/RL/RR role을 순회합니다.
+		for (int32 WheelRoleIndex = 0; WheelRoleIndex < 4; ++WheelRoleIndex)
+		{
+			if (PersistedWheelSocketNames[WheelRoleIndex] != WheelSocketNames[WheelRoleIndex])
+			{
+				++OutFacts.WheelLayoutMismatchCount;
+			}
+			if (!AreVectorsExactlyEqual(PersistedWheelAnchorPoses[WheelRoleIndex]->RelativeLocation, WheelSocketFacts[WheelRoleIndex]->RelativeLocation)
+				|| !AreRotatorsExactlyEqual(PersistedWheelAnchorPoses[WheelRoleIndex]->RelativeRotation, WheelSocketFacts[WheelRoleIndex]->RelativeRotation)
+				|| !AreVectorsExactlyEqual(PersistedWheelAnchorPoses[WheelRoleIndex]->RelativeScale, WheelSocketFacts[WheelRoleIndex]->RelativeScale))
+			{
+				++OutFacts.WheelLayoutMismatchCount;
+			}
+		}
+
+		for (const FCFHardpointIntent& HardpointIntent : Recipe->HardpointIntents)
+		{
+			if (HardpointIntent.LocationSlotId.IsNone() || HardpointIntent.SocketName.IsNone())
+			{
+				continue;
+			}
+
+			// Current AssetSnapshot에서 이 Hardpoint intent가 요청한 Socket fact입니다.
+			const FCFVehicleSocketSnapshot* HardpointSocketFact = Assets.FindChassisSocket(HardpointIntent.SocketName);
+			// Current Target에서 같은 stable LocationSlotId로 materialized된 persisted Hardpoint slot입니다.
+			const FCFVehicleHardpointSlot* PersistedHardpoint = TargetVehicleData->HardpointSlots.FindByPredicate([&HardpointIntent](const FCFVehicleHardpointSlot& HardpointSlot)
+			{
+				return HardpointSlot.LocationSlotId == HardpointIntent.LocationSlotId;
+			});
+			if (!HardpointSocketFact || !HardpointSocketFact->bFound || !PersistedHardpoint
+				|| !AreVectorsExactlyEqual(PersistedHardpoint->LocalLocation, HardpointSocketFact->RelativeLocation)
+				|| !AreRotatorsExactlyEqual(PersistedHardpoint->LocalRotation, HardpointSocketFact->RelativeRotation))
+			{
+				++OutFacts.HardpointLayoutWarningCount;
+			}
+		}
+	}
+
+	OutFacts.bAvailable = true;
+	OutError.Reset();
+	return true;
+}
+
+// Resolver AssetSnapshot과 분리된 Editor-only current Chassis Socket inventory를 read-only로 반환합니다.
+bool FCFVehicleBuilderVM::ReadCurrentChassisSocketInventory(
+	FCFBuilderChassisSocketInventory& OutInventory,
+	FString& OutError) const
+{
+	OutInventory = FCFBuilderChassisSocketInventory();
+	if (!AuthoringViewModel.IsValid() || !AuthoringViewModel->HasRecipe())
+	{
+		OutError = TEXT("Hardpoint Socket inventory를 읽을 current managed Recipe가 없습니다.");
+		return false;
+	}
+
+	const FSoftObjectPath ChassisMeshPath = GetCurrentChassisMeshPath();
+	if (!ChassisMeshPath.IsValid())
+	{
+		OutError = TEXT("Hardpoint Socket inventory를 읽을 current Chassis StaticMesh path가 없습니다.");
+		return false;
+	}
+
+	UObject* MeshObject = ChassisMeshPath.ResolveObject();
+	if (!MeshObject)
+	{
+		MeshObject = ChassisMeshPath.TryLoad();
+	}
+	const UStaticMesh* ChassisMesh = Cast<UStaticMesh>(MeshObject);
+	if (!ChassisMesh)
+	{
+		OutError = FString::Printf(
+			TEXT("Hardpoint Socket inventory의 Chassis StaticMesh를 읽을 수 없습니다: %s"),
+			*ChassisMeshPath.ToString());
+		return false;
+	}
+
+	return FCFVehicleBuilderHardpointIntegrity::ReadChassisSocketInventory(
+		ChassisMesh,
+		GetRecipe(),
+		AuthoringViewModel->GetTargetVehicleData(),
+		GetStandardHardpointCategories(),
+		OutInventory,
+		OutError);
+}
+
+// UseHardpoints 상태에서 canonical existing HP_* Socket 하나를 exact parsed stable identity로 Recipe HardpointIntent에 채택합니다.
+bool FCFVehicleBuilderVM::AdoptExistingStandardHardpointSocket(
+	const FName SocketName,
+	FCFHardpointIntent& OutIntent,
+	FCFAuthoringOpResult& OutResult,
+	FString& OutError)
+{
+	OutIntent = FCFHardpointIntent();
+	OutResult = FCFAuthoringOpResult();
+	LastPostCommitRefreshWarning.Reset();
+
+	if (!AuthoringViewModel.IsValid() || !AuthoringViewModel->HasRecipe() || !GetRecipe())
+	{
+		OutError = TEXT("existing Hardpoint Socket을 채택할 current managed Recipe가 없습니다.");
+		return false;
+	}
+	if (GetHardpointPlanMode() != ECFBuilderHardpointPlanMode::UseHardpoints)
+	{
+		OutResult.Status = ECFAuthoringOpStatus::Blocked;
+		OutResult.ErrorCode = ECFAuthoringErrorCode::InvalidSemanticInput;
+		OutResult.Message = TEXT("existing Socket 채택 전에 Hardpoint Plan을 '장착 위치 사용'으로 명시해야 합니다.");
+		OutError = OutResult.Message;
+		return false;
+	}
+	if (SocketName.IsNone())
+	{
+		OutResult.Status = ECFAuthoringOpStatus::Blocked;
+		OutResult.ErrorCode = ECFAuthoringErrorCode::InvalidSemanticInput;
+		OutResult.Message = TEXT("채택할 existing SocketName이 None입니다.");
+		OutError = OutResult.Message;
+		return false;
+	}
+
+	FCFBuilderChassisSocketInventory Inventory;
+	if (!ReadCurrentChassisSocketInventory(Inventory, OutError))
+	{
+		OutResult.Status = ECFAuthoringOpStatus::Blocked;
+		OutResult.ErrorCode = ECFAuthoringErrorCode::MissingRequiredSource;
+		OutResult.Message = OutError;
+		return false;
+	}
+
+	const FCFBuilderChassisSocketInventoryEntry* Candidate = Inventory.FindBySocketName(SocketName);
+	if (!Candidate || Candidate->Classification != ECFBuilderHardpointSocketClassification::StandardAdoptable)
+	{
+		OutResult.Status = ECFAuthoringOpStatus::Blocked;
+		OutResult.ErrorCode = ECFAuthoringErrorCode::DependencyConflict;
+		OutResult.Message = Candidate
+			? FString::Printf(TEXT("이 Socket은 현재 Standard adoption 대상이 아닙니다: %s"), *Candidate->Diagnostic)
+			: FString::Printf(TEXT("current Chassis에서 Socket을 찾을 수 없습니다: %s"), *SocketName.ToString());
+		OutError = OutResult.Message;
+		return false;
+	}
+
+	FCFHardpointIntent NewIntent;
+	NewIntent.LocationSlotId = Candidate->ParsedLocationSlotId;
+	NewIntent.LocationCategory = Candidate->ParsedLocationCategory;
+	NewIntent.SocketName = Candidate->SocketName;
+
+	if (!AuthoringViewModel->UpsertHardpointIntent(NewIntent, OutResult))
+	{
+		OutError = OutResult.Message;
+		RebuildStepStates();
+		return false;
+	}
+
+	OutIntent = NewIntent;
+
+	// successful Recipe mutation 뒤 current state refresh 실패를 non-fatal warning으로 수집합니다.
+	TArray<FString> PostCommitRefreshFailures;
+	// successful Recipe mutation 뒤 current state refresh 실패 원문입니다.
+	FString RefreshError;
+	if (!RefreshCurrentState(RefreshError))
+	{
+		PostCommitRefreshFailures.Add(FString::Printf(
+			TEXT("현재 Builder 상태 다시 읽기: %s"),
+			RefreshError.IsEmpty() ? TEXT("<원인 정보 없음>") : *RefreshError));
+	}
+
+	return FinalizeSuccessfulMutationRefresh(
+		PostCommitRefreshFailures,
+		OutError,
+		LastPostCommitRefreshWarning);
+}
+
 // 현재 선택이 아직 VehicleData가 없는 Mesh-only 후보인지 반환합니다.
 bool FCFVehicleBuilderVM::IsMeshOnlyCandidate() const
 {
@@ -3787,118 +4353,36 @@ void FCFVehicleBuilderVM::EvaluateLayoutCaptureStep()
 		return;
 	}
 
-	// Current Recipe의 persistent Asset intent입니다.
-	const FCFVehicleAssetIntent& AssetIntent = Recipe->AssetIntent;
-	// Current fresh asset/socket truth입니다.
-	const FCFVehicleAssetSnapshot& Assets = AuthoringViewModel->GetResolveResult().ResolveRequest.Assets;
-	// FL/FR/RL/RR effective socket names입니다.
-	const TArray<FName> WheelSocketNames = BuildResolvedWheelSocketNames(AssetIntent);
-	// Current fresh 4-role socket facts입니다.
-	TArray<const FCFVehicleSocketSnapshot*> WheelSocketFacts;
-	WheelSocketFacts.Reserve(4);
-	// 네 Wheel role의 effective Socket 이름을 순회합니다.
-	for (const FName WheelSocketName : WheelSocketNames)
-	{
-		WheelSocketFacts.Add(Assets.FindChassisSocket(WheelSocketName));
-	}
-	// current 4-role Socket fact가 모두 실제 존재하는지 순회 확인합니다.
-	for (const FCFVehicleSocketSnapshot* SocketFact : WheelSocketFacts)
-	{
-		if (!SocketFact || !SocketFact->bFound)
-		{
-			SetStep(ECFVehicleBuilderStepId::LayoutCapture, ECFVehicleBuilderStepState::Blocked,
-				TEXT("SocketGuide 이후 fresh snapshot에서 Wheel Socket fact가 사라졌습니다."),
-				TEXT("현재 상태를 다시 확인하고 Wheel Socket 4/4를 복구하세요."),
-				true);
-			return;
-		}
-	}
-
-	// Current persisted capture truth owner입니다.
-	const UCFVehicleData* TargetVehicleData = AuthoringViewModel->GetTargetVehicleData();
-	if (!TargetVehicleData)
+	// Step 3/4 USER presentation과 같은 current Socket/Target 배치 사실입니다.
+	FCFVehicleBuilderLayoutFacts LayoutFacts;
+	// Layout fact read diagnostic입니다.
+	FString LayoutFactsError;
+	if (!ReadCurrentLayoutFacts(LayoutFacts, LayoutFactsError))
 	{
 		SetStep(ECFVehicleBuilderStepId::LayoutCapture, ECFVehicleBuilderStepState::Blocked,
-			TEXT("현재 Target VehicleData readback을 찾을 수 없습니다."),
-			TEXT("대상을 다시 선택해 Target/Recipe binding을 fresh read하세요."),
+			LayoutFactsError,
+			TEXT("현재 상태를 다시 확인하고 Wheel Socket 4개와 Target VehicleData를 확인하세요."),
 			true);
 		return;
 	}
 
-	if (!TargetVehicleData->VehicleLayoutConfig.bUseLayoutOverrides)
+	// Raw backend diagnostic에만 보존할 current Chassis layout fingerprint입니다.
+	const FString& ChassisLayoutFingerprint = AuthoringViewModel->GetResolveResult().ResolveRequest.Assets.ChassisLayoutFingerprint;
+	if (!LayoutFacts.bTargetUsesLayoutOverrides)
 	{
 		SetStep(ECFVehicleBuilderStepId::LayoutCapture, ECFVehicleBuilderStepState::Ready,
-			FString::Printf(TEXT("Layout Capture 준비 완료입니다. current ChassisLayoutFingerprint=%s. VehicleLayoutConfig.bUseLayoutOverrides=false이므로 아직 Target에는 NotCaptured 상태이며 실제 Layout Apply는 Step 7에서 수행합니다."), *Assets.ChassisLayoutFingerprint),
+			FString::Printf(TEXT("Layout Capture 준비 완료입니다. current ChassisLayoutFingerprint=%s. VehicleLayoutConfig.bUseLayoutOverrides=false이므로 아직 Target에는 NotCaptured 상태이며 실제 Layout Apply는 Step 7에서 수행합니다."), *ChassisLayoutFingerprint),
 			TEXT("현재 Socket truth는 Step 5 이후 proposal에 사용할 수 있습니다. 이 Ready/NotCaptured 상태에서는 다음 단계 진행을 허용하며, 실제 Target Layout capture/apply는 Step 7 Final Review에서 explicit USER 승인으로 수행합니다."),
 			true);
 		return;
 	}
 
-	// Resolver precedence와 무관하게 비교할 current persisted VehicleLayoutConfig입니다.
-	const FCFVehicleLayoutConfig& PersistedLayout = TargetVehicleData->VehicleLayoutConfig;
-	// persisted FL/FR/RL/RR Socket binding입니다.
-	const FName PersistedWheelSocketNames[] =
-	{
-		PersistedLayout.BodyWheelSocketFL,
-		PersistedLayout.BodyWheelSocketFR,
-		PersistedLayout.BodyWheelSocketRL,
-		PersistedLayout.BodyWheelSocketRR
-	};
-	// persisted FL/FR/RL/RR Wheel Anchor pose입니다.
-	const FCFWheelAnchorPose* PersistedWheelAnchorPoses[] =
-	{
-		&PersistedLayout.WheelAnchorFL,
-		&PersistedLayout.WheelAnchorFR,
-		&PersistedLayout.WheelAnchorRL,
-		&PersistedLayout.WheelAnchorRR
-	};
-	// Current AssetSnapshot과 persisted Target의 direct exact mismatch 수입니다.
-	int32 WheelLayoutMismatchCount = 0;
-	// persisted/current 비교를 위해 FL/FR/RL/RR role을 순회하는 index입니다.
-	for (int32 WheelRoleIndex = 0; WheelRoleIndex < 4; ++WheelRoleIndex)
-	{
-		if (PersistedWheelSocketNames[WheelRoleIndex] != WheelSocketNames[WheelRoleIndex])
-		{
-			++WheelLayoutMismatchCount;
-		}
-		if (!AreVectorsExactlyEqual(PersistedWheelAnchorPoses[WheelRoleIndex]->RelativeLocation, WheelSocketFacts[WheelRoleIndex]->RelativeLocation)
-			|| !AreRotatorsExactlyEqual(PersistedWheelAnchorPoses[WheelRoleIndex]->RelativeRotation, WheelSocketFacts[WheelRoleIndex]->RelativeRotation)
-			|| !AreVectorsExactlyEqual(PersistedWheelAnchorPoses[WheelRoleIndex]->RelativeScale, WheelSocketFacts[WheelRoleIndex]->RelativeScale))
-		{
-			++WheelLayoutMismatchCount;
-		}
-	}
-
-	// Socket-bound Hardpoint persisted capture mismatch는 P0-03 Warning으로만 집계합니다.
-	int32 HardpointLayoutWarningCount = 0;
-	for (const FCFHardpointIntent& HardpointIntent : Recipe->HardpointIntents)
-	{
-		if (HardpointIntent.LocationSlotId.IsNone() || HardpointIntent.SocketName.IsNone())
-		{
-			continue;
-		}
-
-		// Current AssetSnapshot에서 이 Hardpoint intent가 요청한 Socket fact입니다.
-		const FCFVehicleSocketSnapshot* HardpointSocketFact = Assets.FindChassisSocket(HardpointIntent.SocketName);
-		// Current Target에서 같은 stable LocationSlotId로 materialized된 persisted Hardpoint slot입니다.
-		const FCFVehicleHardpointSlot* PersistedHardpoint = TargetVehicleData->HardpointSlots.FindByPredicate([&HardpointIntent](const FCFVehicleHardpointSlot& HardpointSlot)
-		{
-			return HardpointSlot.LocationSlotId == HardpointIntent.LocationSlotId;
-		});
-		if (!HardpointSocketFact || !HardpointSocketFact->bFound || !PersistedHardpoint
-			|| !AreVectorsExactlyEqual(PersistedHardpoint->LocalLocation, HardpointSocketFact->RelativeLocation)
-			|| !AreRotatorsExactlyEqual(PersistedHardpoint->LocalRotation, HardpointSocketFact->RelativeRotation))
-		{
-			++HardpointLayoutWarningCount;
-		}
-	}
-
-	if (WheelLayoutMismatchCount == 0)
+	if (LayoutFacts.WheelLayoutMismatchCount == 0)
 	{
 		SetStep(ECFVehicleBuilderStepId::LayoutCapture, ECFVehicleBuilderStepState::Complete,
 			FString::Printf(
 				TEXT("Persisted VehicleLayoutConfig가 current AssetSnapshot의 Wheel Socket identity/location/rotation/scale과 direct exact 일치합니다. ChassisLayoutFingerprint=%s. Hardpoint layout warning=%d."),
-				*Assets.ChassisLayoutFingerprint, HardpointLayoutWarningCount),
+				*ChassisLayoutFingerprint, LayoutFacts.HardpointLayoutWarningCount),
 			TEXT("Wheel Layout은 Current입니다. Hardpoint mismatch가 있더라도 P0-03에서는 Warning이며 requiredness는 Gameplay Setup이 결정합니다."),
 			true);
 	}
@@ -3907,7 +4391,7 @@ void FCFVehicleBuilderVM::EvaluateLayoutCaptureStep()
 		SetStep(ECFVehicleBuilderStepId::LayoutCapture, ECFVehicleBuilderStepState::Stale,
 			FString::Printf(
 				TEXT("기존 persisted Layout과 current Socket truth가 다릅니다. Wheel layout mismatch=%d, Hardpoint layout warning=%d, ChassisLayoutFingerprint=%s."),
-				WheelLayoutMismatchCount, HardpointLayoutWarningCount, *Assets.ChassisLayoutFingerprint),
+				LayoutFacts.WheelLayoutMismatchCount, LayoutFacts.HardpointLayoutWarningCount, *ChassisLayoutFingerprint),
 			TEXT("현재 Chassis Socket 위치/이름/Scale을 검토한 뒤 reviewed Capture/Apply 경로로 다시 반영하세요. 이 evaluator는 자동 Capture·Socket 이동·Save를 하지 않습니다."),
 			true);
 	}
@@ -4046,22 +4530,41 @@ void FCFVehicleBuilderVM::EvaluatePhysicsProposalStep()
 			return;
 		}
 
-		if (ReceiptPreview.Operation.Status == ECFAuthoringOpStatus::NoChange)
+		// Generic Profile Commit transaction과 분리된 Step 5 Physics eligibility 판정입니다.
+		const FCFBuilderPhysicsReceiptCompatibilityResult PhysicsCompatibility =
+			EvaluateCurrentPhysicsReceiptCompatibility(ReceiptRequest, ReceiptPreview);
+
+		switch (PhysicsCompatibility.Compatibility)
 		{
+		case ECFBuilderPhysicsReceiptCompatibility::Exact:
 			SetStep(ECFVehicleBuilderStepId::PhysicsProposal, ECFVehicleBuilderStepState::Complete,
-				FString::Printf(
-					TEXT("Persistent Builder receipt가 current Evidence/Claim set/private 4 Profile/Resolver를 exact 증명합니다. EvidenceFingerprint=%s."),
-					*ReceiptPreview.EvidenceFingerprint),
-				TEXT("Physics Proposal은 Current입니다. 다음 Gameplay Setup으로 진행할 수 있습니다."),
+				TEXT("기존 물리 설정과 현재 차량의 물리 관련 정보가 정확히 일치합니다."),
+				TEXT("물리 설정은 현재 상태입니다. 다음 Gameplay Setup으로 진행할 수 있습니다."),
+				true);
+			return;
+
+		case ECFBuilderPhysicsReceiptCompatibility::PhysicsEquivalentStructuralDrift:
+			SetStep(ECFVehicleBuilderStepId::PhysicsProposal, ECFVehicleBuilderStepState::Complete,
+				TEXT("장착 구조만 변경되어 기존 물리 설정은 계속 유효합니다."),
+				TEXT("물리 설정을 다시 작성할 필요가 없습니다. 다음 Gameplay Setup으로 진행하세요."),
+				true);
+			return;
+
+		case ECFBuilderPhysicsReceiptCompatibility::PhysicsStale:
+			SetStep(ECFVehicleBuilderStepId::PhysicsProposal, ECFVehicleBuilderStepState::Stale,
+				PhysicsCompatibility.Diagnostic,
+				TEXT("물리 성능에 영향을 줄 수 있는 기준 정보나 차량 설정이 변경됐습니다. 현재 상태를 기준으로 AI 물리 설정을 다시 검토하세요."),
+				true);
+			return;
+
+		case ECFBuilderPhysicsReceiptCompatibility::Blocked:
+		default:
+			SetStep(ECFVehicleBuilderStepId::PhysicsProposal, ECFVehicleBuilderStepState::Blocked,
+				PhysicsCompatibility.Diagnostic,
+				TEXT("현재 차량 변경 내용을 다시 확인한 뒤 재시도하세요. 안전하게 판정할 수 없는 상태에서는 기존 물리 설정을 자동으로 인정하지 않습니다."),
 				true);
 			return;
 		}
-
-		SetStep(ECFVehicleBuilderStepId::PhysicsProposal, ECFVehicleBuilderStepState::Stale,
-			ReceiptPreview.Operation.Message,
-			TEXT("Current private Profile payload와 receipt가 동일한 accepted proposal을 증명하지 않습니다. fresh AI Physics Proposal을 다시 review/commit하세요."),
-			true);
-		return;
 	}
 
 	SetStep(ECFVehicleBuilderStepId::PhysicsProposal, ECFVehicleBuilderStepState::Ready,
@@ -4347,7 +4850,757 @@ bool FCFVehicleBuilderVM::BuildFinalReviewRequest(
 	return true;
 }
 
-// USER-facing Step 7 validation/drift/provenance/diff/apply readiness 요약을 만듭니다.
+// Fresh Final Review identity + live Target snapshot에서 exact Recipe/Target durable handoff facts를 읽습니다.
+FCFBuilderSavedHandoffPreflight FCFVehicleBuilderVM::ReadSavedHandoffPreflight(
+	const FCFBuilderFinalReviewResult& FreshReview) const
+{
+	// Fail-closed 기본 Saved Handoff 결과입니다.
+	FCFBuilderSavedHandoffPreflight Result;
+
+	// Current managed Recipe입니다.
+	UCFVehicleRecipeData* Recipe = GetRecipe();
+	if (!Recipe || IsMeshOnlyCandidate() || !Recipe->RecipeId.IsValid())
+	{
+		Result.Blocker = ECFBuilderSavedHandoffBlocker::RecipeUnavailable;
+		Result.Diagnostic = TEXT("Step 7 durable handoff에 사용할 valid managed Recipe가 없습니다.");
+		return Result;
+	}
+
+	Result.RecipePath = FSoftObjectPath(Recipe);
+	if (!HasSelection() || GetSelectedEntry().RecipePath != Result.RecipePath)
+	{
+		Result.Blocker = ECFBuilderSavedHandoffBlocker::SelectionMismatch;
+		Result.Diagnostic = TEXT("Builder current selection의 Recipe identity가 loaded Recipe와 일치하지 않습니다.");
+		return Result;
+	}
+
+	// Current Recipe가 binding한 exact persistent Target VehicleData입니다.
+	UCFVehicleData* TargetVehicleData = Recipe->TargetVehicleData.Get();
+	if (!TargetVehicleData)
+	{
+		TargetVehicleData = Recipe->TargetVehicleData.LoadSynchronous();
+	}
+	if (!TargetVehicleData)
+	{
+		Result.Blocker = ECFBuilderSavedHandoffBlocker::TargetUnavailable;
+		Result.Diagnostic = TEXT("Step 7 durable handoff의 Target VehicleData를 load할 수 없습니다.");
+		return Result;
+	}
+
+	Result.TargetPath = FSoftObjectPath(TargetVehicleData);
+	if (FreshReview.PreparedApplyRequest.Recipe != Recipe
+		|| FreshReview.PreparedApplyRequest.TargetVehicleData != TargetVehicleData)
+	{
+		Result.Blocker = ECFBuilderSavedHandoffBlocker::SelectionMismatch;
+		Result.Diagnostic = TEXT("Fresh Final Review의 Recipe/Target identity가 current Builder selection과 일치하지 않습니다.");
+		return Result;
+	}
+
+	// Current Recipe package입니다.
+	UPackage* RecipePackage = Recipe->GetOutermost();
+	// Current Target package입니다.
+	UPackage* TargetPackage = TargetVehicleData->GetOutermost();
+	// Current Recipe package long name입니다.
+	const FString RecipePackageName = RecipePackage ? RecipePackage->GetName() : FString();
+	// Current Target package long name입니다.
+	const FString TargetPackageName = TargetPackage ? TargetPackage->GetName() : FString();
+	if (!RecipePackage
+		|| !TargetPackage
+		|| RecipePackage == GetTransientPackage()
+		|| TargetPackage == GetTransientPackage()
+		|| !RecipePackageName.StartsWith(TEXT("/Game/"), ESearchCase::CaseSensitive)
+		|| !TargetPackageName.StartsWith(TEXT("/Game/"), ESearchCase::CaseSensitive)
+		|| !FPackageName::IsValidLongPackageName(RecipePackageName)
+		|| !FPackageName::IsValidLongPackageName(TargetPackageName))
+	{
+		Result.Blocker = ECFBuilderSavedHandoffBlocker::PackageInvalid;
+		Result.Diagnostic = FString::Printf(
+			TEXT("Step 7 durable handoff package identity가 안전한 /Game package가 아닙니다. Recipe=%s Target=%s"),
+			*RecipePackageName,
+			*TargetPackageName);
+		return Result;
+	}
+
+	// Live Target UObject에서 다시 계산한 fresh exact object path입니다.
+	FSoftObjectPath FreshTargetPath;
+	// Live Target UObject에서 다시 계산한 fresh DefinitionHash입니다.
+	FString FreshTargetDefinitionHash;
+	// Fresh Target snapshot 실패 진단입니다.
+	FString TargetIdentityError;
+	if (!BuildFreshDrivingTargetIdentity(*TargetVehicleData, FreshTargetPath, FreshTargetDefinitionHash, TargetIdentityError)
+		|| FreshTargetPath != Result.TargetPath)
+	{
+		Result.Blocker = ECFBuilderSavedHandoffBlocker::StateReadFailed;
+		Result.Diagnostic = TargetIdentityError.IsEmpty()
+			? TEXT("Live Target의 fresh path/hash identity를 읽지 못했습니다.")
+			: TargetIdentityError;
+		return Result;
+	}
+
+	Result.RecipeFingerprint = FreshReview.Operation.CurrentRecipeFingerprint;
+	Result.SourceSignature = FreshReview.Operation.CurrentSourceSignature;
+	Result.TargetDefinitionHash = FreshTargetDefinitionHash;
+	Result.ResolvedDefinitionHash = FreshReview.Operation.CurrentResolvedDefinitionHash;
+	Result.ResolverContractRevision = FreshReview.Operation.ResolverContractRevision;
+	if (Result.RecipeFingerprint.IsEmpty()
+		|| Result.SourceSignature.IsEmpty()
+		|| Result.TargetDefinitionHash.IsEmpty()
+		|| Result.ResolvedDefinitionHash.IsEmpty())
+	{
+		Result.Blocker = ECFBuilderSavedHandoffBlocker::StateReadFailed;
+		Result.Diagnostic = TEXT("Fresh Final Review가 durable handoff에 필요한 Recipe/Source/Target/Resolved identity를 모두 제공하지 않았습니다.");
+		return Result;
+	}
+
+	if (FreshReview.Operation.CurrentTargetDefinitionHash != Result.TargetDefinitionHash)
+	{
+		Result.Blocker = ECFBuilderSavedHandoffBlocker::TargetDefinitionStale;
+		Result.Diagnostic = FString::Printf(
+			TEXT("Fresh Final Review가 본 Target hash와 live Target snapshot hash가 다릅니다. Review=%s Live=%s"),
+			*FreshReview.Operation.CurrentTargetDefinitionHash,
+			*Result.TargetDefinitionHash);
+		return Result;
+	}
+
+	Result.bRecipeDirty = RecipePackage->IsDirty();
+	Result.bTargetDirty = TargetPackage->IsDirty();
+	Result.bRecipePersisted = DoesBuilderPackageExist(RecipePackageName);
+	Result.bTargetPersisted = DoesBuilderPackageExist(TargetPackageName);
+
+	// Current Recipe가 보존하는 last applied provenance입니다.
+	const FCFVehicleAppliedState& AppliedState = Recipe->AppliedState;
+	Result.bAppliedStateCurrent = AppliedState.AppliedRecipeFingerprint == Result.RecipeFingerprint
+		&& AppliedState.AppliedSourceSignature == Result.SourceSignature
+		&& AppliedState.AppliedDefinitionHash == Result.ResolvedDefinitionHash
+		&& AppliedState.ResolverContractRevision == Result.ResolverContractRevision;
+
+	Result.Blocker = ECFBuilderSavedHandoffBlocker::None;
+	Result.Diagnostic = FString::Printf(
+		TEXT("Saved Handoff current. RecipeDirty=%s TargetDirty=%s RecipeDisk=%s TargetDisk=%s AppliedState=%s TargetEqualsResolved=%s"),
+		Result.bRecipeDirty ? TEXT("예") : TEXT("아니오"),
+		Result.bTargetDirty ? TEXT("예") : TEXT("아니오"),
+		Result.bRecipePersisted ? TEXT("예") : TEXT("아니오"),
+		Result.bTargetPersisted ? TEXT("예") : TEXT("아니오"),
+		Result.bAppliedStateCurrent ? TEXT("CURRENT") : TEXT("STALE"),
+		Result.TargetDefinitionHash == Result.ResolvedDefinitionHash ? TEXT("예") : TEXT("아니오"));
+	return Result;
+}
+
+// Benchmark cache와 무관하게 persistent USER Driving receipt-only downstream dirty 후보가 exact인지 먼저 판정합니다.
+bool FCFVehicleBuilderVM::IsPostDrivingReceiptCandidate(
+	const FCFBuilderFinalReviewResult& FreshReview,
+	const FCFBuilderSavedHandoffPreflight& SavedHandoff) const
+{
+	if (!FreshReview.bCanCompleteFinalReview
+		|| SavedHandoff.Blocker != ECFBuilderSavedHandoffBlocker::None
+		|| SavedHandoff.TargetDefinitionHash != SavedHandoff.ResolvedDefinitionHash
+		|| SavedHandoff.bTargetDirty
+		|| !SavedHandoff.bTargetPersisted
+		|| !SavedHandoff.bRecipePersisted
+		|| !SavedHandoff.bRecipeDirty
+		|| !SavedHandoff.bAppliedStateCurrent)
+	{
+		return false;
+	}
+
+	// Narrow downstream exception authority인 persistent USER Driving receipt입니다.
+	const UCFVehicleRecipeData* Recipe = GetRecipe();
+	if (!Recipe)
+	{
+		return false;
+	}
+
+	// Legacy host-local token은 이 candidate의 authority가 될 수 없습니다.
+	const FCFVehicleBuilderDrivingAcceptanceReceipt& Receipt = Recipe->BuilderDrivingAcceptanceReceipt;
+	return Receipt.IsValid()
+		&& Receipt.TargetVehicleDataPath == SavedHandoff.TargetPath
+		&& Receipt.TargetDefinitionHash == SavedHandoff.TargetDefinitionHash;
+}
+
+// Step 8 USER Driving receipt write만 남은 downstream Recipe dirty가 Step 7을 retroactive incomplete로 만들지 않는지 판정합니다.
+bool FCFVehicleBuilderVM::IsPostDrivingReceiptSavePending(
+	const FCFBuilderFinalReviewResult& FreshReview,
+	const FCFBuilderSavedHandoffPreflight& SavedHandoff) const
+{
+	if (!IsPostDrivingReceiptCandidate(FreshReview, SavedHandoff)
+		|| !bHasDrivingBenchmarkResult
+		|| DrivingBenchmarkValidationState != EDrivingBenchmarkValidationState::Current
+		|| !DrivingBenchmarkResult.bHasMetric
+		|| DrivingBenchmarkResult.Metric.VehicleDataPath != SavedHandoff.TargetPath.ToString()
+		|| DrivingBenchmarkResult.ExpectedTargetDefinitionHash != SavedHandoff.TargetDefinitionHash)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+// USER dialog approval을 exact action/Recipe/Target/fresh provenance/package state에 binding한 scope hash를 생성합니다.
+FString FCFVehicleBuilderVM::BuildFinalCommitApprovalScope(const FCFBuilderFinalCommitPreflight& Preflight)
+{
+	if (!Preflight.CanExecute())
+	{
+		return FString();
+	}
+
+	// Approval scope의 deterministic canonical payload입니다.
+	const FString Payload = FString::Printf(
+		TEXT("Action=%d|Recipe=%s|Target=%s|RecipeFingerprint=%s|SourceSignature=%s|TargetHash=%s|ResolvedHash=%s|ResolverRevision=%d|RecipeDirty=%d|TargetDirty=%d|RecipePersisted=%d|TargetPersisted=%d|AppliedStateCurrent=%d"),
+		static_cast<int32>(Preflight.Action),
+		*Preflight.SavedHandoff.RecipePath.ToString(),
+		*Preflight.SavedHandoff.TargetPath.ToString(),
+		*Preflight.SavedHandoff.RecipeFingerprint,
+		*Preflight.SavedHandoff.SourceSignature,
+		*Preflight.SavedHandoff.TargetDefinitionHash,
+		*Preflight.SavedHandoff.ResolvedDefinitionHash,
+		Preflight.SavedHandoff.ResolverContractRevision,
+		Preflight.SavedHandoff.bRecipeDirty ? 1 : 0,
+		Preflight.SavedHandoff.bTargetDirty ? 1 : 0,
+		Preflight.SavedHandoff.bRecipePersisted ? 1 : 0,
+		Preflight.SavedHandoff.bTargetPersisted ? 1 : 0,
+		Preflight.SavedHandoff.bAppliedStateCurrent ? 1 : 0);
+	return FMD5::HashAnsiString(*Payload);
+}
+
+// Fresh semantic Final Review와 Saved Handoff를 합성해 Step 7 exact action을 파생합니다.
+FCFBuilderFinalCommitPreflight FCFVehicleBuilderVM::EvaluateFinalCommitPreflight(
+	const FCFBuilderFinalReviewResult& FreshReview) const
+{
+	// Final Review + persisted state를 합친 fail-closed 결과입니다.
+	FCFBuilderFinalCommitPreflight Result;
+	Result.SavedHandoff = ReadSavedHandoffPreflight(FreshReview);
+
+	if (FreshReview.BlockingIssueCount > 0
+		|| FreshReview.bHasExternalDrift
+		|| Result.SavedHandoff.Blocker != ECFBuilderSavedHandoffBlocker::None)
+	{
+		Result.Action = ECFBuilderFinalCommitAction::Blocked;
+		Result.Diagnostic = Result.SavedHandoff.Diagnostic.IsEmpty()
+			? FreshReview.Operation.Message
+			: Result.SavedHandoff.Diagnostic;
+		return Result;
+	}
+
+	if (FreshReview.bCanApply)
+	{
+		Result.Action = ECFBuilderFinalCommitAction::ApplyAndPersist;
+		Result.Diagnostic = TEXT("Semantic Target Diff를 existing DefinitionApply로 적용한 뒤 exact current Target→Recipe durable pair를 저장해야 합니다.");
+		Result.ApprovalScopeHash = BuildFinalCommitApprovalScope(Result);
+		return Result;
+	}
+
+	if (!FreshReview.bCanCompleteFinalReview
+		|| Result.SavedHandoff.TargetDefinitionHash != Result.SavedHandoff.ResolvedDefinitionHash)
+	{
+		Result.Action = ECFBuilderFinalCommitAction::Blocked;
+		Result.Diagnostic = TEXT("Final Review가 Diff0 semantic PASS 또는 Target==fresh Resolve durable boundary를 만족하지 못했습니다.");
+		return Result;
+	}
+
+	if (IsPostDrivingReceiptSavePending(FreshReview, Result.SavedHandoff))
+	{
+		Result.Action = ECFBuilderFinalCommitAction::PostDrivingReceiptSavePending;
+		Result.Diagnostic = TEXT("Step 7 durable Target handoff는 완료됐고, Step 8 USER Driving receipt 때문에 current Recipe 저장만 남았습니다. Benchmark를 다시 실행하지 않습니다.");
+		return Result;
+	}
+
+	if (Result.SavedHandoff.IsStrictReady())
+	{
+		Result.Action = ECFBuilderFinalCommitAction::None;
+		Result.Diagnostic = TEXT("Step 7 Target/Recipe Saved Handoff가 current fresh semantic truth와 exact 일치합니다.");
+		return Result;
+	}
+
+	if (!Result.SavedHandoff.bAppliedStateCurrent)
+	{
+		Result.Action = ECFBuilderFinalCommitAction::FinalizeAppliedStateAndPersist;
+		Result.Diagnostic = TEXT("Target은 fresh Resolve와 일치하지만 Recipe AppliedState provenance가 stale입니다. Target을 필요한 경우 먼저 저장한 뒤 AppliedState를 fresh finalize하고 Recipe를 저장해야 합니다.");
+		Result.ApprovalScopeHash = BuildFinalCommitApprovalScope(Result);
+		return Result;
+	}
+
+	if (Result.SavedHandoff.bRecipeDirty
+		|| Result.SavedHandoff.bTargetDirty
+		|| !Result.SavedHandoff.bRecipePersisted
+		|| !Result.SavedHandoff.bTargetPersisted)
+	{
+		Result.Action = ECFBuilderFinalCommitAction::PersistDirtyPair;
+		Result.Diagnostic = TEXT("Semantic/AppliedState는 current이지만 Target/Recipe durable package handoff가 아직 완료되지 않았습니다. 필요한 package만 Target→Recipe 순서로 저장해야 합니다.");
+		Result.ApprovalScopeHash = BuildFinalCommitApprovalScope(Result);
+		return Result;
+	}
+
+	Result.Action = ECFBuilderFinalCommitAction::Blocked;
+	Result.Diagnostic = TEXT("Final Review semantic PASS 뒤 durable handoff state를 결정할 수 없습니다. backend contract mismatch로 fail-closed 처리합니다.");
+	return Result;
+}
+
+// Exact package의 persisted state를 production disk 또는 Automation override에서 확인합니다.
+bool FCFVehicleBuilderVM::DoesBuilderPackageExist(const FString& PackageName) const
+{
+#if WITH_DEV_AUTOMATION_TESTS
+	if (TestBuilderPackageExistsOverride)
+	{
+		return TestBuilderPackageExistsOverride(PackageName);
+	}
+#endif
+	return FPackageName::DoesPackageExist(PackageName);
+}
+
+// Exact /Game package 하나만 저장하고 SavePackage success + clean + persisted existence를 확인합니다.
+bool FCFVehicleBuilderVM::SaveBuilderPackage(
+	UPackage* Package,
+	UObject* Asset,
+	bool& bOutSaved,
+	bool& bOutSaveStateUnconfirmed,
+	FString& OutError)
+{
+	bOutSaved = false;
+	bOutSaveStateUnconfirmed = false;
+	OutError.Reset();
+
+	// Exact save target package long name입니다.
+	const FString PackageName = Package ? Package->GetName() : FString();
+	if (!Package
+		|| !Asset
+		|| Asset->GetOutermost() != Package
+		|| Package == GetTransientPackage()
+		|| !PackageName.StartsWith(TEXT("/Game/"), ESearchCase::CaseSensitive)
+		|| !FPackageName::IsValidLongPackageName(PackageName))
+	{
+		OutError = FString::Printf(TEXT("Exact Builder package save identity가 유효하지 않습니다: %s"), *PackageName);
+		return false;
+	}
+
+	// Current package가 persistent storage에 이미 존재하는지 여부입니다.
+	const bool bPackagePersisted = DoesBuilderPackageExist(PackageName);
+	if (!Package->IsDirty() && bPackagePersisted)
+	{
+		return true;
+	}
+
+	// Raw single-package save 호출이 success를 반환했는지 여부입니다.
+	bool bSaveSucceeded = false;
+#if WITH_DEV_AUTOMATION_TESTS
+	if (TestBuilderPackageSaveOverride)
+	{
+		FString TestSaveError;
+		bSaveSucceeded = TestBuilderPackageSaveOverride(Package, Asset, TestSaveError);
+		if (!bSaveSucceeded && !TestSaveError.IsEmpty())
+		{
+			OutError = TestSaveError;
+		}
+	}
+	else
+#endif
+	{
+		// Exact package .uasset filename입니다.
+		const FString PackageFilename = FPackageName::LongPackageNameToFilename(
+			PackageName,
+			FPackageName::GetAssetPackageExtension());
+		// UE 5.8 single-package save options입니다.
+		FSavePackageArgs SaveArgs;
+		SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+		SaveArgs.SaveFlags = SAVE_NoError;
+		bSaveSucceeded = UPackage::SavePackage(Package, Asset, *PackageFilename, SaveArgs);
+	}
+
+	if (!bSaveSucceeded)
+	{
+		if (OutError.IsEmpty())
+		{
+			OutError = FString::Printf(TEXT("UPackage::SavePackage가 false를 반환했습니다: %s"), *PackageName);
+		}
+		return false;
+	}
+
+	if (Package->IsDirty() || !DoesBuilderPackageExist(PackageName))
+	{
+		bOutSaveStateUnconfirmed = true;
+		OutError = FString::Printf(TEXT("SavePackage success 뒤 clean/persisted 상태를 확인하지 못했습니다: %s"), *PackageName);
+		return false;
+	}
+
+	bOutSaved = true;
+	return true;
+}
+
+// Step 7의 current Final Review와 exact Target/Recipe durable action을 USER dialog 직전 fresh 평가해 prepared state로 보관합니다.
+bool FCFVehicleBuilderVM::PrepareFinalReviewCommit(
+	FCFBuilderFinalCommitPreflight& OutPreflight,
+	FCFBuilderFinalReviewResult& OutReview,
+	FString& OutError)
+{
+	ClearPreparedFinalReviewApply();
+	OutPreflight = FCFBuilderFinalCommitPreflight();
+	OutReview = FCFBuilderFinalReviewResult();
+	OutError.Reset();
+
+	// Final commit review 직전 Step 6 prerequisite diagnostic입니다.
+	FString PrerequisiteError;
+	if (!AreFinalReviewPrerequisitesComplete(PrerequisiteError))
+	{
+		OutError = PrerequisiteError;
+		return false;
+	}
+
+	// Fresh Final Review request입니다.
+	FCFBuilderFinalReviewRequest Request;
+	if (!BuildFinalReviewRequest(Request, OutError))
+	{
+		return false;
+	}
+
+	// USER dialog 직전 current semantic truth입니다.
+	FCFBuilderFinalReviewResult Review;
+	if (!FCFVehicleAuthoringService::ReadBuilderFinalReview(Request, Review))
+	{
+		FinalReviewResult = Review;
+		bHasFinalReviewResult = true;
+		OutError = Review.Operation.Message.IsEmpty()
+			? TEXT("Step 7 fresh Final Review를 읽지 못했습니다.")
+			: Review.Operation.Message;
+		return false;
+	}
+
+	FinalReviewResult = Review;
+	bHasFinalReviewResult = true;
+	FinalCommitPreflight = EvaluateFinalCommitPreflight(Review);
+	OutReview = Review;
+	OutPreflight = FinalCommitPreflight;
+	if (!FinalCommitPreflight.CanExecute() || FinalCommitPreflight.ApprovalScopeHash.IsEmpty())
+	{
+		OutError = FinalCommitPreflight.Diagnostic.IsEmpty()
+			? TEXT("Current Step 7에는 USER가 실행할 durable commit action이 없습니다.")
+			: FinalCommitPreflight.Diagnostic;
+		return false;
+	}
+
+	PreparedFinalReviewRequest = Request;
+	PreparedFinalReviewResult = Review;
+	PreparedFinalCommitPreflight = FinalCommitPreflight;
+	bHasPreparedFinalCommit = true;
+	return true;
+}
+
+// USER가 확인한 exact final-commit scope를 fresh 재검증한 뒤 Apply/finalize/Target→Recipe persistence를 실행합니다.
+bool FCFVehicleBuilderVM::ExecutePreparedFinalReviewCommit(
+	FCFBuilderFinalCommitResult& OutResult,
+	FString& OutError)
+{
+	OutResult = FCFBuilderFinalCommitResult();
+	OutError.Reset();
+	if (!bHasPreparedFinalCommit
+		|| !PreparedFinalCommitPreflight.CanExecute()
+		|| PreparedFinalCommitPreflight.ApprovalScopeHash.IsEmpty())
+	{
+		OutResult.Outcome = ECFBuilderFinalCommitOutcome::Blocked;
+		OutError = TEXT("먼저 Step 7의 fresh durable commit 내용을 검토하고 승인해야 합니다.");
+		OutResult.Diagnostic = OutError;
+		return false;
+	}
+
+	// USER가 확인한 exact Final Review request입니다.
+	const FCFBuilderFinalReviewRequest ApprovedReviewRequest = PreparedFinalReviewRequest;
+	// USER가 확인한 durable final commit identity/state입니다.
+	const FCFBuilderFinalCommitPreflight ApprovedPreflight = PreparedFinalCommitPreflight;
+	// USER가 확인한 exact durable commit scope입니다.
+	const FString ApprovedScopeHash = PreparedFinalCommitPreflight.ApprovalScopeHash;
+	ClearPreparedFinalReviewApply();
+
+	// Mutation/save 직전 fresh semantic truth입니다.
+	FCFBuilderFinalReviewResult FreshReview;
+	if (!FCFVehicleAuthoringService::ReadBuilderFinalReview(ApprovedReviewRequest, FreshReview))
+	{
+		OutResult.Outcome = ECFBuilderFinalCommitOutcome::Blocked;
+		OutError = FreshReview.Operation.Message.IsEmpty()
+			? TEXT("Final commit 직전 fresh Final Review를 읽지 못했습니다.")
+			: FreshReview.Operation.Message;
+		OutResult.Diagnostic = OutError;
+		return false;
+	}
+
+	// Mutation/save 직전 exact current durable action입니다.
+	FCFBuilderFinalCommitPreflight FreshPreflight = EvaluateFinalCommitPreflight(FreshReview);
+	if (FreshPreflight.Action != ApprovedPreflight.Action
+		|| FreshPreflight.ApprovalScopeHash.IsEmpty()
+		|| FreshPreflight.ApprovalScopeHash != ApprovedScopeHash)
+	{
+		OutResult.Outcome = ECFBuilderFinalCommitOutcome::Blocked;
+		OutError = TEXT("확인창 이후 Step 7 action/Recipe/Target/provenance/package 상태가 바뀌어 기존 승인을 사용할 수 없습니다. 현재 상태를 다시 확인하세요.");
+		OutResult.Diagnostic = OutError;
+		return false;
+	}
+
+	// Approved operation의 exact Recipe입니다.
+	UCFVehicleRecipeData* Recipe = GetRecipe();
+	// Approved operation의 exact Target VehicleData입니다.
+	UCFVehicleData* TargetVehicleData = Recipe ? Recipe->TargetVehicleData.LoadSynchronous() : nullptr;
+	if (!Recipe
+		|| !TargetVehicleData
+		|| FSoftObjectPath(Recipe) != ApprovedPreflight.SavedHandoff.RecipePath
+		|| FSoftObjectPath(TargetVehicleData) != ApprovedPreflight.SavedHandoff.TargetPath)
+	{
+		OutResult.Outcome = ECFBuilderFinalCommitOutcome::Blocked;
+		OutError = TEXT("Final commit 실행 직전 current Recipe/Target identity가 승인 대상과 달라졌습니다.");
+		OutResult.Diagnostic = OutError;
+		return false;
+	}
+
+	if (ApprovedPreflight.Action == ECFBuilderFinalCommitAction::ApplyAndPersist)
+	{
+		if (!FreshReview.bCanApply || FreshReview.ApplyProposal.ProposalHash.IsEmpty())
+		{
+			OutResult.Outcome = ECFBuilderFinalCommitOutcome::ApplyFailed;
+			OutError = TEXT("Fresh Final Review가 더 이상 DefinitionApply 가능한 상태가 아닙니다.");
+			OutResult.Diagnostic = OutError;
+			return false;
+		}
+
+		// Existing R3 Apply lane이 자체 fresh re-review할 explicit request입니다.
+		FCFBuilderFinalApplyRequest ApplyRequest;
+		ApplyRequest.ReviewRequest = ApprovedReviewRequest;
+		ApplyRequest.CallContext.ClientOperationId = FString::Printf(
+			TEXT("Builder-FinalCommit-Apply-%s"),
+			*FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphensLower));
+		ApplyRequest.CallContext.CallerKind = ECFAuthoringCallerKind::SlateUI;
+		ApplyRequest.CallContext.ApprovalClass = ECFAuthoringApprovalClass::DefinitionApply;
+		ApplyRequest.CallContext.ApprovalScopeHash = FreshReview.ApplyProposal.ProposalHash;
+
+		// Existing DefinitionApply terminal result입니다.
+		FCFBuilderFinalApplyResult ApplyResult;
+		if (!FCFVehicleAuthoringService::ApplyBuilderFinalReview(ApplyRequest, ApplyResult))
+		{
+			OutResult.Outcome = ECFBuilderFinalCommitOutcome::ApplyFailed;
+			OutError = ApplyResult.Operation.Message.IsEmpty()
+				? TEXT("Step 7 DefinitionApply가 fresh guard에서 차단됐습니다.")
+				: ApplyResult.Operation.Message;
+			OutResult.Diagnostic = OutError;
+			return false;
+		}
+
+		OutResult.bTargetApplied = ApplyResult.Operation.Mutation.bTargetChanged;
+		OutResult.bUndoAvailable = ApplyResult.bUndoAvailable;
+		if (ApplyResult.bUndoAvailable)
+		{
+			FinalReviewUndoToken = ApplyResult.UndoToken;
+			bHasFinalReviewUndoToken = true;
+		}
+		else
+		{
+			ClearFinalReviewUndoToken();
+		}
+
+		// Apply 뒤 current Target이 승인된 resolved identity로 실제 전환됐는지 fresh 확인합니다.
+		FCFBuilderFinalReviewRequest PostApplyReviewRequest;
+		// Post-Apply request 구성 실패 진단입니다.
+		FString PostApplyRequestError;
+		if (!BuildFinalReviewRequest(PostApplyReviewRequest, PostApplyRequestError)
+			|| !FCFVehicleAuthoringService::ReadBuilderFinalReview(PostApplyReviewRequest, FreshReview))
+		{
+			OutResult.Outcome = ECFBuilderFinalCommitOutcome::SaveStateUnconfirmed;
+			OutError = PostApplyRequestError.IsEmpty()
+				? TEXT("DefinitionApply는 성공했지만 저장 전 fresh Final Review를 다시 읽지 못했습니다.")
+				: PostApplyRequestError;
+			OutResult.Diagnostic = OutError;
+			return false;
+		}
+		FreshPreflight = EvaluateFinalCommitPreflight(FreshReview);
+	}
+
+	// Approved semantic identity가 operation 중 외부 변경 없이 유지됐는지 확인할 current handoff입니다.
+	FCFBuilderSavedHandoffPreflight CurrentHandoff = FreshPreflight.SavedHandoff;
+	if (CurrentHandoff.Blocker != ECFBuilderSavedHandoffBlocker::None
+		|| CurrentHandoff.RecipePath != ApprovedPreflight.SavedHandoff.RecipePath
+		|| CurrentHandoff.TargetPath != ApprovedPreflight.SavedHandoff.TargetPath
+		|| CurrentHandoff.RecipeFingerprint != ApprovedPreflight.SavedHandoff.RecipeFingerprint
+		|| CurrentHandoff.SourceSignature != ApprovedPreflight.SavedHandoff.SourceSignature
+		|| CurrentHandoff.ResolvedDefinitionHash != ApprovedPreflight.SavedHandoff.ResolvedDefinitionHash
+		|| CurrentHandoff.ResolverContractRevision != ApprovedPreflight.SavedHandoff.ResolverContractRevision
+		|| CurrentHandoff.TargetDefinitionHash != ApprovedPreflight.SavedHandoff.ResolvedDefinitionHash)
+	{
+		OutResult.Outcome = ECFBuilderFinalCommitOutcome::SaveStateUnconfirmed;
+		OutError = TEXT("Apply/finalize 저장 경계에서 Recipe/Target/provenance identity가 승인 범위를 벗어났습니다. 자동 재시도하지 않습니다.");
+		OutResult.Diagnostic = OutError;
+		return false;
+	}
+
+	// Exact Target package입니다.
+	UPackage* TargetPackage = TargetVehicleData->GetOutermost();
+	// Target→Recipe ordering의 Target save 결과입니다.
+	bool bTargetSavedNow = false;
+	// Raw Target save success 뒤 clean/persisted 확인에 실패했는지 여부입니다.
+	bool bTargetSaveStateUnconfirmed = false;
+	// Exact package save 실패 진단입니다.
+	FString SaveError;
+	if ((CurrentHandoff.bTargetDirty || !CurrentHandoff.bTargetPersisted)
+		&& !SaveBuilderPackage(
+			TargetPackage,
+			TargetVehicleData,
+			bTargetSavedNow,
+			bTargetSaveStateUnconfirmed,
+			SaveError))
+	{
+		OutResult.Outcome = bTargetSaveStateUnconfirmed
+			? ECFBuilderFinalCommitOutcome::SaveStateUnconfirmed
+			: ECFBuilderFinalCommitOutcome::TargetSaveFailed;
+		OutResult.bTargetSaved = bTargetSavedNow;
+		OutError = SaveError.IsEmpty() ? TEXT("Step 7 Target VehicleData 저장에 실패했습니다.") : SaveError;
+		OutResult.Diagnostic = OutError;
+		return false;
+	}
+	OutResult.bTargetSaved = bTargetSavedNow;
+
+	if (CurrentHandoff.bTargetDirty || !CurrentHandoff.bTargetPersisted)
+	{
+		// Target save 뒤 Recipe mutation/save 전에 current semantic identity를 다시 확인합니다.
+		FCFBuilderFinalReviewRequest PostTargetSaveRequest;
+		// Post-Target-save request 구성 진단입니다.
+		FString PostTargetSaveError;
+		if (!BuildFinalReviewRequest(PostTargetSaveRequest, PostTargetSaveError)
+			|| !FCFVehicleAuthoringService::ReadBuilderFinalReview(PostTargetSaveRequest, FreshReview))
+		{
+			OutResult.Outcome = ECFBuilderFinalCommitOutcome::SaveStateUnconfirmed;
+			OutError = PostTargetSaveError.IsEmpty()
+				? TEXT("Target 저장은 성공했지만 Recipe 단계 전 fresh 상태를 다시 읽지 못했습니다.")
+				: PostTargetSaveError;
+			OutResult.Diagnostic = OutError;
+			return false;
+		}
+		FreshPreflight = EvaluateFinalCommitPreflight(FreshReview);
+		CurrentHandoff = FreshPreflight.SavedHandoff;
+		if (CurrentHandoff.Blocker != ECFBuilderSavedHandoffBlocker::None
+			|| CurrentHandoff.RecipeFingerprint != ApprovedPreflight.SavedHandoff.RecipeFingerprint
+			|| CurrentHandoff.SourceSignature != ApprovedPreflight.SavedHandoff.SourceSignature
+			|| CurrentHandoff.ResolvedDefinitionHash != ApprovedPreflight.SavedHandoff.ResolvedDefinitionHash
+			|| CurrentHandoff.ResolverContractRevision != ApprovedPreflight.SavedHandoff.ResolverContractRevision
+			|| CurrentHandoff.TargetDefinitionHash != ApprovedPreflight.SavedHandoff.ResolvedDefinitionHash)
+		{
+			OutResult.Outcome = ECFBuilderFinalCommitOutcome::SaveStateUnconfirmed;
+			OutError = TEXT("Target 저장 뒤 current Recipe/Resolve identity가 바뀌었습니다. Recipe write/save는 수행하지 않습니다.");
+			OutResult.Diagnostic = OutError;
+			return false;
+		}
+	}
+
+	if (ApprovedPreflight.Action == ECFBuilderFinalCommitAction::FinalizeAppliedStateAndPersist)
+	{
+		// Fresh no-diff Final Review identity를 binding한 AppliedState finalize approval scope입니다.
+		const FString FinalizeScope = FCFVehicleAuthoringService::BuildBuilderAppliedStateFinalizeScope(FreshReview);
+		if (FinalizeScope.IsEmpty())
+		{
+			OutResult.Outcome = ECFBuilderFinalCommitOutcome::FinalizeAppliedStateFailed;
+			OutError = TEXT("Recipe AppliedState finalize approval scope를 만들 수 없습니다.");
+			OutResult.Diagnostic = OutError;
+			return false;
+		}
+
+		// Recipe AppliedState-only R3 finalize 호출 context입니다.
+		FCFAuthoringCallContext FinalizeContext;
+		FinalizeContext.ClientOperationId = FString::Printf(
+			TEXT("Builder-FinalCommit-Finalize-%s"),
+			*FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphensLower));
+		FinalizeContext.CallerKind = ECFAuthoringCallerKind::SlateUI;
+		FinalizeContext.ApprovalClass = ECFAuthoringApprovalClass::DefinitionApply;
+		FinalizeContext.ApprovalScopeHash = FinalizeScope;
+
+		// AppliedState finalize terminal operation입니다.
+		FCFAuthoringOpResult FinalizeResult;
+		if (!FCFVehicleAuthoringService::FinalizeBuilderAppliedState(
+				ApprovedReviewRequest,
+				FinalizeContext,
+				FinalizeResult))
+		{
+			OutResult.Outcome = ECFBuilderFinalCommitOutcome::FinalizeAppliedStateFailed;
+			OutError = FinalizeResult.Message.IsEmpty()
+				? TEXT("Recipe AppliedState finalize가 fresh guard에서 차단됐습니다.")
+				: FinalizeResult.Message;
+			OutResult.Diagnostic = OutError;
+			return false;
+		}
+		OutResult.bAppliedStateFinalized = FinalizeResult.Mutation.bRecipeChanged;
+
+		// Finalize 뒤 Recipe save 전 exact AppliedState readback을 fresh Final Review로 확인합니다.
+		FCFBuilderFinalReviewRequest PostFinalizeRequest;
+		// Post-finalize request 구성 진단입니다.
+		FString PostFinalizeError;
+		if (!BuildFinalReviewRequest(PostFinalizeRequest, PostFinalizeError)
+			|| !FCFVehicleAuthoringService::ReadBuilderFinalReview(PostFinalizeRequest, FreshReview))
+		{
+			OutResult.Outcome = ECFBuilderFinalCommitOutcome::SaveStateUnconfirmed;
+			OutError = PostFinalizeError.IsEmpty()
+				? TEXT("AppliedState finalize는 성공했지만 Recipe 저장 전 fresh 상태를 읽지 못했습니다.")
+				: PostFinalizeError;
+			OutResult.Diagnostic = OutError;
+			return false;
+		}
+		FreshPreflight = EvaluateFinalCommitPreflight(FreshReview);
+		CurrentHandoff = FreshPreflight.SavedHandoff;
+	}
+
+	if (CurrentHandoff.Blocker != ECFBuilderSavedHandoffBlocker::None
+		|| CurrentHandoff.TargetDefinitionHash != CurrentHandoff.ResolvedDefinitionHash
+		|| !CurrentHandoff.bAppliedStateCurrent)
+	{
+		OutResult.Outcome = ECFBuilderFinalCommitOutcome::SaveStateUnconfirmed;
+		OutError = TEXT("Recipe 저장 직전 Target==Resolve / AppliedState exact readback을 확인하지 못했습니다. Recipe를 자동 저장하지 않습니다.");
+		OutResult.Diagnostic = OutError;
+		return false;
+	}
+
+	// Exact Recipe package입니다.
+	UPackage* RecipePackage = Recipe->GetOutermost();
+	// Target 뒤 exact Recipe package save 결과입니다.
+	bool bRecipeSavedNow = false;
+	// Raw Recipe save success 뒤 clean/persisted 확인에 실패했는지 여부입니다.
+	bool bRecipeSaveStateUnconfirmed = false;
+	if ((CurrentHandoff.bRecipeDirty || !CurrentHandoff.bRecipePersisted)
+		&& !SaveBuilderPackage(
+			RecipePackage,
+			Recipe,
+			bRecipeSavedNow,
+			bRecipeSaveStateUnconfirmed,
+			SaveError))
+	{
+		OutResult.Outcome = bRecipeSaveStateUnconfirmed
+			? ECFBuilderFinalCommitOutcome::SaveStateUnconfirmed
+			: ECFBuilderFinalCommitOutcome::TargetSavedRecipeSaveFailed;
+		OutResult.bRecipeSaved = bRecipeSavedNow;
+		OutError = SaveError.IsEmpty() ? TEXT("Target 단계 뒤 Recipe 저장에 실패했습니다.") : SaveError;
+		OutResult.Diagnostic = OutError;
+		return false;
+	}
+	OutResult.bRecipeSaved = bRecipeSavedNow;
+
+	// Durable pair write 성공 뒤 transient Builder refresh 실패는 persistent success를 false-negative로 뒤집지 않습니다.
+	FString RefreshError;
+	if (!RefreshCurrentState(RefreshError))
+	{
+		OutResult.Outcome = ECFBuilderFinalCommitOutcome::CommittedRefreshWarning;
+		OutResult.Diagnostic = RefreshError.IsEmpty()
+			? TEXT("Step 7 Target/Recipe durable commit은 완료됐지만 post-commit Builder refresh에 실패했습니다.")
+			: FString::Printf(TEXT("Step 7 Target/Recipe durable commit은 완료됐지만 post-commit Builder refresh에 실패했습니다: %s"), *RefreshError);
+		OutError = OutResult.Diagnostic;
+		return true;
+	}
+
+	if (!FinalCommitPreflight.IsStepComplete()
+		|| FinalCommitPreflight.Action == ECFBuilderFinalCommitAction::PostDrivingReceiptSavePending)
+	{
+		OutResult.Outcome = ECFBuilderFinalCommitOutcome::SaveStateUnconfirmed;
+		OutError = FinalCommitPreflight.Diagnostic.IsEmpty()
+			? TEXT("Step 7 durable commit 뒤 strict Saved Handoff Complete를 확인하지 못했습니다.")
+			: FinalCommitPreflight.Diagnostic;
+		OutResult.Diagnostic = OutError;
+		return false;
+	}
+
+	OutResult.Outcome = ECFBuilderFinalCommitOutcome::Committed;
+	OutResult.Diagnostic = TEXT("Step 7 exact Target/Recipe durable commit + clean/disk/fresh identity readback이 완료됐습니다.");
+	return true;
+}
+
+// USER-facing Step 7 validation/drift/provenance/diff/durable handoff readiness 요약을 만듭니다.
 FString FCFVehicleBuilderVM::BuildFinalReviewSummary() const
 {
 	if (!bHasFinalReviewResult)
@@ -4371,6 +5624,41 @@ FString FCFVehicleBuilderVM::BuildFinalReviewSummary() const
 		FinalReviewResult.bCanCompleteFinalReview ? TEXT("예") : TEXT("아니오"),
 		bHasFinalReviewUndoToken ? TEXT("있음") : TEXT("없음"),
 		FinalReviewResult.DiffHash.IsEmpty() ? TEXT("<없음>") : *FinalReviewResult.DiffHash);
+
+	// USER에게 노출할 current durable final commit action 이름입니다.
+	const TCHAR* FinalCommitActionText = TEXT("막힘");
+	switch (FinalCommitPreflight.Action)
+	{
+	case ECFBuilderFinalCommitAction::None: FinalCommitActionText = TEXT("완료 - 추가 작업 없음"); break;
+	case ECFBuilderFinalCommitAction::ApplyAndPersist: FinalCommitActionText = TEXT("차량 데이터 적용 + 저장"); break;
+	case ECFBuilderFinalCommitAction::PersistDirtyPair: FinalCommitActionText = TEXT("현재 차량 데이터 + 제작 정보 저장"); break;
+	case ECFBuilderFinalCommitAction::FinalizeAppliedStateAndPersist: FinalCommitActionText = TEXT("적용 상태 복구 + 저장"); break;
+	case ECFBuilderFinalCommitAction::PostDrivingReceiptSavePending: FinalCommitActionText = TEXT("Step 8 주행 승인 저장만 남음"); break;
+	case ECFBuilderFinalCommitAction::Blocked: FinalCommitActionText = TEXT("막힘"); break;
+	default: FinalCommitActionText = TEXT("알 수 없음"); break;
+	}
+
+	Summary += FString::Printf(
+		TEXT(
+			"\n\nStep 7 저장 완료 상태"
+			"\n- 지금 할 일: %s"
+			"\n- 차량 데이터 저장 안 됨: %s"
+			"\n- 제작 정보 저장 안 됨: %s"
+			"\n- 차량 데이터 파일 존재: %s"
+			"\n- 제작 정보 파일 존재: %s"
+			"\n- 적용 상태 기록: %s"
+			"\n- 현재 차량 데이터 = 최종 계산 결과: %s"
+			"\n- 진단: %s"),
+		FinalCommitActionText,
+		FinalCommitPreflight.SavedHandoff.bTargetDirty ? TEXT("예") : TEXT("아니오"),
+		FinalCommitPreflight.SavedHandoff.bRecipeDirty ? TEXT("예") : TEXT("아니오"),
+		FinalCommitPreflight.SavedHandoff.bTargetPersisted ? TEXT("예") : TEXT("아니오"),
+		FinalCommitPreflight.SavedHandoff.bRecipePersisted ? TEXT("예") : TEXT("아니오"),
+		FinalCommitPreflight.SavedHandoff.bAppliedStateCurrent ? TEXT("현재 상태와 일치") : TEXT("복구 필요"),
+		(!FinalCommitPreflight.SavedHandoff.TargetDefinitionHash.IsEmpty()
+			&& FinalCommitPreflight.SavedHandoff.TargetDefinitionHash == FinalCommitPreflight.SavedHandoff.ResolvedDefinitionHash)
+			? TEXT("예") : TEXT("아니오"),
+		FinalCommitPreflight.Diagnostic.IsEmpty() ? TEXT("<없음>") : *FinalCommitPreflight.Diagnostic);
 
 	if (FinalReviewResult.Provenance.bAvailable)
 	{
@@ -4446,7 +5734,7 @@ FString FCFVehicleBuilderVM::BuildFinalReviewSummary() const
 				"\n- ResolvedDefinitionHash: %s"
 				"\n- ResolverRevision: %d"
 				"\n- Target mutation: %s"
-				"\n- Auto Save: %s"),
+				"\n- DefinitionApply 자체 저장: %s"),
 			*FinalReviewResult.ApplyProposal.ProposalHash,
 			*FinalReviewResult.ApplyProposal.ProspectiveResolvedDefinitionHash,
 			FinalReviewResult.ApplyProposal.ResolverContractRevision,
@@ -4471,11 +5759,13 @@ FString FCFVehicleBuilderVM::BuildFinalReviewSummary() const
 	}
 
 	Summary += TEXT(
-		"\n\nStep 7 경계:"
-		"\n- Review는 R0 read-only"
-		"\n- Apply는 USER explicit DefinitionApply 승인 뒤 existing R3 Apply lane"
-		"\n- Apply 성공 시 Target VehicleData와 Recipe AppliedState가 transaction으로 변경될 수 있음"
-		"\n- 자동 Save / 자동 재시도 없음"
+		"\n\nStep 7 작업 경계:"
+		"\n- 상태 확인은 읽기 전용이며 아무 파일도 바꾸지 않음"
+		"\n- '최종 적용 및 저장'은 USER 확인 뒤에만 실행"
+		"\n- 저장 대상은 현재 선택 차량의 VehicleData와 Recipe 두 파일로 제한"
+		"\n- 둘 다 저장이 필요하면 VehicleData → Recipe 순서로 저장"
+		"\n- Save All / 자동 재시도 / 다른 에셋 저장 없음"
+		"\n- 주행 승인 뒤 Recipe만 Dirty인 narrow 상태는 Step 8 '주행 승인 저장'이 담당"
 		"\n- Undo는 이 Builder Apply가 만든 exact UE transaction top + post-Apply state가 그대로일 때만 허용");
 	return Summary;
 }
@@ -4596,7 +5886,7 @@ bool FCFVehicleBuilderVM::ExecutePreparedFinalReviewApply(
 	return true;
 }
 
-// USER explicit DefinitionApply approval로 exact Builder-owned top transaction guarded Undo를 실행합니다.
+// USER explicit DefinitionApply approval로 exact Builder-owned top transaction guarded Undo를 실행하고 reverted pair를 durable 저장합니다.
 bool FCFVehicleBuilderVM::ExecuteFinalReviewUndo(
 	FCFAuthoringOpResult& OutResult,
 	FString& OutError)
@@ -4625,6 +5915,7 @@ bool FCFVehicleBuilderVM::ExecuteFinalReviewUndo(
 		if (OutResult.Mutation.bTargetChanged || OutResult.Mutation.bRecipeChanged)
 		{
 			ClearFinalReviewUndoToken();
+			// Undo mutation 뒤 가능한 current truth를 복구할 진단입니다.
 			FString RefreshError;
 			RefreshCurrentState(RefreshError);
 		}
@@ -4635,14 +5926,111 @@ bool FCFVehicleBuilderVM::ExecuteFinalReviewUndo(
 	}
 
 	ClearFinalReviewUndoToken();
+	LastPostCommitRefreshWarning.Reset();
 
-	// Undo 성공 뒤 pre-Apply diff/readiness를 fresh Final Review에서 복원합니다.
+	// Undo가 실제로 되돌린 current managed Recipe입니다.
+	UCFVehicleRecipeData* Recipe = GetRecipe();
+	// Undo가 실제로 되돌린 current Target VehicleData입니다.
+	UCFVehicleData* TargetVehicleData = AuthoringViewModel.IsValid()
+		? AuthoringViewModel->GetTargetVehicleData()
+		: nullptr;
+	// Undo 뒤 exact Recipe package입니다.
+	UPackage* RecipePackage = Recipe ? Recipe->GetOutermost() : nullptr;
+	// Undo 뒤 exact Target package입니다.
+	UPackage* TargetPackage = TargetVehicleData ? TargetVehicleData->GetOutermost() : nullptr;
+
+	// Undo persistence 전에 두 package identity를 모두 검증해 invalid counterpart 때문에 선행 package만 저장되는 일을 막습니다.
+	const auto IsValidUndoPackageIdentity = [](UPackage* Package, UObject* Asset)
+	{
+		if (!Package || !Asset || Asset->GetOutermost() != Package || Package == GetTransientPackage())
+		{
+			return false;
+		}
+		// 현재 exact long package name입니다.
+		const FString PackageName = Package->GetName();
+		return PackageName.StartsWith(TEXT("/Game/"), ESearchCase::CaseSensitive)
+			&& FPackageName::IsValidLongPackageName(PackageName);
+	};
+
+	if (!IsValidUndoPackageIdentity(TargetPackage, TargetVehicleData)
+		|| !IsValidUndoPackageIdentity(RecipePackage, Recipe))
+	{
+		// Undo mutation 자체는 이미 성공했으므로 current dirty truth만 fresh projection으로 복구합니다.
+		FString RefreshError;
+		RefreshCurrentState(RefreshError);
+		OutError = TEXT("Guarded Undo는 성공했지만 reverted VehicleData/Recipe의 durable /Game package identity가 유효하지 않아 저장하지 않았습니다. 되돌린 dirty 상태는 유지됩니다.");
+		return false;
+	}
+
+	// Backend Undo가 Target UObject를 실제 변경했다면 package dirty flag가 누락돼도 disk와 memory가 달라졌으므로 명시 dirty 처리합니다.
+	if (OutResult.Mutation.bTargetChanged)
+	{
+		TargetPackage->SetDirtyFlag(true);
+	}
+	// Backend Undo가 Recipe UObject를 실제 변경했다면 AppliedState 등 reverted state를 반드시 durable save 대상으로 표시합니다.
+	if (OutResult.Mutation.bRecipeChanged)
+	{
+		RecipePackage->SetDirtyFlag(true);
+	}
+
+	// Target→Recipe ordering의 Target save 결과입니다.
+	bool bTargetSavedNow = false;
+	// Raw Target save success 뒤 clean/persisted 확인 실패 여부입니다.
+	bool bTargetSaveStateUnconfirmed = false;
+	// Exact Undo persistence save diagnostic입니다.
+	FString SaveError;
+	if (TargetPackage->IsDirty() || !DoesBuilderPackageExist(TargetPackage->GetName()))
+	{
+		OutResult.Mutation.bSavePerformed = true;
+		if (!SaveBuilderPackage(
+			TargetPackage,
+			TargetVehicleData,
+			bTargetSavedNow,
+			bTargetSaveStateUnconfirmed,
+			SaveError))
+		{
+		// Undo mutation은 rollback하지 않고 current dirty/partial truth를 다시 평가합니다.
+		FString RefreshError;
+		RefreshCurrentState(RefreshError);
+		OutError = SaveError.IsEmpty()
+			? TEXT("Guarded Undo는 성공했지만 reverted Target VehicleData 저장에 실패했습니다. 자동 rollback/retry하지 않습니다.")
+			: FString::Printf(TEXT("Guarded Undo는 성공했지만 reverted Target VehicleData 저장을 완료하지 못했습니다: %s"), *SaveError);
+			return false;
+		}
+	}
+
+	// Target 뒤 exact Recipe save 결과입니다.
+	bool bRecipeSavedNow = false;
+	// Raw Recipe save success 뒤 clean/persisted 확인 실패 여부입니다.
+	bool bRecipeSaveStateUnconfirmed = false;
+	if (RecipePackage->IsDirty() || !DoesBuilderPackageExist(RecipePackage->GetName()))
+	{
+		OutResult.Mutation.bSavePerformed = true;
+		if (!SaveBuilderPackage(
+			RecipePackage,
+			Recipe,
+			bRecipeSavedNow,
+			bRecipeSaveStateUnconfirmed,
+			SaveError))
+		{
+		// Target가 이미 저장된 partial persistence도 rollback하지 않고 current truth로 보존합니다.
+		FString RefreshError;
+		RefreshCurrentState(RefreshError);
+		OutError = SaveError.IsEmpty()
+			? TEXT("Guarded Undo는 성공했고 Target은 저장됐지만 reverted Recipe 저장에 실패했습니다. 자동 rollback/retry하지 않습니다.")
+			: FString::Printf(TEXT("Guarded Undo는 성공했지만 reverted Recipe 저장을 완료하지 못했습니다: %s"), *SaveError);
+			return false;
+		}
+	}
+
+	// Undo + exact pair persistence 성공 뒤 pre-Apply semantic diff/readiness를 fresh Final Review에서 복원합니다.
 	FString RefreshError;
 	if (!RefreshCurrentState(RefreshError))
 	{
-		OutError = FString::Printf(
-			TEXT("Guarded Undo는 성공했지만 post-Undo Final Review refresh에 실패했습니다: %s"),
+		LastPostCommitRefreshWarning = FString::Printf(
+			TEXT("Guarded Undo와 reverted pair 저장은 완료됐지만 post-Undo 화면 상태 재조회에 실패했습니다: %s"),
 			*RefreshError);
+		OutError.Reset();
 		return true;
 	}
 
@@ -4654,6 +6042,7 @@ bool FCFVehicleBuilderVM::ExecuteFinalReviewUndo(
 void FCFVehicleBuilderVM::EvaluateFinalReviewStep()
 {
 	FinalReviewResult = FCFBuilderFinalReviewResult();
+	FinalCommitPreflight = FCFBuilderFinalCommitPreflight();
 	bHasFinalReviewResult = false;
 
 	// Step 7은 Gameplay Setup이 current Complete일 때만 Final Review를 평가합니다.
@@ -4703,6 +6092,17 @@ void FCFVehicleBuilderVM::EvaluateFinalReviewStep()
 	FinalReviewResult = MoveTemp(Review);
 	bHasFinalReviewResult = true;
 
+	// Fresh restart에서는 Step 7이 Step 8보다 먼저 평가되므로 downstream USER Driving receipt-only 후보일 때만 persisted benchmark result를 transient cache로 선행 복원합니다.
+	const FCFBuilderSavedHandoffPreflight PreBenchmarkHandoff = ReadSavedHandoffPreflight(FinalReviewResult);
+	if (IsPostDrivingReceiptCandidate(FinalReviewResult, PreBenchmarkHandoff))
+	{
+		// Exact current Target path/hash에 benchmark JSON을 다시 binding하는 read-only transient cache refresh 진단입니다.
+		FString BenchmarkRefreshError;
+		RefreshDrivingBenchmarkState(BenchmarkRefreshError);
+	}
+
+	FinalCommitPreflight = EvaluateFinalCommitPreflight(FinalReviewResult);
+
 	if (FinalReviewResult.BlockingIssueCount > 0 || FinalReviewResult.bHasExternalDrift)
 	{
 		SetStep(
@@ -4718,31 +6118,52 @@ void FCFVehicleBuilderVM::EvaluateFinalReviewStep()
 		return;
 	}
 
-	if (FinalReviewResult.bCanCompleteFinalReview)
+	if (FinalCommitPreflight.IsStepComplete())
 	{
+		// Narrow Step 8 receipt dirty exception인지 일반 strict Saved Handoff 완료인지 구분한 USER 안내입니다.
+		const bool bPostDrivingReceiptPending = FinalCommitPreflight.Action == ECFBuilderFinalCommitAction::PostDrivingReceiptSavePending;
 		SetStep(
 			ECFVehicleBuilderStepId::FinalReview,
 			ECFVehicleBuilderStepState::Complete,
-			FString::Printf(
-				TEXT("Final Review PASS입니다. Warning %d / Blocker 0 / Target Diff 0."),
-				FinalReviewResult.WarningCount),
-			bHasFinalReviewUndoToken
-				? TEXT("Apply 결과가 current이며 Step 8로 진행할 수 있습니다. 필요하면 exact guarded Undo로 마지막 Builder Apply만 되돌릴 수 있습니다.")
-				: TEXT("Target Definition이 current Authoring truth와 일치합니다. Step 8 Driving Test로 진행할 수 있습니다."),
+			bPostDrivingReceiptPending
+				? TEXT("Step 7 durable Target/Recipe handoff는 완료됐습니다. 현재 Recipe dirty는 Step 8 USER 주행 승인 영수증 저장만 남은 상태입니다.")
+				: FString::Printf(
+					TEXT("Final Review semantic PASS + Saved Handoff PASS입니다. Warning %d / Blocker 0 / Target Diff 0 / Target·Recipe 저장 완료."),
+					FinalReviewResult.WarningCount),
+			bPostDrivingReceiptPending
+				? TEXT("Step 8에서 '주행 승인 저장'으로 current Recipe만 저장하세요. 같은 Target DefinitionHash에서는 기술 벤치마크나 USER 주행을 다시 수행하지 않습니다.")
+				: bHasFinalReviewUndoToken
+					? TEXT("Step 8로 진행할 수 있습니다. 필요하면 current Editor lifetime의 exact guarded Undo로 마지막 Builder Apply만 되돌릴 수 있습니다.")
+					: TEXT("Step 8 Driving Test로 진행할 수 있습니다."),
 			true);
 		return;
 	}
 
-	if (FinalReviewResult.bCanApply)
+	if (FinalCommitPreflight.CanExecute())
 	{
+		// Current durable action에 맞춘 USER next-action 문구입니다.
+		FString Resolution;
+		switch (FinalCommitPreflight.Action)
+		{
+		case ECFBuilderFinalCommitAction::ApplyAndPersist:
+			Resolution = TEXT("상세 Field Diff와 저장 대상을 확인한 뒤 '최종 적용 및 저장'을 눌러 DefinitionApply + exact Target→Recipe 저장을 승인하세요.");
+			break;
+		case ECFBuilderFinalCommitAction::PersistDirtyPair:
+			Resolution = TEXT("Target/Recipe의 현재 미저장 변경이 함께 저장됩니다. 내용을 확인한 뒤 '최종 적용 및 저장'을 누르세요.");
+			break;
+		case ECFBuilderFinalCommitAction::FinalizeAppliedStateAndPersist:
+			Resolution = TEXT("Target은 current이지만 Recipe 적용 상태 기록이 stale입니다. '최종 적용 및 저장'으로 적용 상태를 복구하고 exact Target→Recipe 순서로 저장하세요.");
+			break;
+		default:
+			Resolution = TEXT("Current durable commit action을 다시 확인하세요.");
+			break;
+		}
+
 		SetStep(
 			ECFVehicleBuilderStepId::FinalReview,
 			ECFVehicleBuilderStepState::Ready,
-			FString::Printf(
-				TEXT("Final Review는 Apply 준비됐습니다. Warning %d / Blocker 0 / Target Diff %d."),
-				FinalReviewResult.WarningCount,
-				FinalReviewResult.FieldDiff.Num()),
-			TEXT("상세 Field Diff와 Reference provenance를 검토한 뒤 'Final Review 검토 후 적용'을 눌러 explicit DefinitionApply를 승인하세요."),
+			FinalCommitPreflight.Diagnostic,
+			Resolution,
 			true);
 		return;
 	}
@@ -4750,10 +6171,10 @@ void FCFVehicleBuilderVM::EvaluateFinalReviewStep()
 	SetStep(
 		ECFVehicleBuilderStepId::FinalReview,
 		ECFVehicleBuilderStepState::Blocked,
-		FString::Printf(
-			TEXT("Final Review가 blocker 없이도 Apply/Complete 상태로 확정되지 않았습니다. Target Diff=%d."),
-			FinalReviewResult.FieldDiff.Num()),
-		TEXT("Current Final Review result를 확인하고 backend contract mismatch로 취급하세요. 자동 우회하지 않습니다."),
+		FinalCommitPreflight.Diagnostic.IsEmpty()
+			? FString::Printf(TEXT("Step 7 durable handoff를 안전하게 확정할 수 없습니다. Target Diff=%d."), FinalReviewResult.FieldDiff.Num())
+			: FinalCommitPreflight.Diagnostic,
+		TEXT("Current Final Review와 Target/Recipe 저장 상태를 다시 확인하세요. 자동 Apply/Save/재시도하지 않습니다."),
 		true);
 }
 
@@ -4762,6 +6183,109 @@ void FCFVehicleBuilderVM::EvaluateFinalReviewStep()
 FString FCFVehicleBuilderVM::GetDrivingBenchmarkResultPath() const
 {
 	return FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("CarFight"), TEXT("VehicleBuilderBenchmarkResult.json"));
+}
+
+// Step 8 exact RunId coarse progress sidecar의 canonical JSON path를 반환합니다.
+FString FCFVehicleBuilderVM::GetDrivingBenchmarkProgressPath() const
+{
+	return FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("CarFight"), TEXT("VehicleBuilderBenchmarkProgress.json"));
+}
+
+// Canonical progress sidecar를 읽어 Editor-only typed coarse progress로 변환합니다.
+bool FCFVehicleBuilderVM::ReadDrivingBenchmarkProgress(
+	FCFVehicleBuilderBenchmarkProgress& OutProgress,
+	FString& OutError) const
+{
+	OutProgress = FCFVehicleBuilderBenchmarkProgress();
+	OutError.Reset();
+
+	// Current canonical progress sidecar 전체 JSON입니다.
+	FString JsonText;
+	if (!FFileHelper::LoadFileToString(JsonText, *GetDrivingBenchmarkProgressPath()))
+	{
+		OutError = TEXT("기술 주행 측정 진행 정보 파일이 아직 생성되지 않았습니다.");
+		return false;
+	}
+
+	// Progress JSON root object입니다.
+	TSharedPtr<FJsonObject> RootObject;
+	// Strict JSON reader입니다.
+	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonText);
+	if (!FJsonSerializer::Deserialize(Reader, RootObject) || !RootObject.IsValid())
+	{
+		OutError = TEXT("기술 주행 측정 진행 정보 JSON을 읽을 수 없습니다.");
+		return false;
+	}
+
+	// Sidecar schema identity입니다.
+	FString SchemaVersion;
+	// Exact benchmark run identity입니다.
+	FString RunId;
+	// Runtime-private coarse phase key입니다.
+	FString PhaseKey;
+	// JSON number로 읽은 phase index입니다.
+	double PhaseIndexNumber = 0.0;
+	// JSON number로 읽은 fixed phase count입니다.
+	double PhaseCountNumber = 0.0;
+	if (!RootObject->TryGetStringField(TEXT("schema_version"), SchemaVersion)
+		|| !RootObject->TryGetStringField(TEXT("run_id"), RunId)
+		|| !RootObject->TryGetStringField(TEXT("phase_key"), PhaseKey)
+		|| !RootObject->TryGetNumberField(TEXT("phase_index"), PhaseIndexNumber)
+		|| !RootObject->TryGetNumberField(TEXT("phase_count"), PhaseCountNumber))
+	{
+		OutError = TEXT("기술 주행 측정 진행 정보에 필요한 필드가 없습니다.");
+		return false;
+	}
+
+	if (SchemaVersion != TEXT("carfight_vehicle_builder_benchmark_progress_v1"))
+	{
+		OutError = FString::Printf(TEXT("지원하지 않는 기술 주행 진행 정보 schema입니다: %s"), *SchemaVersion);
+		return false;
+	}
+
+	// RunId가 valid GUID인지 검증할 임시 값입니다.
+	FGuid ParsedRunId;
+	if (!FGuid::Parse(RunId, ParsedRunId))
+	{
+		OutError = TEXT("기술 주행 진행 정보 RunId가 올바르지 않습니다.");
+		return false;
+	}
+
+	// 정수 phase index입니다.
+	const int32 PhaseIndex = FMath::RoundToInt(PhaseIndexNumber);
+	// 정수 phase count입니다.
+	const int32 PhaseCount = FMath::RoundToInt(PhaseCountNumber);
+	if (!FMath::IsNearlyEqual(PhaseIndexNumber, static_cast<double>(PhaseIndex))
+		|| !FMath::IsNearlyEqual(PhaseCountNumber, static_cast<double>(PhaseCount))
+		|| PhaseCount != 7
+		|| PhaseIndex < 1
+		|| PhaseIndex > PhaseCount)
+	{
+		OutError = TEXT("기술 주행 진행 정보 단계 번호가 올바르지 않습니다.");
+		return false;
+	}
+
+	// Runtime-private key를 Editor presentation enum으로 변환합니다.
+	ECFVehicleBuilderBenchmarkProgressPhase Phase = ECFVehicleBuilderBenchmarkProgressPhase::None;
+	if (PhaseKey == TEXT("preparing")) Phase = ECFVehicleBuilderBenchmarkProgressPhase::Preparing;
+	else if (PhaseKey == TEXT("acceleration")) Phase = ECFVehicleBuilderBenchmarkProgressPhase::Acceleration;
+	else if (PhaseKey == TEXT("top_speed")) Phase = ECFVehicleBuilderBenchmarkProgressPhase::TopSpeed;
+	else if (PhaseKey == TEXT("braking")) Phase = ECFVehicleBuilderBenchmarkProgressPhase::Braking;
+	else if (PhaseKey == TEXT("steering")) Phase = ECFVehicleBuilderBenchmarkProgressPhase::Steering;
+	else if (PhaseKey == TEXT("turning_radius")) Phase = ECFVehicleBuilderBenchmarkProgressPhase::TurningRadius;
+	else if (PhaseKey == TEXT("finalizing")) Phase = ECFVehicleBuilderBenchmarkProgressPhase::Finalizing;
+	else
+	{
+		OutError = FString::Printf(TEXT("알 수 없는 기술 주행 진행 단계입니다: %s"), *PhaseKey);
+		return false;
+	}
+
+	OutProgress.SchemaVersion = MoveTemp(SchemaVersion);
+	OutProgress.RunId = MoveTemp(RunId);
+	OutProgress.Phase = Phase;
+	OutProgress.PhaseIndex = PhaseIndex;
+	OutProgress.PhaseCount = PhaseCount;
+	return true;
 }
 
 // Step 8이 요구하는 Step 7 current Complete prerequisite를 검사합니다.
@@ -4783,7 +6307,7 @@ bool FCFVehicleBuilderVM::AreDrivingTestPrerequisitesComplete(FString& OutError)
 	return true;
 }
 
-// Current saved Target object path와 exact current DefinitionHash를 Step 8 identity로 읽습니다.
+// Current Target object path와 exact current DefinitionHash를 live VehicleData snapshot에서 fresh 읽습니다.
 bool FCFVehicleBuilderVM::BuildDrivingTargetIdentity(
 	FSoftObjectPath& OutTargetPath,
 	FString& OutTargetDefinitionHash,
@@ -4812,23 +6336,34 @@ bool FCFVehicleBuilderVM::BuildDrivingTargetIdentity(
 		return false;
 	}
 
-	if (!AuthoringViewModel.IsValid())
-	{
-		OutError = TEXT("Driving Test current DefinitionHash를 읽을 Authoring ViewModel이 없습니다.");
-		return false;
-	}
+	return BuildFreshDrivingTargetIdentity(*TargetVehicleData, OutTargetPath, OutTargetDefinitionHash, OutError);
+}
 
-	// Fresh Authoring preview가 소유하는 current Target semantic snapshot입니다.
-	const FCFVehicleResolveReadResult& ResolveRead = AuthoringViewModel->GetResolveResult();
-	if (ResolveRead.ResolveRequest.CurrentDefinition.DefinitionHash.IsEmpty())
-	{
-		OutError = TEXT("Driving Test current Target DefinitionHash가 비어 있습니다. 현재 상태를 다시 확인하세요.");
-		return false;
-	}
-
-	OutTargetPath = FSoftObjectPath(TargetVehicleData);
-	OutTargetDefinitionHash = ResolveRead.ResolveRequest.CurrentDefinition.DefinitionHash;
+// Driving Apply stable guard용으로 live Target UObject 자체에서 fresh Definition Snapshot path/hash identity를 만듭니다.
+bool FCFVehicleBuilderVM::BuildFreshDrivingTargetIdentity(
+	const UCFVehicleData& TargetVehicleData,
+	FSoftObjectPath& OutTargetPath,
+	FString& OutTargetDefinitionHash,
+	FString& OutError)
+{
+	OutTargetPath.Reset();
+	OutTargetDefinitionHash.Reset();
 	OutError.Reset();
+
+	// Live Target UObject의 exact current semantic payload를 value-copy한 immutable Definition Snapshot입니다.
+	FCFVehicleDefinitionSnapshot FreshTargetSnapshot;
+	if (!FCFVehicleSnapshotBuilder::BuildDefinitionSnapshot(TargetVehicleData, FreshTargetSnapshot, OutError))
+	{
+		return false;
+	}
+	if (FreshTargetSnapshot.DefinitionHash.IsEmpty())
+	{
+		OutError = TEXT("현재 VehicleData의 fresh DefinitionHash가 비어 있습니다. 현재 상태를 다시 확인하세요.");
+		return false;
+	}
+
+	OutTargetPath = FSoftObjectPath(&TargetVehicleData);
+	OutTargetDefinitionHash = FreshTargetSnapshot.DefinitionHash;
 	return true;
 }
 
@@ -4853,42 +6388,48 @@ bool FCFVehicleBuilderVM::PrepareDrivingBenchmarkLaunch(
 		return false;
 	}
 
-	// Current Target exact object path입니다.
-	FSoftObjectPath TargetPath;
-	// Current Target exact semantic DefinitionHash입니다.
-	FString TargetDefinitionHash;
-	if (!BuildDrivingTargetIdentity(TargetPath, TargetDefinitionHash, OutError))
+	// Benchmark launch가 Step 7 표시 상태가 아니라 fresh semantic/durable truth를 다시 확인할 Final Review request입니다.
+	FCFBuilderFinalReviewRequest FreshReviewRequest;
+	if (!BuildFinalReviewRequest(FreshReviewRequest, OutError))
 	{
 		return false;
 	}
 
-	// Current Recipe/Target persistent save gate를 검사할 Recipe입니다.
+	// Benchmark launch 직전 fresh semantic Final Review입니다.
+	FCFBuilderFinalReviewResult FreshReview;
+	if (!FCFVehicleAuthoringService::ReadBuilderFinalReview(FreshReviewRequest, FreshReview))
+	{
+		OutError = FreshReview.Operation.Message.IsEmpty()
+			? TEXT("Technical Benchmark 직전 fresh Final Review를 읽지 못했습니다.")
+			: FreshReview.Operation.Message;
+		return false;
+	}
+
+	// Benchmark pre-launch가 요구하는 exact strict Saved Handoff입니다.
+	const FCFBuilderFinalCommitPreflight FreshFinalCommit = EvaluateFinalCommitPreflight(FreshReview);
+	if (FreshFinalCommit.Action != ECFBuilderFinalCommitAction::None
+		|| !FreshFinalCommit.SavedHandoff.IsStrictReady())
+	{
+		OutError = FreshFinalCommit.Diagnostic.IsEmpty()
+			? TEXT("Technical Benchmark 전에 Step 7의 차량 데이터/제작 정보 적용 및 저장을 완료해야 합니다.")
+			: FreshFinalCommit.Diagnostic;
+		return false;
+	}
+
+	// Strict Saved Handoff가 승인한 exact Target object path입니다.
+	const FSoftObjectPath TargetPath = FreshFinalCommit.SavedHandoff.TargetPath;
+	// Strict Saved Handoff가 승인한 exact live Target DefinitionHash입니다.
+	const FString TargetDefinitionHash = FreshFinalCommit.SavedHandoff.TargetDefinitionHash;
+	// Current Recipe/Target persistent save gate를 통과한 Recipe입니다.
 	UCFVehicleRecipeData* Recipe = GetRecipe();
 	// Current benchmark target입니다.
 	UCFVehicleData* TargetVehicleData = Recipe ? Recipe->TargetVehicleData.LoadSynchronous() : nullptr;
-	if (!Recipe || !TargetVehicleData)
+	if (!Recipe
+		|| !TargetVehicleData
+		|| FSoftObjectPath(Recipe) != FreshFinalCommit.SavedHandoff.RecipePath
+		|| FSoftObjectPath(TargetVehicleData) != TargetPath)
 	{
-		OutError = TEXT("Benchmark saved-state gate에서 Recipe/Target을 load할 수 없습니다.");
-		return false;
-	}
-
-	if (Recipe->GetOutermost()->IsDirty() || TargetVehicleData->GetOutermost()->IsDirty())
-	{
-		OutError = TEXT("Technical Benchmark는 saved VehicleData만 읽습니다. Step 7 Apply 뒤 Recipe와 Target VehicleData를 직접 저장한 후 다시 실행하세요. Builder는 자동 저장하지 않습니다.");
-		return false;
-	}
-
-	if (!FPackageName::DoesPackageExist(Recipe->GetOutermost()->GetName())
-		|| !FPackageName::DoesPackageExist(TargetVehicleData->GetOutermost()->GetName()))
-	{
-		OutError = TEXT("Technical Benchmark 전에 Recipe와 Target VehicleData가 disk에 저장되어 있어야 합니다.");
-		return false;
-	}
-
-	if (Recipe->AppliedState.AppliedDefinitionHash.IsEmpty()
-		|| Recipe->AppliedState.AppliedDefinitionHash != TargetDefinitionHash)
-	{
-		OutError = TEXT("Current Target DefinitionHash와 Recipe AppliedState가 일치하지 않습니다. Final Review를 fresh 확인한 뒤 다시 시도하세요.");
+		OutError = TEXT("Benchmark launch 직전 Recipe/Target identity가 strict Saved Handoff와 달라졌습니다.");
 		return false;
 	}
 
@@ -4920,6 +6461,7 @@ bool FCFVehicleBuilderVM::PrepareDrivingBenchmarkLaunch(
 	bUserTestDrivePreparedThisSession = false;
 	DrivingBenchmarkResult = FCFVehicleBuilderBenchmarkResult();
 	bHasDrivingBenchmarkResult = false;
+	DrivingBenchmarkValidationState = EDrivingBenchmarkValidationState::Unavailable;
 	DrivingBenchmarkStateError = TEXT("Technical Driving Benchmark 실행 중입니다.");
 	OutError.Reset();
 	return true;
@@ -4933,6 +6475,7 @@ bool FCFVehicleBuilderVM::RefreshDrivingBenchmarkState(FString& OutError)
 
 	DrivingBenchmarkResult = FCFVehicleBuilderBenchmarkResult();
 	bHasDrivingBenchmarkResult = false;
+	DrivingBenchmarkValidationState = EDrivingBenchmarkValidationState::Unavailable;
 	DrivingBenchmarkStateError.Reset();
 
 	// Current Target exact identity입니다.
@@ -4952,6 +6495,9 @@ bool FCFVehicleBuilderVM::RefreshDrivingBenchmarkState(FString& OutError)
 		OutError.Reset();
 		return true;
 	}
+
+	// Result 파일이 존재한 이후 validation 실패는 missing이 아니라 stale/invalid current cache로 구분합니다.
+	DrivingBenchmarkValidationState = EDrivingBenchmarkValidationState::StaleOrInvalid;
 
 	// UTF-8 JSON 원문입니다.
 	FString JsonText;
@@ -5067,6 +6613,7 @@ bool FCFVehicleBuilderVM::RefreshDrivingBenchmarkState(FString& OutError)
 	}
 
 	bHasDrivingBenchmarkResult = true;
+	DrivingBenchmarkValidationState = EDrivingBenchmarkValidationState::Current;
 	if (!PreviousRunId.IsEmpty() && PreviousRunId != ParsedResult.RunId)
 	{
 		bUserTestDrivePreparedThisSession = false;
@@ -5089,10 +6636,10 @@ FString FCFVehicleBuilderVM::BuildDrivingTestSummary() const
 
 	FString Summary = FString::Printf(
 		TEXT(
-			"Saved-state gate\n"
-			"- Recipe Dirty: %s\n"
-			"- Target VehicleData Dirty: %s\n"
-			"- Builder Auto Save: 안 함\n\n"),
+			"저장 상태\n"
+			"- 제작 정보 저장 안 됨: %s\n"
+			"- 차량 데이터 저장 안 됨: %s\n"
+			"- Step 7 저장 방식: 현재 VehicleData/Recipe만 USER 승인 뒤 필요한 범위로 저장\n\n"),
 		bRecipeDirty ? TEXT("예") : TEXT("아니오"),
 		bTargetDirty ? TEXT("예") : TEXT("아니오"));
 
@@ -5102,8 +6649,8 @@ FString FCFVehicleBuilderVM::BuildDrivingTestSummary() const
 			? TEXT("Technical Benchmark: current Target에 binding된 결과 없음\n")
 			: FString::Printf(TEXT("Technical Benchmark: current 결과 미인정\n%s\n"), *DrivingBenchmarkStateError);
 		Summary += TEXT(
-			"Step 7 Apply 뒤 Recipe와 Target을 직접 저장하고 '기술 벤치마크 실행'을 사용하세요.\n"
-			"Runner는 fixed 60Hz fresh PIE에서 수치만 계측하며 실차 threshold나 주행감을 임의 PASS/FAIL하지 않습니다.");
+			"Step 7에서 '최종 적용 및 저장'을 완료한 뒤 '기술 벤치마크 실행'을 사용하세요.\n"
+			"기술 주행 측정은 fixed 60Hz fresh PIE에서 수치만 계측하며 실차 기준값이나 주행감을 임의 PASS/FAIL하지 않습니다.");
 		return Summary;
 	}
 
@@ -5164,42 +6711,166 @@ FString FCFVehicleBuilderVM::BuildDrivingTestSummary() const
 	return Summary;
 }
 
+// Stable Driving Apply facts를 deterministic blocker 우선순위로 변환합니다.
+FCFVehicleDrivingApplyPreflight FCFVehicleBuilderVM::EvaluateDrivingApplyPreflight(const FDrivingApplyPreflightFacts& Facts)
+{
+	// 최종 typed preflight 결과입니다.
+	FCFVehicleDrivingApplyPreflight Result;
+	Result.Diagnostic = Facts.Diagnostic;
+
+	if (!Facts.bRecipeAvailable)
+	{
+		Result.Blocker = ECFVehicleDrivingApplyBlocker::RecipeUnavailable;
+		return Result;
+	}
+	if (!Facts.bTargetAvailable)
+	{
+		Result.Blocker = ECFVehicleDrivingApplyBlocker::TargetUnavailable;
+		return Result;
+	}
+	if (Facts.bRecipeDirty)
+	{
+		Result.Blocker = ECFVehicleDrivingApplyBlocker::RecipeUnsaved;
+		return Result;
+	}
+	if (Facts.bTargetDirty)
+	{
+		Result.Blocker = ECFVehicleDrivingApplyBlocker::TargetUnsaved;
+		return Result;
+	}
+	if (!Facts.bRecipePersisted)
+	{
+		Result.Blocker = ECFVehicleDrivingApplyBlocker::RecipeNotPersisted;
+		return Result;
+	}
+	if (!Facts.bTargetPersisted)
+	{
+		Result.Blocker = ECFVehicleDrivingApplyBlocker::TargetNotPersisted;
+		return Result;
+	}
+	if (!Facts.bStateReadSucceeded)
+	{
+		Result.Blocker = ECFVehicleDrivingApplyBlocker::StateReadFailed;
+		return Result;
+	}
+	if (!Facts.bAppliedStateCurrent)
+	{
+		Result.Blocker = ECFVehicleDrivingApplyBlocker::AppliedStateStale;
+		return Result;
+	}
+	if (Facts.BenchmarkState == EDrivingBenchmarkValidationState::Unavailable)
+	{
+		Result.Blocker = ECFVehicleDrivingApplyBlocker::BenchmarkUnavailable;
+		return Result;
+	}
+	if (Facts.BenchmarkState != EDrivingBenchmarkValidationState::Current || !Facts.bBenchmarkIdentityCurrent)
+	{
+		Result.Blocker = ECFVehicleDrivingApplyBlocker::BenchmarkStale;
+		return Result;
+	}
+
+	Result.Blocker = ECFVehicleDrivingApplyBlocker::None;
+	return Result;
+}
+
+// Step 8 PIE Apply 버튼과 production Apply가 공유하는 current saved-state/benchmark stable preflight를 mutation 없이 읽습니다.
+FCFVehicleDrivingApplyPreflight FCFVehicleBuilderVM::ReadDrivingApplyPreflight() const
+{
+	// Pure blocker evaluator에 전달할 current facts입니다.
+	FDrivingApplyPreflightFacts Facts;
+
+	// Current managed Recipe입니다.
+	const UCFVehicleRecipeData* Recipe = GetRecipe();
+	Facts.bRecipeAvailable = Recipe != nullptr;
+	if (!Recipe)
+	{
+		Facts.Diagnostic = TEXT("Current Recipe가 없습니다.");
+		return EvaluateDrivingApplyPreflight(Facts);
+	}
+
+	// Current persistent Target VehicleData입니다.
+	const UCFVehicleData* TargetVehicleData = Recipe->TargetVehicleData.LoadSynchronous();
+	Facts.bTargetAvailable = TargetVehicleData != nullptr;
+	if (!TargetVehicleData)
+	{
+		Facts.Diagnostic = TEXT("Current Recipe의 TargetVehicleData를 load할 수 없습니다.");
+		return EvaluateDrivingApplyPreflight(Facts);
+	}
+
+	// Current Recipe package입니다.
+	const UPackage* RecipePackage = Recipe->GetOutermost();
+	// Current Target VehicleData package입니다.
+	const UPackage* TargetPackage = TargetVehicleData->GetOutermost();
+	Facts.bRecipeDirty = RecipePackage && RecipePackage->IsDirty();
+	Facts.bTargetDirty = TargetPackage && TargetPackage->IsDirty();
+	Facts.bRecipePersisted = RecipePackage && FPackageName::DoesPackageExist(RecipePackage->GetName());
+	Facts.bTargetPersisted = TargetPackage && FPackageName::DoesPackageExist(TargetPackage->GetName());
+
+	// Fresh current Target exact object path입니다.
+	FSoftObjectPath TargetPath;
+	// Fresh current Target exact DefinitionHash입니다.
+	FString TargetDefinitionHash;
+	// Fresh identity read 실패 진단입니다.
+	FString IdentityError;
+	Facts.bStateReadSucceeded = BuildFreshDrivingTargetIdentity(*TargetVehicleData, TargetPath, TargetDefinitionHash, IdentityError);
+	Facts.Diagnostic = IdentityError;
+	if (!Facts.bStateReadSucceeded)
+	{
+		return EvaluateDrivingApplyPreflight(Facts);
+	}
+
+	// 마지막 Step 7 fresh rebuild가 확정한 Saved Handoff provenance와 현재 live Target identity를 함께 사용합니다.
+	const FCFBuilderSavedHandoffPreflight& SavedHandoff = FinalCommitPreflight.SavedHandoff;
+	Facts.bAppliedStateCurrent = SavedHandoff.Blocker == ECFBuilderSavedHandoffBlocker::None
+		&& SavedHandoff.RecipePath == FSoftObjectPath(Recipe)
+		&& SavedHandoff.TargetPath == TargetPath
+		&& SavedHandoff.TargetDefinitionHash == TargetDefinitionHash
+		&& SavedHandoff.TargetDefinitionHash == SavedHandoff.ResolvedDefinitionHash
+		&& Recipe->AppliedState.AppliedRecipeFingerprint == SavedHandoff.RecipeFingerprint
+		&& Recipe->AppliedState.AppliedSourceSignature == SavedHandoff.SourceSignature
+		&& Recipe->AppliedState.AppliedDefinitionHash == SavedHandoff.ResolvedDefinitionHash
+		&& Recipe->AppliedState.ResolverContractRevision == SavedHandoff.ResolverContractRevision;
+	if (!Facts.bAppliedStateCurrent && Facts.Diagnostic.IsEmpty() && !SavedHandoff.Diagnostic.IsEmpty())
+	{
+		Facts.Diagnostic = SavedHandoff.Diagnostic;
+	}
+	Facts.BenchmarkState = DrivingBenchmarkValidationState;
+	Facts.bBenchmarkIdentityCurrent = bHasDrivingBenchmarkResult
+		&& DrivingBenchmarkValidationState == EDrivingBenchmarkValidationState::Current
+		&& DrivingBenchmarkResult.bHasMetric
+		&& DrivingBenchmarkResult.Metric.VehicleDataPath == TargetPath.ToString()
+		&& DrivingBenchmarkResult.ExpectedTargetDefinitionHash == TargetDefinitionHash;
+	if (DrivingBenchmarkValidationState == EDrivingBenchmarkValidationState::StaleOrInvalid
+		&& !DrivingBenchmarkStateError.IsEmpty())
+	{
+		Facts.Diagnostic = DrivingBenchmarkStateError;
+	}
+
+	return EvaluateDrivingApplyPreflight(Facts);
+}
+
 // Active PIE player VehiclePawn에 current selected saved VehicleData의 transient duplicate를 적용해 USER test-drive를 준비합니다.
 bool FCFVehicleBuilderVM::ApplySelectedVehicleToActivePIE(FString& OutError)
 {
-	if (!bHasDrivingBenchmarkResult)
+	OutError.Reset();
+
+	// UI enable과 production mutation guard가 공유하는 stable preflight입니다.
+	const FCFVehicleDrivingApplyPreflight Preflight = ReadDrivingApplyPreflight();
+	if (!Preflight.CanApply())
 	{
-		OutError = TEXT("USER Driving 전에 current Target에 exact binding된 Technical Benchmark가 필요합니다.");
+		OutError = Preflight.Diagnostic.IsEmpty()
+			? TEXT("현재 저장 상태/기술 주행 측정 결과가 PIE 적용 조건을 만족하지 않습니다.")
+			: Preflight.Diagnostic;
 		return false;
 	}
 
-	// Current target exact identity를 다시 확인합니다.
-	FSoftObjectPath TargetPath;
-	// Current target exact hash입니다.
-	FString TargetDefinitionHash;
-	if (!BuildDrivingTargetIdentity(TargetPath, TargetDefinitionHash, OutError)
-		|| TargetDefinitionHash != DrivingBenchmarkResult.ExpectedTargetDefinitionHash)
-	{
-		if (OutError.IsEmpty())
-		{
-			OutError = TEXT("USER Driving target hash가 benchmark와 달라졌습니다.");
-		}
-		return false;
-	}
-
-	// Persistent target source입니다.
+	// Stable preflight 직후 실제 runtime 적용에 사용할 current Recipe입니다.
 	UCFVehicleRecipeData* Recipe = GetRecipe();
-	// Persistent target VehicleData입니다.
+	// Stable preflight 직후 실제 runtime 적용에 사용할 current persistent Target입니다.
 	UCFVehicleData* PersistentTarget = Recipe ? Recipe->TargetVehicleData.LoadSynchronous() : nullptr;
 	if (!Recipe || !PersistentTarget)
 	{
-		OutError = TEXT("USER Driving에 사용할 current Recipe/Target을 load할 수 없습니다.");
-		return false;
-	}
-
-	if (Recipe->GetOutermost()->IsDirty() || PersistentTarget->GetOutermost()->IsDirty())
-	{
-		OutError = TEXT("USER Driving은 current Technical Benchmark와 같은 saved Target을 사용해야 합니다. Recipe/Target을 저장한 뒤 다시 확인하세요.");
+		OutError = TEXT("PIE 적용 직전에 current Recipe/Target 상태가 바뀌었습니다. 현재 상태를 다시 확인하세요.");
 		return false;
 	}
 
@@ -5382,6 +7053,156 @@ bool FCFVehicleBuilderVM::HasCurrentUserDrivingAcceptance() const
 		&& AcceptedDrivingTargetDefinitionHash == TargetDefinitionHash;
 }
 
+// Persistent USER Driving receipt가 fresh current Target에 exact binding된 current Recipe explicit Save preflight를 읽습니다.
+FCFVehicleRecipeSavePreflight FCFVehicleBuilderVM::ReadCurrentRecipeSavePreflight() const
+{
+	// Fail-closed 기본 결과입니다.
+	FCFVehicleRecipeSavePreflight Result;
+
+	// Exact current managed Recipe입니다.
+	UCFVehicleRecipeData* Recipe = GetRecipe();
+	if (!Recipe || !Recipe->RecipeId.IsValid() || IsMeshOnlyCandidate())
+	{
+		Result.Blocker = ECFVehicleRecipeSaveBlocker::RecipeUnavailable;
+		Result.Diagnostic = TEXT("Current managed Recipe가 없습니다.");
+		return Result;
+	}
+
+	if (!HasSelection() || GetSelectedEntry().RecipePath != FSoftObjectPath(Recipe))
+	{
+		Result.Blocker = ECFVehicleRecipeSaveBlocker::SelectionMismatch;
+		Result.Diagnostic = TEXT("Builder current selection의 Recipe identity가 loaded Recipe와 일치하지 않습니다.");
+		return Result;
+	}
+
+	// Receipt target인 current persistent VehicleData입니다.
+	UCFVehicleData* TargetVehicleData = Recipe->TargetVehicleData.Get();
+	if (!TargetVehicleData)
+	{
+		TargetVehicleData = Recipe->TargetVehicleData.LoadSynchronous();
+	}
+	if (!TargetVehicleData)
+	{
+		Result.Blocker = ECFVehicleRecipeSaveBlocker::TargetUnavailable;
+		Result.Diagnostic = TEXT("Current Recipe의 Target VehicleData를 load할 수 없습니다.");
+		return Result;
+	}
+
+	// Live Target UObject에서 fresh exact path/hash를 다시 계산합니다.
+	FSoftObjectPath FreshTargetPath;
+	// Live Target current semantic hash입니다.
+	FString FreshTargetDefinitionHash;
+	// Snapshot build 실패 진단입니다.
+	FString IdentityError;
+	if (!BuildFreshDrivingTargetIdentity(*TargetVehicleData, FreshTargetPath, FreshTargetDefinitionHash, IdentityError))
+	{
+		Result.Blocker = ECFVehicleRecipeSaveBlocker::StateReadFailed;
+		Result.Diagnostic = IdentityError.IsEmpty() ? TEXT("Current Target identity를 읽지 못했습니다.") : IdentityError;
+		return Result;
+	}
+
+	// Explicit Save authority는 legacy host-local token이 아니라 persistent Recipe receipt만 사용합니다.
+	const FCFVehicleBuilderDrivingAcceptanceReceipt& Receipt = Recipe->BuilderDrivingAcceptanceReceipt;
+	if (!Receipt.IsValid()
+		|| Receipt.TargetVehicleDataPath != FreshTargetPath
+		|| Receipt.TargetDefinitionHash != FreshTargetDefinitionHash)
+	{
+		Result.Blocker = ECFVehicleRecipeSaveBlocker::AcceptanceUnavailableOrStale;
+		Result.Diagnostic = TEXT("Persistent USER Driving receipt가 fresh current Target path/hash에 exact binding되지 않았습니다.");
+		return Result;
+	}
+
+	// 저장할 exact Recipe package입니다.
+	UPackage* RecipePackage = Recipe->GetOutermost();
+	// 저장할 package long name입니다.
+	const FString PackageName = RecipePackage ? RecipePackage->GetName() : FString();
+	if (!RecipePackage
+		|| RecipePackage == GetTransientPackage()
+		|| !PackageName.StartsWith(TEXT("/Game/"), ESearchCase::CaseSensitive)
+		|| !FPackageName::IsValidLongPackageName(PackageName))
+	{
+		Result.Blocker = ECFVehicleRecipeSaveBlocker::PackageInvalid;
+		Result.Diagnostic = FString::Printf(TEXT("Current Recipe package를 안전한 /Game package로 저장할 수 없습니다: %s"), *PackageName);
+		return Result;
+	}
+
+	Result.Blocker = ECFVehicleRecipeSaveBlocker::None;
+	Result.bRecipeDirty = RecipePackage->IsDirty();
+	Result.Diagnostic = Result.bRecipeDirty
+		? TEXT("Persistent USER Driving receipt가 current Target에 exact binding됐고 current Recipe package는 dirty입니다.")
+		: TEXT("Persistent USER Driving receipt가 current Target에 exact binding됐고 current Recipe package는 clean입니다.");
+	return Result;
+}
+
+// USER click 뒤 exact current Recipe package 하나만 저장하고 terminal Save outcome을 반환합니다.
+FCFVehicleRecipeSaveResult FCFVehicleBuilderVM::SaveCurrentRecipeAfterDrivingAcceptance()
+{
+	// Writer terminal result입니다.
+	FCFVehicleRecipeSaveResult Result;
+	// Mutation 직전 fresh stable preflight입니다.
+	const FCFVehicleRecipeSavePreflight Preflight = ReadCurrentRecipeSavePreflight();
+	if (Preflight.Blocker != ECFVehicleRecipeSaveBlocker::None)
+	{
+		Result.Outcome = ECFVehicleRecipeSaveOutcome::Blocked;
+		Result.Diagnostic = Preflight.Diagnostic;
+		return Result;
+	}
+	if (!Preflight.bRecipeDirty)
+	{
+		Result.Outcome = ECFVehicleRecipeSaveOutcome::NoSaveNeeded;
+		Result.Diagnostic = TEXT("Current Recipe package에 저장할 미저장 변경이 없습니다.");
+		return Result;
+	}
+
+	// Preflight가 승인한 exact current Recipe입니다.
+	UCFVehicleRecipeData* Recipe = GetRecipe();
+	// Exact Recipe outer package입니다.
+	UPackage* RecipePackage = Recipe ? Recipe->GetOutermost() : nullptr;
+	if (!Recipe || !RecipePackage)
+	{
+		Result.Outcome = ECFVehicleRecipeSaveOutcome::Blocked;
+		Result.Diagnostic = TEXT("Save 직전 current Recipe/package identity를 다시 읽지 못했습니다.");
+		return Result;
+	}
+
+	// Exact Recipe .uasset filename입니다.
+	const FString PackageFilename = FPackageName::LongPackageNameToFilename(
+		RecipePackage->GetName(),
+		FPackageName::GetAssetPackageExtension());
+	// UE 5.8 single-package save options입니다.
+	FSavePackageArgs SaveArgs;
+	SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+	SaveArgs.SaveFlags = SAVE_NoError;
+
+	if (!UPackage::SavePackage(RecipePackage, Recipe, *PackageFilename, SaveArgs))
+	{
+		Result.Outcome = ECFVehicleRecipeSaveOutcome::SaveFailed;
+		Result.Diagnostic = FString::Printf(TEXT("UPackage::SavePackage가 false를 반환했습니다: %s"), *RecipePackage->GetName());
+		return Result;
+	}
+	if (RecipePackage->IsDirty())
+	{
+		Result.Outcome = ECFVehicleRecipeSaveOutcome::SaveStateUnconfirmed;
+		Result.Diagnostic = FString::Printf(TEXT("SavePackage는 true였지만 Recipe package가 여전히 dirty입니다: %s"), *RecipePackage->GetName());
+		return Result;
+	}
+
+	// Persistent write 성공 뒤 UI/state 재평가 실패는 저장 성공을 false-negative로 뒤집지 않습니다.
+	FString RefreshError;
+	if (!RefreshCurrentState(RefreshError))
+	{
+		Result.Outcome = ECFVehicleRecipeSaveOutcome::SavedRefreshWarning;
+		Result.Diagnostic = RefreshError.IsEmpty()
+			? TEXT("Recipe package 저장은 완료됐지만 post-save Builder refresh에 실패했습니다.")
+			: FString::Printf(TEXT("Recipe package 저장은 완료됐지만 post-save Builder refresh에 실패했습니다: %s"), *RefreshError);
+		return Result;
+	}
+
+	Result.Outcome = ECFVehicleRecipeSaveOutcome::Saved;
+	Result.Diagnostic = FString::Printf(TEXT("Exact current Recipe package SavePackage 성공 + clean 확인: %s"), *RecipePackage->GetName());
+	return Result;
+}
+
 // Current saved Target Definition을 USER Driving PASS persistent Recipe receipt + legacy local token으로 기록합니다.
 bool FCFVehicleBuilderVM::AcceptCurrentUserDriving(FString& OutError)
 {
@@ -5446,6 +7267,7 @@ void FCFVehicleBuilderVM::EvaluateDrivingTestStep()
 	{
 		DrivingBenchmarkResult = FCFVehicleBuilderBenchmarkResult();
 		bHasDrivingBenchmarkResult = false;
+		DrivingBenchmarkValidationState = EDrivingBenchmarkValidationState::Unavailable;
 		DrivingBenchmarkStateError.Reset();
 		SetStep(
 			ECFVehicleBuilderStepId::DrivingTest,

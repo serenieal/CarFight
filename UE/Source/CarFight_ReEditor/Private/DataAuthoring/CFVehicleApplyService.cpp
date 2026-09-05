@@ -1,15 +1,19 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleApplyService.cpp
-// Version: v1.2.0
-// Date: 2026-08-18
-// Description: DAUTH-P0-08H~P0-11 TOCTOU-safe Vehicle Definition Apply Transaction 구현입니다.
-// Scope: Fresh precondition, dependency-safe exact diff, transient preflight, Validator/hash readback, AppliedState exact value trace, rollback/no-auto-save를 제공합니다.
+// Version: v1.3.1
+// Date: 2026-09-04
+// Description: DAUTH TOCTOU-safe Vehicle Definition Apply Transaction + AppliedState finalize 구현입니다.
+// Scope: Fresh precondition, dependency-safe exact diff, transient preflight, Validator/hash readback, AppliedState exact value trace, rollback/no-auto-save와 no-diff AppliedState repair를 제공합니다.
 // Changelog:
+// - v1.3.1: AppliedState finalize의 unexpected Target dirty invariant failure에서 Recipe AppliedState/Recipe dirty/Target dirty를 pre-state로 명시 복구해 transaction cancel만으로 끝나는 불완전 rollback을 제거.
+// - v1.3.0: VBHAI-P0-07H에서 fresh Resolve와 이미 일치하는 Target을 재검증한 뒤 Target mutation 없이 Recipe AppliedState만 existing BuildAppliedState authority로 finalize하는 transaction을 추가.
 // - v1.2.0: P0-12 UA-06 readiness에서 Definition Apply transaction에 explicit CarFight context + Target PrimaryObject metadata를 부여해 Workspace Undo ownership 검증을 지원.
 // - v1.1.0: Frozen 24.59 3-way Drift review를 위해 AppliedTrace에 exact typed LastAppliedValue를 추가하되 기존 hash authority를 유지.
 // - v1.0.0: Frozen Section 22.33~22.35 A0~A14 Apply lane 최초 구현.
 // Migration:
+// - v1.3.1 rollback 보강은 failure path에만 적용되며 정상 finalize/Save authority와 persistent schema는 변경하지 않습니다.
+// - v1.3.0 FinalizeAppliedState는 Recipe AppliedState만 dirty로 만들고 Save는 수행하지 않습니다. Target writer/Resolver/Runtime schema 의미는 변경하지 않습니다.
 // - v1.2.0은 Editor transaction metadata만 추가하며 Asset/Runtime schema migration은 없습니다.
 // - Runtime UCFVehicleData schema와 UCFVDAValidator source는 수정하지 않습니다.
 // - R14 Foundation의 remove-array 미표현은 Apply plan에서 current-vs-resolved selector 차이로 deterministic 보완하며 Source/Resolver 의미는 변경하지 않습니다.
@@ -834,6 +838,121 @@ bool FCFVehicleApplyService::Apply(
 	FCFVehicleApplyResult& OutResult)
 {
 	return ApplyInternal(Request, OutResult, false);
+}
+
+// Fresh Resolve와 이미 일치하는 Target을 재검증한 뒤 Target mutation 없이 Recipe AppliedState만 authoritative state로 finalize합니다.
+bool FCFVehicleApplyService::FinalizeAppliedState(
+	const FCFVehicleApplyRequest& Request,
+	FCFVehicleApplyResult& OutResult)
+{
+	OutResult = FCFVehicleApplyResult();
+
+	// Current UObject truth를 다시 읽은 no-diff finalize precondition입니다.
+	CFVehicleApplyPrivate::FFreshApplyState FreshState;
+	if (!CFVehicleApplyPrivate::BuildFreshApplyState(Request, FreshState, OutResult))
+	{
+		return false;
+	}
+
+	if (!FreshState.ResolveResult.FieldDiff.IsEmpty())
+	{
+		CFVehicleApplyPrivate::SetBlocked(
+			OutResult,
+			ECFVehicleApplyFailureCode::ReviewedDiffMismatch,
+			TEXT("AppliedState finalize는 Target Diff 0 상태에서만 허용됩니다."));
+		return false;
+	}
+
+	if (FreshState.TargetSnapshot.DefinitionHash != FreshState.ResolveResult.ResolvedDefinitionHash
+		|| FreshState.TargetSnapshot.DefinitionHash != Request.ExpectedResolvedDefinitionHash)
+	{
+		CFVehicleApplyPrivate::SetBlocked(
+			OutResult,
+			ECFVehicleApplyFailureCode::TargetReadbackMismatch,
+			FString::Printf(
+				TEXT("AppliedState finalize 전 current Target hash가 fresh resolved hash와 다릅니다. Target=%s Resolved=%s"),
+				*FreshState.TargetSnapshot.DefinitionHash,
+				*FreshState.ResolveResult.ResolvedDefinitionHash));
+		return false;
+	}
+
+	// Resolver-owned exact field projection이 current Target에서 expected resolved hash로 readback되는지 확인합니다.
+	FCFVehicleDefinitionSnapshot TargetProjection;
+	// Projection/AppliedState build 진단입니다.
+	FString FinalizeError;
+	if (!CFVehicleApplyPrivate::BuildResolvedProjection(
+			*Request.TargetVehicleData,
+			FreshState.ResolveResult.SortedResolvedFields,
+			TargetProjection,
+			FinalizeError)
+		|| TargetProjection.DefinitionHash != Request.ExpectedResolvedDefinitionHash)
+	{
+		if (FinalizeError.IsEmpty())
+		{
+			FinalizeError = FString::Printf(
+				TEXT("AppliedState finalize Target projection hash mismatch. Expected=%s Actual=%s"),
+				*Request.ExpectedResolvedDefinitionHash,
+				*TargetProjection.DefinitionHash);
+		}
+		CFVehicleApplyPrivate::SetBlocked(OutResult, ECFVehicleApplyFailureCode::TargetReadbackMismatch, FinalizeError);
+		return false;
+	}
+
+	// Existing Apply authority와 동일한 provenance construction을 사용하는 새 AppliedState입니다.
+	FCFVehicleAppliedState NewAppliedState;
+	if (!CFVehicleApplyPrivate::BuildAppliedState(*Request.Recipe, FreshState, NewAppliedState, FinalizeError))
+	{
+		CFVehicleApplyPrivate::SetError(OutResult, ECFVehicleApplyFailureCode::InternalError, FinalizeError);
+		return false;
+	}
+
+	// Recipe-only finalize가 Target package dirty state를 바꾸지 않았는지 검증하기 위한 pre-state입니다.
+	UPackage* TargetPackage = Request.TargetVehicleData->GetOutermost();
+	// Target package의 pre-finalize dirty state입니다.
+	const bool bTargetPackageWasDirty = TargetPackage && TargetPackage->IsDirty();
+	// Failure rollback에서 exact Recipe provenance를 복원할 pre-finalize AppliedState입니다.
+	const FCFVehicleAppliedState AppliedStateBeforeFinalize = Request.Recipe->AppliedState;
+	// Failure rollback에서 dirty flag를 복원할 current Recipe package입니다.
+	UPackage* RecipePackage = Request.Recipe->GetOutermost();
+	// Recipe package의 pre-finalize dirty state입니다.
+	const bool bRecipePackageWasDirty = RecipePackage && RecipePackage->IsDirty();
+
+	// Recipe AppliedState provenance만 소유하는 explicit Editor transaction입니다.
+	FScopedTransaction FinalizeTransaction(
+		TEXT("CarFight.VehicleAuthoring.AppliedStateFinalize"),
+		NSLOCTEXT("CarFightDataAuthoring", "FinalizeVehicleAppliedState", "차량 적용 상태 확정"),
+		Request.Recipe,
+		true);
+	Request.Recipe->Modify();
+	Request.Recipe->AppliedState = MoveTemp(NewAppliedState);
+	Request.Recipe->MarkPackageDirty();
+	Request.Recipe->PostEditChange();
+
+	if (TargetPackage && TargetPackage->IsDirty() != bTargetPackageWasDirty)
+	{
+		Request.Recipe->AppliedState = AppliedStateBeforeFinalize;
+		FinalizeTransaction.Cancel();
+		if (RecipePackage)
+		{
+			RecipePackage->SetDirtyFlag(bRecipePackageWasDirty);
+		}
+		TargetPackage->SetDirtyFlag(bTargetPackageWasDirty);
+		CFVehicleApplyPrivate::SetError(
+			OutResult,
+			ECFVehicleApplyFailureCode::InternalError,
+			TEXT("AppliedState finalize 중 Target package dirty state가 예기치 않게 변경되어 Recipe/Target pre-state를 복구했습니다."));
+		return false;
+	}
+
+	OutResult.Status = ECFVehicleApplyStatus::Success;
+	OutResult.FailureCode = ECFVehicleApplyFailureCode::None;
+	OutResult.Message = TEXT("Current Target과 fresh Resolve를 재검증한 뒤 Recipe AppliedState만 확정했습니다. Package는 저장하지 않았습니다.");
+	OutResult.AppliedDiffOperationCount = 0;
+	OutResult.AppliedDefinitionHash = TargetProjection.DefinitionHash;
+	OutResult.bTargetMutationCommitted = false;
+	OutResult.bRecipeAppliedStateUpdated = true;
+	OutResult.bRollbackVerified = false;
+	return true;
 }
 
 // Production Apply와 Automation rollback probe가 공유하는 실제 transaction implementation입니다.

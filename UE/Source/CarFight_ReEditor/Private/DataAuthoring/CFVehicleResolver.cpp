@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleResolver.cpp
-// Version: v1.6.0
-// Date: 2026-09-01
-// Description: DAUTH-P0-08E/F Frozen R0~R16 Pure Resolver + ESH-01 vehicle-specific Engine TorqueCurve Profile mapping 구현입니다.
+// Version: v1.7.0
+// Date: 2026-09-03
+// Description: DAUTH-P0-08E/F Frozen R0~R16 Pure Resolver + CF-FQ-047 stable Mount legacy passthrough integrity 구현입니다.
 // Scope: Snapshot-only source candidate/precedence와 R15 transient Materializer/Validator orchestration을 제공합니다.
 // Changelog:
+// - v1.7.0: CF-FQ-047 P0-06. active Recipe Mount row의 hidden legacy leaf가 explicit stored override가 없을 때 current same-ID serialized value를 보존하고, 신규 row는 Project Compatibility wildcard struct default를 exact selector fallback으로 materialize해 Resolver/full Target hash 일치를 복원.
 // - v1.6.0: Performance Profile의 bUseEngineTorqueCurve/atomic EngineTorqueCurve를 R2에 연결하고 opt-in payload를 공통 Runtime validator로 fail-closed 검증.
 // - v1.5.3: SoftClass Profile → hard TSubclassOf Definition 변환에서 /Game Blueprint Generated Class를 UClass qualifier로 고정하던 오류를 교정. /Script native class는 Class, content generated class는 BlueprintGeneratedClass canonical qualifier를 사용해 R15 hash readback을 일치시킴.
 // - v1.5.2: Recipe SoftObject reference를 Target hard Object leaf로 encode할 때 target class-qualified canonical text로 정규화해 R15 hash roundtrip을 복원.
@@ -1885,9 +1886,94 @@ namespace CFVehicleResolverPrivate
 		ApplyStoredOverrideLayer(Context, Context.Request.Recipe.ImportState.LegacyPinnedFields, ECFVehicleSourceType::LegacyImportedPinnedBaseline, TEXT("Recipe.ImportState.LegacyPins"), Context.Request.Recipe.RecipeFingerprint);
 	}
 
+	// Active Mount row의 hidden legacy leaf를 current serialized value 또는 C++ struct default로 deterministic 보존합니다.
+	void ApplyActiveMountLegacySerializedFallbacks(FResolverContext& Context)
+	{
+		for (const FCFMountIntent& MountIntent : Context.Request.Recipe.MountIntents)
+		{
+			if (MountIntent.MountProfileId.IsNone())
+			{
+				continue;
+			}
+
+			for (const FCFVehicleFieldDescriptor& Descriptor : FCFVehicleFieldRegistry::GetDescriptors())
+			{
+				if (!Descriptor.bLegacySerialized
+					|| Descriptor.StablePathPattern.CollectionPropertyName != TEXT("MountProfiles"))
+				{
+					continue;
+				}
+
+				const FCFVehicleFieldPath ExactPath = MakeExactCollectionPath(*Descriptor.GetCanonicalPattern(), MountIntent.MountProfileId);
+				const FString ExactCanonicalPath = ExactPath.ToCanonicalString(true);
+
+				const bool bHasStoredLegacyOverride = Context.Request.Recipe.ImportState.LegacySerializedFields.ContainsByPredicate(
+					[&ExactCanonicalPath](const FCFVehicleFieldOverride& Override)
+					{
+						return Override.FieldPath.ToCanonicalString(true) == ExactCanonicalPath;
+					});
+				if (bHasStoredLegacyOverride)
+				{
+					continue;
+				}
+
+				const FCFVehicleFieldEntry* SourceEntry = nullptr;
+				FString SourceId;
+				if (Context.Request.bHasCurrentDefinition)
+				{
+					SourceEntry = Context.Request.CurrentDefinition.SortedFields.FindByPredicate(
+						[&ExactCanonicalPath](const FCFVehicleFieldEntry& Entry)
+						{
+							return Entry.FieldPath.ToCanonicalString(true) == ExactCanonicalPath;
+						});
+					if (SourceEntry)
+					{
+						SourceId = TEXT("CurrentDefinition.LegacySerialized");
+					}
+				}
+
+				if (!SourceEntry)
+				{
+					const FString DefaultCanonicalPattern = Descriptor.GetCanonicalPattern();
+					SourceEntry = Context.Request.ProjectDefaults.SortedFields.FindByPredicate(
+						[&DefaultCanonicalPattern](const FCFVehicleFieldEntry& Entry)
+						{
+							return Entry.FieldPath.ToCanonicalString(true) == DefaultCanonicalPattern;
+						});
+					if (SourceEntry)
+					{
+						SourceId = TEXT("Project.CppDefaultStableMountLegacy");
+					}
+				}
+
+				if (!SourceEntry)
+				{
+					AddIssue(
+						Context,
+						Context.Result.ResolverValidation,
+						ECFVehicleValidationSeverity::Error,
+						TEXT("MountLegacyPassthroughBaselineMissing"),
+						FString::Printf(TEXT("Active Mount legacy passthrough baseline을 찾을 수 없습니다: %s"), *ExactCanonicalPath),
+						&ExactPath);
+					continue;
+				}
+
+				AddCandidate(
+					Context,
+					ExactPath,
+					SourceEntry->Value,
+					ECFVehicleSourceType::LegacySerializedPassthrough,
+					SourceId,
+					Context.Request.Recipe.AuthoringRevision,
+					FCFVehicleFieldCodec::HashValue(SourceEntry->Value));
+			}
+		}
+	}
+
 	// R9 Hidden legacy Mount serialized field를 passthrough layer로 적용합니다.
 	void RunR9LegacySerialized(FResolverContext& Context)
 	{
+		ApplyActiveMountLegacySerializedFallbacks(Context);
 		ApplyStoredOverrideLayer(Context, Context.Request.Recipe.ImportState.LegacySerializedFields, ECFVehicleSourceType::LegacySerializedPassthrough, TEXT("Recipe.ImportState.LegacySerialized"), Context.Request.Recipe.RecipeFingerprint);
 	}
 
