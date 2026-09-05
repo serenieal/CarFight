@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFBatchTests.cpp
-// Version: v1.1.0
-// Date: 2026-08-18
-// Description: DAUTH-P0-08J Batch Column Registry / Canonical Export + current 118-field/79-profile-numeric compatibility Automation입니다.
+// Version: v1.2.0
+// Date: 2026-09-03
+// Description: DAUTH-P0-08J Batch Column Registry / Canonical Export + current 118-field/89-profile-numeric compatibility Automation입니다.
 // Changelog:
+// - v1.2.0: Profile schema v1.2.0의 VehicleBase ChassisWidth/Reference Wheel Geometry 5필드와 Drivetrain Transmission scalar 5필드를 Batch numeric allowlist에 반영하고, VehicleBase 13개/Drivetrain 6개 exact ColumnId 집합을 current typed schema 계약으로 검증.
 // - v1.1.0: UI-P0-06 explicit RedlineStartRPM으로 Current Resolved Registry 118, Performance numeric 18, five-profile numeric total 79 계약을 반영.
 // - v1.0.2: TArray 전체 TestEqual 문자열화 의존을 제거하고 exact array equality를 TestTrue로 검증.
 // - v1.0.1: UE 5.8 TArray에 없는 CountByPredicate test helper를 explicit loop로 교정.
@@ -269,6 +270,34 @@ bool FCFBatchAllowlistTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("Base Mass editable only in ExplicitValue"), BaseMassDescriptor->RequiredEditConditionValue, FString(TEXT("ExplicitValue")));
 	}
 
+	// VehicleBase typed schema에서 Batch가 허용해야 하는 exact scalar numeric ColumnId 집합입니다.
+	const TCHAR* ExpectedVehicleBaseNumericColumnIds[] =
+	{
+		TEXT("Profile.VehicleBase.BaseVehicleMassKg"),
+		TEXT("Profile.VehicleBase.MaximumGrossMassKg"),
+		TEXT("Profile.VehicleBase.MaxHealth"),
+		TEXT("Profile.VehicleBase.ChassisWidth"),
+		TEXT("Profile.VehicleBase.ChassisHeight"),
+		TEXT("Profile.VehicleBase.FrontWheelRadius"),
+		TEXT("Profile.VehicleBase.RearWheelRadius"),
+		TEXT("Profile.VehicleBase.FrontWheelWidth"),
+		TEXT("Profile.VehicleBase.RearWheelWidth"),
+		TEXT("Profile.VehicleBase.ExpectedWheelCount"),
+		TEXT("Profile.VehicleBase.FrontWheelCountForSteering"),
+		TEXT("Profile.VehicleBase.WheelMeshScaleClampMin"),
+		TEXT("Profile.VehicleBase.WheelMeshScaleClampMax")
+	};
+	// Drivetrain typed schema에서 Batch가 허용해야 하는 exact scalar numeric ColumnId 집합입니다. TransmissionRatios 배열과 bool/enum/class는 의도적으로 제외됩니다.
+	const TCHAR* ExpectedDrivetrainNumericColumnIds[] =
+	{
+		TEXT("Profile.Drivetrain.FrontRearSplit"),
+		TEXT("Profile.Drivetrain.FinalRatio"),
+		TEXT("Profile.Drivetrain.ChangeUpRPM"),
+		TEXT("Profile.Drivetrain.ChangeDownRPM"),
+		TEXT("Profile.Drivetrain.GearChangeTime"),
+		TEXT("Profile.Drivetrain.TransmissionEfficiency")
+	};
+
 	// Profile Domain별 expected non-reserved numeric counts입니다.
 	struct FDomainCount
 	{
@@ -281,10 +310,10 @@ bool FCFBatchAllowlistTest::RunTest(const FString& Parameters)
 	// Section 26.15 typed payload reflection baseline입니다.
 	const FDomainCount ExpectedDomainCounts[] =
 	{
-		{ECFVehicleProfileDomain::VehicleBase, 8},
-		{ECFVehicleProfileDomain::Drivetrain, 1},
+		{ECFVehicleProfileDomain::VehicleBase, 13},
+		{ECFVehicleProfileDomain::Drivetrain, 6},
 		{ECFVehicleProfileDomain::Handling, 41},
-				{ECFVehicleProfileDomain::Performance, 18},
+		{ECFVehicleProfileDomain::Performance, 18},
 		{ECFVehicleProfileDomain::DriveState, 11}
 	};
 	// 5 Domain 전체 numeric editable leaf 합계입니다.
@@ -301,6 +330,30 @@ bool FCFBatchAllowlistTest::RunTest(const FString& Parameters)
 		const int32 DataColumnCount = CFBatchTestsPrivate::CountDataColumns(ProfileColumns);
 		TestEqual(TEXT("Profile Domain numeric leaf count matches typed schema"), DataColumnCount, DomainCount.ExpectedCount);
 		TotalProfileNumericCount += DataColumnCount;
+		if (DomainCount.Domain == ECFVehicleProfileDomain::VehicleBase)
+		{
+			for (const TCHAR* ExpectedColumnId : ExpectedVehicleBaseNumericColumnIds)
+			{
+				// Current VehicleBase typed numeric leaf와 일치하는 non-reserved descriptor입니다.
+				const FCFBatchColumnDescriptor* MatchingDescriptor = ProfileColumns.FindByPredicate([ExpectedColumnId](const FCFBatchColumnDescriptor& Descriptor)
+				{
+					return !Descriptor.bReservedMetadata && Descriptor.ColumnId == ExpectedColumnId;
+				});
+				TestNotNull(TEXT("VehicleBase Batch allowlist contains every current typed numeric leaf"), MatchingDescriptor);
+			}
+		}
+		if (DomainCount.Domain == ECFVehicleProfileDomain::Drivetrain)
+		{
+			for (const TCHAR* ExpectedColumnId : ExpectedDrivetrainNumericColumnIds)
+			{
+				// Current Drivetrain typed numeric leaf와 일치하는 non-reserved descriptor입니다.
+				const FCFBatchColumnDescriptor* MatchingDescriptor = ProfileColumns.FindByPredicate([ExpectedColumnId](const FCFBatchColumnDescriptor& Descriptor)
+				{
+					return !Descriptor.bReservedMetadata && Descriptor.ColumnId == ExpectedColumnId;
+				});
+				TestNotNull(TEXT("Drivetrain Batch allowlist contains every current typed numeric leaf"), MatchingDescriptor);
+			}
+		}
 		for (const FCFBatchColumnDescriptor& Descriptor : ProfileColumns)
 		{
 			if (Descriptor.bReservedMetadata)
@@ -314,7 +367,7 @@ bool FCFBatchAllowlistTest::RunTest(const FString& Parameters)
 			TestTrue(TEXT("Profile mutation target stays inside typed Data payload"), Descriptor.PropertyOrSemanticTarget.StartsWith(TEXT("Data.")));
 		}
 	}
-		TestEqual(TEXT("Five Profile Domains expose exactly 79 scalar numeric leaves"), TotalProfileNumericCount, 79);
+	TestEqual(TEXT("Five Profile Domains expose exactly 89 scalar numeric leaves"), TotalProfileNumericCount, 89);
 	return true;
 }
 
