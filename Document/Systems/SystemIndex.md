@@ -1,7 +1,7 @@
 # SystemIndex
 
-- Version: 1.28.0
-- Date: 2026-09-03
+- Version: 1.31.0
+- Date: 2026-09-05
 
 - Status: Active
 - Scope: `Document/Systems/` 하위 문서 위치 안내 색인
@@ -50,6 +50,14 @@
 | 경로 | 문서 내용 |
 | --- | --- |
 | `Document/Systems/Config/ProjectRuntimeConfig.md` | 프로젝트 시작 맵, 렌더링 기술, 하드웨어 타깃, 입력 백엔드, 축 기본값 같은 런타임 환경 설정을 설명하는 문서다. |
+
+---
+
+## 4.1 DataManagement 폴더
+
+| 경로 | 문서 내용 |
+| --- | --- |
+| `Document/Systems/DataManagement/DataAssetManagement.md` | `CF-FQ-045`에서 완료한 CarFight Data Asset Manager Current System이다. native/persisted DataAsset 자동 발견, Typed Semantic Registry, metadata-only 새로고침, 명시적 검사·참조 관계 조회, generation-bound `재검사 필요 / 재확인 필요`, 한글 우선 관리 UI와 Product Asset no-auto-mutation/save 경계를 기록한다. |
 
 ---
 
@@ -110,7 +118,7 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 | `Document/Systems/Vehicles/VehicleAim.md` | `VehicleCamera`가 만든 조준 결과와 Weapon Aim Solution을 Local 표시·검증 상태로 관리하고, 사용자 조준점과 `CurrentMuzzleDirection` 기반 터렛 레티클 월드 지점을 분리해 제공한다. 정렬 정책, `MuzzleBlocked`와 CF-FQ-025 터렛 레티클을 사용자 PIE로 확인했다. |
 | `Document/Systems/Vehicles/VehicleCamera.md` | Look 입력을 차량 기준 누적 조준 상태로 변환하고, 카메라 모드, Aim Profile, 속도, 충돌 상태를 반영해 SpringArm, FOV, AimTrace를 계산/적용하는 차량 카메라 기능 문서다. |
 | `Document/Systems/Vehicles/VehicleCoreDecisions.md` | 현재 차량 코어의 유지 결정, 교체 결정, 임시 운영 판단을 기록하는 결정 로그 문서다. 차량 코어 변경 전 확인해야 하는 기준 문서다. |
-| `Document/Systems/Vehicles/VehicleBuilder.md` | `CF-FQ-040` + `CF-FQ-042` + `CF-FQ-043` + `CF-FQ-044` 완료 기준 Guided Vehicle Builder Current System이다. 8-Step Guided Shell, 신규 차량 Creation Entry, Recipe-owned Hardpoint Plan Mode, Standard Hardpoint/Mount Guidance, unified Chassis Socket edit/copy/explicit add, Legacy/custom preservation, Preview→explicit approval, Final Review/Undo, persistent Target DefinitionHash Driving acceptance와 USER PASS 뒤 Default Runtime Catalog promotion/no-auto-save/retry, same-session RuntimeApply sync 경계를 기록한다. |
+| `Document/Systems/Vehicles/VehicleBuilder.md` | `CF-FQ-040` + `CF-FQ-042` + `CF-FQ-043` + `CF-FQ-044` + `CF-FQ-047` 완료 기준 Guided Vehicle Builder Current System이다. 8-Step Guided Shell, 신규 차량 Creation Entry, Recipe-owned Hardpoint Plan Mode, Standard Hardpoint/Mount/Socket authoring integrity, Step 5 Physics impact boundary, Step 7 exact Target→Recipe durable final commit와 partial-save/fresh-restart recovery, Step 8 fresh saved-handoff readiness/persistent USER Driving receipt, USER PASS 뒤 Default Runtime Catalog promotion/no-auto-save/retry와 same-session RuntimeApply sync 경계를 기록한다. |
 | `Document/Systems/Vehicles/VehicleData.md` | `UCFVehicleData`의 외형·Layout·Hardpoint·MountProfile·Fitting Mass·Movement·WheelVisual·Reference·Defense/Fx·DriveState 구성과 실제 Pawn 적용 순서를 기록한다. WSA 완료 기준으로 USER-authored Wheel Socket Scale → visual/physics size authority, FL shared fallback Right 예외, hot-reinit full-transform 복원 계약을 포함한다. |
 | `Document/Systems/Vehicles/VehicleDrive.md` | 차량 입력을 Chaos Vehicle Movement에 적용하고, 속도/방향/접지/입력 상태를 바탕으로 DriveState를 계산/유지하는 주행 상태 기능 문서다. |
 | `Document/Systems/Vehicles/VehiclePawnLegacy.md` | `CFModVehiclePawn / BP_ModularVehicle` 계열을 현재 주력 차량 Pawn이 아닌 레거시 계열로 정리하는 문서다. |
@@ -137,6 +145,7 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 | Reticle 목표점, 터렛 추적, Muzzle 방향을 하나의 Aim Solution으로 통합한 완료 설계·검증 기록 | `Document/Plan/Archive/AimFireAlignment/ImplementationDesign.md` |
 | Sweep/Sub-stepping/보조 Sphere Sweep을 통한 고속 Projectile 연속 충돌 완료 설계·검증 기록 | `Document/Plan/Archive/ProjectileContinuousCollision/ImplementationDesign.md` |
 | 프로젝트 시작 맵, 렌더링, 입력 백엔드 설정 | `Config/ProjectRuntimeConfig.md` |
+| CarFight DataAsset 종류·용도·관리 상태 탐색, 고유 ID/중복 검사, 참조 관계 조회, Refresh 후 재검사 필요 상태와 no-auto-save 관리 경계 | `DataManagement/DataAssetManagement.md` |
 | 입력 액션, 매핑 컨텍스트, 키보드/게임패드 입력 처리 | `Input/Input.md` |
 | 과거 Dedicated Server 접속 후 차량 Pawn 생성과 Possess 기록 | `Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md` |
 | 차량 Sensor 탐지, ContactId, Live/LastKnown/Lost/DestroyedHold, Tactical Analysis·Knowledge, Scanner Utility 장비/Fitting Source와 V Active Scan 입력, actor-free Snapshot/HUD 소비 경계 | `Targeting/SensorContact.md` |
@@ -147,7 +156,7 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 | 인게임 UI Root·Layer 수명, Production HUD 데이터 흐름, Pause, Radar·Target·Weapon UI의 현재 구현 | `UI/InGameUI.md` |
 | 조준점/Reticle 표시, 로컬 발사 결과 피드백과 UISubsystem singleton/Rebind | `UI/AimReticle.md` |
 | 차량 코어 변경 전 결정 기준 | `Vehicles/VehicleCoreDecisions.md` |
-| Guided Vehicle Builder 8-Step 제작 흐름, Blank/Unused/Reused Mesh Creation Entry, Vehicle ID naming, Hardpoint/Mount/Socket Guidance, exact Socket copy/add, AI Reference/Physics Proposal, Final Review, persistent Driving acceptance, USER PASS 뒤 Runtime Demo Catalog promotion/no-auto-save/retry와 same-session RuntimeApply 연계, Data Authoring Backend·Advanced Workspace 역할 | `Vehicles/VehicleBuilder.md` |
+| Guided Vehicle Builder 8-Step 제작 흐름, Blank/Unused/Reused Mesh Creation Entry, Vehicle ID naming, Hardpoint/Mount/Socket integrity, exact Socket copy/add/adoption, AI Reference/Physics Proposal, Step 5 Physics 영향 경계, Step 7 Target→Recipe durable final commit·save-state confirmation·partial-save/fresh-restart recovery·guarded Undo reverted-pair persistence, Step 8 fresh saved-handoff/persistent Driving acceptance, USER PASS 뒤 Runtime Demo Catalog promotion/no-auto-save/retry와 same-session RuntimeApply 연계, Data Authoring Backend·Advanced Workspace 역할 | `Vehicles/VehicleBuilder.md` |
 | 차량 DataAsset 구조 | `Vehicles/VehicleData.md` |
 | 차량 BeginPlay 준비와 Ready 판정 | `Vehicles/VehicleRuntime.md` |
 | 차량 주행 입력 적용과 DriveState | `Vehicles/VehicleDrive.md` |
@@ -172,6 +181,30 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 ---
 
 ## 13. Changelog
+
+### v1.31.0 - 2026-09-05
+
+- CF-FQ-047 post-closure final audit remediation을 반영해 Current owner를 `Vehicles/VehicleBuilder.md v1.4.1`로 동기화했다.
+- Step 7 exact package save는 raw `SavePackage` 성공뿐 아니라 package clean + persisted 확인까지 필요하며 확인 실패는 `SaveStateUnconfirmed`, durable write 뒤 refresh-only failure는 `CommittedRefreshWarning`으로 분리하는 현재 계약을 검색 설명에 반영했다.
+- guarded Undo가 실제로 되돌린 Target/Recipe package를 `Target → Recipe` 순서로 durable 저장하고 partial failure에서 자동 rollback/retry하지 않는 현재 계약을 추가했다. CF-FQ-047 lifecycle은 Done/Historical 그대로이며 Product Asset migration은 없다.
+
+Migration: Vehicle Builder 현재 구현 판단은 `Vehicles/VehicleBuilder.md v1.4.1`과 실제 `CarFight_ReEditor/DataAuthoring` Source를 우선한다. post-closure remediation은 저장 완료/실패 판정과 회귀 증거를 강화한 것이며 기존 Wagon 2/2 및 USER Driving acceptance를 재승인하거나 migration하지 않는다.
+
+### v1.30.0 - 2026-09-05
+
+- `CF-FQ-047 / VBHAI-P0-08 Current System Promotion`을 반영해 `Vehicles/VehicleBuilder.md v1.4.0`을 Current index에 동기화했다.
+- Hardpoint/Mount/Socket authoring integrity, Step 5 Physics impact boundary, Step 7 exact Target→Recipe durable final commit와 partial-save/fresh-restart recovery, Step 8 fresh saved-handoff readiness/persistent USER Driving receipt를 Vehicle Builder 검색 설명에 추가했다.
+- CF-FQ-047 final-audit remediation은 Current 계약을 바꾸는 신규 기능이 아니라 durable persistence failure taxonomy와 Automation coverage를 보강하는 post-closure correction이다.
+
+Migration: Vehicle Builder 현재 구현 판단은 `Vehicles/VehicleBuilder.md v1.4.0`과 실제 `CarFight_ReEditor/DataAuthoring` Source를 우선한다. CF-FQ-047 당시 상세 Build/Automation/USER evidence는 Historical Plan이 보존하며 Product Asset migration은 없다.
+
+### v1.29.0 - 2026-09-04
+
+- `CF-FQ-045 / DAM-P0-04E USER Acceptance PASS`와 P0 완료를 Current System으로 승격해 `DataManagement/DataAssetManagement.md v1.0.0`을 신규 등록했다.
+- native/persisted 자동 discovery, semantic Registry, metadata-only Refresh, explicit 검사/참조 조회, Refresh generation에 따른 `재검사 필요 / 재확인 필요`, 한글 우선 Manager UX와 no-auto-mutation/save 경계를 기능 색인에 추가했다.
+- 완료 당시 Build·Automation·USER feedback은 `Document/Plan/DataAssetManagement/DataAssetManagementPlan.md v0.2.0` Historical + Retained Path가 보존하며 residual P2 2건은 현재 시스템을 재오픈하지 않는 별도 폴리싱 후보로 남긴다.
+
+Migration: Data Asset Manager의 현재 구현 판단은 `DataManagement/DataAssetManagement.md`와 실제 `CarFight_ReEditor/DataManagement` Source를 우선한다. Runtime/Content/Product Asset migration은 없다.
 
 ### v1.28.0 - 2026-09-03
 

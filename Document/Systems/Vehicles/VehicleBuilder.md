@@ -1,10 +1,10 @@
 # Vehicle Builder
 
-- 문서 버전: v1.3.0
-- 최근 갱신일: 2026-09-03
+- 문서 버전: v1.4.1
+- 최근 갱신일: 2026-09-05
 - 문서 상태: Current Implementation
-- 적용 범위: `CF-FQ-040 Guided Vehicle Builder`, `CF-FQ-042 Vehicle Builder 신규 차량 생성 UX`, `CF-FQ-043 Vehicle Builder 장비 장착점 Guidance UX`, `CF-FQ-044 Vehicle Builder Runtime Catalog Promotion`, Guided Builder Editor Shell, Builder-private Authoring ownership, Data Authoring Backend/Advanced Workspace 연계
-- 완료 기반: `VB-P0-09 End-to-End USER Acceptance PASS` + `VB-P0-10 Current System Promotion Complete` + `VBCUX-P0-05 USER Acceptance PASS` + `VMG-P0-07 USER Acceptance PASS` + `VMG-P0-08 Current System Promotion Complete` + `VRCP-P0-05 USER Acceptance PASS` + `VRCP-P0-06 Current System Promotion Complete`
+- 적용 범위: `CF-FQ-040 Guided Vehicle Builder`, `CF-FQ-042 Vehicle Builder 신규 차량 생성 UX`, `CF-FQ-043 Vehicle Builder 장비 장착점 Guidance UX`, `CF-FQ-044 Vehicle Builder Runtime Catalog Promotion`, `CF-FQ-047 Vehicle Builder Hardpoint Authoring Integrity`, Guided Builder Editor Shell, Builder-private Authoring ownership, Data Authoring Backend/Advanced Workspace 연계
+- 완료 기반: `VB-P0-09 End-to-End USER Acceptance PASS` + `VB-P0-10 Current System Promotion Complete` + `VBCUX-P0-05 USER Acceptance PASS` + `VMG-P0-07 USER Acceptance PASS` + `VMG-P0-08 Current System Promotion Complete` + `VRCP-P0-05 USER Acceptance PASS` + `VRCP-P0-06 Current System Promotion Complete` + `VBHAI-P0-07G USER Re-Acceptance PASS` + `VBHAI-P0-08 Current System Promotion Complete`
 
 ---
 
@@ -192,6 +192,52 @@ exact SocketName
 `추가 후 편집` 활성 여부와 표시 상태는 cached Builder snapshot이 아니라 current `UStaticMesh::FindSocket()` live truth를 사용한다. 같은 Chassis Mesh를 재사용하는 차량은 Socket geometry를 공유하므로 편집 전 shared-Chassis 경고를 노출한다.
 
 `파괴 FX Socket (선택)`은 차량 파괴 시 폭발/잔해 효과를 별도 위치에 붙일 때만 필요하다. 별도 위치가 필요하지 않으면 만들지 않아도 된다.
+
+#### 3.1.3 Hardpoint Authoring Integrity / Durable Final Commit
+
+`CF-FQ-047` 완료 뒤 Builder는 Chassis Socket의 물리 위치와 차량별 Hardpoint/Mount semantic이 서로 다른 authority라는 점을 유지하면서, 둘이 어긋난 채 제작이 완료되는 경로를 fail-closed한다.
+
+```text
+Unbound Hardpoint-like Socket inventory
+= Editor-only read-only 진단
+= Resolver AssetSnapshot / ChassisLayoutFingerprint / DefinitionHash에 참여하지 않음
+
+Standard existing Socket adoption
+= exact canonical HP_<LocationSlotId> grammar만 허용
+= USER가 UseHardpoints를 먼저 명시한 뒤 explicit adoption
+= mode 자동 변경 / duplicate Socket 생성 / silent normalize 금지
+
+Mount completeness
+= Standard Hardpoint는 기본 1:1 Mount semantic 필요
+= unbound Socket 존재 자체는 blocker가 아님
+```
+
+Step 5 Physics는 generic Profile Commit의 `NoChange` 의미를 바꾸지 않는다. persistent Physics provenance가 exact이고 current Target 대비 변경이 Hardpoint/Mount 구조에만 한정되면 기존 물리 설정을 계속 Current로 인정할 수 있다. Evidence/Profile/Transmission/Engine/Resolver 또는 다른 Definition 영역이 바뀌면 Physics stale/blocked로 fail-closed한다.
+
+Step 7의 `[완료]`는 단순히 semantic Diff가 0이라는 뜻이 아니다. 현재 계약은 다음 durable handoff까지 충족해야 한다.
+
+```text
+fresh Final Review semantic PASS
++ exact current Target/Recipe identity
++ Target/Recipe package persisted
++ 필요한 package dirty 0
++ Recipe AppliedState가 current resolved Definition과 exact
+= Step 7 durable Complete
+```
+
+필요한 경우 Step 7 primary action은 기존 DefinitionApply 이후 exact current Target/Recipe 두 package만 dirty-needed 범위로 저장하며 둘 다 저장해야 하면 `Target → Recipe` 순서를 사용한다. `Save All`, StaticMesh, Profile, Evidence, Catalog 저장 권한은 추가하지 않는다.
+
+각 exact package 저장은 `SavePackage` 호출 성공만으로 완료 처리하지 않는다. 호출 성공 뒤 package가 clean이고 persistent package 존재가 확인돼야 durable success다. 호출은 성공했지만 clean/persisted 상태를 확인하지 못하면 `SaveStateUnconfirmed`로 fail-closed하고 Step 7 Complete로 전진하지 않는다. 반대로 exact durable 저장은 끝났지만 이후 Builder 화면 refresh만 실패하면 persistent write를 되돌리지 않고 `CommittedRefreshWarning`으로 분리한다.
+
+Step 7 guarded Undo는 USER가 승인한 exact latest Builder transaction만 되돌린다. backend Undo가 Target 또는 Recipe UObject를 실제 변경했다고 보고하면 해당 package는 기존 dirty flag 값과 무관하게 persistence-needed로 취급하고 reverted Target → Recipe 순서로 exact 저장한다. Target 저장 뒤 Recipe 저장이 실패하는 partial persistence에서는 이미 성공한 Undo나 Target 저장을 자동 rollback/retry하지 않고 현재 Target clean / Recipe dirty 같은 실제 상태를 보존하며 Step 7 Complete를 강제하지 않는다.
+
+Step 8 Driving Apply readiness는 fresh live Target identity, Recipe/Target disk 존재, dirty 여부, AppliedState, current benchmark identity를 같은 stable preflight로 판정하고 버튼 비활성 이유를 USER-facing 상태로 제공한다. 실제 PIE Apply는 이 stable preflight를 다시 통과한 뒤 active PIE World/PlayerController/Vehicle Pawn 같은 volatile runtime guard를 추가로 확인한다.
+
+USER Driving PASS는 Recipe의 persistent `BuilderDrivingAcceptanceReceipt`에 exact Target path + DefinitionHash를 기록한다. 같은 Target Definition이면 Editor fresh restart에서도 persistent receipt를 authority로 복원하며, USER Driving receipt만 Recipe dirty로 남은 좁은 downstream phase는 Step 7을 과거 미완료로 되감지 않는다. fresh restart에서는 해당 exact receipt-only candidate에 한해 기존 benchmark result JSON을 current Target path/hash에 read-only로 다시 binding한다.
+
+Step 8의 explicit Recipe 저장은 **현재 Recipe package 하나의 전체 unsaved package state**를 저장하는 USER action이다. receipt field 하나만 따로 쓰는 저장이 아니며 자동 Save All/Target/StaticMesh/Catalog 저장은 하지 않는다.
+
+Wagon의 CF-FQ-047 closure 기준 semantic baseline은 USER가 직접 만든 Hardpoint/Mount **2/2**이며 historical 1/1 상태로 자동 복구하지 않는다. 공통 Step 1~8 Page Shell/scroll/overflow는 계속 `CF-FQ-046`의 Presentation owner 범위다.
 
 ### 3.2 Builder ViewModel
 
@@ -620,14 +666,31 @@ Document/Plan/Archive/VehicleBuilder/VehicleBuilderRoadmap.md
 Document/Plan/VehicleBuilderCreationUX/VehicleBuilderCreationUXPlan.md
 Document/Plan/VehicleMountGuidance/VehicleMountGuidancePlan.md
 Document/Plan/VehicleRuntimeCatalogPromotion/VehicleRuntimeCatalogPromotionPlan.md
+Document/Plan/VehicleBuilderHardpointIntegrity/VehicleBuilderHardpointIntegrityPlan.md
 Document/Plan/Archive/README.md
 ```
 
-`CF-FQ-040` 대표 Plan은 `Done → Historical + Archived Path`로 `Document/Plan/Archive/VehicleBuilder/`에 보존한다. `CF-FQ-042`, `CF-FQ-043`, `CF-FQ-044` 대표 Plan은 Current route에서 내려온 `Historical + Retained Path`로 각각 기존 `VehicleBuilderCreationUX/`, `VehicleMountGuidance/`, `VehicleRuntimeCatalogPromotion/` 경로를 보존한다.
+`CF-FQ-040` 대표 Plan은 `Done → Historical + Archived Path`로 `Document/Plan/Archive/VehicleBuilder/`에 보존한다. `CF-FQ-042`, `CF-FQ-043`, `CF-FQ-044`, `CF-FQ-047` 대표 Plan은 Current route에서 내려온 `Historical + Retained Path`로 각각 기존 `VehicleBuilderCreationUX/`, `VehicleMountGuidance/`, `VehicleRuntimeCatalogPromotion/`, `VehicleBuilderHardpointIntegrity/` 경로를 보존한다.
 
 ---
 
 ## 13. Changelog
+
+### v1.4.1 - 2026-09-05
+
+- CF-FQ-047 post-closure final audit remediation을 Current 계약에 반영했다. exact package save는 raw `SavePackage` success뿐 아니라 clean + persisted confirmation까지 필요하며 확인 실패는 `SaveStateUnconfirmed`, durable write 뒤 refresh-only failure는 `CommittedRefreshWarning`으로 구분한다.
+- guarded Undo가 실제 Target/Recipe mutation을 수행한 package를 dirty flag 누락과 무관하게 persistence-needed로 취급하고 reverted `Target → Recipe` exact pair를 저장하도록 Current 계약을 보강했다. partial save failure에서는 자동 rollback/retry 없이 실제 partial/dirty truth를 보존하고 Step 7 Complete를 강제하지 않는다.
+- post-closure remediation은 Product Wagon semantic/Asset migration이나 새 benchmark/USER Driving을 요구하지 않는다. USER-approved Wagon Hardpoint/Mount 2/2와 기존 persistent Driving acceptance는 유지한다.
+
+Migration: 기존 제작 차량의 Asset schema/content migration은 없다. Step 7/guarded Undo의 저장 완료·실패 판정만 더 엄격해지며 Save All·StaticMesh·Profile·Evidence·Catalog writer 권한은 추가되지 않는다.
+
+### v1.4.0 - 2026-09-05
+
+- `CF-FQ-047 / VBHAI-P0-08 Current System Promotion`으로 unbound Hardpoint-like Socket 진단, explicit existing Socket adoption, Standard Mount completeness와 shared Chassis preservation 계약을 Current System에 승격했다.
+- Step 5 Physics-equivalent Hardpoint/Mount structural drift와 실제 Physics stale을 분리하고 generic Profile Commit full-exact semantics는 유지하는 계약을 기록했다.
+- Step 7 durable Complete를 semantic PASS + exact Target/Recipe persisted/clean + AppliedState current로 강화하고, dirty-needed exact pair save 및 `Target → Recipe` 순서와 Save All 금지를 Current 계약으로 승격했다.
+- Step 8 fresh Target 기반 Driving Apply preflight, persistent USER Driving receipt, fresh-restart receipt-only benchmark rebind와 exact Recipe-only explicit Save 경계를 기록했다.
+- USER Re-Acceptance PASS 후 fresh AssetDump에서 Wagon current 2/2 semantic, `AppliedDefinitionHash=8aad29d04e008fcd2acb2e6470cd87f1`, 동일 hash의 persistent Driving receipt와 accepted benchmark RunId `e5c8153e-4b31-7c8b-60c1-149f13550561`을 확인했다.
 
 ### v1.3.0 - 2026-09-03
 

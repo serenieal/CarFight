@@ -1,7 +1,7 @@
 # CarFight — 03_FeatureQueue
 
-> 문서 버전: v1.56.71
-> 최근 갱신일(Asia/Seoul): 2026-09-02
+> 문서 버전: v1.57.35
+> 최근 갱신일(Asia/Seoul): 2026-09-05
 > 문서 상태: Current
 > 역할: CarFight의 **Feature 후보 / 착수 판단 / 현재 상태 / 완료 후 Current owner**를 한 곳에서 관리한다.
 
@@ -99,11 +99,16 @@ FeatureQueue는 상세 설계서나 검증 로그가 아니다.
 | `CF-FQ-035` | 인벤토리 Foundation | P1 | Paused | Technical checkpoint 보존 / USER Field UI·Mobility Pending | InventoryFoundation + 관련 Systems 후속 |
 | `CF-FQ-036` | 차량 센서·Contact Intelligence Runtime | P1 | Done | Sensor Runtime 완료, Scanner와 Current 통합 | `Systems/Targeting/SensorContact.md v1.2.0` |
 | `CF-FQ-037` | 차량 스캐너 입력·장비 통합 | P1 | Done | SCAN-P0-00~07 / USER PIE PASS | `Systems/Targeting/SensorContact.md v1.2.0` |
-| `CF-FQ-038` | 차량 데이터 Authoring 시스템 | P2 | Paused | `Document/Plan/DataAuthoring/DataAuthoringPlan.md v0.2.52` / `Document/Plan/DataAuthoring/DataAuthoringRoadmap.md v0.1.56` / Deprecated transition Technical Complete / `Systems/Vehicles/VehicleBuilder.md v1.1.1` 기준 Builder Backend + Advanced Workspace 역할 고정 / P0-12 USER PASS 7/8 / UA-08 quantitative comparison Deferred / DEL6 compatibility retirement Pending | 완료 시 VehicleDataAuthoring 신규 Systems 후보 |
+| `CF-FQ-038` | 차량 데이터 Authoring 시스템 | P2 | Paused | `Document/Plan/DataAuthoring/DataAuthoringPlan.md v0.2.52` / `Document/Plan/DataAuthoring/DataAuthoringRoadmap.md v0.1.56` / Deprecated transition Technical Complete / `Systems/Vehicles/VehicleBuilder.md v1.4.1` 기준 Builder Backend + Advanced Workspace 역할 고정 / P0-12 USER PASS 7/8 / UA-08 quantitative comparison Deferred / DEL6 compatibility retirement Pending | 완료 시 VehicleDataAuthoring 신규 Systems 후보 |
 | `CF-FQ-039` | Production UI Visual Rework | P1 | Active | `Document/Plan/InGameUIVisual/InGameUIVisualPlan.md v0.1.29` / `VPR-P0-01 VT07 VehiclePanel Asset-First whole-panel Review Ready / USER Visual PASS Pending / UE Import 0 / Production Asset mutation 0` | 완료 시 `Systems/UI/InGameUI.md` Visual ownership 갱신 + Production UI Asset 기준 |
-| `CF-FQ-040` | Guided Vehicle Builder | P2 | Done | VB-P0-10 Current System Promotion Complete / VB-P0-09 End-to-End USER Acceptance PASS / WSA P0 Complete / ESH-01~06 Final Audit Clean PASS / representative Plan은 `Document/Plan/Archive/VehicleBuilder/` Historical + Archived Path | `Systems/Vehicles/VehicleBuilder.md v1.1.1` |
-| `CF-FQ-041` | 런타임 콘텐츠 적용 메뉴 | P2 | Ready | `Document/Plan/RuntimeApply/RuntimeApplyPlan.md v0.1.5` / `RTA-P0-01 Technical PASS` / next `RTA-P0-02 Vehicle Runtime Apply` / Hard Reference Runtime Catalog+bounded Cook+actual runtime load PASS / Builder Step 8 same-Pawn Vehicle reinitialize 재사용 / Equipment post-apply seam Pending | 완료 시 Runtime Apply 재사용 계약을 관련 Vehicle/Fitting/UI Systems에 승격 |
-| `CF-FQ-042` | Vehicle Builder 신규 차량 생성 UX | P2 | Done | `VBCUX-P0-05 USER Acceptance PASS` / A Blank Start + B 기존 Chassis 재사용 + C 미사용 Mesh Quick Start PASS / final audit P1 old-selection refresh restore 교정 + focused/affected 5/0 PASS / `Document/Plan/VehicleBuilderCreationUX/VehicleBuilderCreationUXPlan.md v0.2.1` Historical + Retained Path / Vehicle ID 직접 입력 관리 부담은 비차단 UX 피드백 | `Systems/Vehicles/VehicleBuilder.md v1.1.1` |
+| `CF-FQ-040` | Guided Vehicle Builder | P2 | Done | VB-P0-10 Current System Promotion Complete / VB-P0-09 End-to-End USER Acceptance PASS / WSA P0 Complete / ESH-01~06 Final Audit Clean PASS / representative Plan은 `Document/Plan/Archive/VehicleBuilder/` Historical + Archived Path | `Systems/Vehicles/VehicleBuilder.md v1.4.1` |
+| `CF-FQ-041` | 런타임 콘텐츠 적용 메뉴 | P2 | Ready | `Document/Plan/RuntimeApply/RuntimeApplyPlan.md v0.1.17` / `RTA-P0-05 USER PASS / Closed` / RuntimeApply regression 14/14 PASS(CF-FQ-044 CatalogOptionSync 포함) / Builder-promoted persisted Wagon candidate handoff / next `RTA-P0-06 Packaged Demo` | 완료 시 Runtime Apply 재사용 계약을 관련 Vehicle/Fitting/UI Systems에 승격 |
+| `CF-FQ-042` | Vehicle Builder 신규 차량 생성 UX | P2 | Done | `VBCUX-P0-05 USER Acceptance PASS` / A Blank Start + B 기존 Chassis 재사용 + C 미사용 Mesh Quick Start PASS / final audit P1 old-selection refresh restore 교정 + focused/affected 5/0 PASS / `Document/Plan/VehicleBuilderCreationUX/VehicleBuilderCreationUXPlan.md v0.2.1` Historical + Retained Path / Vehicle ID 직접 입력 관리 부담은 비차단 UX 피드백 | `Systems/Vehicles/VehicleBuilder.md v1.4.1` |
+| `CF-FQ-043` | Vehicle Builder 장비 장착점 Guidance UX | P2 | Done | `VMG-P0-07 USER Acceptance PASS` / Socket-Naming USER PASS + Wagon persistent USER Driving receipt save/Step8 Complete / DataAuthoring 100/100 PASS / `Document/Plan/VehicleMountGuidance/VehicleMountGuidancePlan.md v0.2.0` Historical + Retained Path | `Systems/Vehicles/VehicleBuilder.md v1.4.1` |
+| `CF-FQ-044` | Vehicle Builder Runtime Catalog Promotion | P2 | Done | `VRCP-P0-05 USER Acceptance PASS` + `VRCP-P0-06 Current System Promotion Complete` / USER explicit Save 뒤 persisted Catalog Vehicles=4 + Wagon exact membership 1 / `VehicleRuntimeCatalogPromotionPlan.md v0.2.0` Historical + Retained Path / RuntimeApply RTA-P0-06 handoff 완료 | `Systems/Vehicles/VehicleBuilder.md v1.4.1` |
+| `CF-FQ-045` | CarFight Data Asset Management | P2 | Done | `DAM-P0-04E USER Acceptance PASS` / P0 Complete / Current System Promotion Complete / `Document/Plan/DataAssetManagement/DataAssetManagementPlan.md v0.2.0` Historical + Retained Path / residual P2 2건 non-blocking | `Systems/DataManagement/DataAssetManagement.md v1.0.0` |
+| `CF-FQ-046` | Vehicle Builder 사용자 정보 UX | P2 | Ready | `Document/Plan/VehicleBuilderInfoUX/VehicleBuilderInfoUXPlan.md v0.1.6` / pre-CF-FQ-047 P0-05 Technical PASS evidence preserved / CF-FQ-047 Done으로 dependency 충족 / common Step 1~8 Page Shell·scroll·overflow owner / next `VBIUX-P0-05B Step 1~8 Common Page Layout Audit` | 완료 시 `Systems/Vehicles/VehicleBuilder.md`에 User-Facing Information Architecture 계약 승격 |
+| `CF-FQ-047` | Vehicle Builder Hardpoint Authoring Integrity | P1 | Done | `VBHAI-P0-07G USER Re-Acceptance PASS` + fresh persisted Driving receipt readback PASS + `VBHAI-P0-08 Current System Promotion Complete` + post-closure final audit remediation Technical Clean PASS / `Document/Plan/VehicleBuilderHardpointIntegrity/VehicleBuilderHardpointIntegrityPlan.md v0.2.1` Historical + Retained Path / remediation evidence sync complete / current USER-approved Wagon Hardpoint/Mount baseline 2/2 | `Systems/Vehicles/VehicleBuilder.md v1.4.1` |
 
 ---
 
@@ -116,7 +121,8 @@ FeatureQueue는 상세 설계서나 검증 로그가 아니다.
 | Feature | 상태 | 정확한 다음 Gate |
 | --- | --- | --- |
 | `CF-FQ-030` | Ready | `CF-TC-027 Manual PIE` |
-| `CF-FQ-041` | Ready | `RTA-P0-02 Vehicle Runtime Apply` |
+| `CF-FQ-041` | Ready | `RTA-P0-06 Packaged Demo` |
+| `CF-FQ-046` | Ready | `VBIUX-P0-05B Step 1~8 Common Page Layout Audit` |
 | `CF-FQ-029` | Paused | `LM-P0-06 USER PIE` |
 | `CF-FQ-038` | Paused | non-blocking `DEL6 compatibility retirement` 또는 `UA-08 quantitative comparison Deferred` |
 | `CF-FQ-034` | Paused | `FIT-P0-07D USER Driving Feel Comparison` |
@@ -147,6 +153,375 @@ Feature가 Done되면 Current System 링크와 남은 Deferred/Pending 경계만
 ---
 
 ## 7. Changelog
+
+### v1.57.35 - 2026-09-05
+
+- CF-FQ-047 representative Historical Plan의 post-closure remediation evidence sync를 완료해 pointer를 `Document/Plan/VehicleBuilderHardpointIntegrity/VehicleBuilderHardpointIntegrityPlan.md v0.2.1`로 전진하고 최신 checkpoint에서 plan_repo writer blocker를 제거했다. Feature lifecycle은 P1 / Done 그대로다.
+- Current 구현 owner는 `Systems/Vehicles/VehicleBuilder.md v1.4.1`이며 USER-approved Wagon Hardpoint/Mount 2/2와 persistent Driving acceptance를 보존한다. detailed Build/Automation/source re-review evidence는 대표 Historical Plan이 소유한다.
+- 이번 변경은 final document projection 동기화만 수행했으며 CF-FQ-047 Build/Test/Benchmark/USER Driving을 재실행하지 않았다. `CF-FQ-046`은 Ready / `VBIUX-P0-05B Step 1~8 Common Page Layout Audit`, 현재 Active는 CF-FQ-039 그대로다.
+
+### v1.57.34 - 2026-09-05
+
+- CF-FQ-047 post-closure final audit remediation의 기술 검증을 Clean PASS로 완료했지만 Feature lifecycle은 P1 / Done으로 유지한다. Current 구현 owner는 `Systems/Vehicles/VehicleBuilder.md v1.4.1`이며 representative Historical Plan은 plan_repo Core writer 복구 전까지 v0.2.0을 유지한다.
+- 완료된 Builder 계열 CF-FQ-040/042/043/044/047과 CF-FQ-038 Backend 역할 pointer를 최신 VehicleBuilder v1.4.1로 동기화했다. 과거 승격 당시 v1.4.0 evidence는 Historical changelog에서 유지한다.
+- CF-FQ-046은 Ready / `VBIUX-P0-05B Step 1~8 Common Page Layout Audit` 그대로이며 자동 Active 전환하지 않는다. 이번 remediation에서 Product Wagon save/mutation, 새 benchmark, USER Driving replay는 수행하지 않았다.
+
+### v1.57.33 - 2026-09-05
+
+- `CF-FQ-047 / VBHAI-P0-07G USER Re-Acceptance`를 USER 최종 PASS와 fresh persisted Driving receipt readback으로 닫고 `VBHAI-P0-08 Current System Promotion`까지 완료해 Feature를 P1 / Done으로 전환했다.
+- Current owner는 `Systems/Vehicles/VehicleBuilder.md v1.4.0`, representative Historical Plan은 `VehicleBuilderHardpointIntegrityPlan.md v0.2.0` Historical + Retained Path다. CF-FQ-047은 재개 후보에서 제거했다.
+- `CF-FQ-046`은 CF-FQ-047 completion dependency가 충족되어 Ready 상태에서 `VBIUX-P0-05B Step 1~8 Common Page Layout Audit`을 바로 재개할 수 있다. 자동 Active 승격은 하지 않는다.
+- VehicleBuilder 계열 완료 Feature의 Current owner pointer를 최신 v1.4.0으로 동기화했다. 상세 build/Automation/persisted receipt evidence는 representative Plan과 Systems가 소유한다.
+
+### v1.57.32 - 2026-09-05
+
+- `CF-FQ-047 / VBHAI-P0-07H` Durable Final Commit과 fresh-restart USER Driving receipt recovery implementation을 Technical PASS로 닫고 representative Plan을 v0.1.23으로 전진했다.
+- official UE 5.8 build, focused 8/8, affected 10/10, final source re-review **P0 0 / P1 0 / P2 0 PASS**를 확보했다. detailed job/process evidence는 representative Plan이 소유한다.
+- Feature는 P1 / Ready를 유지하며 exact next를 `VBHAI-P0-07G USER Re-Acceptance continuation`으로 변경했다. accepted Wagon 2/2 baseline과 기존 USER driving judgement는 보존하고 Product Asset save/새 benchmark/Driving replay는 이번 correction에서 수행하지 않았다.
+
+### v1.57.31 - 2026-09-04
+
+- `CF-FQ-047 / VBHAI-P0-07H`의 P1 4 / P2 3 설계를 representative Plan v0.1.22로 교정하고 current FinalReview/Apply/Step8 Source와 재대조해 **P0 0 / P1 0 / P2 0 PASS**로 Implementation Gate를 열었다.
+- single fresh Saved Handoff authority, dirty-only pair save, service-owned AppliedState finalize/fresh-restart recovery, exact pair TOCTOU를 확정했다. 재검수 중 USER Driving PASS receipt write 후 `RebuildStepStates()`가 Step7을 retroactive 미완료로 만들 수 있는 self-lock 가능성을 추가 발견해 `PostDrivingReceiptSavePending` phase로 교정했다.
+- P0-07E/F technical evidence와 accepted Wagon 2/2 baseline은 보존하며 이번 요청의 Source/Asset/Build/Automation/Benchmark/USER Driving 실행은 0이다. exact next는 `VBHAI-P0-07H Step 7 Durable Final Commit Implementation`이다.
+
+### v1.57.30 - 2026-09-04
+
+- `CF-FQ-047 / VBHAI-P0-07H` durable final commit 설계를 current Source와 재검수해 representative Plan v0.1.21에 **P0 0 / P1 4 / P2 3 / Implementation HOLD**를 기록했다.
+- P1 correction 범위는 fresh Target 기반 single saved-handoff authority, fresh-restart partial persistence recovery, exact pair package safety/TOCTOU, Step8 pre-benchmark Ready/launch saved-state 통일이다.
+- Feature는 P1 / Ready 유지하며 exact next는 `VBHAI-P0-07H P1/P2 Design Correction + Re-review`다. P0-07E/F evidence와 accepted Wagon 2/2 baseline은 반복하지 않고 live UAT 3/3도 자동 승격하지 않는다.
+
+### v1.57.29 - 2026-09-04
+
+- `CF-FQ-047` current projection을 실제 P0-07E/F 완료 상태로 동기화했다. Step8 progress/explicit Recipe Save는 구현·Technical PASS이며 detailed build/focused/actual progress evidence는 representative Plan v0.1.20이 소유한다.
+- P0-07G USER UAT에서 Step7 `[완료]` 직후 Step8 benchmark가 VehicleData dirty로 차단되는 stage-contract defect를 확인했다. 정확한 correction을 Step8 추가 저장 버튼이 아니라 `Step7 Complete = semantic complete + exact Target/Recipe durable handoff ready`로 재정의했다.
+- P0-07H Step7 Durable Final Commit 설계 교정을 완료하고 exact next를 `Design Re-review`로 변경했다. 설계 P0/P1 0 전 implementation은 HOLD한다. UAT 중 live 3/3 장착 구성은 test state이며 accepted 2/2 Product baseline으로 자동 승격하지 않는다.
+
+### v1.57.28 - 2026-09-04
+
+- `CF-FQ-047 / VBHAI-P0-07E` mid-review P1 4 / P2 3을 current Source authority에 맞춰 교정하고 representative Plan v0.1.19의 source-based 재검수 **P0 0 / P1 0 / P2 0 PASS**로 implementation Gate를 다시 열었다.
+- actual Builder→PowerShell→UnrealEditor RunId/progress transport, whole-Recipe explicit Save scope, immediate Save success와 fresh persisted evidence 분리, current dirty receipt pre-build protection, bounded progress writes/terminal authority/module boundary를 확정했다.
+- Feature는 P1 / Ready 유지하며 exact next는 `VBHAI-P0-07E Step 8 Progress + Explicit Recipe Save Implementation`이다. current 2/2 USER Driving PASS와 07A/B/C Technical evidence는 반복하지 않는다.
+
+### v1.57.27 - 2026-09-04
+
+- `CF-FQ-047 / VBHAI-P0-07E` implementation-entry 중간검수에서 initial correction design을 **P0 0 / P1 4 / P2 3 / Implementation HOLD**로 재분류하고 representative Plan을 v0.1.18로 전진했다.
+- P1은 actual Builder→PowerShell→UnrealEditor RunId/progress transport, whole-Recipe save scope, durable receipt evidence, current dirty acceptance receipt lifecycle protection이다. current 2/2 USER Driving PASS와 07A/B/C Technical PASS는 보존하며 source/build/test replay는 0이다.
+- exact next는 `VBHAI-P0-07E Design Correction + Re-review`다. P0/P1 0 재확인 전 implementation으로 전진하지 않는다.
+
+### v1.57.26 - 2026-09-04
+
+- `CF-FQ-047 / VBHAI-P0-07D` USER UAT에서 current USER-authored Wagon 2/2의 fresh 기술 측정 → PIE Apply → USER direct Driving → `주행 테스트 통과`까지 완료했다. USER driving judgement는 PASS로 보존하되 Recipe durable Save는 Pending이며, Step8 benchmark progress 부재와 same-screen Recipe save 부재 때문에 closure는 interrupted다.
+- representative Plan을 v0.1.17로 전진하고 exact RunId 7단계 coarse progress+elapsed, USER-click exact current Recipe-only Save correction design을 **P0 0 / P1 0 / P2 0 PASS**로 확정했다. next는 `VBHAI-P0-07E Step 8 Progress + Explicit Recipe Save Implementation`이며 구현/Build/Automation은 아직 0이다.
+- stale `CF-FQ-046` projection을 actual Plan v0.1.6과 post-047 `VBIUX-P0-05B Step 1~8 Common Page Layout Audit` dependency route로 동기화했다. common scroll/page-shell은 046, Step8 progress/save behavior는 047 owner로 유지한다.
+
+### v1.57.25 - 2026-09-04
+
+- `CF-FQ-047 / VBHAI-P0-07B Driving Apply Readiness`와 `P0-07C 046×047 Integration`을 Technical PASS로 전진했다. Step8 stable preflight와 UI/production Apply guard의 단일 authority, live Target fresh DefinitionHash 교정, final source re-review **P0 0 / P1 0**을 대표 Plan v0.1.16에 고정했다.
+- Feature는 P1 / Ready 유지한다. USER-authored Wagon 2/2 semantic baseline은 보존하고 current Driving freshness는 Pending이며 exact next는 `VBHAI-P0-07D USER Re-Acceptance`다.
+
+### v1.57.24 - 2026-09-04
+
+- `CF-FQ-047` P0-07A를 Technical PASS로 전진했다. USER가 UAT에서 의도적으로 추가한 Wagon 2/2는 scalable Recipe↔VehicleData semantic invariant를 통과해 current Product baseline으로 유지하며 exact1 recovery는 하지 않는다.
+- 대표 Plan을 v0.1.15로 갱신하고 exact next를 `VBHAI-P0-07B Driving Apply Readiness`로 전진했다. P0-06 1/1 Benchmark/USER Driving은 Historical evidence로 보존하되 current 2/2 fresh acceptance로 확대하지 않는다.
+
+### v1.57.23 - 2026-09-04
+
+- `CF-FQ-047` v0.1.12 correction design 교정·재검수를 **P0 0 / P1 0 / P2 0 PASS**로 닫았다. generic commit exact semantics와 separate Step5 compatibility, structural boundary single owner, VM/Tab readiness ownership, saved-state exactness와 046 overlap을 확정했다.
+- Feature는 P1 / Ready 유지하며 exact next를 `VBHAI-P0-07A Physics Impact Boundary Implementation`으로 전진한다. P0-06 Product/Benchmark/USER Driving evidence는 semantic drift 없으면 반복하지 않는다.
+
+### v1.57.22 - 2026-09-04
+
+- `CF-FQ-047` v0.1.10 correction design 설계검수 결과 **P0 0 / P1 4 / P2 3**을 반영해 representative Plan pointer를 v0.1.11로 전진했다.
+- exact next는 `VBHAI-P0-07 Design Correction`이다. generic commit/Step5 compatibility 분리, receipt baseline boundary 재사용, VM stable preflight/Tab benchmark process 분리, saved-state exactness를 교정한 뒤 재검수한다. P0-06 USER Driving/Product evidence는 보존한다.
+
+### v1.57.21 - 2026-09-04
+
+- `CF-FQ-047 / VBHAI-P0-07 USER Acceptance`를 USER 피드백으로 FAIL 처리하고 대표 Plan v0.1.10 Correction Design을 연결했다. 047 직접 P1은 Hardpoint/Mount-only structural drift의 Physics stale 과결합과 Step8 Driving Apply readiness/reason 분산 2건이다.
+- Step5 상세/Step8 진단 스크롤은 서로 다른 결함이 아니라 CF-FQ-046이 소유하는 Step1~8 공통 Page Shell 결함으로 분류했다. 047 exact next는 `VBHAI-P0-07A Physics Impact Boundary`이며 P0-06 USER Driving PASS와 Wagon product evidence는 보존한다.
+
+### v1.57.20 - 2026-09-04
+
+- `CF-FQ-045 / DAM-P0-04E USER Acceptance`를 최종 PASS로 닫았다. 최신 한글 우선 화면, `직접 에셋 생성: 가능/불가`, Refresh 후 `재검사 필요 / 재확인 필요`와 재검사 복원을 USER가 직접 확인했다.
+- P0 완료 정의 11개를 모두 충족해 Feature를 P2 / Done으로 전환하고 Current owner를 `Systems/DataManagement/DataAssetManagement.md v1.0.0`으로 승격했다. 대표 Plan은 `DataAssetManagementPlan.md v0.2.0` Historical + Retained Path로 전환했다.
+- CF-FQ-045를 Ready 재개 후보에서 제거했다. residual P2 2건은 non-blocking polish이며 자동으로 Feature를 재오픈하지 않는다. 기존 build/affected 6/6 PASS와 Product Asset mutation/save 0 evidence는 대표 Plan에 보존한다.
+
+### v1.57.19 - 2026-09-04
+
+- `CF-FQ-047` post-P0-06 P1 2건을 교정하고 공식 UE 5.8 Editor build + focused 7/7 PASS 뒤 재검수 **P0 0 / P1 0 / P2 0**으로 닫았다. successful persistent mutation 뒤 refresh failure는 transient warning으로 분리되어 false-negative USER reporting을 제거했다.
+- P0-07 HOLD를 해제하고 exact next를 `VBHAI-P0-07 USER Acceptance`로 전진했다. P0-06 USER Driving PASS, Wagon Hardpoint/Mount 1/1, GrossMass 2350, DefinitionHash/Benchmark는 반복하지 않는다.
+
+### v1.57.18 - 2026-09-04
+
+- `CF-FQ-047` post-P0-06 중간검수에서 **P0 0 / P1 2 / P2 0**을 확인했다. Existing Socket adoption과 Physics/Profile commit 모두 persistent mutation 성공 뒤 ViewModel refresh 실패를 전체 operation failure로 오보고할 수 있는 false-negative reporting 경계가 남아 있다.
+- P0-06 USER Driving Re-Acceptance PASS, Wagon Hardpoint/Mount 1/1, GrossMass 2350, current DefinitionHash와 fixed-60Hz Benchmark는 그대로 보존한다. Feature는 P1 / Ready 유지, exact next는 `P1 Correction + Re-review`이며 `VBHAI-P0-07 USER Acceptance`는 correction closure 전 HOLD한다.
+
+### v1.57.17 - 2026-09-04
+
+- `CF-FQ-047 / VBHAI-P0-06` Product Recovery를 USER Driving Re-Acceptance PASS까지 완전 종료했다. USER direct Driving PASS, Step 8 Complete, explicit Recipe Save, fresh 재기동 Editor `모두 저장됨`과 current DefinitionHash/Benchmark RunId exact acceptance identity를 확인했다.
+- Feature는 P1 / Ready를 유지하고 대표 Plan을 v0.1.7, exact next를 `VBHAI-P0-07 USER Acceptance`로 전진했다. P0-07 전 Done/System Promotion으로 확대하지 않는다.
+
+### v1.57.16 - 2026-09-03
+
+- `CF-FQ-045 / DAM-P0-04B~D`를 Technical PASS로 전진해 대표 Plan을 v0.1.15로 갱신했다. actual Multi-column table/header sort, presentation state, management-universe Overview, current 27 user semantics와 user-first Detail을 구현했다.
+- final official Editor build + focused/affected Automation + source review P0/P1 0이다. Product Asset mutation/save는 0이며 기존 CF-FQ-046/047 DataAuthoring/Product dirty를 보존했다.
+- 기존 CF-FQ-047 implementation HOLD는 USER 승인 + fresh disjoint-file preflight로 P0-04B~D에 한해 bounded release했다. Feature는 Ready 유지, exact next는 `DAM-P0-04E USER Re-Acceptance`이며 USER PASS 전 Done 승격하지 않는다.
+
+### v1.57.15 - 2026-09-03
+
+- `CF-FQ-045 / DAM-P0-04A` current Source 기반 설계 감사/교정을 완료해 대표 Plan을 v0.1.14로 갱신했다.
+- presentation state/Overview universe/semantic compatibility/sort/test matrix를 고정하고 설계 재검수 P0/P1 0 PASS를 확보했다.
+- Feature는 P2 / Ready 유지, CF-FQ-047 완료 전 implementation HOLD와 next `DAM-P0-04B Table Surface`를 유지한다.
+
+### v1.57.14 - 2026-09-03
+
+- `CF-FQ-045 / DAM-P0-04` USER Acceptance를 FAIL로 판정하고 대표 Plan을 v0.1.13으로 갱신했다. 원인은 backend 결함이 아니라 실제 관리표/정보계층이 없어 시선 흐름과 비교성이 낮은 UX 문제다.
+- `DAM-P0-04A Information Architecture Lock` Design PASS로 Multi-column Type/Asset Table, presentation state, 사용자 의미 Overview/Detail과 view-specific filter를 고정했다.
+- CF-FQ-047 완료 전 P0-04B Source implementation은 HOLD한다. Feature는 P2 / Ready 유지하며 다른 lifecycle을 변경하지 않는다.
+
+### v1.57.13 - 2026-09-03
+
+- `CF-FQ-047 / VBHAI-P0-05` Technical Validation을 focused 3/3, affected 10/10, official linked Editor build PASS로 닫았다.
+- `VBHAI-D1`을 Turret / Large / DefaultPreset 없음으로 USER 승인 확정했다. next는 `VBHAI-P0-06 Wagon Product Recovery`이나 자동 Editor lifecycle은 `runtime_protected_dirty` 보호 게이트가 차단하므로 USER manual start 뒤 attach/reuse한다.
+- Product Wagon 신규 mutation은 아직 0이며 다른 Feature lifecycle은 변경하지 않았다.
+
+
+### v1.57.12 - 2026-09-03
+
+- `CF-FQ-047 / VBHAI-P0-02` 구현을 완료해 대표 Plan을 v0.1.2로 전진했다. Resolver-independent Chassis Socket inventory/classifier와 canonical existing Socket adoption을 Step 3에 연결했고 silent migration/auto-save/Product mutation은 0이다.
+- build `8dbc3d87250a40fb87c52cf8c2adae06`에서 신규 helper/BuilderVM/BuilderTab C++ compile과 static lib link는 PASS했다. 실행 중 Editor DLL lock의 LNK1104만 남아 official linked build는 P0-05에서 재검증한다.
+- exact next는 `VBHAI-P0-03 Mount Completion + Final Runtime Readback`이다. CF-FQ-039/041/045/046 lifecycle은 변경하지 않았다.
+
+
+### v1.57.11 - 2026-09-03
+
+- `CF-FQ-045 / DAM-P0-04` technical acceptance를 PASS로 준비하고 대표 Plan을 v0.1.12로 갱신했다.
+- final DAM 13/13 Automation과 current integration/boundary evidence가 Acceptance technical criteria를 만족함을 재확인했다. exact next는 `Representative USER Acceptance`다.
+- Feature는 P2 / Ready 유지하고 USER PASS 전 Done 승격하지 않는다. CF-FQ-039 Active 및 CF-FQ-041/046/047 lifecycle은 변경하지 않았다.
+
+### v1.57.10 - 2026-09-03
+
+- `CF-FQ-047 / VBHAI-P0-00~01` 설계 감사 교정과 재검수를 완료해 대표 Plan을 v0.1.1로 갱신하고 `P0 0 / P1 0` Design PASS로 전환했다.
+- orphan Socket inventory를 Resolver AssetSnapshot/ChassisLayoutFingerprint/ResolvedDefinitionHash/Driving acceptance와 분리하고, canonical Standard grammar + collision-aware explicit adoption, mode별 advisory, Step 7 current-vs-prospective / Step 8 current Target authority를 확정했다.
+- Product Wagon mutation 전에 `VBHAI-P0-05 Technical Validation` PASS를 요구하고 이후 `P0-06 Wagon Product Recovery`로 진행하도록 순서를 교정했다. exact next는 `VBHAI-P0-02 Unbound Socket Integrity + Adoption`이며 CF-FQ-039/041/045/046 lifecycle은 변경하지 않았다.
+
+### v1.57.9 - 2026-09-03
+
+- `CF-FQ-045 / DAM-P0-03 Verification Closure`를 완료해 Manager UI + On-demand Detail을 Technical PASS로 승격했다. 대표 Plan은 v0.1.11, exact next는 `DAM-P0-04 Acceptance`다.
+- parallel CF-FQ-046 compile blocker는 shared Builder logic을 바꾸지 않는 최소 Slate/header repair로 제거했고, final official Editor build + DAM 13/13 Automation + source P0/P1 0을 확인했다.
+- Feature는 P2 / Ready 유지하며 CF-FQ-039 Active와 CF-FQ-041/046/047 lifecycle은 변경하지 않았다.
+
+### v1.57.8 - 2026-09-03
+
+- USER 승인으로 `CF-FQ-047 Vehicle Builder Hardpoint Authoring Integrity`를 P1 / Ready로 정식 등록하고 대표 Plan `Document/Plan/VehicleBuilderHardpointIntegrity/VehicleBuilderHardpointIntegrityPlan.md v0.1.0`을 연결했다.
+- Wagon에서 persisted Chassis `HP_Top_01`은 존재하지만 Recipe `LegacyCompatible / HardpointIntents=0 / MountIntents=0`, VehicleData `HardpointSlots=0 / MountProfiles=0`인 incident를 기준선으로 고정했다. RuntimeApply의 대상 Mount 없음은 이 VehicleData를 정확히 반영하는 정상 consumer 결과다.
+- CF-FQ-043은 Done/Historical로 유지하고, 해결 범위를 unbound Standard HP_* candidate 탐지, explicit adoption, Mount completion, Step7/8 semantic readback, Product UAT restoration, Wagon recovery로 분리했다. CF-FQ-046 shared Builder dirty 때문에 implementation 전 fresh overlap 재확인을 mandatory로 고정했으며 CF-FQ-039 Active와 CF-FQ-041/045/046 lifecycle은 변경하지 않았다.
+
+### v1.57.7 - 2026-09-03
+
+- `CF-FQ-045 / DAM-P0-03` correction source re-review를 P0/P1 0으로 닫고 대표 Plan을 v0.1.10으로 갱신했다.
+- Validate/selection/Reference evidence 의미 교정과 UBT single-file 4/4 compile PASS를 확보했다. full target verification은 protected parallel CF-FQ-046 `CFVehicleBuilderTab.cpp:1352` compile error로 차단되어 Technical PASS 승격을 보류한다.
+- Feature는 P2 / Ready 유지하고 exact next를 `DAM-P0-03 Verification Closure`로 설정했다. CF-FQ-039 Active와 CF-FQ-041/046 Ready lifecycle을 변경하지 않았다.
+
+### v1.57.6 - 2026-09-03
+
+- `CF-FQ-045 / DAM-P0-03` 구현 technical evidence를 확보했으나 mid-review에서 P0 0 / P1 1 / P2 2를 발견해 Technical PASS 승격을 보류했다.
+- 대표 Plan을 v0.1.9로 갱신하고 exact next를 `DAM-P0-03 Correction + Re-review`로 설정했다. P1은 Unregistered `PolicyUnavailable` Validate 성공 오표시, P2는 hidden selection/view-switch selection 두 건이다.
+- Feature는 P2 / Ready 유지하며 CF-FQ-039 Active와 CF-FQ-041/046 Ready lifecycle을 변경하지 않았다.
+
+### v1.57.5 - 2026-09-03
+
+- CF-FQ-044 최종검수에서 CF-FQ-041 current row의 RuntimeApply regression 수치가 pre-044 `13/13`으로 남은 P2 stale projection을 교정해, `CatalogOptionSync` 포함 최종 `14/14 PASS`로 동기화했다.
+- CF-FQ-044 Done과 CF-FQ-041 `RTA-P0-06 Packaged Demo` Ready lifecycle은 변경하지 않았다.
+
+### v1.57.4 - 2026-09-03
+
+- `CF-FQ-045 / DAM-P0-02C` mid-review correction을 재검수 P0/P1 0으로 닫고 대표 Plan을 v0.1.8로 갱신했다.
+- Inventory snapshot-bound generation provenance, duplicate state 분리, typed canonical equality, operational evaluation/DA Health 분리를 반영했다. `DAM-P0-02` Technical PASS와 exact next `DAM-P0-03 Manager UI + On-demand Detail`은 유지한다.
+- Feature는 P2 / Ready 유지하며 CF-FQ-039 Active와 CF-FQ-041/046 Ready lifecycle을 변경하지 않았다.
+
+### v1.57.3 - 2026-09-03
+
+- `CF-FQ-046 / VBIUX-P0-01` Presentation Contract Design Review를 **P0/P1 0 PASS**로 닫고 대표 Plan을 v0.1.3, exact next를 `VBIUX-P0-02 Step 1~4 Implementation`으로 전진했다.
+- VM typed truth / Editor-private pure Presentation / Slate host 소유권, Level 0/1/2, terminology·unit formatter, stable error taxonomy, Step 5 source authority, Step 7 stable-selector structural diff, Step 8 scroll/action 계약을 확정했다.
+- Feature는 P2 / Ready 유지하며 backend/Recipe/Apply/Driving/Catalog authority와 CF-FQ-039/041/044/045 lifecycle을 변경하지 않았다.
+
+### v1.57.2 - 2026-09-03
+
+- `CF-FQ-044 / VRCP-P0-06` Current System Promotion을 PASS로 닫고 Feature를 Done으로 전환했다. Current owner는 `Systems/Vehicles/VehicleBuilder.md v1.3.0`, Historical Plan은 v0.2.0 Retained Path다.
+- USER explicit Save 뒤 fresh persisted AssetDump에서 Default Catalog Vehicles=4와 `DA_Vehicle_Wagon` exact membership 1개를 확인했다. RuntimeApply authorization은 CF-FQ-041에 유지하고 `RuntimeApplyPlan.md v0.1.17 / RTA-P0-06`에 persisted Wagon candidate를 handoff했다.
+- 044를 Ready 재개 후보에서 제거하고 CF-FQ-040/042/043 및 CF-FQ-038의 Current VehicleBuilder owner 포인터를 v1.3.0으로 동기화했다. CF-FQ-039 Active와 CF-FQ-045/046 Ready lifecycle은 변경하지 않았다.
+
+### v1.57.1 - 2026-09-03
+
+- `CF-FQ-046 / VBIUX-P0-00`을 read-only Audit PASS로 닫고 대표 Plan을 v0.1.2, exact next를 `VBIUX-P0-01 Presentation Contract Design Review`로 전진했다.
+- Step 1~8의 USER surface와 source authority를 inventory화했고 raw `Step.Summary/Resolution`, Reference/FinalReview/Driving raw summary, `LastStatusText`, confirmation dialog, Catalog service message의 direct-display 경로를 확정했다.
+- Feature는 P2 / Ready 유지하며 backend/Recipe/Apply/Driving/Catalog authority와 CF-FQ-039/041/044/045 lifecycle을 변경하지 않았다.
+
+### v1.57.0 - 2026-09-03
+
+- `CF-FQ-046` 대표 Plan을 v0.1.1로 갱신하고 설계검수 P1 7건/P2 보강 교정 후 **P0/P1 0 Re-review PASS**를 기록했다.
+- USER presentation owner, Draft/Profile/VehicleData source authority, USER unit/format, 의미/성향 정확도, Step 7 structural diff, error recovery, Step 8 non-persistent checklist, scroll/fixture 계약을 확정했다.
+- Feature 상태는 Ready 유지, exact next Gate는 `VBIUX-P0-00 Full User-Facing Information Audit`이며 CF-FQ-039 Active와 병렬 lifecycle은 변경하지 않았다.
+
+### v1.56.99 - 2026-09-03
+
+- `CF-FQ-045 / DAM-P0-02C Loaded Health Lane`을 Technical PASS로 닫아 `DAM-P0-02 Typed Semantic + Health Adapter` 전체 Gate를 완료했다. 대표 Plan pointer는 v0.1.7, exact next는 `DAM-P0-03 Manager UI + On-demand Detail`이다.
+- metadata-only Refresh와 explicit loaded lane을 분리하고 Stable ID, typed validation, namespace-local duplicate, InventoryGeneration freshness를 검증했다. Reference/Referencer와 Manager UI/Nomad Tab은 아직 열지 않았다.
+- CF-FQ-039 Active와 CF-FQ-041/044/046 Ready lifecycle은 변경하지 않았다.
+
+### v1.56.98 - 2026-09-03
+
+- USER 승인으로 `CF-FQ-046 Vehicle Builder 사용자 정보 UX`를 P2 / Ready로 정식 등록하고 대표 Plan `Document/Plan/VehicleBuilderInfoUX/VehicleBuilderInfoUXPlan.md v0.1.0`을 연결했다.
+- Guided Builder 1~8 Step에서 개발 내부 용어를 기본 화면에서 제거하고 `현재 상태 / 지금 할 일 / 실제 설정값 / 의미 / 게임 영향` 중심으로 재구성하는 범위를 고정했다. Step 7은 Before→After human-readable review, Step 8은 실제 주행 체크리스트를 핵심 USER Gate로 둔다.
+- backend/Recipe/Apply/Driving/Catalog authority는 재오픈하지 않으며 exact next Gate는 `VBIUX-P0-00 Full User-Facing Information Audit`이다. CF-FQ-039 Active와 CF-FQ-041/044/045 Ready lifecycle은 변경하지 않았다.
+
+### v1.56.97 - 2026-09-03
+
+- `CF-FQ-045 / DAM-P0-02B` mid-review P1 4건 교정 후 재검수 PASS를 반영해 대표 Plan pointer를 v0.1.6으로 갱신했다. exact next는 `DAM-P0-02C Loaded Health Lane` 유지다.
+- future DA 확장성, exact source mapping, batch atomicity, duplicate namespace derivation을 보강했고 final build + focused/affected Automation 재PASS를 확보했다. loaded validation/identity execution은 아직 열지 않았다.
+- CF-FQ-039 Active와 CF-FQ-041/044 Ready lifecycle은 변경하지 않았다.
+
+### v1.56.96 - 2026-09-03
+
+- `CF-FQ-044 / VRCP-P0-05` USER Acceptance를 PASS로 닫고 대표 Plan을 v0.1.10, exact next Gate를 `VRCP-P0-06 Current System Promotion`으로 전진했다.
+- USER-operated Wagon retry promotion에서 Step 8 등록됨 + Catalog 미저장 변경, live dirty=true, persisted Catalog에는 아직 Wagon 없음으로 auto-save 0을 확인했다. 같은 Editor lifetime PIE의 RuntimeApply는 Vehicles=4와 `DA_Vehicle_Wagon`을 즉시 노출했다.
+- persisted membership은 아직 저장 전이므로 CF-FQ-044는 Ready 유지하며, explicit Catalog Save + fresh AssetDump readback + Systems promotion 전에는 Done/RTA-P0-06 handoff 완료로 확대하지 않는다.
+
+### v1.56.95 - 2026-09-03
+
+- `CF-FQ-045 / DAM-P0-02B` Current Type Semantics를 Technical PASS로 닫고 대표 Plan pointer를 v0.1.5, exact next internal checkpoint를 `DAM-P0-02C Loaded Health Lane`으로 전진했다.
+- current concrete 27종 semantic/Identity/Validation policy mapping과 27/27 Registered coverage를 검증했다. Stable ID resolve/Validation execution/Duplicate/Reference/UI는 후속 loaded/detail Gate로 유지한다.
+- CF-FQ-039 Active와 CF-FQ-041/044 Ready lifecycle은 변경하지 않았다.
+
+### v1.56.94 - 2026-09-03
+
+- `CF-FQ-045 / DAM-P0-02A` Registry Foundation을 Technical PASS로 닫고 대표 Plan pointer를 v0.1.4, exact next internal checkpoint를 `DAM-P0-02B Current Type Semantics`로 전진했다.
+- Registry/Domain/semantic descriptor/Coverage/Unregistered fallback foundation은 final build + focused/affected Automation으로 검증됐다. Stable ID resolve/Validation/Duplicate/Reference/UI는 후속 Gate로 유지한다.
+- CF-FQ-039 Active와 CF-FQ-041/044 Ready lifecycle은 변경하지 않았다.
+
+### v1.56.93 - 2026-09-03
+
+- CF-FQ-045 중간점검 교정을 반영해 대표 Plan pointer를 v0.1.3으로 갱신했다. DAM-P0-01 Technical PASS와 P2 / Ready 상태는 유지한다.
+- DAM-P0-02의 첫 내부 checkpoint를 `DAM-P0-02A Registry Foundation`으로 명시하고, validation freshness는 InventoryGeneration 종속, Reference/Referencer는 DAM-P0-03 on-demand Detail owner로 교정했다.
+- CF-FQ-039 Active와 CF-FQ-041/044 Ready lifecycle은 변경하지 않았다.
+
+### v1.56.92 - 2026-09-03
+
+- `CF-FQ-045 / DAM-P0-01` Inventory Core를 Technical PASS로 닫고 대표 Plan을 v0.1.2, exact next Gate를 `DAM-P0-02 Typed Semantic + Health Adapter`로 전진했다.
+- metadata-only native/persisted discovery, deterministic merge/dedupe, abstract/zero-instance, Scope+Unclassified, Coverage/TypeInstance, Registry readiness를 구현·검증했다. Stable ID/Validation/Duplicate ID/Reference/UI는 아직 열지 않았다.
+- CF-FQ-039 Active와 CF-FQ-041/044 Ready lifecycle은 변경하지 않았다.
+
+### v1.56.91 - 2026-09-03
+
+- `CF-FQ-044 / VRCP-P0-04` Focused + Affected Regression을 Technical PASS로 닫고 대표 Plan을 v0.1.9, exact next Gate를 `VRCP-P0-05 USER Acceptance`로 전진했다.
+- 남은 affected gap인 CF-FQ-042 3/3 + CF-FQ-043 5/5와 integration source guard/rollback/no-save를 닫았고 기존 Promotion/RuntimeApply/BuilderStep8 PASS evidence는 반복하지 않고 재사용했다.
+
+### v1.56.90 - 2026-09-03
+
+- `CF-FQ-044 / VRCP-P0-03` mid-review P1인 invalid/null Catalog entry repeated RuntimeApply rebuild를 valid-entry filtered sequence comparator로 교정하고 Plan pointer를 v0.1.8로 갱신했다.
+- Product Catalog count-independent `CatalogOptionSync` fixture와 null-entry repeated refresh 회귀를 추가했다. 교정 후 official Editor build PASS, RuntimeApply 14/14 재PASS, 재검수 P0/P1 0건이며 exact next Gate는 `VRCP-P0-04` 유지다.
+
+### v1.56.89 - 2026-09-03
+
+- `CF-FQ-045 / DAM-P0-00` 설계감사 교정 후 재검수를 PASS로 닫고 대표 Plan을 `DataAssetManagementPlan.md v0.1.1`로 갱신했다.
+- Discovery↔Typed Registry, Coverage↔Health, Refresh↔Validate, Domain↔Type 경계를 분리하고 metadata-only Refresh, `Unclassified`, abstract/concrete 구분, lazy Stable ID/Reference, Registry Gathering, synthetic DTO test seam을 구현 전 계약으로 고정했다.
+- Feature는 P2 / Ready를 유지하며 exact next Gate는 `DAM-P0-01 Inventory Core`다. CF-FQ-039 Active와 기존 CF-FQ-041/044 Ready lifecycle은 변경하지 않았다.
+
+### v1.56.88 - 2026-09-03
+
+- `CF-FQ-044 / VRCP-P0-03` final code audit의 same-refresh Equipment 중복 rebuild 가능성을 교정하고 대표 Plan pointer를 v0.1.7로 갱신했다. final build 및 RuntimeApply 14/14 재PASS, next `VRCP-P0-04`는 유지한다.
+
+### v1.56.87 - 2026-09-03
+
+- `CF-FQ-044 / VRCP-P0-03` Step 8 Integration / Retry UX를 Technical PASS로 닫고 대표 Plan을 v0.1.6, exact next Gate를 `VRCP-P0-04 Focused / Affected Regression`으로 전진했다.
+- BuilderVM no-touch를 유지하면서 BuilderTab promotion/fresh status/retry와 RuntimeApply exact-sequence cache sync를 구현했다. official build, Promotion 4/4, RuntimeApply 14/14, Builder affected focused/Step8 PASS를 확보했으며 P0-04 전체 matrix closure는 다음 Gate에 남긴다.
+
+### v1.56.86 - 2026-09-03
+
+- USER 승인으로 `CF-FQ-045 CarFight Data Asset Management`를 P2 / Ready로 정식 등록하고 대표 Plan `Document/Plan/DataAssetManagement/DataAssetManagementPlan.md v0.1.0`을 연결했다.
+- DAM-P0-00 read-only audit + design을 PASS로 기록했다. current baseline은 DA class 28종 / persisted DA Asset 53개이며 기존 `.uasset` SSOT와 Editor-only read-first 관리층을 유지한다.
+- 신규 DA class/instance hardcoding을 금지하고 Generic Adapter + Typed Adapter + Coverage Auditor, Unregistered-visible, Data Overview / Type View / Asset View 계약을 고정했다. next Gate는 `DAM-P0-01 Inventory Core`다. CF-FQ-039 Active와 기존 CF-FQ-041/044 Ready lifecycle은 변경하지 않았다.
+
+### v1.56.85 - 2026-09-03
+
+- `CF-FQ-044 / VRCP-P0-02` Editor Promotion Service를 Technical PASS로 닫았다. official Editor build PASS와 exact focused Automation 4/4 PASS로 raw Catalog resolve, persistent target validation, full validation, idempotent membership, transaction/Undo/Redo, no-auto-save 계약을 검증했다.
+- 대표 Plan을 v0.1.4로 갱신하고 exact next Gate를 `VRCP-P0-03 Step 8 Integration / Retry UX`로 전진했다. CF-FQ-043는 Done 상태를 유지하며 BuilderVM no-touch와 RuntimeApply authorization 경계를 보존한다.
+
+### v1.56.84 - 2026-09-03
+
+- `CF-FQ-043 / VMG-P0-07 USER Acceptance`를 최종 PASS로 닫고 Wagon USER Driving persistent receipt 저장과 Step 8 Complete를 USER 확인했다. fresh AssetDump에서 receipt 직렬화도 확인했다.
+- `VMG-P0-08 Current System Promotion`을 완료해 Current owner를 `Systems/Vehicles/VehicleBuilder.md v1.2.0`으로 승격하고 Feature를 P2 / Done으로 전환했다.
+- 대표 Plan은 `VehicleMountGuidancePlan.md v0.2.0` Historical + Retained Path로 보존하고 Ready 후보에서 제거했다. CF-FQ-039 Active, CF-FQ-041/044 Ready lifecycle은 변경하지 않았다.
+
+### v1.56.83 - 2026-09-03
+
+- `CF-FQ-043 / VMG-P0-07` Socket/Naming UX를 USER PASS로 마감하고 대표 Plan을 v0.1.9로 갱신했다. Socket live enable, bounded scroll, exact copy/add, Recipe-only delete 인식 개선까지 포함한다.
+- FQ-043 lifecycle은 Ready 유지하며 remaining Gate는 USER Driving re-acceptance다. latest Editor build PASS, broad baseline 100/100.
+
+### v1.56.82 - 2026-09-03
+
+- `CF-FQ-043 / VMG-P0-06`을 Technical PASS로 닫고 대표 Plan을 v0.1.7, exact next Gate를 `VMG-P0-07 USER Acceptance`로 전진했다.
+- A~Y technical matrix에서 F/G/K gap을 focused Automation으로 보강하고 V/W Mesh editor routing/shared warning은 source-path audit + compile로 증명했다. final broad는 100건 98 PASS, 기존 2 baseline failure만 유지한다.
+- P0-06 product behavior mutation은 없고 test-only seam/Automation만 추가했다. CF-FQ-039 Active 및 CF-FQ-041/044 Ready lifecycle은 변경하지 않았다.
+
+### v1.56.81 - 2026-09-03
+
+- `CF-FQ-043 / VMG-P0-05`를 Technical PASS로 닫고 대표 Plan을 v0.1.6, exact next Gate를 `VMG-P0-06 Focused + Affected Technical Validation`으로 전진했다.
+- E1~E11 Existing preservation focused regression에서 LegacyCompatible empty-intent, direct/missing Socket stored transform, custom/multi-Mount exact preservation, isolated add/remove, Target/StaticMesh mutation0와 untouched resolved identity를 고정했다.
+- official build와 FQ-043 P0-02~05 regression은 PASS. broad suite 99건 중 97 PASS이며 기존 2 failure만 유지한다. 다른 Feature lifecycle은 변경하지 않았다.
+
+### v1.56.80 - 2026-09-03
+
+- `CF-FQ-043 / VMG-P0-04`을 Technical PASS로 닫고 대표 Plan을 v0.1.5, exact next Gate를 `VMG-P0-05 New / Existing Preservation Guards`로 전진했다.
+- Standard 1:1 Mount typed commit/remove, stable MountProfileId, Type/Size, optional EquipmentPreset compatibility와 LegacyCompatible no-migration 경계를 구현했다. Hardpoint/Mount policy authority는 CompanionMode와 분리된 BuilderHardpointPlanMode를 사용한다.
+- final Editor build와 FQ-043 P0-04/directly affected regression은 PASS. broad suite는 98건 96 PASS이며 변경 범위 밖 기존 2 failure만 유지한다. CF-FQ-039 Active와 CF-FQ-041/044 Ready 상태는 변경하지 않았다.
+
+### v1.56.79 - 2026-09-02
+
+- `CF-FQ-043 / VMG-P0-03`을 Technical PASS로 닫고 대표 Plan을 v0.1.4, exact next Gate를 `VMG-P0-04 Step 6 MountProfile Guided UX`로 전진했다.
+- Step 3 explicit Mode/Standard Hardpoint/Socket guidance와 Step 2 pending Mesh editor entry를 구현했으며, missing Hardpoint Socket은 Builder diagnostic Ready와 Resolver/R3 fail-closed Blocked를 분리해 보존했다.
+- final Editor build와 FQ-043 P0-03 focused/direct affected regression은 PASS. broad suite의 변경 범위 밖 기존 2 failure는 대표 Plan evidence에 유지하며 CF-FQ-039 Active와 CF-FQ-041/044 Ready 상태는 변경하지 않았다.
+
+### v1.56.78 - 2026-09-02
+
+- `CF-FQ-044 / VRCP-P0-01` Correction Re-review를 current Source 기준으로 PASS해 대표 Plan v0.1.2와 next `VRCP-P0-02 Editor Promotion Service Implementation`을 확정했다.
+- Catalog public API/Settings soft reference, Builder Step 8 public acceptance seam, Editor transaction precedent와 RuntimeApply cache 구조가 correction contract와 양립함을 재확인했다. CF-FQ-043 BuilderVM은 no-touch, BuilderTab은 Step 8 exact hunk만 최소 수정하는 병렬 경계를 유지한다.
+- 구현/UE Asset mutation은 아직 0이며 CF-FQ-039 Active와 다른 Feature 상태는 변경하지 않았다.
+
+### v1.56.77 - 2026-09-02
+
+- `CF-FQ-044 / VRCP-P0-01` 설계감사 P1 5건 + P2 3건을 대표 Plan v0.1.1에 교정 반영했다. 상태는 `Design Audit Correction Applied / Re-review Ready`이며 아직 구현 또는 Design PASS로 확대하지 않는다.
+- CF-FQ-043 current BuilderVM dirty와 충돌하지 않도록 전용 Editor Promotion Service + `SCFVehicleBuilderTab` owner를 고정하고 BuilderVM 신규 Catalog state/mutation을 금지했다. RuntimeApply는 실제 Catalog array 변경 때만 options를 rebuild하도록 P0 계약을 보강했다.
+- 다음 Gate를 `VRCP-P0-01 Design Audit Correction Re-review`로 갱신했다. CF-FQ-039 Active, CF-FQ-041/043 Ready, CF-FQ-042 Done 상태는 변경하지 않았다.
+
+### v1.56.76 - 2026-09-02
+
+- `CF-FQ-043 / VMG-P0-02`를 Technical PASS로 닫고 대표 Plan을 v0.1.3, 정확한 다음 Gate를 `VMG-P0-03 Step 3 Hardpoint Planning UX`로 전진했다.
+- Recipe-owned Hardpoint Plan Mode, Guided creation binding, Builder-owned transaction/readback, typed no-cascade remove의 구현·검증을 완료했다. final official Editor build와 direct affected regression은 PASS이며 broad suite의 변경 범위 밖 2 failure는 대표 Plan evidence에만 유지한다.
+- CF-FQ-039 Active, CF-FQ-041/044 Ready, CF-FQ-042 Done 상태는 변경하지 않았다.
+
+### v1.56.75 - 2026-09-02
+
+- USER 승인으로 `CF-FQ-044 Vehicle Builder Runtime Catalog Promotion`을 P2 / Ready로 정식 등록하고 대표 Plan을 `Document/Plan/VehicleRuntimeCatalogPromotion/VehicleRuntimeCatalogPromotionPlan.md v0.1.0`으로 연결했다.
+- Builder 생성 직후가 아니라 Step 8 exact USER Driving PASS 성공 뒤 Default RuntimeTestCatalog에 exact persistent VehicleData를 idempotent promotion하는 방향을 고정했다. Transaction/Undo, no-auto-save, promotion 실패 시 USER PASS 보존과 explicit retry, Tests/Legacy auto-search 금지를 기본 계약으로 둔다.
+- VRCP-P0-00 Current Contract Audit을 PASS로 기록하고 next Gate를 `VRCP-P0-01 Detailed Promotion Contract Design Review`로 설정했다. CF-FQ-040/042 Done은 재오픈하지 않고 CF-FQ-043 병렬 Builder 작업을 보호한다.
+- 동시에 stale CF-FQ-041 projection을 실제 `RuntimeApplyPlan.md v0.1.16 / RTA-P0-05 USER PASS / next RTA-P0-06 Packaged Demo` 상태로 동기화했다.
+
+### v1.56.74 - 2026-09-02
+
+- `CF-FQ-043 / VMG-P0-01` post-design audit 교정을 반영해 대표 Plan을 v0.1.2로 갱신하고 `Design Audit Correction PASS / VMG-P0-02 Ready`를 확정했다.
+- 신규 Guided 차량이 Companion 생성 뒤 CompleteExisting으로 파생될 수 있는 current lifecycle과 충돌하지 않도록 Hardpoint Guidance를 별도 Recipe-owned 4-state Mode로 분리하고, Guided creation ProposalHash binding·stale workflow invalidation·shared Chassis warning을 설계 계약에 추가했다. 구현/UE Asset/Runtime mutation은 0이다.
+
+### v1.56.73 - 2026-09-02
+
+- `CF-FQ-043 / VMG-P0-01` Detailed UX / State Contract Design Review를 PASS로 닫고 대표 Plan을 v0.1.1로 갱신했다.
+- Configured derived state, stable MountProfileId, current Utility Scanner support, existing R1 remove lane, Step 2 pending asset open, Step 3/6 completion과 Existing preservation을 확정했다. next는 `VMG-P0-02`이며 구현/UE Asset/Runtime mutation은 0이다.
+
+### v1.56.72 - 2026-09-02
+
+- USER 승인으로 `CF-FQ-043 Vehicle Builder 장비 장착점 Guidance UX`를 P2 / Ready로 신규 등록하고 대표 Plan을 `Document/Plan/VehicleMountGuidance/VehicleMountGuidancePlan.md v0.1.0`으로 연결했다.
+- VMG-P0-00 감사에서 Hardpoint=물리 위치, MountProfile=장착 허용 규칙, 신규 차량 미결정/명시적 0개 구분과 Step 2/3 Mesh Editor 진입 UX 필요성을 확정했다. next는 `VMG-P0-01`이며 CF-FQ-042 Done, CF-FQ-040 Wagon/WSA/ESH, CF-FQ-041 Runtime Apply는 변경하지 않았다.
 
 ### v1.56.71 - 2026-09-02
 
