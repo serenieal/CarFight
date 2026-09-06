@@ -663,18 +663,25 @@ Document/Systems/Vehicles/VehicleCoreDecisions.md
 ```text
 Document/Plan/Archive/VehicleBuilder/VehicleBuilderPlan.md
 Document/Plan/Archive/VehicleBuilder/VehicleBuilderRoadmap.md
-Document/Plan/VehicleBuilderCreationUX/VehicleBuilderCreationUXPlan.md
-Document/Plan/VehicleMountGuidance/VehicleMountGuidancePlan.md
-Document/Plan/VehicleRuntimeCatalogPromotion/VehicleRuntimeCatalogPromotionPlan.md
-Document/Plan/VehicleBuilderHardpointIntegrity/VehicleBuilderHardpointIntegrityPlan.md
+Document/Plan/Archive/VehicleBuilderCreationUX/VehicleBuilderCreationUXPlan.md
+Document/Plan/Archive/VehicleMountGuidance/VehicleMountGuidancePlan.md
+Document/Plan/Archive/VehicleRuntimeCatalogPromotion/VehicleRuntimeCatalogPromotionPlan.md
+Document/Plan/Archive/VehicleBuilderHardpointIntegrity/VehicleBuilderHardpointIntegrityPlan.md
 Document/Plan/Archive/README.md
 ```
 
-`CF-FQ-040` 대표 Plan은 `Done → Historical + Archived Path`로 `Document/Plan/Archive/VehicleBuilder/`에 보존한다. `CF-FQ-042`, `CF-FQ-043`, `CF-FQ-044`, `CF-FQ-047` 대표 Plan은 Current route에서 내려온 `Historical + Retained Path`로 각각 기존 `VehicleBuilderCreationUX/`, `VehicleMountGuidance/`, `VehicleRuntimeCatalogPromotion/`, `VehicleBuilderHardpointIntegrity/` 경로를 보존한다.
+`CF-FQ-040` 대표 Plan은 `Done → Historical + Archived Path`로 `Document/Plan/Archive/VehicleBuilder/`에 보존한다. `CF-FQ-042`, `CF-FQ-043`, `CF-FQ-044`, `CF-FQ-047` 대표 Plan도 G5 Physical Move를 완료해 각각 `Document/Plan/Archive/VehicleBuilderCreationUX/`, `Archive/VehicleMountGuidance/`, `Archive/VehicleRuntimeCatalogPromotion/`, `Archive/VehicleBuilderHardpointIntegrity/`의 `Historical + Archived Path`에 보존한다.
 
 ---
 
 ## 13. Changelog
+
+### Maintenance - 2026-09-06
+
+- 완료된 `CF-FQ-042/043/044/047`의 G5 Physical Move에 따라 완료 당시 Historical Plan 링크를 `Document/Plan/Archive/<Feature>/` 경로로 교정했다.
+- Current Vehicle Builder runtime/authoring 계약, 문서 버전, USER/Technical acceptance와 Wagon 2/2 baseline은 변경하지 않는다.
+
+Migration: 2026-09-06 이후 위 4개 완료 Feature의 Historical 설계·검증은 Archive 경로에서 찾는다. 이전 root-level Plan 경로는 과거 Changelog에서 당시 상태로만 해석한다.
 
 ### v1.4.1 - 2026-09-05
 

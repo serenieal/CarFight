@@ -14,7 +14,7 @@
 
 사용자는 DataAsset 클래스명과 저장 경로를 모두 외우지 않고도 에디터의 `CarFight 데이터 관리` 화면에서 현재 데이터 유형과 실제 에셋을 찾고, 용도와 상태를 확인하고, 필요한 경우 명시적으로 검사하거나 참조 관계를 조회할 수 있다.
 
-완료 당시 단계별 설계·Build·Automation·USER 피드백은 Historical Plan인 `Document/Plan/DataAssetManagement/DataAssetManagementPlan.md`가 보존한다. 현재 구현 판단은 이 문서와 실제 `CarFight_ReEditor/DataManagement` Source를 우선한다.
+완료 당시 단계별 설계·Build·Automation·USER 피드백은 Historical Plan인 `Document/Plan/Archive/DataAssetManagement/DataAssetManagementPlan.md`가 보존한다. 현재 구현 판단은 이 문서와 실제 `CarFight_ReEditor/DataManagement` Source를 우선한다.
 
 ---
 
@@ -279,6 +279,13 @@ CF-FQ-045 완료를 막지 않는 P2 UI polish 2건은 향후 필요 시 별도 
 
 ## 14. Changelog
 
+### Maintenance - 2026-09-06
+
+- `CF-FQ-045` G5 Physical Move에 따라 완료 당시 Historical Plan 링크를 `Document/Plan/Archive/DataAssetManagement/DataAssetManagementPlan.md`로 교정했다.
+- Current Data Asset Management 계약, 문서 버전, DAM-P0-04E USER PASS와 residual P2 2건의 경계는 변경하지 않는다.
+
+Migration: 2026-09-06 이후 CF-FQ-045 완료 설계·검증 evidence는 Archive 경로에서 찾는다. 이전 root-level Plan 경로는 과거 Changelog/Historical 문맥에서만 해석한다.
+
 ### v1.0.0 - 2026-09-04
 
 - `CF-FQ-045 CarFight Data Asset Management`의 P0 완료 내용을 Current System으로 최초 승격했다.
@@ -291,5 +298,5 @@ CF-FQ-045 완료를 막지 않는 P2 UI polish 2건은 향후 필요 시 별도 
 ## 15. Migration
 
 - CF-FQ-045 완료 이후 Data Asset Manager의 현재 구현 판단은 이 문서와 실제 `CarFight_ReEditor/DataManagement` Source를 우선한다.
-- `Document/Plan/DataAssetManagement/DataAssetManagementPlan.md`는 완료 당시 설계·검증·USER 피드백 evidence를 보존하는 Historical + Retained Path로 읽는다.
+- `Document/Plan/Archive/DataAssetManagement/DataAssetManagementPlan.md`는 완료 당시 설계·검증·USER 피드백 evidence를 보존하는 Historical + Archived Path로 읽는다.
 - 기존 Runtime/Content/Product Asset의 데이터 형식이나 저장 방식에는 migration이 없다.
