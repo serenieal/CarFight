@@ -1,9 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.166.0
-// Date: 2026-09-02
-// Description: CarFight 싱글플레이 차량 Pawn 기준 클래스 / UISubsystem UI ownership 정리 / WSA Wheel Visual / RTA Fitting-dependent Runtime refresh seam
+// Version: 2.169.1
+// Date: 2026-09-06
+// Description: CarFight 싱글플레이 차량 Pawn 기준 클래스 / VPS-P0-02 Fire behavior extraction / RTA Fitting-dependent Runtime refresh seam
 // Changelog:
+// - v2.169.1: VPS-P0-02 Authority 교정으로 FireRequest ID/시간 할당과 입력 순간 LastFireRequest commit을 Pawn에 명시적으로 복귀. FireComp는 계산·검증·실행만 수행.
+// - v2.169.0: CF-FQ-048 VPS-P0-02로 Fire Command 생성·검증·Muzzle/Aim glue·HitScan/Projectile 실행·Launcher 후속 발사와 Fire side effect를 UCFVehicleFireComp로 추출. Pawn Fire observable/Damage Debug Authority, Launcher callback, 기존 Public/Automation facade는 유지.
+// - v2.168.0: CF-FQ-048 VPS-P0-01로 차체·휠·레이아웃·터렛·Owner 표시 행동과 순수 시각 캐시를 UCFVehicleVisualComp로 추출. 기존 Pawn Public/BP API, observable state Authority, lifecycle 호출 순서와 private Automation wrapper는 유지.
 // - v2.166.0: RTA-P0-03 장비 hot apply가 전체 차량 Runtime을 재초기화하지 않고 Applied Fitting 기반 Ammo·TurretVisual·Launcher와 CombatReady만 재구성하는 C++ 전용 refresh seam을 추가.
 // - v2.165.0: Wheel Visual authored cache를 Rotation에서 Full RelativeTransform으로 확장하고 Construction fresh recapture / runtime deterministic reapply 계약을 추가.
 // - v2.164.0: FL-only shared Wheel fallback의 Right orientation 보정을 위해 authored Wheel_Mesh base rotation cache와 Wheel Visual 전용 private helper 경계를 추가. 신규 Component 분해는 하지 않고 향후 추출 가능한 seam으로 한정.
@@ -88,6 +91,9 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth 적용 전 기준선 정리를 위해 차량 NetDebug/OwnerVisual/OwnerBodyVisual 실험 플래그 기본값을 False로 통일.
 // Migration:
+// - v2.169.1 FireRequest ID/시간과 LastFireRequest 입력 commit은 다시 Pawn Authority가 직접 수행합니다. Blueprint/Product Asset과 기존 Public/BP/Automation 호출 계약에는 변경이 없습니다.
+// - v2.169.0 기존 BP_CFVehiclePawn 계열은 VehicleFireComp 기본 서브오브젝트를 자동 상속합니다. Launcher는 기존 ACFVehiclePawn::ExecuteScheduledLauncherShot callback을 계속 사용하며 Fire observable/Damage Debug와 Public/BP/Automation facade는 Pawn에 유지됩니다. Product Asset 수동 추가/저장은 필요하지 않습니다.
+// - v2.168.0 기존 BP_CFVehiclePawn 계열은 VehicleVisualComp 기본 서브오브젝트를 자동 상속합니다. Product Asset 수동 추가/저장은 필요하지 않으며 기존 Public/BP 함수·프로퍼티 이름과 터렛/Runtime observable state는 Pawn에 그대로 유지됩니다.
 // - v2.162.0 Legacy AimReticleWidgetClass/AimReticleZOrder/TargetSelectWidgetClass/TargetSelectHudZOrder는 기존 Asset 역직렬화를 위해 이름과 타입을 보존합니다. 새 설정·런타임 생성은 CFUISubsystem Config와 Layer ZOrder를 사용합니다.
 // - v2.154.0부터 차량 TargetId는 VehicleData의 유효한 PrimaryAssetId.PrimaryAssetName을 사용한다. VehicleData가 없거나 PrimaryAssetId가 invalid면 TargetId=None으로 fail-closed하며 Actor GetFName/GetName을 fallback으로 사용하지 않는다. DisplayName은 별도 Player-facing 이름 source가 생기기 전 Empty를 유지한다.
 // - v2.152.0부터 InputAction_SelectWeapon은 `/Game/CarFight/Input/IA_SelectWeapon` Axis1D를 기본 로드한다. P0 키보드 매핑은 숫자 1~9가 각각 실제 1-based selectable weapon 순번 1~9를 전달한다. Mouse Wheel은 Radar Range/Zoom 예약을 보존하고 게임패드 키는 이번 slice에서 임의 지정하지 않는다.
@@ -181,6 +187,8 @@
 
 class UCFVehicleData;
 class UCFVehicleCameraComp;
+class UCFVehicleVisualComp;
+class UCFVehicleFireComp;
 class UCFVehicleAimComp;
 class UCFVehicleWeaponComp;
 class UCFVehicleAmmoComp;
@@ -1000,7 +1008,11 @@ class CARFIGHT_RE_API ACFVehiclePawn : public AWheeledVehiclePawn, public ICFTar
 {
 	GENERATED_BODY()
 
-						friend class UCFLauncherComp;
+	// [v2.168.0] 내부 Visual coordinator가 기존 Pawn 상태 Authority와 private 시각 wrapper를 유지한 채 행동만 수행하도록 허용합니다.
+	friend class UCFVehicleVisualComp;
+	// [v2.169.0] 내부 Fire coordinator가 기존 Pawn Fire/Damage observable Authority와 private compatibility wrapper를 유지한 채 행동만 수행하도록 허용합니다.
+	friend class UCFVehicleFireComp;
+	friend class UCFLauncherComp;
 	friend class FCFAmmoFireTransactionTest;
 	// [v2.150.0] UI-P0-06 Heat Automation이 기존 private accepted-fire/apply 경계를 public API로 열지 않고 실제 호출하도록 허용합니다.
 	friend class FCFHUDP006HeatResourceTest;
@@ -1879,11 +1891,13 @@ protected:
 	void HandleHandbrakeCompleted(const FInputActionValue& InputActionValue);
 
 private:
-	// [v2.165.0] Wheel Visual 최초 mutation 전에 캡처한 FL/FR/RL/RR authored base relative transform입니다.
-	TArray<FTransform> WheelVisualAuthoredBaseTransforms;
+	// [v2.168.0] 차체·휠·레이아웃·터렛·Owner 표시 행동과 순수 시각 캐시를 소유하며 Blueprint/Details에는 새 surface를 만들지 않는 내부 coordinator입니다.
+	UPROPERTY()
+	TObjectPtr<UCFVehicleVisualComp> VehicleVisualComp = nullptr;
 
-	// [v2.165.0] Wheel Visual authored base transform 4개가 현재 Pawn lifetime에서 정상 캡처됐는지 여부입니다.
-	bool bHasCapturedWheelVisualAuthoredBaseTransforms = false;
+	// [v2.169.0] Fire Command·검증·실행 행동만 소유하고 Pawn observable state를 복제하지 않는 내부 coordinator입니다.
+	UPROPERTY()
+	TObjectPtr<UCFVehicleFireComp> VehicleFireComp = nullptr;
 
 	// [v2.87.0] 마지막 터렛 시각 장착에 사용한 TurretMountData입니다.
 	UPROPERTY(Transient)
@@ -1921,35 +1935,5 @@ private:
 
 	// [v2.86.0] 터렛 시각 컴포넌트를 기본 숨김 상태로 되돌립니다.
 	void ResetTurretVisualComponents();
-
-	// [v2.48.0] Owner 표시 안정화 계층 준비가 완료됐는지 여부입니다.
-	bool bOwnerVisualStabilizationReady = false;
-
-	// [v2.48.0] Owner 표시 안정화용 이전 프레임 표시 회전값입니다.
-	FRotator SmoothedOwnerVisualRotation = FRotator::ZeroRotator;
-
-	// [v2.48.0] Owner 표시 안정화 회전 기준값이 유효한지 여부입니다.
-	bool bHasSmoothedOwnerVisualRotation = false;
-
-	// [v2.48.0] Owner 표시 루트 아래로 이동한 표시 컴포넌트 목록입니다.
-	TArray<TObjectPtr<USceneComponent>> OwnerVisualStabilizedComponents;
-
-	// [v2.48.0] Owner 표시 안정화 때문에 물리 루트 VehicleMesh 렌더링을 숨겼는지 여부입니다.
-	bool bOwnerVisualPhysicsMeshHidden = false;
-
-	// [v2.53.0] Owner 차체 표시 안정화가 현재 적용 가능한 상태인지 여부입니다.
-	bool bOwnerBodyVisualStabilizationReady = false;
-
-	// [v2.53.0] Owner 차체 표시 안정화용 이전 프레임 표시 회전값입니다.
-	FRotator SmoothedOwnerBodyVisualRotation = FRotator::ZeroRotator;
-
-	// [v2.53.0] Owner 차체 표시 안정화 회전 기준값이 유효한지 여부입니다.
-	bool bHasSmoothedOwnerBodyVisualRotation = false;
-
-	// [v2.53.0] Owner 차체 표시 안정화 전 SM_Body의 기본 상대 회전입니다.
-	FRotator OriginalOwnerBodyVisualRelativeRotation = FRotator::ZeroRotator;
-
-	// [v2.53.0] Owner 차체 표시 안정화 전 SM_Body 상대 회전을 저장했는지 여부입니다.
-	bool bHasOriginalOwnerBodyVisualRelativeRotation = false;
 
 };
