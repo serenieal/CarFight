@@ -1,12 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-07-29
-// Description: CF-FQ-030 MG-P0-00 미사일 비행·유도 Foundation 자동화 테스트
-// Scope: 기본 비활성, Config 보정, Clearance와 제한형 비례항법 순수 수학 계약을 검증합니다.
+// Version: 1.3.0
+// Date: 2026-09-07
+// Description: CF-FQ-030 미사일 비행·유도 Foundation 자동화 테스트
+// Scope: MG-P0-00 기본 비활성·물리 수학 계약과 MG-P0-08~12D Guidance Performance Types·Config Foundation을 검증합니다.
 // Changelog:
+// - v1.3.0: MG-P0-12D Guidance Activation 기본 호환값·Clamp와 Stateful Seeker 독립 0~180도 반각, Activation/Overshoot Snapshot 기본 계약을 검증.
+// - v1.2.0: MG-P0-12C GuidanceLaw 기본 호환값, LeadPursuit 수치 Clamp와 Guidance Law Snapshot 기본 계약을 추가 검증.
+// - v1.1.0: Legacy/Stateful Seeker, Direct/Sampled 관측, Reacquisition 기본값·Clamp·각도 invariant·Snapshot 기본 계약을 검증하는 MG-P0-08 ConfigFoundation 테스트 추가.
 // - v1.0.0: Missile Foundation Contract 최초 추가.
 // Migration:
+// - MG-P0-08~12D Foundation 검증은 Runtime 상태 머신을 실행하지 않고 Config/Reflection 값 타입만 검증합니다.
+// - v1.3.0부터 Stateful Acquisition/Tracking/Reacquisition 반각은 서로 독립이며, 과거 Tracking 상한 coupling assertion은 Historical contract로 대체합니다.
+// - 기존 MG-P0-00 FoundationContract 이름과 검증 범위는 보존합니다.
 // - 이 테스트는 Actor·ProjectileMovement 런타임을 실행하지 않으며 기존 Projectile·Rocket 회귀는 기본 비활성 계약으로 보호합니다.
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -148,6 +154,130 @@ bool FCFMissileFoundationContractTest::RunTest(const FString& Parameters)
 		DisabledConfig);
 	TestFalse(TEXT("비활성 Guidance Command 무효"), DisabledCommand.bCommandValid);
 	TestEqual(TEXT("비활성 Guidance 사유"), DisabledCommand.InvalidReason, ECFMissileMissReason::GuidanceDisabled);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFMissileGuideConfigTest,
+	"CarFight.Missile.MG_P0_08.ConfigFoundation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.1.0] 신규 Guidance Performance 모델의 기본 호환값, 안전 보정과 Snapshot 기본 계약을 검증합니다.
+bool FCFMissileGuideConfigTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.1.0] UCFProjectileData를 거친 실제 기본 MissileGuideConfig 계약을 확인할 임시 데이터입니다.
+	UCFProjectileData* ProjectileData = NewObject<UCFProjectileData>();
+	if (!TestNotNull(TEXT("MG-P0-08 ProjectileData 생성"), ProjectileData))
+	{
+		return false;
+	}
+
+	// [v1.1.0] 기존 저장 Asset과 같은 C++ 기본값에서 얻은 유효 Guidance 설정입니다.
+	const FCFMissileGuideConfig DefaultGuideConfig = ProjectileData->GetEffectiveMissileGuideConfig();
+	TestFalse(TEXT("기존 ProjectileData Guidance 기본 비활성 유지"), DefaultGuideConfig.bUseGuidance);
+	TestEqual(TEXT("기존 ProjectileData Guide Mode None 유지"), DefaultGuideConfig.GuideMode, ECFMissileGuideMode::None);
+	TestEqual(TEXT("기본 Seeker 모델 LegacySingleGate"), DefaultGuideConfig.SeekerModel, ECFMissileSeekerModel::LegacySingleGate);
+	TestEqual(TEXT("기본 관측 모델 DirectActorKinematics"), DefaultGuideConfig.TargetObservationMode, ECFMissileTargetObservationMode::DirectActorKinematics);
+	TestEqual(TEXT("기본 Guidance Law ProportionalNavigation"), DefaultGuideConfig.GuidanceLaw, ECFMissileGuidanceLaw::ProportionalNavigation);
+	TestEqual(TEXT("기본 Guidance Activation은 Flight Window 호환"), DefaultGuideConfig.GuidanceActivationMode, ECFMissileGuidanceActivationMode::FollowFlightGuidanceWindow);
+	TestTrue(TEXT("기본 Guidance Activation Delay 0초"), FMath::IsNearlyZero(DefaultGuideConfig.GuidanceActivationDelaySeconds));
+	TestTrue(TEXT("기본 Guidance Activation Distance 0cm"), FMath::IsNearlyZero(DefaultGuideConfig.GuidanceActivationDistanceCm));
+	TestTrue(TEXT("기본 Lead Time 0.20초"), FMath::IsNearlyEqual(DefaultGuideConfig.LeadTimeSeconds, 0.20f));
+	TestTrue(TEXT("기본 Max Lead Distance 2000cm"), FMath::IsNearlyEqual(DefaultGuideConfig.MaxLeadDistanceCm, 2000.0f));
+	TestEqual(TEXT("기본 Reacquisition None"), DefaultGuideConfig.ReacquisitionMode, ECFMissileReacquisitionMode::None);
+	TestTrue(TEXT("기본 관측 간격 0.08초"), FMath::IsNearlyEqual(DefaultGuideConfig.TargetObservationIntervalSeconds, 0.08f));
+	TestTrue(TEXT("기본 속도 추정 응답 0.20초"), FMath::IsNearlyEqual(DefaultGuideConfig.TargetVelocityEstimateResponseTimeSeconds, 0.20f));
+	TestTrue(TEXT("기본 Acquisition 반각 30도"), FMath::IsNearlyEqual(DefaultGuideConfig.AcquisitionConeHalfAngleDeg, 30.0f));
+	TestTrue(TEXT("기본 Tracking 반각 60도"), FMath::IsNearlyEqual(DefaultGuideConfig.TrackingConeHalfAngleDeg, 60.0f));
+	TestTrue(TEXT("기본 Reacquisition 반각 45도"), FMath::IsNearlyEqual(DefaultGuideConfig.ReacquisitionConeHalfAngleDeg, 45.0f));
+	TestTrue(TEXT("기본 Reacquisition 시간 0.50초"), FMath::IsNearlyEqual(DefaultGuideConfig.ReacquisitionTimeSeconds, 0.50f));
+
+	// [v1.1.0] 범위를 벗어난 신규 설정값을 안전 보정 계약에 넣을 원본 Config입니다.
+	FCFMissileGuideConfig InvalidPerformanceConfig;
+	InvalidPerformanceConfig.bUseGuidance = true;
+	InvalidPerformanceConfig.GuideMode = ECFMissileGuideMode::TargetActor;
+	InvalidPerformanceConfig.SeekerModel = ECFMissileSeekerModel::Stateful;
+	InvalidPerformanceConfig.TargetObservationMode = ECFMissileTargetObservationMode::SampledPositionEstimate;
+	InvalidPerformanceConfig.ReacquisitionMode = ECFMissileReacquisitionMode::ForwardCone;
+	InvalidPerformanceConfig.GuidanceLaw = ECFMissileGuidanceLaw::LeadPursuit;
+	InvalidPerformanceConfig.GuidanceActivationMode = ECFMissileGuidanceActivationMode::Independent;
+	InvalidPerformanceConfig.GuidanceActivationDelaySeconds = 100.0f;
+	InvalidPerformanceConfig.GuidanceActivationDistanceCm = -100.0f;
+	InvalidPerformanceConfig.LeadTimeSeconds = 100.0f;
+	InvalidPerformanceConfig.MaxLeadDistanceCm = -100.0f;
+	InvalidPerformanceConfig.TargetObservationIntervalSeconds = 0.0f;
+	InvalidPerformanceConfig.TargetVelocityEstimateResponseTimeSeconds = 100.0f;
+	InvalidPerformanceConfig.AcquisitionConeHalfAngleDeg = 170.0f;
+	InvalidPerformanceConfig.TrackingConeHalfAngleDeg = 40.0f;
+	InvalidPerformanceConfig.ReacquisitionConeHalfAngleDeg = 120.0f;
+	InvalidPerformanceConfig.ReacquisitionTimeSeconds = 100.0f;
+
+	// [v1.1.0] 원본을 바꾸지 않고 신규 성능 축 Clamp와 angle invariant가 적용된 Config입니다.
+	const FCFMissileGuideConfig EffectivePerformanceConfig = InvalidPerformanceConfig.GetEffectiveConfig();
+	TestEqual(TEXT("Stateful Seeker 선택 보존"), EffectivePerformanceConfig.SeekerModel, ECFMissileSeekerModel::Stateful);
+	TestEqual(TEXT("Sampled 관측 선택 보존"), EffectivePerformanceConfig.TargetObservationMode, ECFMissileTargetObservationMode::SampledPositionEstimate);
+	TestEqual(TEXT("LeadPursuit 선택 보존"), EffectivePerformanceConfig.GuidanceLaw, ECFMissileGuidanceLaw::LeadPursuit);
+	TestEqual(TEXT("Independent Guidance Activation 선택 보존"), EffectivePerformanceConfig.GuidanceActivationMode, ECFMissileGuidanceActivationMode::Independent);
+	TestTrue(TEXT("Guidance Activation Delay 최대 30초"), FMath::IsNearlyEqual(EffectivePerformanceConfig.GuidanceActivationDelaySeconds, 30.0f));
+	TestTrue(TEXT("음수 Guidance Activation Distance는 0cm"), FMath::IsNearlyZero(EffectivePerformanceConfig.GuidanceActivationDistanceCm));
+	TestTrue(TEXT("Lead Time 최대 10초"), FMath::IsNearlyEqual(EffectivePerformanceConfig.LeadTimeSeconds, 10.0f));
+	TestTrue(TEXT("음수 Max Lead Distance는 0cm"), FMath::IsNearlyZero(EffectivePerformanceConfig.MaxLeadDistanceCm));
+	TestEqual(TEXT("ForwardCone 재포착 선택 보존"), EffectivePerformanceConfig.ReacquisitionMode, ECFMissileReacquisitionMode::ForwardCone);
+	TestTrue(TEXT("관측 간격 최소 0.001초"), FMath::IsNearlyEqual(EffectivePerformanceConfig.TargetObservationIntervalSeconds, 0.001f));
+	TestTrue(TEXT("속도 추정 응답 최대 10초"), FMath::IsNearlyEqual(EffectivePerformanceConfig.TargetVelocityEstimateResponseTimeSeconds, 10.0f));
+	TestTrue(TEXT("Tracking 반각 40도 유지"), FMath::IsNearlyEqual(EffectivePerformanceConfig.TrackingConeHalfAngleDeg, 40.0f));
+	TestTrue(TEXT("Acquisition 반각은 Tracking과 독립적으로 170도 유지"), FMath::IsNearlyEqual(EffectivePerformanceConfig.AcquisitionConeHalfAngleDeg, 170.0f));
+	TestTrue(TEXT("Reacquisition 반각은 Tracking과 독립적으로 120도 유지"), FMath::IsNearlyEqual(EffectivePerformanceConfig.ReacquisitionConeHalfAngleDeg, 120.0f));
+	TestTrue(TEXT("Reacquisition 시간 최대 30초"), FMath::IsNearlyEqual(EffectivePerformanceConfig.ReacquisitionTimeSeconds, 30.0f));
+	TestTrue(TEXT("원본 Acquisition 반각은 비파괴"), FMath::IsNearlyEqual(InvalidPerformanceConfig.AcquisitionConeHalfAngleDeg, 170.0f));
+	TestTrue(TEXT("원본 Reacquisition 반각은 비파괴"), FMath::IsNearlyEqual(InvalidPerformanceConfig.ReacquisitionConeHalfAngleDeg, 120.0f));
+
+	// [v1.1.0] 비정상 부동소수점 입력이 안전한 최솟값/0으로 복구되는지 확인할 Config입니다.
+	FCFMissileGuideConfig NonFinitePerformanceConfig;
+	NonFinitePerformanceConfig.GuidanceActivationDelaySeconds = std::numeric_limits<float>::quiet_NaN();
+	NonFinitePerformanceConfig.GuidanceActivationDistanceCm = std::numeric_limits<float>::quiet_NaN();
+	NonFinitePerformanceConfig.LeadTimeSeconds = std::numeric_limits<float>::quiet_NaN();
+	NonFinitePerformanceConfig.MaxLeadDistanceCm = std::numeric_limits<float>::quiet_NaN();
+	NonFinitePerformanceConfig.TargetObservationIntervalSeconds = std::numeric_limits<float>::quiet_NaN();
+	NonFinitePerformanceConfig.TargetVelocityEstimateResponseTimeSeconds = std::numeric_limits<float>::quiet_NaN();
+	NonFinitePerformanceConfig.AcquisitionConeHalfAngleDeg = std::numeric_limits<float>::quiet_NaN();
+	NonFinitePerformanceConfig.TrackingConeHalfAngleDeg = std::numeric_limits<float>::quiet_NaN();
+	NonFinitePerformanceConfig.ReacquisitionConeHalfAngleDeg = std::numeric_limits<float>::quiet_NaN();
+	NonFinitePerformanceConfig.ReacquisitionTimeSeconds = std::numeric_limits<float>::quiet_NaN();
+
+	// [v1.1.0] NaN을 포함한 신규 성능 축에 안전 기본 보정이 적용된 결과입니다.
+	const FCFMissileGuideConfig EffectiveNonFiniteConfig = NonFinitePerformanceConfig.GetEffectiveConfig();
+	TestTrue(TEXT("NaN Guidance Activation Delay는 0초"), FMath::IsNearlyZero(EffectiveNonFiniteConfig.GuidanceActivationDelaySeconds));
+	TestTrue(TEXT("NaN Guidance Activation Distance는 0cm"), FMath::IsNearlyZero(EffectiveNonFiniteConfig.GuidanceActivationDistanceCm));
+	TestTrue(TEXT("NaN Lead Time은 0초"), FMath::IsNearlyZero(EffectiveNonFiniteConfig.LeadTimeSeconds));
+	TestTrue(TEXT("NaN Max Lead Distance는 0cm"), FMath::IsNearlyZero(EffectiveNonFiniteConfig.MaxLeadDistanceCm));
+	TestTrue(TEXT("NaN 관측 간격은 최소 0.001초"), FMath::IsNearlyEqual(EffectiveNonFiniteConfig.TargetObservationIntervalSeconds, 0.001f));
+	TestTrue(TEXT("NaN 속도 추정 응답은 최소 0.001초"), FMath::IsNearlyEqual(EffectiveNonFiniteConfig.TargetVelocityEstimateResponseTimeSeconds, 0.001f));
+	TestTrue(TEXT("NaN Tracking 반각은 0도"), FMath::IsNearlyZero(EffectiveNonFiniteConfig.TrackingConeHalfAngleDeg));
+	TestTrue(TEXT("NaN Acquisition 반각은 0도"), FMath::IsNearlyZero(EffectiveNonFiniteConfig.AcquisitionConeHalfAngleDeg));
+	TestTrue(TEXT("NaN Reacquisition 반각은 0도"), FMath::IsNearlyZero(EffectiveNonFiniteConfig.ReacquisitionConeHalfAngleDeg));
+	TestTrue(TEXT("NaN Reacquisition 시간은 0초"), FMath::IsNearlyZero(EffectiveNonFiniteConfig.ReacquisitionTimeSeconds));
+
+	// [v1.1.0] 신규 Snapshot 필드가 Pool-safe한 비활성/Legacy 기본값에서 시작하는지 확인할 값입니다.
+	const FCFMissileGuideSnapshot DefaultGuideSnapshot;
+	TestEqual(TEXT("Snapshot 기본 Seeker 모델 LegacySingleGate"), DefaultGuideSnapshot.SeekerModel, ECFMissileSeekerModel::LegacySingleGate);
+	TestEqual(TEXT("Snapshot 기본 Seeker 상태 Inactive"), DefaultGuideSnapshot.SeekerState, ECFMissileSeekerState::Inactive);
+	TestEqual(TEXT("Snapshot 기본 관측 모델 DirectActorKinematics"), DefaultGuideSnapshot.TargetObservationMode, ECFMissileTargetObservationMode::DirectActorKinematics);
+	TestEqual(TEXT("Snapshot 기본 Guidance Law ProportionalNavigation"), DefaultGuideSnapshot.GuidanceLaw, ECFMissileGuidanceLaw::ProportionalNavigation);
+	TestEqual(TEXT("Snapshot 기본 Guidance Activation은 Flight Window 호환"), DefaultGuideSnapshot.GuidanceActivationMode, ECFMissileGuidanceActivationMode::FollowFlightGuidanceWindow);
+	TestFalse(TEXT("Snapshot 기본 Guidance Activation 미충족"), DefaultGuideSnapshot.bGuidanceActivationSatisfied);
+	TestTrue(TEXT("Snapshot 기본 Guidance Aim Point Zero"), DefaultGuideSnapshot.GuidanceAimPoint.IsNearlyZero());
+	TestFalse(TEXT("Snapshot 기본 Course Capture 비활성"), DefaultGuideSnapshot.bCourseCaptureActive);
+	TestFalse(TEXT("Snapshot 기본 Stateful Overshoot 미준비"), DefaultGuideSnapshot.bOvershootArmed);
+	TestTrue(TEXT("Snapshot 기본 LastObserved 위치 Zero"), DefaultGuideSnapshot.LastObservedTargetLocation.IsNearlyZero());
+	TestTrue(TEXT("Snapshot 기본 Estimated 위치 Zero"), DefaultGuideSnapshot.EstimatedTargetLocation.IsNearlyZero());
+	TestTrue(TEXT("Snapshot 기본 Velocity Estimate Zero"), DefaultGuideSnapshot.FilteredTargetVelocityEstimate.IsNearlyZero());
+	TestTrue(TEXT("Snapshot 기본 Observation Age 0"), FMath::IsNearlyZero(DefaultGuideSnapshot.ObservationAgeSeconds));
+	TestTrue(TEXT("Snapshot 기본 Reacquisition 경과 0"), FMath::IsNearlyZero(DefaultGuideSnapshot.ReacquisitionElapsedTimeSeconds));
+	TestFalse(TEXT("Snapshot 기본 유효 관측 없음"), DefaultGuideSnapshot.bHasValidObservation);
 
 	return true;
 }
