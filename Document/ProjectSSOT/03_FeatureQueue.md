@@ -1,7 +1,7 @@
 # CarFight — 03_FeatureQueue
 
-> 문서 버전: v1.57.35
-> 최근 갱신일(Asia/Seoul): 2026-09-05
+> 문서 버전: v1.57.41
+> 최근 갱신일(Asia/Seoul): 2026-09-08
 > 문서 상태: Current
 > 역할: CarFight의 **Feature 후보 / 착수 판단 / 현재 상태 / 완료 후 Current owner**를 한 곳에서 관리한다.
 
@@ -91,7 +91,7 @@ FeatureQueue는 상세 설계서나 검증 로그가 아니다.
 | `CF-FQ-027` | 투사체 비행 FX | P1 | Done | USER PIE PASS / CF-TC-023 PASS | Projectile |
 | `CF-FQ-028` | 발사체 추진 시스템 | P1 | Done | USER PIE PASS / CF-TC-024 PASS | Projectile |
 | `CF-FQ-029` | 모듈형 런처 및 발사 인계 | P1 | Paused | `LauncherMissilePlan.md v0.14.0` / `LM-P0-06 USER PIE` | Launcher / WeaponFire / Projectile 후속 |
-| `CF-FQ-030` | 물리 제한형 미사일 비행·유도 | P1 | Ready | Persisted Technical PASS / `CF-TC-027 Manual PIE Pending` | Missile / Projectile 후속 |
+| `CF-FQ-030` | 물리 제한형 미사일 비행·유도 | P1 | Done | P0 Complete / CF-TC-027 Complete PASS / Post-Closure Final Audit PASS / Current owner `Systems/Combat/MissileGuidance.md v1.0.1` + `Systems/Combat/Projectile.md v1.9.0` integration boundary / Historical Plan `MissileGuidancePlan.md v0.6.25` retained | LaserPoint·DataLink/Inertial 실제 Runtime, Angled/Vertical/Loft/TopAttack, 실제 Expire, 장비별 Salvo 연출은 후속 비차단 범위 |
 | `CF-FQ-031` | 차량 탄약·재장전 런타임 | P1 | Done | AMMO-P0-00~08 + USER PIE PASS | `Systems/Combat/Ammo.md v1.0.0` |
 | `CF-FQ-032` | 인게임 전투 HUD 및 UI 프레임워크 | P1 | Done | UI-P0-11 Systems Promotion + 2026-08-22 post-closure remediation PASS. Radar/Edge Visual·Zoom Feel과 D1-11-ART 잔여 Visual은 비차단 Deferred/Pending | `Systems/UI/InGameUI.md v1.1.5`, `UI/AimReticle.md v1.10.0`, `Targeting/SensorContact.md v1.2.0` |
 | `CF-FQ-033` | 차량 방어·손상 런타임 | P0 | Done | DR-P0-00~07 + USER PIE PASS | VehicleDefense / HitDamage |
@@ -103,12 +103,13 @@ FeatureQueue는 상세 설계서나 검증 로그가 아니다.
 | `CF-FQ-039` | Production UI Visual Rework | P1 | Active | `Document/Plan/InGameUIVisual/InGameUIVisualPlan.md v0.1.29` / `VPR-P0-01 VT07 VehiclePanel Asset-First whole-panel Review Ready / USER Visual PASS Pending / UE Import 0 / Production Asset mutation 0` | 완료 시 `Systems/UI/InGameUI.md` Visual ownership 갱신 + Production UI Asset 기준 |
 | `CF-FQ-040` | Guided Vehicle Builder | P2 | Done | VB-P0-10 Current System Promotion Complete / VB-P0-09 End-to-End USER Acceptance PASS / WSA P0 Complete / ESH-01~06 Final Audit Clean PASS / representative Plan은 `Document/Plan/Archive/VehicleBuilder/` Historical + Archived Path | `Systems/Vehicles/VehicleBuilder.md v1.4.1` |
 | `CF-FQ-041` | 런타임 콘텐츠 적용 메뉴 | P2 | Ready | `Document/Plan/RuntimeApply/RuntimeApplyPlan.md v0.1.17` / `RTA-P0-05 USER PASS / Closed` / RuntimeApply regression 14/14 PASS(CF-FQ-044 CatalogOptionSync 포함) / Builder-promoted persisted Wagon candidate handoff / next `RTA-P0-06 Packaged Demo` | 완료 시 Runtime Apply 재사용 계약을 관련 Vehicle/Fitting/UI Systems에 승격 |
-| `CF-FQ-042` | Vehicle Builder 신규 차량 생성 UX | P2 | Done | `VBCUX-P0-05 USER Acceptance PASS` / A Blank Start + B 기존 Chassis 재사용 + C 미사용 Mesh Quick Start PASS / final audit P1 old-selection refresh restore 교정 + focused/affected 5/0 PASS / `Document/Plan/VehicleBuilderCreationUX/VehicleBuilderCreationUXPlan.md v0.2.1` Historical + Retained Path / Vehicle ID 직접 입력 관리 부담은 비차단 UX 피드백 | `Systems/Vehicles/VehicleBuilder.md v1.4.1` |
-| `CF-FQ-043` | Vehicle Builder 장비 장착점 Guidance UX | P2 | Done | `VMG-P0-07 USER Acceptance PASS` / Socket-Naming USER PASS + Wagon persistent USER Driving receipt save/Step8 Complete / DataAuthoring 100/100 PASS / `Document/Plan/VehicleMountGuidance/VehicleMountGuidancePlan.md v0.2.0` Historical + Retained Path | `Systems/Vehicles/VehicleBuilder.md v1.4.1` |
-| `CF-FQ-044` | Vehicle Builder Runtime Catalog Promotion | P2 | Done | `VRCP-P0-05 USER Acceptance PASS` + `VRCP-P0-06 Current System Promotion Complete` / USER explicit Save 뒤 persisted Catalog Vehicles=4 + Wagon exact membership 1 / `VehicleRuntimeCatalogPromotionPlan.md v0.2.0` Historical + Retained Path / RuntimeApply RTA-P0-06 handoff 완료 | `Systems/Vehicles/VehicleBuilder.md v1.4.1` |
-| `CF-FQ-045` | CarFight Data Asset Management | P2 | Done | `DAM-P0-04E USER Acceptance PASS` / P0 Complete / Current System Promotion Complete / `Document/Plan/DataAssetManagement/DataAssetManagementPlan.md v0.2.0` Historical + Retained Path / residual P2 2건 non-blocking | `Systems/DataManagement/DataAssetManagement.md v1.0.0` |
+| `CF-FQ-042` | Vehicle Builder 신규 차량 생성 UX | P2 | Done | `VBCUX-P0-05 USER Acceptance PASS` / A Blank Start + B 기존 Chassis 재사용 + C 미사용 Mesh Quick Start PASS / final audit P1 old-selection refresh restore 교정 + focused/affected 5/0 PASS / `Document/Plan/Archive/VehicleBuilderCreationUX/VehicleBuilderCreationUXPlan.md v0.2.1` Historical + Archived Path / G5 Physical Move Complete / Vehicle ID 직접 입력 관리 부담은 비차단 UX 피드백 | `Systems/Vehicles/VehicleBuilder.md v1.4.1` |
+| `CF-FQ-043` | Vehicle Builder 장비 장착점 Guidance UX | P2 | Done | `VMG-P0-07 USER Acceptance PASS` / Socket-Naming USER PASS + Wagon persistent USER Driving receipt save/Step8 Complete / DataAuthoring 100/100 PASS / `Document/Plan/Archive/VehicleMountGuidance/VehicleMountGuidancePlan.md v0.2.0` Historical + Archived Path / G5 Physical Move Complete | `Systems/Vehicles/VehicleBuilder.md v1.4.1` |
+| `CF-FQ-044` | Vehicle Builder Runtime Catalog Promotion | P2 | Done | `VRCP-P0-05 USER Acceptance PASS` + `VRCP-P0-06 Current System Promotion Complete` / USER explicit Save 뒤 persisted Catalog Vehicles=4 + Wagon exact membership 1 / `Document/Plan/Archive/VehicleRuntimeCatalogPromotion/VehicleRuntimeCatalogPromotionPlan.md v0.2.0` Historical + Archived Path / G5 Physical Move Complete / RuntimeApply RTA-P0-06 handoff 완료 | `Systems/Vehicles/VehicleBuilder.md v1.4.1` |
+| `CF-FQ-045` | CarFight Data Asset Management | P2 | Done | `DAM-P0-04E USER Acceptance PASS` / P0 Complete / Current System Promotion Complete / `Document/Plan/Archive/DataAssetManagement/DataAssetManagementPlan.md v0.2.0` Historical + Archived Path / G5 Physical Move Complete / residual P2 2건 non-blocking | `Systems/DataManagement/DataAssetManagement.md v1.0.0` |
 | `CF-FQ-046` | Vehicle Builder 사용자 정보 UX | P2 | Ready | `Document/Plan/VehicleBuilderInfoUX/VehicleBuilderInfoUXPlan.md v0.1.6` / pre-CF-FQ-047 P0-05 Technical PASS evidence preserved / CF-FQ-047 Done으로 dependency 충족 / common Step 1~8 Page Shell·scroll·overflow owner / next `VBIUX-P0-05B Step 1~8 Common Page Layout Audit` | 완료 시 `Systems/Vehicles/VehicleBuilder.md`에 User-Facing Information Architecture 계약 승격 |
-| `CF-FQ-047` | Vehicle Builder Hardpoint Authoring Integrity | P1 | Done | `VBHAI-P0-07G USER Re-Acceptance PASS` + fresh persisted Driving receipt readback PASS + `VBHAI-P0-08 Current System Promotion Complete` + post-closure final audit remediation Technical Clean PASS / `Document/Plan/VehicleBuilderHardpointIntegrity/VehicleBuilderHardpointIntegrityPlan.md v0.2.1` Historical + Retained Path / remediation evidence sync complete / current USER-approved Wagon Hardpoint/Mount baseline 2/2 | `Systems/Vehicles/VehicleBuilder.md v1.4.1` |
+| `CF-FQ-047` | Vehicle Builder Hardpoint Authoring Integrity | P1 | Done | `VBHAI-P0-07G USER Re-Acceptance PASS` + fresh persisted Driving receipt readback PASS + `VBHAI-P0-08 Current System Promotion Complete` + post-closure final audit remediation Technical Clean PASS / `Document/Plan/Archive/VehicleBuilderHardpointIntegrity/VehicleBuilderHardpointIntegrityPlan.md v0.2.1` Historical + Archived Path / G5 Physical Move Complete / remediation evidence sync complete / current USER-approved Wagon Hardpoint/Mount baseline 2/2 | `Systems/Vehicles/VehicleBuilder.md v1.4.1` |
+| `CF-FQ-048` | Vehicle Pawn Slimming | P2 | Ready | `Document/Plan/VehiclePawnSlimming/VehiclePawnSlimmingPlan.md v0.1.0` / Initial Design Audit Correction + Re-review PASS / Behavior Extraction + Contract State Freeze / exact next `VPS-P0-00 Contract / State / Lifecycle Freeze` / Source mutation 0 | 완료 시 Vehicle Runtime/WeaponFire/Visual 관련 Systems에 축소된 Pawn composition/facade 계약 승격 |
 
 ---
 
@@ -120,9 +121,9 @@ FeatureQueue는 상세 설계서나 검증 로그가 아니다.
 
 | Feature | 상태 | 정확한 다음 Gate |
 | --- | --- | --- |
-| `CF-FQ-030` | Ready | `CF-TC-027 Manual PIE` |
 | `CF-FQ-041` | Ready | `RTA-P0-06 Packaged Demo` |
 | `CF-FQ-046` | Ready | `VBIUX-P0-05B Step 1~8 Common Page Layout Audit` |
+| `CF-FQ-048` | Ready | `VPS-P0-00 Contract / State / Lifecycle Freeze` |
 | `CF-FQ-029` | Paused | `LM-P0-06 USER PIE` |
 | `CF-FQ-038` | Paused | non-blocking `DEL6 compatibility retirement` 또는 `UA-08 quantitative comparison Deferred` |
 | `CF-FQ-034` | Paused | `FIT-P0-07D USER Driving Feel Comparison` |
@@ -153,6 +154,49 @@ Feature가 Done되면 Current System 링크와 남은 Deferred/Pending 경계만
 ---
 
 ## 7. Changelog
+
+### v1.57.41 - 2026-09-08
+
+- `CF-FQ-030 Post-Closure Final Audit` 교정 후 재검수 P0 0 / P1 0 / P2 0 PASS를 반영했다.
+- Current owner를 `Systems/Combat/MissileGuidance.md v1.0.1`, representative Historical Plan을 `MissileGuidancePlan.md v0.6.25`로 동기화했다.
+- Final Audit에서 교정한 항목은 Direct Flight 상태/종료 표현, Tick prerequisite 표현, Plan Index stale Ready route이며 Product Source/Asset 변화는 없다.
+- Feature lifecycle은 `Done` 그대로이며 Technical/USER evidence를 재실행하지 않았다. 후속 비차단 범위와 현재 단일 Active `CF-FQ-039`도 변경하지 않았다.
+
+### v1.57.40 - 2026-09-08
+
+- `CF-FQ-030` P0 Closure + Current System Promotion Review를 PASS로 닫고 Feature 상태를 `Done`으로 전진했다.
+- Current owner는 `Systems/Combat/MissileGuidance.md v1.0.0`, 공통 Projectile 통합 경계는 `Systems/Combat/Projectile.md v1.9.0`으로 승격했다.
+- `CF-TC-027` Technical + USER Guidance Feel은 Complete / PASS를 유지한다. 기존 Build/Authoring/Focused/Missile 10/10/AssetDump evidence는 문서 승격만을 이유로 반복하지 않았다.
+- LaserPoint·DataLink/Inertial 실제 Runtime, Angled/Vertical/Loft/TopAttack, 실제 Expire와 향후 장비별 다중 미사일 Salvo 연출은 CF-FQ-030 P0 완료를 막지 않는 후속 범위다.
+- 현재 단일 Active `CF-FQ-039`와 다른 Feature lifecycle은 변경하지 않았다.
+
+### v1.57.39 - 2026-09-08
+
+- USER가 실제 MissileDirectTest PIE에서 Low / Normal / High를 모두 확인하고 "얼추 PASS"로 승인했다.
+- `MG-P0-12 USER Guidance Feel Validation`은 USER ACCEPTED / Complete, `CF-TC-027`은 Technical + USER 기준 Complete / PASS로 전진했다.
+- CF-FQ-030은 아직 Done이 아니라 Ready를 유지하며 대표 Plan v0.6.23의 `P0 Closure + Current System Promotion Review`를 다음 exact Gate로 고정했다. 기존 MG-P0-12E Build/Automation/AssetDump evidence는 반복하지 않는다.
+- 현재 단일 Active `CF-FQ-039`와 다른 Feature lifecycle은 변경하지 않았다.
+
+### v1.57.38 - 2026-09-08
+
+- `CF-FQ-030 / MG-P0-12E Guidance Preset DA Rewire Post-Implementation Mid-review`의 P1 3 / P2 1 교정과 재검수를 **P0 0 / P1 0 / P2 0 PASS**로 닫았다.
+- Guidance Preset은 passive Product DataAsset + Editor-only 신규 seed + existing Asset no-seed/no-save + persisted idempotence 보존 계약으로 정리됐으며 대표 Plan은 v0.6.22다.
+- 실제 Low/Normal/High Preset 3개와 DirectTest persisted baseline은 변경하지 않아 기존 AssetDump 3/3 evidence를 재사용했다. exact next는 `MG-P0-12 USER Guidance Feel Validation — Corrected Low DA Revalidation`이며 `CF-TC-027 USER Feel`은 NOT ACCEPTED를 유지한다.
+- 현재 단일 Active `CF-FQ-039`와 다른 Feature lifecycle은 변경하지 않았다.
+
+### v1.57.37 - 2026-09-06
+
+- 완료된 `CF-FQ-042/043/044/045/047`의 G5 Physical Move를 반영해 FeatureQueue의 현재 Historical Plan 포인터를 모두 `Document/Plan/Archive/<Feature>/` Archived Path로 갱신했다.
+- Feature 상태, 우선순위, Current System owner, 완료 evidence와 residual/non-blocking 경계는 변경하지 않았다. Build/Automation/PIE/Benchmark/USER Acceptance 재실행도 없다.
+- 현재 Active CF-FQ-039와 기존 `CF-FQ-048 Vehicle Pawn Slimming` Ready 등록은 그대로 유지한다.
+
+Migration: 2026-09-06 이후 위 5개 완료 Feature의 상세 Historical evidence는 Archive 경로에서 찾는다. 과거 Changelog에 기록된 root-level Retained Path는 당시 상태를 보존하는 Historical 기록이다.
+
+### v1.57.36 - 2026-09-06
+
+- `CF-FQ-048 Vehicle Pawn Slimming`을 P2 / Ready 정식 Feature로 승격했다. 대표 Plan은 `Document/Plan/VehiclePawnSlimming/VehiclePawnSlimmingPlan.md v0.1.0`이다.
+- read-only responsibility audit와 Initial Design Audit Correction + Re-review 결과는 P0 0 / blocking P1 0 PASS이며, exact next를 `VPS-P0-00 Contract / State / Lifecycle Freeze`로 고정했다.
+- 이번 승격은 문서/계획 등록만 수행했다. CF-FQ-048 Source/Asset mutation은 0이며 현재 단일 Active는 CF-FQ-039 그대로다.
 
 ### v1.57.35 - 2026-09-05
 

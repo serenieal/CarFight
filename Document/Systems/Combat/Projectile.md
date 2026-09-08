@@ -1,11 +1,11 @@
 # Projectile
 
-- Version: 1.8.1
-- Date: 2026-08-02
-- Status: Current System / Same-Source Salvo Isolation User PIE PASS / Different-Source Interception Deferred
-- Features: `CF-FQ-023 고속 Projectile 연속 충돌`, `CF-FQ-027 투사체 비행 FX`, `CF-FQ-028 발사체 추진 시스템`
-- Tests: `CF-TC-020 PASS`, `CF-TC-023 PASS`, `CF-TC-024 PASS`
-- Scope: ProjectileData 기반 발사체 Actor, 비유도 Rocket 추진, 지속형 Trail·Thruster FX, 연속 충돌, 첫 Impact 피해와 Pool 생명주기의 현재 구현 기준
+- Version: 1.9.0
+- Date: 2026-09-08
+- Status: Current System / CF-FQ-030 Missile Integration Boundary Promoted / Same-Source Salvo Isolation User PIE PASS / Different-Source Interception Deferred
+- Features: `CF-FQ-023 고속 Projectile 연속 충돌`, `CF-FQ-027 투사체 비행 FX`, `CF-FQ-028 발사체 추진 시스템`, `CF-FQ-030 물리 제한형 미사일 비행·유도`
+- Tests: `CF-TC-020 PASS`, `CF-TC-023 PASS`, `CF-TC-024 PASS`, `CF-TC-027 PASS`
+- Scope: ProjectileData 기반 공통 발사체 Actor, 비유도 Rocket 추진, Missile Flight/Guidance 컴포넌트 통합, 지속형 Trail·Thruster FX, 연속 충돌, 첫 Impact 피해와 Pool 생명주기의 현재 구현 기준
 
 ---
 
@@ -20,12 +20,12 @@
 
 > `ProjectileData`를 읽어 공통 Projectile Actor를 활성화하고, 필요하면 비유도 Rocket 추진과 지속형 비행 FX를 적용하며, 첫 유효 Impact에서 피해를 한 번 처리한 뒤 모든 런타임 상태를 초기화해 Pool로 안전하게 재사용한다.
 
-현재 문서의 범위에서 제외하는 항목:
+현재 문서의 범위에서 제외하거나 별도 Current owner가 소유하는 항목:
 
 ```text
-- Target Homing Missile
-- Laser Guided Missile
-- 수동 유도와 목표 상실 정책
+- Missile Guidance 세부 알고리즘과 Seeker/Observation/Guidance Law 계약 → Combat/MissileGuidance.md
+- Laser Guided Missile 실제 Runtime
+- Angled/Vertical/Loft/TopAttack 공격 프로파일 완성
 - 다단 추진과 추진 출력 Curve
 - 공기저항·항력·추력 편향
 - 폭발 범위 피해
@@ -80,8 +80,10 @@ Document/Plan/Archive/ProjectileFlightFx/ProjectileFlightFxPlan.md
 | 타입 | 현재 역할 |
 | --- | --- |
 | `UCFProjectileData` | 발사체의 Actor, 이동, 충돌, 추진, 요격, 메시, Trail·Thruster, Impact와 DamageData 설정을 제공한다. |
-| `ACFProjectileActor` | ProjectileData를 적용하고 이동·추진·지속형 FX·차량별 충돌 격리·요격·피해·비활성화 생명주기를 소유한다. |
+| `ACFProjectileActor` | ProjectileData를 적용하고 이동·추진·Missile Flight/Guidance 통합·지속형 FX·차량별 충돌 격리·요격·피해·비활성화 생명주기를 소유한다. |
 | `UCFProjectileMotorComp` | 비유도 Rocket의 점화 지연, Burning 가속, 속도 상한과 BurnedOut 상태를 관리한다. |
+| `UCFMissileFlightComp` | 미사일 Released·Clearance·GuidedFlight 상태와 발사 후 시간·분리거리를 소유한다. 세부 Current 계약은 `MissileGuidance.md`가 소유한다. |
+| `UCFMissileGuideComp` | Launch Target Snapshot을 물리 제한 안에서 추적하고 Guidance Command를 ProjectileMovement에 적용한다. 세부 Current 계약은 `MissileGuidance.md`가 소유한다. |
 | `UCFProjectilePoolComp` | Projectile Actor Class별 Actor를 재사용하고 모든 버킷을 가로질러 동일 발사 차량 Projectile의 양방향 Ignore 관계를 관리한다. |
 | `FCFProjectilePropulsionConfig` | 자체 추진 사용 여부, 점화 지연, 연소 시간, 추진 가속도와 최대 추진 속도를 제공한다. |
 | `FCFProjectileMotorSnapshot` | 현재 모터 상태, 경과 시간, 속도, 추진 방향과 FX 활성 요청을 Debug와 Blueprint에 제공한다. |
@@ -1010,7 +1012,8 @@ Current System = Document/Systems/Combat/Projectile.md
 
 ```text
 - ProjectileData를 공통 Projectile Actor에 적용한다.
-- 비추진 포탄과 비유도 추진 Rocket을 같은 Actor 생명주기에서 처리한다.
+- 비추진 포탄, 비유도 추진 Rocket과 미사일을 같은 Actor 생명주기에서 처리한다.
+- Missile Flight/Guidance 컴포넌트를 생성·활성화·Reset하고 ProjectileMovement 앞 Tick dependency를 연결한다.
 - 점화 지연, Burning 가속, 속도 상한과 BurnedOut 관성 비행을 처리한다.
 - Trail과 추진 화염을 데이터 기반으로 배치·재생한다.
 - Thruster를 실제 Burning 상태와 동기화한다.
@@ -1028,8 +1031,8 @@ Current System = Document/Systems/Combat/Projectile.md
 ```text
 - 차량 체력과 파괴 상태의 최종 소유
 - 일회성 Muzzle·Impact·Destroyed Niagara 생성
-- TargetSelect와 Lock-on
-- Missile Guidance
+- TargetSelect와 Lock-on 후보/선택 수명
+- Missile Guidance의 Guidance Law·Seeker·Observation·Activation 세부 정책 (`Combat/MissileGuidance.md` 소유)
 - 폭발 범위 피해
 - 장갑·모듈 피해
 - 탄약 소비와 재장전
@@ -1047,10 +1050,10 @@ CombatFx
 → 승인 Fire, 첫 Impact와 최초 Destroyed의 일회성 FX
 
 TargetSelect
-→ 공용 선택 대상
+→ 발사 전에 선택할 공용 Target 후보/선택 상태
 
-후속 Guidance
-→ 유도 목표에 따른 추진 방향 변경
+MissileGuidance
+→ 발사 순간 Target Snapshot 이후 독립 Missile Flight/Guidance와 물리 제한형 방향 변경
 ```
 
 ---
@@ -1122,6 +1125,9 @@ CF-TC-024 Projectile Propulsion
 ## 20. 연관 Systems 문서
 
 ```text
+Document/Systems/Combat/MissileGuidance.md
+- CF-FQ-030 Direct TargetActor Missile Flight/Guidance, Guidance Law, Seeker/Observation/Activation과 USER Feel 승인 계약을 소유한다.
+
 Document/Systems/Combat/WeaponFire.md
 - Projectile Actor 사용 여부와 Pool Acquire 호출을 결정한다.
 
@@ -1153,18 +1159,28 @@ Document/Systems/UI/VehicleDebugPanel.md
 - Projectile Pool 확보·반환 정책 변경
 - Sweep·Sub-step·보조 Sweep 정책 변경
 - 첫 Impact 피해 적용과 결과 보존 방식 변경
-- Missile Guidance가 Current System으로 승격
-- CF-TC-024 회귀 기준 변경
+- Missile Flight/Guidance와 공통 Projectile Actor의 통합·Reset 책임 경계 변경
+- CF-TC-024 또는 CF-TC-027 회귀 기준 변경
 ```
 
 ---
 
 ## 22. 문서 버전 관리
 
-- 현재 문서 버전: `1.8.1`
-- 문서 상태: `Current System / Same-Source Salvo Isolation User PIE PASS / Different-Source Interception Deferred`
+- 현재 문서 버전: `1.9.0`
+- 문서 상태: `Current System / CF-FQ-030 Missile Integration Boundary Promoted / Same-Source Salvo Isolation User PIE PASS / Different-Source Interception Deferred`
 
 ### Changelog
+
+#### v1.9.0 - 2026-09-08
+
+```text
+- CF-FQ-030 Current System Promotion에 맞춰 공통 Projectile Actor가 MissileFlightComp와 MissileGuideComp를 생성·활성화·Reset하는 현재 책임을 반영했다.
+- Missile Guidance 세부 알고리즘 owner를 Document/Systems/Combat/MissileGuidance.md v1.0.0으로 분리했다.
+- 기존 'Target Homing Missile / Missile Guidance 후속' 표기를 실제 Current Source와 맞게 교정했다.
+- CF-TC-027 Technical + USER Feel PASS를 Current 통합 경계에 추가했다.
+- Source/Asset mutation이나 검증 재실행 없이 문서의 Current projection만 승격했다.
+```
 
 #### v1.8.1 - 2026-08-02
 

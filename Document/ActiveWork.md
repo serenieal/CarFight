@@ -1,7 +1,7 @@
 # CarFight Active Work
 
-- 문서 버전: v4.156
-- 최근 갱신일: 2026-09-05
+- 문서 버전: v4.163
+- 최근 갱신일: 2026-09-08
 - 문서 상태: Current
 - 역할: CarFight 게임 프로젝트에서 현재 실제로 진행 중인 작업을 선택하고 대표 Plan으로 연결하는 **세션 복원 projection**
 
@@ -46,20 +46,21 @@ UI Resource 방법론 실험 `URT05_Plan.md v0.8`은 Method Validation Complete�
 
 ## 3. 최근 완료
 
-### CF-FQ-047 Vehicle Builder Hardpoint Authoring Integrity — Done
+### CF-FQ-030 물리 제한형 미사일 비행·유도 — Done
 
 ```text
-상태: Done / VBHAI-P0-07G USER Re-Acceptance PASS / P0 Complete / Current System Promotion Complete
-Current owner: Document/Systems/Vehicles/VehicleBuilder.md v1.4.1
-Historical Plan: Document/Plan/VehicleBuilderHardpointIntegrity/VehicleBuilderHardpointIntegrityPlan.md v0.2.1 — Historical + Retained Path / post-closure remediation evidence sync complete
+상태: Done / P0 Complete / CF-TC-027 Technical + USER Feel PASS / Current System Promotion Complete
+Current owner: Document/Systems/Combat/MissileGuidance.md v1.0.1
+공통 Projectile 통합 경계: Document/Systems/Combat/Projectile.md v1.9.0
+Historical Plan: Document/Plan/MissileGuidance/MissileGuidancePlan.md v0.6.25 — Historical + Retained Path / Final Audit PASS / physical move 0
 ```
 
 보존 판정:
 
-- USER가 P0-07G 최종 흐름을 직접 확인하고 PASS했다.
-- fresh persisted Wagon Recipe에서 current Target DefinitionHash와 persistent USER Driving receipt가 exact 일치하고 current USER-approved Hardpoint/Mount baseline 2/2가 유지됨을 확인했다.
-- post-closure final audit remediation까지 official UE 5.8 build, dedicated P0-07H, focused/affected Automation, mandatory 27/27 mapping과 final source re-review가 Clean PASS다. representative Historical Plan v0.2.1이 remediation detailed evidence를 보존하며 이 문서 동기화를 이유로 검증을 반복하지 않는다.
-- CF-FQ-046 common Step 1~8 Page Shell/scroll/overflow dependency는 해제됐지만 자동 Active 전환하지 않는다.
+- USER가 MissileDirectTest PIE에서 Low / Normal / High Guidance Feel을 직접 확인하고 "얼추 PASS"로 승인했다.
+- Direct TargetActor 물리 제한형 Flight/Guidance, Guidance Law, Independent Activation, Stateful Seeker/Observation, rear-aspect와 Guidance Preset authoring/idempotence의 Technical evidence는 PASS 상태를 유지한다.
+- 대표 Plan의 완료 상세 evidence는 보존하며, Current 구현은 MissileGuidance.md와 Projectile.md를 우선한다. 문서 승격을 이유로 기존 Build/Authoring/Focused/Missile 10/10/AssetDump evidence를 반복하지 않는다.
+- LaserPoint·DataLink/Inertial 실제 Runtime, Angled/Vertical/Loft/TopAttack, 실제 Expire와 장비별 다중 미사일 Salvo 연출은 P0 완료를 막지 않는 후속 범위다.
 
 ---
 
@@ -70,9 +71,9 @@ Historical Plan: Document/Plan/VehicleBuilderHardpointIntegrity/VehicleBuilderHa
 | `CF-FQ-038` 차량 데이터 Authoring | Paused | `Document/Plan/DataAuthoring/DataAuthoringPlan.md v0.2.52` + `Document/Plan/DataAuthoring/DataAuthoringRoadmap.md v0.1.56` → Deprecated transition Technical Complete / `Document/Systems/Vehicles/VehicleBuilder.md v1.4.1` 기준 Builder Backend + Advanced Workspace 역할 / 다음 non-blocking `DEL6 compatibility retirement` 또는 `UA-08 quantitative comparison Deferred` | P0-12 USER PASS 7/8 유지. UA-01~08·P0-08~11·DG1~DG5·deprecation validation replay 금지. DEL6 Pending이라 physical Wizard deletion 금지 |
 | `CF-FQ-034` 차량 피팅·질량 | Paused | `Document/Plan/VehicleFitting/VehicleFittingPlan.md v0.17.0` → `FIT-P0-07D USER Driving Feel Comparison` | FIT-P0-07A~07C 정량 Mobility evidence 반복 금지 |
 | `CF-FQ-029` 모듈형 런처 | Paused | `Document/Plan/LauncherMissile/LauncherMissilePlan.md v0.14.0` → `LM-P0-06 USER PIE` | LM-P0-06A Failure Policy Technical PASS 반복 금지 |
-| `CF-FQ-030` 미사일 비행·유도 | Ready | `CF-TC-027 Manual PIE Pending` | Persisted Asset Technical Verification과 Direct Runtime 기술 증거 반복 금지 |
 | `CF-FQ-041` 런타임 콘텐츠 적용 메뉴 | Ready | `Document/Plan/RuntimeApply/RuntimeApplyPlan.md v0.1.17` → `RTA-P0-05 USER PASS / Closed / next RTA-P0-06 Packaged Demo` | RuntimeApply Vehicle/Equipment UI와 Legacy Current Equipment readback까지 USER 확인 완료, 최종 RuntimeApply regression 14/14 PASS(CF-FQ-044 `CatalogOptionSync` 포함). CF-FQ-044에서 persisted `DA_Vehicle_Wagon`을 Builder-produced Packaged Demo candidate로 handoff했다. 기존 RuntimeApply authorization/apply 계약을 재작업하지 않는다. |
 | `CF-FQ-046` Vehicle Builder 사용자 정보 UX | Ready | `Document/Plan/VehicleBuilderInfoUX/VehicleBuilderInfoUXPlan.md v0.1.6` → pre-CF-FQ-047 Technical PASS evidence preserved / CF-FQ-047 Done으로 dependency 충족 / next `VBIUX-P0-05B Step 1~8 Common Page Layout Audit` | Step 1~8 common Page Shell/height/scroll/overflow는 046 owner다. 047의 Step 5 Physics 영향 경계와 Step 7/8 durable/save/readiness 계약은 Current VehicleBuilder v1.4.1으로 동기화됐으며, 공통 scroll/page-shell을 047 방식으로 중복 구현하지 않는다. |
+| `CF-FQ-048` Vehicle Pawn Slimming | Ready | `Document/Plan/VehiclePawnSlimming/VehiclePawnSlimmingPlan.md v0.1.0` → Initial Design Audit Correction + Re-review PASS / next `VPS-P0-00 Contract / State / Lifecycle Freeze` | Gameplay semantics, Blueprint/Asset contract, Pawn observable state authority와 lifecycle ordering을 P0에서 동결한다. 기존 CF-FQ-039 Active 및 Wagon/RuntimeTestCatalog/WeaponDef/VehiclePanel 병렬 dirty를 보호하며 Source mutation은 아직 0이다. |
 | `CF-FQ-035` 인벤토리 Foundation | Paused | FeatureQueue/대표 Plan → USER Field UI·Mobility | 기존 Inventory/Fitting Technical checkpoint 반복 금지 |
 | `CF-FQ-026` 타겟 선택 | Paused | FeatureQueue/대표 Plan → `TS-P0-08 USER PIE` | TS-P0-00~07 및 Remote Technical evidence 반복 금지 |
 | `CF-FQ-015` 차량 데이터 튜닝 | Paused | FeatureQueue/대표 Plan → `VD-P0-04 USER Tuning` | VD-P0-00~03 Technical evidence 반복 금지 |
@@ -120,6 +121,53 @@ ActiveWork가 다시 상세 Build/Automation/USER 로그를 누적하거나 서�
 ---
 
 ## 8. Changelog
+
+### v4.163 - 2026-09-08
+
+- `CF-FQ-030 Post-Closure Final Audit`에서 P0 0 / P1 3 / P2 0을 확인하고 문서 사실 오차만 교정한 뒤 재검수 P0 0 / P1 0 / P2 0 PASS로 닫았다.
+- Current owner를 `Systems/Combat/MissileGuidance.md v1.0.1`로 전진했다. Direct Flight의 Ejection 상태, Projectile 종료와 Flight Reset 경계, 실제 Tick prerequisite graph를 Source와 일치시켰다.
+- Plan Index의 stale `v0.6.23 / Ready / Closure Review` current 본문을 제거하고 representative Historical Plan을 v0.6.25로 동기화했다.
+- Product Source/Asset mutation과 Build/Automation/AssetDump/USER PIE 재실행은 0이다. 기존 PASS evidence와 현재 단일 Active `CF-FQ-039`를 유지한다.
+
+### v4.162 - 2026-09-08
+
+- `CF-FQ-030`을 P0 Complete / CF-TC-027 Complete PASS / Current System Promotion Complete로 닫고 Ready 복원 표에서 제거했다.
+- 최근 완료 블록을 CF-FQ-030으로 교체하고 Current owner를 `Systems/Combat/MissileGuidance.md v1.0.0`, 공통 통합 경계를 `Projectile.md v1.9.0`으로 고정했다.
+- 대표 Plan은 `MissileGuidancePlan.md v0.6.24` Historical + Retained Path로 보존하며 physical move는 수행하지 않는다.
+- 기존 Technical/USER evidence는 새 failure/change evidence 없이 반복하지 않았고 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v4.161 - 2026-09-08
+
+- USER가 실제 MissileDirectTest PIE에서 Low / Normal / High를 모두 확인하고 "얼추 PASS"로 승인해 `MG-P0-12 USER Guidance Feel Validation`과 `CF-TC-027 USER Feel`을 ACCEPTED로 전진했다.
+- CF-FQ-030은 아직 Done으로 승격하지 않고 대표 Plan v0.6.23의 `P0 Closure + Current System Promotion Review`를 다음 Ready 복원 지점으로 고정했다.
+- 기존 MG-P0-12E Build/Authoring/Focused/Missile 10/10과 Guidance Preset AssetDump 3/3은 새 failure/change evidence 없이 반복하지 않는다. 현재 단일 Active CF-FQ-039와 다른 Feature lifecycle은 변경하지 않았다.
+
+### v4.160 - 2026-09-08
+
+- `CF-FQ-030 / MG-P0-12E Guidance Preset DA Rewire Post-Implementation Mid-review`의 P1 3 / P2 1 교정과 재검수를 P0/P1/P2 0 PASS로 닫고 대표 Plan pointer를 v0.6.22로 전진했다.
+- passive Guidance Preset, Editor-only 신규 seed와 persisted idempotence 보존 계약을 fresh Build/Authoring/Focused/전체 Missile 회귀로 확인했다. 실제 Low/Normal/High Preset 3개는 수정하지 않아 기존 AssetDump 3/3 evidence를 보존한다.
+- exact next는 `MG-P0-12 USER Guidance Feel Validation — Corrected Low DA Revalidation`이며 `CF-TC-027 USER Feel`은 계속 NOT ACCEPTED다. 현재 단일 Active CF-FQ-039와 다른 Paused/Ready lifecycle은 변경하지 않았다.
+
+### v4.159 - 2026-09-08
+
+- `CF-FQ-030` 새 세션 복원 지점을 USER PIE 직전에서 `MG-P0-12E Guidance Preset DA Rewire Post-Implementation Mid-review`로 한 단계 되돌려 고정했다.
+- MG-P0-12E Technical PASS, persisted Low/Normal/High Preset 3/3, Authoring 1/1, Focused 1/1, 전체 Missile 10/10과 Official Build PASS evidence는 보존하며, 중간검수에서 새 결함이 나오지 않는 한 반복하지 않는다.
+- 중간검수 PASS 뒤에만 `MG-P0-12 USER Guidance Feel Validation — Corrected Low DA Revalidation`으로 진행한다. `CF-TC-027 USER Feel`은 계속 NOT ACCEPTED다.
+- 현재 단일 Active CF-FQ-039와 다른 Paused/Ready Feature lifecycle은 변경하지 않았다.
+
+### v4.158 - 2026-09-06
+
+- 완료된 `CF-FQ-047` 대표 Historical Plan의 G5 Physical Move를 반영해 최근 완료 복원 포인터를 `Document/Plan/Archive/VehicleBuilderHardpointIntegrity/VehicleBuilderHardpointIntegrityPlan.md v0.2.1` Archived Path로 갱신했다.
+- Feature lifecycle, Current owner, USER-approved Wagon 2/2와 persistent Driving acceptance는 변경하지 않았고 Build/Test/Benchmark/USER Driving을 재실행하지 않았다.
+- 현재 단일 Active CF-FQ-039와 Paused/Ready 목록, 기존 `CF-FQ-048 Vehicle Pawn Slimming` Ready 등록은 그대로 보존한다.
+
+Migration: 2026-09-06 이후 CF-FQ-047 완료 evidence를 찾을 때는 Archive 경로를 사용한다. 이전 root-level Plan 경로는 과거 Changelog 문맥에서만 해석한다.
+
+### v4.157 - 2026-09-06
+
+- `CF-FQ-048 Vehicle Pawn Slimming`을 P2 / Ready 정식 Feature로 승격하고 대표 Plan `Document/Plan/VehiclePawnSlimming/VehiclePawnSlimmingPlan.md v0.1.0`을 복원 포인터에 추가했다.
+- Initial Design Audit Correction + Re-review는 P0 0 / blocking P1 0 PASS이며 exact next는 `VPS-P0-00 Contract / State / Lifecycle Freeze`다.
+- 현재 단일 Active는 CF-FQ-039 그대로 유지한다. CF-FQ-048 Source/Asset 구현은 아직 시작하지 않았고 기존 병렬 Asset dirty를 보호한다.
 
 ### v4.156 - 2026-09-05
 

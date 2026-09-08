@@ -1,7 +1,7 @@
 # SystemIndex
 
-- Version: 1.31.0
-- Date: 2026-09-05
+- Version: 1.32.0
+- Date: 2026-09-08
 
 - Status: Active
 - Scope: `Document/Systems/` 하위 문서 위치 안내 색인
@@ -37,7 +37,8 @@
 | `Document/Systems/Combat/WeaponFire.md` | 싱글플레이 로컬 차량 Pawn에서 Fire 입력을 발사 명령으로 만들고, Weapon Aim Solution을 기준으로 Projectile Actor 또는 Dummy HitScan 경로로 넘기며, 발사 결과와 거부 사유를 Aim / Debug / 후속 UI 피드백이 읽을 수 있게 남기는 현재 발사 기능 문서다. Ammo 수량·Reload 상태는 `UCFVehicleAmmoComp`가 소유한다. |
 | `Document/Systems/Combat/Ammo.md` | `CF-FQ-031`에서 완료한 차량 finite Ammo Current System이다. WeaponInstanceId별 Loaded, AmmoId별 Reserve, SingleCycle Commit·Rollback, Ripple·Salvo 전체 예약, FullMagazine Reload, WeaponPanel `Loaded / MagazineCapacity + Reserve`와 출격 Ammo 질량 계약을 기록한다. Heavy·Ripple USER PIE를 완료했다. |
 | `Document/Systems/Combat/FireFeedback.md` | `WeaponFire`가 남긴 로컬 발사 성공·실패·쿨다운·NoWeapon·AimBlocked·TurretAligning·MuzzleBlocked 결과를 Reticle 텍스트와 색상으로 표시한다. P0 상태 전환과 피드백 만료를 사용자 PIE로 확인했다. |
-| `Document/Systems/Combat/Projectile.md` | `ProjectileData`, 공통 `CFProjectileActor`, `ProjectileMotorComp`와 `ProjectilePoolComp`를 통한 비추진 포탄·비유도 Rocket 이동, 점화·연소·BurnedOut 관성 비행, 지속형 Trail·Thruster 소켓/Fallback·독립 Scale, 종료 Reset·Pool 재사용·고속 Bounds, 고속 연속 충돌과 첫 Impact 피해를 기록한다. `CF-TC-020`, `CF-TC-023`, `CF-TC-024`를 사용자 PIE로 확인했다. |
+| `Document/Systems/Combat/Projectile.md` | `ProjectileData`, 공통 `CFProjectileActor`, `ProjectileMotorComp`와 `ProjectilePoolComp`를 통한 비추진 포탄·비유도 Rocket 이동, Missile Flight/Guidance 컴포넌트 통합 경계, 지속형 Trail·Thruster, 충돌·Impact·Pool 생명주기를 기록한다. Guidance 세부 Current 계약은 `MissileGuidance.md`가 소유한다. |
+| `Document/Systems/Combat/MissileGuidance.md` | `CF-FQ-030`에서 완료한 Direct TargetActor 물리 제한형 Missile Flight/Guidance Current System이다. Launch Target Snapshot, Released/Clearance/GuidedFlight, PurePursuit·LeadPursuit·PN, Independent Activation, Stateful Seeker, Sampled Observation, Target Lost/Reacquisition, Pool Reset, passive Guidance Preset과 `CF-TC-027` Technical + USER Feel PASS를 기록한다. |
 | `Document/Systems/Combat/DamageHitContext.md` | Dummy HitScan과 Projectile의 시각 차체 Hit 결과, `HitComponentName`, 위치/노멀/입사 방향을 같은 `FCFDamageHitContext` 형식으로 기록한다. 이 Context는 현재 `HitDamage`의 공용 피해 적용 입력으로 사용된다. |
 | `Document/Systems/Combat/HitDamage.md` | HitScan·Projectile의 `FCFDamageHitContext`를 정식 `VehicleDefenseComp` 진입점으로 연결하고, Shield·Armor 이후 Vehicle Integrity 적용, Legacy Fallback, 최초 파괴와 기존 `FCFDamageApplyResult` 호환을 기록한다. |
 | `Document/Systems/Combat/VehicleDefense.md` | `VehicleDefenseData`와 `VehicleDefenseComp`가 소유하는 Shield, 재생, Front·Left·Right·Rear·Top·Bottom 독립 Armor, 방향 배율, ArmorPenetration, Armor Overflow, Vehicle Integrity 전달과 Fitting Defense Commit을 기록한다. |
@@ -137,7 +138,8 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 | 차량 finite Ammo, 무기별 장전량·탄종별 Reserve, Launcher 예약, FullMagazine Reload, WeaponPanel 탄약 표시와 출격 탄약 질량 | `Combat/Ammo.md` |
 | 발사 성공/실패/쿨다운/무기 없음 상태를 Reticle, HUD와 시각 VFX로 표시하는 기준 | `Combat/FireFeedback.md` |
 | 프로젝트 전역 게임 사운드 비지원 결정과 오디오 도입 금지 기준 | `Document/ProjectSSOT/04_ProjectDecisions.md` |
-| Projectile Actor 활성화, 비유도 Rocket 추진 상태, Trail·Thruster 지속형 FX, 독립 FX Scale, 일반·고속 충돌, 첫 Impact 피해와 Pool Reset 기준 | `Combat/Projectile.md` |
+| Projectile Actor 활성화, 비유도 Rocket 추진 상태, Missile 컴포넌트 통합 경계, Trail·Thruster 지속형 FX, 일반·고속 충돌, 첫 Impact 피해와 Pool Reset 기준 | `Combat/Projectile.md` |
+| Direct TargetActor 미사일 비행 상태, Guidance Law, 물리 제한, Guidance Activation, Seeker/Observation/Reacquisition, Guidance Preset과 USER Feel 기준 | `Combat/MissileGuidance.md` |
 | Dummy HitScan / Projectile 시각 차체 HitContext와 HitComponent 기록 | `Combat/DamageHitContext.md` |
 | HitScan·Projectile 공용 피해 진입점, Vehicle Integrity 적용, Legacy Fallback과 최초 파괴 상태 | `Combat/HitDamage.md` |
 | Shield, 6방향 Armor, 관통·Overflow, 재생과 방어층별 전체 결과 | `Combat/VehicleDefense.md` |
@@ -181,6 +183,13 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 ---
 
 ## 13. Changelog
+
+### v1.32.0 - 2026-09-08
+
+- `CF-FQ-030` P0 Current System Promotion으로 `Combat/MissileGuidance.md v1.0.0`을 신규 등록했다.
+- `Projectile.md v1.9.0`의 공통 Actor/Missile 컴포넌트 통합 경계와 Guidance 상세 owner 분리를 색인에 반영했다.
+- CF-TC-027 Technical + USER Guidance Feel PASS를 현재 Missile Guidance 탐색 경로로 승격했다.
+- Source/Asset mutation과 Build/Automation/AssetDump 재실행 없이 Current 문서 projection만 갱신했다.
 
 ### v1.31.0 - 2026-09-05
 
