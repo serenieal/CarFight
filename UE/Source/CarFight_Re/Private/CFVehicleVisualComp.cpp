@@ -1,12 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.1
-// Date: 2026-09-06
+// Version: 1.0.2
+// Date: 2026-09-07
 // Description: CF-FQ-048 VPS-P0-01 차량 시각 행동 전용 내부 컴포넌트 구현
 // Changelog:
+// - v1.0.2: standalone non-unity compile에서 AActor::GetComponents를 직접 사용할 수 있도록 GameFramework/Actor.h 명시 include를 추가. Runtime 동작 변경 없음.
 // - v1.0.1: 중간검수 교정으로 BP/SCS SceneComponent 장기 포인터 bookkeeping cache를 제거하고 각 행동의 fresh resolve 계약을 유지.
 // - v1.0.0: Chassis/Wheel/Layout/Turret/Owner Visual 행동과 순수 시각 캐시를 Pawn에서 분리하고 fresh BP/SCS component resolve 계약을 유지.
 // Migration:
+// - v1.0.2는 IWYU/독립 컴파일 안정화만 수행하며 Vehicle Visual 런타임 계약, Blueprint/Public API와 Product Asset은 변경하지 않음.
 // - Pawn의 기존 wrapper와 observable state authority를 유지하므로 Blueprint/Product Asset 수정은 필요하지 않음.
 
 #include "CFVehicleVisualComp.h"
@@ -26,6 +28,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "GameFramework/Actor.h"
 
 namespace
 {
