@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDACurrentTypeTests.cpp
-// Version: v1.1.0
-// Date: 2026-09-03
+// Version: v1.2.0
+// Date: 2026-09-08
 // Description: CF-FQ-045 DAM-P0-02B current concrete type semantics focused Automation입니다.
 // Changelog:
+// - v1.2.0: CF-FQ-049 prerequisite로 CFMissileGuidePresetData descriptor/identity compile guard를 추가하고 current exact matrix를 27→28로 확장.
 // - v1.1.0: 미래 concrete DA 확장 허용, exact SourceName, source symbol compile guard, batch atomicity, duplicate namespace policy를 검증.
 // - v1.0.2: VehicleData 공개 read-only VDA validator를 CustomContract expected matrix에 반영.
 // - v1.0.1: Identity Required/N/A와 resolver kind 분리 계약을 current 27종 matrix에 반영.
@@ -23,6 +24,7 @@
 #include "CFDamageData.h"
 #include "CFEquipmentPresetData.h"
 #include "CFInventoryItemData.h"
+#include "CFMissileGuidePresetData.h"
 #include "CFProjectileData.h"
 #include "CFRuntimeTestCatalogData.h"
 #include "CFTargetSelectData.h"
@@ -71,7 +73,7 @@ namespace CFDACurrentTypeTestsPrivate
 		ECFDADuplicateNamespacePolicy DuplicateNamespacePolicy;
 	};
 
-	// current concrete 27종의 exact descriptor policy matrix를 반환합니다.
+	// CF-FQ-049 prerequisite까지 반영한 current concrete 28종의 exact descriptor policy matrix를 반환합니다.
 	TArray<FExpectedDescriptor> BuildExpectedDescriptors()
 	{
 		// P0-02B actual Source audit 기준 current concrete descriptor matrix입니다.
@@ -80,6 +82,7 @@ namespace CFDACurrentTypeTestsPrivate
 			{TEXT("/Script/CarFight_Re.CFAmmoData"), ECFDADomain::Combat, ECFDAIdentityPolicy::Required, ECFDAIdentityResolverKind::ExplicitFName, TEXT("AmmoId"), ECFDAValidationPolicy::CustomContract, TEXT("IsAmmoDataValid"), ECFDADuplicateNamespacePolicy::ExactClassPath},
 			{TEXT("/Script/CarFight_Re.CFCombatFxData"), ECFDADomain::Combat, ECFDAIdentityPolicy::Required, ECFDAIdentityResolverKind::ExplicitFName, TEXT("CombatFxId"), ECFDAValidationPolicy::None, TEXT(""), ECFDADuplicateNamespacePolicy::ExactClassPath},
 			{TEXT("/Script/CarFight_Re.CFDamageData"), ECFDADomain::Combat, ECFDAIdentityPolicy::Required, ECFDAIdentityResolverKind::ExplicitFName, TEXT("DamageId"), ECFDAValidationPolicy::None, TEXT(""), ECFDADuplicateNamespacePolicy::ExactClassPath},
+			{TEXT("/Script/CarFight_Re.CFMissileGuidePresetData"), ECFDADomain::Combat, ECFDAIdentityPolicy::Required, ECFDAIdentityResolverKind::ExplicitFName, TEXT("PresetId"), ECFDAValidationPolicy::None, TEXT(""), ECFDADuplicateNamespacePolicy::ExactClassPath},
 			{TEXT("/Script/CarFight_Re.CFEquipmentPresetData"), ECFDADomain::Combat, ECFDAIdentityPolicy::Required, ECFDAIdentityResolverKind::ExplicitFName, TEXT("EquipmentId"), ECFDAValidationPolicy::CustomContract, TEXT("HasCompleteEquipmentData"), ECFDADuplicateNamespacePolicy::ExactClassPath},
 			{TEXT("/Script/CarFight_Re.CFEquipmentItemData"), ECFDADomain::Combat, ECFDAIdentityPolicy::Required, ECFDAIdentityResolverKind::PrimaryAssetId, TEXT("ItemDefinitionId"), ECFDAValidationPolicy::NativeDataValidation, TEXT("IsDataValid"), ECFDADuplicateNamespacePolicy::PrimaryAssetType},
 			{TEXT("/Script/CarFight_Re.CFDefenseItemData"), ECFDADomain::Vehicle, ECFDAIdentityPolicy::Required, ECFDAIdentityResolverKind::PrimaryAssetId, TEXT("ItemDefinitionId"), ECFDAValidationPolicy::NativeDataValidation, TEXT("IsDataValid"), ECFDADuplicateNamespacePolicy::PrimaryAssetType},
@@ -114,6 +117,7 @@ namespace CFDACurrentTypeTestsPrivate
 		(void)GET_MEMBER_NAME_CHECKED(UCFAmmoData, AmmoId);
 		(void)GET_MEMBER_NAME_CHECKED(UCFCombatFxData, CombatFxId);
 		(void)GET_MEMBER_NAME_CHECKED(UCFDamageData, DamageId);
+		(void)GET_MEMBER_NAME_CHECKED(UCFMissileGuidePresetData, PresetId);
 		(void)GET_MEMBER_NAME_CHECKED(UCFEquipmentPresetData, EquipmentId);
 		(void)GET_MEMBER_NAME_CHECKED(UCFInventoryItemData, ItemDefinitionId);
 		(void)GET_MEMBER_NAME_CHECKED(UCFProjectileData, ProjectileId);
@@ -158,7 +162,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"CarFight.DataManagement.CF_FQ_045.DAM_P0_02B.CurrentCoverageIntegration",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-// current 27 concrete descriptor의 exact semantic/policy/source, batch atomicity와 namespace derivation을 검증합니다.
+// current 28 concrete descriptor의 exact semantic/policy/source, batch atomicity와 namespace derivation을 검증합니다.
 bool FCFDACurrentDescriptorMatrixTest::RunTest(const FString& Parameters)
 {
 	CFDACurrentTypeTestsPrivate::VerifyAuditedSourceSymbolsCompile();
@@ -176,10 +180,10 @@ bool FCFDACurrentDescriptorMatrixTest::RunTest(const FString& Parameters)
 	// actual Source audit 기준 expected descriptor matrix입니다.
 	const TArray<CFDACurrentTypeTestsPrivate::FExpectedDescriptor> ExpectedDescriptors =
 		CFDACurrentTypeTestsPrivate::BuildExpectedDescriptors();
-	TestEqual(TEXT("Current descriptor matrix count"), ExpectedDescriptors.Num(), 27);
+	TestEqual(TEXT("Current descriptor matrix count"), ExpectedDescriptors.Num(), 28);
 	TestEqual(TEXT("Registry contains exact current descriptors"), TypeRegistry.Num(), ExpectedDescriptors.Num());
 
-	// current descriptor 27종의 exact semantic/policy/source를 하나씩 확인합니다.
+	// current descriptor 28종의 exact semantic/policy/source를 하나씩 확인합니다.
 	for (const CFDACurrentTypeTestsPrivate::FExpectedDescriptor& ExpectedDescriptor : ExpectedDescriptors)
 	{
 		// expected class path에 등록된 current semantic descriptor입니다.
@@ -211,7 +215,7 @@ bool FCFDACurrentDescriptorMatrixTest::RunTest(const FString& Parameters)
 		TEXT("Current descriptor registration is idempotent"),
 		TypeRegistry.RegisterCurrentCarFightDescriptors(&RegistrationError));
 	TestTrue(TEXT("Idempotent current registration has no error"), RegistrationError.IsEmpty());
-	TestEqual(TEXT("Idempotent current descriptor count"), TypeRegistry.Num(), 27);
+	TestEqual(TEXT("Idempotent current descriptor count"), TypeRegistry.Num(), 28);
 
 	// abstract framework base는 current concrete registry에 등록하지 않는 계약입니다.
 	TestNull(
@@ -256,7 +260,7 @@ bool FCFDACurrentDescriptorMatrixTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// current audited 27종은 Registered로 보장하되 미래 concrete DA는 Unregistered 상태로 추가되어도 실패하지 않는지 검증합니다.
+// current audited 28종은 Registered로 보장하되 미래 concrete DA는 Unregistered 상태로 추가되어도 실패하지 않는지 검증합니다.
 bool FCFDACurrentCoverageIntegrationTest::RunTest(const FString& Parameters)
 {
 	// current Editor process의 Asset Registry module입니다.
@@ -346,7 +350,7 @@ bool FCFDACurrentCoverageIntegrationTest::RunTest(const FString& Parameters)
 				|| TypeRecord.CoverageState == ECFDACoverageState::Unregistered);
 	}
 
-	TestEqual(TEXT("All audited current concrete types remain discoverable"), FoundExpectedCurrentTypeCount, 27);
+	TestEqual(TEXT("All audited current concrete types remain discoverable"), FoundExpectedCurrentTypeCount, 28);
 	TestTrue(TEXT("Current abstract InventoryItem base remains discoverable"), bFoundInventoryItemAbstractBase);
 	return true;
 }

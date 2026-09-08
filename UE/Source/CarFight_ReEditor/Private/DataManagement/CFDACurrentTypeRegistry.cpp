@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDACurrentTypeRegistry.cpp
-// Version: v1.1.0
-// Date: 2026-09-03
+// Version: v1.2.0
+// Date: 2026-09-08
 // Description: CF-FQ-045 current concrete CarFight DataAsset semantic/policy + Manager user description 등록 구현입니다.
 // Changelog:
+// - v1.2.0: CF-FQ-049 DAS-P0-02 prerequisite로 CFMissileGuidePresetData를 Combat/ExplicitFName(PresetId) descriptor로 등록해 current coverage를 27→28로 확장.
 // - v1.1.0: current 27종에 '어떤 데이터인가 / 어디에 사용되는가' 사용자 설명을 추가.
 // - v1.0.3: current descriptor batch 등록을 all-or-nothing으로 교정하고 SourceName을 exact symbol provenance로 정규화.
 // - v1.0.2: 공개 read-only UCFVDAValidator::ValidateVehicleData facade를 VehicleData CustomContract policy로 연결.
@@ -36,6 +37,9 @@ namespace CFDACurrentTypeRegistryPrivate
 		CF_SET_DA_USER_DESCRIPTION("/Script/CarFight_Re.CFDamageData",
 			"공격이 대상에 적용할 피해와 관통·범위 피해 규칙을 정의하는 데이터입니다.",
 			"발사체가 명중했을 때 차량과 모듈에 어떤 피해를 적용할지 결정하는 데 사용합니다.");
+		CF_SET_DA_USER_DESCRIPTION("/Script/CarFight_Re.CFMissileGuidePresetData",
+			"미사일 유도 성능과 추적 성격을 한 묶음으로 저장하는 프리셋 데이터입니다.",
+			"미사일 체감 시험과 후속 저작 도구가 유도 방식·탐색기·관측·선회 제한 설정을 재빌드 없이 선택할 때 사용합니다.");
 		CF_SET_DA_USER_DESCRIPTION("/Script/CarFight_Re.CFEquipmentPresetData",
 			"차량에 장착할 무기 또는 유틸리티 장비 한 묶음을 정의하는 데이터입니다.",
 			"차량의 Mount와 장비 선택 화면이 실제 장착 패키지를 선택하고 표시할 때 사용합니다.");
@@ -148,9 +152,9 @@ bool FCFDATypeRegistry::RegisterCurrentCarFightDescriptors(FString* OutError)
 		OutError->Reset();
 	}
 
-	// P0-02B current Source audit에서 확정한 concrete descriptor 27종입니다.
+	// CF-FQ-049 prerequisite까지 반영한 current concrete descriptor 28종입니다.
 	TArray<FCFDASemanticDescriptor> CurrentDescriptors;
-	CurrentDescriptors.Reserve(27);
+	CurrentDescriptors.Reserve(28);
 
 	CurrentDescriptors.Add(CFDACurrentTypeRegistryPrivate::MakeDescriptor(
 		TEXT("/Script/CarFight_Re.CFAmmoData"),
@@ -182,6 +186,17 @@ bool FCFDATypeRegistry::RegisterCurrentCarFightDescriptors(FString* OutError)
 		ECFDAIdentityPolicy::Required,
 		ECFDAIdentityResolverKind::ExplicitFName,
 		TEXT("DamageId"),
+		ECFDAValidationPolicy::None,
+		TEXT("")));
+
+	CurrentDescriptors.Add(CFDACurrentTypeRegistryPrivate::MakeDescriptor(
+		TEXT("/Script/CarFight_Re.CFMissileGuidePresetData"),
+		ECFDADomain::Combat,
+		TEXT("미사일 유도 프리셋 데이터"),
+		TEXT("미사일 Guidance의 identity, 사용자 설명과 전체 MissileGuideConfig를 한 묶음으로 저장하는 passive authoring DataAsset입니다."),
+		ECFDAIdentityPolicy::Required,
+		ECFDAIdentityResolverKind::ExplicitFName,
+		TEXT("PresetId"),
 		ECFDAValidationPolicy::None,
 		TEXT("")));
 

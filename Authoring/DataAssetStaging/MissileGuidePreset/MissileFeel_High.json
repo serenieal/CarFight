@@ -1,0 +1,52 @@
+{
+	"SchemaId": "CarFight.DataAsset.MissileGuidePreset",
+	"SchemaRevision": 1,
+	"AdapterContractRevision": 2,
+	"DataAssetTypeClassPath": "/Script/CarFight_Re.CFMissileGuidePresetData",
+	"StableLogicalId": "MissileFeel_High",
+	"TargetObjectPath": "/Game/Test/CarFight/Missile/FeelPresets/DA_MissileFeel_High.DA_MissileFeel_High",
+	"BaseSemanticFingerprint": "sha256:cacfecf462261c881f5f224a73679ac8b0b15500dc4ec37f7ccc3ef3a9c23af9",
+	"Payload":
+	{
+		"PresetId": "MissileFeel_High",
+		"PresetDisplayName":
+		{
+			"Kind": "Literal",
+			"Text": "고성능 비례항법"
+		},
+		"PresetDescription":
+		{
+			"Kind": "Literal",
+			"Text": "발사 직후 전방/후방 각도까지 폭넓게 포착하고 PN Course Capture를 사용하는 고성능 비례항법 체감 프리셋입니다."
+		},
+		"MissileGuideConfig":
+		{
+			"bUseGuidance": true,
+			"GuideMode": "TargetActor",
+			"LostTargetPolicy": "ContinueStraight",
+			"NavigationConstant": 3,
+			"MaximumTurnRateDegPerSec": 140,
+			"MaximumLateralAccelerationCmPerSecSq": 15000,
+			"GuidanceResponseTimeSeconds": 0.05000000074505806,
+			"MinimumGuidanceSpeedCmPerSec": 500,
+			"SeekerFieldOfViewDeg": 60,
+			"LockBreakAngleDeg": 85,
+			"TargetLostGraceTimeSeconds": 0.80000001192092896,
+			"SeekerModel": "Stateful",
+			"TargetObservationMode": "SampledPositionEstimate",
+			"GuidanceLaw": "ProportionalNavigation",
+			"GuidanceActivationMode": "Independent",
+			"GuidanceActivationDelaySeconds": 0,
+			"GuidanceActivationDistanceCm": 0,
+			"LeadTimeSeconds": 0.20000000298023224,
+			"MaxLeadDistanceCm": 2000,
+			"ReacquisitionMode": "ForwardCone",
+			"TargetObservationIntervalSeconds": 0.029999999329447746,
+			"TargetVelocityEstimateResponseTimeSeconds": 0.10000000149011612,
+			"AcquisitionConeHalfAngleDeg": 180,
+			"TrackingConeHalfAngleDeg": 180,
+			"ReacquisitionConeHalfAngleDeg": 180,
+			"ReacquisitionTimeSeconds": 0.60000002384185791
+		}
+	}
+}

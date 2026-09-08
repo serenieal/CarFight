@@ -1,0 +1,52 @@
+{
+	"SchemaId": "CarFight.DataAsset.MissileGuidePreset",
+	"SchemaRevision": 1,
+	"AdapterContractRevision": 2,
+	"DataAssetTypeClassPath": "/Script/CarFight_Re.CFMissileGuidePresetData",
+	"StableLogicalId": "MissileFeel_Low",
+	"TargetObjectPath": "/Game/Test/CarFight/Missile/FeelPresets/DA_MissileFeel_Low.DA_MissileFeel_Low",
+	"BaseSemanticFingerprint": "sha256:4778012f61ac1ff6c77c516fd06049a0abbbdd0a197798403c736fc1150af4d6",
+	"Payload":
+	{
+		"PresetId": "MissileFeel_Low",
+		"PresetDisplayName":
+		{
+			"Kind": "Literal",
+			"Text": "저성능 단순 추적"
+		},
+		"PresetDescription":
+		{
+			"Kind": "Literal",
+			"Text": "좋은 초기 조준 탄도를 짧게 보존한 뒤 현재 관측 위치만 단순 추적하는 저가형 Pure Pursuit 체감 프리셋입니다."
+		},
+		"MissileGuideConfig":
+		{
+			"bUseGuidance": true,
+			"GuideMode": "TargetActor",
+			"LostTargetPolicy": "ContinueStraight",
+			"NavigationConstant": 3,
+			"MaximumTurnRateDegPerSec": 35,
+			"MaximumLateralAccelerationCmPerSecSq": 2000,
+			"GuidanceResponseTimeSeconds": 0.18000000715255737,
+			"MinimumGuidanceSpeedCmPerSec": 500,
+			"SeekerFieldOfViewDeg": 60,
+			"LockBreakAngleDeg": 85,
+			"TargetLostGraceTimeSeconds": 0.20000000298023224,
+			"SeekerModel": "Stateful",
+			"TargetObservationMode": "SampledPositionEstimate",
+			"GuidanceLaw": "PurePursuit",
+			"GuidanceActivationMode": "Independent",
+			"GuidanceActivationDelaySeconds": 0.25,
+			"GuidanceActivationDistanceCm": 500,
+			"LeadTimeSeconds": 0,
+			"MaxLeadDistanceCm": 0,
+			"ReacquisitionMode": "None",
+			"TargetObservationIntervalSeconds": 0.079999998211860657,
+			"TargetVelocityEstimateResponseTimeSeconds": 0.25,
+			"AcquisitionConeHalfAngleDeg": 45,
+			"TrackingConeHalfAngleDeg": 60,
+			"ReacquisitionConeHalfAngleDeg": 60,
+			"ReacquisitionTimeSeconds": 0
+		}
+	}
+}

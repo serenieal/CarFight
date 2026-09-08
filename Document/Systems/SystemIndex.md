@@ -1,7 +1,7 @@
 # SystemIndex
 
-- Version: 1.32.0
-- Date: 2026-09-08
+- Version: 1.33.1
+- Date: 2026-09-09
 
 - Status: Active
 - Scope: `Document/Systems/` 하위 문서 위치 안내 색인
@@ -59,6 +59,7 @@
 | 경로 | 문서 내용 |
 | --- | --- |
 | `Document/Systems/DataManagement/DataAssetManagement.md` | `CF-FQ-045`에서 완료한 CarFight Data Asset Manager Current System이다. native/persisted DataAsset 자동 발견, Typed Semantic Registry, metadata-only 새로고침, 명시적 검사·참조 관계 조회, generation-bound `재검사 필요 / 재확인 필요`, 한글 우선 관리 UI와 Product Asset no-auto-mutation/save 경계를 기록한다. |
+| `Document/Systems/DataManagement/DataAssetAuthoring.md` | `CF-FQ-049`에서 완료한 Editor-off Staging + Reviewed Batch Apply Current System이다. MissileGuidePreset strict JSON, semantic fingerprint/3-way Preview, exact selection, fresh Review/TOCTOU, typed exact-package materialization, disk reload semantic readback과 Product no-auto-apply/save 경계를 기록한다. |
 
 ---
 
@@ -148,6 +149,7 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 | Sweep/Sub-stepping/보조 Sphere Sweep을 통한 고속 Projectile 연속 충돌 완료 설계·검증 기록 | `Document/Plan/Archive/ProjectileContinuousCollision/ImplementationDesign.md` |
 | 프로젝트 시작 맵, 렌더링, 입력 백엔드 설정 | `Config/ProjectRuntimeConfig.md` |
 | CarFight DataAsset 종류·용도·관리 상태 탐색, 고유 ID/중복 검사, 참조 관계 조회, Refresh 후 재검사 필요 상태와 no-auto-save 관리 경계 | `DataManagement/DataAssetManagement.md` |
+| Editor가 꺼진 동안 DataAsset JSON 의도를 작성하고 exact Preview/Review 뒤 명시적으로 typed DataAsset을 Batch 적용하는 절차, stale/conflict/dirty 보호와 durable save/readback 기준 | `DataManagement/DataAssetAuthoring.md` |
 | 입력 액션, 매핑 컨텍스트, 키보드/게임패드 입력 처리 | `Input/Input.md` |
 | 과거 Dedicated Server 접속 후 차량 Pawn 생성과 Possess 기록 | `Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md` |
 | 차량 Sensor 탐지, ContactId, Live/LastKnown/Lost/DestroyedHold, Tactical Analysis·Knowledge, Scanner Utility 장비/Fitting Source와 V Active Scan 입력, actor-free Snapshot/HUD 소비 경계 | `Targeting/SensorContact.md` |
@@ -183,6 +185,22 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 ---
 
 ## 13. Changelog
+
+### v1.33.1 - 2026-09-09
+
+- `DataManagement/DataAssetAuthoring.md`를 v1.0.1로 전진해 AdapterContractRevision 2의 FText persistence metadata 예외를 Current Source와 정확히 정렬했다.
+- Unreal이 저장 과정에서 자동 부여한 package-only namespace / stable key는 authored semantic identity에서 제외하고, StringTable·명시적 authored namespace·lossless source string이 없는 generated/formatted FText만 fail-closed한다.
+- Source/Asset/Build/Automation 변경은 없으며 CF-FQ-049 Done, Product Low/Normal/High Apply·Save 0, CF-FQ-039 Active는 그대로다.
+
+Migration: Data Asset Authoring의 현재 FText 계약은 `DataAssetAuthoring.md v1.0.1`을 따른다. v1.0.0의 포괄적인 namespace-key 차단 표현은 현재 판단에 사용하지 않는다.
+
+### v1.33.0 - 2026-09-09
+
+- `CF-FQ-049 / DAS-P0-05 Final Acceptance` PASS와 Current System Promotion을 반영해 `DataManagement/DataAssetAuthoring.md v1.0.0`을 신규 등록했다.
+- Editor-off canonical JSON, exact selection Preview→fresh Review→explicit ApplyReviewed, dirty/stale/conflict fail-closed, typed exact-package SavePackage + disk reload semantic readback을 현재 DataAsset Authoring 계약으로 승격했다.
+- closure 기준 Product Low/Normal/High Apply·Save는 0이며 fresh persisted acceptance audit에서 `CFMissileGuidePresetData` 3개를 확인했다. CF-FQ-045 Data Asset Manager read-first owner와 CF-FQ-039 Active lifecycle은 변경하지 않았다.
+
+Migration: CF-FQ-049 완료 이후 Staging/Batch Apply 현재 구현 판단은 `DataManagement/DataAssetAuthoring.md`와 실제 `CarFight_ReEditor/DataAuthoring` Source를 우선한다. Data Asset 발견·검사·참조 조회는 계속 `DataAssetManagement.md`가 소유한다.
 
 ### v1.32.0 - 2026-09-08
 
