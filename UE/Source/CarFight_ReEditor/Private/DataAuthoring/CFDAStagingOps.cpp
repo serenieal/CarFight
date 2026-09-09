@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDAStagingOps.cpp
-// Version: v1.1.1
+// Version: v1.2.0
 // Date: 2026-09-09
 // Description: CF-FQ-049 DAS-P0-05 Product Staging safe sync, exact selection discovery와 Preview→Review→ApplyReviewed operational session 구현입니다.
 // Changelog:
+// - v1.2.0: CF-FQ-050 DACE-P0-01이 anonymous production BuildProductStagingJson을 직접 관측할 수 있는 WITH_DEV_AUTOMATION_TESTS private serializer probe를 추가. Product Sync/write behavior는 변경하지 않음.
 // - v1.1.1: UE 5.8 console registration API에 맞춰 args delegate를 FAutoConsoleCommand overload로 교정.
 // - v1.1.0: exact selected Preview, selection-bound fresh Review session, console Preview args와 Sync partial-write exact-byte rollback을 추가.
 // - v1.0.0: Low/Normal/High Product converged-only Staging Sync, canonical discovery Preview/hash와 console operation entry를 추가.
@@ -13,6 +14,7 @@
 // - SyncProduct는 Product .uasset을 저장하지 않으며 write/verification 실패 시 이번 호출에서 touched된 Staging 파일을 호출 전 raw bytes/absence로 rollback합니다.
 
 #include "DataAuthoring/CFDAStagingOps.h"
+#include "CFDAContractGuard.h"
 
 #include "CFMissileGuidePresetData.h"
 #include "Dom/JsonObject.h"
@@ -1180,5 +1182,16 @@ void FCFDAStagingOpsTestControl::Reset()
 void FCFDAStagingOpsTestControl::ForceSyncFailureAfterWrite(const int32 WriteOrdinal)
 {
 	CFDAStagingOpsPrivate::GForceSyncFailureAfterWriteOrdinal = WriteOrdinal;
+}
+
+// Production canonical Product→Staging serializer를 CF-FQ-050 private probe로 직접 호출합니다.
+bool CFDAContractProbeSerialize(
+	const FCFDAMissilePresetPayload& Payload,
+	const FString& TargetObjectPath,
+	const FString& BaseSemanticFingerprint,
+	FString& OutJsonText,
+	FString& OutError)
+{
+	return CFDAStagingOpsPrivate::BuildProductStagingJson(Payload, TargetObjectPath, BaseSemanticFingerprint, OutJsonText, OutError);
 }
 #endif

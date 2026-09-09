@@ -1,10 +1,10 @@
 # CarFight Data Asset Staging / Batch Authoring
 
-- 문서 버전: v1.0.1
+- 문서 버전: v1.1.0
 - 최근 갱신일: 2026-09-09
 - 문서 상태: Current
-- 완료 Feature: `CF-FQ-049 Data Asset Staging·Batch Authoring`
-- 현재 구현 범위: `CFMissileGuidePresetData` typed Staging / Preview / Reviewed Apply P0
+- 완료 Feature: `CF-FQ-049 Data Asset Staging·Batch Authoring` + `CF-FQ-050 Data Asset Contract Evolution Guard`
+- 현재 구현 범위: `CFMissileGuidePresetData` typed Staging / Preview / Reviewed Apply + Contract Evolution Guard P0
 - Current System owner: 이 문서 + 실제 `CarFight_ReEditor/DataAuthoring` Source
 
 ---
@@ -498,6 +498,165 @@ write/readback/Product semantic verification 중 어느 단계에서 실패해�
 
 ---
 
+## 13.1 Contract Evolution Guard
+
+`CF-FQ-050` 완료 이후 Staging 지원 DataAsset의 C++ authoring contract가 바뀔 때는 기존 typed Staging이 조용히 뒤처진 상태로 남을 수 없다.
+
+현재 Pilot은 `CFMissileGuidePresetData` 한 타입이며, Guard는 Public/Blueprint API가 아니라 `CarFight_ReEditor` Private developer contract다.
+
+### 13.1.1 Current machine-readable baseline
+
+현재 MissileGuidePreset contract는 다음 네 descriptor 축으로 고정한다.
+
+```text
+SourceShape
+= exact 30 node
+= UCFMissileGuidePresetData top-level exact4 + FCFMissileGuideConfig authored exact26
+
+AdapterShape
+= strict JSON physical shape exact42 node
+
+SourceAdapterMapping
+= explicit mapping exact38 row
+
+SemanticContract
+= explicit semantic policy exact26 rule
+```
+
+각 descriptor는 case-sensitive ordinal deterministic order로 canonical row를 만들고 SHA-256 signature를 계산한다. Reflection만으로 semantic meaning 전체를 자동 추론하지 않으며, semantic policy 변화는 명시적 `SemanticContract` 변화로 관리한다.
+
+현재 accepted baseline authority는 test fixture가 아니라 다음 production Editor Private source다.
+
+```text
+UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFDAContractBase.cpp
+```
+
+현재 history는 다음 bootstrap exact1이다.
+
+```text
+SnapshotId: DACE-MissileGuidePreset-S1-A2-Bootstrap
+SchemaRevision: 1
+AdapterContractRevision: 2
+Accepted record count: 1
+```
+
+accepted history는 append-only다. 기존 record를 수정해서 새 contract를 승인하지 않는다.
+
+### 13.1.2 Structural / behavior drift guard
+
+Guard는 다음 current 계약의 불일치를 fail-closed한다.
+
+```text
+Native Reflection Source shape drift
+Adapter JSON physical shape drift
+Source↔Adapter mapping coverage drift
+production serializer coverage mismatch
+production strict parser coverage mismatch
+production semantic fingerprint token mismatch
+production materializer↔extractor semantic roundtrip mismatch
+accepted snapshot chain/integrity mismatch
+```
+
+Descriptor 목록 자체만 맞춰 놓고 production implementation이 빠진 상태가 PASS하지 않도록 serializer/parser/fingerprint/extractor/materializer의 실제 production 경로를 developer-only probe로 검증한다.
+
+### 13.1.3 Revision guard
+
+Accepted latest와 current candidate가 다르면 `CurrentChangeDeclaration`이 latest accepted `BaseSnapshotId`와 Guard가 계산한 `CandidateContractSignature`에 exact binding되어야 한다.
+
+```text
+Adapter physical shape change
+→ SchemaRevision bump 필요
+
+Declared semantic contract change
+→ AdapterContractRevision bump 필요
+
+Source/Mapping-only change
+→ revision을 무조건 올리지는 않음
+→ 대신 explicit migration impact declaration은 필요
+```
+
+`NoMigration`은 Guard가 변화 종류만 보고 자동으로 safe라고 추론한 값이 아니다. 개발자가 명시적으로 판단하는 migration declaration이며, 더 보수적인 Product review impact를 선택할 수 있다.
+
+현재 migration impact:
+
+```text
+NoMigration
+StagingMigrationRequired
+ProductMigrationReviewRequired
+StagingAndProductMigrationReviewRequired
+```
+
+현재 resolution:
+
+```text
+NotRequired
+Pending
+Resolved
+```
+
+### 13.1.4 Migration / promotion gate
+
+canonical Product Staging Low/Normal/High exact3은 Guard가 **read-only**로 읽어 current production strict parser와 revision compatibility를 검증한다.
+
+old revision 또는 incompatible staging을 current 계약으로 silent reinterpret하지 않는다. 필요한 migration/review가 Pending이면 다음을 차단한다.
+
+```text
+new accepted snapshot append
+Current System promotion
+```
+
+`Resolved`가 필요한 impact는 non-empty `MigrationEvidenceId`가 있어야 한다. Evidence 문자열의 존재는 machine gate이고, 실제 migration/review 내용의 충분성은 integration/acceptance review가 판단한다.
+
+Guard는 다음 write authority를 소유하지 않는다.
+
+```text
+SyncProduct
+ApplyReviewed
+SavePackage
+Product DataAsset mutation
+canonical Product Staging mutation
+```
+
+따라서 contract 변화 감지는 Product를 자동 수정하거나 저장하는 기능이 아니다.
+
+### 13.1.5 Contract 변경 시 운영 순서
+
+Staging 지원 DA의 authored contract를 변경할 때는 다음 순서를 사용한다.
+
+```text
+Source / Adapter / Semantic 변경
+→ DACE focused guard 실행
+→ 필요한 SchemaRevision / AdapterContractRevision 결정
+→ migration impact 명시
+→ 필요 시 old Staging migration / Product review 수행
+→ Resolution + Evidence 확정
+→ Guard와 affected Staging regression PASS
+→ 그 뒤에만 새 accepted snapshot append 검토
+```
+
+contract 변화가 없으면 accepted snapshot을 중복 append하지 않는다.
+
+### 13.1.6 다른 DA 타입 onboarding 경계
+
+CF-FQ-050 P0 완료로 **두 번째 Staging 지원 DA가 따라야 할 guard interface와 lifecycle 선행조건은 준비됐다.** 하지만 새 타입이 자동 지원되는 것은 아니다.
+
+새 타입은 별도 lifecycle에서 최소 다음을 제공해야 한다.
+
+```text
+Typed Adapter / Schema
+Source descriptor
+Adapter descriptor
+Source↔Adapter mapping
+Semantic policy
+accepted baseline
+production behavior probe provider
+focused + affected regression
+```
+
+두 번째 DA를 실제 onboarding한 뒤 반복 boilerplate와 공수를 측정하기 전에는 generic Reflection writer나 대형 scaffold framework로 확대하지 않는다.
+
+---
+
 ## 14. Current Source 위치
 
 Typed Staging / Preview core:
@@ -530,11 +689,24 @@ UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFDAStagingPilotTests.cpp
 UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFDAStagingOpsTests.cpp
 ```
 
+Contract Evolution Guard / accepted history:
+
+```text
+UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFDAContractGuard.h
+UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFDAContractGuard.cpp
+UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFDAContractBase.cpp
+UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFDAContractGuardTests.cpp
+UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFDAContractDriftTests.cpp
+UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFDAContractRevTests.cpp
+UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFDAContractMigTests.cpp
+```
+
 Runners:
 
 ```text
 Tools/RunDAStagingTests.ps1
 Tools/RunDAStagingOpsTest.ps1
+Tools/RunDAContractTests.ps1
 Tools/ClearDAStagingP04.ps1
 ```
 
@@ -602,6 +774,35 @@ canonical Staging은 Low/Normal/High exact Product target 세 개에 binding돼 
 
 P0-04 durable fixture residue가 Product scope에 추가된 징후는 없다.
 
+### 15.5 CF-FQ-050 Contract Evolution Guard acceptance baseline
+
+CF-FQ-050 P0 최종 통합 회귀는 CF-FQ-049 Current operation과 DACE Guard를 같은 current binary 기준으로 검증했다.
+
+```text
+Official UE 5.8 Build
+Job: 29df6158b2114e6f806a2cb9ace5100f
+Result: PASS / Exit 0
+
+DACE focused
+Process: aff1246873cb402f813267c04cfd0892
+Exact: 15/15 PASS
+Failure / Missing / Unexpected / Duplicate terminal: 0 / 0 / 0 / 0
+
+affected CF-FQ-049 Staging
+Process: e1b4d2629d7744e8b152e7428340ce36
+Exact: 13/13 PASS
+Failure / Missing / Unexpected / Duplicate terminal: 0 / 0 / 0 / 0
+Test-owned durable fixture residue: 0
+
+CF-FQ-049 OperationalEntry
+Process: 531f99e9da92407ba94fb507c91d1d9c
+Exact: 1/1 PASS
+Failure / Missing / Unexpected / Duplicate terminal: 0 / 0 / 0 / 0
+Product Staging residue: 0
+```
+
+CF-FQ-050 closure에서는 Product Low/Normal/High `ApplyReviewed` 또는 UE Asset Save를 실행하지 않았다. canonical Product exact3 JSON과 `.uasset` scoped Git diff는 0이며 production accepted history도 bootstrap exact1 / append 0을 유지한다.
+
 ---
 
 ## 16. USER Acceptance 경계
@@ -637,20 +838,35 @@ Current 운영면은 Editor console + 로그 기반의 technical authoring workf
 ## 18. 완료 상태
 
 ```text
-CF-FQ-049: Done
-DAS-P0-00~04: PASS
+CF-FQ-049: Done / Data Asset Staging·Batch Authoring P0 Complete
+CF-FQ-050: Done / Data Asset Contract Evolution Guard P0 Complete
 DAS-P0-05 Final Acceptance: PASS
+DACE-P0-06 Final Acceptance: PASS
 Current System Promotion: Complete
-Current owner: Document/Systems/DataManagement/DataAssetAuthoring.md v1.0.1
-Product Low/Normal/High Apply·Save during CF-FQ-049 closure: 0
+Current owner: Document/Systems/DataManagement/DataAssetAuthoring.md v1.1.0
+Product Low/Normal/High Apply·Save during CF-FQ-049/050 closure: 0
+canonical Product Staging mutation during CF-FQ-050 closure: 0
+accepted snapshot history: bootstrap exact1 / CF-FQ-050 closure append 0
 CF-FQ-039 Active lifecycle: unchanged
 ```
 
-후속 타입 확장이나 별도 UI는 CF-FQ-049의 old next gate를 재사용하지 않고 새로운 Feature/lifecycle로 연다.
+후속 타입 확장이나 별도 UI는 CF-FQ-049/050의 old next gate를 재사용하지 않고 새로운 Feature/lifecycle로 연다.
 
 ---
 
 ## 19. Changelog
+
+### v1.1.0 - 2026-09-09
+
+- Post-closure 최종검수 P2 문서 교정으로 §20의 부정확한 `CarFight_ReEditor/DataAuthoring` 축약 경로를 실제 `Public/DataAuthoring/` + `Private/DataAuthoring/` Source 경계로 교정했다. 구현·Source·Asset·검증 evidence와 Current owner version은 변경하지 않는다.
+- `CF-FQ-050 Data Asset Contract Evolution Guard` P0 완료 계약을 기존 Data Asset Authoring Current System에 승격했다.
+- MissileGuidePreset의 SourceShape exact30 / AdapterShape exact42 / SourceAdapterMapping exact38 / SemanticContract exact26 descriptor, deterministic four-signature, production-owned append-only accepted history와 production behavior probe 기반 drift guard를 Current 계약으로 추가했다.
+- SchemaRevision/AdapterContractRevision bump 누락, current change declaration binding, migration impact/Resolution/Evidence, canonical Product Staging old-revision/incompatibility와 Pending accepted append/Current promotion 차단을 현재 운영 규칙으로 기록했다.
+- final P0-05 evidence는 official Build PASS + DACE exact15/15 + affected CF-FQ-049 exact13/13 + OperationalEntry exact1/1이며 fixture/Product Staging residue는 0이다.
+- CF-FQ-050 closure에서도 Product Low/Normal/High ApplyReviewed/UE Asset Save 0, canonical Product Staging mutation 0, exact3 JSON·uasset diff 0, accepted snapshot append 0을 유지했다. CF-FQ-039 Active lifecycle과 기존 병렬 dirty는 변경하지 않았다.
+- 다른 DA 타입은 이 Guard interface를 선행조건으로 사용할 수 있지만 자동 onboarding되지 않으며 Typed Adapter/Schema/descriptor/probe를 별도 lifecycle에서 구현해야 한다.
+
+Migration: v1.1.0부터 Staging 지원 DataAsset의 C++ authoring contract를 변경할 때는 기존 parser/materializer 수정만으로 종료하지 않는다. DACE structural/behavior guard, revision 판단, explicit migration impact, 필요한 Staging migration/Product review와 affected regression을 통과한 뒤에만 새 accepted snapshot append를 검토한다. Guard 자체는 Product write/save 권한을 가지지 않는다.
 
 ### v1.0.1 - 2026-09-09
 
@@ -674,7 +890,8 @@ Migration: v1.0.0의 `namespace-key localization representation` 포괄 표현�
 
 ## 20. Migration
 
-- CF-FQ-049 완료 이후 현재 구현 판단은 이 문서와 실제 `UE/Source/CarFight_ReEditor/DataAuthoring` Source를 우선한다.
+- CF-FQ-050 완료 이후 Staging 지원 DataAsset의 contract evolution 판단은 이 문서와 실제 `CFDAContractGuard*` / typed Staging Source를 함께 우선한다.
+- CF-FQ-049 완료 이후 현재 구현 판단은 이 문서와 실제 `UE/Source/CarFight_ReEditor/Public/DataAuthoring/` + `UE/Source/CarFight_ReEditor/Private/DataAuthoring/` Source 경계를 우선한다.
 - `Document/Plan/DataAssetStaging/DataAssetStagingPlan.md`는 완료 당시 상세 설계·검수·Build/Automation evidence를 보존하는 Historical 문서로 사용한다.
 - 기존 `DataAssetManagement.md`는 계속 read-first Data Asset Manager owner이며 write/apply authority를 이 문서와 합치지 않는다.
 - Product Low/Normal/High canonical Staging JSON은 Git-reviewable authoring input으로 유지하지만 persisted `.uasset`이 최종 Source of Truth다.

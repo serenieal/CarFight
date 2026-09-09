@@ -1,9 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDAStaging.cpp
-// Version: v1.6.0
-// Date: 2026-09-08
+// Version: v1.7.1
+// Date: 2026-09-09
 // Description: CF-FQ-049 DAS-P0-02 MissileGuidePreset strict JSON parse, canonical SHA-256, read-only current resolve, mutation0 Preview와 BatchPlanHash 구현입니다.
 // Changelog:
+// - v1.7.1: CF-FQ-050 DACE-P0-02 재검수 교정으로 fingerprint token observation sink를 thread-local + scoped RAII restoration으로 격리해 nested/concurrent dev probe에서 process-global raw state가 누수되지 않도록 보강.
+// - v1.7.0: CF-FQ-050 DACE-P0-01 전용 private parser/fingerprint/extractor probe와 fingerprint actual token-label observation hook을 WITH_DEV_AUTOMATION_TESTS 범위에 추가. Production semantic bytes와 Public API는 변경하지 않음.
 // - v1.6.0: P0-04 persisted FText canonicalization 의미 변경을 AdapterContractRevision 2로 승격해 revision 1 Staging/approval의 silent reinterpret를 차단.
 // - v1.5.1: Product AssetDump가 확인한 NSLOCTEXT("", generated-key, source) persisted 형태를 반영해 source-backed empty-authored-namespace FText의 key를 persistence metadata로 제외하고, authored namespace만 localization 의미 경계로 유지.
 // - v1.5.0: DAS-P0-04 persisted round-trip에서 UE stable localization key가 부여한 package-only namespace/key는 source-backed Literal 의미로 canonicalize하고, StringTable/explicit authored namespace/source-less FText는 계속 fail-closed하도록 교정.
@@ -17,8 +19,10 @@
 // Migration:
 // - 이 파일 자체는 UObject/package write API를 호출하지 않습니다. DAS-P0-03 write/save는 별도 CFDAStagingApply service가 소유하며 current resolver는 read-only truth owner를 유지합니다.
 // - AdapterContractRevision 1 Staging/approval은 current FText canonicalization 의미와 다르므로 silent migration하지 않고 AdapterRevisionMismatch로 거부합니다. current authoring은 revision 2로 fresh Preview/fingerprint를 생성해야 합니다.
+// - v1.7.1의 probe 격리는 WITH_DEV_AUTOMATION_TESTS 전용이며 production fingerprint byte stream, Product Apply/Save와 Public API 의미는 변경하지 않습니다.
 
 #include "DataAuthoring/CFDAStaging.h"
+#include "CFDAContractGuard.h"
 
 #include "AssetRegistry/ARFilter.h"
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -64,6 +68,46 @@ namespace CFDAStagingPrivate
 
 	// BatchPlanHash binary token format revision입니다.
 	static constexpr int32 BatchPlanFormatRevision = 1;
+
+#if WITH_DEV_AUTOMATION_TESTS
+	// DACE private probe가 현재 thread의 production fingerprint path에서 실제 emit된 token label을 관측할 temporary sink입니다.
+	thread_local TArray<FString>* GSemanticTokenLabelProbe = nullptr;
+
+	// 한 fingerprint probe lifetime 동안 token observation sink를 설치하고 반드시 이전 상태로 복원합니다.
+	struct FScopedSemanticTokenProbe
+	{
+		// Scope 진입 전 현재 thread의 probe sink입니다.
+		TArray<FString>* PreviousSink = nullptr;
+		// 이번 scope가 실제 sink ownership을 획득했는지 나타냅니다.
+		bool bBound = false;
+
+		// 현재 thread에 기존 probe가 없을 때 requested sink를 설치합니다.
+		explicit FScopedSemanticTokenProbe(TArray<FString>& RequestedSink)
+			: PreviousSink(GSemanticTokenLabelProbe)
+			, bBound(PreviousSink == nullptr)
+		{
+			if (bBound)
+			{
+				GSemanticTokenLabelProbe = &RequestedSink;
+			}
+		}
+
+		// Scope 종료 시 성공/실패 경로와 무관하게 이전 sink를 복원합니다.
+		~FScopedSemanticTokenProbe()
+		{
+			if (bBound)
+			{
+				GSemanticTokenLabelProbe = PreviousSink;
+			}
+		}
+
+		// 이번 scope가 probe sink ownership을 획득했는지 반환합니다.
+		bool IsBound() const
+		{
+			return bBound;
+		}
+	};
+#endif
 
 	// blocking 또는 informational issue를 target 배열에 추가합니다.
 	void AddIssue(
@@ -111,6 +155,12 @@ namespace CFDAStagingPrivate
 		const uint8* ValueBytes,
 		const int32 ValueByteCount)
 	{
+#if WITH_DEV_AUTOMATION_TESTS
+		if (GSemanticTokenLabelProbe != nullptr)
+		{
+			GSemanticTokenLabelProbe->Add(Label);
+		}
+#endif
 		// token label의 deterministic UTF-8 bytes입니다.
 		FTCHARToUTF8 LabelUtf8(*Label);
 		AppendUint32BigEndian(OutBytes, static_cast<uint32>(LabelUtf8.Length()));
@@ -1715,3 +1765,40 @@ bool FCFDAStagingService::HasIssueCode(
 	}
 	return false;
 }
+
+#if WITH_DEV_AUTOMATION_TESTS
+// Production strict parser implementation을 CF-FQ-050 private probe로 직접 호출합니다.
+FCFDAStagingParseResult CFDAContractProbeParse(const FString& JsonText, const FString& StagingRelativePath)
+{
+	return FCFDAStagingService::ParseMissilePresetJson(JsonText, StagingRelativePath);
+}
+
+// Production fingerprint implementation을 호출하면서 실제 semantic token label sequence를 관측합니다.
+bool CFDAContractProbeFingerprint(
+	const FCFDAMissilePresetPayload& Payload,
+	FString& OutFingerprint,
+	TArray<FString>& OutTokenLabels,
+	FString& OutError)
+{
+	OutTokenLabels.Reset();
+	// 현재 thread에서 token sink 설치/복원을 소유하는 scoped probe입니다.
+	CFDAStagingPrivate::FScopedSemanticTokenProbe ScopedProbe(OutTokenLabels);
+	if (!ScopedProbe.IsBound())
+	{
+		OutFingerprint.Reset();
+		OutError = TEXT("DACE fingerprint probe가 같은 thread에서 중첩 호출되었습니다.");
+		return false;
+	}
+	// Production fingerprint path의 실제 결과이며 scope destructor가 성공/실패와 무관하게 sink를 복원합니다.
+	return FCFDAStagingService::BuildSemanticFingerprint(Payload, OutFingerprint, OutError);
+}
+
+// Production extractor implementation을 CF-FQ-050 private probe로 직접 호출합니다.
+bool CFDAContractProbeExtract(
+	const UCFMissileGuidePresetData& Asset,
+	FCFDAMissilePresetPayload& OutPayload,
+	TArray<FCFDAStagingIssue>& OutIssues)
+{
+	return FCFDAStagingService::ExtractMissilePresetPayload(Asset, OutPayload, OutIssues);
+}
+#endif

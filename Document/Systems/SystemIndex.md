@@ -1,6 +1,6 @@
 # SystemIndex
 
-- Version: 1.33.1
+- Version: 1.34.0
 - Date: 2026-09-09
 
 - Status: Active
@@ -59,7 +59,7 @@
 | 경로 | 문서 내용 |
 | --- | --- |
 | `Document/Systems/DataManagement/DataAssetManagement.md` | `CF-FQ-045`에서 완료한 CarFight Data Asset Manager Current System이다. native/persisted DataAsset 자동 발견, Typed Semantic Registry, metadata-only 새로고침, 명시적 검사·참조 관계 조회, generation-bound `재검사 필요 / 재확인 필요`, 한글 우선 관리 UI와 Product Asset no-auto-mutation/save 경계를 기록한다. |
-| `Document/Systems/DataManagement/DataAssetAuthoring.md` | `CF-FQ-049`에서 완료한 Editor-off Staging + Reviewed Batch Apply Current System이다. MissileGuidePreset strict JSON, semantic fingerprint/3-way Preview, exact selection, fresh Review/TOCTOU, typed exact-package materialization, disk reload semantic readback과 Product no-auto-apply/save 경계를 기록한다. |
+| `Document/Systems/DataManagement/DataAssetAuthoring.md` | `CF-FQ-049` Editor-off Staging + Reviewed Batch Apply와 `CF-FQ-050` Contract Evolution Guard를 통합한 Current System이다. MissileGuidePreset strict JSON, semantic fingerprint/3-way Preview, exact selection, durable typed apply와 함께 Source/Adapter/Mapping/Semantic descriptor, production behavior drift, revision/migration fail-closed, append-only accepted snapshot과 Product no-auto-apply/save 경계를 기록한다. |
 
 ---
 
@@ -149,7 +149,7 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 | Sweep/Sub-stepping/보조 Sphere Sweep을 통한 고속 Projectile 연속 충돌 완료 설계·검증 기록 | `Document/Plan/Archive/ProjectileContinuousCollision/ImplementationDesign.md` |
 | 프로젝트 시작 맵, 렌더링, 입력 백엔드 설정 | `Config/ProjectRuntimeConfig.md` |
 | CarFight DataAsset 종류·용도·관리 상태 탐색, 고유 ID/중복 검사, 참조 관계 조회, Refresh 후 재검사 필요 상태와 no-auto-save 관리 경계 | `DataManagement/DataAssetManagement.md` |
-| Editor가 꺼진 동안 DataAsset JSON 의도를 작성하고 exact Preview/Review 뒤 명시적으로 typed DataAsset을 Batch 적용하는 절차, stale/conflict/dirty 보호와 durable save/readback 기준 | `DataManagement/DataAssetAuthoring.md` |
+| Editor가 꺼진 동안 DataAsset JSON 의도를 작성하고 exact Preview/Review 뒤 명시적으로 typed DataAsset을 Batch 적용하는 절차, stale/conflict/dirty 보호와 durable save/readback 기준, Staging 지원 DA의 C++ contract drift·revision·migration·accepted snapshot 운영 기준 | `DataManagement/DataAssetAuthoring.md` |
 | 입력 액션, 매핑 컨텍스트, 키보드/게임패드 입력 처리 | `Input/Input.md` |
 | 과거 Dedicated Server 접속 후 차량 Pawn 생성과 Possess 기록 | `Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md` |
 | 차량 Sensor 탐지, ContactId, Live/LastKnown/Lost/DestroyedHold, Tactical Analysis·Knowledge, Scanner Utility 장비/Fitting Source와 V Active Scan 입력, actor-free Snapshot/HUD 소비 경계 | `Targeting/SensorContact.md` |
@@ -185,6 +185,14 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 ---
 
 ## 13. Changelog
+
+### v1.34.0 - 2026-09-09
+
+- `CF-FQ-050 / DACE-P0-06 Final Acceptance` PASS와 Current System Promotion을 반영해 `DataManagement/DataAssetAuthoring.md`를 v1.1.0으로 전진했다.
+- 기존 CF-FQ-049 Staging/Reviewed Apply owner에 MissileGuidePreset Source/Adapter/Mapping/Semantic descriptor, production behavior drift guard, Schema/Adapter revision guard, migration Resolution/Evidence와 append-only accepted snapshot promotion gate를 통합했다.
+- CF-FQ-050 closure 기준 Product Low/Normal/High Apply·Save 0 / canonical Product Staging mutation 0 / accepted snapshot append 0이며 현재 single Active `CF-FQ-039`는 변경하지 않았다.
+
+Migration: Staging 지원 DataAsset의 C++ contract가 바뀌면 `DataAssetAuthoring.md v1.1.0`의 Contract Evolution Guard 절차를 따른다. 새 DA 타입은 자동 지원되지 않으며 별도 Typed Adapter/Schema/descriptor/probe lifecycle이 필요하다.
 
 ### v1.33.1 - 2026-09-09
 

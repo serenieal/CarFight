@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDAStagingApply.cpp
-// Version: v1.2.0
+// Version: v1.3.0
 // Date: 2026-09-08
 // Description: CF-FQ-049 DAS-P0-03 one-shot approval, disk/current global TOCTOU preflight, MissileGuidePreset exact typed materialization과 durable single-package save 구현입니다.
 // Changelog:
+// - v1.3.0: CF-FQ-050 DACE-P0-01 전용 WITH_DEV_AUTOMATION_TESTS transient materializer→production extractor private roundtrip probe를 추가. Product Apply/Save path는 변경하지 않음.
 // - v1.2.0: DAS-P0-04 Automation fixture 전용 deterministic save/confirmation/before-mutation fault injection을 WITH_DEV_AUTOMATION_TESTS에 한정해 추가.
 // - v1.1.0: DurableApplied를 SavePackage 뒤 exact package 비대화 없는 non-interactive disk reload + unified typed semantic extractor readback으로 강화하고 Apply/rollback의 UObject→payload 변환 authority를 CFDAStagingService 하나로 통합.
 // - v1.0.1: global preflight 이후 각 target mutation 직전 current truth를 다시 검증하고, Create 실패 뒤 operation-created package가 memory에 남으면 rollback confirmed를 주장하지 않도록 보수화.
@@ -12,6 +13,7 @@
 // - P0 write allowlist는 UCFMissileGuidePresetData 하나뿐입니다. Product Low/Normal/High를 자동 적용하지 않으며 caller가 Reviewed approval을 명시적으로 전달해야 합니다.
 
 #include "DataAuthoring/CFDAStagingApply.h"
+#include "CFDAContractGuard.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "CFMissileGuidePresetData.h"
@@ -969,3 +971,31 @@ bool FCFDAStagingApplyService::ApplyReviewedBatch(
 		|| OutReport.Result == ECFDAStagingBatchApplyResult::PostCommitWarning
 		|| OutReport.Result == ECFDAStagingBatchApplyResult::NoChange;
 }
+
+#if WITH_DEV_AUTOMATION_TESTS
+// Production materializer를 test-owned transient asset에 적용한 뒤 production extractor로 semantic roundtrip합니다.
+bool CFDAContractProbeMaterializeRoundTrip(
+	const FCFDAMissilePresetPayload& Payload,
+	FCFDAMissilePresetPayload& OutReadbackPayload,
+	FString& OutError)
+{
+	// Product package/path를 전혀 소유하지 않는 transient test-only asset입니다.
+	UCFMissileGuidePresetData* TransientAsset = NewObject<UCFMissileGuidePresetData>(GetTransientPackage(), NAME_None, RF_Transient);
+	if (TransientAsset == nullptr)
+	{
+		OutReadbackPayload = FCFDAMissilePresetPayload();
+		OutError = TEXT("DACE transient MissileGuidePreset 생성에 실패했습니다.");
+		return false;
+	}
+	CFDAStagingApplyPrivate::ApplyPayloadToAsset(Payload, *TransientAsset);
+	// Production extractor가 반환하는 semantic diagnostics입니다.
+	TArray<FCFDAStagingIssue> ExtractIssues;
+	if (!FCFDAStagingService::ExtractMissilePresetPayload(*TransientAsset, OutReadbackPayload, ExtractIssues))
+	{
+		OutError = ExtractIssues.IsEmpty() ? TEXT("DACE transient materializer readback extractor가 실패했습니다.") : ExtractIssues[0].Message;
+		return false;
+	}
+	OutError.Reset();
+	return true;
+}
+#endif
