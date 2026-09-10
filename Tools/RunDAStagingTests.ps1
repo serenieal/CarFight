@@ -1,8 +1,9 @@
 # CarFight Data Asset Staging focused Automation runner.
-# Version: v1.4.0
-# Date: 2026-09-08
+# Version: v1.5.0
+# Date: 2026-09-09
 # Description: CF-FQ-049 DAS-P0-02 foundation + P0-03 Apply safety + DAS-P0-04 Product Preview/durable fixture focused Automation exact set을 기존 Data Authoring runner로 실행합니다.
 # Changelog:
+# - v1.5.0: DAO-P0-01 provider-owned StagingRoot 계약에 맞춰 P04 runner residue gate를 MissileGuidePreset provider root 하위로 이동. exact 13종 목록은 변경하지 않음.
 # - v1.4.0: P0-04 post-PASS correction에 맞춰 AdapterContractRevision 2 회귀와 loaded-but-unregistered residue 검증을 포함하는 current exact 13종을 유지하고, runner의 physical Content/Staging residue gate를 보존.
 # - v1.3.0: DAS-P0-04 exact-list 실행 전 test-owned residue pre-clean과 실행 후 Content/Staging residue 0 verification gate를 추가해 cleanup defect가 전체 focused run을 silent PASS시키지 못하게 강화.
 # - v1.2.0: DAS-P0-04 Product mutation0 Preview, durable Create/Update, conflict guards, save uncertainty, PartialApplied 5건을 추가해 exact 13종으로 확장.
@@ -31,7 +32,7 @@ $MainGameRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $FixtureContentRoot = Join-Path $MainGameRoot 'UE\Content\Test\CarFight\DAStagingP04'
 
 # DAS-P0-04 test-owned canonical Staging root입니다.
-$FixtureStagingRoot = Join-Path $MainGameRoot 'Authoring\DataAssetStaging\__AutomationP04__'
+$FixtureStagingRoot = Join-Path $MainGameRoot 'Authoring\DataAssetStaging\MissileGuidePreset\__AutomationP04__'
 
 # DAS-P0-02 foundation + DAS-P0-03 approval/preflight + DAS-P0-04 Pilot fixture가 요구하는 exact Automation 목록입니다.
 $ExactTestNames = @(

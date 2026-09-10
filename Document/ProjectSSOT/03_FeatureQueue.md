@@ -1,7 +1,7 @@
 # CarFight — 03_FeatureQueue
 
-> 문서 버전: v1.57.68
-> 최근 갱신일(Asia/Seoul): 2026-09-09
+> 문서 버전: v1.57.77
+> 최근 갱신일(Asia/Seoul): 2026-09-10
 > 문서 상태: Current
 > 역할: CarFight의 **Feature 후보 / 착수 판단 / 현재 상태 / 완료 후 Current owner**를 한 곳에서 관리한다.
 
@@ -112,6 +112,7 @@ FeatureQueue는 상세 설계서나 검증 로그가 아니다.
 | `CF-FQ-048` | Vehicle Pawn Slimming | P2 | Ready | `Document/Plan/VehiclePawnSlimming/VehiclePawnSlimmingPlan.md v0.1.0` / Initial Design Audit Correction + Re-review PASS / Behavior Extraction + Contract State Freeze / exact next `VPS-P0-00 Contract / State / Lifecycle Freeze` / Source mutation 0 | 완료 시 Vehicle Runtime/WeaponFire/Visual 관련 Systems에 축소된 Pawn composition/facade 계약 승격 |
 | `CF-FQ-049` | Data Asset Staging·Batch Authoring | P2 | Done | `DAS-P0-05 Final Acceptance PASS` / post-promotion final review correction PASS / P0 Complete / Current System Promotion Complete / Product Low·Normal·High Apply·Save 0 / Historical Plan `Document/Plan/DataAssetStaging/DataAssetStagingPlan.md v0.7.0` Retained Path / G5 Deferred | `Systems/DataManagement/DataAssetAuthoring.md v1.1.0` |
 | `CF-FQ-050` | Data Asset Contract Evolution Guard | P2 | Done | `DACE-P0-06 Final Acceptance PASS` / P0 Complete / Current System Promotion Complete / representative Historical Plan `Document/Plan/DAContractEvolution/DAContractEvolutionPlan.md v0.7.0` Retained Path / Product Apply·Save 0 / canonical Product Staging mutation 0 / accepted snapshot append 0 | `Systems/DataManagement/DataAssetAuthoring.md v1.1.0` |
+| `CF-FQ-051` | Data Asset Multi-Type Onboarding | P2 | Done | `DAO-P0-06 Final Audit Correction + Re-review PASS` / P0 0 / blocking P1 0 / P2 1 non-blocking / prohibited shared algorithm duplication 0 / third-type shared core rewrite 0 required / Historical Plan `Document/Plan/DataAssetOnboarding/DataAssetOnboardingPlan.md v0.3.22` Retained Path / DamageData third onboarding Candidate·Not Started | `Systems/DataManagement/DataAssetAuthoring.md v1.4.1` |
 
 ---
 
@@ -156,6 +157,64 @@ Feature가 Done되면 Current System 링크와 남은 Deferred/Pending 경계만
 ---
 
 ## 7. Changelog
+
+### v1.57.77 - 2026-09-10
+
+- `CF-FQ-051 / DAO-P0-06 Final Audit Correction + Re-review`를 문서-only로 반영했다. Current Ammo 지원 모순과 완료 Feature header 누락을 교정한 뒤 최종 판정은 `P0 0 / blocking P1 0 / P2 1 non-blocking / PASS`다.
+- Feature 상태는 Done으로 유지하고 Current owner를 `Systems/DataManagement/DataAssetAuthoring.md v1.4.1`, Historical Plan을 `DataAssetOnboarding/DataAssetOnboardingPlan.md v0.3.22`로 동기화했다. hybrid shared/legacy physical ownership P2는 비차단 maintenance debt로 유지한다.
+- Source/Asset/Test mutation과 Build/Automation 재실행은 0이며 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty를 변경하지 않았다.
+
+### v1.57.76 - 2026-09-10
+
+- `CF-FQ-051 / DAO-P0-06 Reuse Measurement / Acceptance / Current System Promotion`을 사전검수 `P0 0 / blocking P1 0 / P2 1 non-blocking` PASS로 닫고 Feature를 Ready → Done으로 전환했다.
+- MissileGuidePreset→AmmoData second onboarding은 shared Preview/Review/TOCTOU/Apply/Durable/DACE algorithm 복제 0이며, third type는 typed provider/DACE 구현 + production provider registration + explicit operational admission으로 확장하고 shared core algorithm rewrite는 요구하지 않는 Current 계약으로 승격했다.
+- Current owner는 `Systems/DataManagement/DataAssetAuthoring.md v1.4.0`, representative Historical Plan은 `DataAssetOnboarding/DataAssetOnboardingPlan.md v0.3.21` Retained Path다. DamageData는 Candidate로만 남기고 자동 착수하지 않는다.
+- DAO-P0-06 executable Source/Asset mutation은 0이며 Product canonical Ammo exact0, Missile Product exact3, HeavyFinite/RocketFinite exact2, protected exact10, 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty를 보존했다.
+
+### v1.57.75 - 2026-09-09
+
+- `CF-FQ-051 / DAO-P0-02 Contract Correction + Source Re-review`를 current Source 기준 `P0 0 / blocking P1 0 / P2 0 / Source Contract PASS`로 반영하고 representative Plan을 v0.3.4로 전진했다.
+- provider readiness 분리, provider-neutral primitive authority, AmmoIcon strict parse↔Asset Registry metadata validation seam, fingerprint integrity와 no-load regression을 교정했다. Ammo typed schema/provider 본체와 Production Ammo registration은 아직 0이다.
+- current correction fresh Build/Automation은 build preset repository mapping blocker로 job 생성 전 차단되어 Pending이다. exact next는 `DAO-P0-02 Correction Fresh Technical Validation`이며 Product exact3·accepted baseline, 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty를 유지한다.
+
+### v1.57.74 - 2026-09-09
+
+- `CF-FQ-051 / DAO-P0-02` 구현 전 계약검수를 current Source 기준 `P0 0 / blocking P1 3 / P2 2 / Implementation HOLD`로 반영하고 representative Plan을 v0.3.3으로 전진했다.
+- blocking P1은 read-only provider readiness와 mutation capability 강제 충돌, provider-neutral JSON/FText/fingerprint primitive의 Missile file-local authority, AmmoIcon strict parse↔Asset Registry Preview validation seam이다. DAO-P0-01 final Build/affected13/DACE15 evidence는 보존한다.
+- Ammo C++ 구현/Build/Automation/JSON/.uasset mutation은 0이며 Product exact3·accepted baseline, 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty를 유지한다. exact next는 `DAO-P0-02 Contract Correction + Re-review`다.
+
+### v1.57.73 - 2026-09-09
+
+- `CF-FQ-051 / DAO-P0-01 Correction + Re-review`를 current Source와 fresh validation 기준 `P0 0 / blocking P1 0 / P2 0 / Technical PASS`로 닫고 representative Plan을 v0.3.2로 전진했다.
+- payload-free shared Preview/Review/TOCTOU, complete exact TypeKey provider operation registry, provider-root fixture 이동, test-only second-provider seam과 duplicate exact TypeKey fail-closed regression을 반영했다. final UE 5.8 Build + affected13 13/13 + DACE15 15/15가 PASS했다.
+- Product Low/Normal/High JSON·uasset과 accepted baseline은 무변경이며 Ammo 구현은 아직 0이다. exact next는 `DAO-P0-02 Ammo Typed Schema / Parse / Fingerprint / Preview`; 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty는 변경하지 않았다.
+
+### v1.57.72 - 2026-09-09
+
+- `CF-FQ-051 / DAO-P0-01 Post-Implementation Mid-review`를 current Source 기준 `P0 0 / blocking P1 4 / P2 2 / HOLD`로 반영했다. representative Plan은 v0.3.1이다.
+- 기존 official Build PASS + affected CF-FQ-049 13/13 + DACE 15/15는 Missile parity evidence로 보존하지만 shared multi-type foundation acceptance는 취소했다.
+- DAO-P0-02는 HOLD하고 exact next를 `DAO-P0-01 Correction + Re-review`로 되돌렸다. 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty, Missile Product/accepted baseline은 변경하지 않았다.
+
+### v1.57.71 - 2026-09-09
+
+- `CF-FQ-051 / DAO-P0-00` Initial Review P1 6건/P2 2건을 representative Plan v0.2.0의 normative contract로 전건 교정하고 current Source 재대조 후 `P0 0 / blocking P1 0 / P2 0` PASS로 닫았다.
+- common envelope + per-type typed record + Missile compatibility facade, exact TypeKey provider/root/history, class-scoped StableLogicalId, Ammo numeric/Tags/Icon/optional field semantics와 Test exact2/Product exact0 분류를 동결했다.
+- Source/Build/Automation/JSON/.uasset/accepted snapshot mutation은 0이며 exact next를 `DAO-P0-01 Shared Type Dispatch Foundation + Missile Parity Rewire`로 전진했다.
+- 현재 단일 Active `CF-FQ-039`, 기존 병렬 dirty와 Missile Product/accepted baseline은 변경하지 않았다.
+
+### v1.57.70 - 2026-09-09
+
+- `CF-FQ-051 / DAO-P0-00 Initial Design Review`를 current Source/Asset evidence로 수행해 `P0 0 / P1 6 / P2 2 / Implementation HOLD`로 반영했다. representative Plan은 `Document/Plan/DataAssetOnboarding/DataAssetOnboardingPlan.md v0.1.1`이다.
+- P1은 multi-type transport/Public compatibility, trusted TypeKey/provider/root/history authority, class-scoped StableLogicalId duplicate namespace, Ammo authored numeric semantic, AmmoTags+DACE array-element contract, AmmoIcon Soft Reference+DACE target-class drift coverage다.
+- fresh persisted dependency evidence에서 Ammo exact2는 referencer 0이므로 Test-owned durable fixture exact2로 유지하고 Product canonical target은 현재 exact0으로 둔다. Source/JSON/.uasset/accepted snapshot mutation과 Build/Automation은 0이다.
+- `DAO-P0-01`은 HOLD하고 exact next를 `DAO-P0-00 Correction + Re-review`로 변경했다. 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty, Missile Product/accepted baseline은 변경하지 않았다.
+
+### v1.57.69 - 2026-09-09
+
+- 사용자 요청으로 `CF-FQ-051 Data Asset Multi-Type Onboarding`을 P2 / Ready 정식 Feature로 등록했다. 대표 Plan은 `Document/Plan/DataAssetOnboarding/DataAssetOnboardingPlan.md v0.1.0`이다.
+- UE Source와 fresh persisted AssetDump를 감사해 `CFAmmoData` authored exact8 / persisted exact2, 기존 Data Asset Manager의 AmmoId/IsAmmoDataValid 계약과 현재 Missile-specific Staging/Ops/Apply/DACE 결합을 확인했다.
+- 두 번째 Pilot은 AmmoData로 고정하고 shared orchestration + typed adapter/provider 재사용 구조를 검증한다. generic Reflection writer와 Weapon/Projectile/Damage 동시 onboarding은 범위에서 제외했다.
+- 구현은 아직 0이며 exact next는 `DAO-P0-00 Architecture / Contract Freeze + Initial Design Audit`이다. 현재 단일 Active `CF-FQ-039`, 기존 병렬 dirty와 Missile Product/accepted baseline은 변경하지 않았다.
 
 ### v1.57.68 - 2026-09-09
 

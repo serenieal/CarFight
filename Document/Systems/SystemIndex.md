@@ -1,7 +1,7 @@
 # SystemIndex
 
-- Version: 1.34.0
-- Date: 2026-09-09
+- Version: 1.35.1
+- Date: 2026-09-10
 
 - Status: Active
 - Scope: `Document/Systems/` 하위 문서 위치 안내 색인
@@ -59,7 +59,7 @@
 | 경로 | 문서 내용 |
 | --- | --- |
 | `Document/Systems/DataManagement/DataAssetManagement.md` | `CF-FQ-045`에서 완료한 CarFight Data Asset Manager Current System이다. native/persisted DataAsset 자동 발견, Typed Semantic Registry, metadata-only 새로고침, 명시적 검사·참조 관계 조회, generation-bound `재검사 필요 / 재확인 필요`, 한글 우선 관리 UI와 Product Asset no-auto-mutation/save 경계를 기록한다. |
-| `Document/Systems/DataManagement/DataAssetAuthoring.md` | `CF-FQ-049` Editor-off Staging + Reviewed Batch Apply와 `CF-FQ-050` Contract Evolution Guard를 통합한 Current System이다. MissileGuidePreset strict JSON, semantic fingerprint/3-way Preview, exact selection, durable typed apply와 함께 Source/Adapter/Mapping/Semantic descriptor, production behavior drift, revision/migration fail-closed, append-only accepted snapshot과 Product no-auto-apply/save 경계를 기록한다. |
+| `Document/Systems/DataManagement/DataAssetAuthoring.md` | `CF-FQ-049` Editor-off Staging + Reviewed Batch Apply, `CF-FQ-050` Contract Evolution Guard와 `CF-FQ-051` MissileGuidePreset+AmmoData multi-type onboarding을 통합한 Current System이다. Production provider exact2, provider-neutral mixed Explicit Paths, shared Preview/Review/TOCTOU/Apply/Durable/DACE core, 타입별 typed adapter/descriptor/history와 Product no-auto-apply/save 경계를 기록한다. Third DataAsset type는 provider registration + explicit operational admission으로 확장하며 common core algorithm을 복제하지 않는다. |
 
 ---
 
@@ -149,7 +149,7 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 | Sweep/Sub-stepping/보조 Sphere Sweep을 통한 고속 Projectile 연속 충돌 완료 설계·검증 기록 | `Document/Plan/Archive/ProjectileContinuousCollision/ImplementationDesign.md` |
 | 프로젝트 시작 맵, 렌더링, 입력 백엔드 설정 | `Config/ProjectRuntimeConfig.md` |
 | CarFight DataAsset 종류·용도·관리 상태 탐색, 고유 ID/중복 검사, 참조 관계 조회, Refresh 후 재검사 필요 상태와 no-auto-save 관리 경계 | `DataManagement/DataAssetManagement.md` |
-| Editor가 꺼진 동안 DataAsset JSON 의도를 작성하고 exact Preview/Review 뒤 명시적으로 typed DataAsset을 Batch 적용하는 절차, stale/conflict/dirty 보호와 durable save/readback 기준, Staging 지원 DA의 C++ contract drift·revision·migration·accepted snapshot 운영 기준 | `DataManagement/DataAssetAuthoring.md` |
+| Editor가 꺼진 동안 DataAsset JSON 의도를 작성하고 exact Preview/Review 뒤 명시적으로 typed DataAsset을 Batch 적용하는 절차, MissileGuidePreset+AmmoData mixed Explicit Paths, stale/conflict/dirty 보호와 shared durable save/readback, Staging 지원 DA의 C++ contract drift·revision·migration·accepted snapshot 및 provider-centric 새 타입 확장 기준 | `DataManagement/DataAssetAuthoring.md` |
 | 입력 액션, 매핑 컨텍스트, 키보드/게임패드 입력 처리 | `Input/Input.md` |
 | 과거 Dedicated Server 접속 후 차량 Pawn 생성과 Possess 기록 | `Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md` |
 | 차량 Sensor 탐지, ContactId, Live/LastKnown/Lost/DestroyedHold, Tactical Analysis·Knowledge, Scanner Utility 장비/Fitting Source와 V Active Scan 입력, actor-free Snapshot/HUD 소비 경계 | `Targeting/SensorContact.md` |
@@ -185,6 +185,23 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 ---
 
 ## 13. Changelog
+
+### v1.35.1 - 2026-09-10
+
+- `CF-FQ-051 / DAO-P0-06 Final Audit Correction + Re-review` PASS에 맞춰 Data Asset Authoring Current owner를 `DataManagement/DataAssetAuthoring.md v1.4.1`로 동기화했다.
+- AmmoData는 MissileGuidePreset과 함께 Current Production provider exact2에 포함되고, DamageData/VehicleSensorData/기타 신규 타입만 별도 provider-centric onboarding 대상임을 Current index 의미와 일치시켰다.
+- Source/Asset/Test 계약은 변경하지 않았고 hybrid shared/legacy physical ownership P2는 non-blocking maintenance debt로 유지한다.
+
+Migration: CF-FQ-051 완료 이후 Data Asset Authoring의 현재 구현 판단은 `DataManagement/DataAssetAuthoring.md v1.4.1`과 실제 `CarFight_ReEditor/DataAuthoring` Source를 우선한다. v1.35.0의 v1.4.0 포인터는 당시 Systems Promotion 기록이며 새 DataAsset 타입은 별도 lifecycle에서 onboarding한다.
+
+### v1.35.0 - 2026-09-10
+
+- `CF-FQ-051 / DAO-P0-06 Reuse Measurement / Acceptance / Current System Promotion` 완료를 반영해 `DataManagement/DataAssetAuthoring.md v1.4.0`을 Current index에 동기화했다.
+- MissileGuidePreset+AmmoData Production provider exact2, provider-neutral mixed Explicit Paths와 shared Preview/Review/TOCTOU/Apply/Durable/DACE core를 Current 검색 경계에 추가했다. Third type는 typed provider/DACE + production provider registration + explicit operational admission으로 확장하며 shared core algorithm rewrite는 요구하지 않는다.
+- DAO-P0-06 사전검수는 P0 0 / blocking P1 0 / P2 1 non-blocking PASS다. P2는 generic implementation과 legacy Missile compatibility의 물리적 owner 혼재이며 실제 third onboarding 반복 비용이 확인될 때만 별도 maintenance를 검토한다.
+- DAO-P0-06 executable Source/Asset mutation은 0이며 Product canonical Ammo exact0, Missile Product exact3, HeavyFinite/RocketFinite exact2, protected exact10과 single Active `CF-FQ-039`를 유지한다.
+
+Migration: CF-FQ-051 완료 이후 Data Asset Authoring의 현재 구현 판단은 `DataManagement/DataAssetAuthoring.md v1.4.0`과 실제 `CarFight_ReEditor/DataAuthoring` Source를 우선한다. 새 DataAsset 타입은 완료된 CF-FQ-051 Plan의 old gate를 재사용하지 않고 별도 lifecycle에서 provider-centric onboarding을 연다.
 
 ### v1.34.0 - 2026-09-09
 

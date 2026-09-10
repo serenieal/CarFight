@@ -1,9 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDAStaging.cpp
-// Version: v1.7.1
-// Date: 2026-09-09
-// Description: CF-FQ-049 DAS-P0-02 MissileGuidePreset strict JSON parse, canonical SHA-256, read-only current resolve, mutation0 Preview와 BatchPlanHash 구현입니다.
+// Version: v1.12.0
+// Date: 2026-09-10
+// Description: CF-FQ-051 DAO-P0-02 payload-free common Preview/Batch orchestration과 Missile provider-local typed compatibility facade 구현입니다.
 // Changelog:
+// - v1.12.0: Missile compatibility path의 TargetObjectPath와 BaseSemanticFingerprint common envelope 검증을 CFDACommonPrimitives 단일 authority로 rewire.
+// - v1.11.0: provider-neutral issue/JSON/Literal FText/fingerprint primitive를 CFDACommonPrimitives authority로 rewire해 Missile accepted semantic bytes/Public API를 보존.
+// - v1.10.0: Public Missile Preview row의 typed mutable integrity를 provider-local에서 검증한 뒤 payload-free common Review row로 투영하는 compatibility seam을 추가.
+// - v1.9.0: shared Preview/duplicate/BatchPlanHash를 FCFDACommonPreviewRow로 이동하고 raw JSON→common/current provider operation seam을 추가. Public Missile record/payload는 provider-local facade에서만 common row로 투영하며 accepted Missile semantic/hash token 값은 보존.
+// - v1.8.0: Editor Private common envelope + trusted Missile provider를 기존 Public compatibility facade 뒤에 연결하고 provider-owned StagingRoot, class-scoped StableLogicalId와 provider-first typed parse를 적용. Missile semantic/hash token 값은 보존.
 // - v1.7.1: CF-FQ-050 DACE-P0-02 재검수 교정으로 fingerprint token observation sink를 thread-local + scoped RAII restoration으로 격리해 nested/concurrent dev probe에서 process-global raw state가 누수되지 않도록 보강.
 // - v1.7.0: CF-FQ-050 DACE-P0-01 전용 private parser/fingerprint/extractor probe와 fingerprint actual token-label observation hook을 WITH_DEV_AUTOMATION_TESTS 범위에 추가. Production semantic bytes와 Public API는 변경하지 않음.
 // - v1.6.0: P0-04 persisted FText canonicalization 의미 변경을 AdapterContractRevision 2로 승격해 revision 1 Staging/approval의 silent reinterpret를 차단.
@@ -20,9 +25,13 @@
 // - 이 파일 자체는 UObject/package write API를 호출하지 않습니다. DAS-P0-03 write/save는 별도 CFDAStagingApply service가 소유하며 current resolver는 read-only truth owner를 유지합니다.
 // - AdapterContractRevision 1 Staging/approval은 current FText canonicalization 의미와 다르므로 silent migration하지 않고 AdapterRevisionMismatch로 거부합니다. current authoring은 revision 2로 fresh Preview/fingerprint를 생성해야 합니다.
 // - v1.7.1의 probe 격리는 WITH_DEV_AUTOMATION_TESTS 전용이며 production fingerprint byte stream, Product Apply/Save와 Public API 의미는 변경하지 않습니다.
+// - v1.9.0도 FCFDAStagingRecord/FCFDAStagingService Public Missile 시그니처를 유지합니다. Shared core는 payload-free common row만 보유하며 Ammo typed payload/provider는 DAO-P0-02 이후 추가합니다.
 
 #include "DataAuthoring/CFDAStaging.h"
+#include "CFDACommonPrimitives.h"
 #include "CFDAContractGuard.h"
+#include "CFDAMissileProvider.h"
+#include "CFDATypeDispatch.h"
 
 #include "AssetRegistry/ARFilter.h"
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -33,7 +42,6 @@
 #include "Dom/JsonObject.h"
 #include "Internationalization/Text.h"
 #include "Internationalization/TextNamespaceUtil.h"
-#include "Misc/PackageName.h"
 #include "Misc/SecureHash.h"
 #include "Modules/ModuleManager.h"
 #include "Serialization/JsonReader.h"
@@ -51,65 +59,13 @@ THIRD_PARTY_INCLUDES_END
 
 namespace CFDAStagingPrivate
 {
-	// P0 MissileGuidePreset schema identity입니다.
-	static constexpr TCHAR MissilePresetSchemaId[] = TEXT("CarFight.DataAsset.MissileGuidePreset");
-
-	// P0 MissileGuidePreset JSON shape revision입니다.
-	static constexpr int32 MissilePresetSchemaRevision = 1;
-
-	// P0 MissileGuidePreset typed adapter semantic revision입니다.
-	static constexpr int32 MissilePresetAdapterRevision = 2;
-
-	// P0 MissileGuidePreset exact native class path입니다.
-	static constexpr TCHAR MissilePresetClassPath[] = TEXT("/Script/CarFight_Re.CFMissileGuidePresetData");
-
 	// BatchPlanHash domain kind입니다.
 	static constexpr TCHAR BatchPlanKind[] = TEXT("CarFightDAStagingBatchPlan");
 
 	// BatchPlanHash binary token format revision입니다.
 	static constexpr int32 BatchPlanFormatRevision = 1;
 
-#if WITH_DEV_AUTOMATION_TESTS
-	// DACE private probe가 현재 thread의 production fingerprint path에서 실제 emit된 token label을 관측할 temporary sink입니다.
-	thread_local TArray<FString>* GSemanticTokenLabelProbe = nullptr;
-
-	// 한 fingerprint probe lifetime 동안 token observation sink를 설치하고 반드시 이전 상태로 복원합니다.
-	struct FScopedSemanticTokenProbe
-	{
-		// Scope 진입 전 현재 thread의 probe sink입니다.
-		TArray<FString>* PreviousSink = nullptr;
-		// 이번 scope가 실제 sink ownership을 획득했는지 나타냅니다.
-		bool bBound = false;
-
-		// 현재 thread에 기존 probe가 없을 때 requested sink를 설치합니다.
-		explicit FScopedSemanticTokenProbe(TArray<FString>& RequestedSink)
-			: PreviousSink(GSemanticTokenLabelProbe)
-			, bBound(PreviousSink == nullptr)
-		{
-			if (bBound)
-			{
-				GSemanticTokenLabelProbe = &RequestedSink;
-			}
-		}
-
-		// Scope 종료 시 성공/실패 경로와 무관하게 이전 sink를 복원합니다.
-		~FScopedSemanticTokenProbe()
-		{
-			if (bBound)
-			{
-				GSemanticTokenLabelProbe = PreviousSink;
-			}
-		}
-
-		// 이번 scope가 probe sink ownership을 획득했는지 반환합니다.
-		bool IsBound() const
-		{
-			return bBound;
-		}
-	};
-#endif
-
-	// blocking 또는 informational issue를 target 배열에 추가합니다.
+	// blocking 또는 informational issue를 provider-neutral common authority를 통해 추가합니다.
 	void AddIssue(
 		TArray<FCFDAStagingIssue>& OutIssues,
 		const ECFDAStagingIssueCode Code,
@@ -117,104 +73,37 @@ namespace CFDAStagingPrivate
 		const FString& Message,
 		const bool bBlocking = true)
 	{
-		// 새로 추가할 stable diagnostic입니다.
-		FCFDAStagingIssue Issue;
-		Issue.Code = Code;
-		Issue.FieldPath = FieldPath;
-		Issue.Message = Message;
-		Issue.bBlocking = bBlocking;
-		OutIssues.Add(MoveTemp(Issue));
+		CFDACommonPrimitives::AddIssue(OutIssues, Code, FieldPath, Message, bBlocking);
 	}
 
-	// issue 배열에 blocking 진단이 하나라도 존재하는지 확인합니다.
+	// issue 배열의 blocking 여부를 provider-neutral common authority로 확인합니다.
 	bool HasBlockingIssue(const TArray<FCFDAStagingIssue>& Issues)
 	{
-		for (const FCFDAStagingIssue& Issue : Issues)
-		{
-			if (Issue.bBlocking)
-			{
-				return true;
-			}
-		}
-		return false;
+		return CFDACommonPrimitives::HasBlockingIssue(Issues);
 	}
 
-	// uint32를 platform endian과 무관한 big-endian 4 bytes로 append합니다.
-	void AppendUint32BigEndian(TArray<uint8>& OutBytes, const uint32 Value)
-	{
-		OutBytes.Add(static_cast<uint8>((Value >> 24) & 0xff));
-		OutBytes.Add(static_cast<uint8>((Value >> 16) & 0xff));
-		OutBytes.Add(static_cast<uint8>((Value >> 8) & 0xff));
-		OutBytes.Add(static_cast<uint8>(Value & 0xff));
-	}
-
-	// label/value raw bytes를 length-prefixed canonical token으로 append합니다.
-	void AppendRawToken(
-		TArray<uint8>& OutBytes,
-		const FString& Label,
-		const uint8* ValueBytes,
-		const int32 ValueByteCount)
-	{
-#if WITH_DEV_AUTOMATION_TESTS
-		if (GSemanticTokenLabelProbe != nullptr)
-		{
-			GSemanticTokenLabelProbe->Add(Label);
-		}
-#endif
-		// token label의 deterministic UTF-8 bytes입니다.
-		FTCHARToUTF8 LabelUtf8(*Label);
-		AppendUint32BigEndian(OutBytes, static_cast<uint32>(LabelUtf8.Length()));
-		OutBytes.Append(reinterpret_cast<const uint8*>(LabelUtf8.Get()), LabelUtf8.Length());
-		AppendUint32BigEndian(OutBytes, static_cast<uint32>(ValueByteCount));
-		if (ValueByteCount > 0)
-		{
-			OutBytes.Append(ValueBytes, ValueByteCount);
-		}
-	}
-
-	// label/FString을 UTF-8 length-prefixed canonical token으로 append합니다.
+	// label/FString을 accepted provider-neutral token authority로 append합니다.
 	void AppendStringToken(TArray<uint8>& OutBytes, const FString& Label, const FString& Value)
 	{
-		// token value의 deterministic UTF-8 bytes입니다.
-		FTCHARToUTF8 ValueUtf8(*Value);
-		AppendRawToken(
-			OutBytes,
-			Label,
-			reinterpret_cast<const uint8*>(ValueUtf8.Get()),
-			ValueUtf8.Length());
+		CFDACommonPrimitives::AppendStringToken(OutBytes, *Label, Value);
 	}
 
-	// bool을 text formatter를 거치지 않는 1-byte canonical token으로 append합니다.
+	// bool을 accepted provider-neutral token authority로 append합니다.
 	void AppendBoolToken(TArray<uint8>& OutBytes, const FString& Label, const bool bValue)
 	{
-		// canonical bool byte입니다.
-		const uint8 CanonicalBool = bValue ? 1 : 0;
-		AppendRawToken(OutBytes, Label, &CanonicalBool, 1);
+		CFDACommonPrimitives::AppendBoolToken(OutBytes, *Label, bValue);
 	}
 
-	// float를 -0→+0 정규화 후 IEEE-754 32-bit big-endian canonical token으로 append합니다.
+	// float를 accepted provider-neutral token authority로 append합니다.
 	void AppendFloatToken(TArray<uint8>& OutBytes, const FString& Label, const float Value)
 	{
-		// -0.0f와 +0.0f를 같은 semantic 값으로 만드는 canonical float입니다.
-		const float CanonicalValue = Value == 0.0f ? 0.0f : Value;
-		// canonical float의 raw IEEE-754 bit pattern입니다.
-		uint32 FloatBits = 0;
-		FMemory::Memcpy(&FloatBits, &CanonicalValue, sizeof(float));
-		// platform endian과 무관한 canonical float bytes입니다.
-		uint8 FloatBytes[4] =
-		{
-			static_cast<uint8>((FloatBits >> 24) & 0xff),
-			static_cast<uint8>((FloatBits >> 16) & 0xff),
-			static_cast<uint8>((FloatBits >> 8) & 0xff),
-			static_cast<uint8>(FloatBits & 0xff)
-		};
-		AppendRawToken(OutBytes, Label, FloatBytes, UE_ARRAY_COUNT(FloatBytes));
+		CFDACommonPrimitives::AppendFloatToken(OutBytes, *Label, Value);
 	}
 
-	// FName semantic equality와 맞추기 위해 comparison text를 lowercase로 canonicalize합니다.
+	// FName canonicalization을 provider-neutral common authority로 위임합니다.
 	FString CanonicalNameText(const FName Value)
 	{
-		return Value.ToString().ToLower();
+		return CFDACommonPrimitives::CanonicalNameText(Value);
 	}
 
 	// enum typed value를 exact reflected enumerator token으로 변환합니다.
@@ -269,104 +158,29 @@ namespace CFDAStagingPrivate
 		return false;
 	}
 
-	// SHA-256 canonical lowercase `sha256:<64 hex>` 형식인지 확인합니다.
+	// SHA-256 canonical 형식 검사를 provider-neutral common authority로 위임합니다.
 	bool IsCanonicalSha256Fingerprint(const FString& Fingerprint)
 	{
-		if (Fingerprint.Len() != 71 || !Fingerprint.StartsWith(TEXT("sha256:"), ESearchCase::CaseSensitive))
-		{
-			return false;
-		}
-
-		for (int32 CharacterIndex = 7; CharacterIndex < Fingerprint.Len(); ++CharacterIndex)
-		{
-			// 현재 SHA-256 hex digit입니다.
-			const TCHAR Character = Fingerprint[CharacterIndex];
-			// lowercase canonical hex인지 나타냅니다.
-			const bool bIsLowerHex = (Character >= TEXT('0') && Character <= TEXT('9'))
-				|| (Character >= TEXT('a') && Character <= TEXT('f'));
-			if (!bIsLowerHex)
-			{
-				return false;
-			}
-		}
-		return true;
+		return CFDACommonPrimitives::IsCanonicalSha256Fingerprint(Fingerprint);
 	}
 
-	// canonical byte stream을 OpenSSL EVP SHA-256으로 hash하고 protocol fingerprint 형식으로 반환합니다.
+	// canonical byte stream hash를 provider-neutral common authority로 위임합니다.
 	bool HashCanonicalBytes(const TArray<uint8>& Bytes, FString& OutFingerprint, FString& OutError)
 	{
-		// OpenSSL EVP가 채울 32-byte SHA-256 결과입니다.
-		FSHA256Signature Signature;
-		// OpenSSL EVP가 반환하는 실제 digest byte 수입니다.
-		unsigned int DigestLength = 0;
-		// empty buffer에서도 안전한 non-null input pointer입니다.
-		const uint8 EmptyInputByte = 0;
-		// hash 대상 canonical byte pointer입니다.
-		const uint8* HashData = Bytes.Num() > 0 ? Bytes.GetData() : &EmptyInputByte;
-		// OpenSSL portable SHA-256 실행 결과입니다.
-		const int32 DigestResult = EVP_Digest(
-			HashData,
-			static_cast<size_t>(Bytes.Num()),
-			Signature.Signature,
-			&DigestLength,
-			EVP_sha256(),
-			nullptr);
-		if (DigestResult != 1 || DigestLength != UE_ARRAY_COUNT(Signature.Signature))
-		{
-			OutFingerprint.Reset();
-			OutError = TEXT("OpenSSL EVP SHA-256 fingerprint 생성에 실패했습니다.");
-			return false;
-		}
-
-		OutFingerprint = TEXT("sha256:") + Signature.ToString().ToLower();
-		OutError.Reset();
-		return true;
+		return CFDACommonPrimitives::HashCanonicalBytes(Bytes, OutFingerprint, OutError);
 	}
 
-	// JSON object가 exact required field set만 가지는지 검사합니다.
+	// JSON exact-field 검사를 provider-neutral common authority로 위임합니다.
 	bool ValidateExactFields(
 		const TSharedPtr<FJsonObject>& Object,
 		const TArray<FString>& RequiredFields,
 		const FString& ObjectPath,
 		TArray<FCFDAStagingIssue>& OutIssues)
 	{
-		// allowed/required field membership 검사 집합입니다.
-		TSet<FString> RequiredFieldSet;
-		for (const FString& RequiredField : RequiredFields)
-		{
-			RequiredFieldSet.Add(RequiredField);
-		}
-
-		for (const auto& Pair : Object->Values)
-		{
-			// UE 5.8 FJsonObject의 shared-string key를 schema 비교용 owned FString으로 변환합니다.
-			const FString ActualFieldName(Pair.Key.ToView());
-			if (!RequiredFieldSet.Contains(ActualFieldName))
-			{
-				AddIssue(
-					OutIssues,
-					ECFDAStagingIssueCode::UnknownField,
-					ObjectPath.IsEmpty() ? ActualFieldName : ObjectPath + TEXT(".") + ActualFieldName,
-					TEXT("schema에 없는 field입니다. 오타를 자동 무시하지 않습니다."));
-			}
-		}
-
-		for (const FString& RequiredField : RequiredFields)
-		{
-			// UE 5.8 public FStringView existence lookup 결과입니다.
-			if (!Object->HasField(RequiredField))
-			{
-				AddIssue(
-					OutIssues,
-					ECFDAStagingIssueCode::MissingRequiredField,
-					ObjectPath.IsEmpty() ? RequiredField : ObjectPath + TEXT(".") + RequiredField,
-					TEXT("whole-record required field가 누락되었습니다."));
-			}
-		}
-		return !HasBlockingIssue(OutIssues);
+		return CFDACommonPrimitives::ValidateExactFields(Object, RequiredFields, ObjectPath, OutIssues);
 	}
 
-	// exact field를 찾아 expected JSON type인지 검사합니다.
+	// JSON exact field/type 검사를 provider-neutral common authority로 위임합니다.
 	TSharedPtr<FJsonValue> RequireField(
 		const TSharedPtr<FJsonObject>& Object,
 		const FString& FieldName,
@@ -374,21 +188,10 @@ namespace CFDAStagingPrivate
 		const EJson ExpectedType,
 		TArray<FCFDAStagingIssue>& OutIssues)
 	{
-		// UE 5.8 public FStringView untyped lookup으로 읽은 requested JSON field입니다.
-		const TSharedPtr<FJsonValue> FoundValue = Object->GetFieldUntyped(FieldName);
-		if (!FoundValue.IsValid())
-		{
-			return nullptr;
-		}
-		if (FoundValue->Type != ExpectedType)
-		{
-			AddIssue(OutIssues, ECFDAStagingIssueCode::TypeMismatch, FieldPath, TEXT("JSON field type이 schema와 다릅니다."));
-			return nullptr;
-		}
-		return FoundValue;
+		return CFDACommonPrimitives::RequireField(Object, FieldName, FieldPath, ExpectedType, OutIssues);
 	}
 
-	// required JSON string field를 parse합니다.
+	// required JSON string parsing을 provider-neutral common authority로 위임합니다.
 	bool ParseStringField(
 		const TSharedPtr<FJsonObject>& Object,
 		const FString& FieldName,
@@ -396,17 +199,10 @@ namespace CFDAStagingPrivate
 		FString& OutValue,
 		TArray<FCFDAStagingIssue>& OutIssues)
 	{
-		// exact string JSON field입니다.
-		const TSharedPtr<FJsonValue> Value = RequireField(Object, FieldName, FieldPath, EJson::String, OutIssues);
-		if (!Value.IsValid())
-		{
-			return false;
-		}
-		OutValue = Value->AsString();
-		return true;
+		return CFDACommonPrimitives::ParseStringField(Object, FieldName, FieldPath, OutValue, OutIssues);
 	}
 
-	// required JSON integer-valued number field를 parse합니다.
+	// required JSON revision parsing을 provider-neutral common authority로 위임합니다.
 	bool ParseRevisionField(
 		const TSharedPtr<FJsonObject>& Object,
 		const FString& FieldName,
@@ -414,27 +210,10 @@ namespace CFDAStagingPrivate
 		int32& OutValue,
 		TArray<FCFDAStagingIssue>& OutIssues)
 	{
-		// exact numeric JSON field입니다.
-		const TSharedPtr<FJsonValue> Value = RequireField(Object, FieldName, FieldPath, EJson::Number, OutIssues);
-		if (!Value.IsValid())
-		{
-			return false;
-		}
-		// JSON number 원본 double 값입니다.
-		const double NumberValue = Value->AsNumber();
-		if (!FMath::IsFinite(NumberValue)
-			|| NumberValue < static_cast<double>(MIN_int32)
-			|| NumberValue > static_cast<double>(MAX_int32)
-			|| static_cast<double>(static_cast<int32>(NumberValue)) != NumberValue)
-		{
-			AddIssue(OutIssues, ECFDAStagingIssueCode::InvalidValue, FieldPath, TEXT("revision은 finite int32 정수여야 합니다."));
-			return false;
-		}
-		OutValue = static_cast<int32>(NumberValue);
-		return true;
+		return CFDACommonPrimitives::ParseRevisionField(Object, FieldName, FieldPath, OutValue, OutIssues);
 	}
 
-	// required JSON bool field를 parse합니다.
+	// required JSON bool parsing을 provider-neutral common authority로 위임합니다.
 	bool ParseBoolField(
 		const TSharedPtr<FJsonObject>& Object,
 		const FString& FieldName,
@@ -442,17 +221,10 @@ namespace CFDAStagingPrivate
 		bool& OutValue,
 		TArray<FCFDAStagingIssue>& OutIssues)
 	{
-		// exact boolean JSON field입니다.
-		const TSharedPtr<FJsonValue> Value = RequireField(Object, FieldName, FieldPath, EJson::Boolean, OutIssues);
-		if (!Value.IsValid())
-		{
-			return false;
-		}
-		OutValue = Value->AsBool();
-		return true;
+		return CFDACommonPrimitives::ParseBoolField(Object, FieldName, FieldPath, OutValue, OutIssues);
 	}
 
-	// required JSON number를 current authored range 안의 finite float로 parse합니다.
+	// required JSON finite float/range parsing을 provider-neutral common authority로 위임합니다.
 	bool ParseFloatField(
 		const TSharedPtr<FJsonObject>& Object,
 		const FString& FieldName,
@@ -462,36 +234,10 @@ namespace CFDAStagingPrivate
 		float& OutValue,
 		TArray<FCFDAStagingIssue>& OutIssues)
 	{
-		// exact numeric JSON field입니다.
-		const TSharedPtr<FJsonValue> Value = RequireField(Object, FieldName, FieldPath, EJson::Number, OutIssues);
-		if (!Value.IsValid())
-		{
-			return false;
-		}
-		// JSON number 원본 double 값입니다.
-		const double NumberValue = Value->AsNumber();
-		if (!FMath::IsFinite(NumberValue) || NumberValue < MinimumValue || NumberValue > MaximumValue)
-		{
-			AddIssue(
-				OutIssues,
-				ECFDAStagingIssueCode::InvalidValue,
-				FieldPath,
-				FString::Printf(TEXT("raw authored 값이 허용 범위 %.6g..%.6g 밖입니다. clamp하지 않습니다."), MinimumValue, MaximumValue));
-			return false;
-		}
-
-		// Unreal 저장 타입으로 변환한 authored float 값입니다.
-		const float TypedValue = static_cast<float>(NumberValue);
-		if (!FMath::IsFinite(TypedValue))
-		{
-			AddIssue(OutIssues, ECFDAStagingIssueCode::InvalidValue, FieldPath, TEXT("float 변환 결과가 finite 값이 아닙니다."));
-			return false;
-		}
-		OutValue = TypedValue;
-		return true;
+		return CFDACommonPrimitives::ParseFloatField(Object, FieldName, FieldPath, MinimumValue, MaximumValue, OutValue, OutIssues);
 	}
 
-	// required JSON object field를 parse합니다.
+	// required JSON object parsing을 provider-neutral common authority로 위임합니다.
 	bool ParseObjectField(
 		const TSharedPtr<FJsonObject>& Object,
 		const FString& FieldName,
@@ -499,127 +245,31 @@ namespace CFDAStagingPrivate
 		TSharedPtr<FJsonObject>& OutObject,
 		TArray<FCFDAStagingIssue>& OutIssues)
 	{
-		// exact object JSON field입니다.
-		const TSharedPtr<FJsonValue> Value = RequireField(Object, FieldName, FieldPath, EJson::Object, OutIssues);
-		if (!Value.IsValid())
-		{
-			return false;
-		}
-		OutObject = Value->AsObject();
-		if (!OutObject.IsValid())
-		{
-			AddIssue(OutIssues, ECFDAStagingIssueCode::TypeMismatch, FieldPath, TEXT("유효한 JSON object가 아닙니다."));
-			return false;
-		}
-		return true;
+		return CFDACommonPrimitives::ParseObjectField(Object, FieldName, FieldPath, OutObject, OutIssues);
 	}
 
-	// P0 Literal FText object를 strict `{Kind,Text}` shape로 parse합니다.
+	// Literal FText parsing을 provider-neutral common authority로 위임합니다.
 	bool ParseLiteralText(
 		const TSharedPtr<FJsonObject>& TextObject,
 		const FString& FieldPath,
 		FCFDAStagingLiteralText& OutText,
 		TArray<FCFDAStagingIssue>& OutIssues)
 	{
-		// Literal text object의 exact required fields입니다.
-		const TArray<FString> RequiredFields = {TEXT("Kind"), TEXT("Text")};
-		ValidateExactFields(TextObject, RequiredFields, FieldPath, OutIssues);
-
-		// interchange text representation kind입니다.
-		FString Kind;
-		if (ParseStringField(TextObject, TEXT("Kind"), FieldPath + TEXT(".Kind"), Kind, OutIssues)
-			&& !Kind.Equals(TEXT("Literal"), ESearchCase::CaseSensitive))
-		{
-			AddIssue(
-				OutIssues,
-				ECFDAStagingIssueCode::UnsupportedTextRepresentation,
-				FieldPath + TEXT(".Kind"),
-				TEXT("P0는 Literal FText만 지원합니다. StringTable/localization identity를 silent 변환하지 않습니다."));
-		}
-
-		ParseStringField(TextObject, TEXT("Text"), FieldPath + TEXT(".Text"), OutText.Text, OutIssues);
-		return !HasBlockingIssue(OutIssues);
+		return CFDACommonPrimitives::ParseLiteralText(TextObject, FieldPath, OutText, OutIssues);
 	}
 
-	// exact full `/Game/.../Asset.Asset` target object path인지 검사합니다.
+	// exact full `/Game/.../Asset.Asset` target object path 검증을 provider-neutral common authority로 위임합니다.
 	bool ValidateTargetObjectPath(const FString& ObjectPath, TArray<FCFDAStagingIssue>& OutIssues)
 	{
-		if (!ObjectPath.StartsWith(TEXT("/Game/"), ESearchCase::CaseSensitive)
-			|| ObjectPath.Contains(TEXT(":"), ESearchCase::CaseSensitive)
-			|| ObjectPath.Contains(TEXT("\\"), ESearchCase::CaseSensitive))
-		{
-			AddIssue(OutIssues, ECFDAStagingIssueCode::InvalidValue, TEXT("TargetObjectPath"), TEXT("P0 target은 exact `/Game/.../Asset.Asset` 경로여야 합니다."));
-			return false;
-		}
-
-		// object separator 마지막 dot 위치입니다.
-		int32 DotIndex = INDEX_NONE;
-		// package path 마지막 slash 위치입니다.
-		int32 SlashIndex = INDEX_NONE;
-		ObjectPath.FindLastChar(TEXT('.'), DotIndex);
-		ObjectPath.FindLastChar(TEXT('/'), SlashIndex);
-		if (DotIndex <= SlashIndex + 1 || DotIndex >= ObjectPath.Len() - 1)
-		{
-			AddIssue(OutIssues, ECFDAStagingIssueCode::InvalidValue, TEXT("TargetObjectPath"), TEXT("full object path에는 package와 object 이름이 모두 필요합니다."));
-			return false;
-		}
-
-		// `.Object` 앞의 long package name입니다.
-		const FString PackageName = ObjectPath.Left(DotIndex);
-		// package leaf asset name입니다.
-		const FString PackageLeaf = ObjectPath.Mid(SlashIndex + 1, DotIndex - SlashIndex - 1);
-		// dot 뒤 UObject 이름입니다.
-		const FString ObjectName = ObjectPath.Mid(DotIndex + 1);
-		if (!FPackageName::IsValidLongPackageName(PackageName)
-			|| !PackageLeaf.Equals(ObjectName, ESearchCase::CaseSensitive))
-		{
-			AddIssue(OutIssues, ECFDAStagingIssueCode::InvalidValue, TEXT("TargetObjectPath"), TEXT("package/object 이름이 canonical Unreal asset object path 규칙과 다릅니다."));
-			return false;
-		}
-		return true;
+		return CFDACommonPrimitives::ValidateTargetObjectPath(ObjectPath, OutIssues);
 	}
 
-	// repository-relative Staging path를 canonical authority 아래의 slash-normalized JSON path로 변환합니다.
+	// repository-relative Missile Staging path를 provider-owned canonical root 아래의 slash-normalized JSON path로 변환합니다.
 	bool NormalizeStagingRelativePath(const FString& InputPath, FString& OutPath)
 	{
-		// CF-FQ-049가 읽을 수 있는 tracked Staging authority root입니다.
-		static constexpr TCHAR StagingRootPrefix[] = TEXT("Authoring/DataAssetStaging/");
-
-		OutPath = InputPath;
-		OutPath.TrimStartAndEndInline();
-		OutPath.ReplaceInline(TEXT("\\"), TEXT("/"), ESearchCase::CaseSensitive);
-		while (OutPath.StartsWith(TEXT("./"), ESearchCase::CaseSensitive))
-		{
-			OutPath = OutPath.Mid(2);
-		}
-		if (OutPath.IsEmpty()
-			|| OutPath.StartsWith(TEXT("/"), ESearchCase::CaseSensitive)
-			|| OutPath.EndsWith(TEXT("/"), ESearchCase::CaseSensitive)
-			|| OutPath.Contains(TEXT("//"), ESearchCase::CaseSensitive)
-			|| OutPath.Contains(TEXT(":"), ESearchCase::CaseSensitive))
-		{
-			return false;
-		}
-
-		// normalized path segment 목록입니다.
-		TArray<FString> Segments;
-		OutPath.ParseIntoArray(Segments, TEXT("/"), true);
-		for (const FString& Segment : Segments)
-		{
-			if (Segment.IsEmpty() || Segment == TEXT(".") || Segment == TEXT(".."))
-			{
-				return false;
-			}
-		}
-
-		// P0 canonical interchange source는 tracked Staging root 아래의 lowercase .json 파일만 허용합니다.
-		if (!OutPath.StartsWith(StagingRootPrefix, ESearchCase::CaseSensitive)
-			|| !OutPath.EndsWith(TEXT(".json"), ESearchCase::CaseSensitive)
-			|| OutPath.Len() <= UE_ARRAY_COUNT(StagingRootPrefix) - 1 + 5)
-		{
-			return false;
-		}
-		return true;
+		// Current compatibility facade가 사용하는 trusted Missile provider입니다.
+		const FCFDATypeProvider& MissileProvider = CFDATypeDispatch::GetMissilePresetProvider();
+		return CFDATypeDispatch::NormalizeProviderStagingPath(MissileProvider, InputPath, OutPath);
 	}
 
 	// Config enum string field를 strict typed enum으로 parse합니다.
@@ -812,70 +462,14 @@ namespace CFDAStagingPrivate
 		return true;
 	}
 
-	// persisted FText가 P0 Literal interchange로 loss 없이 표현 가능한지 검사하고 source codepoint sequence를 읽습니다.
+	// persisted Literal FText readback을 provider-neutral common authority로 위임합니다.
 	bool ReadLiteralTextFromAsset(
 		const FText& SourceText,
 		const FString& FieldPath,
 		FCFDAStagingLiteralText& OutText,
 		TArray<FCFDAStagingIssue>& OutIssues)
 	{
-		// persisted FText가 참조하는 StringTable identity입니다.
-		FName StringTableId = NAME_None;
-		// persisted FText가 참조하는 StringTable key입니다.
-		FString StringTableKey;
-		if (FTextInspector::GetTableIdAndKey(SourceText, StringTableId, StringTableKey))
-		{
-			AddIssue(
-				OutIssues,
-				ECFDAStagingIssueCode::UnsupportedTextRepresentation,
-				FieldPath,
-				TEXT("StringTable FText는 P0 Literal Staging 표현으로 localization identity를 보존할 수 없습니다."));
-			return false;
-		}
-
-		// localization display string이 아닌 authored source string입니다.
-		const FString* SourceString = FTextInspector::GetSourceString(SourceText);
-		// persisted FText namespace identity입니다.
-		const TOptional<FString> TextNamespace = FTextInspector::GetNamespace(SourceText);
-		// persisted FText key identity입니다.
-		const TOptional<FString> TextKey = FTextInspector::GetKey(SourceText);
-		// full namespace에서 UE package namespace component를 제외한 authored namespace입니다.
-		FString AuthoredNamespace;
-		if (TextNamespace.IsSet() && !TextNamespace.GetValue().IsEmpty())
-		{
-			AuthoredNamespace = TextNamespaceUtil::StripPackageNamespace(TextNamespace.GetValue());
-		}
-
-		// P0 Literal은 source string 의미만 보존하므로 실제 authored namespace가 남는 localization text만 차단합니다.
-		if (!AuthoredNamespace.IsEmpty())
-		{
-			AddIssue(
-				OutIssues,
-				ECFDAStagingIssueCode::UnsupportedTextRepresentation,
-				FieldPath,
-				TEXT("명시적 authored namespace localization identity가 있는 FText는 P0 Literal Staging으로 silent 변환하지 않습니다."));
-			return false;
-		}
-
-		// empty/package-only namespace에서 UE가 persistence용 stable key를 부여한 경우 key는 P0 semantic fingerprint에서 제외합니다.
-		(void)TextKey;
-		if (SourceString != nullptr)
-		{
-			OutText.Text = *SourceString;
-			return true;
-		}
-		if (SourceText.IsEmpty())
-		{
-			OutText.Text.Reset();
-			return true;
-		}
-
-		AddIssue(
-			OutIssues,
-			ECFDAStagingIssueCode::UnsupportedTextRepresentation,
-			FieldPath,
-			TEXT("source string을 직접 보존할 수 없는 generated/formatted FText는 P0 Literal Staging에서 지원하지 않습니다."));
-		return false;
+		return CFDACommonPrimitives::ReadLiteralTextFromAsset(SourceText, FieldPath, OutText, OutIssues);
 	}
 
 	// persisted MissileGuidePreset UObject를 fingerprint와 동일한 typed whole-record payload로 read-only 변환합니다.
@@ -926,10 +520,12 @@ namespace CFDAStagingPrivate
 	// typed MissileGuidePreset payload의 exact semantic token stream을 작성합니다.
 	void AppendMissilePresetPayloadTokens(TArray<uint8>& OutBytes, const FCFDAMissilePresetPayload& Payload)
 	{
-		AppendStringToken(OutBytes, TEXT("SchemaId"), MissilePresetSchemaId);
-		AppendStringToken(OutBytes, TEXT("SchemaRevision"), FString::FromInt(MissilePresetSchemaRevision));
-		AppendStringToken(OutBytes, TEXT("AdapterContractRevision"), FString::FromInt(MissilePresetAdapterRevision));
-		AppendStringToken(OutBytes, TEXT("DataAssetTypeClassPath"), MissilePresetClassPath);
+		// Accepted Missile semantic header authority입니다.
+		const FCFDATypeProvider& MissileProvider = CFDATypeDispatch::GetMissilePresetProvider();
+		AppendStringToken(OutBytes, TEXT("SchemaId"), MissileProvider.TypeKey.SchemaId);
+		AppendStringToken(OutBytes, TEXT("SchemaRevision"), FString::FromInt(MissileProvider.SchemaRevision));
+		AppendStringToken(OutBytes, TEXT("AdapterContractRevision"), FString::FromInt(MissileProvider.AdapterContractRevision));
+		AppendStringToken(OutBytes, TEXT("DataAssetTypeClassPath"), MissileProvider.TypeKey.DataAssetTypeClassPath);
 		AppendStringToken(OutBytes, TEXT("Payload.PresetId"), CanonicalNameText(Payload.PresetId));
 		AppendStringToken(OutBytes, TEXT("Payload.PresetDisplayName"), Payload.PresetDisplayName.Text);
 		AppendStringToken(OutBytes, TEXT("Payload.PresetDescription"), Payload.PresetDescription.Text);
@@ -976,24 +572,35 @@ namespace CFDAStagingPrivate
 			OutError = FString::Printf(TEXT("Staging Payload semantic fingerprint 재계산에 실패했습니다: %s"), *FingerprintError);
 			return false;
 		}
-		if (!RecomputedFingerprint.Equals(Record.StagingSemanticFingerprint, ESearchCase::CaseSensitive))
-		{
-			OutError = TEXT("Staging Payload와 StagingSemanticFingerprint가 서로 다른 semantic state를 나타냅니다.");
-			return false;
-		}
-		OutError.Reset();
-		return true;
+		return CFDACommonPrimitives::ValidateCachedSemanticFingerprint(
+			Record.StagingSemanticFingerprint,
+			RecomputedFingerprint,
+			OutError);
 	}
 
-	// Create/Update approval candidate의 mutable DTO 구조와 source/current binding을 다시 검증합니다.
-	bool ValidateBatchCandidateIntegrity(const FCFDAStagingPreviewRow& Row, FString& OutError)
+	// Public Missile facade Create/Update candidate의 typed payload와 common binding을 다시 검증합니다.
+	bool ValidateMissileBatchCandidateIntegrity(const FCFDAStagingPreviewRow& Row, FString& OutError)
 	{
-		if (!Row.Record.SchemaId.Equals(MissilePresetSchemaId, ESearchCase::CaseSensitive)
-			|| Row.Record.SchemaRevision != MissilePresetSchemaRevision
-			|| Row.Record.AdapterContractRevision != MissilePresetAdapterRevision
-			|| !Row.Record.DataAssetTypeClassPath.Equals(MissilePresetClassPath, ESearchCase::CaseSensitive))
+		// Candidate exact TypeKey에 등록된 complete provider entry입니다.
+		const FCFDATypeProviderEntry* ProviderEntry = CFDATypeDispatch::FindExactProviderEntry(
+			Row.Record.SchemaId,
+			Row.Record.DataAssetTypeClassPath,
+			&OutError);
+		// Public Missile facade가 허용하는 exact first provider entry입니다.
+		const FCFDATypeProviderEntry& MissileProviderEntry = CFDATypeDispatch::GetMissilePresetProviderEntry();
+		if (ProviderEntry == nullptr || ProviderEntry != &MissileProviderEntry)
 		{
-			OutError = TEXT("Batch candidate의 schema/revision/class가 current P0 계약과 다릅니다.");
+			OutError = TEXT("Batch candidate가 Missile compatibility facade의 exact trusted provider가 아닙니다.");
+			return false;
+		}
+
+		// Provider-local typed record projection으로 만든 payload-free common orchestration envelope입니다.
+		const FCFDACommonEnvelope Envelope = CFDAMissileProviderImpl::BuildCommonEnvelope(
+			Row.Record,
+			Row.CurrentSemanticFingerprint,
+			Row.Kind);
+		if (!CFDATypeDispatch::ValidateProviderContract(Envelope, ProviderEntry->Descriptor, OutError))
+		{
 			return false;
 		}
 		if (Row.Record.StableLogicalId.IsNone()
@@ -1004,7 +611,7 @@ namespace CFDAStagingPrivate
 			return false;
 		}
 
-		// mutable target path를 canonical Unreal object path 규칙으로 재검증할 임시 진단입니다.
+		// Mutable target path를 canonical Unreal object path 규칙으로 재검증할 임시 진단입니다.
 		TArray<FCFDAStagingIssue> TargetPathIssues;
 		if (!ValidateTargetObjectPath(Row.Record.TargetObjectPath, TargetPathIssues))
 		{
@@ -1012,46 +619,11 @@ namespace CFDAStagingPrivate
 			return false;
 		}
 
-		// mutable source path를 canonical Staging authority로 다시 정규화한 값입니다.
-		FString NormalizedStagingPath;
-		if (!NormalizeStagingRelativePath(Row.Record.StagingRelativePath, NormalizedStagingPath)
-			|| !NormalizedStagingPath.Equals(Row.Record.StagingRelativePath, ESearchCase::CaseSensitive))
-		{
-			OutError = TEXT("Batch candidate의 StagingRelativePath가 canonical `Authoring/DataAssetStaging/.../*.json` source path가 아닙니다.");
-			return false;
-		}
-
-		// mutable Payload와 cached desired-state fingerprint가 같은 semantic state인지 확인합니다.
+		// Mutable Payload와 cached desired-state fingerprint가 같은 semantic state인지 확인합니다.
 		FString StagingFingerprintIntegrityError;
 		if (!ValidateStagingFingerprintIntegrity(Row.Record, StagingFingerprintIntegrityError))
 		{
 			OutError = StagingFingerprintIntegrityError;
-			return false;
-		}
-
-		if (Row.Kind == ECFDAStagingPreviewKind::Create)
-		{
-			if (Row.Record.bHasBaseSemanticFingerprint
-				|| !Row.Record.BaseSemanticFingerprint.IsEmpty()
-				|| !Row.CurrentSemanticFingerprint.IsEmpty())
-			{
-				OutError = TEXT("Create candidate는 Base가 없어야 하고 Current target fingerprint도 없어야 합니다.");
-				return false;
-			}
-		}
-		else if (Row.Kind == ECFDAStagingPreviewKind::Update)
-		{
-			if (!Row.Record.bHasBaseSemanticFingerprint
-				|| !IsCanonicalSha256Fingerprint(Row.Record.BaseSemanticFingerprint)
-				|| !IsCanonicalSha256Fingerprint(Row.CurrentSemanticFingerprint))
-			{
-				OutError = TEXT("Update candidate는 canonical Base/Current semantic fingerprint를 모두 가져야 합니다.");
-				return false;
-			}
-		}
-		else
-		{
-			OutError = TEXT("Batch mutation candidate는 Create 또는 Update여야 합니다.");
 			return false;
 		}
 
@@ -1078,59 +650,131 @@ namespace CFDAStagingPrivate
 		}
 	}
 
-	// exact BatchPlanHash candidate sorting key를 만듭니다.
-	FString BuildBatchSortKey(const FCFDAStagingPreviewRow& Row)
+	// exact BatchPlanHash candidate sorting key를 payload-free common row 기준으로 만듭니다.
+	FString BuildBatchSortKey(const FCFDACommonPreviewRow& Row)
 	{
-		return Row.Record.DataAssetTypeClassPath.ToLower()
-			+ TEXT("\n") + CanonicalNameText(Row.Record.StableLogicalId)
-			+ TEXT("\n") + Row.Record.TargetObjectPath.ToLower()
-			+ TEXT("\n") + Row.Record.StagingRelativePath.ToLower();
+		return Row.Envelope.DataAssetTypeClassPath.ToLower()
+			+ TEXT("\n") + CanonicalNameText(Row.Envelope.StableLogicalId)
+			+ TEXT("\n") + Row.Envelope.TargetObjectPath.ToLower()
+			+ TEXT("\n") + Row.Envelope.StagingRelativePath.ToLower();
 	}
 
-	// 한 Create/Update row의 approval-binding semantic fields를 BatchPlan token stream에 append합니다.
-	void AppendBatchTargetTokens(TArray<uint8>& OutBytes, const FCFDAStagingPreviewRow& Row)
+	// 한 Create/Update common row의 payload-free envelope를 accepted BatchPlan token stream에 append합니다.
+	void AppendBatchTargetTokens(TArray<uint8>& OutBytes, const FCFDACommonPreviewRow& Row)
 	{
-		AppendStringToken(OutBytes, TEXT("SchemaId"), Row.Record.SchemaId);
-		AppendStringToken(OutBytes, TEXT("SchemaRevision"), FString::FromInt(Row.Record.SchemaRevision));
-		AppendStringToken(OutBytes, TEXT("AdapterContractRevision"), FString::FromInt(Row.Record.AdapterContractRevision));
-		AppendStringToken(OutBytes, TEXT("DataAssetTypeClassPath"), Row.Record.DataAssetTypeClassPath);
+		// Existing approval hash bytes와 1:1로 대응하는 payload-free common envelope입니다.
+		const FCFDACommonEnvelope& Envelope = Row.Envelope;
+		AppendStringToken(OutBytes, TEXT("SchemaId"), Envelope.SchemaId);
+		AppendStringToken(OutBytes, TEXT("SchemaRevision"), FString::FromInt(Envelope.SchemaRevision));
+		AppendStringToken(OutBytes, TEXT("AdapterContractRevision"), FString::FromInt(Envelope.AdapterContractRevision));
+		AppendStringToken(OutBytes, TEXT("DataAssetTypeClassPath"), Envelope.DataAssetTypeClassPath);
 		AppendStringToken(OutBytes, TEXT("IdentityPolicy"), TEXT("Required"));
-		AppendStringToken(OutBytes, TEXT("StableLogicalId"), CanonicalNameText(Row.Record.StableLogicalId));
-		AppendStringToken(OutBytes, TEXT("TargetObjectPath"), Row.Record.TargetObjectPath);
-		AppendStringToken(OutBytes, TEXT("StagingRelativePath"), Row.Record.StagingRelativePath);
-		AppendStringToken(OutBytes, TEXT("BaseSemanticFingerprint"), Row.Record.bHasBaseSemanticFingerprint ? Row.Record.BaseSemanticFingerprint : TEXT("<none>"));
-		AppendStringToken(OutBytes, TEXT("CurrentSemanticFingerprint"), Row.CurrentSemanticFingerprint.IsEmpty() ? TEXT("<absent-target>") : Row.CurrentSemanticFingerprint);
-		AppendStringToken(OutBytes, TEXT("StagingSemanticFingerprint"), Row.Record.StagingSemanticFingerprint);
-		AppendStringToken(OutBytes, TEXT("PlannedOperation"), PreviewKindToken(Row.Kind));
+		AppendStringToken(OutBytes, TEXT("StableLogicalId"), CanonicalNameText(Envelope.StableLogicalId));
+		AppendStringToken(OutBytes, TEXT("TargetObjectPath"), Envelope.TargetObjectPath);
+		AppendStringToken(OutBytes, TEXT("StagingRelativePath"), Envelope.StagingRelativePath);
+		AppendStringToken(OutBytes, TEXT("BaseSemanticFingerprint"), Envelope.bHasBaseSemanticFingerprint ? Envelope.BaseSemanticFingerprint : TEXT("<none>"));
+		AppendStringToken(OutBytes, TEXT("CurrentSemanticFingerprint"), Envelope.CurrentSemanticFingerprint.IsEmpty() ? TEXT("<absent-target>") : Envelope.CurrentSemanticFingerprint);
+		AppendStringToken(OutBytes, TEXT("StagingSemanticFingerprint"), Envelope.StagingSemanticFingerprint);
+		AppendStringToken(OutBytes, TEXT("PlannedOperation"), PreviewKindToken(Envelope.PlannedOperation));
 	}
 }
 
-// P0 MissileGuidePreset schema identity를 반환합니다.
+// P0 MissileGuidePreset schema identity를 compatibility facade로 반환합니다.
 const TCHAR* FCFDAStagingService::GetMissilePresetSchemaId()
 {
-	return CFDAStagingPrivate::MissilePresetSchemaId;
+	return *CFDATypeDispatch::GetMissilePresetProvider().TypeKey.SchemaId;
 }
 
-// P0 MissileGuidePreset JSON shape revision을 반환합니다.
+// P0 MissileGuidePreset JSON shape revision을 compatibility facade로 반환합니다.
 int32 FCFDAStagingService::GetMissilePresetSchemaRevision()
 {
-	return CFDAStagingPrivate::MissilePresetSchemaRevision;
+	return CFDATypeDispatch::GetMissilePresetProvider().SchemaRevision;
 }
 
-// P0 MissileGuidePreset typed adapter semantic revision을 반환합니다.
+// P0 MissileGuidePreset typed adapter semantic revision을 compatibility facade로 반환합니다.
 int32 FCFDAStagingService::GetMissilePresetAdapterRevision()
 {
-	return CFDAStagingPrivate::MissilePresetAdapterRevision;
+	return CFDATypeDispatch::GetMissilePresetProvider().AdapterContractRevision;
 }
 
-// P0 MissileGuidePreset exact native class path를 반환합니다.
+// P0 MissileGuidePreset exact native class path를 compatibility facade로 반환합니다.
 const TCHAR* FCFDAStagingService::GetMissilePresetClassPath()
 {
-	return CFDAStagingPrivate::MissilePresetClassPath;
+	return *CFDATypeDispatch::GetMissilePresetProvider().TypeKey.DataAssetTypeClassPath;
+}
+
+// Existing Missile typed record를 payload-free common envelope로 투영하는 provider-local adapter입니다.
+FCFDACommonEnvelope CFDAMissileProviderImpl::BuildCommonEnvelope(
+	const FCFDAStagingRecord& Record,
+	const FString& CurrentSemanticFingerprint,
+	const ECFDAStagingPreviewKind PlannedOperation)
+{
+	// Shared orchestration으로 전달할 payload-free common envelope입니다.
+	FCFDACommonEnvelope Envelope;
+	Envelope.SchemaId = Record.SchemaId;
+	Envelope.SchemaRevision = Record.SchemaRevision;
+	Envelope.AdapterContractRevision = Record.AdapterContractRevision;
+	Envelope.DataAssetTypeClassPath = Record.DataAssetTypeClassPath;
+	Envelope.StableLogicalId = Record.StableLogicalId;
+	Envelope.TargetObjectPath = Record.TargetObjectPath;
+	Envelope.StagingRelativePath = Record.StagingRelativePath;
+	Envelope.bHasBaseSemanticFingerprint = Record.bHasBaseSemanticFingerprint;
+	Envelope.BaseSemanticFingerprint = Record.BaseSemanticFingerprint;
+	Envelope.CurrentSemanticFingerprint = CurrentSemanticFingerprint;
+	Envelope.StagingSemanticFingerprint = Record.StagingSemanticFingerprint;
+	Envelope.PlannedOperation = PlannedOperation;
+	return Envelope;
+}
+
+// Existing Public Missile Preview row의 typed mutable integrity를 검증한 뒤 payload-free common row로 투영합니다.
+bool CFDAMissileProviderImpl::ProjectCompatibilityPreviewRow(
+	const FCFDAStagingPreviewRow& PreviewRow,
+	FCFDACommonPreviewRow& OutCommonRow,
+	FString& OutError)
+{
+	OutCommonRow = FCFDACommonPreviewRow();
+	OutError.Reset();
+
+	if (PreviewRow.Kind == ECFDAStagingPreviewKind::Create
+		|| PreviewRow.Kind == ECFDAStagingPreviewKind::Update)
+	{
+		if (!CFDAStagingPrivate::ValidateMissileBatchCandidateIntegrity(PreviewRow, OutError))
+		{
+			return false;
+		}
+	}
+
+	OutCommonRow.Kind = PreviewRow.Kind;
+	OutCommonRow.Envelope = BuildCommonEnvelope(
+		PreviewRow.Record,
+		PreviewRow.CurrentSemanticFingerprint,
+		PreviewRow.Kind);
+	OutCommonRow.Issues = PreviewRow.Issues;
+	return true;
+}
+
+// Raw JSON을 typed Missile parser로 검증한 뒤 payload-free common candidate만 shared core에 반환합니다.
+bool CFDAMissileProviderImpl::ParseCommonCandidate(
+	const FString& JsonText,
+	const FString& StagingRelativePath,
+	FCFDACommonEnvelope& OutEnvelope,
+	TArray<FCFDAStagingIssue>& OutIssues)
+{
+	// Provider-local strict typed parse 결과입니다.
+	const FCFDAStagingParseResult ParseResult = ParseJson(JsonText, StagingRelativePath);
+	OutIssues = ParseResult.Issues;
+	if (!ParseResult.bValid)
+	{
+		OutEnvelope = FCFDACommonEnvelope();
+		return false;
+	}
+
+	OutEnvelope = BuildCommonEnvelope(ParseResult.Record);
+	return true;
 }
 
 // strict whole-record JSON을 typed MissileGuidePreset record로 parse/canonicalize합니다.
-FCFDAStagingParseResult FCFDAStagingService::ParseMissilePresetJson(
+FCFDAStagingParseResult CFDAMissileProviderImpl::ParseJson(
 	const FString& JsonText,
 	const FString& StagingRelativePath)
 {
@@ -1182,53 +826,61 @@ FCFDAStagingParseResult FCFDAStagingService::ParseMissilePresetJson(
 		CFDAStagingPrivate::ValidateTargetObjectPath(Result.Record.TargetObjectPath, Result.Issues);
 	}
 
-	// BaseSemanticFingerprint JSON field입니다. Create는 required null, Update는 required string입니다.
-	const TSharedPtr<FJsonValue> BaseFingerprintValue = RootObject->GetFieldUntyped(TEXT("BaseSemanticFingerprint"));
-	if (BaseFingerprintValue.IsValid())
+	// BaseSemanticFingerprint common envelope physical contract를 provider-neutral authority로 parse합니다.
+	CFDACommonPrimitives::ParseBaseSemanticFingerprint(
+		RootObject,
+		Result.Record.bHasBaseSemanticFingerprint,
+		Result.Record.BaseSemanticFingerprint,
+		Result.Issues);
+
+	// Common fields가 선택한 exact complete trusted provider entry입니다. JSON/DTO는 provider implementation을 직접 지정하지 못합니다.
+	FString ProviderLookupError;
+	const FCFDATypeProviderEntry* SelectedProviderEntry = CFDATypeDispatch::FindExactProviderEntry(
+		Result.Record.SchemaId,
+		Result.Record.DataAssetTypeClassPath,
+		&ProviderLookupError);
+	// Missile compatibility parser가 허용하는 exact first provider entry입니다.
+	const FCFDATypeProviderEntry& MissileProviderEntry = CFDATypeDispatch::GetMissilePresetProviderEntry();
+	if (SelectedProviderEntry == nullptr || SelectedProviderEntry != &MissileProviderEntry)
 	{
-		if (BaseFingerprintValue->Type == EJson::Null)
+		CFDAStagingPrivate::AddIssue(
+			Result.Issues,
+			ECFDAStagingIssueCode::SchemaUnsupported,
+			TEXT("TypeKey"),
+			ProviderLookupError.IsEmpty() ? TEXT("Missile compatibility parser에 등록된 exact trusted TypeKey provider가 아닙니다.") : ProviderLookupError);
+	}
+	else
+	{
+		// Selected complete entry의 structural descriptor입니다.
+		const FCFDATypeProvider& SelectedProvider = SelectedProviderEntry->Descriptor;
+		if (Result.Record.SchemaRevision != SelectedProvider.SchemaRevision)
 		{
-			Result.Record.bHasBaseSemanticFingerprint = false;
-			Result.Record.BaseSemanticFingerprint.Reset();
+			CFDAStagingPrivate::AddIssue(Result.Issues, ECFDAStagingIssueCode::SchemaRevisionUnsupported, TEXT("SchemaRevision"), TEXT("Selected provider와 정확히 같은 SchemaRevision만 지원합니다."));
 		}
-		else if (BaseFingerprintValue->Type == EJson::String)
+		if (Result.Record.AdapterContractRevision != SelectedProvider.AdapterContractRevision)
 		{
-			Result.Record.bHasBaseSemanticFingerprint = true;
-			Result.Record.BaseSemanticFingerprint = BaseFingerprintValue->AsString();
-			if (!CFDAStagingPrivate::IsCanonicalSha256Fingerprint(Result.Record.BaseSemanticFingerprint))
+			CFDAStagingPrivate::AddIssue(Result.Issues, ECFDAStagingIssueCode::AdapterRevisionMismatch, TEXT("AdapterContractRevision"), TEXT("Selected provider typed adapter와 정확히 같은 AdapterContractRevision만 지원합니다."));
+		}
+		if (!StagingRelativePath.IsEmpty())
+		{
+			if (!CFDATypeDispatch::NormalizeProviderStagingPath(SelectedProvider, StagingRelativePath, Result.Record.StagingRelativePath))
 			{
-				CFDAStagingPrivate::AddIssue(Result.Issues, ECFDAStagingIssueCode::InvalidValue, TEXT("BaseSemanticFingerprint"), TEXT("BaseSemanticFingerprint는 `sha256:` + 64 lowercase hex 형식이어야 합니다."));
+				CFDAStagingPrivate::AddIssue(Result.Issues, ECFDAStagingIssueCode::InvalidValue, TEXT("StagingRelativePath"), TEXT("Staging source path가 selected provider의 canonical StagingRoot 아래 lowercase `.json` 경로가 아닙니다."));
 			}
 		}
-		else
+	}
+
+	// Provider TypeKey/revision/root 검증을 통과한 뒤에만 Missile typed payload adapter로 진입합니다.
+	if (!CFDAStagingPrivate::HasBlockingIssue(Result.Issues))
+	{
+		// strict Payload JSON object입니다.
+		TSharedPtr<FJsonObject> PayloadObject;
+		if (CFDAStagingPrivate::ParseObjectField(RootObject, TEXT("Payload"), TEXT("Payload"), PayloadObject, Result.Issues))
 		{
-			CFDAStagingPrivate::AddIssue(Result.Issues, ECFDAStagingIssueCode::TypeMismatch, TEXT("BaseSemanticFingerprint"), TEXT("Create는 null, Update는 canonical sha256 string이어야 합니다."));
+			CFDAStagingPrivate::ParseMissilePresetPayload(PayloadObject, Result.Record.Payload, Result.Issues);
 		}
 	}
 
-	// strict Payload JSON object입니다.
-	TSharedPtr<FJsonObject> PayloadObject;
-	if (CFDAStagingPrivate::ParseObjectField(RootObject, TEXT("Payload"), TEXT("Payload"), PayloadObject, Result.Issues))
-	{
-		CFDAStagingPrivate::ParseMissilePresetPayload(PayloadObject, Result.Record.Payload, Result.Issues);
-	}
-
-	if (!Result.Record.SchemaId.Equals(CFDAStagingPrivate::MissilePresetSchemaId, ESearchCase::CaseSensitive))
-	{
-		CFDAStagingPrivate::AddIssue(Result.Issues, ECFDAStagingIssueCode::SchemaUnsupported, TEXT("SchemaId"), TEXT("지원하지 않는 Staging schema입니다."));
-	}
-	if (Result.Record.SchemaRevision != CFDAStagingPrivate::MissilePresetSchemaRevision)
-	{
-		CFDAStagingPrivate::AddIssue(Result.Issues, ECFDAStagingIssueCode::SchemaRevisionUnsupported, TEXT("SchemaRevision"), TEXT("현재 parser와 정확히 같은 SchemaRevision만 지원합니다."));
-	}
-	if (Result.Record.AdapterContractRevision != CFDAStagingPrivate::MissilePresetAdapterRevision)
-	{
-		CFDAStagingPrivate::AddIssue(Result.Issues, ECFDAStagingIssueCode::AdapterRevisionMismatch, TEXT("AdapterContractRevision"), TEXT("현재 typed adapter와 정확히 같은 AdapterContractRevision만 지원합니다."));
-	}
-	if (!Result.Record.DataAssetTypeClassPath.Equals(CFDAStagingPrivate::MissilePresetClassPath, ESearchCase::CaseSensitive))
-	{
-		CFDAStagingPrivate::AddIssue(Result.Issues, ECFDAStagingIssueCode::SchemaUnsupported, TEXT("DataAssetTypeClassPath"), TEXT("P0 Pilot은 CFMissileGuidePresetData exact class만 지원합니다."));
-	}
 	if (!Result.Record.StableLogicalId.IsNone()
 		&& !Result.Record.Payload.PresetId.IsNone()
 		&& Result.Record.StableLogicalId != Result.Record.Payload.PresetId)
@@ -1236,19 +888,11 @@ FCFDAStagingParseResult FCFDAStagingService::ParseMissilePresetJson(
 		CFDAStagingPrivate::AddIssue(Result.Issues, ECFDAStagingIssueCode::StableIdentityMismatch, TEXT("StableLogicalId"), TEXT("StableLogicalId와 Payload.PresetId가 같은 FName identity가 아닙니다."));
 	}
 
-	if (!StagingRelativePath.IsEmpty())
-	{
-		if (!CFDAStagingPrivate::NormalizeStagingRelativePath(StagingRelativePath, Result.Record.StagingRelativePath))
-		{
-			CFDAStagingPrivate::AddIssue(Result.Issues, ECFDAStagingIssueCode::InvalidValue, TEXT("StagingRelativePath"), TEXT("Staging source path는 `Authoring/DataAssetStaging/` 아래의 안전한 main_game-relative `.json` 경로여야 합니다."));
-		}
-	}
-
 	if (!CFDAStagingPrivate::HasBlockingIssue(Result.Issues))
 	{
 		// typed desired payload의 derived semantic fingerprint 생성 오류입니다.
 		FString FingerprintError;
-		if (!BuildSemanticFingerprint(Result.Record.Payload, Result.Record.StagingSemanticFingerprint, FingerprintError))
+		if (!CFDAMissileProviderImpl::BuildSemanticFingerprint(Result.Record.Payload, Result.Record.StagingSemanticFingerprint, FingerprintError))
 		{
 			CFDAStagingPrivate::AddIssue(Result.Issues, ECFDAStagingIssueCode::InvalidValue, TEXT("Payload"), FingerprintError);
 		}
@@ -1259,7 +903,7 @@ FCFDAStagingParseResult FCFDAStagingService::ParseMissilePresetJson(
 }
 
 // typed MissileGuidePreset whole-record payload를 deterministic SHA-256 semantic fingerprint로 변환합니다.
-bool FCFDAStagingService::BuildSemanticFingerprint(
+bool CFDAMissileProviderImpl::BuildSemanticFingerprint(
 	const FCFDAMissilePresetPayload& Payload,
 	FString& OutFingerprint,
 	FString& OutError)
@@ -1278,7 +922,7 @@ bool FCFDAStagingService::BuildSemanticFingerprint(
 }
 
 // exact MissileGuidePreset UObject를 current fingerprint와 동일한 P0 Literal whole-record semantic payload로 lossless 추출합니다.
-bool FCFDAStagingService::ExtractMissilePresetPayload(
+bool CFDAMissileProviderImpl::ExtractPayload(
 	const UCFMissileGuidePresetData& PresetAsset,
 	FCFDAMissilePresetPayload& OutPayload,
 	TArray<FCFDAStagingIssue>& OutIssues)
@@ -1287,44 +931,53 @@ bool FCFDAStagingService::ExtractMissilePresetPayload(
 	return CFDAStagingPrivate::BuildMissilePresetPayloadFromAsset(PresetAsset, OutPayload, OutIssues);
 }
 
-// Asset Registry와 typed MissileGuidePreset payload만 사용해 exact target/StableIdentity/current fingerprint를 read-only로 해석합니다.
-bool FCFDAStagingService::ResolveMissilePresetCurrentState(
-	const FCFDAStagingRecord& Record,
-	FCFDAStagingCurrentState& OutCurrentState,
+// Payload-free common candidate를 Asset Registry + Missile typed readback으로 exact current truth에 해석합니다.
+bool CFDAMissileProviderImpl::ResolveCommonCurrentState(
+	const FCFDACommonEnvelope& Envelope,
+	FCFDACommonCurrentState& OutCurrentState,
 	TArray<FCFDAStagingIssue>& OutIssues)
 {
-	OutCurrentState = FCFDAStagingCurrentState();
+	OutCurrentState = FCFDACommonCurrentState();
 	OutIssues.Reset();
 
-	if (!Record.SchemaId.Equals(CFDAStagingPrivate::MissilePresetSchemaId, ESearchCase::CaseSensitive)
-		|| Record.SchemaRevision != CFDAStagingPrivate::MissilePresetSchemaRevision
-		|| Record.AdapterContractRevision != CFDAStagingPrivate::MissilePresetAdapterRevision
-		|| !Record.DataAssetTypeClassPath.Equals(CFDAStagingPrivate::MissilePresetClassPath, ESearchCase::CaseSensitive))
+	// Envelope exact TypeKey에 등록된 complete provider entry입니다.
+	FString ProviderLookupError;
+	const FCFDATypeProviderEntry* ProviderEntry = CFDATypeDispatch::FindExactProviderEntry(
+		Envelope.SchemaId,
+		Envelope.DataAssetTypeClassPath,
+		&ProviderLookupError);
+	// Missile current-state resolver가 허용하는 exact first provider entry입니다.
+	const FCFDATypeProviderEntry& MissileProviderEntry = CFDATypeDispatch::GetMissilePresetProviderEntry();
+	// Provider 계약 검증 실패 상세입니다.
+	FString ProviderContractError;
+	if (ProviderEntry == nullptr
+		|| ProviderEntry != &MissileProviderEntry
+		|| !CFDATypeDispatch::ValidateProviderContract(Envelope, ProviderEntry->Descriptor, ProviderContractError))
 	{
+		// Fail-closed 원인을 보존하는 current-state provider diagnostic입니다.
+		const FString ProviderDiagnostic = ProviderEntry == nullptr
+			? ProviderLookupError
+			: (ProviderEntry != &MissileProviderEntry
+				? TEXT("Missile current-state resolver에 등록된 typed provider가 아닙니다.")
+				: ProviderContractError);
 		CFDAStagingPrivate::AddIssue(
 			OutIssues,
 			ECFDAStagingIssueCode::SchemaUnsupported,
-			TEXT("DataAssetTypeClassPath"),
-			TEXT("current resolver는 current P0 CFMissileGuidePresetData schema/adapter/class 계약만 지원합니다."));
+			TEXT("TypeKey"),
+			ProviderDiagnostic);
 		return false;
 	}
-	if (Record.StableLogicalId.IsNone())
-	{
-		CFDAStagingPrivate::AddIssue(
-			OutIssues,
-			ECFDAStagingIssueCode::StableIdentityMissing,
-			TEXT("StableLogicalId"),
-			TEXT("current resolver에는 required StableLogicalId가 필요합니다."));
-		return false;
-	}
-	if (!CFDAStagingPrivate::ValidateTargetObjectPath(Record.TargetObjectPath, OutIssues))
+
+	// Current resolver가 사용할 selected structural descriptor입니다.
+	const FCFDATypeProvider& Provider = ProviderEntry->Descriptor;
+	if (!CFDAStagingPrivate::ValidateTargetObjectPath(Envelope.TargetObjectPath, OutIssues))
 	{
 		return false;
 	}
 
 	// CF-FQ-045 public Registry coverage를 current resolver가 요구하는 metadata authority로 준비합니다.
 	FCFDATypeRegistry TypeRegistry;
-	// current concrete descriptor 등록 실패 원인입니다.
+	// Current concrete descriptor 등록 실패 원인입니다.
 	FString RegistryError;
 	if (!TypeRegistry.RegisterCurrentCarFightDescriptors(&RegistryError))
 	{
@@ -1336,11 +989,11 @@ bool FCFDAStagingService::ResolveMissilePresetCurrentState(
 		return false;
 	}
 	// Pilot exact class의 public semantic descriptor입니다.
-	const FCFDASemanticDescriptor* Descriptor = TypeRegistry.FindDescriptor(Record.DataAssetTypeClassPath);
+	const FCFDASemanticDescriptor* Descriptor = TypeRegistry.FindDescriptor(Envelope.DataAssetTypeClassPath);
 	if (Descriptor == nullptr
 		|| Descriptor->IdentityPolicy != ECFDAIdentityPolicy::Required
 		|| Descriptor->IdentityResolverKind != ECFDAIdentityResolverKind::ExplicitFName
-		|| Descriptor->IdentitySourceName != TEXT("PresetId"))
+		|| Descriptor->IdentitySourceName != Provider.StableIdentitySourceName.ToString())
 	{
 		CFDAStagingPrivate::AddIssue(
 			OutIssues,
@@ -1350,13 +1003,13 @@ bool FCFDAStagingService::ResolveMissilePresetCurrentState(
 		return false;
 	}
 
-	// read-only exact target/identity 조회에 사용할 Project Asset Registry입니다.
+	// Read-only exact target/identity 조회에 사용할 Project Asset Registry입니다.
 	IAssetRegistry& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get();
-	// exact requested target object path입니다.
-	const FSoftObjectPath TargetObjectPath(Record.TargetObjectPath);
+	// Exact requested target object path입니다.
+	const FSoftObjectPath TargetObjectPath(Envelope.TargetObjectPath);
 	// 이미 메모리에 존재하는 exact target UObject입니다. ResolveObject는 load/mutation을 수행하지 않습니다.
 	UObject* ResolvedTargetObject = TargetObjectPath.ResolveObject();
-	// persisted/registered exact target metadata입니다.
+	// Persisted/registered exact target metadata입니다.
 	const FAssetData TargetAssetData = AssetRegistry.GetAssetByObjectPath(TargetObjectPath, false, false);
 	OutCurrentState.bRequestedTargetExists = ResolvedTargetObject != nullptr || TargetAssetData.IsValid();
 
@@ -1371,11 +1024,11 @@ bool FCFDAStagingService::ResolveMissilePresetCurrentState(
 			OutCurrentState.RequestedTargetClassPath = TargetAssetData.AssetClassPath.ToString();
 		}
 
-		if (OutCurrentState.RequestedTargetClassPath.Equals(CFDAStagingPrivate::MissilePresetClassPath, ESearchCase::CaseSensitive))
+		if (OutCurrentState.RequestedTargetClassPath.Equals(Provider.TypeKey.DataAssetTypeClassPath, ESearchCase::CaseSensitive))
 		{
-			// current exact class target를 semantic readback하기 위해 load한 read-only UObject입니다.
+			// Current exact class target를 semantic readback하기 위해 load한 read-only UObject입니다.
 			UObject* LoadedTargetObject = ResolvedTargetObject != nullptr ? ResolvedTargetObject : TargetAssetData.GetAsset();
-			// exact expected DataAsset 타입으로 확인한 current target입니다.
+			// Exact expected DataAsset 타입으로 확인한 current target입니다.
 			const UCFMissileGuidePresetData* CurrentPreset = Cast<UCFMissileGuidePresetData>(LoadedTargetObject);
 			if (CurrentPreset == nullptr)
 			{
@@ -1388,19 +1041,19 @@ bool FCFDAStagingService::ResolveMissilePresetCurrentState(
 			}
 
 			OutCurrentState.RequestedTargetStableLogicalId = CurrentPreset->PresetId;
-			// current exact target를 소유하는 package입니다.
+			// Current exact target를 소유하는 package입니다.
 			const UPackage* CurrentPackage = CurrentPreset->GetOutermost();
 			OutCurrentState.bRequestedTargetDirty = CurrentPackage != nullptr && CurrentPackage->IsDirty();
 
-			// current persisted/loaded asset의 raw whole-record typed payload입니다.
+			// Current persisted/loaded asset의 raw whole-record typed payload입니다.
 			FCFDAMissilePresetPayload CurrentPayload;
-			if (!ExtractMissilePresetPayload(*CurrentPreset, CurrentPayload, OutIssues))
+			if (!CFDAMissileProviderImpl::ExtractPayload(*CurrentPreset, CurrentPayload, OutIssues))
 			{
 				return false;
 			}
-			// current semantic fingerprint 생성 오류입니다.
+			// Current semantic fingerprint 생성 오류입니다.
 			FString CurrentFingerprintError;
-			if (!BuildSemanticFingerprint(CurrentPayload, OutCurrentState.CurrentSemanticFingerprint, CurrentFingerprintError))
+			if (!CFDAMissileProviderImpl::BuildSemanticFingerprint(CurrentPayload, OutCurrentState.CurrentSemanticFingerprint, CurrentFingerprintError))
 			{
 				CFDAStagingPrivate::AddIssue(
 					OutIssues,
@@ -1422,12 +1075,12 @@ bool FCFDAStagingService::ResolveMissilePresetCurrentState(
 		const UCFMissileGuidePresetData* LoadedPreset = *LoadedPresetIterator;
 		if (LoadedPreset == nullptr
 			|| LoadedPreset->HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject | RF_Transient)
-			|| LoadedPreset->PresetId != Record.StableLogicalId)
+			|| LoadedPreset->PresetId != Envelope.StableLogicalId)
 		{
 			continue;
 		}
 
-		// loaded object의 exact soft object identity입니다.
+		// Loaded object의 exact soft object identity입니다.
 		const FString LoadedObjectPath = FSoftObjectPath(LoadedPreset).ToString();
 		if (!LoadedObjectPath.StartsWith(TEXT("/Game/"), ESearchCase::CaseSensitive))
 		{
@@ -1436,7 +1089,7 @@ bool FCFDAStagingService::ResolveMissilePresetCurrentState(
 		StableIdentityObjectPaths.Add(LoadedObjectPath);
 	}
 
-	// current Project 안의 exact CFMissileGuidePresetData 전체에서 StableLogicalId를 찾는 metadata+typed read-only filter입니다.
+	// Current Project 안의 exact CFMissileGuidePresetData 전체에서 StableLogicalId를 찾는 metadata+typed read-only filter입니다.
 	FARFilter IdentityFilter;
 	IdentityFilter.ClassPaths.Add(UCFMissileGuidePresetData::StaticClass()->GetClassPathName());
 	IdentityFilter.bRecursiveClasses = false;
@@ -1450,16 +1103,16 @@ bool FCFDAStagingService::ResolveMissilePresetCurrentState(
 		return false;
 	}
 
-	// current exact Pilot class asset metadata 목록입니다. 0건은 valid absent current truth입니다.
+	// Current exact Pilot class asset metadata 목록입니다. 0건은 valid absent current truth입니다.
 	TArray<FAssetData> MissilePresetAssets;
-	// filter는 StaticClass 기반으로 내부 고정되므로 query result bool과 무관하게 empty result를 정상 absent로 소비합니다.
+	// Filter는 StaticClass 기반으로 내부 고정되므로 query result bool과 무관하게 empty result를 정상 absent로 소비합니다.
 	(void)AssetRegistry.GetAssets(IdentityFilter, MissilePresetAssets, false);
 
 	for (const FAssetData& MissilePresetAssetData : MissilePresetAssets)
 	{
 		// StableLogicalId 비교를 위해 read-only load한 exact class DataAsset입니다.
 		const UCFMissileGuidePresetData* CandidatePreset = Cast<UCFMissileGuidePresetData>(MissilePresetAssetData.GetAsset());
-		if (CandidatePreset == nullptr || CandidatePreset->PresetId != Record.StableLogicalId)
+		if (CandidatePreset == nullptr || CandidatePreset->PresetId != Envelope.StableLogicalId)
 		{
 			continue;
 		}
@@ -1471,7 +1124,7 @@ bool FCFDAStagingService::ResolveMissilePresetCurrentState(
 	OutCurrentState.bStableIdentityExists = OutCurrentState.StableIdentityMatchCount > 0;
 	if (OutCurrentState.StableIdentityMatchCount == 1)
 	{
-		// single identity match의 exact current object path입니다.
+		// Single identity match의 exact current object path입니다.
 		for (const FString& IdentityObjectPath : StableIdentityObjectPaths)
 		{
 			OutCurrentState.StableIdentityObjectPath = IdentityObjectPath;
@@ -1485,25 +1138,220 @@ bool FCFDAStagingService::ResolveMissilePresetCurrentState(
 	return !CFDAStagingPrivate::HasBlockingIssue(OutIssues);
 }
 
-// valid typed record와 current truth를 P0 exact 3-way 규칙으로 mutation0 분류합니다.
+// 기존 Public Missile current-state typed record를 common resolver에 투영하는 compatibility implementation입니다.
+bool CFDAMissileProviderImpl::ResolveCurrentState(
+	const FCFDAStagingRecord& Record,
+	FCFDAStagingCurrentState& OutCurrentState,
+	TArray<FCFDAStagingIssue>& OutIssues)
+{
+	// Public Missile typed record에서 만든 provider-local common envelope입니다.
+	const FCFDACommonEnvelope Envelope = BuildCommonEnvelope(Record);
+	// Shared current-state resolver 결과입니다.
+	FCFDACommonCurrentState CommonCurrentState;
+	if (!ResolveCommonCurrentState(Envelope, CommonCurrentState, OutIssues))
+	{
+		OutCurrentState = FCFDAStagingCurrentState();
+		return false;
+	}
+
+	OutCurrentState = FCFDAStagingCurrentState();
+	OutCurrentState.bRequestedTargetExists = CommonCurrentState.bRequestedTargetExists;
+	OutCurrentState.bRequestedTargetDirty = CommonCurrentState.bRequestedTargetDirty;
+	OutCurrentState.RequestedTargetClassPath = CommonCurrentState.RequestedTargetClassPath;
+	OutCurrentState.RequestedTargetStableLogicalId = CommonCurrentState.RequestedTargetStableLogicalId;
+	OutCurrentState.CurrentSemanticFingerprint = CommonCurrentState.CurrentSemanticFingerprint;
+	OutCurrentState.bStableIdentityExists = CommonCurrentState.bStableIdentityExists;
+	OutCurrentState.StableIdentityMatchCount = CommonCurrentState.StableIdentityMatchCount;
+	OutCurrentState.StableIdentityObjectPath = CommonCurrentState.StableIdentityObjectPath;
+	return true;
+}
+
+// 기존 Public Missile parser API를 first typed provider callback으로 전달하는 compatibility facade입니다.
+FCFDAStagingParseResult FCFDAStagingService::ParseMissilePresetJson(
+	const FString& JsonText,
+	const FString& StagingRelativePath)
+{
+	// Current Missile typed provider callback table입니다.
+	const FCFDAMissileProviderCallbacks& Callbacks = CFDAMissileProvider::GetProvider().Callbacks;
+	checkf(Callbacks.ParseJson != nullptr, TEXT("Missile provider ParseJson callback이 등록되지 않았습니다."));
+	return Callbacks.ParseJson(JsonText, StagingRelativePath);
+}
+
+// 기존 Public Missile fingerprint API를 first typed provider callback으로 전달하는 compatibility facade입니다.
+bool FCFDAStagingService::BuildSemanticFingerprint(
+	const FCFDAMissilePresetPayload& Payload,
+	FString& OutFingerprint,
+	FString& OutError)
+{
+	// Current Missile typed provider callback table입니다.
+	const FCFDAMissileProviderCallbacks& Callbacks = CFDAMissileProvider::GetProvider().Callbacks;
+	checkf(Callbacks.BuildSemanticFingerprint != nullptr, TEXT("Missile provider fingerprint callback이 등록되지 않았습니다."));
+	return Callbacks.BuildSemanticFingerprint(Payload, OutFingerprint, OutError);
+}
+
+// 기존 Public Missile extractor API를 first typed provider callback으로 전달하는 compatibility facade입니다.
+bool FCFDAStagingService::ExtractMissilePresetPayload(
+	const UCFMissileGuidePresetData& PresetAsset,
+	FCFDAMissilePresetPayload& OutPayload,
+	TArray<FCFDAStagingIssue>& OutIssues)
+{
+	// Current Missile typed provider callback table입니다.
+	const FCFDAMissileProviderCallbacks& Callbacks = CFDAMissileProvider::GetProvider().Callbacks;
+	checkf(Callbacks.ExtractPayload != nullptr, TEXT("Missile provider extractor callback이 등록되지 않았습니다."));
+	return Callbacks.ExtractPayload(PresetAsset, OutPayload, OutIssues);
+}
+
+// 기존 Public Missile current-state API를 first typed provider callback으로 전달하는 compatibility facade입니다.
+bool FCFDAStagingService::ResolveMissilePresetCurrentState(
+	const FCFDAStagingRecord& Record,
+	FCFDAStagingCurrentState& OutCurrentState,
+	TArray<FCFDAStagingIssue>& OutIssues)
+{
+	// Current Missile typed provider callback table입니다.
+	const FCFDAMissileProviderCallbacks& Callbacks = CFDAMissileProvider::GetProvider().Callbacks;
+	checkf(Callbacks.ResolveCurrentState != nullptr, TEXT("Missile provider current-state callback이 등록되지 않았습니다."));
+	return Callbacks.ResolveCurrentState(Record, OutCurrentState, OutIssues);
+}
+
+// Payload-free common candidate와 current truth를 P0 exact 3-way 규칙으로 mutation0 분류합니다.
+FCFDACommonPreviewRow CFDATypeDispatch::BuildCommonPreview(
+	const FCFDACommonEnvelope& Envelope,
+	const FCFDACommonCurrentState& CurrentState)
+{
+	// 반환할 payload-free Preview row입니다.
+	FCFDACommonPreviewRow Row;
+	Row.Envelope = Envelope;
+	Row.Envelope.CurrentSemanticFingerprint = CurrentState.CurrentSemanticFingerprint;
+
+	// Preview kind와 immutable approval operation을 항상 함께 갱신하는 finalizer입니다.
+	const auto FinalizeRow = [&Row](const ECFDAStagingPreviewKind Kind)
+	{
+		Row.Kind = Kind;
+		Row.Envelope.PlannedOperation = Kind;
+		return Row;
+	};
+
+	// Preview input exact TypeKey에 등록된 complete provider entry입니다.
+	FString ProviderLookupError;
+	const FCFDATypeProviderEntry* ProviderEntry = FindExactProviderEntry(
+		Envelope.SchemaId,
+		Envelope.DataAssetTypeClassPath,
+		&ProviderLookupError);
+	// Provider 계약 검증 실패 상세입니다.
+	FString ProviderContractError;
+	if (ProviderEntry == nullptr
+		|| !ValidateProviderContract(Row.Envelope, ProviderEntry->Descriptor, ProviderContractError))
+	{
+		CFDAStagingPrivate::AddIssue(
+			Row.Issues,
+			ECFDAStagingIssueCode::SchemaUnsupported,
+			TEXT("TypeKey"),
+			ProviderEntry == nullptr ? ProviderLookupError : ProviderContractError);
+		return FinalizeRow(ECFDAStagingPreviewKind::Invalid);
+	}
+	if (!CFDAStagingPrivate::IsCanonicalSha256Fingerprint(Envelope.StagingSemanticFingerprint))
+	{
+		CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::InvalidValue, TEXT("StagingSemanticFingerprint"), TEXT("Preview input의 StagingSemanticFingerprint가 canonical SHA-256이 아닙니다."));
+		return FinalizeRow(ECFDAStagingPreviewKind::Invalid);
+	}
+	if (!CFDAStagingPrivate::ValidateTargetObjectPath(Envelope.TargetObjectPath, Row.Issues))
+	{
+		return FinalizeRow(ECFDAStagingPreviewKind::Invalid);
+	}
+
+	if (CurrentState.StableIdentityMatchCount > 1)
+	{
+		CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::DuplicateStableIdentity, TEXT("StableLogicalId"), TEXT("current Project에 같은 class-scoped StableLogicalId가 둘 이상 존재합니다."));
+		return FinalizeRow(ECFDAStagingPreviewKind::Conflict);
+	}
+	if (CurrentState.bStableIdentityExists
+		&& !CurrentState.StableIdentityObjectPath.IsEmpty()
+		&& !CurrentState.StableIdentityObjectPath.Equals(Envelope.TargetObjectPath, ESearchCase::IgnoreCase))
+	{
+		CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::TargetMoved, TEXT("TargetObjectPath"), TEXT("같은 class-scoped StableLogicalId가 다른 current object path에 존재합니다."));
+		return FinalizeRow(ECFDAStagingPreviewKind::Conflict);
+	}
+
+	if (CurrentState.bRequestedTargetExists)
+	{
+		if (!CurrentState.RequestedTargetClassPath.Equals(Envelope.DataAssetTypeClassPath, ESearchCase::CaseSensitive)
+			|| CurrentState.RequestedTargetStableLogicalId != Envelope.StableLogicalId)
+		{
+			CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::PathCollision, TEXT("TargetObjectPath"), TEXT("requested path에 다른 class 또는 stable identity의 object가 존재합니다."));
+			return FinalizeRow(ECFDAStagingPreviewKind::Conflict);
+		}
+		if (CurrentState.bRequestedTargetDirty)
+		{
+			CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::TargetDirtyUnowned, TEXT("TargetObjectPath"), TEXT("pre-existing dirty target은 authoring save ownership 밖이므로 Preview에서 차단합니다."));
+			return FinalizeRow(ECFDAStagingPreviewKind::Conflict);
+		}
+	}
+
+	if (!Envelope.bHasBaseSemanticFingerprint)
+	{
+		if (CurrentState.bRequestedTargetExists || CurrentState.bStableIdentityExists)
+		{
+			CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::UnexpectedExistingTarget, TEXT("BaseSemanticFingerprint"), TEXT("Create-intent candidate인데 target 또는 identity가 이미 존재합니다."));
+			return FinalizeRow(ECFDAStagingPreviewKind::Conflict);
+		}
+		Row.Envelope.CurrentSemanticFingerprint.Reset();
+		return FinalizeRow(ECFDAStagingPreviewKind::Create);
+	}
+
+	if (!CFDAStagingPrivate::IsCanonicalSha256Fingerprint(Envelope.BaseSemanticFingerprint))
+	{
+		CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::BaselineMissing, TEXT("BaseSemanticFingerprint"), TEXT("Update-intent candidate에는 canonical BaseSemanticFingerprint가 필요합니다."));
+		return FinalizeRow(ECFDAStagingPreviewKind::Invalid);
+	}
+	if (!CurrentState.bRequestedTargetExists)
+	{
+		CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::TargetMissing, TEXT("TargetObjectPath"), TEXT("Update baseline은 존재하지만 requested current target이 없습니다."));
+		return FinalizeRow(ECFDAStagingPreviewKind::Conflict);
+	}
+	if (!CFDAStagingPrivate::IsCanonicalSha256Fingerprint(CurrentState.CurrentSemanticFingerprint))
+	{
+		CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::InvalidValue, TEXT("CurrentSemanticFingerprint"), TEXT("current target fingerprint가 canonical SHA-256이 아닙니다."));
+		return FinalizeRow(ECFDAStagingPreviewKind::Invalid);
+	}
+
+	// Update Staging을 만들 때 캡처한 semantic baseline입니다.
+	const FString& BaseFingerprint = Envelope.BaseSemanticFingerprint;
+	// Preview 직전 current Unreal semantic state입니다.
+	const FString& CurrentFingerprint = CurrentState.CurrentSemanticFingerprint;
+	// Staging desired semantic state입니다.
+	const FString& StagingFingerprint = Envelope.StagingSemanticFingerprint;
+
+	if (BaseFingerprint == CurrentFingerprint)
+	{
+		return FinalizeRow(StagingFingerprint == CurrentFingerprint
+			? ECFDAStagingPreviewKind::NoChange
+			: ECFDAStagingPreviewKind::Update);
+	}
+	if (CurrentFingerprint == StagingFingerprint)
+	{
+		CFDAStagingPrivate::AddIssue(
+			Row.Issues,
+			ECFDAStagingIssueCode::BaselineRebaseRequired,
+			TEXT("BaseSemanticFingerprint"),
+			TEXT("current가 이미 Staging desired state로 수렴했습니다. mutation은 0이지만 다음 편집 전 explicit baseline rebase가 필요합니다."),
+			false);
+		return FinalizeRow(ECFDAStagingPreviewKind::NoChange);
+	}
+
+	CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::BaselineMismatch, TEXT("BaseSemanticFingerprint"), TEXT("Base와 Current가 달라 외부 current drift를 overwrite하지 않습니다."));
+	return FinalizeRow(ECFDAStagingPreviewKind::Conflict);
+}
+
+// 기존 Public Missile typed record/current truth를 common Preview로 투영하는 compatibility facade입니다.
 FCFDAStagingPreviewRow FCFDAStagingService::BuildPreview(
 	const FCFDAStagingRecord& Record,
 	const FCFDAStagingCurrentState& CurrentState)
 {
-	// 반환할 mutation0 Preview row입니다.
+	// 반환할 existing Public Missile Preview row입니다.
 	FCFDAStagingPreviewRow Row;
 	Row.Record = Record;
 	Row.CurrentSemanticFingerprint = CurrentState.CurrentSemanticFingerprint;
 
-	if (!Record.SchemaId.Equals(CFDAStagingPrivate::MissilePresetSchemaId, ESearchCase::CaseSensitive)
-		|| Record.SchemaRevision != CFDAStagingPrivate::MissilePresetSchemaRevision
-		|| Record.AdapterContractRevision != CFDAStagingPrivate::MissilePresetAdapterRevision
-		|| !Record.DataAssetTypeClassPath.Equals(CFDAStagingPrivate::MissilePresetClassPath, ESearchCase::CaseSensitive))
-	{
-		Row.Kind = ECFDAStagingPreviewKind::Invalid;
-		CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::SchemaUnsupported, TEXT("SchemaId"), TEXT("Preview input record가 current P0 MissileGuidePreset schema/adapter/class 계약과 다릅니다."));
-		return Row;
-	}
 	if (Record.StableLogicalId.IsNone() || Record.Payload.PresetId.IsNone())
 	{
 		Row.Kind = ECFDAStagingPreviewKind::Invalid;
@@ -1516,19 +1364,8 @@ FCFDAStagingPreviewRow FCFDAStagingService::BuildPreview(
 		CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::StableIdentityMismatch, TEXT("StableLogicalId"), TEXT("Preview input record의 StableLogicalId와 Payload.PresetId가 다릅니다."));
 		return Row;
 	}
-	if (!CFDAStagingPrivate::IsCanonicalSha256Fingerprint(Record.StagingSemanticFingerprint))
-	{
-		Row.Kind = ECFDAStagingPreviewKind::Invalid;
-		CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::InvalidValue, TEXT("StagingSemanticFingerprint"), TEXT("Preview input record의 StagingSemanticFingerprint가 canonical SHA-256이 아닙니다."));
-		return Row;
-	}
-	if (!CFDAStagingPrivate::ValidateTargetObjectPath(Record.TargetObjectPath, Row.Issues))
-	{
-		Row.Kind = ECFDAStagingPreviewKind::Invalid;
-		return Row;
-	}
 
-	// mutable DTO의 Payload와 cached fingerprint가 갈라진 상태를 approval 이전에 fail-closed합니다.
+	// Mutable Public DTO의 Payload와 cached fingerprint가 갈라진 상태를 approval 이전에 fail-closed합니다.
 	FString StagingFingerprintIntegrityError;
 	if (!CFDAStagingPrivate::ValidateStagingFingerprintIntegrity(Record, StagingFingerprintIntegrityError))
 	{
@@ -1537,121 +1374,55 @@ FCFDAStagingPreviewRow FCFDAStagingService::BuildPreview(
 		return Row;
 	}
 
-	if (CurrentState.StableIdentityMatchCount > 1)
-	{
-		Row.Kind = ECFDAStagingPreviewKind::Conflict;
-		CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::DuplicateStableIdentity, TEXT("StableLogicalId"), TEXT("current Project에 같은 StableLogicalId의 CFMissileGuidePresetData가 둘 이상 존재합니다."));
-		return Row;
-	}
+	// Public current-state DTO를 shared payload-free current truth로 투영합니다.
+	FCFDACommonCurrentState CommonCurrentState;
+	CommonCurrentState.bRequestedTargetExists = CurrentState.bRequestedTargetExists;
+	CommonCurrentState.bRequestedTargetDirty = CurrentState.bRequestedTargetDirty;
+	CommonCurrentState.RequestedTargetClassPath = CurrentState.RequestedTargetClassPath;
+	CommonCurrentState.RequestedTargetStableLogicalId = CurrentState.RequestedTargetStableLogicalId;
+	CommonCurrentState.CurrentSemanticFingerprint = CurrentState.CurrentSemanticFingerprint;
+	CommonCurrentState.bStableIdentityExists = CurrentState.bStableIdentityExists;
+	CommonCurrentState.StableIdentityMatchCount = CurrentState.StableIdentityMatchCount;
+	CommonCurrentState.StableIdentityObjectPath = CurrentState.StableIdentityObjectPath;
 
-	if (CurrentState.bStableIdentityExists
-		&& !CurrentState.StableIdentityObjectPath.IsEmpty()
-		&& !CurrentState.StableIdentityObjectPath.Equals(Record.TargetObjectPath, ESearchCase::IgnoreCase))
-	{
-		Row.Kind = ECFDAStagingPreviewKind::Conflict;
-		CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::TargetMoved, TEXT("TargetObjectPath"), TEXT("같은 StableLogicalId가 다른 current object path에 존재합니다."));
-		return Row;
-	}
-
-	if (CurrentState.bRequestedTargetExists)
-	{
-		if (!CurrentState.RequestedTargetClassPath.Equals(Record.DataAssetTypeClassPath, ESearchCase::CaseSensitive)
-			|| CurrentState.RequestedTargetStableLogicalId != Record.StableLogicalId)
-		{
-			Row.Kind = ECFDAStagingPreviewKind::Conflict;
-			CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::PathCollision, TEXT("TargetObjectPath"), TEXT("requested path에 다른 class 또는 stable identity의 object가 존재합니다."));
-			return Row;
-		}
-		if (CurrentState.bRequestedTargetDirty)
-		{
-			Row.Kind = ECFDAStagingPreviewKind::Conflict;
-			CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::TargetDirtyUnowned, TEXT("TargetObjectPath"), TEXT("pre-existing dirty target은 CF-FQ-049 save ownership 밖이므로 Preview에서 차단합니다."));
-			return Row;
-		}
-	}
-
-	if (!Record.bHasBaseSemanticFingerprint)
-	{
-		if (CurrentState.bRequestedTargetExists || CurrentState.bStableIdentityExists)
-		{
-			Row.Kind = ECFDAStagingPreviewKind::Conflict;
-			CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::UnexpectedExistingTarget, TEXT("BaseSemanticFingerprint"), TEXT("Create-intent record인데 target 또는 identity가 이미 존재합니다."));
-			return Row;
-		}
-		Row.Kind = ECFDAStagingPreviewKind::Create;
-		Row.CurrentSemanticFingerprint.Reset();
-		return Row;
-	}
-
-	if (!CFDAStagingPrivate::IsCanonicalSha256Fingerprint(Record.BaseSemanticFingerprint))
-	{
-		Row.Kind = ECFDAStagingPreviewKind::Invalid;
-		CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::BaselineMissing, TEXT("BaseSemanticFingerprint"), TEXT("Update-intent record에는 canonical BaseSemanticFingerprint가 필요합니다."));
-		return Row;
-	}
-	if (!CurrentState.bRequestedTargetExists)
-	{
-		Row.Kind = ECFDAStagingPreviewKind::Conflict;
-		CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::TargetMissing, TEXT("TargetObjectPath"), TEXT("Update baseline은 존재하지만 requested current target이 없습니다."));
-		return Row;
-	}
-	if (!CFDAStagingPrivate::IsCanonicalSha256Fingerprint(CurrentState.CurrentSemanticFingerprint))
-	{
-		Row.Kind = ECFDAStagingPreviewKind::Invalid;
-		CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::InvalidValue, TEXT("CurrentSemanticFingerprint"), TEXT("current target fingerprint가 canonical SHA-256이 아닙니다."));
-		return Row;
-	}
-
-	// Update Staging을 만들 때 캡처한 semantic baseline입니다.
-	const FString& BaseFingerprint = Record.BaseSemanticFingerprint;
-	// Preview 직전 current Unreal semantic state입니다.
-	const FString& CurrentFingerprint = CurrentState.CurrentSemanticFingerprint;
-	// Staging JSON desired semantic state입니다.
-	const FString& StagingFingerprint = Record.StagingSemanticFingerprint;
-
-	if (BaseFingerprint == CurrentFingerprint)
-	{
-		Row.Kind = StagingFingerprint == CurrentFingerprint
-			? ECFDAStagingPreviewKind::NoChange
-			: ECFDAStagingPreviewKind::Update;
-		return Row;
-	}
-	if (CurrentFingerprint == StagingFingerprint)
-	{
-		Row.Kind = ECFDAStagingPreviewKind::NoChange;
-		CFDAStagingPrivate::AddIssue(
-			Row.Issues,
-			ECFDAStagingIssueCode::BaselineRebaseRequired,
-			TEXT("BaseSemanticFingerprint"),
-			TEXT("current가 이미 Staging desired state로 수렴했습니다. mutation은 0이지만 다음 편집 전 explicit baseline rebase가 필요합니다."),
-			false);
-		return Row;
-	}
-
-	Row.Kind = ECFDAStagingPreviewKind::Conflict;
-	CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::BaselineMismatch, TEXT("BaseSemanticFingerprint"), TEXT("Base와 Current가 달라 외부 current drift를 overwrite하지 않습니다."));
+	// Provider-local typed record projection으로 만든 payload-free common envelope입니다.
+	const FCFDACommonEnvelope Envelope = CFDAMissileProviderImpl::BuildCommonEnvelope(
+		Record,
+		CurrentState.CurrentSemanticFingerprint);
+	// Shared 3-way state machine 결과입니다.
+	const FCFDACommonPreviewRow CommonRow = CFDATypeDispatch::BuildCommonPreview(Envelope, CommonCurrentState);
+	Row.Kind = CommonRow.Kind;
+	Row.CurrentSemanticFingerprint = CommonRow.Envelope.CurrentSemanticFingerprint;
+	Row.Issues = CommonRow.Issues;
 	return Row;
 }
 
-// 같은 batch 안의 duplicate stable identity/target path를 fail-closed Invalid로 승격합니다.
-void FCFDAStagingService::ApplyBatchDuplicateValidation(TArray<FCFDAStagingPreviewRow>& InOutRows)
+// 같은 batch 안의 class-scoped StableLogicalId/global TargetObjectPath duplicate를 payload-free rows에서 fail-closed합니다.
+void CFDATypeDispatch::ApplyCommonBatchDuplicateValidation(TArray<FCFDACommonPreviewRow>& InOutRows)
 {
-	// canonical stable identity별 row index 목록입니다.
+	// canonical class-scoped stable identity별 row index 목록입니다.
 	TMap<FString, TArray<int32>> IdentityRows;
-	// case-insensitive target object path별 row index 목록입니다.
+	// case-insensitive global target object path별 row index 목록입니다.
 	TMap<FString, TArray<int32>> TargetPathRows;
 
 	for (int32 RowIndex = 0; RowIndex < InOutRows.Num(); ++RowIndex)
 	{
-		// 현재 Preview row입니다.
-		const FCFDAStagingPreviewRow& Row = InOutRows[RowIndex];
-		if (!Row.Record.StableLogicalId.IsNone())
+		// 현재 payload-free Preview row입니다.
+		const FCFDACommonPreviewRow& Row = InOutRows[RowIndex];
+		if (!Row.Envelope.StableLogicalId.IsNone())
 		{
-			IdentityRows.FindOrAdd(CFDAStagingPrivate::CanonicalNameText(Row.Record.StableLogicalId)).Add(RowIndex);
+			// StableLogicalId duplicate scope를 exact DataAsset class + canonical FName semantic으로 만든 key입니다.
+			const FString ClassScopedIdentityKey = BuildClassScopedStableIdentityKey(
+				Row.Envelope.DataAssetTypeClassPath,
+				Row.Envelope.StableLogicalId);
+			if (!ClassScopedIdentityKey.IsEmpty())
+			{
+				IdentityRows.FindOrAdd(ClassScopedIdentityKey).Add(RowIndex);
+			}
 		}
-		if (!Row.Record.TargetObjectPath.IsEmpty())
+		if (!Row.Envelope.TargetObjectPath.IsEmpty())
 		{
-			TargetPathRows.FindOrAdd(Row.Record.TargetObjectPath.ToLower()).Add(RowIndex);
+			TargetPathRows.FindOrAdd(Row.Envelope.TargetObjectPath.ToLower()).Add(RowIndex);
 		}
 	}
 
@@ -1663,9 +1434,11 @@ void FCFDAStagingService::ApplyBatchDuplicateValidation(TArray<FCFDAStagingPrevi
 		}
 		for (const int32 RowIndex : Pair.Value)
 		{
-			FCFDAStagingPreviewRow& Row = InOutRows[RowIndex];
+			// Duplicate class-scoped identity로 invalid 승격할 common row입니다.
+			FCFDACommonPreviewRow& Row = InOutRows[RowIndex];
 			Row.Kind = ECFDAStagingPreviewKind::Invalid;
-			CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::DuplicateStableIdentity, TEXT("StableLogicalId"), TEXT("같은 batch 안에 duplicate StableLogicalId가 있습니다."));
+			Row.Envelope.PlannedOperation = ECFDAStagingPreviewKind::Invalid;
+			CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::DuplicateStableIdentity, TEXT("StableLogicalId"), TEXT("같은 batch 안에 동일 DataAsset class scope의 duplicate StableLogicalId가 있습니다."));
 		}
 	}
 
@@ -1677,24 +1450,53 @@ void FCFDAStagingService::ApplyBatchDuplicateValidation(TArray<FCFDAStagingPrevi
 		}
 		for (const int32 RowIndex : Pair.Value)
 		{
-			FCFDAStagingPreviewRow& Row = InOutRows[RowIndex];
+			// Duplicate global target path로 invalid 승격할 common row입니다.
+			FCFDACommonPreviewRow& Row = InOutRows[RowIndex];
 			Row.Kind = ECFDAStagingPreviewKind::Invalid;
+			Row.Envelope.PlannedOperation = ECFDAStagingPreviewKind::Invalid;
 			CFDAStagingPrivate::AddIssue(Row.Issues, ECFDAStagingIssueCode::DuplicateTargetPath, TEXT("TargetObjectPath"), TEXT("같은 batch 안에 duplicate TargetObjectPath가 있습니다."));
 		}
 	}
 }
 
-// exact Create/Update candidate set을 deterministic order로 묶어 SHA-256 BatchPlanHash를 계산합니다.
-bool FCFDAStagingService::BuildBatchPlanHash(
-	const TArray<FCFDAStagingPreviewRow>& PreviewRows,
+// 기존 Public Missile Preview rows를 common duplicate validator에 투영하는 compatibility facade입니다.
+void FCFDAStagingService::ApplyBatchDuplicateValidation(TArray<FCFDAStagingPreviewRow>& InOutRows)
+{
+	// Shared duplicate validation에 전달할 payload-free rows입니다.
+	TArray<FCFDACommonPreviewRow> CommonRows;
+	CommonRows.Reserve(InOutRows.Num());
+	for (const FCFDAStagingPreviewRow& Row : InOutRows)
+	{
+		// 한 Public Missile row를 provider-local common envelope로 투영한 row입니다.
+		FCFDACommonPreviewRow CommonRow;
+		CommonRow.Kind = Row.Kind;
+		CommonRow.Envelope = CFDAMissileProviderImpl::BuildCommonEnvelope(
+			Row.Record,
+			Row.CurrentSemanticFingerprint,
+			Row.Kind);
+		CommonRow.Issues = Row.Issues;
+		CommonRows.Add(MoveTemp(CommonRow));
+	}
+
+	CFDATypeDispatch::ApplyCommonBatchDuplicateValidation(CommonRows);
+	for (int32 RowIndex = 0; RowIndex < InOutRows.Num(); ++RowIndex)
+	{
+		InOutRows[RowIndex].Kind = CommonRows[RowIndex].Kind;
+		InOutRows[RowIndex].Issues = CommonRows[RowIndex].Issues;
+	}
+}
+
+// Payload-free exact Create/Update candidate set을 deterministic order로 묶어 accepted SHA-256 BatchPlanHash를 계산합니다.
+bool CFDATypeDispatch::BuildCommonBatchPlanHash(
+	const TArray<FCFDACommonPreviewRow>& PreviewRows,
 	FString& OutBatchPlanHash,
 	FString& OutError)
 {
-	// caller가 별도 duplicate-validation 호출을 빼먹어도 hash authority가 fail-closed하도록 복사한 rows입니다.
-	TArray<FCFDAStagingPreviewRow> ValidatedRows = PreviewRows;
-	ApplyBatchDuplicateValidation(ValidatedRows);
+	// Caller가 별도 duplicate-validation 호출을 빼먹어도 hash authority가 fail-closed하도록 복사한 common rows입니다.
+	TArray<FCFDACommonPreviewRow> ValidatedRows = PreviewRows;
+	ApplyCommonBatchDuplicateValidation(ValidatedRows);
 
-	for (const FCFDAStagingPreviewRow& Row : ValidatedRows)
+	for (const FCFDACommonPreviewRow& Row : ValidatedRows)
 	{
 		if (Row.Kind == ECFDAStagingPreviewKind::Conflict || Row.Kind == ECFDAStagingPreviewKind::Invalid)
 		{
@@ -1705,20 +1507,60 @@ bool FCFDAStagingService::BuildBatchPlanHash(
 
 		if (Row.Kind == ECFDAStagingPreviewKind::Create || Row.Kind == ECFDAStagingPreviewKind::Update)
 		{
-			// Preview 이후 mutable DTO의 payload/path/intent가 변조된 split state를 approval hash가 수용하지 않게 합니다.
-			FString CandidateIntegrityError;
-			if (!CFDAStagingPrivate::ValidateBatchCandidateIntegrity(Row, CandidateIntegrityError))
+			// Provider parse/current 경계를 이미 통과한 common row가 hash authority에 필요한 payload-free structural binding을 갖는지 검증합니다.
+			if (Row.Envelope.SchemaId.IsEmpty()
+				|| Row.Envelope.SchemaRevision <= 0
+				|| Row.Envelope.AdapterContractRevision <= 0
+				|| Row.Envelope.DataAssetTypeClassPath.IsEmpty()
+				|| Row.Envelope.StableLogicalId.IsNone()
+				|| Row.Envelope.StagingRelativePath.IsEmpty()
+				|| !Row.Envelope.StagingRelativePath.EndsWith(TEXT(".json"), ESearchCase::CaseSensitive)
+				|| Row.Envelope.PlannedOperation != Row.Kind)
 			{
 				OutBatchPlanHash.Reset();
-				OutError = CandidateIntegrityError;
+				OutError = TEXT("Common candidate의 payload-free structural/operation binding이 유효하지 않습니다.");
+				return false;
+			}
+			if (!CFDAStagingPrivate::IsCanonicalSha256Fingerprint(Row.Envelope.StagingSemanticFingerprint))
+			{
+				OutBatchPlanHash.Reset();
+				OutError = TEXT("Common candidate의 StagingSemanticFingerprint가 canonical SHA-256이 아닙니다.");
+				return false;
+			}
+			// Target path canonicality 검증용 임시 진단입니다.
+			TArray<FCFDAStagingIssue> TargetPathIssues;
+			if (!CFDAStagingPrivate::ValidateTargetObjectPath(Row.Envelope.TargetObjectPath, TargetPathIssues))
+			{
+				OutBatchPlanHash.Reset();
+				OutError = TEXT("Common candidate의 TargetObjectPath가 canonical Unreal asset object path가 아닙니다.");
+				return false;
+			}
+
+			if (Row.Kind == ECFDAStagingPreviewKind::Create)
+			{
+				if (Row.Envelope.bHasBaseSemanticFingerprint
+					|| !Row.Envelope.BaseSemanticFingerprint.IsEmpty()
+					|| !Row.Envelope.CurrentSemanticFingerprint.IsEmpty())
+				{
+					OutBatchPlanHash.Reset();
+					OutError = TEXT("Create common candidate는 Base가 없어야 하고 Current target fingerprint도 없어야 합니다.");
+					return false;
+				}
+			}
+			else if (!Row.Envelope.bHasBaseSemanticFingerprint
+				|| !CFDAStagingPrivate::IsCanonicalSha256Fingerprint(Row.Envelope.BaseSemanticFingerprint)
+				|| !CFDAStagingPrivate::IsCanonicalSha256Fingerprint(Row.Envelope.CurrentSemanticFingerprint))
+			{
+				OutBatchPlanHash.Reset();
+				OutError = TEXT("Update common candidate는 canonical Base/Current semantic fingerprint를 모두 가져야 합니다.");
 				return false;
 			}
 		}
 	}
 
-	// Create/Update mutation candidate만 복사한 exact included target set입니다.
-	TArray<FCFDAStagingPreviewRow> CandidateRows;
-	for (const FCFDAStagingPreviewRow& Row : ValidatedRows)
+	// Create/Update mutation candidate만 복사한 exact included common target set입니다.
+	TArray<FCFDACommonPreviewRow> CandidateRows;
+	for (const FCFDACommonPreviewRow& Row : ValidatedRows)
 	{
 		if (Row.Kind == ECFDAStagingPreviewKind::Create || Row.Kind == ECFDAStagingPreviewKind::Update)
 		{
@@ -1732,23 +1574,62 @@ bool FCFDAStagingService::BuildBatchPlanHash(
 		return false;
 	}
 
-	CandidateRows.Sort([](const FCFDAStagingPreviewRow& Left, const FCFDAStagingPreviewRow& Right)
+	CandidateRows.Sort([](const FCFDACommonPreviewRow& Left, const FCFDACommonPreviewRow& Right)
 	{
 		return CFDAStagingPrivate::BuildBatchSortKey(Left) < CFDAStagingPrivate::BuildBatchSortKey(Right);
 	});
 
-	// exact sorted target-plan canonical token stream입니다.
+	// Exact sorted target-plan canonical token stream입니다. 기존 Public Missile BatchPlanHash byte format을 그대로 유지합니다.
 	TArray<uint8> CanonicalBytes;
 	CanonicalBytes.Reserve(CandidateRows.Num() * 1024);
 	CFDAStagingPrivate::AppendStringToken(CanonicalBytes, TEXT("Kind"), CFDAStagingPrivate::BatchPlanKind);
 	CFDAStagingPrivate::AppendStringToken(CanonicalBytes, TEXT("FormatRevision"), FString::FromInt(CFDAStagingPrivate::BatchPlanFormatRevision));
 	CFDAStagingPrivate::AppendStringToken(CanonicalBytes, TEXT("IncludedTargetCount"), FString::FromInt(CandidateRows.Num()));
 
-	for (const FCFDAStagingPreviewRow& Row : CandidateRows)
+	for (const FCFDACommonPreviewRow& Row : CandidateRows)
 	{
 		CFDAStagingPrivate::AppendBatchTargetTokens(CanonicalBytes, Row);
 	}
 	return CFDAStagingPrivate::HashCanonicalBytes(CanonicalBytes, OutBatchPlanHash, OutError);
+}
+
+// 기존 Public Missile Preview set을 common BatchPlanHash authority에 투영하는 compatibility facade입니다.
+bool FCFDAStagingService::BuildBatchPlanHash(
+	const TArray<FCFDAStagingPreviewRow>& PreviewRows,
+	FString& OutBatchPlanHash,
+	FString& OutError)
+{
+	// Public mutable typed DTO split-state를 provider-local facade에서 먼저 검증합니다.
+	for (const FCFDAStagingPreviewRow& Row : PreviewRows)
+	{
+		if (Row.Kind == ECFDAStagingPreviewKind::Create || Row.Kind == ECFDAStagingPreviewKind::Update)
+		{
+			FString CandidateIntegrityError;
+			if (!CFDAStagingPrivate::ValidateMissileBatchCandidateIntegrity(Row, CandidateIntegrityError))
+			{
+				OutBatchPlanHash.Reset();
+				OutError = CandidateIntegrityError;
+				return false;
+			}
+		}
+	}
+
+	// Shared hash authority에 전달할 payload-free rows입니다.
+	TArray<FCFDACommonPreviewRow> CommonRows;
+	CommonRows.Reserve(PreviewRows.Num());
+	for (const FCFDAStagingPreviewRow& Row : PreviewRows)
+	{
+		// 한 Public Missile row를 common row로 투영합니다.
+		FCFDACommonPreviewRow CommonRow;
+		CommonRow.Kind = Row.Kind;
+		CommonRow.Envelope = CFDAMissileProviderImpl::BuildCommonEnvelope(
+			Row.Record,
+			Row.CurrentSemanticFingerprint,
+			Row.Kind);
+		CommonRow.Issues = Row.Issues;
+		CommonRows.Add(MoveTemp(CommonRow));
+	}
+	return CFDATypeDispatch::BuildCommonBatchPlanHash(CommonRows, OutBatchPlanHash, OutError);
 }
 
 // diagnostic 배열에 특정 machine code가 존재하는지 확인합니다.
@@ -1782,7 +1663,7 @@ bool CFDAContractProbeFingerprint(
 {
 	OutTokenLabels.Reset();
 	// 현재 thread에서 token sink 설치/복원을 소유하는 scoped probe입니다.
-	CFDAStagingPrivate::FScopedSemanticTokenProbe ScopedProbe(OutTokenLabels);
+	CFDACommonPrimitives::FScopedSemanticTokenProbe ScopedProbe(OutTokenLabels);
 	if (!ScopedProbe.IsBound())
 	{
 		OutFingerprint.Reset();

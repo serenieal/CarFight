@@ -1,19 +1,30 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDAStagingApply.cpp
-// Version: v1.3.0
-// Date: 2026-09-08
-// Description: CF-FQ-049 DAS-P0-03 one-shot approval, disk/current global TOCTOU preflight, MissileGuidePreset exact typed materialization과 durable single-package save 구현입니다.
+// Version: v1.8.1
+// Date: 2026-09-10
+// Description: CF-FQ-051 DAO-P0-03 payload-free Apply/TOCTOU + provider-neutral typed durable core dispatch 구현입니다.
 // Changelog:
+// - v1.8.1: CFDADurableCore 전환 뒤 남아 있던 Missile-only durable transaction dead copy와 legacy save/confirmation fault state를 제거해 durable sequencing 단일 authority를 확정.
+// - v1.8.0: Missile durable execution을 CFDADurableCore shared typed transaction으로 rewire하고 Save/confirmation fault authority도 shared core로 이동해 Ammo second writer가 동일 durable sequencing을 재사용하도록 함.
+// - v1.7.0: provider readiness를 global preflight와 mutation 직전에 검증해 ReadOnlyPreviewReady provider의 source re-read/Reviewed mutation 진입을 fail-closed.
+// - v1.6.0: Reviewed approval 동결 자체를 payload-free common Review authority로 이동하고 Public Missile BuildReviewedApproval은 provider-local integrity projection facade로 축소.
+// - v1.5.0: Reviewed approval/fresh disk parse/current resolve/immediate TOCTOU/materialize를 common row + complete provider operation entry로 재배선. Shared Apply는 Missile parser/current/materializer를 직접 호출하지 않으며 typed durable body는 Missile provider-local callback 안에 격리.
+// - v1.4.0: approval/fresh-read/mutation 직전에 trusted provider를 exact TypeKey로 resolve하고 provider-owned StagingRoot/common envelope 계약을 검증하도록 재배선. 기존 Missile materializer/Public Apply API와 durable save semantics는 보존.
 // - v1.3.0: CF-FQ-050 DACE-P0-01 전용 WITH_DEV_AUTOMATION_TESTS transient materializer→production extractor private roundtrip probe를 추가. Product Apply/Save path는 변경하지 않음.
 // - v1.2.0: DAS-P0-04 Automation fixture 전용 deterministic save/confirmation/before-mutation fault injection을 WITH_DEV_AUTOMATION_TESTS에 한정해 추가.
 // - v1.1.0: DurableApplied를 SavePackage 뒤 exact package 비대화 없는 non-interactive disk reload + unified typed semantic extractor readback으로 강화하고 Apply/rollback의 UObject→payload 변환 authority를 CFDAStagingService 하나로 통합.
 // - v1.0.1: global preflight 이후 각 target mutation 직전 current truth를 다시 검증하고, Create 실패 뒤 operation-created package가 memory에 남으면 rollback confirmed를 주장하지 않도록 보수화.
 // - v1.0.0: Reviewed approval freeze, disk Staging re-read, fresh Preview/hash revalidation, deterministic Create/Update, pre-save rollback, SaveStateUnconfirmed와 PartialApplied aggregation을 추가.
 // Migration:
-// - P0 write allowlist는 UCFMissileGuidePresetData 하나뿐입니다. Product Low/Normal/High를 자동 적용하지 않으며 caller가 Reviewed approval을 명시적으로 전달해야 합니다.
+// - Current write allowlist는 trusted TypeKey provider registry + ReviewedMutationReady readiness가 소유하며 MissileGuidePreset과 AmmoData exact2가 mutation-ready입니다.
+// - Product Low/Normal/High 또는 Product Ammo를 자동 적용하지 않으며 caller가 Reviewed approval을 명시적으로 전달해야 합니다.
+// - v1.8.1부터 durable Create/Update/Save/reload/readback/rollback sequencing은 CFDADurableCore 단일 authority를 사용합니다.
 
 #include "DataAuthoring/CFDAStagingApply.h"
 #include "CFDAContractGuard.h"
+#include "CFDADurableCore.h"
+#include "CFDAMissileProvider.h"
+#include "CFDATypeDispatch.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "CFMissileGuidePresetData.h"
@@ -32,12 +43,6 @@
 namespace CFDAStagingApplyPrivate
 {
 #if WITH_DEV_AUTOMATION_TESTS
-	// SavePackage 호출 지점에서 uncertainty를 강제할 exact test target path입니다.
-	FString GForceSaveFailureTargetPath;
-
-	// SavePackage 성공 뒤 durable confirmation 실패를 강제할 exact test target path입니다.
-	FString GForceConfirmationFailureTargetPath;
-
 	// global preflight 뒤 mutation 직전에 known block을 강제할 exact test target path입니다.
 	FString GForceBeforeMutationBlockTargetPath;
 
@@ -80,24 +85,60 @@ namespace CFDAStagingApplyPrivate
 			+ StagingRelativePath;
 	}
 
-	// Preview row 하나를 immutable approval target projection으로 복사합니다.
-	FCFDAStagingApprovalTarget BuildApprovalTarget(const FCFDAStagingPreviewRow& Row)
+	// Payload-free common row 하나를 immutable approval target projection으로 복사합니다.
+	FCFDAStagingApprovalTarget BuildApprovalTarget(const FCFDACommonPreviewRow& Row)
 	{
+		// Shared orchestration common envelope입니다.
+		const FCFDACommonEnvelope& Envelope = Row.Envelope;
 		// 반환할 exact approval target입니다.
 		FCFDAStagingApprovalTarget Target;
-		Target.SchemaId = Row.Record.SchemaId;
-		Target.SchemaRevision = Row.Record.SchemaRevision;
-		Target.AdapterContractRevision = Row.Record.AdapterContractRevision;
-		Target.DataAssetTypeClassPath = Row.Record.DataAssetTypeClassPath;
-		Target.StableLogicalId = Row.Record.StableLogicalId;
-		Target.TargetObjectPath = Row.Record.TargetObjectPath;
-		Target.StagingRelativePath = Row.Record.StagingRelativePath;
-		Target.bHasBaseSemanticFingerprint = Row.Record.bHasBaseSemanticFingerprint;
-		Target.BaseSemanticFingerprint = Row.Record.BaseSemanticFingerprint;
-		Target.CurrentSemanticFingerprint = Row.CurrentSemanticFingerprint;
-		Target.StagingSemanticFingerprint = Row.Record.StagingSemanticFingerprint;
-		Target.PlannedOperation = Row.Kind;
+		Target.SchemaId = Envelope.SchemaId;
+		Target.SchemaRevision = Envelope.SchemaRevision;
+		Target.AdapterContractRevision = Envelope.AdapterContractRevision;
+		Target.DataAssetTypeClassPath = Envelope.DataAssetTypeClassPath;
+		Target.StableLogicalId = Envelope.StableLogicalId;
+		Target.TargetObjectPath = Envelope.TargetObjectPath;
+		Target.StagingRelativePath = Envelope.StagingRelativePath;
+		Target.bHasBaseSemanticFingerprint = Envelope.bHasBaseSemanticFingerprint;
+		Target.BaseSemanticFingerprint = Envelope.BaseSemanticFingerprint;
+		Target.CurrentSemanticFingerprint = Envelope.CurrentSemanticFingerprint;
+		Target.StagingSemanticFingerprint = Envelope.StagingSemanticFingerprint;
+		Target.PlannedOperation = Envelope.PlannedOperation;
 		return Target;
+	}
+
+	// Existing Public Missile Preview row를 provider-local projection 뒤 common approval target으로 변환합니다.
+	FCFDAStagingApprovalTarget BuildApprovalTarget(const FCFDAStagingPreviewRow& Row)
+	{
+		// Public Missile row를 payload-free common row로 투영한 compatibility intermediate입니다.
+		FCFDACommonPreviewRow CommonRow;
+		CommonRow.Kind = Row.Kind;
+		CommonRow.Envelope = CFDAMissileProviderImpl::BuildCommonEnvelope(
+			Row.Record,
+			Row.CurrentSemanticFingerprint,
+			Row.Kind);
+		CommonRow.Issues = Row.Issues;
+		return BuildApprovalTarget(CommonRow);
+	}
+
+	// Immutable approval target을 payload-free common orchestration envelope로 투영합니다.
+	FCFDACommonEnvelope BuildApprovalEnvelope(const FCFDAStagingApprovalTarget& Target)
+	{
+		// Shared provider validation에 전달할 common envelope입니다.
+		FCFDACommonEnvelope Envelope;
+		Envelope.SchemaId = Target.SchemaId;
+		Envelope.SchemaRevision = Target.SchemaRevision;
+		Envelope.AdapterContractRevision = Target.AdapterContractRevision;
+		Envelope.DataAssetTypeClassPath = Target.DataAssetTypeClassPath;
+		Envelope.StableLogicalId = Target.StableLogicalId;
+		Envelope.TargetObjectPath = Target.TargetObjectPath;
+		Envelope.StagingRelativePath = Target.StagingRelativePath;
+		Envelope.bHasBaseSemanticFingerprint = Target.bHasBaseSemanticFingerprint;
+		Envelope.BaseSemanticFingerprint = Target.BaseSemanticFingerprint;
+		Envelope.CurrentSemanticFingerprint = Target.CurrentSemanticFingerprint;
+		Envelope.StagingSemanticFingerprint = Target.StagingSemanticFingerprint;
+		Envelope.PlannedOperation = Target.PlannedOperation;
+		return Envelope;
 	}
 
 	// Approval target 하나의 initial report projection을 만듭니다.
@@ -122,13 +163,25 @@ namespace CFDAStagingApplyPrivate
 		return MainGameRoot;
 	}
 
-	// Approval target의 exact main_game-relative Staging JSON을 UTF-8 text로 다시 읽습니다.
-	bool ReadStagingFile(const FString& StagingRelativePath, FString& OutJsonText, FString& OutError)
+	// Approval target의 provider-owned exact main_game-relative Staging JSON을 UTF-8 text로 다시 읽습니다.
+	bool ReadStagingFile(
+		const FCFDATypeProvider& Provider,
+		const FString& StagingRelativePath,
+		FString& OutJsonText,
+		FString& OutError)
 	{
+		// provider authority로 canonicalized 된 reviewed source path입니다.
+		FString NormalizedStagingRelativePath;
+		if (!CFDATypeDispatch::NormalizeProviderStagingPath(Provider, StagingRelativePath, NormalizedStagingRelativePath)
+			|| !NormalizedStagingRelativePath.Equals(StagingRelativePath, ESearchCase::CaseSensitive))
+		{
+			OutError = TEXT("Reviewed Staging source가 selected provider의 canonical StagingRoot 밖에 있습니다.");
+			return false;
+		}
 		// canonical main_game absolute root입니다.
 		const FString MainGameRoot = GetMainGameRoot();
 		// approval이 가리키는 exact Staging source absolute path입니다.
-		FString StagingAbsolutePath = FPaths::ConvertRelativePathToFull(FPaths::Combine(MainGameRoot, StagingRelativePath));
+		FString StagingAbsolutePath = FPaths::ConvertRelativePathToFull(FPaths::Combine(MainGameRoot, NormalizedStagingRelativePath));
 		FPaths::NormalizeFilename(StagingAbsolutePath);
 
 		// normalized main_game root의 slash-normalized comparison text입니다.
@@ -152,34 +205,51 @@ namespace CFDAStagingApplyPrivate
 		return true;
 	}
 
-	// Approval target과 fresh Preview row의 exact evidence binding이 일치하는지 검증합니다.
+	// Approval target과 payload-free fresh Preview row의 exact evidence binding이 일치하는지 검증합니다.
 	bool MatchesApprovalTarget(
 		const FCFDAStagingApprovalTarget& ApprovalTarget,
-		const FCFDAStagingPreviewRow& FreshRow,
+		const FCFDACommonPreviewRow& FreshRow,
 		FString& OutError)
 	{
-		if (ApprovalTarget.SchemaId != FreshRow.Record.SchemaId
-			|| ApprovalTarget.SchemaRevision != FreshRow.Record.SchemaRevision
-			|| ApprovalTarget.AdapterContractRevision != FreshRow.Record.AdapterContractRevision
-			|| ApprovalTarget.DataAssetTypeClassPath != FreshRow.Record.DataAssetTypeClassPath
-			|| ApprovalTarget.StableLogicalId != FreshRow.Record.StableLogicalId
-			|| !ApprovalTarget.TargetObjectPath.Equals(FreshRow.Record.TargetObjectPath, ESearchCase::CaseSensitive)
-			|| !ApprovalTarget.StagingRelativePath.Equals(FreshRow.Record.StagingRelativePath, ESearchCase::CaseSensitive)
-			|| ApprovalTarget.bHasBaseSemanticFingerprint != FreshRow.Record.bHasBaseSemanticFingerprint
-			|| !ApprovalTarget.BaseSemanticFingerprint.Equals(FreshRow.Record.BaseSemanticFingerprint, ESearchCase::CaseSensitive)
-			|| !ApprovalTarget.CurrentSemanticFingerprint.Equals(FreshRow.CurrentSemanticFingerprint, ESearchCase::CaseSensitive)
-			|| !ApprovalTarget.StagingSemanticFingerprint.Equals(FreshRow.Record.StagingSemanticFingerprint, ESearchCase::CaseSensitive)
-			|| ApprovalTarget.PlannedOperation != FreshRow.Kind)
+		// Immutable approval target을 common envelope로 투영한 reviewed evidence입니다.
+		const FCFDACommonEnvelope ApprovalEnvelope = BuildApprovalEnvelope(ApprovalTarget);
+		if (FreshRow.Kind != ApprovalTarget.PlannedOperation
+			|| FreshRow.Envelope.PlannedOperation != FreshRow.Kind
+			|| !CFDATypeDispatch::AreCommonEnvelopesEquivalent(ApprovalEnvelope, FreshRow.Envelope))
 		{
-			OutError = TEXT("Reviewed approval target evidence와 fresh disk/current Preview가 exact 일치하지 않습니다.");
+			OutError = TEXT("Reviewed approval target evidence와 fresh disk/current common Preview가 exact 일치하지 않습니다.");
 			return false;
 		}
 		OutError.Reset();
 		return true;
 	}
 
-	// Create candidate가 새 package를 만들기 전에 package 자체도 완전히 absent인지 확인합니다.
-	bool ValidateCreatePackageAbsent(const FCFDAStagingPreviewRow& Row, FString& OutError)
+	// Fresh parse가 current truth를 읽기 전에 approval의 immutable source/candidate binding과 일치하는지 검증합니다.
+	bool MatchesApprovalCandidateBinding(
+		const FCFDAStagingApprovalTarget& ApprovalTarget,
+		const FCFDACommonEnvelope& FreshCandidate,
+		FString& OutError)
+	{
+		if (!ApprovalTarget.SchemaId.Equals(FreshCandidate.SchemaId, ESearchCase::CaseSensitive)
+			|| ApprovalTarget.SchemaRevision != FreshCandidate.SchemaRevision
+			|| ApprovalTarget.AdapterContractRevision != FreshCandidate.AdapterContractRevision
+			|| !ApprovalTarget.DataAssetTypeClassPath.Equals(FreshCandidate.DataAssetTypeClassPath, ESearchCase::CaseSensitive)
+			|| ApprovalTarget.StableLogicalId != FreshCandidate.StableLogicalId
+			|| !ApprovalTarget.TargetObjectPath.Equals(FreshCandidate.TargetObjectPath, ESearchCase::CaseSensitive)
+			|| !ApprovalTarget.StagingRelativePath.Equals(FreshCandidate.StagingRelativePath, ESearchCase::CaseSensitive)
+			|| ApprovalTarget.bHasBaseSemanticFingerprint != FreshCandidate.bHasBaseSemanticFingerprint
+			|| !ApprovalTarget.BaseSemanticFingerprint.Equals(FreshCandidate.BaseSemanticFingerprint, ESearchCase::CaseSensitive)
+			|| !ApprovalTarget.StagingSemanticFingerprint.Equals(FreshCandidate.StagingSemanticFingerprint, ESearchCase::CaseSensitive))
+		{
+			OutError = TEXT("Reviewed approval source/candidate binding과 fresh provider parse 결과가 exact 일치하지 않습니다.");
+			return false;
+		}
+		OutError.Reset();
+		return true;
+	}
+
+	// Create common candidate가 새 package를 만들기 전에 package 자체도 완전히 absent인지 확인합니다.
+	bool ValidateCreatePackageAbsent(const FCFDACommonPreviewRow& Row, FString& OutError)
 	{
 		if (Row.Kind != ECFDAStagingPreviewKind::Create)
 		{
@@ -187,8 +257,8 @@ namespace CFDAStagingApplyPrivate
 			return true;
 		}
 
-		// exact target package long name입니다.
-		const FString PackageName = FPackageName::ObjectPathToPackageName(Row.Record.TargetObjectPath);
+		// Exact target package long name입니다.
+		const FString PackageName = FPackageName::ObjectPathToPackageName(Row.Envelope.TargetObjectPath);
 		if (!FPackageName::IsValidLongPackageName(PackageName)
 			|| FindPackage(nullptr, *PackageName) != nullptr
 			|| FPackageName::DoesPackageExist(PackageName))
@@ -200,7 +270,7 @@ namespace CFDAStagingApplyPrivate
 		return true;
 	}
 
-	// Typed whole-record payload를 exact MissileGuidePreset DataAsset에 적용합니다.
+	// Typed whole-record payload를 exact MissileGuidePreset DataAsset에 적용하는 existing production body입니다.
 	void ApplyPayloadToAsset(const FCFDAMissilePresetPayload& Payload, UCFMissileGuidePresetData& Asset)
 	{
 		Asset.PresetId = Payload.PresetId;
@@ -209,207 +279,49 @@ namespace CFDAStagingApplyPrivate
 		Asset.MissileGuideConfig = Payload.MissileGuideConfig;
 	}
 
-	// Asset의 current semantic fingerprint가 current resolver와 동일한 exact extractor 기준으로 expected fingerprint와 일치하는지 검증합니다.
-	bool ValidateAssetFingerprint(
-		const UCFMissileGuidePresetData& Asset,
-		const FString& ExpectedFingerprint,
-		FString& OutError)
-	{
-		// current Asset을 whole-record typed payload로 lossless 추출한 값입니다.
-		FCFDAMissilePresetPayload CurrentPayload;
-		// FText representation/typed authored validation까지 포함한 extractor diagnostics입니다.
-		TArray<FCFDAStagingIssue> ExtractionIssues;
-		if (!FCFDAStagingService::ExtractMissilePresetPayload(Asset, CurrentPayload, ExtractionIssues))
-		{
-			OutError = ExtractionIssues.IsEmpty()
-				? TEXT("typed semantic readback payload 추출에 실패했습니다.")
-				: ExtractionIssues[0].Message;
-			return false;
-		}
-
-		// current Asset semantic fingerprint입니다.
-		FString CurrentFingerprint;
-		// fingerprint generation failure입니다.
-		FString FingerprintError;
-		if (!FCFDAStagingService::BuildSemanticFingerprint(CurrentPayload, CurrentFingerprint, FingerprintError))
-		{
-			OutError = FString::Printf(TEXT("typed semantic readback fingerprint 생성에 실패했습니다: %s"), *FingerprintError);
-			return false;
-		}
-		if (!CurrentFingerprint.Equals(ExpectedFingerprint, ESearchCase::CaseSensitive))
-		{
-			OutError = TEXT("typed semantic readback이 reviewed StagingSemanticFingerprint와 다릅니다.");
-			return false;
-		}
-		OutError.Reset();
-		return true;
-	}
-
-	// Exact target package 하나만 SavePackage하고 disk reload 기반 persisted semantic readback까지 durable confirmation을 수행합니다.
-	bool SaveExactPackage(
-		UPackage& Package,
-		UCFMissileGuidePresetData& Asset,
-		const FString& ExpectedFingerprint,
-		bool& bOutSaveWasCalled,
-		FString& OutError)
-	{
-		bOutSaveWasCalled = false;
-		// reload 뒤 old UObject pointer를 사용하지 않기 위해 save 전에 동결하는 exact package long name입니다.
-		const FString PackageName = Package.GetName();
-		// reload 뒤 exact persisted object를 다시 resolve하기 위한 object path입니다.
-		const FString TargetObjectPath = FSoftObjectPath(&Asset).ToString();
-		if (Asset.GetOutermost() != &Package
-			|| &Package == GetTransientPackage()
-			|| !PackageName.StartsWith(TEXT("/Game/"), ESearchCase::CaseSensitive)
-			|| !FPackageName::IsValidLongPackageName(PackageName)
-			|| TargetObjectPath.IsEmpty())
-		{
-			OutError = FString::Printf(TEXT("Exact Staging save package/object identity가 유효하지 않습니다: %s"), *PackageName);
-			return false;
-		}
-
-		// package의 canonical .uasset filename입니다.
-		const FString PackageFilename = FPackageName::LongPackageNameToFilename(
-			PackageName,
-			FPackageName::GetAssetPackageExtension());
-		// 신규 package를 위한 exact output directory입니다.
-		const FString PackageDirectory = FPaths::GetPath(PackageFilename);
-		IFileManager::Get().MakeDirectory(*PackageDirectory, true);
-
-		// UE 5.8 exact single-package save arguments입니다.
-		FSavePackageArgs SaveArgs;
-		SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
-		SaveArgs.SaveFlags = SAVE_NoError;
-		bOutSaveWasCalled = true;
-#if WITH_DEV_AUTOMATION_TESTS
-		if (MatchesTestFaultTarget(GForceSaveFailureTargetPath, TargetObjectPath))
-		{
-			OutError = TEXT("DAS-P0-04 Automation fixture가 SavePackage outcome uncertainty를 강제했습니다.");
-			return false;
-		}
-#endif
-		if (!UPackage::SavePackage(&Package, &Asset, *PackageFilename, SaveArgs))
-		{
-			OutError = FString::Printf(TEXT("UPackage::SavePackage가 false를 반환했습니다: %s"), *PackageName);
-			return false;
-		}
-		if (Package.IsDirty() || !FPackageName::DoesPackageExist(PackageName))
-		{
-			OutError = FString::Printf(TEXT("SavePackage success 뒤 package clean/persisted 존재를 확인하지 못했습니다: %s"), *PackageName);
-			return false;
-		}
-#if WITH_DEV_AUTOMATION_TESTS
-		if (MatchesTestFaultTarget(GForceConfirmationFailureTargetPath, TargetObjectPath))
-		{
-			OutError = TEXT("DAS-P0-04 Automation fixture가 SavePackage 성공 뒤 persisted confirmation uncertainty를 강제했습니다.");
-			return false;
-		}
-#endif
-
-		// 방금 저장한 exact package 하나만 disk state로 non-interactive reload할 목록입니다.
-		TArray<UPackage*> PackagesToReload;
-		PackagesToReload.Add(&Package);
-		// package reload 실패 상세입니다.
-		FText ReloadError;
-		if (!UPackageTools::ReloadPackages(PackagesToReload, ReloadError, EReloadPackagesInteractionMode::AssumePositive))
-		{
-			OutError = FString::Printf(
-				TEXT("SavePackage success 뒤 exact persisted package reload를 확인하지 못했습니다: %s / %s"),
-				*PackageName,
-				*ReloadError.ToString());
-			return false;
-		}
-
-		// disk reload 뒤 exact object path에서 다시 resolve한 persisted Pilot DataAsset입니다.
-		UCFMissileGuidePresetData* ReloadedAsset = Cast<UCFMissileGuidePresetData>(FSoftObjectPath(TargetObjectPath).ResolveObject());
-		if (ReloadedAsset == nullptr)
-		{
-			ReloadedAsset = LoadObject<UCFMissileGuidePresetData>(nullptr, *TargetObjectPath);
-		}
-		// reloaded object가 소유하는 exact package입니다.
-		UPackage* ReloadedPackage = ReloadedAsset != nullptr ? ReloadedAsset->GetOutermost() : nullptr;
-		if (ReloadedAsset == nullptr
-			|| ReloadedPackage == nullptr
-			|| !ReloadedPackage->GetName().Equals(PackageName, ESearchCase::CaseSensitive)
-			|| ReloadedPackage->IsDirty()
-			|| !FPackageName::DoesPackageExist(PackageName))
-		{
-			OutError = FString::Printf(TEXT("disk reload 뒤 exact persisted object/package identity 또는 clean state를 확인하지 못했습니다: %s"), *PackageName);
-			return false;
-		}
-		if (!ValidateAssetFingerprint(*ReloadedAsset, ExpectedFingerprint, OutError))
-		{
-			return false;
-		}
-		OutError.Reset();
-		return true;
-	}
-
-	// Create target의 pre-save failure에서 operation-created UObject/registry/dirty state를 best-effort로 정리하고 original package absence까지 확인합니다.
-	bool CleanupCreatedAsset(
-		UCFMissileGuidePresetData* Asset,
-		UPackage* Package,
-		const bool bRegistryNotified)
-	{
-		if (Asset == nullptr || Package == nullptr)
-		{
-			return false;
-		}
-		// Create 이전에는 존재하지 않았어야 하는 exact package long name입니다.
-		const FString CreatedPackageName = Package->GetName();
-		if (bRegistryNotified)
-		{
-			FAssetRegistryModule::AssetDeleted(Asset);
-		}
-		Asset->ClearFlags(RF_Public | RF_Standalone);
-		// operation-created object를 transient package로 옮겨 original target path ownership을 해제합니다.
-		const bool bRenamed = Asset->Rename(
-			nullptr,
-			GetTransientPackage(),
-			REN_DontCreateRedirectors | REN_NonTransactional);
-		Asset->MarkAsGarbage();
-		Package->SetDirtyFlag(false);
-
-		// Package UObject 자체가 process memory에 남으면 original `package absent` 상태를 exact 복원했다고 주장할 수 없습니다.
-		const bool bPackageAbsenceRestored = FindPackage(nullptr, *CreatedPackageName) == nullptr;
-		return bRenamed && !Package->IsDirty() && bPackageAbsenceRestored;
-	}
-
-	// Update target의 typed snapshot과 original dirty state를 pre-save failure 뒤 복원하고 검증합니다.
-	bool RestoreUpdatedAsset(
-		UCFMissileGuidePresetData& Asset,
-		UPackage& Package,
-		const FCFDAMissilePresetPayload& OriginalPayload,
-		const bool bOriginalPackageDirty,
-		const FString& OriginalFingerprint)
-	{
-		ApplyPayloadToAsset(OriginalPayload, Asset);
-		Package.SetDirtyFlag(bOriginalPackageDirty);
-		// rollback semantic readback failure입니다.
-		FString RollbackError;
-		return Package.IsDirty() == bOriginalPackageDirty
-			&& ValidateAssetFingerprint(Asset, OriginalFingerprint, RollbackError);
-	}
-
-	// Fresh global preflight를 approval exact target order로 다시 구축합니다.
+	// Fresh global preflight를 approval exact target order로 payload-free common rows로 다시 구축합니다.
 	bool BuildFreshRows(
 		const FCFDAStagingReviewedApproval& Approval,
-		TArray<FCFDAStagingPreviewRow>& OutFreshRows,
+		TArray<FCFDACommonPreviewRow>& OutFreshRows,
 		FCFDAStagingApplyReport& OutReport)
 	{
 		OutFreshRows.Reset();
 		for (int32 TargetIndex = 0; TargetIndex < Approval.IncludedTargets.Num(); ++TargetIndex)
 		{
-			// immutable approval target입니다.
+			// Immutable approval target입니다.
 			const FCFDAStagingApprovalTarget& ApprovalTarget = Approval.IncludedTargets[TargetIndex];
-			// matching report row입니다.
+			// Matching report row입니다.
 			FCFDAStagingTargetApplyReport& TargetReport = OutReport.Targets[TargetIndex];
-
-			// disk Staging source current text입니다.
-			FString JsonText;
-			// preflight failure detail입니다.
+			// Reviewed approval의 payload-free common envelope입니다.
+			const FCFDACommonEnvelope ApprovalEnvelope = BuildApprovalEnvelope(ApprovalTarget);
+			// Preflight failure detail입니다.
 			FString PreflightError;
-			if (!ReadStagingFile(ApprovalTarget.StagingRelativePath, JsonText, PreflightError))
+			// Reviewed exact TypeKey에 등록된 complete trusted provider entry입니다.
+			const FCFDATypeProviderEntry* ProviderEntry = CFDATypeDispatch::FindExactProviderEntry(
+				ApprovalTarget.SchemaId,
+				ApprovalTarget.DataAssetTypeClassPath,
+				&PreflightError);
+			if (ProviderEntry == nullptr
+				|| !CFDATypeDispatch::ValidateProviderContract(ApprovalEnvelope, ProviderEntry->Descriptor, PreflightError))
+			{
+				TargetReport.Result = ECFDAStagingTargetApplyResult::BlockedBeforeMutation;
+				TargetReport.Diagnostic = PreflightError.IsEmpty()
+					? TEXT("Reviewed approval의 exact TypeKey provider contract를 확정하지 못했습니다.")
+					: PreflightError;
+				AddIssue(TargetReport.Issues, ECFDAStagingIssueCode::ApprovalStale, TEXT("TypeKey"), TargetReport.Diagnostic);
+				return false;
+			}
+			if (!CFDATypeDispatch::ValidateProviderMutationReady(*ProviderEntry, PreflightError))
+			{
+				TargetReport.Result = ECFDAStagingTargetApplyResult::BlockedBeforeMutation;
+				TargetReport.Diagnostic = PreflightError;
+				AddIssue(TargetReport.Issues, ECFDAStagingIssueCode::ApprovalStale, TEXT("TypeKey.Readiness"), PreflightError);
+				return false;
+			}
+
+			// Disk Staging source current text입니다.
+			FString JsonText;
+			if (!ReadStagingFile(ProviderEntry->Descriptor, ApprovalTarget.StagingRelativePath, JsonText, PreflightError))
 			{
 				TargetReport.Result = ECFDAStagingTargetApplyResult::BlockedBeforeMutation;
 				TargetReport.Diagnostic = PreflightError;
@@ -417,38 +329,51 @@ namespace CFDAStagingApplyPrivate
 				return false;
 			}
 
-			// fresh disk text를 strict typed DTO로 다시 parse한 결과입니다.
-			const FCFDAStagingParseResult ParseResult = FCFDAStagingService::ParseMissilePresetJson(JsonText, ApprovalTarget.StagingRelativePath);
-			if (!ParseResult.bValid)
+			// Provider-local typed parse 뒤 shared core에 반환된 fresh payload-free candidate입니다.
+			FCFDACommonEnvelope FreshCandidate;
+			// Provider parser diagnostics입니다.
+			TArray<FCFDAStagingIssue> ParseIssues;
+			if (!ProviderEntry->Operations.ParseCommonCandidate(
+				JsonText,
+				ApprovalTarget.StagingRelativePath,
+				FreshCandidate,
+				ParseIssues))
 			{
 				TargetReport.Result = ECFDAStagingTargetApplyResult::BlockedBeforeMutation;
-				TargetReport.Issues = ParseResult.Issues;
-				AddIssue(TargetReport.Issues, ECFDAStagingIssueCode::ApprovalStale, TEXT("Staging"), TEXT("Reviewed 이후 Staging parse/validation truth가 바뀌었습니다."));
-				TargetReport.Diagnostic = TEXT("Reviewed 이후 Staging JSON이 current strict schema를 만족하지 않습니다.");
+				TargetReport.Issues = MoveTemp(ParseIssues);
+				AddIssue(TargetReport.Issues, ECFDAStagingIssueCode::ApprovalStale, TEXT("Staging"), TEXT("Reviewed 이후 provider typed parse/validation truth가 바뀌었습니다."));
+				TargetReport.Diagnostic = TEXT("Reviewed 이후 Staging JSON이 selected provider contract를 만족하지 않습니다.");
+				return false;
+			}
+			if (!MatchesApprovalCandidateBinding(ApprovalTarget, FreshCandidate, PreflightError))
+			{
+				TargetReport.Result = ECFDAStagingTargetApplyResult::BlockedBeforeMutation;
+				TargetReport.Diagnostic = PreflightError;
+				AddIssue(TargetReport.Issues, ECFDAStagingIssueCode::ApprovalStale, TEXT("Staging"), PreflightError);
 				return false;
 			}
 
-			// fresh current UE target/identity/package truth입니다.
-			FCFDAStagingCurrentState CurrentState;
-			// resolver diagnostics입니다.
+			// Fresh current UE target/identity/package payload-free truth입니다.
+			FCFDACommonCurrentState CurrentState;
+			// Provider current resolver diagnostics입니다.
 			TArray<FCFDAStagingIssue> CurrentIssues;
-			if (!FCFDAStagingService::ResolveMissilePresetCurrentState(ParseResult.Record, CurrentState, CurrentIssues))
+			if (!ProviderEntry->Operations.ResolveCommonCurrentState(FreshCandidate, CurrentState, CurrentIssues))
 			{
 				TargetReport.Result = ECFDAStagingTargetApplyResult::BlockedBeforeMutation;
 				TargetReport.Issues = MoveTemp(CurrentIssues);
-				AddIssue(TargetReport.Issues, ECFDAStagingIssueCode::ApprovalStale, TEXT("Current"), TEXT("Apply 직전 current UE truth를 확정하지 못했습니다."));
-				TargetReport.Diagnostic = TEXT("Apply global preflight current resolver가 실패했습니다.");
+				AddIssue(TargetReport.Issues, ECFDAStagingIssueCode::ApprovalStale, TEXT("Current"), TEXT("Apply 직전 provider current truth를 확정하지 못했습니다."));
+				TargetReport.Diagnostic = TEXT("Apply global preflight provider current resolver가 실패했습니다.");
 				return false;
 			}
 
-			// current truth와 disk staging을 exact 3-way로 재분류한 fresh Preview입니다.
-			FCFDAStagingPreviewRow FreshRow = FCFDAStagingService::BuildPreview(ParseResult.Record, CurrentState);
+			// Current truth와 disk candidate를 exact shared 3-way로 재분류한 fresh common Preview입니다.
+			FCFDACommonPreviewRow FreshRow = CFDATypeDispatch::BuildCommonPreview(FreshCandidate, CurrentState);
 			if (FreshRow.Kind == ECFDAStagingPreviewKind::Conflict || FreshRow.Kind == ECFDAStagingPreviewKind::Invalid)
 			{
 				TargetReport.Result = ECFDAStagingTargetApplyResult::BlockedBeforeMutation;
 				TargetReport.Issues = FreshRow.Issues;
-				AddIssue(TargetReport.Issues, ECFDAStagingIssueCode::ApprovalStale, TEXT("Preview"), TEXT("Apply 직전 fresh Preview가 reviewed Create/Update 상태가 아닙니다."));
-				TargetReport.Diagnostic = TEXT("Apply global preflight에서 fresh Preview가 blocker로 전환됐습니다.");
+				AddIssue(TargetReport.Issues, ECFDAStagingIssueCode::ApprovalStale, TEXT("Preview"), TEXT("Apply 직전 fresh common Preview가 reviewed Create/Update 상태가 아닙니다."));
+				TargetReport.Diagnostic = TEXT("Apply global preflight에서 fresh common Preview가 blocker로 전환됐습니다.");
 				return false;
 			}
 			if (!MatchesApprovalTarget(ApprovalTarget, FreshRow, PreflightError))
@@ -469,34 +394,34 @@ namespace CFDAStagingApplyPrivate
 			OutFreshRows.Add(MoveTemp(FreshRow));
 		}
 
-		FCFDAStagingService::ApplyBatchDuplicateValidation(OutFreshRows);
+		CFDATypeDispatch::ApplyCommonBatchDuplicateValidation(OutFreshRows);
 		for (int32 RowIndex = 0; RowIndex < OutFreshRows.Num(); ++RowIndex)
 		{
-			// duplicate validation 이후 fresh row입니다.
-			const FCFDAStagingPreviewRow& FreshRow = OutFreshRows[RowIndex];
+			// Duplicate validation 이후 fresh common row입니다.
+			const FCFDACommonPreviewRow& FreshRow = OutFreshRows[RowIndex];
 			if (FreshRow.Kind == ECFDAStagingPreviewKind::Conflict || FreshRow.Kind == ECFDAStagingPreviewKind::Invalid)
 			{
 				FCFDAStagingTargetApplyReport& TargetReport = OutReport.Targets[RowIndex];
 				TargetReport.Result = ECFDAStagingTargetApplyResult::BlockedBeforeMutation;
 				TargetReport.Issues = FreshRow.Issues;
-				AddIssue(TargetReport.Issues, ECFDAStagingIssueCode::ApprovalStale, TEXT("Batch"), TEXT("Apply 직전 batch duplicate validation 결과가 blocker입니다."));
-				TargetReport.Diagnostic = TEXT("Apply global batch preflight duplicate validation이 실패했습니다.");
+				AddIssue(TargetReport.Issues, ECFDAStagingIssueCode::ApprovalStale, TEXT("Batch"), TEXT("Apply 직전 common batch duplicate validation 결과가 blocker입니다."));
+				TargetReport.Diagnostic = TEXT("Apply global common batch preflight duplicate validation이 실패했습니다.");
 				return false;
 			}
 		}
 
-		// fresh exact target set의 BatchPlanHash입니다.
+		// Fresh exact common target set의 BatchPlanHash입니다.
 		FString FreshBatchPlanHash;
-		// fresh hash generation error입니다.
+		// Fresh hash generation error입니다.
 		FString HashError;
-		if (!FCFDAStagingService::BuildBatchPlanHash(OutFreshRows, FreshBatchPlanHash, HashError)
+		if (!CFDATypeDispatch::BuildCommonBatchPlanHash(OutFreshRows, FreshBatchPlanHash, HashError)
 			|| !FreshBatchPlanHash.Equals(Approval.BatchPlanHash, ESearchCase::CaseSensitive))
 		{
 			if (!OutReport.Targets.IsEmpty())
 			{
 				FCFDAStagingTargetApplyReport& TargetReport = OutReport.Targets[0];
 				TargetReport.Result = ECFDAStagingTargetApplyResult::BlockedBeforeMutation;
-				AddIssue(TargetReport.Issues, ECFDAStagingIssueCode::ApprovalStale, TEXT("BatchPlanHash"), TEXT("Apply 직전 fresh BatchPlanHash가 reviewed approval과 다릅니다."));
+				AddIssue(TargetReport.Issues, ECFDAStagingIssueCode::ApprovalStale, TEXT("BatchPlanHash"), TEXT("Apply 직전 fresh common BatchPlanHash가 reviewed approval과 다릅니다."));
 				TargetReport.Diagnostic = HashError.IsEmpty() ? TEXT("BatchPlanHash stale mismatch입니다.") : HashError;
 			}
 			return false;
@@ -504,39 +429,91 @@ namespace CFDAStagingApplyPrivate
 		return true;
 	}
 
-	// Global preflight 뒤 각 target mutation 직전에 current truth가 exact reviewed execution row와 여전히 같은지 다시 검증합니다.
+	// Global preflight 뒤 각 target mutation 직전에 Staging source + current truth가 reviewed common row와 여전히 같은지 다시 검증합니다.
 	bool RevalidateImmediatelyBeforeMutation(
-		const FCFDAStagingPreviewRow& PlannedRow,
+		const FCFDACommonPreviewRow& PlannedRow,
+		FString& OutFreshJsonText,
 		TArray<FCFDAStagingIssue>& OutIssues,
 		FString& OutError)
 	{
-		// mutation 직전 exact current UE target/identity/package truth입니다.
-		FCFDAStagingCurrentState CurrentState;
-		// current resolver diagnostics입니다.
-		TArray<FCFDAStagingIssue> CurrentIssues;
-		if (!FCFDAStagingService::ResolveMissilePresetCurrentState(PlannedRow.Record, CurrentState, CurrentIssues))
+		OutFreshJsonText.Reset();
+		OutIssues.Reset();
+
+		// Planned row exact TypeKey에 등록된 complete provider entry입니다.
+		const FCFDATypeProviderEntry* ProviderEntry = CFDATypeDispatch::FindExactProviderEntry(
+			PlannedRow.Envelope.SchemaId,
+			PlannedRow.Envelope.DataAssetTypeClassPath,
+			&OutError);
+		if (ProviderEntry == nullptr)
 		{
-			OutIssues = MoveTemp(CurrentIssues);
-			AddIssue(OutIssues, ECFDAStagingIssueCode::ApprovalStale, TEXT("Current"), TEXT("Global preflight 이후 mutation 직전 current truth를 다시 확정하지 못했습니다."));
-			OutError = TEXT("Mutation 직전 current resolver가 실패했습니다.");
+			AddIssue(OutIssues, ECFDAStagingIssueCode::ApprovalStale, TEXT("TypeKey"), OutError);
+			return false;
+		}
+		if (!CFDATypeDispatch::ValidateProviderMutationReady(*ProviderEntry, OutError))
+		{
+			AddIssue(OutIssues, ECFDAStagingIssueCode::ApprovalStale, TEXT("TypeKey.Readiness"), OutError);
 			return false;
 		}
 
-		// mutation 직전 exact 3-way Preview입니다.
-		const FCFDAStagingPreviewRow ImmediateRow = FCFDAStagingService::BuildPreview(PlannedRow.Record, CurrentState);
+		// Mutation 직전 exact Staging source를 다시 읽습니다.
+		if (!ReadStagingFile(
+			ProviderEntry->Descriptor,
+			PlannedRow.Envelope.StagingRelativePath,
+			OutFreshJsonText,
+			OutError))
+		{
+			AddIssue(OutIssues, ECFDAStagingIssueCode::ApprovalStale, TEXT("StagingRelativePath"), OutError);
+			return false;
+		}
+
+		// Provider-local typed parse 뒤 shared core에 반환된 immediate common candidate입니다.
+		FCFDACommonEnvelope ImmediateCandidate;
+		// Immediate provider parser diagnostics입니다.
+		TArray<FCFDAStagingIssue> ParseIssues;
+		if (!ProviderEntry->Operations.ParseCommonCandidate(
+			OutFreshJsonText,
+			PlannedRow.Envelope.StagingRelativePath,
+			ImmediateCandidate,
+			ParseIssues))
+		{
+			OutIssues = MoveTemp(ParseIssues);
+			AddIssue(OutIssues, ECFDAStagingIssueCode::ApprovalStale, TEXT("Staging"), TEXT("Global preflight 이후 mutation 직전 provider parse truth가 바뀌었습니다."));
+			OutError = TEXT("Mutation 직전 provider typed parse가 실패했습니다.");
+			return false;
+		}
+
+		// Global preflight source/candidate binding을 temporary approval projection으로 동결합니다.
+		const FCFDAStagingApprovalTarget PlannedTarget = BuildApprovalTarget(PlannedRow);
+		if (!MatchesApprovalCandidateBinding(PlannedTarget, ImmediateCandidate, OutError))
+		{
+			AddIssue(OutIssues, ECFDAStagingIssueCode::ApprovalStale, TEXT("Staging"), OutError);
+			return false;
+		}
+
+		// Mutation 직전 provider-specific current UE target/identity/package truth입니다.
+		FCFDACommonCurrentState CurrentState;
+		// Current resolver diagnostics입니다.
+		TArray<FCFDAStagingIssue> CurrentIssues;
+		if (!ProviderEntry->Operations.ResolveCommonCurrentState(ImmediateCandidate, CurrentState, CurrentIssues))
+		{
+			OutIssues = MoveTemp(CurrentIssues);
+			AddIssue(OutIssues, ECFDAStagingIssueCode::ApprovalStale, TEXT("Current"), TEXT("Global preflight 이후 mutation 직전 provider current truth를 다시 확정하지 못했습니다."));
+			OutError = TEXT("Mutation 직전 provider current resolver가 실패했습니다.");
+			return false;
+		}
+
+		// Mutation 직전 exact shared 3-way Preview입니다.
+		const FCFDACommonPreviewRow ImmediateRow = CFDATypeDispatch::BuildCommonPreview(ImmediateCandidate, CurrentState);
 		if (ImmediateRow.Kind == ECFDAStagingPreviewKind::Conflict || ImmediateRow.Kind == ECFDAStagingPreviewKind::Invalid)
 		{
 			OutIssues = ImmediateRow.Issues;
 			AddIssue(OutIssues, ECFDAStagingIssueCode::ApprovalStale, TEXT("Preview"), TEXT("Global preflight 이후 mutation 직전 current state가 blocker로 변했습니다."));
-			OutError = TEXT("Mutation 직전 fresh Preview가 Conflict/Invalid로 변했습니다.");
+			OutError = TEXT("Mutation 직전 fresh common Preview가 Conflict/Invalid로 변했습니다.");
 			return false;
 		}
-
-		// global preflight가 동결한 exact row를 temporary approval projection으로 재사용합니다.
-		const FCFDAStagingApprovalTarget PlannedTarget = BuildApprovalTarget(PlannedRow);
 		if (!MatchesApprovalTarget(PlannedTarget, ImmediateRow, OutError))
 		{
-			AddIssue(OutIssues, ECFDAStagingIssueCode::ApprovalStale, TEXT("CurrentSemanticFingerprint"), TEXT("Global preflight 이후 mutation 직전 exact target evidence가 바뀌었습니다."));
+			AddIssue(OutIssues, ECFDAStagingIssueCode::ApprovalStale, TEXT("CurrentSemanticFingerprint"), TEXT("Global preflight 이후 mutation 직전 exact common evidence가 바뀌었습니다."));
 			return false;
 		}
 		if (!ValidateCreatePackageAbsent(ImmediateRow, OutError))
@@ -549,28 +526,37 @@ namespace CFDAStagingApplyPrivate
 		return true;
 	}
 
-	// One target을 exact typed materialization하고 durable terminal result를 반환합니다.
+	// Payload-free common row 하나를 exact provider operation entry로 dispatch해 durable terminal result를 반환합니다.
 	void ApplyOneTarget(
-		const FCFDAStagingPreviewRow& Row,
+		const FCFDACommonPreviewRow& Row,
 		FCFDAStagingTargetApplyReport& OutReport)
 	{
-		// exact target soft path입니다.
-		const FSoftObjectPath TargetPath(Row.Record.TargetObjectPath);
-		// exact target package long name입니다.
-		const FString PackageName = FPackageName::ObjectPathToPackageName(Row.Record.TargetObjectPath);
-		// exact target asset object name입니다.
-		const FString AssetName = TargetPath.GetAssetName();
-		if (!TargetPath.IsValid()
-			|| !FPackageName::IsValidLongPackageName(PackageName)
-			|| AssetName.IsEmpty())
+		// Execution row exact TypeKey에 등록된 complete provider entry입니다.
+		FString ProviderError;
+		const FCFDATypeProviderEntry* ProviderEntry = CFDATypeDispatch::FindExactProviderEntry(
+			Row.Envelope.SchemaId,
+			Row.Envelope.DataAssetTypeClassPath,
+			&ProviderError);
+		if (ProviderEntry == nullptr
+			|| !CFDATypeDispatch::ValidateProviderContract(Row.Envelope, ProviderEntry->Descriptor, ProviderError))
 		{
 			OutReport.Result = ECFDAStagingTargetApplyResult::BlockedBeforeMutation;
-			OutReport.Diagnostic = TEXT("execution target package/object identity가 유효하지 않습니다.");
+			OutReport.Diagnostic = ProviderError.IsEmpty()
+				? TEXT("Execution common row의 exact provider contract를 확정하지 못했습니다.")
+				: ProviderError;
+			AddIssue(OutReport.Issues, ECFDAStagingIssueCode::ApprovalStale, TEXT("TypeKey"), OutReport.Diagnostic);
+			return;
+		}
+		if (!CFDATypeDispatch::ValidateProviderMutationReady(*ProviderEntry, ProviderError))
+		{
+			OutReport.Result = ECFDAStagingTargetApplyResult::BlockedBeforeMutation;
+			OutReport.Diagnostic = ProviderError;
+			AddIssue(OutReport.Issues, ECFDAStagingIssueCode::ApprovalStale, TEXT("TypeKey.Readiness"), ProviderError);
 			return;
 		}
 
 #if WITH_DEV_AUTOMATION_TESTS
-		if (MatchesTestFaultTarget(GForceBeforeMutationBlockTargetPath, Row.Record.TargetObjectPath))
+		if (MatchesTestFaultTarget(GForceBeforeMutationBlockTargetPath, Row.Envelope.TargetObjectPath))
 		{
 			OutReport.Result = ECFDAStagingTargetApplyResult::BlockedBeforeMutation;
 			OutReport.Diagnostic = TEXT("DAS-P0-04 Automation fixture가 global preflight 뒤 mutation 직전 known block을 강제했습니다.");
@@ -578,165 +564,22 @@ namespace CFDAStagingApplyPrivate
 		}
 #endif
 
-		// Global preflight와 실제 mutation 사이에 생긴 drift를 target-local로 마지막 한 번 차단합니다.
+		// Mutation 직전 source/current TOCTOU를 재검증한 exact fresh JSON입니다.
+		FString FreshJsonText;
+		// Mutation 직전 provider/common preflight 실패 상세입니다.
 		FString ImmediatePreflightError;
-		if (!RevalidateImmediatelyBeforeMutation(Row, OutReport.Issues, ImmediatePreflightError))
+		if (!RevalidateImmediatelyBeforeMutation(
+			Row,
+			FreshJsonText,
+			OutReport.Issues,
+			ImmediatePreflightError))
 		{
 			OutReport.Result = ECFDAStagingTargetApplyResult::BlockedBeforeMutation;
 			OutReport.Diagnostic = ImmediatePreflightError;
 			return;
 		}
 
-		if (Row.Kind == ECFDAStagingPreviewKind::Create)
-		{
-			if (FindPackage(nullptr, *PackageName) != nullptr || FPackageName::DoesPackageExist(PackageName) || TargetPath.ResolveObject() != nullptr)
-			{
-				OutReport.Result = ECFDAStagingTargetApplyResult::BlockedBeforeMutation;
-				OutReport.Diagnostic = TEXT("global preflight 뒤 Create target/package가 새로 생겨 mutation을 시작하지 않았습니다.");
-				return;
-			}
-
-			// exact new target package입니다.
-			UPackage* Package = CreatePackage(*PackageName);
-			// exact new typed DataAsset입니다.
-			UCFMissileGuidePresetData* Asset = Package
-				? NewObject<UCFMissileGuidePresetData>(Package, FName(*AssetName), RF_Public | RF_Standalone | RF_Transactional)
-				: nullptr;
-			if (Package == nullptr || Asset == nullptr)
-			{
-				// CreatePackage가 성공한 뒤 NewObject가 실패하면 operation-created package가 memory에 남을 수 있어 exact rollback을 주장하지 않습니다.
-				OutReport.Result = Package == nullptr
-					? ECFDAStagingTargetApplyResult::FailedBeforeDurableWrite
-					: ECFDAStagingTargetApplyResult::InMemoryStateUnconfirmed;
-				OutReport.Diagnostic = TEXT("CreatePackage/NewObject 단계에서 exact typed target 생성에 실패했습니다.");
-				return;
-			}
-
-			ApplyPayloadToAsset(Row.Record.Payload, *Asset);
-			// pre-save typed readback error입니다.
-			FString ReadbackError;
-			if (!ValidateAssetFingerprint(*Asset, Row.Record.StagingSemanticFingerprint, ReadbackError))
-			{
-				const bool bRollbackConfirmed = CleanupCreatedAsset(Asset, Package, false);
-				OutReport.Result = bRollbackConfirmed
-					? ECFDAStagingTargetApplyResult::FailedBeforeDurableWrite
-					: ECFDAStagingTargetApplyResult::InMemoryStateUnconfirmed;
-				OutReport.Diagnostic = ReadbackError;
-				return;
-			}
-
-			FAssetRegistryModule::AssetCreated(Asset);
-			Package->MarkPackageDirty();
-			// SavePackage 호출 여부입니다.
-			bool bSaveWasCalled = false;
-			// exact save/durable confirmation error입니다.
-			FString SaveError;
-			if (!SaveExactPackage(*Package, *Asset, Row.Record.StagingSemanticFingerprint, bSaveWasCalled, SaveError))
-			{
-				if (bSaveWasCalled)
-				{
-					OutReport.Result = ECFDAStagingTargetApplyResult::SaveStateUnconfirmed;
-				}
-				else
-				{
-					const bool bRollbackConfirmed = CleanupCreatedAsset(Asset, Package, true);
-					OutReport.Result = bRollbackConfirmed
-						? ECFDAStagingTargetApplyResult::FailedBeforeDurableWrite
-						: ECFDAStagingTargetApplyResult::InMemoryStateUnconfirmed;
-				}
-				OutReport.Diagnostic = SaveError;
-				return;
-			}
-
-			OutReport.Result = ECFDAStagingTargetApplyResult::DurableApplied;
-			OutReport.Diagnostic = TEXT("Create target가 exact package save + clean + persisted existence + typed semantic readback을 통과했습니다.");
-			return;
-		}
-
-		if (Row.Kind == ECFDAStagingPreviewKind::Update)
-		{
-			// exact update target object입니다.
-			UCFMissileGuidePresetData* Asset = Cast<UCFMissileGuidePresetData>(TargetPath.ResolveObject());
-			if (Asset == nullptr)
-			{
-				Asset = LoadObject<UCFMissileGuidePresetData>(nullptr, *Row.Record.TargetObjectPath);
-			}
-			// exact update target package입니다.
-			UPackage* Package = Asset ? Asset->GetOutermost() : nullptr;
-			if (Asset == nullptr || Package == nullptr || Package->IsDirty())
-			{
-				OutReport.Result = ECFDAStagingTargetApplyResult::BlockedBeforeMutation;
-				OutReport.Diagnostic = TEXT("global preflight 뒤 Update target이 사라졌거나 package가 dirty로 바뀌어 mutation을 시작하지 않았습니다.");
-				return;
-			}
-
-			// rollback을 위한 exact original typed payload입니다.
-			FCFDAMissilePresetPayload OriginalPayload;
-			// original payload의 FText/typed whole-record extraction diagnostics입니다.
-			TArray<FCFDAStagingIssue> OriginalPayloadIssues;
-			if (!FCFDAStagingService::ExtractMissilePresetPayload(*Asset, OriginalPayload, OriginalPayloadIssues))
-			{
-				OutReport.Result = ECFDAStagingTargetApplyResult::FailedBeforeDurableWrite;
-				OutReport.Issues = MoveTemp(OriginalPayloadIssues);
-				OutReport.Diagnostic = TEXT("Update mutation 시작 전에 original typed snapshot을 lossless 추출하지 못했습니다.");
-				return;
-			}
-			// original package dirty state입니다.
-			const bool bOriginalPackageDirty = Package->IsDirty();
-			// original semantic fingerprint입니다.
-			FString OriginalFingerprint;
-			// original fingerprint generation error입니다.
-			FString OriginalFingerprintError;
-			if (!FCFDAStagingService::BuildSemanticFingerprint(OriginalPayload, OriginalFingerprint, OriginalFingerprintError))
-			{
-				OutReport.Result = ECFDAStagingTargetApplyResult::FailedBeforeDurableWrite;
-				OutReport.Diagnostic = OriginalFingerprintError;
-				return;
-			}
-
-			Asset->Modify();
-			ApplyPayloadToAsset(Row.Record.Payload, *Asset);
-			Package->MarkPackageDirty();
-			// pre-save typed readback error입니다.
-			FString ReadbackError;
-			if (!ValidateAssetFingerprint(*Asset, Row.Record.StagingSemanticFingerprint, ReadbackError))
-			{
-				const bool bRollbackConfirmed = RestoreUpdatedAsset(*Asset, *Package, OriginalPayload, bOriginalPackageDirty, OriginalFingerprint);
-				OutReport.Result = bRollbackConfirmed
-					? ECFDAStagingTargetApplyResult::FailedBeforeDurableWrite
-					: ECFDAStagingTargetApplyResult::InMemoryStateUnconfirmed;
-				OutReport.Diagnostic = ReadbackError;
-				return;
-			}
-
-			// SavePackage 호출 여부입니다.
-			bool bSaveWasCalled = false;
-			// exact save/durable confirmation error입니다.
-			FString SaveError;
-			if (!SaveExactPackage(*Package, *Asset, Row.Record.StagingSemanticFingerprint, bSaveWasCalled, SaveError))
-			{
-				if (bSaveWasCalled)
-				{
-					OutReport.Result = ECFDAStagingTargetApplyResult::SaveStateUnconfirmed;
-				}
-				else
-				{
-					const bool bRollbackConfirmed = RestoreUpdatedAsset(*Asset, *Package, OriginalPayload, bOriginalPackageDirty, OriginalFingerprint);
-					OutReport.Result = bRollbackConfirmed
-						? ECFDAStagingTargetApplyResult::FailedBeforeDurableWrite
-						: ECFDAStagingTargetApplyResult::InMemoryStateUnconfirmed;
-				}
-				OutReport.Diagnostic = SaveError;
-				return;
-			}
-
-			OutReport.Result = ECFDAStagingTargetApplyResult::DurableApplied;
-			OutReport.Diagnostic = TEXT("Update target가 exact package save + clean + persisted existence + typed semantic readback을 통과했습니다.");
-			return;
-		}
-
-		OutReport.Result = ECFDAStagingTargetApplyResult::BlockedBeforeMutation;
-		OutReport.Diagnostic = TEXT("P0 materializer는 Create/Update operation만 실행합니다.");
+		ProviderEntry->Operations.ApplyReviewedMutation(FreshJsonText, Row, OutReport);
 	}
 
 	// Target terminal results를 fail-safe batch aggregate taxonomy로 계산합니다.
@@ -804,25 +647,80 @@ namespace CFDAStagingApplyPrivate
 	}
 }
 
+// Existing Missile typed materializer production body를 first typed provider callback에 연결합니다.
+void CFDAMissileProviderImpl::MaterializePayload(
+	UCFMissileGuidePresetData& TargetAsset,
+	const FCFDAMissilePresetPayload& Payload)
+{
+	CFDAStagingApplyPrivate::ApplyPayloadToAsset(Payload, TargetAsset);
+}
+
+// Fresh JSON을 provider-local typed payload로 다시 parse한 뒤 exact reviewed common row를 durable Missile mutation에 연결합니다.
+void CFDAMissileProviderImpl::ApplyReviewedMutation(
+	const FString& JsonText,
+	const FCFDACommonPreviewRow& FreshRow,
+	FCFDAStagingTargetApplyReport& OutTargetReport)
+{
+	// Mutation 직전 fresh JSON의 provider-local strict typed parse 결과입니다.
+	const FCFDAStagingParseResult ParseResult = ParseJson(JsonText, FreshRow.Envelope.StagingRelativePath);
+	if (!ParseResult.bValid)
+	{
+		OutTargetReport.Result = ECFDAStagingTargetApplyResult::BlockedBeforeMutation;
+		OutTargetReport.Issues = ParseResult.Issues;
+		CFDAStagingApplyPrivate::AddIssue(
+			OutTargetReport.Issues,
+			ECFDAStagingIssueCode::ApprovalStale,
+			TEXT("Staging"),
+			TEXT("Provider materialize 진입 직전 fresh JSON typed parse가 실패했습니다."));
+		OutTargetReport.Diagnostic = TEXT("Missile provider materialize 진입 직전 typed parse가 실패했습니다.");
+		return;
+	}
+
+	// Provider-local typed parse 결과를 reviewed current/operation binding까지 포함해 common envelope로 재투영합니다.
+	const FCFDACommonEnvelope ParsedEnvelope = BuildCommonEnvelope(
+		ParseResult.Record,
+		FreshRow.Envelope.CurrentSemanticFingerprint,
+		FreshRow.Kind);
+	if (!CFDATypeDispatch::AreCommonEnvelopesEquivalent(ParsedEnvelope, FreshRow.Envelope))
+	{
+		OutTargetReport.Result = ECFDAStagingTargetApplyResult::BlockedBeforeMutation;
+		CFDAStagingApplyPrivate::AddIssue(
+			OutTargetReport.Issues,
+			ECFDAStagingIssueCode::ApprovalStale,
+			TEXT("Staging"),
+			TEXT("Provider-local typed parse 결과가 reviewed common execution row와 exact 일치하지 않습니다."));
+		OutTargetReport.Diagnostic = TEXT("Provider-local typed execution binding mismatch입니다.");
+		return;
+	}
+
+	// Missile provider-local typed payload를 provider-neutral durable sequencing에 전달합니다.
+	CFDADurableCore::ApplyTypedTarget<UCFMissileGuidePresetData, FCFDAMissilePresetPayload>(
+		FreshRow,
+		ParseResult.Record.Payload,
+		&CFDAMissileProviderImpl::MaterializePayload,
+		&CFDAMissileProviderImpl::ExtractPayload,
+		&CFDAMissileProviderImpl::BuildSemanticFingerprint,
+		OutTargetReport);
+}
+
 #if WITH_DEV_AUTOMATION_TESTS
 // 모든 test-only fault injection state를 초기화합니다.
 void FCFDAStagingApplyTestControl::Reset()
 {
-	CFDAStagingApplyPrivate::GForceSaveFailureTargetPath.Reset();
-	CFDAStagingApplyPrivate::GForceConfirmationFailureTargetPath.Reset();
+	CFDADurableCore::ResetTestFaults();
 	CFDAStagingApplyPrivate::GForceBeforeMutationBlockTargetPath.Reset();
 }
 
 // exact target의 SavePackage 호출 시점을 outcome-unknown failure로 강제합니다.
 void FCFDAStagingApplyTestControl::ForceSaveFailure(const FString& TargetObjectPath)
 {
-	CFDAStagingApplyPrivate::GForceSaveFailureTargetPath = TargetObjectPath;
+	CFDADurableCore::SetForceSaveFailureTarget(TargetObjectPath);
 }
 
 // exact target의 SavePackage 성공 뒤 persisted confirmation 실패를 강제합니다.
 void FCFDAStagingApplyTestControl::ForceConfirmationFailure(const FString& TargetObjectPath)
 {
-	CFDAStagingApplyPrivate::GForceConfirmationFailureTargetPath = TargetObjectPath;
+	CFDADurableCore::SetForceConfirmationFailureTarget(TargetObjectPath);
 }
 
 // exact target의 global preflight 뒤 mutation 직전 known block을 강제합니다.
@@ -832,35 +730,35 @@ void FCFDAStagingApplyTestControl::ForceBeforeMutationBlock(const FString& Targe
 }
 #endif
 
-// Conflict/Invalid 없는 exact Create/Update Preview set을 Reviewed approval evidence로 동결합니다.
-bool FCFDAStagingApplyService::BuildReviewedApproval(
-	const TArray<FCFDAStagingPreviewRow>& PreviewRows,
+// Payload-free common Preview set을 deterministic Reviewed approval evidence로 동결합니다.
+bool CFDATypeDispatch::BuildCommonReviewedApproval(
+	const TArray<FCFDACommonPreviewRow>& PreviewRows,
 	FCFDAStagingReviewedApproval& OutApproval,
 	FString& OutError)
 {
 	OutApproval = FCFDAStagingReviewedApproval();
 	OutError.Reset();
 
-	// duplicate validation을 포함해 approval 가능한 exact preview copy입니다.
-	TArray<FCFDAStagingPreviewRow> ValidatedRows = PreviewRows;
-	FCFDAStagingService::ApplyBatchDuplicateValidation(ValidatedRows);
-	for (const FCFDAStagingPreviewRow& Row : ValidatedRows)
+	// Duplicate validation을 포함해 approval 가능한 payload-free common preview copy입니다.
+	TArray<FCFDACommonPreviewRow> ValidatedRows = PreviewRows;
+	ApplyCommonBatchDuplicateValidation(ValidatedRows);
+	for (const FCFDACommonPreviewRow& Row : ValidatedRows)
 	{
 		if (Row.Kind == ECFDAStagingPreviewKind::Conflict || Row.Kind == ECFDAStagingPreviewKind::Invalid)
 		{
-			OutError = TEXT("Conflict/Invalid가 포함된 Preview set은 Reviewed approval로 승격할 수 없습니다.");
+			OutError = TEXT("Conflict/Invalid가 포함된 common Preview set은 Reviewed approval로 승격할 수 없습니다.");
 			return false;
 		}
 	}
 
-	// exact reviewed mutation set의 batch plan hash입니다.
+	// Exact reviewed common mutation set의 batch plan hash입니다.
 	FString BatchPlanHash;
-	if (!FCFDAStagingService::BuildBatchPlanHash(ValidatedRows, BatchPlanHash, OutError))
+	if (!BuildCommonBatchPlanHash(ValidatedRows, BatchPlanHash, OutError))
 	{
 		return false;
 	}
 
-	for (const FCFDAStagingPreviewRow& Row : ValidatedRows)
+	for (const FCFDACommonPreviewRow& Row : ValidatedRows)
 	{
 		if (Row.Kind == ECFDAStagingPreviewKind::Create || Row.Kind == ECFDAStagingPreviewKind::Update)
 		{
@@ -869,7 +767,7 @@ bool FCFDAStagingApplyService::BuildReviewedApproval(
 	}
 	if (OutApproval.IncludedTargets.IsEmpty())
 	{
-		OutError = TEXT("Reviewed approval에는 Create/Update mutation candidate가 하나 이상 필요합니다.");
+		OutError = TEXT("Reviewed approval에는 Create/Update common mutation candidate가 하나 이상 필요합니다.");
 		return false;
 	}
 
@@ -889,6 +787,32 @@ bool FCFDAStagingApplyService::BuildReviewedApproval(
 	OutApproval.BatchPlanHash = MoveTemp(BatchPlanHash);
 	OutApproval.State = ECFDAStagingApprovalState::Reviewed;
 	return true;
+}
+
+// Existing Public Missile Preview set을 provider-local integrity projection 뒤 common Reviewed approval authority로 전달하는 compatibility facade입니다.
+bool FCFDAStagingApplyService::BuildReviewedApproval(
+	const TArray<FCFDAStagingPreviewRow>& PreviewRows,
+	FCFDAStagingReviewedApproval& OutApproval,
+	FString& OutError)
+{
+	OutApproval = FCFDAStagingReviewedApproval();
+	OutError.Reset();
+
+	// Shared Review authority에 전달할 payload-free common rows입니다.
+	TArray<FCFDACommonPreviewRow> CommonRows;
+	CommonRows.Reserve(PreviewRows.Num());
+	for (const FCFDAStagingPreviewRow& PreviewRow : PreviewRows)
+	{
+		// Provider-local typed mutable integrity 검증 뒤 반환된 common row입니다.
+		FCFDACommonPreviewRow CommonRow;
+		if (!CFDAMissileProviderImpl::ProjectCompatibilityPreviewRow(PreviewRow, CommonRow, OutError))
+		{
+			return false;
+		}
+		CommonRows.Add(MoveTemp(CommonRow));
+	}
+
+	return CFDATypeDispatch::BuildCommonReviewedApproval(CommonRows, OutApproval, OutError);
 }
 
 // Reviewed approval을 one-shot 소비하고 disk Staging + current UE truth를 global preflight한 뒤 exact target만 순서대로 materialize/save합니다.
@@ -912,8 +836,8 @@ bool FCFDAStagingApplyService::ApplyReviewedBatch(
 		OutReport.Targets.Add(CFDAStagingApplyPrivate::BuildInitialTargetReport(Target));
 	}
 
-	// disk Staging + fresh current truth로 다시 만든 exact mutation rows입니다.
-	TArray<FCFDAStagingPreviewRow> FreshRows;
+	// Disk Staging + fresh current truth로 다시 만든 payload-free exact mutation rows입니다.
+	TArray<FCFDACommonPreviewRow> FreshRows;
 	if (!CFDAStagingApplyPrivate::BuildFreshRows(InOutApproval, FreshRows, OutReport))
 	{
 		InOutApproval.State = ECFDAStagingApprovalState::Consumed;
@@ -937,8 +861,8 @@ bool FCFDAStagingApplyService::ApplyReviewedBatch(
 
 	for (int32 RowIndex = 0; RowIndex < FreshRows.Num(); ++RowIndex)
 	{
-		// deterministic execution row입니다.
-		const FCFDAStagingPreviewRow& FreshRow = FreshRows[RowIndex];
+		// Deterministic payload-free execution row입니다.
+		const FCFDACommonPreviewRow& FreshRow = FreshRows[RowIndex];
 		// matching target report입니다.
 		FCFDAStagingTargetApplyReport& TargetReport = OutReport.Targets[RowIndex];
 		CFDAStagingApplyPrivate::ApplyOneTarget(FreshRow, TargetReport);

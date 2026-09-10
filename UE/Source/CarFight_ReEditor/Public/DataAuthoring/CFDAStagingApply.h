@@ -1,14 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDAStagingApply.h
-// Version: v1.2.0
-// Date: 2026-09-08
-// Description: CF-FQ-049 DAS-P0-03 reviewed DataAsset Staging Preview를 exact typed UE Asset materialization으로 승격하는 approval/apply public contract입니다.
+// Version: v1.3.0
+// Date: 2026-09-10
+// Description: trusted typed provider의 reviewed DataAsset Staging Preview를 exact typed UE Asset materialization으로 승격하는 approval/apply public contract입니다.
 // Changelog:
+// - v1.3.0: CF-FQ-051 DAO-P0-03에서 trusted TypeKey provider readiness 기반 multi-type reviewed Apply를 Current contract로 명시. Public API signature는 변경하지 않음.
 // - v1.2.0: DAS-P0-04 전용 Automation fixture가 save/confirmation uncertainty와 post-durable first-failure를 결정적으로 재현할 수 있도록 WITH_DEV_AUTOMATION_TESTS 전용 fault control을 추가.
 // - v1.1.0: DurableApplied가 exact SavePackage 뒤 non-interactive package disk reload와 unified typed semantic readback까지 확인해야 한다는 public result contract를 강화.
 // - v1.0.0: one-shot Reviewed approval, global TOCTOU preflight, target/batch result taxonomy와 MissileGuidePreset exact materializer facade를 추가.
 // Migration:
-// - P0에서는 CFMissileGuidePresetData exact class만 write allowlist에 포함합니다. 범용 UObject reflection writer나 Save All 경로는 제공하지 않습니다.
+// - reviewed write allowlist는 code-owned trusted TypeKey provider registry + ReviewedMutationReady readiness로 제한합니다. 현재 MissileGuidePreset + AmmoData exact2가 mutation-ready입니다.
+// - 범용 UObject reflection writer나 Save All 경로는 제공하지 않으며 기존 Public API signature는 유지합니다.
 
 #pragma once
 
@@ -147,7 +149,7 @@ struct FCFDAStagingApplyReport
 	FString Diagnostic;
 };
 
-// DAS-P0-03 exact typed materializer와 one-shot Apply를 제공하는 Editor-only service입니다.
+// Trusted typed provider materializer와 one-shot reviewed Apply를 제공하는 Editor-only service입니다.
 #if WITH_DEV_AUTOMATION_TESTS
 // DAS-P0-04 test fixture만 사용하는 deterministic fault injection control입니다.
 class FCFDAStagingApplyTestControl

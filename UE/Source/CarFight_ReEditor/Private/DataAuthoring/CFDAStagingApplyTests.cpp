@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDAStagingApplyTests.cpp
-// Version: v1.2.0
-// Date: 2026-09-08
+// Version: v1.3.0
+// Date: 2026-09-09
 // Description: CF-FQ-049 DAS-P0-03 one-shot approval/global preflight와 loaded-but-unregistered StableIdentity current truth focused Automation입니다.
 // Changelog:
+// - v1.3.0: DAO-P0-01 provider-owned exact StagingRoot 경계에 맞춰 missing/loaded Automation fixture source를 MissileGuidePreset provider root 하위로 이동.
 // - v1.2.0: P0-04 AdapterContractRevision 2 승격에 맞춰 P0-03 current valid Staging fixture revision을 2로 갱신.
 // - v1.1.0: current resolver와 Apply/rollback/post-save가 공유하는 exact MissileGuidePreset UObject→typed payload extractor 회귀 검증을 LoadedIdentityPreflight에 추가.
 // - v1.0.0: missing reviewed Staging source의 mutation0 ApprovalStale/Consumed lifecycle과 Asset Registry 미등록 loaded identity의 TargetMoved fail-closed를 추가.
@@ -127,7 +128,7 @@ bool FCFDAStagingApprovalLifecycleTest::RunTest(const FString& Parameters)
 		*StableLogicalId);
 	// intentionally 존재하지 않는 canonical Staging source path입니다.
 	const FString MissingStagingPath = FString::Printf(
-		TEXT("Authoring/DataAssetStaging/__AutomationMissing__/%s.json"),
+		TEXT("Authoring/DataAssetStaging/MissileGuidePreset/__AutomationMissing__/%s.json"),
 		*StableLogicalId);
 
 	// valid whole-record typed parse result입니다.
@@ -212,7 +213,7 @@ bool FCFDAStagingLoadedIdentityTest::RunTest(const FString& Parameters)
 		*StableLogicalId);
 	// parse contract을 만족하는 canonical source path입니다.
 	const FString StagingPath = FString::Printf(
-		TEXT("Authoring/DataAssetStaging/__AutomationLoaded__/%s.json"),
+		TEXT("Authoring/DataAssetStaging/MissileGuidePreset/__AutomationLoaded__/%s.json"),
 		*StableLogicalId);
 
 	// Asset Registry에 notify하지 않을 loaded-only fixture package입니다.

@@ -1,9 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDAStagingOps.cpp
-// Version: v1.2.0
-// Date: 2026-09-09
-// Description: CF-FQ-049 DAS-P0-05 Product Staging safe sync, exact selection discovery와 Preview→Review→ApplyReviewed operational session 구현입니다.
+// Version: v1.4.0
+// Date: 2026-09-10
+// Description: CF-FQ-051 DAO-P0-05 trusted provider-owned StagingRoot를 사용하는 Missile compatibility + mixed exact-path operational session 구현입니다.
 // Changelog:
+// - v1.4.0: session non-empty selection에만 provider-neutral exact-path discovery를 추가하고 JSON read 전 path owner exact1, actual provider Parse/Current/common Preview, mixed Review evidence를 연결했습니다. Empty Missile whole-root discovery, Public Missile facade, console shorthand와 SyncProduct exact3는 보존합니다.
+// - v1.3.0: hard-coded Missile StagingRoot authority를 Editor Private TypeKey provider로 이동하고 selection/discovery/Product Sync path validation을 provider-owned root exact containment으로 재배선. Public Ops API와 Product write semantics는 보존.
 // - v1.2.0: CF-FQ-050 DACE-P0-01이 anonymous production BuildProductStagingJson을 직접 관측할 수 있는 WITH_DEV_AUTOMATION_TESTS private serializer probe를 추가. Product Sync/write behavior는 변경하지 않음.
 // - v1.1.1: UE 5.8 console registration API에 맞춰 args delegate를 FAutoConsoleCommand overload로 교정.
 // - v1.1.0: exact selected Preview, selection-bound fresh Review session, console Preview args와 Sync partial-write exact-byte rollback을 추가.
@@ -12,9 +14,14 @@
 // - `CarFight.DAStaging.Preview`는 인수가 없으면 전체 canonical folder를, 인수가 있으면 StableLogicalId 또는 canonical relative JSON path exact-list만 Preview합니다.
 // - Review는 마지막 Preview의 same selection만 fresh re-discovery/hash 검증하고, ApplyReviewed는 그 Reviewed one-shot approval만 전달합니다.
 // - SyncProduct는 Product .uasset을 저장하지 않으며 write/verification 실패 시 이번 호출에서 touched된 Staging 파일을 호출 전 raw bytes/absence로 rollback합니다.
+// - v1.3.0에서도 `GetMissilePresetStagingRoot()` Public signature/value와 Product Low/Normal/High canonical path는 그대로이며, authority만 Private provider로 이동합니다.
+// - v1.4.0에서 mixed explicit selection은 MissileGuidePreset+AmmoData exact2만 허용하며 parent root recursive scan과 payload-first provider 선택을 하지 않습니다. Product Ammo exact0은 이 경로에서 fake target/Staging으로 보충하지 않습니다.
 
 #include "DataAuthoring/CFDAStagingOps.h"
 #include "CFDAContractGuard.h"
+#include "CFDAAmmoProvider.h"
+#include "CFDAMissileProvider.h"
+#include "CFDATypeDispatch.h"
 
 #include "CFMissileGuidePresetData.h"
 #include "Dom/JsonObject.h"
@@ -27,12 +34,317 @@
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
 
+namespace CFDAStagingOpsPrivate
+{
+	// CarFight main_game root를 `<main_game>/UE/` ProjectDir의 부모로 resolve합니다.
+	FString GetMainGameRoot();
+
+	// main_game root 문자열을 slash-normalized prefix 비교용 형태로 반환합니다.
+	FString GetMainGameRootPrefix();
+
+	// DAO-P0-05 mixed operational path가 명시적으로 허용하는 production TypeKey exact2를 반환합니다.
+	const TArray<FCFDATypeKey>& GetMixedOperationalAllowedTypeKeys()
+	{
+		// P0-05에서 자동 확장하지 않는 explicit MissileGuidePreset + AmmoData scope입니다.
+		static const TArray<FCFDATypeKey> AllowedTypeKeys =
+		{
+			CFDAMissileProvider::GetProvider().Descriptor.TypeKey,
+			CFDAAmmoProvider::GetProvider().Descriptor.TypeKey
+		};
+		return AllowedTypeKeys;
+	}
+
+	// Provider-neutral exact selected path 목록을 owner-before-read 규칙으로 canonicalize/dedupe/sort합니다.
+	bool NormalizeMixedSelectedPaths(
+		const TArray<FString>& SelectedStagingRelativePaths,
+		TArray<FString>& OutNormalizedPaths,
+		bool& bOutAllMissilePaths,
+		FString& OutError)
+	{
+		OutNormalizedPaths.Reset();
+		bOutAllMissilePaths = true;
+		// Exact duplicate를 차단할 normalized mixed path 집합입니다.
+		TSet<FString> SeenPaths;
+		for (const FString& SelectedPath : SelectedStagingRelativePaths)
+		{
+			// JSON read 전에 trusted production registry가 확정한 canonical selected path입니다.
+			FString NormalizedPath;
+			// JSON read 전에 root containment로 확정한 exact owner provider입니다.
+			const FCFDATypeProviderEntry* OwnerProvider = CFDATypeDispatch::FindProviderForStagingPath(
+				SelectedPath,
+				GetMixedOperationalAllowedTypeKeys(),
+				NormalizedPath,
+				&OutError);
+			if (OwnerProvider == nullptr)
+			{
+				return false;
+			}
+			if (SeenPaths.Contains(NormalizedPath))
+			{
+				OutError = FString::Printf(TEXT("selected Staging path가 중복됐습니다: %s"), *NormalizedPath);
+				return false;
+			}
+			SeenPaths.Add(NormalizedPath);
+			OutNormalizedPaths.Add(NormalizedPath);
+			bOutAllMissilePaths = bOutAllMissilePaths
+				&& OwnerProvider == &CFDATypeDispatch::GetMissilePresetProviderEntry();
+		}
+		OutNormalizedPaths.Sort();
+		OutError.Reset();
+		return true;
+	}
+
+	// 이미 owner가 확정된 canonical Staging path를 main_game 내부 absolute filename으로 변환합니다.
+	bool ResolveOwnedStagingAbsolutePath(
+		const FCFDATypeProvider& Provider,
+		const FString& StagingRelativePath,
+		FString& OutAbsolutePath,
+		FString& OutError)
+	{
+		// Owner provider root 기준으로 재검증한 canonical relative path입니다.
+		FString NormalizedRelativePath;
+		if (!CFDATypeDispatch::NormalizeProviderStagingPath(Provider, StagingRelativePath, NormalizedRelativePath)
+			|| !NormalizedRelativePath.Equals(StagingRelativePath, ESearchCase::CaseSensitive))
+		{
+			OutAbsolutePath.Reset();
+			OutError = TEXT("owner provider가 확정된 Staging path가 canonical form과 다릅니다.");
+			return false;
+		}
+
+		// Canonical main_game absolute root입니다.
+		const FString MainGameRoot = GetMainGameRoot();
+		// Requested exact staging absolute filename입니다.
+		FString AbsolutePath = FPaths::ConvertRelativePathToFull(FPaths::Combine(MainGameRoot, NormalizedRelativePath));
+		FPaths::NormalizeFilename(AbsolutePath);
+		// Main_game containment 비교용 slash-normalized prefix입니다.
+		const FString MainGameRootPrefix = GetMainGameRootPrefix();
+		if (!AbsolutePath.StartsWith(MainGameRootPrefix, ESearchCase::IgnoreCase))
+		{
+			OutAbsolutePath.Reset();
+			OutError = TEXT("Provider-owned Staging absolute path가 main_game root 밖으로 벗어났습니다.");
+			return false;
+		}
+
+		OutAbsolutePath = MoveTemp(AbsolutePath);
+		OutError.Reset();
+		return true;
+	}
+
+	// Payload-free common row를 mixed session 사용자에게 보여줄 기존 Preview DTO 구조 요약으로 투영합니다.
+	FCFDAStagingPreviewRow BuildMixedCompatibilityPreviewRow(const FCFDACommonPreviewRow& CommonRow)
+	{
+		// Public compatibility DTO에 투영할 structural row입니다. Typed Missile payload는 mixed mode에서 authority가 아닙니다.
+		FCFDAStagingPreviewRow CompatibilityRow;
+		CompatibilityRow.Kind = CommonRow.Kind;
+		CompatibilityRow.Record.SchemaId = CommonRow.Envelope.SchemaId;
+		CompatibilityRow.Record.SchemaRevision = CommonRow.Envelope.SchemaRevision;
+		CompatibilityRow.Record.AdapterContractRevision = CommonRow.Envelope.AdapterContractRevision;
+		CompatibilityRow.Record.DataAssetTypeClassPath = CommonRow.Envelope.DataAssetTypeClassPath;
+		CompatibilityRow.Record.StableLogicalId = CommonRow.Envelope.StableLogicalId;
+		CompatibilityRow.Record.TargetObjectPath = CommonRow.Envelope.TargetObjectPath;
+		CompatibilityRow.Record.bHasBaseSemanticFingerprint = CommonRow.Envelope.bHasBaseSemanticFingerprint;
+		CompatibilityRow.Record.BaseSemanticFingerprint = CommonRow.Envelope.BaseSemanticFingerprint;
+		CompatibilityRow.Record.StagingSemanticFingerprint = CommonRow.Envelope.StagingSemanticFingerprint;
+		CompatibilityRow.Record.StagingRelativePath = CommonRow.Envelope.StagingRelativePath;
+		CompatibilityRow.CurrentSemanticFingerprint = CommonRow.Envelope.CurrentSemanticFingerprint;
+		CompatibilityRow.Issues = CommonRow.Issues;
+		return CompatibilityRow;
+	}
+
+	// Actual registered providers로 exact non-empty mixed paths를 discover하고 existing common Preview/Review core에 연결합니다.
+	bool DiscoverMixedExplicitPreview(
+		const TArray<FString>& NormalizedSelectedPaths,
+		FCFDAStagingOpsPreview& OutPreview,
+		FCFDAStagingReviewedApproval* OutFreshReviewedApproval,
+		FString& OutError)
+	{
+		OutPreview = FCFDAStagingOpsPreview();
+		if (OutFreshReviewedApproval != nullptr)
+		{
+			*OutFreshReviewedApproval = FCFDAStagingReviewedApproval();
+		}
+		if (NormalizedSelectedPaths.IsEmpty())
+		{
+			OutError = TEXT("Mixed Explicit Paths discovery에는 non-empty exact selection이 필요합니다.");
+			return false;
+		}
+
+		// Shared duplicate/hash/Review core에 전달할 heterogeneous payload-free rows입니다.
+		TArray<FCFDACommonPreviewRow> CommonRows;
+		CommonRows.Reserve(NormalizedSelectedPaths.Num());
+		for (const FString& SelectedPath : NormalizedSelectedPaths)
+		{
+			// JSON read 전에 production provider root ownership으로 다시 확정한 canonical path입니다.
+			FString OwnedNormalizedPath;
+			// JSON read 전에 exact1로 확정한 production provider entry입니다.
+			const FCFDATypeProviderEntry* OwnerProvider = CFDATypeDispatch::FindProviderForStagingPath(
+				SelectedPath,
+				GetMixedOperationalAllowedTypeKeys(),
+				OwnedNormalizedPath,
+				&OutError);
+			if (OwnerProvider == nullptr
+				|| !OwnedNormalizedPath.Equals(SelectedPath, ESearchCase::CaseSensitive))
+			{
+				if (OutError.IsEmpty())
+				{
+					OutError = TEXT("Mixed selected path의 fresh owner/canonical path가 Preview selection과 달라졌습니다.");
+				}
+				return false;
+			}
+
+			// Exact provider-owned JSON physical filename입니다.
+			FString StagingAbsolutePath;
+			if (!ResolveOwnedStagingAbsolutePath(OwnerProvider->Descriptor, SelectedPath, StagingAbsolutePath, OutError))
+			{
+				return false;
+			}
+			if (!IFileManager::Get().FileExists(*StagingAbsolutePath))
+			{
+				OutError = FString::Printf(TEXT("selected mixed Staging JSON이 존재하지 않습니다: %s"), *SelectedPath);
+				return false;
+			}
+
+			// Owner 확정 뒤에만 읽는 exact source JSON text입니다.
+			FString JsonText;
+			if (!FFileHelper::LoadFileToString(JsonText, *StagingAbsolutePath))
+			{
+				OutError = FString::Printf(TEXT("selected mixed Staging JSON을 읽지 못했습니다: %s"), *SelectedPath);
+				return false;
+			}
+
+			// Owner provider의 typed parser가 반환한 payload-free candidate입니다.
+			FCFDACommonEnvelope CandidateEnvelope;
+			// Owner provider typed parse/integrity/reference diagnostics입니다.
+			TArray<FCFDAStagingIssue> CandidateIssues;
+			if (!OwnerProvider->Operations.ParseCommonCandidate(
+				JsonText,
+				SelectedPath,
+				CandidateEnvelope,
+				CandidateIssues))
+			{
+				// Malformed payload라도 path owner와 source path를 진단 projection에 유지하는 invalid row입니다.
+				FCFDACommonPreviewRow InvalidRow;
+				InvalidRow.Kind = ECFDAStagingPreviewKind::Invalid;
+				InvalidRow.Envelope = CandidateEnvelope;
+				if (InvalidRow.Envelope.SchemaId.IsEmpty())
+				{
+					InvalidRow.Envelope.SchemaId = OwnerProvider->Descriptor.TypeKey.SchemaId;
+					InvalidRow.Envelope.SchemaRevision = OwnerProvider->Descriptor.SchemaRevision;
+					InvalidRow.Envelope.AdapterContractRevision = OwnerProvider->Descriptor.AdapterContractRevision;
+					InvalidRow.Envelope.DataAssetTypeClassPath = OwnerProvider->Descriptor.TypeKey.DataAssetTypeClassPath;
+				}
+				InvalidRow.Envelope.StagingRelativePath = SelectedPath;
+				InvalidRow.Issues = MoveTemp(CandidateIssues);
+				CommonRows.Add(MoveTemp(InvalidRow));
+				continue;
+			}
+
+			// Payload-declared TypeKey/revision/root가 path owner provider와 exact 같은지 재확인한 오류입니다.
+			FString ProviderContractError;
+			if (!CFDATypeDispatch::ValidateProviderContract(
+				CandidateEnvelope,
+				OwnerProvider->Descriptor,
+				ProviderContractError))
+			{
+				// Path owner와 payload contract mismatch를 fail-closed할 common invalid row입니다.
+				FCFDACommonPreviewRow InvalidRow;
+				InvalidRow.Kind = ECFDAStagingPreviewKind::Invalid;
+				InvalidRow.Envelope = CandidateEnvelope;
+				// Owner/payload mismatch를 machine-readable blocker로 기록합니다.
+				FCFDAStagingIssue ContractIssue;
+				ContractIssue.Code = ECFDAStagingIssueCode::SchemaUnsupported;
+				ContractIssue.FieldPath = TEXT("TypeKey");
+				ContractIssue.Message = ProviderContractError;
+				ContractIssue.bBlocking = true;
+				InvalidRow.Issues.Add(MoveTemp(ContractIssue));
+				CommonRows.Add(MoveTemp(InvalidRow));
+				continue;
+			}
+
+			// Exact provider-specific current truth입니다.
+			FCFDACommonCurrentState CurrentState;
+			// Exact provider current resolver diagnostics입니다.
+			TArray<FCFDAStagingIssue> CurrentIssues;
+			if (!OwnerProvider->Operations.ResolveCommonCurrentState(
+				CandidateEnvelope,
+				CurrentState,
+				CurrentIssues))
+			{
+				// Current truth를 확정할 수 없는 candidate의 common invalid row입니다.
+				FCFDACommonPreviewRow InvalidRow;
+				InvalidRow.Kind = ECFDAStagingPreviewKind::Invalid;
+				InvalidRow.Envelope = CandidateEnvelope;
+				InvalidRow.Issues = MoveTemp(CurrentIssues);
+				CommonRows.Add(MoveTemp(InvalidRow));
+				continue;
+			}
+
+			CommonRows.Add(CFDATypeDispatch::BuildCommonPreview(CandidateEnvelope, CurrentState));
+		}
+
+		CFDATypeDispatch::ApplyCommonBatchDuplicateValidation(CommonRows);
+		for (const FCFDACommonPreviewRow& CommonRow : CommonRows)
+		{
+			OutPreview.Rows.Add(BuildMixedCompatibilityPreviewRow(CommonRow));
+			switch (CommonRow.Kind)
+			{
+			case ECFDAStagingPreviewKind::Create:
+				++OutPreview.CreateCount;
+				break;
+			case ECFDAStagingPreviewKind::Update:
+				++OutPreview.UpdateCount;
+				break;
+			case ECFDAStagingPreviewKind::NoChange:
+				++OutPreview.NoChangeCount;
+				break;
+			case ECFDAStagingPreviewKind::Conflict:
+				++OutPreview.ConflictCount;
+				break;
+			case ECFDAStagingPreviewKind::Invalid:
+			default:
+				++OutPreview.InvalidCount;
+				break;
+			}
+		}
+
+		OutPreview.bBlocked = OutPreview.ConflictCount > 0 || OutPreview.InvalidCount > 0;
+		OutPreview.bHasMutationCandidates = OutPreview.CreateCount > 0 || OutPreview.UpdateCount > 0;
+		if (!OutPreview.bBlocked && OutPreview.bHasMutationCandidates)
+		{
+			if (!CFDATypeDispatch::BuildCommonBatchPlanHash(CommonRows, OutPreview.BatchPlanHash, OutError))
+			{
+				return false;
+			}
+			if (OutFreshReviewedApproval != nullptr)
+			{
+				if (!CFDATypeDispatch::BuildCommonReviewedApproval(CommonRows, *OutFreshReviewedApproval, OutError)
+					|| !OutFreshReviewedApproval->BatchPlanHash.Equals(OutPreview.BatchPlanHash, ESearchCase::CaseSensitive))
+				{
+					*OutFreshReviewedApproval = FCFDAStagingReviewedApproval();
+					return false;
+				}
+			}
+		}
+		else
+		{
+			OutPreview.BatchPlanHash.Reset();
+		}
+
+		OutError.Reset();
+		return true;
+	}
+
+}
+
 DEFINE_LOG_CATEGORY_STATIC(LogCFDAStagingOps, Log, All);
 
 namespace CFDAStagingOpsPrivate
 {
-	// P0 MissileGuidePreset canonical main_game-relative Staging directory입니다.
-	static constexpr TCHAR MissilePresetStagingRoot[] = TEXT("Authoring/DataAssetStaging/MissileGuidePreset");
+	// Current compatibility Ops가 사용하는 trusted Missile provider-owned canonical StagingRoot를 반환합니다.
+	const FString& GetMissileStagingRoot()
+	{
+		return CFDATypeDispatch::GetMissilePresetProvider().CanonicalStagingRoot;
+	}
 
 #if WITH_DEV_AUTOMATION_TESTS
 	// zero-based changed-file write ordinal에서 write 성공 뒤 failure를 강제하는 test-only 값입니다.
@@ -114,22 +426,20 @@ namespace CFDAStagingOpsPrivate
 		return MainGameRootPrefix;
 	}
 
-	// canonical main_game-relative Staging path를 containment 검증한 absolute path로 변환합니다.
+	// canonical main_game-relative Staging path를 provider root containment 검증한 absolute path로 변환합니다.
 	bool ResolveStagingAbsolutePath(
 		const FString& StagingRelativePath,
 		FString& OutAbsolutePath,
 		FString& OutError)
 	{
-		// slash-normalized source path입니다.
-		FString NormalizedRelativePath = StagingRelativePath;
-		FPaths::NormalizeFilename(NormalizedRelativePath);
-		if (!FPaths::IsRelative(NormalizedRelativePath)
-			|| NormalizedRelativePath.Contains(TEXT(".."), ESearchCase::CaseSensitive)
-			|| !NormalizedRelativePath.StartsWith(FString(MissilePresetStagingRoot) + TEXT("/"), ESearchCase::CaseSensitive)
-			|| !NormalizedRelativePath.EndsWith(TEXT(".json"), ESearchCase::IgnoreCase))
+		// Current compatibility Ops가 사용하는 trusted Missile provider입니다.
+		const FCFDATypeProvider& MissileProvider = CFDATypeDispatch::GetMissilePresetProvider();
+		// provider authority로 canonicalized 된 source path입니다.
+		FString NormalizedRelativePath;
+		if (!CFDATypeDispatch::NormalizeProviderStagingPath(MissileProvider, StagingRelativePath, NormalizedRelativePath))
 		{
 			OutAbsolutePath.Reset();
-			OutError = FString::Printf(TEXT("canonical MissileGuidePreset Staging path가 아닙니다: %s"), *StagingRelativePath);
+			OutError = FString::Printf(TEXT("selected provider의 canonical MissileGuidePreset Staging path가 아닙니다: %s"), *StagingRelativePath);
 			return false;
 		}
 
@@ -225,10 +535,12 @@ namespace CFDAStagingOpsPrivate
 			}
 			else
 			{
-				RawSelectedPaths.Add(FString::Printf(TEXT("%s/%s.json"), MissilePresetStagingRoot, *Arg));
+				RawSelectedPaths.Add(FString::Printf(TEXT("%s/%s.json"), *GetMissileStagingRoot(), *Arg));
 			}
 		}
-		return NormalizeSelectedPaths(RawSelectedPaths, OutSelectedPaths, OutError);
+		// StableLogicalId shorthand는 위에서 Missile canonical path로 바뀌었고 full path만 mixed owner resolution을 사용합니다.
+		bool bAllMissilePaths = true;
+		return NormalizeMixedSelectedPaths(RawSelectedPaths, OutSelectedPaths, bAllMissilePaths, OutError);
 	}
 
 	// enum typed value를 exact reflected source token으로 변환합니다.
@@ -286,7 +598,7 @@ namespace CFDAStagingOpsPrivate
 		return ConfigObject;
 	}
 
-	// current typed Product payload를 revision-2 strict whole-record Update JSON으로 직렬화합니다.
+	// current typed Product payload를 revision-2 strict whole-record Update JSON으로 직렬화하는 existing production body입니다.
 	bool BuildProductStagingJson(
 		const FCFDAMissilePresetPayload& Payload,
 		const FString& TargetObjectPath,
@@ -392,7 +704,7 @@ namespace CFDAStagingOpsPrivate
 		}
 
 		// Product stable id 기반 canonical repository-relative Staging path입니다.
-		const FString StagingRelativePath = FString::Printf(TEXT("%s/%s.json"), MissilePresetStagingRoot, ProductTarget.StableLogicalId);
+		const FString StagingRelativePath = FString::Printf(TEXT("%s/%s.json"), *GetMissileStagingRoot(), ProductTarget.StableLogicalId);
 		// Product staging physical path입니다.
 		FString StagingAbsolutePath;
 		if (!ResolveStagingAbsolutePath(StagingRelativePath, StagingAbsolutePath, OutError))
@@ -402,7 +714,10 @@ namespace CFDAStagingOpsPrivate
 
 		// current Product와 exact base가 같은 canonical revision-2 JSON입니다.
 		FString CanonicalJsonText;
-		if (!BuildProductStagingJson(CurrentPayload, ProductTarget.TargetObjectPath, CurrentFingerprint, CanonicalJsonText, OutError))
+		// Current Missile typed provider callback table입니다.
+		const FCFDAMissileProviderCallbacks& ProviderCallbacks = CFDAMissileProvider::GetProvider().Callbacks;
+		checkf(ProviderCallbacks.SerializeProductStagingJson != nullptr, TEXT("Missile provider serializer callback이 등록되지 않았습니다."));
+		if (!ProviderCallbacks.SerializeProductStagingJson(CurrentPayload, ProductTarget.TargetObjectPath, CurrentFingerprint, CanonicalJsonText, OutError))
 		{
 			return false;
 		}
@@ -793,10 +1108,26 @@ namespace CFDAStagingOpsPrivate
 		FConsoleCommandDelegate::CreateStatic(&ApplyReviewedCommand));
 }
 
-// P0 MissileGuidePreset canonical repository-relative Staging directory를 반환합니다.
+// Existing Product→Staging production serializer body를 Missile typed provider callback에 연결합니다.
+bool CFDAMissileProviderImpl::SerializeProductStagingJson(
+	const FCFDAMissilePresetPayload& Payload,
+	const FString& TargetObjectPath,
+	const FString& BaseSemanticFingerprint,
+	FString& OutJsonText,
+	FString& OutError)
+{
+	return CFDAStagingOpsPrivate::BuildProductStagingJson(
+		Payload,
+		TargetObjectPath,
+		BaseSemanticFingerprint,
+		OutJsonText,
+		OutError);
+}
+
+// P0 MissileGuidePreset canonical repository-relative Staging directory를 compatibility facade로 반환합니다.
 const TCHAR* FCFDAStagingOps::GetMissilePresetStagingRoot()
 {
-	return CFDAStagingOpsPrivate::MissilePresetStagingRoot;
+	return *CFDAStagingOpsPrivate::GetMissileStagingRoot();
 }
 
 // persisted Product Low/Normal/High를 current semantic baseline으로 canonical Staging JSON에 bootstrap/rebase하며 Product .uasset은 저장하지 않습니다.
@@ -945,7 +1276,7 @@ bool FCFDAStagingOps::DiscoverMissilePresetPreview(
 		// canonical Staging root absolute path입니다.
 		FString StagingRootSentinelAbsolutePath;
 		// canonical root 자체는 file이 아니므로 sentinel filename을 resolve해 parent directory를 얻습니다.
-		const FString RootSentinelRelativePath = FString::Printf(TEXT("%s/__RootSentinel__.json"), CFDAStagingOpsPrivate::MissilePresetStagingRoot);
+		const FString RootSentinelRelativePath = FString::Printf(TEXT("%s/__RootSentinel__.json"), *CFDAStagingOpsPrivate::GetMissileStagingRoot());
 		if (!CFDAStagingOpsPrivate::ResolveStagingAbsolutePath(RootSentinelRelativePath, StagingRootSentinelAbsolutePath, OutError))
 		{
 			return false;
@@ -954,7 +1285,7 @@ bool FCFDAStagingOps::DiscoverMissilePresetPreview(
 		const FString StagingRootAbsolutePath = FPaths::GetPath(StagingRootSentinelAbsolutePath);
 		if (!IFileManager::Get().DirectoryExists(*StagingRootAbsolutePath))
 		{
-			OutError = FString::Printf(TEXT("canonical Staging directory가 없습니다. 먼저 SyncProduct 또는 Staging 작성이 필요합니다: %s"), CFDAStagingOpsPrivate::MissilePresetStagingRoot);
+			OutError = FString::Printf(TEXT("canonical Staging directory가 없습니다. 먼저 SyncProduct 또는 Staging 작성이 필요합니다: %s"), *CFDAStagingOpsPrivate::GetMissileStagingRoot());
 			return false;
 		}
 		IFileManager::Get().FindFilesRecursive(StagingFiles, *StagingRootAbsolutePath, TEXT("*.json"), true, false, false);
@@ -1065,31 +1396,68 @@ bool FCFDAStagingOps::DiscoverMissilePresetPreview(
 	return true;
 }
 
-// selected exact Staging set을 fresh Preview하고 이후 Review가 같은 selection을 재검증하도록 동결합니다.
+// selected exact Staging set을 fresh Preview하고 이후 Review가 같은 selection/mode를 재검증하도록 동결합니다.
 bool FCFDAStagingOpsSession::Preview(
 	const TArray<FString>& InSelectedStagingRelativePaths,
 	FCFDAStagingOpsPreview& OutPreview,
 	FString& OutError)
 {
 	Reset();
-	// canonical validation/dedupe/sort된 session selection입니다.
+	if (InSelectedStagingRelativePaths.IsEmpty())
+	{
+		// Historical compatibility: empty selection은 기존 Missile canonical root 전체 discovery입니다.
+		const TArray<FString> EmptyMissileSelection;
+		if (!FCFDAStagingOps::DiscoverMissilePresetPreview(EmptyMissileSelection, OutPreview, OutError))
+		{
+			return false;
+		}
+		SelectedStagingRelativePaths.Reset();
+		LastPreview = OutPreview;
+		bLastPreviewUsedMixedExplicitDiscovery = false;
+		bHasLastPreview = true;
+		OutError.Reset();
+		return true;
+	}
+
+	// Owner-before-read validation/dedupe/sort를 통과한 non-empty exact session paths입니다.
 	TArray<FString> NormalizedSelection;
-	if (!CFDAStagingOpsPrivate::NormalizeSelectedPaths(InSelectedStagingRelativePaths, NormalizedSelection, OutError))
+	// 모든 selected path가 historical Missile provider 소유인지 나타냅니다.
+	bool bAllMissilePaths = true;
+	if (!CFDAStagingOpsPrivate::NormalizeMixedSelectedPaths(
+		InSelectedStagingRelativePaths,
+		NormalizedSelection,
+		bAllMissilePaths,
+		OutError))
 	{
 		return false;
 	}
-	if (!FCFDAStagingOps::DiscoverMissilePresetPreview(NormalizedSelection, OutPreview, OutError))
+
+	if (bAllMissilePaths)
+	{
+		// Historical Missile-only non-empty selection은 typed Public Preview row 의미까지 그대로 보존합니다.
+		if (!FCFDAStagingOps::DiscoverMissilePresetPreview(NormalizedSelection, OutPreview, OutError))
+		{
+			return false;
+		}
+	}
+	else if (!CFDAStagingOpsPrivate::DiscoverMixedExplicitPreview(
+		NormalizedSelection,
+		OutPreview,
+		nullptr,
+		OutError))
 	{
 		return false;
 	}
+
 	SelectedStagingRelativePaths = MoveTemp(NormalizedSelection);
 	LastPreview = OutPreview;
+	bLastPreviewUsedMixedExplicitDiscovery = !bAllMissilePaths;
 	bHasLastPreview = true;
 	OutError.Reset();
 	return true;
 }
 
-// 마지막 mutation Preview를 동일 selection의 fresh discovery/hash와 재대조해 Reviewed approval로 동결합니다.
+// 마지막 mutation Preview를 동일 selection/mode의 fresh discovery/hash와 재대조해 Reviewed approval로 동결합니다.
 bool FCFDAStagingOpsSession::Review(FString& OutError)
 {
 	ReviewedApproval = FCFDAStagingReviewedApproval();
@@ -1099,26 +1467,49 @@ bool FCFDAStagingOpsSession::Review(FString& OutError)
 		return false;
 	}
 
-	// Review 직전 same-selection fresh discovery Preview입니다.
+	// Review 직전 same-selection/same-mode fresh discovery Preview입니다.
 	FCFDAStagingOpsPreview FreshPreview;
-	if (!FCFDAStagingOps::DiscoverMissilePresetPreview(SelectedStagingRelativePaths, FreshPreview, OutError))
+	// Fresh exact selected rows로 생성할 Reviewed approval입니다.
+	FCFDAStagingReviewedApproval NewReviewedApproval;
+	if (bLastPreviewUsedMixedExplicitDiscovery)
 	{
-		return false;
+		if (!CFDAStagingOpsPrivate::DiscoverMixedExplicitPreview(
+			SelectedStagingRelativePaths,
+			FreshPreview,
+			&NewReviewedApproval,
+			OutError))
+		{
+			return false;
+		}
 	}
+	else
+	{
+		if (!FCFDAStagingOps::DiscoverMissilePresetPreview(SelectedStagingRelativePaths, FreshPreview, OutError))
+		{
+			return false;
+		}
+	}
+
 	if (FreshPreview.bBlocked
 		|| !FreshPreview.bHasMutationCandidates
 		|| !FreshPreview.BatchPlanHash.Equals(LastPreview.BatchPlanHash, ESearchCase::CaseSensitive))
 	{
-		OutError = TEXT("Preview 이후 selected source/current target set이 바뀌었습니다. same selection의 fresh Preview가 필요합니다.");
+		OutError = TEXT("Preview 이후 selected source/current target set이 바뀌었습니다. same selection/mode의 fresh Preview가 필요합니다.");
 		return false;
 	}
 
-	// fresh exact selected rows로 동결할 Reviewed approval입니다.
-	FCFDAStagingReviewedApproval NewReviewedApproval;
-	if (!FCFDAStagingApplyService::BuildReviewedApproval(FreshPreview.Rows, NewReviewedApproval, OutError)
-		|| !NewReviewedApproval.BatchPlanHash.Equals(FreshPreview.BatchPlanHash, ESearchCase::CaseSensitive))
+	if (!bLastPreviewUsedMixedExplicitDiscovery)
+	{
+		if (!FCFDAStagingApplyService::BuildReviewedApproval(FreshPreview.Rows, NewReviewedApproval, OutError))
+		{
+			ReviewedApproval = FCFDAStagingReviewedApproval();
+			return false;
+		}
+	}
+	if (!NewReviewedApproval.BatchPlanHash.Equals(FreshPreview.BatchPlanHash, ESearchCase::CaseSensitive))
 	{
 		ReviewedApproval = FCFDAStagingReviewedApproval();
+		OutError = TEXT("Fresh Review approval hash가 same-selection Preview hash와 다릅니다.");
 		return false;
 	}
 
@@ -1157,6 +1548,7 @@ bool FCFDAStagingOpsSession::ApplyReviewed(
 	const bool bApplySucceeded = FCFDAStagingApplyService::ApplyReviewedBatch(ReviewedApproval, OutReport);
 	SelectedStagingRelativePaths.Reset();
 	LastPreview = FCFDAStagingOpsPreview();
+	bLastPreviewUsedMixedExplicitDiscovery = false;
 	bHasLastPreview = false;
 	OutError = bApplySucceeded ? FString() : OutReport.Diagnostic;
 	return bApplySucceeded;
@@ -1167,6 +1559,7 @@ void FCFDAStagingOpsSession::Reset()
 {
 	SelectedStagingRelativePaths.Reset();
 	LastPreview = FCFDAStagingOpsPreview();
+	bLastPreviewUsedMixedExplicitDiscovery = false;
 	bHasLastPreview = false;
 	ReviewedApproval = FCFDAStagingReviewedApproval();
 }
@@ -1192,6 +1585,9 @@ bool CFDAContractProbeSerialize(
 	FString& OutJsonText,
 	FString& OutError)
 {
-	return CFDAStagingOpsPrivate::BuildProductStagingJson(Payload, TargetObjectPath, BaseSemanticFingerprint, OutJsonText, OutError);
+	// Current Missile typed provider callback table입니다.
+	const FCFDAMissileProviderCallbacks& ProviderCallbacks = CFDAMissileProvider::GetProvider().Callbacks;
+	checkf(ProviderCallbacks.SerializeProductStagingJson != nullptr, TEXT("Missile provider serializer callback이 등록되지 않았습니다."));
+	return ProviderCallbacks.SerializeProductStagingJson(Payload, TargetObjectPath, BaseSemanticFingerprint, OutJsonText, OutError);
 }
 #endif

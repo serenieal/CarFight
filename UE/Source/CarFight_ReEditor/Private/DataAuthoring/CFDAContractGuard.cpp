@@ -1,9 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDAContractGuard.cpp
-// Version: v1.3.0
-// Date: 2026-09-09
-// Description: CF-FQ-050 DACE-P0-04 current MissileGuidePreset contract, canonical Staging compatibility와 migration promotion fail-closed validator입니다.
+// Version: v1.5.0
+// Date: 2026-09-10
+// Description: CF-FQ-050 Missile compatibility facade와 CF-FQ-051 per-TypeKey DACE common 구현입니다.
 // Changelog:
+// - v1.5.0: AmmoData SourceShape bootstrap을 위해 int32 authored property의 stable Reflection kind `Int`를 추가했습니다. 기존 Missile descriptor/signature에는 영향이 없습니다.
+// - v1.4.0: DAO-P0-04 correction에서 provider-parameterized descriptor/revision/history/canonical Staging seam, Array element JSON observation과 scalar SoftObject target-class Reflection을 추가했습니다. 기존 Missile facade/accepted history는 보존합니다.
 // - v1.3.0: canonical Product Staging exact3 read-only strict parse, Resolution/Evidence validation, Staging/Product Pending machine state와 accepted append/Current promotion gate를 추가했습니다.
 // - v1.2.1: Source/Mapping-only change의 safe 여부 자동 추론을 제거하고 explicit NoMigration structural gate로 전환했습니다. no-delta stale declaration을 차단하고 accepted snapshot four component signature의 canonical SHA-256 integrity를 fail-closed했습니다.
 // - v1.2.0: Combined candidate contract signature, CurrentChangeDeclaration binding, Schema/Adapter revision bump guard, safe native refactor explicit NoMigration와 accepted snapshot chain/monotonic validation을 추가.
@@ -18,9 +20,13 @@
 // - v1.2.0부터 contract 변화는 latest accepted SnapshotId와 Guard 계산 CandidateContractSignature에 결속된 explicit declaration이 필요합니다. 현재 baseline이 accepted latest와 같으면 declaration은 nullptr로 유지합니다.
 // - v1.2.1부터 NoMigration은 Source/Mapping-only category를 Guard가 자동 safe 판정한 결과가 아니라 개발자가 명시한 safe 판단입니다. accepted history의 four component signature는 lowercase canonical sha256 형식이어야 합니다.
 // - v1.3.0부터 canonical Product Staging은 disk read + production strict parser만 사용합니다. Guard는 파일/UObject/package를 수정하거나 SyncProduct/ApplyReviewed/SavePackage를 호출하지 않습니다.
+// - v1.4.0 common seam은 accepted snapshot을 생성/append하지 않습니다. AmmoData bootstrap은 후속 구현이며 Missile accepted chain과 Product exact3는 그대로 유지합니다.
+// - v1.5.0부터 FIntProperty는 `Int` stable token으로 Reflection descriptor에 기록합니다. Missile accepted baseline을 rebaseline하지 않습니다.
 
 #include "CFDAContractGuard.h"
 
+#include "CFDAMissileProvider.h"
+#include "CFDATypeDispatch.h"
 #include "CFMissileGuidePresetData.h"
 #include "CFMissileGuideTypes.h"
 #include "Containers/StringConv.h"
@@ -44,14 +50,6 @@ namespace CFDAContractGuardPrivate
 	static constexpr TCHAR SourceRootClassPath[] = TEXT("/Script/CarFight_Re.CFMissileGuidePresetData");
 	// Nested Guidance config struct path입니다.
 	static constexpr TCHAR GuideConfigStructPath[] = TEXT("/Script/CarFight_Re.CFMissileGuideConfig");
-	// P0-04가 read-only로 검증하는 canonical Product Staging exact3 상대 경로입니다.
-	static constexpr const TCHAR* CanonicalStagingRelativePaths[] =
-	{
-		TEXT("Authoring/DataAssetStaging/MissileGuidePreset/MissileFeel_Low.json"),
-		TEXT("Authoring/DataAssetStaging/MissileGuidePreset/MissileFeel_Normal.json"),
-		TEXT("Authoring/DataAssetStaging/MissileGuidePreset/MissileFeel_High.json")
-	};
-
 	// CarFight main_game root를 `<main_game>/UE/` ProjectDir의 부모로 resolve합니다.
 	FString GetMainGameRoot()
 	{
@@ -253,11 +251,14 @@ namespace CFDAContractGuardPrivate
 		if (CastField<const FBoolProperty>(&Property) != nullptr) return TEXT("Bool");
 		if (CastField<const FFloatProperty>(&Property) != nullptr) return TEXT("Float");
 		if (CastField<const FDoubleProperty>(&Property) != nullptr) return TEXT("Double");
+		if (CastField<const FIntProperty>(&Property) != nullptr) return TEXT("Int");
 		if (CastField<const FEnumProperty>(&Property) != nullptr) return TEXT("Enum");
 		if (const FByteProperty* ByteProperty = CastField<const FByteProperty>(&Property)) return ByteProperty->Enum != nullptr ? TEXT("Enum") : TEXT("Byte");
 		if (CastField<const FNameProperty>(&Property) != nullptr) return TEXT("Name");
 		if (CastField<const FTextProperty>(&Property) != nullptr) return TEXT("Text");
 		if (CastField<const FStructProperty>(&Property) != nullptr) return TEXT("Struct");
+		if (CastField<const FSoftObjectProperty>(&Property) != nullptr) return TEXT("SoftObject");
+		if (CastField<const FObjectPropertyBase>(&Property) != nullptr) return TEXT("Object");
 		if (CastField<const FArrayProperty>(&Property) != nullptr) return TEXT("Array");
 		if (CastField<const FSetProperty>(&Property) != nullptr) return TEXT("Set");
 		if (CastField<const FMapProperty>(&Property) != nullptr) return TEXT("Map");
@@ -311,6 +312,12 @@ namespace CFDAContractGuardPrivate
 				? FString(TEXT("Struct:")) + StructProperty->Struct->GetPathName()
 				: TEXT("Struct:?");
 		}
+		if (const FSoftObjectProperty* SoftObjectProperty = CastField<const FSoftObjectProperty>(&Property))
+		{
+			return SoftObjectProperty->PropertyClass != nullptr
+				? FString(TEXT("SoftObject:")) + SoftObjectProperty->PropertyClass->GetPathName()
+				: TEXT("SoftObject:?");
+		}
 		if (const FObjectPropertyBase* ObjectProperty = CastField<const FObjectPropertyBase>(&Property))
 		{
 			return ObjectProperty->PropertyClass != nullptr
@@ -340,6 +347,10 @@ namespace CFDAContractGuardPrivate
 		if (const FStructProperty* StructProperty = CastField<const FStructProperty>(&Property))
 		{
 			return StructProperty->Struct != nullptr ? StructProperty->Struct->GetPathName() : FString();
+		}
+		if (const FObjectPropertyBase* ObjectProperty = CastField<const FObjectPropertyBase>(&Property))
+		{
+			return ObjectProperty->PropertyClass != nullptr ? ObjectProperty->PropertyClass->GetPathName() : FString();
 		}
 		return FString();
 	}
@@ -409,6 +420,31 @@ namespace CFDAContractGuardPrivate
 			if (Pair.Value.IsValid() && Pair.Value->Type == EJson::Object)
 			{
 				CollectObservedJsonFields(Pair.Value->AsObject(), FieldPath, OutFields);
+			}
+			else if (Pair.Value.IsValid() && Pair.Value->Type == EJson::Array)
+			{
+				// Non-empty Array의 element physical kind를 synthesized `[]` path로 관측합니다.
+				const TArray<TSharedPtr<FJsonValue>>& ArrayValues = Pair.Value->AsArray();
+				if (!ArrayValues.IsEmpty())
+				{
+					// 첫 element에서 시작하는 homogeneous element kind입니다.
+					const FString FirstElementKind = GetObservedJsonKind(ArrayValues[0]);
+					// Array element가 모두 같은 physical JSON kind인지 나타냅니다.
+					bool bHomogeneousElementKind = true;
+					for (const TSharedPtr<FJsonValue>& ArrayValue : ArrayValues)
+					{
+						if (!GetObservedJsonKind(ArrayValue).Equals(FirstElementKind, ESearchCase::CaseSensitive))
+						{
+							bHomogeneousElementKind = false;
+							break;
+						}
+					}
+					// Synthesized element-level observation입니다.
+					FObservedJsonField ElementObservedField;
+					ElementObservedField.JsonValueKind = bHomogeneousElementKind ? FirstElementKind : TEXT("Mixed");
+					ElementObservedField.bNull = bHomogeneousElementKind && FirstElementKind.Equals(TEXT("Null"), ESearchCase::CaseSensitive);
+					OutFields.Add(FieldPath + TEXT("[]"), MoveTemp(ElementObservedField));
+				}
 			}
 		}
 	}
@@ -576,31 +612,49 @@ const TArray<FCFDAFingerprintTokenDescriptor>& FCFDAContractGuard::GetFingerprin
 // Current four component descriptor signatures를 계산합니다.
 bool FCFDAContractGuard::BuildCurrentSignatures(FCFDAContractSignatures& OutSignatures, FString& OutError)
 {
+	return BuildSignaturesFromDescriptors(
+		GetSourceShapeDescriptor(),
+		GetAdapterShapeDescriptor(),
+		GetSourceAdapterMappingDescriptor(),
+		GetSemanticContractDescriptor(),
+		OutSignatures,
+		OutError);
+}
+
+// 임의 exact TypeKey provider가 소유하는 four descriptor 집합을 동일 canonical algorithm으로 계산합니다.
+bool FCFDAContractGuard::BuildSignaturesFromDescriptors(
+	const TArray<FCFDASourceFieldDescriptor>& SourceDescriptors,
+	const TArray<FCFDAAdapterFieldDescriptor>& AdapterDescriptors,
+	const TArray<FCFDASourceAdapterMappingDescriptor>& MappingDescriptors,
+	const TArray<FCFDASemanticRuleDescriptor>& SemanticDescriptors,
+	FCFDAContractSignatures& OutSignatures,
+	FString& OutError)
+{
 	OutSignatures = FCFDAContractSignatures();
 	// Source canonical rows입니다.
 	TArray<FString> SourceRows;
-	for (const FCFDASourceFieldDescriptor& Descriptor : GetSourceShapeDescriptor())
+	for (const FCFDASourceFieldDescriptor& Descriptor : SourceDescriptors)
 	{
 		SourceRows.Add(CFDAContractGuardPrivate::BuildSourceRow(Descriptor));
 	}
 	if (!CFDAContractGuardPrivate::HashRows(MoveTemp(SourceRows), OutSignatures.SourceShapeSignature, OutError)) return false;
 	// Adapter canonical rows입니다.
 	TArray<FString> AdapterRows;
-	for (const FCFDAAdapterFieldDescriptor& Descriptor : GetAdapterShapeDescriptor())
+	for (const FCFDAAdapterFieldDescriptor& Descriptor : AdapterDescriptors)
 	{
 		AdapterRows.Add(CFDAContractGuardPrivate::BuildAdapterRow(Descriptor));
 	}
 	if (!CFDAContractGuardPrivate::HashRows(MoveTemp(AdapterRows), OutSignatures.AdapterShapeSignature, OutError)) return false;
 	// Mapping canonical rows입니다.
 	TArray<FString> MappingRows;
-	for (const FCFDASourceAdapterMappingDescriptor& Descriptor : GetSourceAdapterMappingDescriptor())
+	for (const FCFDASourceAdapterMappingDescriptor& Descriptor : MappingDescriptors)
 	{
 		MappingRows.Add(FString::Printf(TEXT("%s\t%s\t%s\t%s"), *Descriptor.SourcePropertyPath, *Descriptor.AdapterJsonPath, *Descriptor.RepresentationKind, *Descriptor.MappingRole));
 	}
 	if (!CFDAContractGuardPrivate::HashRows(MoveTemp(MappingRows), OutSignatures.SourceAdapterMappingSignature, OutError)) return false;
 	// Semantic canonical rows입니다.
 	TArray<FString> SemanticRows;
-	for (const FCFDASemanticRuleDescriptor& Descriptor : GetSemanticContractDescriptor())
+	for (const FCFDASemanticRuleDescriptor& Descriptor : SemanticDescriptors)
 	{
 		SemanticRows.Add(Descriptor.PolicyKey + TEXT("\t") + Descriptor.PolicyValue);
 	}
@@ -623,6 +677,34 @@ bool FCFDAContractGuard::BuildContractBundleSignature(const FCFDAContractSignatu
 		*Signatures.SourceAdapterMappingSignature,
 		*Signatures.SemanticContractSignature);
 	return CFDAContractGuardPrivate::HashCanonicalText(CanonicalText, OutSignature, OutError);
+}
+
+// 임의 native DataAsset class가 직접 소유한 CPF_Edit property shape를 TypeKey-neutral하게 관측합니다.
+bool FCFDAContractGuard::BuildDirectReflectedSourceShapeDescriptor(
+	const UClass& SourceClass,
+	TArray<FCFDASourceFieldDescriptor>& OutDescriptors,
+	FString& OutError)
+{
+	OutDescriptors.Reset();
+	// Reflection이 보고한 exact root class path입니다.
+	const FString RootClassPath = SourceClass.GetClassPathName().ToString();
+	for (TFieldIterator<FProperty> PropertyIterator(&SourceClass); PropertyIterator; ++PropertyIterator)
+	{
+		// 현재 direct class가 실제 소유한 authored reflected property입니다.
+		const FProperty* Property = *PropertyIterator;
+		if (Property == nullptr || Property->GetOwnerStruct() != &SourceClass || !Property->HasAnyPropertyFlags(CPF_Edit))
+		{
+			continue;
+		}
+		OutDescriptors.Add(CFDAContractGuardPrivate::BuildReflectedSourceDescriptor(*Property, RootClassPath, Property->GetName(), FString()));
+	}
+	if (OutDescriptors.IsEmpty())
+	{
+		OutError = FString::Printf(TEXT("%s direct authored Reflection 결과가 비었습니다."), *RootClassPath);
+		return false;
+	}
+	OutError.Reset();
+	return true;
 }
 
 // Native Reflection에서 current Staging-owned Source shape를 직접 관측합니다.
@@ -771,6 +853,14 @@ FCFDAContractGuardResult FCFDAContractGuard::ValidateSourceAdapterMappingCoverag
 // Production serializer 또는 memory fixture JSON physical shape가 Adapter descriptor와 exact인지 검증합니다.
 FCFDAContractGuardResult FCFDAContractGuard::ValidateSerializedAdapterCoverage(const FString& JsonText)
 {
+	return ValidateSerializedAdapterCoverageAgainstDescriptor(JsonText, GetAdapterShapeDescriptor());
+}
+
+// 임의 exact TypeKey Adapter descriptor를 대상으로 JSON physical shape를 검증하며 Array element `[]` observation을 포함합니다.
+FCFDAContractGuardResult FCFDAContractGuard::ValidateSerializedAdapterCoverageAgainstDescriptor(
+	const FString& JsonText,
+	const TArray<FCFDAAdapterFieldDescriptor>& AdapterDescriptors)
+{
 	// 반환할 fail-closed validation 결과입니다.
 	FCFDAContractGuardResult Result;
 	// JSON parser가 만들 root object입니다.
@@ -787,8 +877,8 @@ FCFDAContractGuardResult FCFDAContractGuard::ValidateSerializedAdapterCoverage(c
 	CFDAContractGuardPrivate::CollectObservedJsonFields(RootObject, FString(), ObservedFields);
 	// Descriptor path로 expected field를 빠르게 찾기 위한 map입니다.
 	TMap<FString, const FCFDAAdapterFieldDescriptor*> ExpectedByPath;
-	for (const FCFDAAdapterFieldDescriptor& Descriptor : GetAdapterShapeDescriptor()) ExpectedByPath.Add(Descriptor.AdapterJsonPath, &Descriptor);
-	for (const FCFDAAdapterFieldDescriptor& Expected : GetAdapterShapeDescriptor())
+	for (const FCFDAAdapterFieldDescriptor& Descriptor : AdapterDescriptors) ExpectedByPath.Add(Descriptor.AdapterJsonPath, &Descriptor);
+	for (const FCFDAAdapterFieldDescriptor& Expected : AdapterDescriptors)
 	{
 		// Expected path에 대응하는 actual serialized field입니다.
 		const CFDAContractGuardPrivate::FObservedJsonField* Observed = ObservedFields.Find(Expected.AdapterJsonPath);
@@ -1009,6 +1099,37 @@ FCFDAContractGuardResult FCFDAContractGuard::ValidateRevisionGuard(
 	return Result;
 }
 
+// Base accepted identity를 exact TypeKey provider에 먼저 결속한 뒤 provider revision으로 revision guard를 실행합니다.
+FCFDAContractGuardResult FCFDAContractGuard::ValidateRevisionGuardForProvider(
+	const FCFDATypeProvider& Provider,
+	const FCFDAAcceptedContractSnapshot& BaseSnapshot,
+	const FCFDAContractSignatures& CandidateSignatures,
+	const FCFDACurrentChangeDeclaration* ChangeDeclaration)
+{
+	// Provider identity binding과 기존 revision algorithm 결과를 합칠 fail-closed 결과입니다.
+	FCFDAContractGuardResult Result;
+	if (Provider.DaceReadiness != ECFDADaceReadiness::ContractReady)
+	{
+		CFDAContractGuardPrivate::AddIssue(Result, ECFDAContractIssueCode::AcceptedSnapshotChainInvalid, TEXT("Provider.DaceReadiness"), TEXT("Revision Guard는 DACE ContractReady provider에서만 허용됩니다."));
+		return Result;
+	}
+	if (!BaseSnapshot.SchemaId.Equals(Provider.TypeKey.SchemaId, ESearchCase::CaseSensitive)
+		|| !BaseSnapshot.DataAssetTypeClassPath.Equals(Provider.TypeKey.DataAssetTypeClassPath, ESearchCase::CaseSensitive))
+	{
+		CFDAContractGuardPrivate::AddIssue(Result, ECFDAContractIssueCode::AcceptedSnapshotChainInvalid, TEXT("Provider.TypeKey"), TEXT("Accepted base snapshot identity가 selected exact TypeKey provider와 다릅니다."));
+		return Result;
+	}
+	// Selected provider가 소유하는 current revision을 사용하는 공용 revision guard 결과입니다.
+	const FCFDAContractGuardResult RevisionResult = ValidateRevisionGuard(
+		BaseSnapshot,
+		CandidateSignatures,
+		Provider.SchemaRevision,
+		Provider.AdapterContractRevision,
+		ChangeDeclaration);
+	CFDAContractGuardPrivate::AppendIssues(Result, RevisionResult);
+	return Result;
+}
+
 // Accepted snapshot history의 four component signature integrity, record signature, unique id, previous chain과 revision monotonicity를 검증합니다.
 FCFDAContractGuardResult FCFDAContractGuard::ValidateAcceptedSnapshotChain(const TArray<FCFDAAcceptedContractSnapshot>& Snapshots)
 {
@@ -1103,11 +1224,47 @@ FCFDAContractGuardResult FCFDAContractGuard::ValidateAcceptedSnapshotChain(const
 	return Result;
 }
 
+// Accepted history 전체를 provider exact TypeKey + provider-local history namespace에 결속해 cross-TypeKey chain 오염을 차단합니다.
+FCFDAContractGuardResult FCFDAContractGuard::ValidateAcceptedSnapshotChainForProvider(
+	const FCFDATypeProvider& Provider,
+	const TArray<FCFDAAcceptedContractSnapshot>& Snapshots)
+{
+	// 공용 chain integrity 결과입니다.
+	FCFDAContractGuardResult Result = ValidateAcceptedSnapshotChain(Snapshots);
+	if (Provider.DaceReadiness != ECFDADaceReadiness::ContractReady)
+	{
+		CFDAContractGuardPrivate::AddIssue(Result, ECFDAContractIssueCode::AcceptedSnapshotChainInvalid, TEXT("Provider.DaceReadiness"), TEXT("Accepted DACE history validation은 ContractReady provider에서만 허용됩니다."));
+		return Result;
+	}
+	if (Provider.DaceAcceptedHistoryNamespace.IsEmpty())
+	{
+		CFDAContractGuardPrivate::AddIssue(Result, ECFDAContractIssueCode::AcceptedSnapshotChainInvalid, TEXT("Provider.DaceAcceptedHistoryNamespace"), TEXT("Provider-local DACE history namespace가 비어 있습니다."));
+		return Result;
+	}
+	// Provider namespace 아래 snapshot identity prefix입니다.
+	const FString SnapshotIdPrefix = Provider.DaceAcceptedHistoryNamespace + TEXT("-");
+	for (const FCFDAAcceptedContractSnapshot& Snapshot : Snapshots)
+	{
+		if (!Snapshot.SchemaId.Equals(Provider.TypeKey.SchemaId, ESearchCase::CaseSensitive)
+			|| !Snapshot.DataAssetTypeClassPath.Equals(Provider.TypeKey.DataAssetTypeClassPath, ESearchCase::CaseSensitive))
+		{
+			CFDAContractGuardPrivate::AddIssue(Result, ECFDAContractIssueCode::AcceptedSnapshotChainInvalid, Snapshot.SnapshotId, TEXT("Provider-local accepted history에 다른 exact TypeKey record가 섞였습니다."));
+		}
+		if (!Snapshot.SnapshotId.StartsWith(SnapshotIdPrefix, ESearchCase::CaseSensitive))
+		{
+			CFDAContractGuardPrivate::AddIssue(Result, ECFDAContractIssueCode::AcceptedSnapshotChainInvalid, Snapshot.SnapshotId, TEXT("Accepted SnapshotId가 selected provider의 DACE history namespace에 속하지 않습니다."));
+		}
+	}
+	return Result;
+}
+
 // Production accepted history와 actual current descriptor/service revision을 함께 검증합니다.
 FCFDAContractGuardResult FCFDAContractGuard::ValidateCurrentRevisionGuard()
 {
-	// Accepted history 자체의 chain validation 결과입니다.
-	FCFDAContractGuardResult Result = ValidateAcceptedSnapshotChain(GetAcceptedSnapshots());
+	// Current Missile compatibility facade가 선택한 exact provider입니다.
+	const FCFDATypeProvider& Provider = CFDAMissileProvider::GetProvider().Descriptor;
+	// Accepted history 자체를 provider TypeKey/history namespace에 결속한 validation 결과입니다.
+	FCFDAContractGuardResult Result = ValidateAcceptedSnapshotChainForProvider(Provider, GetAcceptedSnapshots());
 	// Production accepted history입니다.
 	const TArray<FCFDAAcceptedContractSnapshot>& Snapshots = GetAcceptedSnapshots();
 	if (Snapshots.IsEmpty())
@@ -1125,17 +1282,16 @@ FCFDAContractGuardResult FCFDAContractGuard::ValidateCurrentRevisionGuard()
 	}
 	// Latest accepted baseline snapshot입니다.
 	const FCFDAAcceptedContractSnapshot& LatestSnapshot = Snapshots.Last();
-	if (!LatestSnapshot.SchemaId.Equals(FCFDAStagingService::GetMissilePresetSchemaId(), ESearchCase::CaseSensitive)
-		|| !LatestSnapshot.DataAssetTypeClassPath.Equals(FCFDAStagingService::GetMissilePresetClassPath(), ESearchCase::CaseSensitive))
+	if (!LatestSnapshot.SchemaId.Equals(Provider.TypeKey.SchemaId, ESearchCase::CaseSensitive)
+		|| !LatestSnapshot.DataAssetTypeClassPath.Equals(Provider.TypeKey.DataAssetTypeClassPath, ESearchCase::CaseSensitive))
 	{
 		CFDAContractGuardPrivate::AddIssue(Result, ECFDAContractIssueCode::AcceptedSnapshotChainInvalid, TEXT("CurrentContractIdentity"), TEXT("Current SchemaId/DataAssetTypeClassPath가 latest accepted history identity와 다릅니다."));
 	}
-	// Latest accepted baseline 대비 actual current revision/signature/declaration 결과입니다.
-	const FCFDAContractGuardResult RevisionResult = ValidateRevisionGuard(
+	// Latest accepted baseline 대비 selected provider revision/signature/declaration 결과입니다.
+	const FCFDAContractGuardResult RevisionResult = ValidateRevisionGuardForProvider(
+		Provider,
 		LatestSnapshot,
 		CurrentSignatures,
-		FCFDAStagingService::GetMissilePresetSchemaRevision(),
-		FCFDAStagingService::GetMissilePresetAdapterRevision(),
 		GetCurrentChangeDeclaration());
 	CFDAContractGuardPrivate::AppendIssues(Result, RevisionResult);
 	return Result;
@@ -1144,25 +1300,40 @@ FCFDAContractGuardResult FCFDAContractGuard::ValidateCurrentRevisionGuard()
 // 한 Staging JSON을 current production strict parser/revision 계약으로 read-only 검증합니다.
 FCFDAContractGuardResult FCFDAContractGuard::ValidateStagingJsonCompatibility(const FString& JsonText, const FString& StagingRelativePath)
 {
+	return ValidateStagingJsonCompatibilityForProvider(CFDAMissileProvider::GetProvider(), JsonText, StagingRelativePath);
+}
+
+// selected exact TypeKey provider의 production parser/revision 계약으로 한 Staging JSON을 read-only 검증합니다.
+FCFDAContractGuardResult FCFDAContractGuard::ValidateStagingJsonCompatibilityForProvider(
+	const FCFDATypeProviderEntry& ProviderEntry,
+	const FString& JsonText,
+	const FString& StagingRelativePath)
+{
 	// 반환할 Staging compatibility 결과입니다.
 	FCFDAContractGuardResult Result;
-	// Production strict parser가 실제 JSON/revision/semantic validation을 수행한 결과입니다.
-	const FCFDAStagingParseResult ParseResult = FCFDAStagingService::ParseMissilePresetJson(JsonText, StagingRelativePath);
-	if (!ParseResult.bValid)
+	if (ProviderEntry.Operations.ParseCommonCandidate == nullptr)
 	{
-		// 가장 구체적인 strict parser field path를 developer migration issue에 전달합니다.
-		const FString FieldPath = ParseResult.Issues.IsEmpty() ? StagingRelativePath : ParseResult.Issues[0].FieldPath;
-		// 가장 구체적인 strict parser 설명을 developer migration issue에 전달합니다.
-		const FString DetailMessage = ParseResult.Issues.IsEmpty() ? TEXT("Production strict parser가 canonical Staging JSON을 거부했습니다.") : ParseResult.Issues[0].Message;
-		CFDAContractGuardPrivate::AddIssue(Result, ECFDAContractIssueCode::StagingMigrationPending, FieldPath, FString::Printf(TEXT("Canonical Staging이 current strict parser/revision과 호환되지 않습니다: %s"), *DetailMessage));
+		CFDAContractGuardPrivate::AddIssue(Result, ECFDAContractIssueCode::StagingMigrationPending, StagingRelativePath, TEXT("Selected provider에 production ParseCommonCandidate operation이 없습니다."));
 		return Result;
 	}
-	if (!ParseResult.Record.SchemaId.Equals(FCFDAStagingService::GetMissilePresetSchemaId(), ESearchCase::CaseSensitive)
-		|| ParseResult.Record.SchemaRevision != FCFDAStagingService::GetMissilePresetSchemaRevision()
-		|| ParseResult.Record.AdapterContractRevision != FCFDAStagingService::GetMissilePresetAdapterRevision()
-		|| !ParseResult.Record.DataAssetTypeClassPath.Equals(FCFDAStagingService::GetMissilePresetClassPath(), ESearchCase::CaseSensitive))
+	// Provider typed parser를 통과한 payload-free current envelope입니다.
+	FCFDACommonEnvelope Envelope;
+	// Production parser가 반환한 typed/shared issues입니다.
+	TArray<FCFDAStagingIssue> ParseIssues;
+	if (!ProviderEntry.Operations.ParseCommonCandidate(JsonText, StagingRelativePath, Envelope, ParseIssues))
 	{
-		CFDAContractGuardPrivate::AddIssue(Result, ECFDAContractIssueCode::StagingMigrationPending, StagingRelativePath, TEXT("Strict parse는 성공했지만 parsed schema/revision/class identity가 current service contract와 exact 일치하지 않습니다."));
+		// 가장 구체적인 production parser field path입니다.
+		const FString FieldPath = ParseIssues.IsEmpty() ? StagingRelativePath : ParseIssues[0].FieldPath;
+		// 가장 구체적인 production parser 설명입니다.
+		const FString DetailMessage = ParseIssues.IsEmpty() ? TEXT("Production provider parser가 canonical Staging JSON을 거부했습니다.") : ParseIssues[0].Message;
+		CFDAContractGuardPrivate::AddIssue(Result, ECFDAContractIssueCode::StagingMigrationPending, FieldPath, FString::Printf(TEXT("Canonical Staging이 selected provider current parser/revision과 호환되지 않습니다: %s"), *DetailMessage));
+		return Result;
+	}
+	// Parsed envelope가 selected provider exact TypeKey/revision/root 계약과 일치하는지 확인합니다.
+	FString ProviderContractError;
+	if (!CFDATypeDispatch::ValidateProviderContract(Envelope, ProviderEntry.Descriptor, ProviderContractError))
+	{
+		CFDAContractGuardPrivate::AddIssue(Result, ECFDAContractIssueCode::StagingMigrationPending, StagingRelativePath, ProviderContractError);
 	}
 	return Result;
 }
@@ -1170,23 +1341,32 @@ FCFDAContractGuardResult FCFDAContractGuard::ValidateStagingJsonCompatibility(co
 // canonical Product MissileGuidePreset Staging exact3을 disk에서 read-only로 읽어 current strict parser/revision과 검증합니다.
 FCFDAContractGuardResult FCFDAContractGuard::ValidateCurrentCanonicalStagingCompatibility()
 {
-	// Exact3 전체 결과를 합치는 fail-closed validation입니다.
+	return ValidateCanonicalStagingCompatibilityForProvider(CFDAMissileProvider::GetProvider());
+}
+
+// provider가 explicit 선언한 canonical target set을 read-only 검증합니다. 선언된 empty set은 valid exact0입니다.
+FCFDAContractGuardResult FCFDAContractGuard::ValidateCanonicalStagingCompatibilityForProvider(const FCFDATypeProviderEntry& ProviderEntry)
+{
+	// Provider-local canonical target set 전체 결과입니다.
 	FCFDAContractGuardResult Result;
-	for (const TCHAR* RelativePathLiteral : CFDAContractGuardPrivate::CanonicalStagingRelativePaths)
+	if (!ProviderEntry.Descriptor.bDaceCanonicalStagingTargetSetDeclared)
 	{
-		// 현재 검증하는 canonical main_game-relative Staging 경로입니다.
-		const FString StagingRelativePath(RelativePathLiteral);
+		CFDAContractGuardPrivate::AddIssue(Result, ECFDAContractIssueCode::StagingMigrationPending, TEXT("Provider.DaceCanonicalStagingTargetSet"), TEXT("Selected provider가 DACE canonical Staging target set을 explicit하게 선언하지 않았습니다."));
+		return Result;
+	}
+	for (const FString& StagingRelativePath : ProviderEntry.Descriptor.DaceCanonicalStagingRelativePaths)
+	{
 		// Project checkout 안의 read-only physical JSON 경로입니다.
 		const FString PhysicalPath = FPaths::ConvertRelativePathToFull(FPaths::Combine(CFDAContractGuardPrivate::GetMainGameRoot(), StagingRelativePath));
 		// Disk에서 읽은 canonical JSON text입니다.
 		FString JsonText;
 		if (!FFileHelper::LoadFileToString(JsonText, *PhysicalPath))
 		{
-			CFDAContractGuardPrivate::AddIssue(Result, ECFDAContractIssueCode::StagingMigrationPending, StagingRelativePath, TEXT("Canonical Product Staging JSON을 read-only로 읽을 수 없습니다."));
+			CFDAContractGuardPrivate::AddIssue(Result, ECFDAContractIssueCode::StagingMigrationPending, StagingRelativePath, TEXT("Provider-owned canonical Product Staging JSON을 read-only로 읽을 수 없습니다."));
 			continue;
 		}
-		// Actual production strict parser/revision compatibility 결과입니다.
-		const FCFDAContractGuardResult CompatibilityResult = ValidateStagingJsonCompatibility(JsonText, StagingRelativePath);
+		// Selected provider production parser/revision compatibility 결과입니다.
+		const FCFDAContractGuardResult CompatibilityResult = ValidateStagingJsonCompatibilityForProvider(ProviderEntry, JsonText, StagingRelativePath);
 		CFDAContractGuardPrivate::AppendIssues(Result, CompatibilityResult);
 	}
 	return Result;
@@ -1264,13 +1444,32 @@ FCFDAMigrationGateResult FCFDAContractGuard::EvaluateMigrationGate(const FCFDACu
 	return GateResult;
 }
 
-// Production revision guard + canonical exact3 + current migration declaration을 종합한 current operational gate를 평가합니다.
+// Selected exact TypeKey provider의 DACE readiness를 먼저 확인한 뒤 migration gate를 평가합니다.
+FCFDAMigrationGateResult FCFDAContractGuard::EvaluateMigrationGateForProvider(
+	const FCFDATypeProviderEntry& ProviderEntry,
+	const FCFDACurrentChangeDeclaration* ChangeDeclaration,
+	const FCFDAContractGuardResult& CanonicalStagingResult)
+{
+	// 기존 declaration/canonical compatibility algorithm 결과입니다.
+	FCFDAMigrationGateResult GateResult = EvaluateMigrationGate(ChangeDeclaration, CanonicalStagingResult);
+	if (ProviderEntry.Descriptor.DaceReadiness != ECFDADaceReadiness::ContractReady)
+	{
+		CFDAContractGuardPrivate::AddIssue(GateResult.Validation, ECFDAContractIssueCode::AcceptedSnapshotChainInvalid, TEXT("Provider.DaceReadiness"), TEXT("DACE ContractNotReady provider는 accepted append 또는 Current promotion gate를 통과할 수 없습니다."));
+		GateResult.bAcceptedSnapshotAppendAllowed = false;
+		GateResult.bCurrentSystemPromotionAllowed = false;
+	}
+	return GateResult;
+}
+
+// Production revision guard + canonical exact3 + current migration declaration을 종합한 current Missile compatibility operational gate를 평가합니다.
 FCFDAMigrationGateResult FCFDAContractGuard::EvaluateCurrentMigrationGate()
 {
-	// Current canonical exact3 read-only compatibility 결과입니다.
-	const FCFDAContractGuardResult CanonicalStagingResult = ValidateCurrentCanonicalStagingCompatibility();
-	// Declaration/Resolution/Evidence 기반 migration gate입니다.
-	FCFDAMigrationGateResult GateResult = EvaluateMigrationGate(GetCurrentChangeDeclaration(), CanonicalStagingResult);
+	// Current Missile exact provider입니다.
+	const FCFDATypeProviderEntry& ProviderEntry = CFDAMissileProvider::GetProvider();
+	// Current provider-owned canonical exact3 read-only compatibility 결과입니다.
+	const FCFDAContractGuardResult CanonicalStagingResult = ValidateCanonicalStagingCompatibilityForProvider(ProviderEntry);
+	// Provider readiness + Declaration/Resolution/Evidence 기반 migration gate입니다.
+	FCFDAMigrationGateResult GateResult = EvaluateMigrationGateForProvider(ProviderEntry, GetCurrentChangeDeclaration(), CanonicalStagingResult);
 	// Accepted history + actual current revision/signature/declaration 결과입니다.
 	const FCFDAContractGuardResult RevisionResult = ValidateCurrentRevisionGuard();
 	CFDAContractGuardPrivate::AppendIssues(GateResult.Validation, RevisionResult);

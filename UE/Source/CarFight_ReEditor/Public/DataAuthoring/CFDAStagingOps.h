@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDAStagingOps.h
-// Version: v1.1.1
+// Version: v1.2.0
 // Date: 2026-09-09
 // Description: CF-FQ-049 DAS-P0-05 canonical Product Staging bootstrap/rebase, selected discovery Preview와 reviewed operational session public contract입니다.
 // Changelog:
+// - v1.2.0: DAO-P0-05에서 session non-empty exact path selection만 Missile+Ammo provider-neutral mixed discovery로 확장하고 empty Missile whole-root/Public Missile discovery/console shorthand/SyncProduct 호환성을 보존했습니다.
 // - v1.1.1: UE 5.8 console registration API correction과 final operational contract version 정렬.
 // - v1.1.0: exact Staging selection, reusable Preview→Review session과 test-only Sync rollback fault injection을 추가.
 // - v1.0.0: Product Low/Normal/High canonical Staging bootstrap/rebase, deterministic discovery Preview와 mutation BatchPlanHash 결과 DTO를 추가.
@@ -11,6 +12,8 @@
 // - Product Sync는 Product .uasset을 수정·저장하지 않으며 기존 Staging Update/Conflict/Invalid을 자동 덮어쓰지 않습니다.
 // - Preview selection은 canonical repository-relative JSON path exact-list입니다. empty list는 canonical folder 전체를 의미합니다.
 // - 실제 UE Asset materialize/save는 reviewed session의 explicit ApplyReviewed 또는 기존 FCFDAStagingApplyService만 소유합니다.
+// - v1.2.0부터 session의 non-empty full relative JSON path는 trusted MissileGuidePreset+AmmoData exact2를 mixed 선택할 수 있습니다. empty selection과 StableLogicalId console shorthand는 기존 Missile 의미를 유지합니다.
+// - mixed session의 Rows는 공통 envelope를 기존 Preview DTO에 투영한 구조 요약이며 typed Missile Payload는 authoritative하지 않습니다. 기존 Missile-only discovery/session은 종전 typed row를 그대로 반환합니다.
 
 #pragma once
 
@@ -106,6 +109,9 @@ private:
 
 	// 마지막 successful Preview projection입니다.
 	FCFDAStagingOpsPreview LastPreview;
+
+	// 마지막 non-empty Preview가 provider-neutral mixed Explicit Paths discovery를 사용했는지 나타냅니다.
+	bool bLastPreviewUsedMixedExplicitDiscovery = false;
 
 	// 마지막 Preview가 Review 가능한 current session state인지 나타냅니다.
 	bool bHasLastPreview = false;

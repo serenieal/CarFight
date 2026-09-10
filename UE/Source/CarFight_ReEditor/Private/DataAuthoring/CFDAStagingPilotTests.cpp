@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDAStagingPilotTests.cpp
-// Version: v1.2.3
-// Date: 2026-09-08
+// Version: v1.3.0
+// Date: 2026-09-09
 // Description: CF-FQ-049 DAS-P0-04 MissileGuidePreset Product mutation0 Preview와 test-owned durable materializer fixture Automation입니다.
 // Changelog:
+// - v1.3.0: DAO-P0-01 provider-owned exact StagingRoot 경계에 맞춰 durable Automation fixture source/cleanup root를 MissileGuidePreset provider root 하위로 이동.
 // - v1.2.3: AssetRegistry residue 검사를 on-disk-only로 고정해 persisted registry truth와 loaded-but-unregistered UObject truth를 분리하고 loaded-only negative regression의 진단 authority를 정확히 검증.
 // - v1.2.2: UObject AssetDeleted ordering 의존을 제거하고 package unload→GC→disk delete→ScanModifiedAssetFiles disk refresh 순서로 AssetRegistry를 동기화해 loaded handle과 watcher resurrection을 동시에 차단.
 // - v1.2.1: AssetDeleted 전에 exact test-owned physical Content root를 먼저 삭제해 directory watcher의 deleted-asset resurrection을 차단하고, unload/GC 뒤 defensive second delete + 4중 residue 검증을 유지.
@@ -13,7 +14,7 @@
 // - v1.0.0: Product Low/Normal/High NoChange/Update Preview, test-owned Create/Update durable readback, drift/dirty guards, save uncertainty와 PartialApplied exact fixture를 추가.
 // Migration:
 // - Product Low/Normal/High는 read-only Preview만 수행하며 BuildReviewedApproval/ApplyReviewedBatch를 호출하지 않습니다.
-// - 실제 Save/Delete는 /Game/Test/CarFight/DAStagingP04 test-owned package와 __AutomationP04__ Staging 파일에만 한정하고 test 종료 시 정리합니다.
+// - 실제 Save/Delete는 /Game/Test/CarFight/DAStagingP04 test-owned package와 MissileGuidePreset/__AutomationP04__ Staging 파일에만 한정하고 test 종료 시 정리합니다.
 // - cleanup PASS는 AssetRegistry-visible, resolver-visible loaded UObject, physical Content, Staging 네 authority 모두 residue 0일 때만 성립합니다.
 
 #include "DataAuthoring/CFDAStagingApply.h"
@@ -214,7 +215,7 @@ namespace CFDAStagingPilotTestsPrivate
 		Paths.AssetName = FString::Printf(TEXT("DA_%s_%s"), *Prefix, *Suffix);
 		Paths.PackageName = FString::Printf(TEXT("/Game/Test/CarFight/DAStagingP04/%s"), *Paths.AssetName);
 		Paths.TargetObjectPath = FString::Printf(TEXT("%s.%s"), *Paths.PackageName, *Paths.AssetName);
-		Paths.StagingRelativePath = FString::Printf(TEXT("Authoring/DataAssetStaging/__AutomationP04__/%s.json"), *Paths.StableLogicalId);
+		Paths.StagingRelativePath = FString::Printf(TEXT("Authoring/DataAssetStaging/MissileGuidePreset/__AutomationP04__/%s.json"), *Paths.StableLogicalId);
 		return Paths;
 	}
 
@@ -368,7 +369,7 @@ namespace CFDAStagingPilotTestsPrivate
 		// test-owned physical Content directory입니다.
 		const FString FixtureContentDirectory = FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Test/CarFight/DAStagingP04")));
 		// test-owned physical Staging directory입니다.
-		const FString FixtureStagingDirectory = GetStagingAbsolutePath(TEXT("Authoring/DataAssetStaging/__AutomationP04__"));
+		const FString FixtureStagingDirectory = GetStagingAbsolutePath(TEXT("Authoring/DataAssetStaging/MissileGuidePreset/__AutomationP04__"));
 		// current Asset Registry authority입니다.
 		IAssetRegistry& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get();
 		// exact root 아래 registry-visible test assets입니다.
@@ -428,7 +429,7 @@ namespace CFDAStagingPilotTestsPrivate
 		// test-owned physical Content directory입니다.
 		const FString FixtureContentDirectory = FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Test/CarFight/DAStagingP04")));
 		// test-owned physical Staging directory입니다.
-		const FString FixtureStagingDirectory = GetStagingAbsolutePath(TEXT("Authoring/DataAssetStaging/__AutomationP04__"));
+		const FString FixtureStagingDirectory = GetStagingAbsolutePath(TEXT("Authoring/DataAssetStaging/MissileGuidePreset/__AutomationP04__"));
 		// current Asset Registry authority입니다.
 		IAssetRegistry& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get();
 		// exact root 아래 registry-visible test assets입니다.

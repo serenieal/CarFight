@@ -1,7 +1,7 @@
 # CarFight Active Work
 
-- 문서 버전: v4.163
-- 최근 갱신일: 2026-09-08
+- 문서 버전: v4.200
+- 최근 갱신일: 2026-09-10
 - 문서 상태: Current
 - 역할: CarFight 게임 프로젝트에서 현재 실제로 진행 중인 작업을 선택하고 대표 Plan으로 연결하는 **세션 복원 projection**
 
@@ -46,21 +46,21 @@ UI Resource 방법론 실험 `URT05_Plan.md v0.8`은 Method Validation Complete�
 
 ## 3. 최근 완료
 
-### CF-FQ-030 물리 제한형 미사일 비행·유도 — Done
+### CF-FQ-051 Data Asset Multi-Type Onboarding — Done
 
 ```text
-상태: Done / P0 Complete / CF-TC-027 Technical + USER Feel PASS / Current System Promotion Complete
-Current owner: Document/Systems/Combat/MissileGuidance.md v1.0.1
-공통 Projectile 통합 경계: Document/Systems/Combat/Projectile.md v1.9.0
-Historical Plan: Document/Plan/MissileGuidance/MissileGuidancePlan.md v0.6.25 — Historical + Retained Path / Final Audit PASS / physical move 0
+상태: Done / Technical Complete / DAO-P0-06 Final Audit Correction + Re-review PASS
+Current owner: Document/Systems/DataManagement/DataAssetAuthoring.md v1.4.1
+Historical Plan: Document/Plan/DataAssetOnboarding/DataAssetOnboardingPlan.md v0.3.22 — Historical + Retained Path / G5 Deferred
 ```
 
 보존 판정:
 
-- USER가 MissileDirectTest PIE에서 Low / Normal / High Guidance Feel을 직접 확인하고 "얼추 PASS"로 승인했다.
-- Direct TargetActor 물리 제한형 Flight/Guidance, Guidance Law, Independent Activation, Stateful Seeker/Observation, rear-aspect와 Guidance Preset authoring/idempotence의 Technical evidence는 PASS 상태를 유지한다.
-- 대표 Plan의 완료 상세 evidence는 보존하며, Current 구현은 MissileGuidance.md와 Projectile.md를 우선한다. 문서 승격을 이유로 기존 Build/Authoring/Focused/Missile 10/10/AssetDump evidence를 반복하지 않는다.
-- LaserPoint·DataLink/Inertial 실제 Runtime, Angled/Vertical/Loft/TopAttack, 실제 Expire와 장비별 다중 미사일 Salvo 연출은 P0 완료를 막지 않는 후속 범위다.
+- MissileGuidePreset 단일 Staging/DACE 기반을 AmmoData까지 확장해 Production provider exact2와 provider-neutral mixed Explicit Paths authoring을 Current 계약으로 승격했다.
+- DAO-P0-06 사전 Acceptance/Measurement는 P0 0 / blocking P1 0 / P2 1 non-blocking PASS다. second onboarding의 prohibited shared algorithm duplication은 0이며 third type는 typed provider/DACE + provider registration + explicit operational admission으로 확장하고 shared Preview/Review/TOCTOU/Apply/Durable/DACE core algorithm rewrite는 요구하지 않는다.
+- final executable baseline은 Build `39e4973ff0ad4e31803c679d272533ff`, focused4 `148c4f325b724b2fa7bfd7158819c531`, affected13 `0f2f69983f024986aa87a98afee2aed9`, Missile DACE15 `8967abe39f1a4d128c3ce455ede970a5` PASS다. DAO-P0-06은 executable Source mutation 0이라 이 evidence를 반복 실행하지 않았다.
+- Product canonical Ammo exact0, Missile Product exact3, HeavyFinite/RocketFinite exact2, protected exact10을 보존했다. Final Audit의 문서-only P1/P2 projection 교정 후 최종 판정은 P0 0 / blocking P1 0 / P2 1 non-blocking PASS다. DamageData는 third onboarding Candidate / Not Started이며 자동 Active로 승격하지 않는다.
+- 현재 단일 Active `CF-FQ-039 Production UI Visual Rework`는 변경하지 않았다.
 
 ---
 
@@ -121,6 +121,234 @@ ActiveWork가 다시 상세 Build/Automation/USER 로그를 누적하거나 서�
 ---
 
 ## 8. Changelog
+
+### v4.200 - 2026-09-10
+
+- `CF-FQ-051 / DAO-P0-06 Final Audit Correction + Re-review`를 문서-only로 닫았다. Current §2의 stale Ammo 미지원 표현과 완료 Feature header 누락을 교정한 뒤 최종 판정은 `P0 0 / blocking P1 0 / P2 1 non-blocking / PASS`다.
+- Current owner는 `Document/Systems/DataManagement/DataAssetAuthoring.md v1.4.1`, Historical Plan은 `Document/Plan/DataAssetOnboarding/DataAssetOnboardingPlan.md v0.3.22` Retained Path다. hybrid shared/legacy physical ownership P2는 비차단 maintenance debt로 유지한다.
+- Source/Asset/Test mutation과 Build/Automation 재실행은 0이며 protected exact10, 기존 executable evidence, 현재 단일 Active `CF-FQ-039`와 병렬 dirty를 보존했다.
+
+### v4.199 - 2026-09-10
+
+- `CF-FQ-051 / DAO-P0-06 Reuse Measurement / Acceptance / Current System Promotion`을 완료해 Ready 복원 row를 제거하고 최근 완료 projection을 CF-FQ-051 Done / Technical Complete로 교체했다.
+- Current owner는 `Document/Systems/DataManagement/DataAssetAuthoring.md v1.4.0`, Historical Plan은 `Document/Plan/DataAssetOnboarding/DataAssetOnboardingPlan.md v0.3.21` Retained Path다. 사전검수는 P0 0 / blocking P1 0 / P2 1 non-blocking PASS이며 third-type shared core algorithm rewrite는 0 required다.
+- Product canonical Ammo exact0, Missile Product exact3, HeavyFinite/RocketFinite exact2, protected exact10과 기존 병렬 dirty를 보존했고 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v4.198 - 2026-09-09
+
+- `CF-FQ-051 / DAO-P0-02 Contract Correction + Source Re-review`를 `P0 0 / blocking P1 0 / P2 0 / Source Contract PASS`로 반영하고 representative Plan을 v0.3.4로 전진했다.
+- read-only/mutation readiness 분리, provider-neutral primitive authority, AmmoIcon strict parse↔Asset Registry metadata validation seam과 fingerprint/no-load regression을 교정했다. Ammo typed schema/provider 본체는 아직 시작하지 않았다.
+- current correction의 fresh Build/Automation은 build preset repository mapping blocker로 job 생성 전 차단되어 Pending이다. exact next는 `DAO-P0-02 Correction Fresh Technical Validation`이며 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty는 변경하지 않았다.
+
+### v4.197 - 2026-09-09
+
+- `CF-FQ-051 / DAO-P0-02` 구현 전 계약검수를 `P0 0 / blocking P1 3 / P2 2 / HOLD`로 반영하고 representative Plan을 v0.3.3으로 전진했다.
+- read-only provider readiness와 mutation capability 분리, provider-neutral primitive authority, AmmoIcon strict parse↔Asset Registry Preview validation seam이 구현 전 교정 대상이다. DAO-P0-01 final Build/affected13/DACE15 evidence는 보존한다.
+- Ammo C++ 구현/Build/Automation은 시작하지 않았고 exact next는 `DAO-P0-02 Contract Correction + Re-review`다. 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty는 변경하지 않았다.
+
+### v4.196 - 2026-09-09
+
+- `CF-FQ-051 / DAO-P0-01 Correction + Re-review`를 `P0 0 / blocking P1 0 / P2 0 / Technical PASS`로 닫고 representative Plan을 v0.3.2로 전진했다.
+- payload-free common Preview/Review/TOCTOU, complete exact TypeKey provider operation registry, provider-root fixture 이동, second-provider seam과 duplicate TypeKey fail-closed 회귀를 반영했다. final UE 5.8 Build PASS + affected13 13/13 + DACE15 15/15이며 Product exact3/accepted baseline은 무변경이다.
+- DAO-P0-02 Ammo 구현은 아직 시작하지 않았고 Ready next만 `DAO-P0-02 Ammo Typed Schema / Parse / Fingerprint / Preview`로 전진했다. 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty는 변경하지 않았다.
+
+### v4.195 - 2026-09-09
+
+- `CF-FQ-051 / DAO-P0-01 Post-Implementation Mid-review`를 `P0 0 / blocking P1 4 / P2 2 / HOLD`로 반영하고 representative Plan을 v0.3.1로 전진했다.
+- 기존 Build PASS + affected Staging 13/13 + DACE 15/15는 Missile parity evidence로 보존하지만 shared multi-type foundation acceptance는 취소했다.
+- exact next는 `DAO-P0-01 Correction + Re-review`이며 DAO-P0-02는 HOLD다. 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty는 변경하지 않았다.
+
+### v4.194 - 2026-09-09
+
+- `CF-FQ-051 / DAO-P0-01 Shared Type Dispatch Foundation + Missile Parity Rewire`를 Technical PASS로 닫고 representative Plan을 v0.3.0, Current implementation owner를 `DataAssetAuthoring.md v1.2.0`으로 전진했다.
+- Editor Private common envelope + exact trusted TypeKey/provider root + class-scoped StableLogicalId + first Missile typed provider callback ownership을 구현했고 existing Public Missile API는 compatibility facade/signature delta 0으로 보존했다.
+- final UE 5.8 Build PASS, affected Staging exact13/13, DACE exact15/15이며 Product exact3 JSON/uasset diff 0 / Apply·Save 0 / accepted bootstrap exact1 append 0이다.
+- Ammo typed payload/DACE extension은 아직 0이며 exact next는 `DAO-P0-02 Ammo Typed Schema / Parse / Fingerprint / Preview`다. 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty는 변경하지 않았다.
+
+### v4.193 - 2026-09-09
+
+- `CF-FQ-051 / DAO-P0-00` Initial Review P1 6건/P2 2건을 representative Plan v0.2.0에 전건 교정하고 current Source 재대조 후 `P0 0 / blocking P1 0 / P2 0` PASS로 닫았다.
+- common envelope + per-type typed record + Missile compatibility facade, exact TypeKey provider/root/history, class-scoped StableLogicalId와 Ammo numeric/Tags/Icon/optional semantics를 Contract Freeze했다. Ammo target은 Test exact2 / Product canonical exact0이다.
+- 이번 단계는 설계 문서만 변경했으며 C++/Build/Automation/JSON/.uasset/accepted snapshot mutation은 0이다. exact next는 `DAO-P0-01 Shared Type Dispatch Foundation + Missile Parity Rewire`다.
+- 현재 단일 Active `CF-FQ-039`, 기존 병렬 dirty와 Missile Product/accepted baseline은 유지했다.
+
+### v4.192 - 2026-09-09
+
+- `CF-FQ-051 / DAO-P0-00 Initial Design Review`를 `P0 0 / P1 6 / P2 2 / Implementation HOLD`로 판정하고 representative Plan을 v0.1.1로 전진했다.
+- P1은 multi-type transport/Public compatibility, trusted TypeKey/provider/root/history, class-scoped StableLogicalId, Ammo numeric Authoring semantic, AmmoTags+DACE array-element, AmmoIcon Soft Reference+DACE target-class drift coverage다. P2는 optional display/family semantic과 current target classification이다.
+- fresh persisted dependency evidence에서 Ammo exact2는 referencer0 Test-owned durable fixture이며 Product canonical target은 현재 exact0이다. 이번 review는 Source/JSON/.uasset/accepted snapshot mutation 0 / Build·Automation 0이다.
+- exact next는 `DAO-P0-00 Correction + Re-review`이며 DAO-P0-01은 HOLD한다. 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty는 유지했다.
+
+### v4.191 - 2026-09-09
+
+- 사용자 요청으로 `CF-FQ-051 Data Asset Multi-Type Onboarding`을 P2 / Ready 복원 체크포인트에 추가했다. 대표 Plan은 `Document/Plan/DataAssetOnboarding/DataAssetOnboardingPlan.md v0.1.0`이다.
+- UE Source + persisted AssetDump에서 `CFAmmoData` authored exact8 / persisted exact2와 현재 Missile-specific Authoring/DACE 결합을 확인했고, Ammo second Pilot을 통해 shared orchestration + typed provider 경계를 검증하기로 했다.
+- 구현은 아직 0이며 exact next는 `DAO-P0-00 Architecture / Contract Freeze + Initial Design Audit`이다. 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty는 변경하지 않았다.
+
+### v4.190 - 2026-09-09
+
+- `CF-FQ-050 / DACE-P0-06` Final Acceptance를 `P0 0 / blocking P1 0 / P2 0` PASS로 닫고 Current owner를 `Document/Systems/DataManagement/DataAssetAuthoring.md v1.1.0`으로 승격했다.
+- CF-FQ-050을 Ready 복원 목록에서 제거하고 최근 완료를 CF-FQ-050 Done / P0 Complete / Historical + Retained Path로 갱신했다. representative Historical Plan은 v0.7.0이다.
+- Product Low/Normal/High Apply·Save 0 / canonical Product Staging mutation 0 / accepted snapshot append 0, 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty를 유지했다.
+
+### v4.189 - 2026-09-09
+
+- `CF-FQ-050 / DACE-P0-05 Integration / Regression`을 `P0 0 / blocking P1 0 / P2 0` Technical PASS로 닫고 representative Plan을 v0.6.0으로 전진했다.
+- official Build `29df6158b2114e6f806a2cb9ace5100f` PASS + DACE `aff1246873cb402f813267c04cfd0892` exact15/15 + affected CF-FQ-049 `e1b4d2629d7744e8b152e7428340ce36` exact13/13 + OperationalEntry `531f99e9da92407ba94fb507c91d1d9c` exact1/1 PASS다.
+- fixture residue 0 / canonical Product Staging raw-byte residue 0 / Product Low/Normal/High Apply·Save 0 / exact3 JSON·uasset diff 0 / accepted snapshot append 0을 확인했고 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty를 유지했다. exact next는 `DACE-P0-06 Acceptance / Current System Promotion`이다.
+
+### v4.188 - 2026-09-09
+
+- `CF-FQ-050 / DACE-P0-04 Migration Impact Guard`를 post-implementation re-review `P0 0 / blocking P1 0 / P2 0` Technical PASS로 닫았다. representative Plan은 v0.5.0이다.
+- canonical Product Staging exact3 read-only strict parse/revision compatibility, `StagingMigrationPending`/`ProductMigrationReviewPending`, Resolution/Evidence와 Pending accepted append/Current promotion 차단을 구현했다. no-delta baseline은 duplicate append=false / Current promotion prerequisite=true다.
+- final official Build `36dca8bb69ef4ed99271139f2542a79a` PASS + DACE focused `a4702819c89b402285ddf1f0452fd844` exact 15/15 PASS다. Product Low/Normal/High Apply·Save 0 / canonical Product Staging mutation 0 / accepted snapshot append 0, 현재 단일 Active `CF-FQ-039`와 병렬 dirty를 유지했다. exact next는 `DACE-P0-05 Integration / Regression`이다.
+
+### v4.187 - 2026-09-09
+
+- `CF-FQ-050 / DACE-P0-03` 중간검수 P1 2건/P2 2건을 전건 교정하고 재검수 `P0 0 / blocking P1 0 / P2 0` PASS로 닫았다. representative Plan은 v0.4.2다.
+- Source/Mapping-only safe 여부 자동 추론을 제거해 explicit NoMigration과 보수적 Product review declaration을 분리하고 accepted exact4 canonical SHA-256 integrity, no-delta stale declaration, Adapter revision decrease/pure revision-only matrix를 fail-closed했다.
+- fresh official Build `2f1003126fa1435f8087af24a947305d` PASS + DACE focused `3aa77b32ed014a13ac813ab00b3be81e` exact 12/12 PASS다. Product Low/Normal/High Apply·Save 0 / canonical Product Staging mutation 0 / accepted snapshot append 0, 현재 단일 Active `CF-FQ-039`와 병렬 dirty를 유지했다. exact next는 `DACE-P0-04 Migration Impact Guard`다.
+
+### v4.186 - 2026-09-09
+
+- `CF-FQ-050 / DACE-P0-03` 중간검수를 `P0 0 / P1 2 / P2 2 / Final Acceptance HOLD`로 판정하고 representative Plan을 v0.4.1로 전진했다.
+- Source/Mapping-only 변화를 category만으로 safe NoMigration으로 추론해 보수적 Product migration 선언을 차단하는 문제와 accepted snapshot four component signature의 malformed/empty integrity 공백을 P1로 기록했다. no-delta stale declaration 무시와 revision-only/decrease Automation matrix 공백은 P2다.
+- 기존 Build `cab634bae876405ca8342604c3662f67` PASS와 focused `23d3905af62b43c8824d4a0328c86c0d` exact 12/12 PASS는 교정 전 evidence로 보존한다. 이번 review에서는 Source/Build/Automation mutation 0이며 Product Apply·Save 0 / canonical Product Staging mutation 0 / accepted snapshot append 0 / 현재 단일 Active `CF-FQ-039`와 병렬 dirty를 유지했다. exact next는 `DACE-P0-03 Correction + Re-review`다.
+
+### v4.185 - 2026-09-09
+
+- `CF-FQ-050 / DACE-P0-03 Revision Guard`를 post-implementation re-review `P0 0 / blocking P1 0 / P2 0` Technical PASS로 닫고 representative Plan을 v0.4.0으로 전진했다.
+- SchemaRevision / AdapterContractRevision bump 누락, latest accepted snapshot + actual candidate signature binding, migration impact 미선언, safe Source/Mapping native refactor의 explicit NoMigration와 accepted snapshot chain/monotonicity를 fail-closed했다.
+- 첫 exact12 PASS 뒤 future accepted history exact2+에서 synthetic fixture가 history 전체를 보존하지 않는 test-only assumption을 발견해 교정했고, 최종 official Build `cab634bae876405ca8342604c3662f67` PASS + focused `23d3905af62b43c8824d4a0328c86c0d` exact 12/12 PASS를 확보했다. Product Low/Normal/High Apply·Save 0 / canonical Product Staging mutation 0 / accepted snapshot append 0과 현재 단일 Active `CF-FQ-039`, 기존 병렬 dirty를 유지했다. exact next는 `DACE-P0-04 Migration Impact Guard`다.
+
+### v4.184 - 2026-09-09
+
+- `CF-FQ-050 / DACE-P0-02 Correction + Re-review`에서 중간검수 P1 3건/P2 2건을 전건 교정하고 `P0 0 / blocking P1 0 / P2 0` PASS로 닫았다. representative Plan은 v0.3.2다.
+- materializer sentinel을 Source descriptor semantic leaf set에, serializer per-leaf sentinel을 mapping descriptor SourceToAdapter set에 exact 결속했고 recursive container inner-type Reflection token, parser exact FieldPath, dev-only thread_local + scoped RAII fingerprint probe를 반영했다.
+- fresh official UE 5.8 Build `ae2df8748108459d9d74f8acfe14da79` PASS와 DACE focused `c2b7f592e8584aeea5325445f050d61d` exact 8/8 PASS를 확보했다. Product Low/Normal/High Apply·Save 0 / canonical Product Staging mutation 0, 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty를 유지했다. exact next는 `DACE-P0-03 Revision Guard`다.
+
+### v4.183 - 2026-09-09
+
+- `CF-FQ-050 / DACE-P0-02 Post-Implementation Mid-review`를 `P0 0 / P1 3 / P2 2 / Final Acceptance HOLD`로 판정하고 representative Plan을 v0.3.1로 전진했다.
+- P1은 materializer↔extractor sentinel의 Source descriptor 비결속, serializer per-leaf value wiring 검증 공백, container element/key/value reflected type identity 미포함이다. P2는 parser exact FieldPath 미검증과 dev-only fingerprint probe sink isolation이다.
+- 교정 전 official Build PASS + focused exact 8/8 PASS evidence는 보존한다. Product Low/Normal/High ApplyReviewed 0 / UE Asset Save 0 / canonical Product Staging mutation 0과 현재 단일 Active `CF-FQ-039`, 기존 병렬 dirty를 변경하지 않았다. exact next는 `DACE-P0-02 Correction + Re-review`다.
+
+### v4.182 - 2026-09-09
+
+- `CF-FQ-050 / DACE-P0-02 Structural Drift Detection`을 Technical PASS로 닫고 representative Plan을 v0.3.0으로 전진했다.
+- Native Reflection exact30, Adapter exact42 / mapping exact38과 production serializer/parser/fingerprint/materializer↔extractor actual coverage의 negative regression을 DACE-P0-02 5종으로 fail-closed했고, P0-01 3종까지 포함한 final exact 8/8이 PASS했다.
+- Product Low/Normal/High ApplyReviewed 0 / UE Asset Save 0 / canonical Product Staging mutation 0과 exact3 JSON/.uasset scoped diff 0을 유지했다. 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty를 변경하지 않았다. exact next는 `DACE-P0-03 Revision Guard`다.
+
+### v4.181 - 2026-09-09
+
+- `CF-FQ-050 / DACE-P0-01 Contract Descriptor / Snapshot Foundation`을 구현하고 official UE 5.8 Build PASS + focused exact 3/3 PASS로 닫았다. representative Plan은 v0.2.1이다.
+- SourceShape/AdapterShape/SourceAdapterMapping/SemanticContract descriptor와 production-owned Schema 1 / Adapter 2 bootstrap accepted snapshot exact1, serializer/parser/fingerprint/extractor↔materializer private probe foundation을 확보했다.
+- Product Low/Normal/High ApplyReviewed 0 / UE Asset Save 0 / canonical Product Staging mutation 0을 유지했고 exact3 JSON/.uasset scoped diff 0을 확인했다. 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty를 변경하지 않았다. exact next는 `DACE-P0-02 Structural Drift Detection`이다.
+
+### v4.180 - 2026-09-09
+
+- `CF-FQ-050 / DACE-P0-00` Initial Design Review의 P1 6건/P2 2건을 current Source 기준으로 교정하고 재검수 `P0 0 / blocking P1 0 / P2 0` PASS로 닫았다.
+- representative Plan은 v0.2.0이며 Source/Adapter/Mapping/Semantic 4-signature, production behavior probes, private append-only accepted baseline과 migration Impact/Resolution promotion gate를 확정했다.
+- Product Low/Normal/High ApplyReviewed 0 / UE Asset Save 0 / Product Staging JSON mutation 0 / Source implementation 0 / Build·Automation 실행 0을 유지했고 현재 단일 Active `CF-FQ-039`와 unrelated dirty를 변경하지 않았다. exact next는 `DACE-P0-01 Contract Descriptor / Snapshot Foundation`이다.
+
+### v4.179 - 2026-09-09
+
+- `CF-FQ-050 / DACE-P0-00 Initial Design Review`를 current MissileGuidePreset Source / CFDAStaging·Apply·Ops / canonical Product Staging exact3 / Automation source 교차감사로 수행하고 representative Plan을 v0.1.1로 전진했다.
+- 판정은 `P0 0 / P1 6 / P2 2 / Implementation HOLD`다. blocking P1 교정 전 Source implementation을 시작하지 않으며 exact next는 `DACE-P0-00 Correction + Re-review`다.
+- Product Low/Normal/High ApplyReviewed 0 / UE Asset Save 0 / Product Staging JSON write 0 / Build·Automation 실행 0을 유지했고 현재 단일 Active `CF-FQ-039`와 unrelated dirty를 변경하지 않았다.
+
+### v4.178 - 2026-09-09
+
+- USER 요청으로 `CF-FQ-050 Data Asset Contract Evolution Guard`를 P2 / Ready 정식 후속 Feature로 승격하고 `Document/Plan/DAContractEvolution/DAContractEvolutionPlan.md v0.1.0`을 Ready 복원 표에 추가했다.
+- 목적은 Staging 지원 DataAsset의 C++ authoring structural drift, SchemaRevision / AdapterContractRevision bump, migration impact declaration 누락을 fail-closed하는 것이다. semantic meaning 자동 추론, old JSON 자동 migration, Product auto-save와 다른 DA adapter 추가는 P0 범위가 아니다.
+- CF-FQ-049 Done / `DataAssetAuthoring.md v1.0.1` Current 계약과 현재 단일 Active CF-FQ-039를 그대로 보존했다. 이번 승격은 문서 작업이며 Source/Asset/Build/Automation mutation은 0이다. exact next는 `DACE-P0-00 Initial Design Review`다.
+
+### v4.177 - 2026-09-09
+
+- CF-FQ-049 post-promotion 최종검수에서 확인한 Current Systems FText 표현 P1 1건을 `DataAssetAuthoring.md v1.0.1`로 교정하고 재검수 `P0 0 / P1 0 / P2 0` PASS로 닫았다.
+- source-backed Literal 의미와 Unreal persistence가 자동 부여한 package-only namespace / stable key를 분리해 AdapterContractRevision 2 Source와 Current 문서를 정렬했다.
+- Source/Asset/Build/Automation은 재실행·변경하지 않았고 Product Low/Normal/High Apply·Save 0, CF-FQ-049 Done, 현재 단일 Active CF-FQ-039와 unrelated dirty를 그대로 보존했다.
+
+### v4.176 - 2026-09-09
+
+- `CF-FQ-049 / DAS-P0-05 Final Acceptance`를 current Source·canonical Product Staging·기존 Build/Automation evidence와 fresh persisted AssetDump로 감사해 `P0 0 / P1 0 / P2 0` PASS로 닫고 P0 Complete / Current System Promotion Complete로 전환했다.
+- Current owner를 `Document/Systems/DataManagement/DataAssetAuthoring.md v1.0.0`으로 승격하고 CF-FQ-049를 Ready 복원 표에서 제거했다. 대표 Plan v0.7.0은 Historical + Retained Path로 보존한다.
+- Product Low/Normal/High `ApplyReviewed`는 실행하지 않아 Apply·Save 0을 유지했다. 현재 단일 Active `CF-FQ-039`와 unrelated dirty는 변경하지 않았다.
+
+### v4.175 - 2026-09-09
+
+- `CF-FQ-049 / DAS-P0-05` Post-Correction 중간검수의 `P0 0 / P1 3 / P2 0`을 교정하고 재검수 `P0 0 / P1 0 / P2 0` PASS로 닫았다. representative Plan은 v0.6.4다.
+- exact Staging selection, same-selection fresh Review, stale hash rejection, SyncProduct touched-file raw-byte rollback과 runner-level Product Staging residue 0 gate를 확보했다. final official Build + OperationalEntry 1/1 + existing exact13이 PASS했다.
+- Product Low/Normal/High Apply·Save는 0이며 Current System Promotion은 아직 시작하지 않았다. 현재 단일 Active `CF-FQ-039`와 unrelated dirty는 유지하고 next는 `DAS-P0-05 Acceptance / Current System Promotion`이다.
+
+### v4.174 - 2026-09-09
+
+- `CF-FQ-049 / DAS-P0-05 Contract Review Correction + Re-review`의 P1 2건을 교정하고 `P0 0 / P1 0 / P2 0` PASS로 닫았다. representative Plan은 v0.6.3이다.
+- current AdapterContractRevision 2 schema/example, canonical Product Staging Low/Normal/High 3종, reusable `SyncProduct → Preview → Review → ApplyReviewed` Editor-side entry를 확보했고 fresh official Build + OperationalEntry 1/1 + existing exact13이 PASS했다.
+- Product Low/Normal/High Apply·Save는 0이며 Current System Promotion은 아직 시작하지 않았다. 현재 단일 Active `CF-FQ-039`와 unrelated dirty는 유지하고 next는 `DAS-P0-05 Acceptance / Current System Promotion`이다.
+
+### v4.173 - 2026-09-08
+
+- `CF-FQ-049 / DAS-P0-05 Acceptance / Current System Promotion` 계약검수를 `P0 0 / P1 2 / P2 0 / Promotion HOLD`로 닫고 representative Plan을 v0.6.2로 전진했다.
+- P1은 current AdapterContractRevision 2와 충돌하는 normative revision 1 schema/example, 그리고 Product Staging 실파일·bootstrap/rebase·재사용 가능한 discovery→Preview→reviewed Apply 운영 진입 부재다.
+- Product Low/Normal/High Apply·Save는 0이며 P0-04 Build/exact13/AssetDump evidence는 보존한다. 현재 단일 Active `CF-FQ-039`와 unrelated dirty는 변경하지 않았고 next는 `DAS-P0-05 Contract Review Correction + Re-review`다.
+
+### v4.172 - 2026-09-08
+
+- `CF-FQ-049 / DAS-P0-04` Post-PASS 중간검수 `P0 0 / P1 2 / P2 1` 전건을 교정하고 재검수 `P0 0 / blocking P1 0 / P2 0` PASS로 닫았다.
+- representative Plan은 v0.6.1이다. AdapterContractRevision 2, old revision 1 fail-closed, 4-authority fixture residue 검증과 loaded-only negative regression을 반영했다.
+- 최종 fresh official Build + exact 13/13 + fresh parent AssetDump에서 Product Low/Normal/High 3개만 확인했고 Product Apply/Save는 0이다. exact next는 계속 `DAS-P0-05 Acceptance / Current System Promotion`이며 현재 단일 Active `CF-FQ-039`와 unrelated dirty는 변경하지 않았다.
+
+### v4.171 - 2026-09-08
+
+- `CF-FQ-049 / DAS-P0-04 MissileGuidePreset Pilot`을 Technical PASS로 닫고 representative Plan을 v0.6.0, exact next를 `DAS-P0-05 Acceptance / Current System Promotion`으로 전진했다.
+- Product Low/Normal/High는 mutation0 NoChange/Update Preview만 검증했으며 Product `.uasset` Apply/Save는 0이다. test-owned durable fixture는 Create/Update disk reload/readback, drift/dirty, save uncertainty와 PartialApplied를 검증했다.
+- 첫 PASS 뒤 발견된 fixture residue 6개 teardown defect를 cleanup failure→Automation failure + runner pre/post residue gate로 교정했고 fresh Build, exact 13/13, Git status와 fresh parent AssetDump에서 residue 0을 확인했다. 현재 단일 Active `CF-FQ-039`와 unrelated dirty는 변경하지 않았다.
+
+### v4.170 - 2026-09-08
+
+- `CF-FQ-049 / DAS-P0-03` Post-PASS 중간검수 `P0 0 / P1 2 / P2 2` 전건을 교정하고 재검수 `P0 0 / blocking P1 0 / P2 0` PASS로 닫았다.
+- representative Plan은 v0.5.1이며 exact next는 계속 `DAS-P0-04 MissileGuidePreset Pilot`이다. `DurableApplied`는 exact SavePackage 뒤 disk reload + unified typed semantic readback을 요구한다.
+- Product UE Asset Apply/Save는 0이고 실제 durable fixture 실행은 P0-04 소유다. 현재 단일 Active `CF-FQ-039`와 unrelated 기존 dirty는 변경하지 않았다.
+
+### v4.169 - 2026-09-08
+
+- `CF-FQ-049 / DAS-P0-02` 중간검수 P1 2건과 인접 mutable path/intent trust-boundary를 교정하고 재검수 `P0 0 / blocking P1 0 / P2 0` PASS로 닫았다.
+- representative Plan은 v0.4.1, exact next는 계속 `DAS-P0-03 Exact Materializer + Apply`이며 UE Asset Apply/Save는 0이다.
+- 상세 교정·Build·Automation evidence는 representative Plan이 소유하며 현재 단일 Active `CF-FQ-039`와 unrelated 기존 dirty는 변경하지 않았다.
+
+### v4.168 - 2026-09-08
+
+- `CF-FQ-049 / DAS-P0-02 Typed Staging Parse + Preview Foundation`을 공식 Editor Build + focused exact 6/6 PASS로 닫고 representative Plan을 v0.4.0으로 전진했다.
+- next는 `DAS-P0-03 Exact Materializer + Apply`이며 UE Asset Apply/Save는 아직 0이다.
+- 현재 단일 Active `CF-FQ-039`와 unrelated 기존 dirty는 변경하지 않았다. 상세 validation evidence는 representative Plan이 소유한다.
+
+### v4.167 - 2026-09-08
+
+- `CF-FQ-049 / DAS-P0-01 Staging Authority / Schema Design`을 완료하고 representative Plan v0.3.0의 설계검수 교정 후 `P0 0 / blocking P1 0 / P2 0` PASS로 닫았다.
+- exact next는 `DAS-P0-02 Typed Staging Parse + Preview Foundation`이며 첫 Source prerequisite는 `CFMissileGuidePresetData` Registry coverage 27→28 보강이다.
+- Product Source/UE Asset/Build/Automation mutation은 0이다. 현재 단일 Active `CF-FQ-039`와 unrelated 기존 dirty는 변경하지 않았다.
+
+### v4.166 - 2026-09-08
+
+- `CF-FQ-049` DAS-P0-00 current Source Audit을 read-only PASS로 완료하고 representative Plan을 v0.2.0으로 전진했다.
+- Initial Design Review P0/P1/P2와 감사에서 발견한 MissileGuidePreset Registry coverage 공백을 normative 계약으로 교정한 뒤 재검수 `P0 0 / blocking P1 0 / P2 0` PASS로 닫았다.
+- exact next는 `DAS-P0-01 Staging Authority / Schema Design`이다. Product Source/UE Asset implementation은 아직 시작하지 않았다.
+- 현재 단일 Active `CF-FQ-039`와 unrelated `SourceArt/UI/HUD/VehiclePanel/` dirty는 변경하지 않았다.
+
+### v4.165 - 2026-09-08
+
+- `CF-FQ-049` Initial Design Review를 current CF-FQ-045/038/030 Source와 교차검수해 representative Plan을 v0.1.1로 전진하고 `P0 1 / P1 8 / P2 3 / Implementation HOLD`를 기록했다.
+- 기존 target package가 이미 dirty인 상태에서 CF-FQ-049가 SavePackage를 수행할 경우 사용자 미저장 변경까지 함께 영구 저장할 수 있는 ownership 공백을 P0로 판정했다.
+- exact next는 read-only `DAS-P0-00 Current DA Authoring / Creation Audit`이다. P0/P1 교정 및 재검수 전 Source/Asset implementation은 시작하지 않는다.
+- 현재 단일 Active `CF-FQ-039`, 다른 Ready/Paused Feature와 unrelated `SourceArt/UI/HUD/VehiclePanel/` dirty는 변경하지 않았다.
+
+### v4.164 - 2026-09-08
+
+- USER 승인으로 `CF-FQ-049 Data Asset Staging·Batch Authoring`을 P2 / Ready 정식 Feature로 승격하고 대표 Plan `Document/Plan/DataAssetStaging/DataAssetStagingPlan.md v0.1.0`을 Ready 복원 표에 추가했다.
+- `.uasset` 최종 Source of Truth, Editor-off JSON/CSV Staging, Preview→Reviewed Batch Apply 경계를 P0 방향으로 고정했다. CF-FQ-045 Data Asset Manager와 CF-FQ-038 Vehicle Authoring은 재오픈하지 않는다.
+- 첫 Pilot은 완료된 `CFMissileGuidePresetData` Authoring 경로이며 CF-FQ-030 Runtime/Guidance/USER Feel 완료 evidence는 보호한다. exact next는 read-only `DAS-P0-00 Current DA Authoring / Creation Audit`이다.
+- 현재 단일 Active `CF-FQ-039`는 그대로 유지하며 이번 승격에서 Product Source/UE Asset/Build/Automation mutation은 0이다.
 
 ### v4.163 - 2026-09-08
 
@@ -680,7 +908,7 @@ Migration: 2026-09-06 이후 CF-FQ-047 완료 evidence를 찾을 때는 Archive 
 
 ### v4.66 - 2026-09-01
 
-- CF-FQ-040을 `VehicleBuilderPlan v0.1.38 / Roadmap v0.1.29 / ProposalSpec v0.1.11`로 동기화했다.
+- CF-FQ-040을 `VehicleBuilderPlan v0.1.38 / Roadmap v0.1.29 / ProposalSpec v0.1.11 / RefEvidenceSpec v0.1.3`로 동기화했다.
 - ESH-01 vehicle-specific Engine TorqueCurve typed owner/runtime materialization을 Technical PASS로 기록했다.
 - ESH-02 generic contract와 actual Wagon PhysicsDraft v3 mutation0 dry-run을 PASS로 기록했다. actual Wagon `EngineCurveProposalHash=773221966499c6295f2a652a21b270a5`, Blocker 0 / GAME_BIAS USER warning 1, Product Asset mutation 0 / Save 0이다.
 - next는 Wagon Engine Curve USER Review다. 승인 전 Performance Profile commit 및 ESH-03 ShiftRPM derivation은 금지한다.
@@ -1016,7 +1244,7 @@ Migration: 2026-09-06 이후 CF-FQ-047 완료 evidence를 찾을 때는 Archive 
 ### v4.13 - 2026-08-27
 
 - `CF-FQ-040 / VB-P0-09` USER Acceptance 준비에서 Guided Builder Step 2 Mesh / Step 3 Socket / Step 4 Layout runtime evaluator를 fresh AssetSnapshot/current Target authority로 연결하고 대표 Plan/Roadmap을 v0.1.14, ShellSpec을 v0.1.3으로 동기화했다.
-- optional FR/RL/RR Wheel 허용, Wheel role 4/4 found+distinct, socket-transform change Layout Stale, duplicate-role Blocked가 focused BuilderShell 1/1 PASS했다. 상세 build/process evidence는 대표 Plan이 소유한다.
+- optional FR/RL/RR Wheel 허용, Wheel role 4/4 found+distinct, socket-transform change Layout Stale, duplicate-role Blocked가 focused BuilderShell 1/1 PASS했다. 상세 build/process evidence는 대표 Plan evidence로만 보존한다.
 - VB-P0-09 전체 USER PASS는 아직 Pending이며 다음은 Step 1 Reference/Companion + Step 5~8 Guided action 연결 뒤 신규 차량 E2E USER 확인이다. CF-FQ-040은 Ready, 단일 Active CF-FQ-039는 변경하지 않았다.
 
 ### v4.12 - 2026-08-27
@@ -1108,7 +1336,7 @@ Migration: 2026-09-06 이후 CF-FQ-047 완료 evidence를 찾을 때는 Archive 
 
 - USER가 v4 내부 임시 box/seam/deck geometry를 최종 Frame에 남기면 안 된다고 판정해 v4 USER Visual을 Reject 처리했다.
 - Frame Master를 outer-shell-only ownership으로 교정하고 `VT06_FrameMaster_v5.png` / `VT06_FrameReview_v5.png`를 생성해 AI Source QA PASS했다.
-- 대표 Plan/Roadmap을 v0.1.28/v0.1.27로 동기화했다. USER PASS 전 UE Import·local frame assembly·content reposition은 0이다.
+- 대표 Plan/Roadmap 포인터를 v0.1.28/v0.1.27로 동기화했다. USER PASS 전 UE Import·local frame assembly·content reposition은 0이다.
 
 ### v3.97 - 2026-08-26
 

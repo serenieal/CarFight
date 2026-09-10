@@ -1,9 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDAContractGuard.h
-// Version: v1.3.0
-// Date: 2026-09-09
-// Description: CF-FQ-050 DACE-P0-04 MissileGuidePreset contract evolution, canonical Staging compatibility와 migration promotion gate의 Private 검증 계약입니다.
+// Version: v1.5.0
+// Date: 2026-09-10
+// Description: CF-FQ-050 Missile compatibility facade와 CF-FQ-051 per-TypeKey DACE common contract입니다.
 // Changelog:
+// - v1.5.0: AmmoData SourceShape bootstrap을 위해 int32 authored property의 stable Reflection kind `Int`를 공용 contract에 추가했습니다. 기존 Missile Source에는 해당 kind가 없어 accepted Missile signature는 변하지 않습니다.
+// - v1.4.0: DAO-P0-04 correction에서 descriptor hashing, direct Reflection, serialized adapter observation, revision/history/canonical Staging validation에 provider-parameterized common seam을 추가했습니다. 기존 Missile facade는 보존합니다.
 // - v1.3.0: canonical Product Staging exact3 read-only strict-parse compatibility, migration Resolution/Evidence, Staging/Product Pending과 accepted append/Current promotion gate를 추가했습니다.
 // - v1.2.1: Source/Mapping-only change를 자동 safe 판정하지 않고 explicit NoMigration의 structural admissibility만 검증하도록 교정했습니다. no-delta stale declaration과 malformed accepted component signature를 fail-closed합니다.
 // - v1.2.0: CurrentChangeDeclaration, combined candidate contract signature, Schema/Adapter revision guard, explicit NoMigration safe-refactor gate와 accepted snapshot chain validator를 추가.
@@ -15,6 +17,8 @@
 // - DACE-P0-03의 current change declaration은 accepted history와 분리하며, 실제 contract 변화가 없으면 declaration은 없어야 합니다. Revision Guard는 Product Sync/Apply/Save를 호출하지 않습니다.
 // - v1.2.1부터 explicit NoMigration은 개발자의 safe 판단이며 Guard가 Source/Mapping-only category만으로 자동 추론하지 않습니다. accepted four component signature는 canonical lowercase SHA-256이어야 합니다.
 // - v1.3.0부터 Guard는 canonical Product Staging을 read-only로만 읽고 strict parser에 전달합니다. Pending/invalid migration은 accepted append와 Current System promotion을 허용하지 않으며 SyncProduct/ApplyReviewed/SavePackage를 호출하지 않습니다.
+// - v1.4.0의 provider-parameterized common seam은 accepted history를 생성/append하지 않습니다. AmmoData bootstrap은 별도 후속 단계이며 protected Missile accepted history를 수정하지 않습니다.
+// - v1.5.0부터 direct Reflection의 int32는 `Int` stable token으로 기록합니다. 이 token 추가는 AmmoData descriptor에만 사용하며 Missile accepted history를 rebaseline하지 않습니다.
 
 #pragma once
 
@@ -22,6 +26,9 @@
 #include "DataAuthoring/CFDAStaging.h"
 
 class UCFMissileGuidePresetData;
+class UClass;
+struct FCFDATypeProvider;
+struct FCFDATypeProviderEntry;
 
 /** 개발자 전용 Data Asset contract guard 진단 코드입니다. */
 enum class ECFDAContractIssueCode : uint8
@@ -237,10 +244,20 @@ public:
 	static const TArray<FCFDAFingerprintTokenDescriptor>& GetFingerprintTokenDescriptor();
 	// Current four component descriptor signatures를 계산합니다.
 	static bool BuildCurrentSignatures(FCFDAContractSignatures& OutSignatures, FString& OutError);
+	// 임의 exact TypeKey provider가 소유하는 four descriptor 집합을 동일 canonical algorithm으로 계산합니다.
+	static bool BuildSignaturesFromDescriptors(
+		const TArray<FCFDASourceFieldDescriptor>& SourceDescriptors,
+		const TArray<FCFDAAdapterFieldDescriptor>& AdapterDescriptors,
+		const TArray<FCFDASourceAdapterMappingDescriptor>& MappingDescriptors,
+		const TArray<FCFDASemanticRuleDescriptor>& SemanticDescriptors,
+		FCFDAContractSignatures& OutSignatures,
+		FString& OutError);
 	// Four component signatures를 fixed-key order의 candidate contract signature 하나로 결합합니다.
 	static bool BuildContractBundleSignature(const FCFDAContractSignatures& Signatures, FString& OutSignature, FString& OutError);
 	// Native Reflection에서 current Staging-owned Source shape를 직접 관측합니다.
 	static bool BuildReflectedSourceShapeDescriptor(TArray<FCFDASourceFieldDescriptor>& OutDescriptors, FString& OutError);
+	// 임의 native DataAsset class가 직접 소유한 CPF_Edit property shape를 TypeKey-neutral하게 관측합니다.
+	static bool BuildDirectReflectedSourceShapeDescriptor(const UClass& SourceClass, TArray<FCFDASourceFieldDescriptor>& OutDescriptors, FString& OutError);
 	// Expected Source descriptor와 observed Reflection/fixture descriptor를 exact 비교합니다.
 	static FCFDAContractGuardResult ValidateSourceShapeCoverage(const TArray<FCFDASourceFieldDescriptor>& ExpectedDescriptors, const TArray<FCFDASourceFieldDescriptor>& ObservedDescriptors);
 	// Expected Adapter descriptor와 observed/fixture Adapter descriptor를 exact 비교합니다.
@@ -249,6 +266,8 @@ public:
 	static FCFDAContractGuardResult ValidateSourceAdapterMappingCoverage(const TArray<FCFDASourceFieldDescriptor>& SourceDescriptors, const TArray<FCFDAAdapterFieldDescriptor>& AdapterDescriptors, const TArray<FCFDASourceAdapterMappingDescriptor>& MappingDescriptors);
 	// Production serializer 또는 memory fixture JSON physical shape가 Adapter descriptor와 exact인지 검증합니다.
 	static FCFDAContractGuardResult ValidateSerializedAdapterCoverage(const FString& JsonText);
+	// 임의 exact TypeKey Adapter descriptor를 대상으로 JSON physical shape를 검증하며 Array element `[]` observation을 포함합니다.
+	static FCFDAContractGuardResult ValidateSerializedAdapterCoverageAgainstDescriptor(const FString& JsonText, const TArray<FCFDAAdapterFieldDescriptor>& AdapterDescriptors);
 	// Production fingerprint가 emit한 token label sequence가 fingerprint descriptor와 exact인지 검증합니다.
 	static FCFDAContractGuardResult ValidateFingerprintCoverage(const TArray<FString>& ObservedTokenLabels);
 	// Materializer→extractor readback payload가 expected payload의 full semantic fingerprint를 보존했는지 검증합니다.
@@ -263,19 +282,29 @@ public:
 	static const FCFDACurrentChangeDeclaration* GetCurrentChangeDeclaration();
 	// Latest accepted snapshot 대비 candidate revision/signature와 explicit migration declaration을 fail-closed 검증합니다.
 	static FCFDAContractGuardResult ValidateRevisionGuard(const FCFDAAcceptedContractSnapshot& BaseSnapshot, const FCFDAContractSignatures& CandidateSignatures, int32 CandidateSchemaRevision, int32 CandidateAdapterContractRevision, const FCFDACurrentChangeDeclaration* ChangeDeclaration);
+	// Base accepted identity를 exact TypeKey provider에 먼저 결속한 뒤 provider revision으로 revision guard를 실행합니다.
+	static FCFDAContractGuardResult ValidateRevisionGuardForProvider(const FCFDATypeProvider& Provider, const FCFDAAcceptedContractSnapshot& BaseSnapshot, const FCFDAContractSignatures& CandidateSignatures, const FCFDACurrentChangeDeclaration* ChangeDeclaration);
 	// Accepted snapshot history의 four component signature integrity, record signature, unique id, previous chain과 revision monotonicity를 검증합니다.
 	static FCFDAContractGuardResult ValidateAcceptedSnapshotChain(const TArray<FCFDAAcceptedContractSnapshot>& Snapshots);
+	// Accepted history 전체를 provider exact TypeKey + provider-local history namespace에 결속해 cross-TypeKey chain 오염을 차단합니다.
+	static FCFDAContractGuardResult ValidateAcceptedSnapshotChainForProvider(const FCFDATypeProvider& Provider, const TArray<FCFDAAcceptedContractSnapshot>& Snapshots);
 	// Production accepted history와 actual current descriptor/service revision을 함께 검증합니다.
 	static FCFDAContractGuardResult ValidateCurrentRevisionGuard();
 	// 한 Staging JSON을 current production strict parser/revision 계약으로 read-only 검증합니다.
 	static FCFDAContractGuardResult ValidateStagingJsonCompatibility(const FString& JsonText, const FString& StagingRelativePath);
+	// selected exact TypeKey provider의 production parser/revision 계약으로 한 Staging JSON을 read-only 검증합니다.
+	static FCFDAContractGuardResult ValidateStagingJsonCompatibilityForProvider(const FCFDATypeProviderEntry& ProviderEntry, const FString& JsonText, const FString& StagingRelativePath);
 	// canonical Product MissileGuidePreset Staging exact3을 disk에서 read-only로 읽어 current strict parser/revision과 검증합니다.
 	static FCFDAContractGuardResult ValidateCurrentCanonicalStagingCompatibility();
+	// provider가 explicit 선언한 canonical target set을 read-only 검증합니다. 선언된 empty set은 valid exact0입니다.
+	static FCFDAContractGuardResult ValidateCanonicalStagingCompatibilityForProvider(const FCFDATypeProviderEntry& ProviderEntry);
 	// Declared impact의 Resolution/Evidence와 canonical Staging 호환성을 migration pending semantics로 검증합니다.
 	static FCFDAContractGuardResult ValidateMigrationResolution(ECFDAContractMigrationImpact Impact, ECFDAContractMigrationResolution Resolution, const FString& MigrationEvidenceId, bool bCanonicalStagingCompatible);
 	// CurrentChangeDeclaration과 canonical Staging 결과를 accepted append/Current promotion machine gate로 평가합니다.
 	static FCFDAMigrationGateResult EvaluateMigrationGate(const FCFDACurrentChangeDeclaration* ChangeDeclaration, const FCFDAContractGuardResult& CanonicalStagingResult);
-	// Production revision guard + canonical exact3 + current migration declaration을 종합한 current operational gate를 평가합니다.
+	// Selected exact TypeKey provider의 DACE readiness를 먼저 확인한 뒤 migration gate를 평가합니다.
+	static FCFDAMigrationGateResult EvaluateMigrationGateForProvider(const FCFDATypeProviderEntry& ProviderEntry, const FCFDACurrentChangeDeclaration* ChangeDeclaration, const FCFDAContractGuardResult& CanonicalStagingResult);
+	// Production revision guard + canonical exact3 + current migration declaration을 종합한 current Missile compatibility operational gate를 평가합니다.
 	static FCFDAMigrationGateResult EvaluateCurrentMigrationGate();
 	// Historical first bootstrap record의 frozen identity와 전체 append-only accepted snapshot chain을 검증합니다.
 	static bool ValidateBootstrapAcceptedSnapshot(FString& OutError);
