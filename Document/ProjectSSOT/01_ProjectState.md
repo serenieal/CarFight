@@ -2,7 +2,7 @@
 
 > 역할: CarFight 프로젝트의 **현재 실제 기준선 / 현재 Feature 상태 / 현재 리스크**를 고정한다.
 > 공통 규칙 원본: `Document/SSOT/`
-> 문서 버전: v2.45.7
+> 문서 버전: v2.45.8
 > 마지막 정리(Asia/Seoul): 2026-09-11
 > 문서 상태: Current
 
@@ -40,21 +40,19 @@ Current Gate: VPR-P0-01 VehiclePanel Production Vertical Slice — VEHICLE-SPECI
 
 ### 2.2 최근 완료
 
-`CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크`는 Done이다.
+`CF-FQ-038 차량 데이터 Authoring 시스템`은 Done이다.
 
 현재 구현 owner:
 
 ```text
-Document/Systems/UI/InGameUI.md v1.1.10
-Document/Systems/UI/AimReticle.md v1.10.0
-Document/Systems/Targeting/SensorContact.md v1.2.0
+Document/Systems/Vehicles/VehicleBuilder.md v1.5.0
 ```
 
-완료 범위는 UI-P0-02~05 USER PASS, UI-P0-06~10 Technical Complete/AI Runtime Technical Validation, UI-P0-11 Systems Promotion과 2026-08-22 post-closure remediation까지다.
+완료 범위는 DAUTH-P0-08A~M / P0-09~11 Technical PASS, P0-12 Closed with Deferred Feel Comparison, DG1~DG5와 DEL1~DEL7 PASS다. 2026-09-11 DEL6 compatibility retirement에서 Legacy Vehicle DA Wizard direct reference를 `UE/Source` exact0으로 만들고 관련 소스 3개를 물리 폐기했다.
 
-post-closure remediation의 최종 Official Build `bd3640c616794cd7a54cc8a8afa4b021`, broad `CarFight.UI` 44/44, `CarFight.Sensor` 14/14 PASS evidence는 Historical Plan `Document/Plan/Archive/InGameUIPlan.md v0.59.36`가 소유한다. 새 관련 failure evidence가 없으면 반복하지 않는다.
+최종 Official UE 5.8 Build `1fd947042024420aaa7561d380e4548f` PASS와 전체 `CarFight.DataAuthoring` 111/111 PASS / failure0 / Engine Exit0을 closure evidence로 확보했다. 상세 evidence는 Historical Plan `Document/Plan/DataAuthoring/DataAuthoringPlan.md v0.2.53`과 Roadmap v0.1.57이 보존한다.
 
-UI-P0-08 Radar/Edge Visual·Zoom Feel과 D1-11-ART SpeedGauge·VehiclePanel·전체 Visual Review는 **비차단 Deferred/Pending**이며 USER PASS로 확대하지 않는다.
+UA-08은 Runtime Technical PASS / USER Inconclusive이며 quantitative driving comparison은 비차단 Deferred observational debt다. 역사적 P0-12 USER PASS 7/8을 8/8로 확대하지 않으며, 이 Deferred만으로 CF-FQ-038을 재개하지 않는다.
 
 ---
 
@@ -62,7 +60,6 @@ UI-P0-08 Radar/Edge Visual·Zoom Feel과 D1-11-ART SpeedGauge·VehiclePanel·전
 
 | Feature | 상태 | 현재 재개 지점 |
 | --- | --- | --- |
-| `CF-FQ-038` 차량 데이터 Authoring | Paused | `Document/Plan/DataAuthoring/DataAuthoringPlan.md v0.2.47` / `Document/Plan/DataAuthoring/DataAuthoringRoadmap.md v0.1.52` / UA-01~06 USER PASS 보존 / 다음 `UA-07 Driving Feel Authoring` / Remote Technical Readiness PASS |
 | `CF-FQ-034` 차량 피팅·질량 런타임 | Paused | `Document/Plan/VehicleFitting/VehicleFittingPlan.md v0.17.0` / `FIT-P0-07D USER Driving Feel Comparison` |
 | `CF-FQ-035` 인벤토리 Foundation | Paused | 기존 Technical checkpoint 보존 / USER Field UI·Mobility Pending |
 | `CF-FQ-026` 타겟 선택 시스템 | Paused | `TS-P0-08 USER PIE Pending` |
@@ -96,6 +93,7 @@ UI
 Vehicles
 - VehicleData / VehicleRuntime / VehicleDrive / VehicleSteering
 - WheelSync / VehicleCamera / VehicleAim
+- VehicleBuilder / Data Authoring Backend + Advanced Workspace
 
 Inventory/Fitting
 - 완료 또는 부분 완료 Current 계약은 Systems와 대표 Plan의 실제 상태를 함께 확인
@@ -159,6 +157,12 @@ AI Technical PASS와 USER PASS를 서로 대체하지 않는다.
 ---
 
 ## 8. Changelog
+
+### v2.45.8 - 2026-09-11
+
+- `CF-FQ-038 Vehicle Data Authoring`을 DEL1~DEL7 PASS, Legacy Wizard physical retirement, 전체 `CarFight.DataAuthoring` 111/111 PASS를 근거로 Paused → Done 전환했다.
+- 현재 구현 owner는 `Systems/Vehicles/VehicleBuilder.md v1.5.0`, Historical Plan/Roadmap은 `DataAuthoringPlan.md v0.2.53` / `DataAuthoringRoadmap.md v0.1.57` Retained Path다.
+- UA-08은 Runtime Technical PASS / USER Inconclusive / quantitative comparison Deferred로 보존하며 USER PASS 7/8을 8/8로 확대하지 않는다. 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
 
 ### v2.45.7 - 2026-09-11
 

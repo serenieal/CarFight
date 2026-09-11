@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringP10.cpp
-// Version: v1.3.0
-// Date: 2026-08-20
+// Version: v1.4.0
+// Date: 2026-09-11
 // Description: DAUTH-P0-10~12 Existing Wizard Migration / Frozen adoption parity page 구현입니다.
 // Changelog:
+// - v1.4.0: CF-FQ-038 DEL6 closure에 맞춰 제거된 Legacy Wizard 유지 문구를 Current Vehicle Authoring Workspace 기준으로 갱신. 동작 변경 0.
 // - v1.3.0: P0-12 UA-07 Technical Readiness에서 Driving Feel의 Recipe→Preview→Target 분리 설명과 4축 저장/프리셋 실패 feedback을 보강. Core/Resolver/Preset semantic 변경 0.
 // - v1.2.0: P0-12 UA-01 사용자 피드백에 따라 Assets/Layout, Driving Feel, Mount/Compare 사용자 문구를 한국어 우선으로 정리.
 // - v1.1.0: Frozen 24.90 Existing Import completeness를 위해 Handling/Performance Adoption normal Workspace 버튼 추가.
@@ -12,7 +13,7 @@
 // Migration:
 // - Authoring 동작은 FCFVehicleAuthoringVM을 통해 Common Authoring facade를 사용합니다.
 // - Driving Feel 프리셋은 기존 exact Recipe 4축 shortcut을 유지하며 Target 직접 변경이나 자동 저장을 추가하지 않습니다.
-// - 기존 SCFVDAWizardTab은 별도로 유지하며 Batch main page는 추가하지 않습니다.
+// - Legacy Wizard retirement 이후 기존 parity 기능은 Current Vehicle Authoring Workspace가 소유하며 Batch main page는 추가하지 않습니다.
 
 #include "DataAuthoring/CFVehicleAuthoringTab.h"
 

@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleBuilderTests.cpp
-// Version: v1.17.0
-// Date: 2026-09-03
+// Version: v1.18.0
+// Date: 2026-09-11
 // Description: CF-FQ-040 Builder write lane + ESH-02/03 vehicle-specific Engine Curve/Transmission provenance focused Automation입니다.
 // Scope: R2 companion, Evidence Refresh, R1 Profile commit/receipt, Transmission contract와 Engine Curve FACT/DERIVED/GAME_BIAS review/hash 및 post-DefinitionApply persistent Target을 직접 검증합니다.
 // Changelog:
+// - v1.18.0: fresh persisted Wagon readback에서 확인된 current AppliedDefinitionHash 8aad29...로 ESH-02 stale snapshot expectation을 동기화. Engine/Transmission/Curve/RPM 계약과 Product Asset mutation은 변경 없음.
 // - v1.17.0: actual Wagon ResearchDraft/Evidence가 이미 semantic 동기화된 current state에서는 Evidence Refresh preview가 NoChange/equal fingerprint임을 검증하고, WagonTransmissionDraft의 PhysicsDraft expectation을 current SchemaRevision 3 + current accepted Evidence binding으로 갱신.
 // - v1.16.0: actual Wagon persisted expectation을 ESH-03 USER-approved ChangeUpRPM 5500 Target DefinitionApply 뒤 상태로 갱신. Transmission receipt e1be..., Target hash 0e5b..., Target/Drivetrain 5500/2000을 exact 검증.
 // - v1.15.0: actual Wagon mutation0 PhysicsDraft preview가 Engine Curve hash뿐 아니라 current TransmissionProposalHash도 Saved JSON/log에 노출해 ESH-03 fixed-common proposal exact identity를 재사용 가능하게 함.
@@ -25,6 +26,7 @@
 // - v1.1.0: VB-P0-09 Step 1 initial Research payload를 Companion flow에 추가하고 empty/GAME_BIAS reject 및 preview→commit Evidence fingerprint exact binding을 검증.
 // - v1.0.0: VB-P0-05 핵심 write facade를 실제 호출하는 direct Automation 2건을 추가.
 // Migration:
+// - v1.18.0의 hash 갱신은 현재 디스크 persisted Recipe/Target snapshot을 반영하는 test-only expectation 교정이며 Product Asset을 수정하지 않습니다.
 // - 모든 fixture는 in-memory /Temp package만 사용하며 SavePackage를 호출하지 않습니다.
 // - 테스트가 만든 package/object는 Automation process lifetime에만 존재합니다.
 
@@ -2025,7 +2027,7 @@ bool FCFVehicleBuilderWagonEnginePersistedTest::RunTest(const FString& Parameter
 	TestEqual(
 		TEXT("ESH-02 persisted Recipe AppliedState target hash exact"),
 		Recipe->AppliedState.AppliedDefinitionHash,
-		FString(TEXT("0e5b48e8dcd39deba441da9237218be6")));
+		FString(TEXT("8aad29d04e008fcd2acb2e6470cd87f1")));
 	TestEqual(TEXT("ESH-02 persisted Recipe AppliedState resolver revision is 5"), Recipe->AppliedState.ResolverContractRevision, 5);
 
 	// 4-Profile atomic transaction에서 unchanged domains는 semantic fingerprint가 receipt와 fresh 일치해야 합니다.

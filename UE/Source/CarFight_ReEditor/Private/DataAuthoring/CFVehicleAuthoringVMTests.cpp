@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringVMTests.cpp
-// Version: v1.43.1
-// Date: 2026-09-05
+// Version: v1.44.0
+// Date: 2026-09-11
 // Description: Vehicle Authoring Workspace + Guided Builder integration 보호 Automation입니다.
 // Changelog:
+// - v1.44.0: CF-FQ-038 DEL6 compatibility retirement로 Legacy Wizard managed-guard test와 hidden-spawner 공존 기대를 제거하고 Current Builder/Authoring tab 계약만 검증.
 // - v1.43.1: ResolverContractRevision synthetic approval-scope drift fixture를 실제 int32 contract에 맞게 +1로 교정. production 로직 변경 없음.
 // - v1.43.0: P0-07H 재감사 2차 실패를 교정. Undo mutation footprint가 package dirty/save를 강제하는 production contract를 검증하고, Recipe fingerprint drift fixture를 항상 존재하는 DrivingFeelIntent.AccelerationFeel semantic으로 전환. SourceSignature/ResolverRevision approval-scope sensitivity와 durable save 성공 뒤 refresh warning direct regression도 추가.
 // - v1.42.0: CF-FQ-047 최종 재감사에서 누락된 P0-07H guarded Undo durable persistence를 직접 검증. Undo success의 Target→Recipe exact pair save, pre-Apply diff 재생성/Complete 금지, Recipe save partial failure의 no-auto-rollback/retry와 manual Step7 recovery를 isolated /Game fixture에 추가하고 legacy /Temp Undo 기대를 durable fail-closed contract로 교정.
@@ -59,6 +60,7 @@
 // - v1.1.0: P0-10 Reference Compare, typed Layout/Driving Feel+Undo, Measurement/Adoption, legacy Wizard managed-target guard parity 검증 추가.
 // - v1.0.0: ViewModel↔facade parity, preview mutation0, Initial Import mutation boundary, Apply/standard Undo, stale approval fail-closed 검증 추가.
 // Migration:
+// - v1.44.0부터 Legacy Wizard 자체/hidden spawner를 Automation fixture로 직접 참조하지 않습니다. 기존 managed-target guard PASS는 Historical evidence로 보존하고 Current 회귀는 Vehicle Authoring/Builder 경로가 소유합니다.
 // - v1.43.1 ResolverContractRevision은 int32이며 test synthetic drift도 integer revision semantics를 사용합니다.
 // - v1.43.0 fingerprint TOCTOU fixture는 구조가 비어 있을 수 있는 Hardpoint/Mount array에 의존하지 않고 Frozen RecipeFingerprint block에 항상 존재하는 DrivingFeelIntent scalar를 임시 변경 후 exact restore합니다. refresh-warning fixture도 test-only persistence callback에서 VM state를 끊을 뿐 Product disk write는 0입니다.
 // - v1.42.0 guarded Undo durable regression은 physical save가 차단된 isolated /Game persistence seam에서만 실행합니다. legacy /Temp Step7 fixture는 Undo mutation 자체는 성공해도 durable package gate 때문에 operation closure가 false가 되는 current production fail-closed 결과를 기대합니다.
@@ -78,8 +80,6 @@
 #include "CFVehicleData.h"
 #include "CFInventoryFitAdapter.h"
 #include "CFVehicleFittingData.h"
-#include "CFVDAWizardTestAccess.h"
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCFVehicleP10ReferenceTest,
@@ -94,11 +94,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCFVehicleP10AdoptionTest,
 	"CarFight.DataAuthoring.DAUTH_P0_10.Workspace.AdoptionMeasurement",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FCFVehicleP10LegacyGuardTest,
-	"CarFight.DataAuthoring.DAUTH_P0_10.Workspace.LegacyManagedGuard",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -1578,15 +1573,12 @@ bool FCFVehicleWorkspaceUndoTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// Fresh Editor module에서 새 Vehicle Authoring tab과 기존 Wizard tab이 함께 등록되고 새 Workspace가 실제 생성되는지 검증합니다.
+// Fresh Editor module에서 Current Vehicle Authoring tab이 등록되고 새 Workspace가 실제 생성되는지 검증합니다.
 bool FCFVehicleWorkspaceTabTest::RunTest(const FString& Parameters)
 {
 	// P0-09 신규 Vehicle Authoring Nomad Tab identity입니다.
 	const FName VehicleAuthoringTabName(TEXT("CarFight.VehicleAuthoring"));
-	// P0-10 parity 전까지 반드시 보존할 legacy Wizard tab identity입니다.
-	const FName VehicleWizardTabName(TEXT("CarFight.VehicleDAWizard"));
 	TestTrue(TEXT("Vehicle Authoring Nomad Tab spawner is registered"), FGlobalTabmanager::Get()->HasTabSpawner(VehicleAuthoringTabName));
-	TestTrue(TEXT("Legacy Vehicle DA Wizard spawner remains registered"), FGlobalTabmanager::Get()->HasTabSpawner(VehicleWizardTabName));
 
 	// 실제 module spawner를 통해 생성된 P0-09 Workspace tab입니다.
 	TSharedPtr<SDockTab> VehicleAuthoringTab = FGlobalTabmanager::Get()->TryInvokeTab(VehicleAuthoringTabName);
@@ -1606,11 +1598,8 @@ bool FCFVehicleBuilderShellTest::RunTest(const FString& Parameters)
 	const FName VehicleBuilderTabName(TEXT("CarFight.VehicleBuilder"));
 	// 계속 보존해야 하는 Advanced Workspace tab identity입니다.
 	const FName VehicleAuthoringTabName(TEXT("CarFight.VehicleAuthoring"));
-	// 계속 hidden fallback으로 보존해야 하는 legacy Wizard tab identity입니다.
-	const FName VehicleWizardTabName(TEXT("CarFight.VehicleDAWizard"));
 	TestTrue(TEXT("Guided Vehicle Builder tab spawner is registered"), FGlobalTabmanager::Get()->HasTabSpawner(VehicleBuilderTabName));
 	TestTrue(TEXT("Advanced Vehicle Authoring tab remains registered"), FGlobalTabmanager::Get()->HasTabSpawner(VehicleAuthoringTabName));
-	TestTrue(TEXT("Legacy Vehicle DA Wizard spawner remains registered"), FGlobalTabmanager::Get()->HasTabSpawner(VehicleWizardTabName));
 
 	// 실제 Guided Shell이 사용하는 transient ViewModel입니다.
 	FCFVehicleBuilderVM BuilderViewModel;
@@ -4366,51 +4355,6 @@ bool FCFVehicleP10AdoptionTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Adoption commit enables Workspace Undo"), ViewModel.CanUndoLastWorkspaceAction());
 	TestTrue(TEXT("Adoption Workspace Undo succeeds"), ViewModel.UndoLastWorkspaceAction(Error));
 	TestEqual(TEXT("Adoption Undo restores Legacy pin count"), Fixture.Recipe->ImportState.LegacyPinnedFields.Num(), LegacyPinCountBefore);
-	return true;
-}
-
-// Legacy Wizard가 managed Target에서는 변경 동작을 끄고 unmanaged Target에서는 기존 경로를 보존하며 두 탭이 공존하는지 검증합니다.
-bool FCFVehicleP10LegacyGuardTest::RunTest(const FString& Parameters)
-{
-	// Managed Target + Recipe fixture입니다.
-	CFVehicleAuthoringVMTestsPrivate::FWorkspaceFixture ManagedFixture;
-	// Unmanaged Target-only fixture입니다.
-	CFVehicleAuthoringVMTestsPrivate::FWorkspaceFixture UnmanagedFixture;
-	// Fixture diagnostic입니다.
-	FString Error;
-	if (!TestTrue(TEXT("P0-10 managed guard fixture builds"), CFVehicleAuthoringVMTestsPrivate::BuildImportedFixture(ManagedFixture, Error))
-		|| !TestTrue(TEXT("P0-10 unmanaged guard fixture builds"), CFVehicleAuthoringVMTestsPrivate::ConfigureValidTarget(UnmanagedFixture, Error)))
-	{
-		AddError(Error);
-		return false;
-	}
-	ManagedFixture.TargetPackage->SetDirtyFlag(false);
-	ManagedFixture.RecipePackage->SetDirtyFlag(false);
-	UnmanagedFixture.TargetPackage->SetDirtyFlag(false);
-
-	// Production legacy Wizard의 managed-target guard를 읽을 test instance입니다.
-	SCFVDAWizardTab ManagedWizard;
-	FCFVDAWizardTestAccess::SetTarget(ManagedWizard, ManagedFixture.TargetVehicleData);
-	TestTrue(TEXT("Legacy Wizard detects managed Authoring Recipe"), FCFVDAWizardTestAccess::HasManagedRecipe(ManagedWizard));
-	TestFalse(TEXT("Managed legacy Layout action is disabled"), FCFVDAWizardTestAccess::CanCaptureLayout(ManagedWizard));
-	TestFalse(TEXT("Managed legacy Quick Tune action is disabled"), FCFVDAWizardTestAccess::CanApplyDrivingFeel(ManagedWizard));
-	TestFalse(TEXT("Managed legacy memory Revert action is disabled"), FCFVDAWizardTestAccess::CanRevertDrivingFeel(ManagedWizard));
-
-	// Recipe가 없는 Existing Definition용 legacy Wizard instance입니다.
-	SCFVDAWizardTab UnmanagedWizard;
-	FCFVDAWizardTestAccess::SetTarget(UnmanagedWizard, UnmanagedFixture.TargetVehicleData);
-	TestFalse(TEXT("Legacy Wizard leaves unmanaged Target unmanaged"), FCFVDAWizardTestAccess::HasManagedRecipe(UnmanagedWizard));
-	TestTrue(TEXT("Unmanaged legacy Layout action remains available"), FCFVDAWizardTestAccess::CanCaptureLayout(UnmanagedWizard));
-	TestTrue(TEXT("Unmanaged legacy Quick Tune action remains available"), FCFVDAWizardTestAccess::CanApplyDrivingFeel(UnmanagedWizard));
-
-	// P0-10에서도 신규/기존 Nomad Tab registration이 동시에 유지되는지 확인합니다.
-	const FName VehicleAuthoringTabName(TEXT("CarFight.VehicleAuthoring"));
-	const FName VehicleWizardTabName(TEXT("CarFight.VehicleDAWizard"));
-	TestTrue(TEXT("P0-10 Vehicle Authoring tab remains registered"), FGlobalTabmanager::Get()->HasTabSpawner(VehicleAuthoringTabName));
-	TestTrue(TEXT("P0-10 legacy Vehicle DA Wizard remains registered"), FGlobalTabmanager::Get()->HasTabSpawner(VehicleWizardTabName));
-	TestFalse(TEXT("Managed guard read does not dirty Target"), ManagedFixture.TargetPackage->IsDirty());
-	TestFalse(TEXT("Managed guard read does not dirty Recipe"), ManagedFixture.RecipePackage->IsDirty());
-		TestFalse(TEXT("Unmanaged guard read does not dirty Target"), UnmanagedFixture.TargetPackage->IsDirty());
 	return true;
 }
 

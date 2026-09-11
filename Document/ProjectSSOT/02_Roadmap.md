@@ -3,7 +3,7 @@
 > 역할: CarFight 프로젝트의 **현재 해야 할 일 / 우선순위 / 완료 조건 / 진행 순서**를 고정한다.
 > 기준 상태 문서: `01_ProjectState.md`
 > 상위 방향 문서: `00_Vision.md`
-> 문서 버전: v2.30.6
+> 문서 버전: v2.30.7
 > 마지막 정리(Asia/Seoul): 2026-09-11
 > 문서 상태: Current
 
@@ -48,6 +48,7 @@ Feature 상태의 전체 목록은 `03_FeatureQueue.md`, 세션 복원 체크포
 | 센서·Scanner | `CF-FQ-036`, `037` / SensorContact |
 | 인게임 HUD/UI | `CF-FQ-032` / InGameUI·AimReticle·SensorContact |
 | 무기 Data | `CF-FQ-008` / WeaponData |
+| 차량 제작·Authoring | `CF-FQ-038`, `040`, `042`, `043`, `044`, `047` / VehicleBuilder |
 
 완료 evidence의 세부 Build ID, Automation 결과와 USER Acceptance는 각 대표 Plan을 우선한다. 새 관련 failure evidence 없이 완료 검증을 습관적으로 반복하지 않는다.
 
@@ -59,7 +60,6 @@ Feature 상태의 전체 목록은 `03_FeatureQueue.md`, 세션 복원 체크포
 
 | Feature | 상태 | 재개 지점 | 성격 |
 | --- | --- | --- | --- |
-| `CF-FQ-038` 차량 Data Authoring | Paused | `UA-07 Driving Feel Authoring` | UA-01~06 USER PASS 보존, Authoring 사용성·주행감 계속 검증 |
 | `CF-FQ-034` 차량 피팅·질량 | Paused | `FIT-P0-07D USER Driving Feel Comparison` | 정량 Mobility 이후 실제 체감 비교 |
 | `CF-FQ-035` 인벤토리 Foundation | Paused | USER Field UI·Mobility | Field Fitting 사용자 흐름 |
 | `CF-FQ-026` 타겟 선택 | Paused | `TS-P0-08 USER PIE` | 실제 선택 범위·표시·조작감 |
@@ -135,6 +135,12 @@ Roadmap은 진행 순서와 선택지에 집중한다. Feature별 세부 P0 목�
 ---
 
 ## 9. Changelog
+
+### v2.30.7 - 2026-09-11
+
+- `CF-FQ-038 Vehicle Data Authoring`을 DEL1~DEL7 PASS / Legacy Wizard retirement / 전체 DataAuthoring 111/111 PASS로 완료 기반에 편입하고 Paused 재개 후보에서 제거했다.
+- 현재 차량 제작·Authoring 완료 기반은 `Systems/Vehicles/VehicleBuilder.md v1.5.0`이 소유한다. UA-08 quantitative comparison은 비차단 Deferred observational debt이며 USER PASS 7/8을 확대하지 않는다.
+- 현재 단일 Active `CF-FQ-039 Production UI Visual Rework`와 다른 재개 후보의 순서는 변경하지 않았다.
 
 ### v2.30.6 - 2026-09-11
 

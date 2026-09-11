@@ -1,10 +1,10 @@
 # Vehicle Builder
 
-- 문서 버전: v1.4.1
-- 최근 갱신일: 2026-09-05
+- 문서 버전: v1.5.0
+- 최근 갱신일: 2026-09-11
 - 문서 상태: Current Implementation
-- 적용 범위: `CF-FQ-040 Guided Vehicle Builder`, `CF-FQ-042 Vehicle Builder 신규 차량 생성 UX`, `CF-FQ-043 Vehicle Builder 장비 장착점 Guidance UX`, `CF-FQ-044 Vehicle Builder Runtime Catalog Promotion`, `CF-FQ-047 Vehicle Builder Hardpoint Authoring Integrity`, Guided Builder Editor Shell, Builder-private Authoring ownership, Data Authoring Backend/Advanced Workspace 연계
-- 완료 기반: `VB-P0-09 End-to-End USER Acceptance PASS` + `VB-P0-10 Current System Promotion Complete` + `VBCUX-P0-05 USER Acceptance PASS` + `VMG-P0-07 USER Acceptance PASS` + `VMG-P0-08 Current System Promotion Complete` + `VRCP-P0-05 USER Acceptance PASS` + `VRCP-P0-06 Current System Promotion Complete` + `VBHAI-P0-07G USER Re-Acceptance PASS` + `VBHAI-P0-08 Current System Promotion Complete`
+- 적용 범위: `CF-FQ-038 Vehicle Data Authoring`, `CF-FQ-040 Guided Vehicle Builder`, `CF-FQ-042 Vehicle Builder 신규 차량 생성 UX`, `CF-FQ-043 Vehicle Builder 장비 장착점 Guidance UX`, `CF-FQ-044 Vehicle Builder Runtime Catalog Promotion`, `CF-FQ-047 Vehicle Builder Hardpoint Authoring Integrity`, Guided Builder Editor Shell, Builder-private Authoring ownership, Data Authoring Backend/Advanced Workspace
+- 완료 기반: `CF-FQ-038 Done / DEL1~DEL7 PASS / Legacy Wizard Retired` + `VB-P0-09 End-to-End USER Acceptance PASS` + `VB-P0-10 Current System Promotion Complete` + `VBCUX-P0-05 USER Acceptance PASS` + `VMG-P0-07 USER Acceptance PASS` + `VMG-P0-08 Current System Promotion Complete` + `VRCP-P0-05 USER Acceptance PASS` + `VRCP-P0-06 Current System Promotion Complete` + `VBHAI-P0-07G USER Re-Acceptance PASS` + `VBHAI-P0-08 Current System Promotion Complete`
 
 ---
 
@@ -375,7 +375,9 @@ VehicleData
 ```
 
 `CF-FQ-038`의 기존 USER/Technical evidence는 `CF-FQ-040` 완료 evidence로 재포장하지 않는다.
-DEL6 compatibility retirement와 UA-08 quantitative comparison 같은 CF-FQ-038 자체 잔여 항목은 별도 Paused lifecycle을 유지한다.
+2026-09-11 DEL6 compatibility retirement에서 Legacy `SCFVDAWizardTab`, hidden `CarFight.VehicleDAWizard` spawner/open entry와 legacy test access를 제거하고 `UE/Source` direct reference exact0을 확인한 뒤 Legacy Wizard 소스 3개를 물리 폐기했다. 따라서 Data Authoring의 Current UI는 Guided Builder + Advanced Workspace만 유지한다.
+
+UA-08은 transient Sports 4축이 Runtime Movement 13 field에 반영되는 Technical PASS를 보존하지만 USER 주행 체감은 Inconclusive다. 이 정량 비교는 비차단 Deferred observational debt로 남기며, 역사적 P0-12 USER PASS는 7/8에서 8/8로 확대하지 않는다. 이 Deferred 항목은 `CF-FQ-038 Done`을 재개 사유로 사용하지 않는다.
 
 ---
 
@@ -642,7 +644,7 @@ UE Editor 내부 LLM/Web crawler
 가변 shift map Runtime 재설계
 실차 전자식 최고속 limiter 강제 적용
 브랜드/IP 표현 결정
-CF-FQ-038 DEL6/UA-08 자체 잔여 작업
+CF-FQ-038 UA-08 정량 주행 비교 Deferred observational debt
 ```
 
 새 Builder 기능을 추가할 때는 이 Current 구조를 기본으로 하고, 실제 계약 변경이 필요한 경우에만 새 Feature/Plan lifecycle을 연다.
@@ -667,6 +669,8 @@ Document/Plan/Archive/VehicleBuilderCreationUX/VehicleBuilderCreationUXPlan.md
 Document/Plan/Archive/VehicleMountGuidance/VehicleMountGuidancePlan.md
 Document/Plan/Archive/VehicleRuntimeCatalogPromotion/VehicleRuntimeCatalogPromotionPlan.md
 Document/Plan/Archive/VehicleBuilderHardpointIntegrity/VehicleBuilderHardpointIntegrityPlan.md
+Document/Plan/DataAuthoring/DataAuthoringPlan.md
+Document/Plan/DataAuthoring/DataAuthoringRoadmap.md
 Document/Plan/Archive/README.md
 ```
 
@@ -675,6 +679,15 @@ Document/Plan/Archive/README.md
 ---
 
 ## 13. Changelog
+
+### v1.5.0 - 2026-09-11
+
+- `CF-FQ-038 Vehicle Data Authoring`을 Done으로 Current System에 흡수했다. 정상 제작 UX는 Guided Vehicle Builder, 공통 Recipe/Resolver/Diff/Validation/Apply/Undo 엔진은 Data Authoring Backend, 전문가 수동 편집·복구는 Advanced Workspace가 계속 소유한다.
+- DEL6에서 `CFVDAWizardTab`/`CFVDAWizardTestAccess`/`CarFight.VehicleDAWizard`/`OpenVDAWizardTab` direct reference를 `UE/Source` exact0으로 만들고 Legacy Wizard 소스 3개를 물리 폐기했다. Official UE 5.8 Build `1fd947042024420aaa7561d380e4548f` PASS, 전체 `CarFight.DataAuthoring` 111/111 PASS를 closure evidence로 확보했다.
+- 첫 broad run의 Wagon 2건 failure는 현재 persisted `AppliedDefinitionHash=8aad29d04e008fcd2acb2e6470cd87f1` 대비 historical test snapshot `0e5b...` 기대값이 stale한 문제로 분리했고 test-only expectation만 교정했다. Product Asset/Apply/Save mutation은 0이다.
+- UA-08은 Runtime Technical PASS / USER Inconclusive / quantitative comparison Deferred로 보존한다. 역사적 P0-12 USER PASS 7/8을 8/8로 확대하지 않는다.
+
+Migration: Legacy Vehicle DA Wizard 진입점은 더 이상 존재하지 않는다. 정상 차량 제작은 Guided Builder, 전문 수동 편집·복구는 Vehicle Authoring Advanced Workspace를 사용한다. 기존 VehicleData/Recipe/Profile 자산의 schema/content migration은 없다.
 
 ### Maintenance - 2026-09-06
 

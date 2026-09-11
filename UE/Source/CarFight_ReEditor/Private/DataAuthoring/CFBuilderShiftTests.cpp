@@ -1,17 +1,19 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFBuilderShiftTests.cpp
-// Version: v1.3.1
-// Date: 2026-09-02
+// Version: v1.4.0
+// Date: 2026-09-11
 // Description: CF-FQ-040 ESH-03 WheelTorqueCrossoverShift generic + actual Wagon post-5500 DefinitionApply mutation0 Automation입니다.
 // Scope: production path는 계속 default-off로 보호하고, explicit ESH-03 test opt-in에서 current 5500 Target/AppliedState authority와 ratio/radius/post-shift/fail-closed/raw fixed-common 품질 진단을 검증합니다.
 // Changelog:
-// - v1.3.1: current TargetHash 0e5b...가 Engine Curve Apply만의 결과가 아니라 이후 4500→5500 Shift DefinitionApply까지 완료된 최종 Target identity임을 주석에 명확히 교정. 테스트 동작은 변경 없음.
+// - v1.4.0: fresh persisted Wagon readback에서 확인된 current AppliedDefinitionHash 8aad29...로 ESH-03 stale snapshot expectation을 동기화. Shift diagnostic/Target mutation0 계약과 Product Asset은 변경 없음.
+// - v1.3.1: 당시 TargetHash 0e5b...가 Engine Curve Apply만의 결과가 아니라 이후 4500→5500 Shift DefinitionApply까지 완료된 Target identity였음을 Historical 주석으로 보존.
 // - v1.3.0: actual Wagon authority를 USER-approved ChangeUpRPM 5500 Target Apply 뒤 상태로 갱신. Transmission receipt e1be..., Target hash 0e5b..., Target/Drivetrain 5500/2000을 exact 검증하면서 raw WheelTorque recommendation 약6222는 독립 diagnostic으로 보존.
 // - v1.2.0: actual Wagon expectation을 pre-Apply Target=false에서 approved post-DefinitionApply Target=true + exact AppliedDefinitionHash로 전환하고 mutation0 hash invariant를 유지.
 // - v1.1.0: production default-off gate, malformed ratio/radius/post-shift RPM negative regression, nested blocker parent propagation, Wagon poor-fit warning 검증을 추가.
 // - v1.0.0: generic deterministic recommendation, no-curve fallback, actual Wagon persisted profile/receipt/WSA authority diagnostic, Saved WagonShiftPreview.json을 최초 구현.
 // Migration:
+// - v1.4.0의 hash 갱신은 현재 디스크 persisted Recipe/Target snapshot을 반영하는 test-only expectation 교정이며 Product Asset을 수정하지 않습니다.
 // - ChangeUpRPM/ChangeDownRPM/Profile/Target/Recipe를 수정하거나 저장하지 않습니다.
 // - actual Wagon ESH-03는 USER-approved Engine Curve가 Target DefinitionApply까지 완료된 exact post-Apply state에서만 formal diagnostic을 허용합니다.
 
@@ -40,8 +42,8 @@ namespace CFBuilderShiftTestsPrivate
 	// Existing vehicle-specific 8AT proposal hash입니다.
 	const TCHAR* ExpectedWagonTransmissionHash = TEXT("e1be2562d77fb1f5a993d6e7f5d17962");
 
-	// USER-approved Engine Curve 적용 후 4500→5500 Shift DefinitionApply까지 완료된 current exact Target hash입니다.
-	const TCHAR* ExpectedWagonAppliedTargetHash = TEXT("0e5b48e8dcd39deba441da9237218be6");
+	// Fresh persisted readback 기준 현재 Wagon Recipe/Target의 exact AppliedDefinitionHash입니다.
+	const TCHAR* ExpectedWagonAppliedTargetHash = TEXT("8aad29d04e008fcd2acb2e6470cd87f1");
 
 	// ESH-03 generic 4-speed drivetrain fixture를 만듭니다.
 	FCFDrivetrainProfileData BuildGenericDrivetrain()

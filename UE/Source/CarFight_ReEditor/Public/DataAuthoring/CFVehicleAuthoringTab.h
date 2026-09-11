@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringTab.h
-// Version: v1.8.0
-// Date: 2026-08-21
+// Version: v1.9.0
+// Date: 2026-09-11
 // Description: DAUTH-P0-09~12 single-Vehicle Authoring Nomad Workspace Slate widget입니다.
 // Changelog:
+// - v1.9.0: CF-FQ-038 DEL6 closure에 맞춰 제거된 Legacy Wizard 유지 문구를 Current Workspace 소유권으로 갱신. 동작 변경 0.
 // - v1.8.0: P0-12 UA-06 USER UX remediation을 위해 Shared Profile numeric field 검색/선택/current-value UI state와 bounded Apply detail review presentation을 추가.
 // - v1.7.0: P0-12 UA-07 baseline-safe Profile 검증 복구를 위한 explicit reviewed Profile 연결 해제 UI action을 추가.
 // - v1.6.0: P0-12 UA-05 값 출처 UX를 위해 Source Trace 검색과 비적용 후보 상세 표시 상태를 추가.
@@ -18,7 +19,7 @@
 // - v1.8.0은 existing Registry descriptor를 사람용 field selector에 projection할 UI state만 추가하며 stable ColumnId authority와 B2 mutation contract를 변경하지 않습니다.
 
 // - v1.6.0은 Resolver SourceTrace authority를 변경하지 않고 right Context presentation 상태만 추가합니다.
-// - SCFVDAWizardTab은 P0-10 Technical parity 후에도 DG/DEL Gate 전까지 별도 legacy Nomad Tab으로 유지합니다.
+// - Legacy Wizard retirement 이후 기존 parity 기능과 전문 수동 편집/복구는 이 Current Workspace가 소유합니다.
 // - Batch main page는 이 Workspace에 추가하지 않습니다.
 
 #pragma once

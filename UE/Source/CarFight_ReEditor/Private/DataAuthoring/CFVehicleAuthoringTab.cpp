@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringTab.cpp
-// Version: v1.10.0
-// Date: 2026-08-21
+// Version: v1.11.0
+// Date: 2026-09-11
 // Description: DAUTH-P0-09~12 Frozen Section 24 single-Vehicle Authoring Workspace Slate 구현입니다.
 // Changelog:
+// - v1.11.0: CF-FQ-038 DEL6 closure에 맞춰 제거된 Legacy Wizard 유지 문구를 Current Workspace 소유권으로 갱신. 동작 변경 0.
 // - v1.10.0: P0-12 UA-06 USER UX remediation으로 final Apply review에 bounded field/current/apply-after 상세를 추가하고 Shared Profile numeric selector 상태를 selection refresh와 동기화.
 // - v1.9.0: P0-12 UA-05 USER 피드백에 따라 값 출처 탭을 검색 + 실제 적용 우선 + 비적용 후보 선택 표시 UX로 교정.
 // - v1.8.0: P0-12 UA-05 USER 피드백에 따라 문제 탭 검증 이슈를 심각도/코드/필드/내용 의미 단위로 분리하고 문장 사이 줄바꿈을 추가.
@@ -22,7 +23,7 @@
 // - v1.8.0은 Validation issue presentation만 변경하며 issue code/message/field path와 Validation 계약은 변경하지 않습니다.
 // - v1.7.0은 사용자-facing 문구만 현지화하며 C++ Authoring/VehicleData 타입명, facade 계약, serialization은 변경하지 않습니다.
 // - P0-10 parity page 구현은 CFVehicleAuthoringP10.cpp로 분리하며 공통 ViewModel/facade만 사용합니다.
-// - SCFVDAWizardTab은 DG/DEL Gate 전까지 별도 legacy Nomad Tab으로 유지합니다.
+// - Legacy Wizard retirement 이후 기존 parity 기능과 전문 수동 편집/복구는 이 Current Workspace가 소유합니다.
 // - Batch main page는 추가하지 않습니다.
 
 #include "DataAuthoring/CFVehicleAuthoringTab.h"
