@@ -1,10 +1,10 @@
 # Vehicle Builder
 
-- 문서 버전: v1.5.0
+- 문서 버전: v1.6.0
 - 최근 갱신일: 2026-09-11
 - 문서 상태: Current Implementation
-- 적용 범위: `CF-FQ-038 Vehicle Data Authoring`, `CF-FQ-040 Guided Vehicle Builder`, `CF-FQ-042 Vehicle Builder 신규 차량 생성 UX`, `CF-FQ-043 Vehicle Builder 장비 장착점 Guidance UX`, `CF-FQ-044 Vehicle Builder Runtime Catalog Promotion`, `CF-FQ-047 Vehicle Builder Hardpoint Authoring Integrity`, Guided Builder Editor Shell, Builder-private Authoring ownership, Data Authoring Backend/Advanced Workspace
-- 완료 기반: `CF-FQ-038 Done / DEL1~DEL7 PASS / Legacy Wizard Retired` + `VB-P0-09 End-to-End USER Acceptance PASS` + `VB-P0-10 Current System Promotion Complete` + `VBCUX-P0-05 USER Acceptance PASS` + `VMG-P0-07 USER Acceptance PASS` + `VMG-P0-08 Current System Promotion Complete` + `VRCP-P0-05 USER Acceptance PASS` + `VRCP-P0-06 Current System Promotion Complete` + `VBHAI-P0-07G USER Re-Acceptance PASS` + `VBHAI-P0-08 Current System Promotion Complete`
+- 적용 범위: `CF-FQ-015 Vehicle Data Tuning`, `CF-FQ-038 Vehicle Data Authoring`, `CF-FQ-040 Guided Vehicle Builder`, `CF-FQ-042 Vehicle Builder 신규 차량 생성 UX`, `CF-FQ-043 Vehicle Builder 장비 장착점 Guidance UX`, `CF-FQ-044 Vehicle Builder Runtime Catalog Promotion`, `CF-FQ-047 Vehicle Builder Hardpoint Authoring Integrity`, Guided Builder Editor Shell, Builder-private Authoring ownership, Data Authoring Backend/Advanced Workspace, Vehicle Performance Tuning Protocol
+- 완료 기반: `CF-FQ-015 Rebaseline Complete / VD-P0-00~03 Historical Technical PASS / VD-P0-04 Superseded` + `CF-FQ-038 Done / DEL1~DEL7 PASS / Legacy Wizard Retired` + `VB-P0-09 End-to-End USER Acceptance PASS` + `VB-P0-10 Current System Promotion Complete` + `VBCUX-P0-05 USER Acceptance PASS` + `VMG-P0-07 USER Acceptance PASS` + `VMG-P0-08 Current System Promotion Complete` + `VRCP-P0-05 USER Acceptance PASS` + `VRCP-P0-06 Current System Promotion Complete` + `VBHAI-P0-07G USER Re-Acceptance PASS` + `VBHAI-P0-08 Current System Promotion Complete`
 
 ---
 
@@ -596,6 +596,75 @@ RuntimeApply 후보/authorization owner는 계속 `CF-FQ-041`이다. RuntimeAppl
 
 대표 closure에서 `DA_Vehicle_Wagon`을 USER가 명시 저장한 뒤 fresh AssetDump로 persisted `AllowedVehicleData` 4개 중 Wagon exact membership 1개를 확인했다. 이 persisted Wagon은 `CF-FQ-041 / RTA-P0-06 Packaged Demo`의 Builder-produced consumer candidate로 handoff된다.
 
+### 9.2 Vehicle Performance Tuning Protocol
+
+`CF-FQ-015 Vehicle Data Tuning` Rebaseline 뒤 별도 Raw VehicleData 튜닝 Feature를 유지하지 않고, 현재 Builder의 Driving Test / Authoring / USER Acceptance 흐름에 다음 네 계약을 통합한다.
+
+#### 계약 1 — Controlled Axis Tuning
+
+주행 문제의 원인을 추적할 때는 한 번에 한 행동 축만 조정하는 것을 기본으로 한다.
+
+```text
+가속 문제 → Engine / Transmission 계열 한 축부터
+제동 문제 → Brake 계열 한 축부터
+조향 문제 → Steering 계열 한 축부터
+차체 반응 문제 → Suspension / Wheel 계열 한 축부터
+```
+
+여러 필드를 함께 바꿔야 하는 경우에는 하나의 명시적으로 검토된 atomic Proposal이어야 하며, 원인 분석용 임의 다축 변경으로 사용하지 않는다. 모든 수정은 기존 Recipe/Profile/Resolver/Diff/Preview/Approval/DefinitionApply 경로를 사용하고 Raw VehicleData 직접 편집을 정상 튜닝 경로로 승격하지 않는다.
+
+#### 계약 2 — Technical Benchmark + USER Feel Pair
+
+기술 측정과 사람의 주행감은 서로 대체하지 않는다.
+
+```text
+Technical Benchmark
+= 재현 가능한 수치 / Target path + DefinitionHash binding
+
+USER Driving
+= 둔함, 민감함, 안정감, 제동감, 차체 반응 같은 체감 판정
+```
+
+측정 가능한 축은 benchmark evidence와 USER feel을 함께 본다. 기술 수치가 정상이라고 USER feel을 자동 PASS하지 않고, USER 느낌만으로 측정 가능한 기술 이상을 무시하지 않는다. 현재 구현된 고속/가속 benchmark와 persistent USER Driving Acceptance Receipt를 이 결합 계약의 기본 수단으로 사용한다.
+
+#### 계약 3 — Vehicle Character / Reference Baseline
+
+차량 간 Raw Field 차이를 곧바로 좋음/나쁨으로 판정하지 않는다. 각 차량은 먼저 의도한 성격과 비교 기준을 가져야 한다.
+
+```text
+예시
+- 목표 성능 범위
+- 저속/중속/고속에서 기대하는 성격
+- 비교 Reference Vehicle
+- 의도한 가속/제동/조향/차체 반응 방향
+```
+
+이 baseline은 Review 기준이며 모든 차량에 복사하는 universal preset이나 자동 numeric source가 아니다. `UCFVDAValidator::CompareVehicleData()`의 field-level 비교와 Builder의 Reference/Evidence를 함께 사용하되 최종 차량 성격 판단은 USER/설계 의도를 보존한다.
+
+#### 계약 4 — Measurement Gap / Benchmark Extension Ownership
+
+현재 구현된 benchmark가 특정 튜닝 축을 정량적으로 설명하지 못하면 그 축을 임의 수치로 PASS하지 않고 `Measurement Gap`으로 기록한다.
+
+현재 확인된 일반 확장 후보는 다음과 같다.
+
+```text
+Braking
+- 100→0 시간 / 거리
+
+Steering
+- 일정 속도·입력의 Yaw Rate / 횡가속
+- 필요 시 Slip Angle
+
+Suspension / Stability
+- Suspension stroke
+- bump 이후 settling
+- Airborne false-positive 관측
+```
+
+위 항목은 **현재 구현 완료 기능이 아니다.** 실제 계측 기능이 필요해질 때는 VehicleBuilder Driving Test / Performance Tuning owner 아래 별도 Feature 또는 명시적 lifecycle로 구현·검증한다. 계측 부재 자체는 기존 차량 제작/Acceptance를 무효화하지 않는다.
+
+`CF-FQ-015 / VD-P0-04`의 과거 Sedan/SUV Raw USER Tuning 순서는 이 계약으로 **Superseded / Not Executed** 처리한다. 이는 해당 USER Tuning을 PASS했다고 기록하는 것이 아니다. 기존 `VD-P0-00~03` Technical PASS는 VehicleData Validator/Representative Compare/Runtime Apply 기반의 Historical evidence로 보존하고, 앞으로 실제 성능 튜닝은 이 VehicleBuilder protocol을 사용한다.
+
 ---
 
 ## 10. CF-FQ-040 완료 검증 기준선
@@ -671,6 +740,7 @@ Document/Plan/Archive/VehicleRuntimeCatalogPromotion/VehicleRuntimeCatalogPromot
 Document/Plan/Archive/VehicleBuilderHardpointIntegrity/VehicleBuilderHardpointIntegrityPlan.md
 Document/Plan/DataAuthoring/DataAuthoringPlan.md
 Document/Plan/DataAuthoring/DataAuthoringRoadmap.md
+Document/Plan/VehicleDataTuning/VehicleDataTuningPlan.md
 Document/Plan/Archive/README.md
 ```
 
@@ -679,6 +749,15 @@ Document/Plan/Archive/README.md
 ---
 
 ## 13. Changelog
+
+### v1.6.0 - 2026-09-11
+
+- `CF-FQ-015 Vehicle Data Tuning`을 Rebaseline Complete로 종료하고 원래 VD-P0-04 Raw Sedan/SUV USER Tuning을 `Superseded / Not Executed`로 명시했다. VD-P0-00~03 Historical Technical PASS를 USER 주행감 PASS로 확대하지 않는다.
+- CF-FQ-015에서 유지 가치가 있는 네 계약을 Current VehicleBuilder로 승격했다: Controlled Axis Tuning, Technical Benchmark + USER Feel Pair, Vehicle Character / Reference Baseline, Measurement Gap / Benchmark Extension Ownership.
+- 현재 고속/가속 Benchmark와 persistent USER Driving receipt는 기존 구현으로 재사용한다. 제동거리·Yaw Rate·횡가속·Slip Angle·Suspension stroke/settling은 아직 구현 완료 기능으로 쓰지 않고 Measurement Gap 후보로 명시했다.
+- 이 승격은 문서/책임 재정렬이며 Source/Asset/Build/Automation mutation은 0이다.
+
+Migration: 차량 성능 튜닝은 별도 CF-FQ-015 Raw VehicleData 직접 편집 흐름을 재개하지 않는다. VehicleBuilder의 Recipe/Profile/Resolver/Diff/Preview/Approval/DefinitionApply와 Driving Test/USER Acceptance 계약을 사용하며, 미계측 축은 별도 lifecycle에서 계측 기능을 추가한다.
 
 ### v1.5.0 - 2026-09-11
 

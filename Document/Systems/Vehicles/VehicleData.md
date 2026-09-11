@@ -1,7 +1,7 @@
 # VehicleData
 
-- 문서 버전: v2.2.0
-- 최근 갱신일: 2026-09-01
+- 문서 버전: v2.3.0
+- 최근 갱신일: 2026-09-11
 - 문서 상태: Current Implementation
 - 적용 범위: `UCFVehicleData`, `UCFVDAValidator`, `ACFVehiclePawn::ApplyVehicleDataConfig()`와 현재 대표 VehicleData 기준
 
@@ -437,24 +437,26 @@ Wheel Class CDO의 전역 상세 Runtime setter는 테스트 격리 위험 때�
 
 ---
 
-## 11. 현재 미완료 범위
+## 11. CF-FQ-015 Rebaseline 이후 튜닝 경계
 
-CF-FQ-015의 원격 기술 계약은 완료됐지만 **실제 차량 주행감 튜닝은 완료되지 않았다.**
+CF-FQ-015의 `VD-P0-00~03` 원격 기술 계약은 Historical Technical PASS로 보존한다. 과거 `VD-P0-04 USER Tuning`은 실제 USER PASS를 수행한 것이 아니라, 후속 Data Authoring / Vehicle Builder가 더 완전한 Authoring·Benchmark·Acceptance 경로를 제공하게 되어 **Superseded / Not Executed**로 종료했다.
 
-남은 `VD-P0-04 USER Tuning`:
+현재 책임은 다음처럼 분리한다.
 
 ```text
-DA_TestSedan 실제 출발·가속
-제동
-저속 조향
-중속 조향
-고속 안정성
-작은 턱 / 서스펜션 체감
-DA_TestSUV 동일 항목 비교
-필요한 축만 한 번에 하나씩 수정
+VehicleData
+= 저장 구조 / Validator / Representative Compare / Runtime 입력 계약
+
+VehicleBuilder
+= Controlled Axis Tuning
+= Technical Benchmark + USER Feel Pair
+= Vehicle Character / Reference Baseline
+= Measurement Gap / Benchmark Extension ownership
 ```
 
-사용자가 PIE를 직접 확인하기 전에는 Engine/Wheel/DriveState 값을 자동 조정하지 않는다.
+따라서 새 차량 성능 튜닝에서 `DA_TestSedan / DA_TestSUV`를 Raw VehicleData 직접 편집하는 옛 VD-P0-04 절차를 Current 정상 경로로 복원하지 않는다. 실제 값 변경은 VehicleBuilder의 Recipe/Profile/Resolver/Diff/Preview/Approval/DefinitionApply 계약을 사용한다.
+
+제동거리, Yaw Rate, 횡가속, Slip Angle, Suspension stroke/settling처럼 아직 검증된 계측이 없는 축은 VehicleData가 임의 수치나 자동 PASS를 제공하지 않는다. 필요한 경우 VehicleBuilder 측 `Measurement Gap`으로 기록해 별도 구현 lifecycle에서 계측 기능을 추가한다.
 
 ---
 
@@ -502,6 +504,14 @@ USER 튜닝 결과
 
 ## 14. Changelog
 
+### v2.3.0 - 2026-09-11
+
+- `CF-FQ-015 Vehicle Data Tuning` Rebaseline을 반영했다. VD-P0-00~03 Validator/Representative Compare/Runtime Apply Technical PASS는 Historical evidence로 보존하고, VD-P0-04 Raw Sedan/SUV USER Tuning은 `Superseded / Not Executed`로 종료했다.
+- 현재 성능 튜닝 workflow owner를 `VehicleBuilder.md v1.6.0`으로 승격했다. VehicleData는 데이터 구조·Validator·비교·Runtime 입력 계약을 계속 소유하며 USER 주행감이나 성능 목표를 자동 판정하지 않는다.
+- 문서-only 책임 재정렬이며 VehicleData Product Asset, Source, Build/Automation mutation은 0이다.
+
+Migration: CF-FQ-015 closure를 과거 USER Driving PASS로 해석하지 않는다. 새 튜닝은 VehicleBuilder protocol을 사용하고 `CompareVehicleData()`는 계속 field-level 차이만 보고하며 좋음/나쁨을 자동 판정하지 않는다.
+
 ### v2.2.0 - 2026-09-01
 
 - CF-FQ-040 Wheel Size Authority P0 USER PASS 결과를 Current 계약으로 승격했다.
@@ -544,4 +554,4 @@ USER 튜닝 결과
 - `DA_PoliceCar`를 현재 대표 기준으로 사용하는 과거 설명은 Historical로 본다.
 - 현재 P0 대표 비교 경로는 `DA_TestSedan / DA_TestSUV`다.
 - `bUseMovementOverrides=false`를 VehicleMovement 전체 비활성으로 해석하지 않는다.
-- CF-FQ-015 Technical PASS를 USER 주행감 PASS로 승격하지 않는다.
+- CF-FQ-015 VD-P0-00~03 Technical PASS를 USER 주행감 PASS로 승격하지 않는다. VD-P0-04는 PASS가 아니라 Superseded / Not Executed이며 현재 튜닝 owner는 `VehicleBuilder.md v1.6.0`이다.

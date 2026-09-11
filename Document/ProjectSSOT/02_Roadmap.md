@@ -3,7 +3,7 @@
 > 역할: CarFight 프로젝트의 **현재 해야 할 일 / 우선순위 / 완료 조건 / 진행 순서**를 고정한다.
 > 기준 상태 문서: `01_ProjectState.md`
 > 상위 방향 문서: `00_Vision.md`
-> 문서 버전: v2.30.7
+> 문서 버전: v2.30.8
 > 마지막 정리(Asia/Seoul): 2026-09-11
 > 문서 상태: Current
 
@@ -48,7 +48,7 @@ Feature 상태의 전체 목록은 `03_FeatureQueue.md`, 세션 복원 체크포
 | 센서·Scanner | `CF-FQ-036`, `037` / SensorContact |
 | 인게임 HUD/UI | `CF-FQ-032` / InGameUI·AimReticle·SensorContact |
 | 무기 Data | `CF-FQ-008` / WeaponData |
-| 차량 제작·Authoring | `CF-FQ-038`, `040`, `042`, `043`, `044`, `047` / VehicleBuilder |
+| 차량 제작·Authoring·Performance Tuning | `CF-FQ-015`, `038`, `040`, `042`, `043`, `044`, `047` / VehicleBuilder + VehicleData |
 
 완료 evidence의 세부 Build ID, Automation 결과와 USER Acceptance는 각 대표 Plan을 우선한다. 새 관련 failure evidence 없이 완료 검증을 습관적으로 반복하지 않는다.
 
@@ -63,7 +63,6 @@ Feature 상태의 전체 목록은 `03_FeatureQueue.md`, 세션 복원 체크포
 | `CF-FQ-034` 차량 피팅·질량 | Paused | `FIT-P0-07D USER Driving Feel Comparison` | 정량 Mobility 이후 실제 체감 비교 |
 | `CF-FQ-035` 인벤토리 Foundation | Paused | USER Field UI·Mobility | Field Fitting 사용자 흐름 |
 | `CF-FQ-026` 타겟 선택 | Paused | `TS-P0-08 USER PIE` | 실제 선택 범위·표시·조작감 |
-| `CF-FQ-015` 차량 데이터 튜닝 | Paused | `VD-P0-04 USER Tuning` | 실제 차량 주행 튜닝 |
 
 UI의 `Radar/Edge Visual·Zoom Feel`과 D1-11-ART 잔여 Visual Review를 포함한 Production Visual 후속은 현재 `CF-FQ-039`로 선택됐다. `CF-FQ-032 Done`을 되돌리지 않고 새 Visual Plan의 `VPR-*` Gate에서 진행한다.
 
@@ -73,7 +72,7 @@ UI의 `Radar/Edge Visual·Zoom Feel`과 D1-11-ART 잔여 Visual Review를 포함
 
 | Feature | 상태 | 목적 |
 | --- | --- | --- |
-| `CF-FQ-012` 1대 차량 주행감 고도화 | Candidate | 현재 차량의 주행 감각 자체를 개선 |
+| `CF-FQ-012` 1대 차량 주행감 고도화 | Candidate | VehicleBuilder Performance Tuning Protocol을 사용해 현재 차량의 주행 감각 자체를 개선. CF-FQ-015의 Validator/Compare/Runtime Apply foundation을 다시 만들지 않는다. |
 | `CF-FQ-014` WheelSync 시각 품질 폴리싱 | Candidate | 고속 휠·조향·서스펜션 시각 품질 개선 |
 | `CF-FQ-020` 조작감/전투 템포/피드백 개선 | Candidate | 기능 구현 이후 전투 체감 개선 |
 | `CF-FQ-021` 핵심 게임 루프 검증 | Candidate | 현재 싱글 차량 전투가 다음 단계로 갈 수 있는지 종합 판정 |
@@ -135,6 +134,12 @@ Roadmap은 진행 순서와 선택지에 집중한다. Feature별 세부 P0 목�
 ---
 
 ## 9. Changelog
+
+### v2.30.8 - 2026-09-11
+
+- `CF-FQ-015 Vehicle Data Tuning`을 Rebaseline Complete로 완료 기반에 편입하고 Paused 재개 후보에서 제거했다.
+- VD-P0-00~03 Historical Technical PASS는 보존하며 VD-P0-04는 USER PASS가 아니라 `Superseded / Not Executed`로 종료했다. Current tuning owner는 `Systems/Vehicles/VehicleBuilder.md v1.6.0`, data foundation은 `VehicleData.md v2.3.0`이다.
+- `CF-FQ-012`가 향후 착수되면 VehicleBuilder Performance Tuning Protocol을 사용하며 CF-FQ-015 foundation을 중복 구현하지 않는다. 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
 
 ### v2.30.7 - 2026-09-11
 

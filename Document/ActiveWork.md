@@ -1,6 +1,6 @@
 # CarFight Active Work
 
-- 문서 버전: v4.226
+- 문서 버전: v4.227
 - 최근 갱신일: 2026-09-11
 - 문서 상태: Current
 - 역할: CarFight 게임 프로젝트에서 현재 실제로 진행 중인 작업을 선택하고 대표 Plan으로 연결하는 **세션 복원 projection**
@@ -46,22 +46,22 @@ UI Resource 방법론 실험 `URT05_Plan.md v0.8`은 Method Validation Complete�
 
 ## 3. 최근 완료
 
-### CF-FQ-038 차량 데이터 Authoring — Done
+### CF-FQ-015 차량 데이터 튜닝 패스 — Done
 
 ```text
-상태: Done / P0 Technical Closure Complete / DEL1~DEL7 PASS
-Current owner: Document/Systems/Vehicles/VehicleBuilder.md v1.5.0
-Historical Plan: Document/Plan/DataAuthoring/DataAuthoringPlan.md v0.2.53 — Historical + Retained Path
-Historical Roadmap: Document/Plan/DataAuthoring/DataAuthoringRoadmap.md v0.1.57 — Historical + Retained Path
+상태: Done / Rebaseline Complete / Historical + Retained Path
+Current tuning owner: Document/Systems/Vehicles/VehicleBuilder.md v1.6.0
+Current data foundation: Document/Systems/Vehicles/VehicleData.md v2.3.0
+Historical Plan: Document/Plan/VehicleDataTuning/VehicleDataTuningPlan.md v0.3.0
 ```
 
 보존 판정:
 
-- P0-08~11 Technical PASS와 P0-12 USER PASS 7/8을 보존한다. UA-08은 Runtime Technical PASS / USER Inconclusive이며 quantitative driving comparison은 비차단 Deferred observational debt다.
-- DEL6 compatibility retirement에서 Legacy `CFVDAWizardTab`, `CFVDAWizardTestAccess`, `CarFight.VehicleDAWizard`, `OpenVDAWizardTab`, `LegacyManagedGuard` direct reference를 `UE/Source` exact0으로 만들고 Legacy Wizard 소스 3개를 물리 폐기했다.
-- 최종 Official UE 5.8 Build `1fd947042024420aaa7561d380e4548f` PASS, 전체 `CarFight.DataAuthoring` 111/111 PASS / failure0 / Engine Exit0을 확보했다.
-- 현재 제작 책임은 Guided Vehicle Builder + Data Authoring Backend + Vehicle Authoring Advanced Workspace로 고정한다. Product VehicleData/Recipe/Profile Asset의 강제 migration·Apply·Save는 수행하지 않았다.
-- UA-08 Deferred를 USER PASS 8/8로 확대하지 않으며, 이 observational debt만으로 CF-FQ-038을 다시 Paused/Active로 되돌리지 않는다.
+- VD-P0-00~03 Validator / Representative Compare / Runtime Apply Technical PASS와 당시 Build·`CarFight.VehicleData` 3/3 evidence를 Historical로 보존하고 재실행하지 않는다.
+- VD-P0-04 Sedan/SUV Raw USER Tuning은 실제 USER PASS를 한 것으로 처리하지 않는다. 후속 Data Authoring / VehicleBuilder 경로가 상위 기능을 제공하므로 `Superseded / Not Executed`로 종료한다.
+- 유지 가치가 있는 네 계약은 VehicleBuilder Current System으로 승격했다: Controlled Axis Tuning, Technical Benchmark + USER Feel Pair, Vehicle Character / Reference Baseline, Measurement Gap / Benchmark Extension Ownership.
+- 제동거리·Yaw Rate·횡가속·Slip Angle·Suspension stroke/settling은 현재 구현 완료가 아니라 Measurement Gap 후보다. 필요할 때 별도 lifecycle에서 구현한다.
+- 이번 closure는 문서/책임 Rebaseline이며 Source/Asset/Build/Automation mutation은 0이다.
 
 ---
 
@@ -71,11 +71,10 @@ Historical Roadmap: Document/Plan/DataAuthoring/DataAuthoringRoadmap.md v0.1.57 
 | --- | --- | --- | --- |
 | `CF-FQ-034` 차량 피팅·질량 | Paused | `Document/Plan/VehicleFitting/VehicleFittingPlan.md v0.17.0` → `FIT-P0-07D USER Driving Feel Comparison` | FIT-P0-07A~07C 정량 Mobility evidence 반복 금지 |
 | `CF-FQ-041` 런타임 콘텐츠 적용 메뉴 | Ready | `Document/Plan/RuntimeApply/RuntimeApplyPlan.md v0.1.17` → `RTA-P0-05 USER PASS / Closed / next RTA-P0-06 Packaged Demo` | RuntimeApply Vehicle/Equipment UI와 Legacy Current Equipment readback까지 USER 확인 완료, 최종 RuntimeApply regression 14/14 PASS(CF-FQ-044 `CatalogOptionSync` 포함). CF-FQ-044에서 persisted `DA_Vehicle_Wagon`을 Builder-produced Packaged Demo candidate로 handoff했다. 기존 RuntimeApply authorization/apply 계약을 재작업하지 않는다. |
-| `CF-FQ-046` Vehicle Builder 사용자 정보 UX | Ready | `Document/Plan/VehicleBuilderInfoUX/VehicleBuilderInfoUXPlan.md v0.1.6` → pre-CF-FQ-047 Technical PASS evidence preserved / CF-FQ-047 Done으로 dependency 충족 / next `VBIUX-P0-05B Step 1~8 Common Page Layout Audit` | Step 1~8 common Page Shell/height/scroll/overflow는 046 owner다. 047의 Step 5 Physics 영향 경계와 Step 7/8 durable/save/readiness 계약, 038의 Data Authoring Backend/Advanced Workspace closure는 Current VehicleBuilder v1.5.0으로 동기화됐으며, 공통 scroll/page-shell을 047 방식으로 중복 구현하지 않는다. |
+| `CF-FQ-046` Vehicle Builder 사용자 정보 UX | Ready | `Document/Plan/VehicleBuilderInfoUX/VehicleBuilderInfoUXPlan.md v0.1.6` → pre-CF-FQ-047 Technical PASS evidence preserved / CF-FQ-047 Done으로 dependency 충족 / next `VBIUX-P0-05B Step 1~8 Common Page Layout Audit` | Step 1~8 common Page Shell/height/scroll/overflow는 046 owner다. 047의 Step 5 Physics 영향 경계와 Step 7/8 durable/save/readiness, 038 Data Authoring, 015 Performance Tuning protocol은 Current VehicleBuilder v1.6.0으로 동기화됐으며 공통 scroll/page-shell을 중복 구현하지 않는다. |
 | `CF-FQ-048` Vehicle Pawn Slimming | Ready | `Document/Plan/VehiclePawnSlimming/VehiclePawnSlimmingPlan.md v0.1.0` → Initial Design Audit Correction + Re-review PASS / next `VPS-P0-00 Contract / State / Lifecycle Freeze` | Gameplay semantics, Blueprint/Asset contract, Pawn observable state authority와 lifecycle ordering을 P0에서 동결한다. 기존 CF-FQ-039 Active 및 Wagon/RuntimeTestCatalog/WeaponDef/VehiclePanel 병렬 dirty를 보호하며 Source mutation은 아직 0이다. |
 | `CF-FQ-035` 인벤토리 Foundation | Paused | FeatureQueue/대표 Plan → USER Field UI·Mobility | 기존 Inventory/Fitting Technical checkpoint 반복 금지 |
 | `CF-FQ-026` 타겟 선택 | Paused | FeatureQueue/대표 Plan → `TS-P0-08 USER PIE` | TS-P0-00~07 및 Remote Technical evidence 반복 금지 |
-| `CF-FQ-015` 차량 데이터 튜닝 | Paused | FeatureQueue/대표 Plan → `VD-P0-04 USER Tuning` | VD-P0-00~03 Technical evidence 반복 금지 |
 
 ---
 
@@ -120,6 +119,12 @@ ActiveWork가 다시 상세 Build/Automation/USER 로그를 누적하거나 서�
 ---
 
 ## 8. Changelog
+
+### v4.227 - 2026-09-11
+
+- `CF-FQ-015 Vehicle Data Tuning`을 Rebaseline Complete로 Paused → Done 전환하고 복원 체크포인트에서 제거했다.
+- VD-P0-00~03 Historical Technical PASS는 보존하며 VD-P0-04는 USER PASS가 아니라 `Superseded / Not Executed`로 종료했다. 네 튜닝 계약을 `VehicleBuilder.md v1.6.0`으로 승격하고 data foundation은 `VehicleData.md v2.3.0`이 유지한다.
+- Source/Asset/Build/Automation mutation은 0이며 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty는 변경하지 않았다.
 
 ### v4.226 - 2026-09-11
 

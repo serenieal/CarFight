@@ -2,7 +2,7 @@
 
 > 역할: CarFight 프로젝트의 **현재 실제 기준선 / 현재 Feature 상태 / 현재 리스크**를 고정한다.
 > 공통 규칙 원본: `Document/SSOT/`
-> 문서 버전: v2.45.8
+> 문서 버전: v2.45.9
 > 마지막 정리(Asia/Seoul): 2026-09-11
 > 문서 상태: Current
 
@@ -40,19 +40,20 @@ Current Gate: VPR-P0-01 VehiclePanel Production Vertical Slice — VEHICLE-SPECI
 
 ### 2.2 최근 완료
 
-`CF-FQ-038 차량 데이터 Authoring 시스템`은 Done이다.
+`CF-FQ-015 차량 데이터 튜닝 패스`는 Done이다.
 
 현재 구현 owner:
 
 ```text
-Document/Systems/Vehicles/VehicleBuilder.md v1.5.0
+Document/Systems/Vehicles/VehicleBuilder.md v1.6.0
+Document/Systems/Vehicles/VehicleData.md v2.3.0
 ```
 
-완료 범위는 DAUTH-P0-08A~M / P0-09~11 Technical PASS, P0-12 Closed with Deferred Feel Comparison, DG1~DG5와 DEL1~DEL7 PASS다. 2026-09-11 DEL6 compatibility retirement에서 Legacy Vehicle DA Wizard direct reference를 `UE/Source` exact0으로 만들고 관련 소스 3개를 물리 폐기했다.
+기존 `VD-P0-00~03` Validator / Representative Compare / Runtime Apply Technical PASS와 당시 Official UE 5.8 Build 및 `CarFight.VehicleData` 3/3 evidence는 Historical로 보존한다. 남아 있던 `VD-P0-04 USER Tuning`은 실제 USER PASS를 수행한 것이 아니라 후속 Data Authoring / Vehicle Builder가 더 완전한 Authoring·Benchmark·Acceptance 경로를 제공하게 되어 `Superseded / Not Executed`로 종료했다.
 
-최종 Official UE 5.8 Build `1fd947042024420aaa7561d380e4548f` PASS와 전체 `CarFight.DataAuthoring` 111/111 PASS / failure0 / Engine Exit0을 closure evidence로 확보했다. 상세 evidence는 Historical Plan `Document/Plan/DataAuthoring/DataAuthoringPlan.md v0.2.53`과 Roadmap v0.1.57이 보존한다.
+현재 성능 튜닝 계약은 VehicleBuilder가 `Controlled Axis Tuning`, `Technical Benchmark + USER Feel Pair`, `Vehicle Character / Reference Baseline`, `Measurement Gap / Benchmark Extension Ownership` 네 항목을 소유한다. VehicleData는 저장 구조·Validator·Representative Compare·Runtime 입력 계약을 계속 소유한다.
 
-UA-08은 Runtime Technical PASS / USER Inconclusive이며 quantitative driving comparison은 비차단 Deferred observational debt다. 역사적 P0-12 USER PASS 7/8을 8/8로 확대하지 않으며, 이 Deferred만으로 CF-FQ-038을 재개하지 않는다.
+제동거리, Yaw Rate, 횡가속, Slip Angle, Suspension stroke/settling은 아직 구현 완료된 일반 계측 기능이 아니며 필요 시 별도 lifecycle로 추가한다. 이번 closure는 문서/책임 Rebaseline이며 Source/Asset/Build/Automation mutation은 0이다. 상세 Historical evidence는 `Document/Plan/VehicleDataTuning/VehicleDataTuningPlan.md v0.3.0`이 보존한다.
 
 ---
 
@@ -63,7 +64,6 @@ UA-08은 Runtime Technical PASS / USER Inconclusive이며 quantitative driving c
 | `CF-FQ-034` 차량 피팅·질량 런타임 | Paused | `Document/Plan/VehicleFitting/VehicleFittingPlan.md v0.17.0` / `FIT-P0-07D USER Driving Feel Comparison` |
 | `CF-FQ-035` 인벤토리 Foundation | Paused | 기존 Technical checkpoint 보존 / USER Field UI·Mobility Pending |
 | `CF-FQ-026` 타겟 선택 시스템 | Paused | `TS-P0-08 USER PIE Pending` |
-| `CF-FQ-015` 차량 데이터 튜닝 패스 | Paused | `VD-P0-04 USER Tuning Pending` |
 
 `CF-FQ-020 조작감/전투 템포/피드백 개선`, `CF-FQ-021 핵심 게임 루프 검증`, `CF-FQ-012 1대 차량 주행감 고도화`, `CF-FQ-014 WheelSync 시각 품질 폴리싱`은 Candidate다.
 
@@ -93,7 +93,7 @@ UI
 Vehicles
 - VehicleData / VehicleRuntime / VehicleDrive / VehicleSteering
 - WheelSync / VehicleCamera / VehicleAim
-- VehicleBuilder / Data Authoring Backend + Advanced Workspace
+- VehicleBuilder / Data Authoring Backend + Advanced Workspace + Performance Tuning Protocol
 
 Inventory/Fitting
 - 완료 또는 부분 완료 Current 계약은 Systems와 대표 Plan의 실제 상태를 함께 확인
@@ -157,6 +157,12 @@ AI Technical PASS와 USER PASS를 서로 대체하지 않는다.
 ---
 
 ## 8. Changelog
+
+### v2.45.9 - 2026-09-11
+
+- `CF-FQ-015 Vehicle Data Tuning`을 Rebaseline Complete로 Paused → Done 전환하고 재개 가능한 체크포인트에서 제거했다.
+- VD-P0-00~03 Historical Technical PASS는 보존하고 VD-P0-04는 `Superseded / Not Executed`로 종료했다. Current tuning owner는 `VehicleBuilder.md v1.6.0`, data foundation은 `VehicleData.md v2.3.0`이다.
+- 제동·Yaw Rate·횡가속·Slip Angle·Suspension 계측은 현재 완료 기능으로 확대하지 않고 Measurement Gap 후보로 보존한다. 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
 
 ### v2.45.8 - 2026-09-11
 
