@@ -1,6 +1,6 @@
 # CarFight — 05_TestChecklist
 
-> 문서 버전: v1.22.0
+> 문서 버전: v1.23.1
 > 작성일(Asia/Seoul): 2026-08-02
 > 문서 상태: Active
 > 역할: CarFight의 **완료된 Systems 기준 최소 회귀 테스트**를 관리한다.
@@ -69,7 +69,7 @@
 14. 터렛 정렬 중 발사는 `UCFTurretMountData.bAllowFireWhileAligning`의 true/false 정책을 각각 검증하며, 두 정책 모두 `MuzzleBlocked`와 `TurretAligning` 표시 의미를 유지해야 한다.
 15. 전투 시각 FX는 승인된 발사, 첫 Blocking Hit와 최초 Destroyed 전환에만 1회 발생해야 하며 FX 생성 실패가 전투 판정을 바꾸면 안 된다. 게임 오디오 참조는 0개를 유지한다.
 16. 비유도 Rocket은 InitialSpeed 분리, IgnitionDelay, Burning 고정 방향 가속과 BurnedOut 관성 비행이 구분되어야 하며 Thruster는 Burning에서만 재생되고 독립 FX Scale이 소켓·Fallback 양쪽에 적용되어야 한다.
-17. 모듈형 런처는 자산 연결·AssetDump PASS만으로 완료 처리하지 않고 실제 Muzzle 순서, Volley 시간, 고정 Command Target, Release 방향, 차량 속도 상속과 Pool 재사용을 사용자 PIE에서 확인해야 한다.
+17. 모듈형 런처는 자산 연결·AssetDump PASS만으로 완료 처리하지 않는다. Muzzle 순서·Volley 시간·고정 Command Target처럼 사용자 플레이 판단이 필요한 항목은 기존 USER PIE evidence를 보존하고, Release 방향·Carrier Velocity·MuzzleBlocked·Launch Context 전달처럼 기술 상태 전이와 데이터 전달로 판정 가능한 항목은 실제 Product path Automation/RuntimeRead Technical Validation으로 닫을 수 있다.
 18. Projectile 충돌 예외는 팀이나 FireRequest가 아니라 발사 차량 Actor를 기준으로 한다. 같은 차량의 모든 탄종·모든 Volley는 서로 무시하고 다른 차량 Projectile은 요격 가능한 실제 충돌 대상으로 유지한다.
 ```
 
@@ -462,7 +462,7 @@ DA_PFX_ThrusterTest
 | `CF-TC-023` | Presentation | 투사체 비행 FX | Trail·Thruster를 독립·동시 사용하고 소켓·Fallback, Hit·LifeExpired Reset, 20발 이상 Pool 재사용, Ribbon History 무잔류와 30 FPS 고속 Bounds가 정상이며 기존 Impact·Damage를 유지 | `Document/Systems/Combat/Projectile.md`, `Document/Plan/Archive/ProjectileFlightFx/ProjectileFlightFxPlan.md` | `PASS` |
 | `CF-TC-024` | Combat | 비유도 Rocket 추진 | InitialSpeed 분리, IgnitionDelay, Burning 고정 방향 가속, BurnedOut 관성 비행과 Burning 기반 Thruster가 동작하고 FX_Exhaust 소켓·독립 Scale이 적용됨 | `Document/Systems/Combat/Projectile.md`, `Document/Plan/Archive/ProjectilePropulsionPlan.md` | `PASS` |
 | `CF-TC-025` | Combat | Projectile Launch Handoff 회귀 | Direct 발사가 기존 위치·방향·초기 속도·추진·충돌·피해를 유지하고 Launch Context가 발사 후 런처와 독립하며 Pool 반환 시 초기화됨 | `Document/Plan/LauncherMissile/LauncherMissilePlan.md`, `Document/Systems/Combat/Projectile.md` | `PARTIAL` |
-| `CF-TC-026` | Combat | 모듈형 런처·Ejection | Muzzle 1→4→2→3, Ripple 4발·0.15초, 고정 Command Target, SequenceCompleted 쿨다운, 후속 발사 실패 정책, Direct·Angled·Vertical Release와 차량 속도 상속이 정책대로 동작함. 수동 취소는 호출 수단 구현 뒤 별도 검증함 | `Document/Plan/LauncherMissile/LauncherMissilePlan.md`, `Document/Plan/Archive/LauncherMissileLegacy/ModularLauncherPlan.md`, `Document/Systems/Combat/Projectile.md` | `PARTIAL` |
+| `CF-TC-026` | Combat | 모듈형 런처·Ejection | Muzzle 1→4→2→3, Ripple 4발·0.15초, 고정 Command Target, SequenceCompleted 쿨다운, ContinueRemaining·StopSequence 실패 정책, Manual Cancel terminal cleanup, Direct·Angled·Vertical Release와 Carrier Velocity 상속, 실제 사출 방향 MuzzleBlocked가 정책대로 동작함 | `Document/Systems/Combat/Launcher.md`, `Document/Plan/LauncherMissile/LauncherMissilePlan.md`, `Document/Systems/Combat/Projectile.md` | `PASS` |
 
 ---
 
@@ -623,7 +623,7 @@ Salvo Launcher
 - CF-TC-026: PARTIAL 유지
 ```
 
-요격과 복수 탄종 교차 격리는 후속 AI 전투 회귀로 이관한다. 후속 발사 실패 정책 ContinueRemaining·StopSequence는 후속 Muzzle만 의도적으로 실패시키는 전용 배치 또는 테스트 훅이 준비된 뒤 검증한다. 수동 CancelFireSequence는 BlueprintCallable API만 있고 현재 입력·UI·게임플레이 호출 경로가 없으므로 Deferred한다. 현재 LM-P0-06에서는 MuzzleBlocked, Ejection과 Carrier Velocity를 확인한 뒤 기본 Pattern을 복구하고 Direct Ripple 1회를 다시 확인한다.
+요격과 복수 탄종 교차 격리는 후속 AI 전투 회귀로 유지한다. ContinueRemaining·StopSequence와 Manual Cancel terminal cleanup은 LM-P0-06A Technical PASS로 닫혔다. 2026-09-11 LM-P0-06 FinalIntegration은 실제 VehicleFireComp → ProjectilePool → ProjectileActor 경로에서 MuzzleBlocked, Angled/Vertical Ejection과 Carrier Velocity를 1/1 PASS했고, 저장 DA_RocketLauncher의 Direct / EjectionSpeed 0 / CarrierVelocityRatio 0 기본값은 fresh AssetDump로 확인했다.
 
 ```text
 FirePattern = Ripple
@@ -748,7 +748,7 @@ CF-TC-026 CarrierVelocityRatio 0·1 비교: PASS / FAIL
 추가 증상:
 ```
 
-사용자 PIE 결과가 모두 확인되기 전에는 `CF-TC-025`, `CF-TC-026`, `LM-P0-06`과 `CF-FQ-029`를 PASS·Done으로 변경하지 않는다.
+CF-FQ-029의 과거 USER PIE 대상은 이미 확인된 evidence를 보존하며 반복하지 않는다. 남은 순수 기술 invariant는 Current Product-path Automation/RuntimeRead Technical PASS로 닫을 수 있다. CF-FQ-029는 2026-09-11 LM-P0-06 FinalIntegration 1/1 + Launcher 5/5와 Current System Promotion으로 Done이다.
 
 ---
 
@@ -1231,7 +1231,7 @@ CF-TC-026 CarrierVelocityRatio 0·1 비교: PASS / FAIL
 
 ## 15. 문서 버전 관리
 
-- 현재 문서 버전: `v1.22.0`
+- 현재 문서 버전: `v1.23.1`
 - 문서 상태: `Active`
 
 ### 버전 증가 기준
@@ -1245,6 +1245,25 @@ CF-TC-026 CarrierVelocityRatio 0·1 비교: PASS / FAIL
 ---
 
 ## 16. 체인지로그
+
+### v1.23.1 - 2026-09-11
+
+```text
+- CF-FQ-029 representative Historical Plan을 LauncherMissilePlan.md v0.15.0으로 동기화했다.
+- 전체 최소 회귀의 CF-TC-026을 최종 Launcher acceptance에 맞춰 PASS로 전환했다. 기존 2026-07-30 PARTIAL 기록은 당시 Historical 결과로 그대로 보존한다.
+- Current owner를 Combat/Launcher.md v1.0.1로 갱신하고, plan_repo read_only를 텍스트 수정 불가로 해석했던 잘못된 projection을 제거했다.
+- 새로운 Build/Automation은 수행하지 않았으며 v1.23.0에서 기록한 FinalIntegration 1/1 + Launcher 5/5 evidence를 재사용한다.
+```
+
+### v1.23.0 - 2026-09-11
+
+```text
+- CF-FQ-029 / LM-P0-06 Final Technical Integration PASS를 Current 회귀 기준에 반영했다.
+- Historical USER PIE의 Direct/Ripple/SingleCycle/Salvo/Muzzle 순서/Command Target/동일 차량 Salvo 격리 evidence는 반복하지 않고 보존한다.
+- Release 방향·Carrier Velocity·실제 InitialLaunchDirection MuzzleBlocked처럼 기술 invariant로 판정 가능한 항목은 Product-path Automation/RuntimeRead Technical Validation으로 완료할 수 있도록 현재 검증 정책과 정렬했다.
+- 2026-09-11 Official UE 5.8 Build PASS, FinalIntegration 1/1, CarFight.Launcher 5/5 PASS와 Combat/Launcher.md v1.0.0 Current System Promotion을 기록했다.
+- DA_RocketLauncher의 저장 기본값 Direct / EjectionSpeed 0 / CarrierVelocityRatio 0은 fresh AssetDump로 확인했고 Product Asset mutation은 0이다.
+```
 
 ### v1.22.0 - 2026-08-22
 
@@ -1487,6 +1506,27 @@ CF-TC-026 CarrierVelocityRatio 0·1 비교: PASS / FAIL
 ---
 
 ## 17. Migration
+
+### v1.23.1 적용 안내
+
+```text
+- CF-FQ-029는 Done이며 현재 구현 owner는 Document/Systems/Combat/Launcher.md v1.0.1이다.
+- representative Historical Plan은 LauncherMissilePlan.md v0.15.0이며 Done / Historical + Retained Path와 최종 closure evidence를 직접 보존한다.
+- v1.13.0의 "사용자 결과 전 Done 금지"는 2026-07-29 당시 Historical 검증 정책이며, 2026-08-19 이후 Current evidence routing을 덮어쓰지 않는다.
+- 이미 완료된 USER PIE evidence는 새 failure evidence가 없으면 반복하지 않는다.
+- Release/CarrierVelocity/MuzzleBlocked/LaunchContext처럼 기술적으로 관측 가능한 invariant는 Current Product-path Automation 또는 Accepted RuntimeRead로 AI Technical PASS 처리할 수 있다.
+- 전체 최소 회귀의 CF-TC-026은 PASS이며, 문서 안의 과거 PARTIAL 판정은 해당 날짜의 Historical 결과로만 읽는다.
+```
+
+### v1.23.0 적용 안내
+
+```text
+- CF-FQ-029는 Done이며 현재 구현 owner는 Document/Systems/Combat/Launcher.md v1.0.0이다.
+- v1.13.0의 "사용자 결과 전 Done 금지"는 2026-07-29 당시 Historical 검증 정책이며, 2026-08-19 이후 Current evidence routing을 덮어쓰지 않는다.
+- 이미 완료된 USER PIE evidence는 새 failure evidence가 없으면 반복하지 않는다.
+- Release/CarrierVelocity/MuzzleBlocked/LaunchContext처럼 기술적으로 관측 가능한 invariant는 Current Product-path Automation 또는 Accepted RuntimeRead로 AI Technical PASS 처리할 수 있다.
+- LauncherMissilePlan.md v0.14.0은 완료 직전 상세 checkpoint를 보존하는 Historical + Retained Path로 읽는다.
+```
 
 ### v1.13.0 적용 안내
 

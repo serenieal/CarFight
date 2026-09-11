@@ -3,8 +3,8 @@
 > 역할: CarFight 프로젝트의 **현재 해야 할 일 / 우선순위 / 완료 조건 / 진행 순서**를 고정한다.
 > 기준 상태 문서: `01_ProjectState.md`
 > 상위 방향 문서: `00_Vision.md`
-> 문서 버전: v2.30.5
-> 마지막 정리(Asia/Seoul): 2026-08-24
+> 문서 버전: v2.30.6
+> 마지막 정리(Asia/Seoul): 2026-09-11
 > 문서 상태: Current
 
 ---
@@ -41,6 +41,8 @@ Feature 상태의 전체 목록은 `03_FeatureQueue.md`, 세션 복원 체크포
 | --- | --- |
 | 로컬 조준·발사·Reticle | `CF-FQ-013`, `016`, `017`, `022`, `025` / VehicleAim·WeaponFire·AimReticle |
 | Projectile·피해·FX | `CF-FQ-018`, `023`, `024`, `027`, `028` / Projectile·HitDamage·CombatFx |
+| 모듈형 런처·발사 인계 | `CF-FQ-029` / Launcher·WeaponFire·Projectile |
+| 물리 제한형 미사일 비행·유도 | `CF-FQ-030` / MissileGuidance·Projectile |
 | 탄약 | `CF-FQ-031` / Ammo |
 | 방어 | `CF-FQ-033` / VehicleDefense·HitDamage |
 | 센서·Scanner | `CF-FQ-036`, `037` / SensorContact |
@@ -57,8 +59,6 @@ Feature 상태의 전체 목록은 `03_FeatureQueue.md`, 세션 복원 체크포
 
 | Feature | 상태 | 재개 지점 | 성격 |
 | --- | --- | --- | --- |
-| `CF-FQ-030` 미사일 비행·유도 | Ready | `CF-TC-027 Manual PIE` | 구현·Persisted 기술 검증 후 남은 실제 플레이 검증 |
-| `CF-FQ-029` 모듈형 런처 | Paused | `LM-P0-06 USER PIE` | MuzzleBlocked·Ejection·Carrier Velocity 등 실제 통합 검증 |
 | `CF-FQ-038` 차량 Data Authoring | Paused | `UA-07 Driving Feel Authoring` | UA-01~06 USER PASS 보존, Authoring 사용성·주행감 계속 검증 |
 | `CF-FQ-034` 차량 피팅·질량 | Paused | `FIT-P0-07D USER Driving Feel Comparison` | 정량 Mobility 이후 실제 체감 비교 |
 | `CF-FQ-035` 인벤토리 Foundation | Paused | USER Field UI·Mobility | Field Fitting 사용자 흐름 |
@@ -135,6 +135,12 @@ Roadmap은 진행 순서와 선택지에 집중한다. Feature별 세부 P0 목�
 ---
 
 ## 9. Changelog
+
+### v2.30.6 - 2026-09-11
+
+- `CF-FQ-029`을 LM-P0-06 Final Technical Integration PASS / Current System Promotion으로 완료 기반에 편입하고 Paused 재개 후보에서 제거했다.
+- `CF-FQ-030`도 이미 완료된 `MissileGuidance` Current System 상태에 맞춰 stale Ready/Manual PIE 후보에서 제거했다.
+- Launcher→Projectile/Missile Guidance의 완료 기반을 Roadmap에 명시했으며 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
 
 ### v2.30.5 - 2026-08-24
 

@@ -2,8 +2,8 @@
 
 > 역할: CarFight 프로젝트의 **현재 실제 기준선 / 현재 Feature 상태 / 현재 리스크**를 고정한다.
 > 공통 규칙 원본: `Document/SSOT/`
-> 문서 버전: v2.45.6
-> 마지막 정리(Asia/Seoul): 2026-08-25
+> 문서 버전: v2.45.7
+> 마지막 정리(Asia/Seoul): 2026-09-11
 > 문서 상태: Current
 
 ---
@@ -64,8 +64,6 @@ UI-P0-08 Radar/Edge Visual·Zoom Feel과 D1-11-ART SpeedGauge·VehiclePanel·전
 | --- | --- | --- |
 | `CF-FQ-038` 차량 데이터 Authoring | Paused | `Document/Plan/DataAuthoring/DataAuthoringPlan.md v0.2.47` / `Document/Plan/DataAuthoring/DataAuthoringRoadmap.md v0.1.52` / UA-01~06 USER PASS 보존 / 다음 `UA-07 Driving Feel Authoring` / Remote Technical Readiness PASS |
 | `CF-FQ-034` 차량 피팅·질량 런타임 | Paused | `Document/Plan/VehicleFitting/VehicleFittingPlan.md v0.17.0` / `FIT-P0-07D USER Driving Feel Comparison` |
-| `CF-FQ-029` 모듈형 런처 및 발사 인계 | Paused | `Document/Plan/LauncherMissile/LauncherMissilePlan.md v0.14.0` / `LM-P0-06 USER PIE` |
-| `CF-FQ-030` 물리 제한형 미사일 비행·유도 | Ready | Persisted Asset Technical Verification PASS / `CF-TC-027 Manual PIE Pending` |
 | `CF-FQ-035` 인벤토리 Foundation | Paused | 기존 Technical checkpoint 보존 / USER Field UI·Mobility Pending |
 | `CF-FQ-026` 타겟 선택 시스템 | Paused | `TS-P0-08 USER PIE Pending` |
 | `CF-FQ-015` 차량 데이터 튜닝 패스 | Paused | `VD-P0-04 USER Tuning Pending` |
@@ -86,8 +84,8 @@ UI-P0-08 Radar/Edge Visual·Zoom Feel과 D1-11-ART SpeedGauge·VehiclePanel·전
 
 ```text
 Combat
-- WeaponData / WeaponFire / Ammo / FireFeedback
-- Projectile / DamageHitContext / HitDamage / VehicleDefense / CombatFx
+- WeaponData / WeaponFire / Launcher / Ammo / FireFeedback
+- Projectile / MissileGuidance / DamageHitContext / HitDamage / VehicleDefense / CombatFx
 
 Targeting
 - SensorContact + Scanner integration
@@ -161,6 +159,13 @@ AI Technical PASS와 USER PASS를 서로 대체하지 않는다.
 ---
 
 ## 8. Changelog
+
+### v2.45.7 - 2026-09-11
+
+- `CF-FQ-029` 모듈형 런처 및 발사 인계를 LM-P0-06 Final Technical Integration PASS로 Done 처리하고 재개 후보에서 제거했다.
+- Launcher Current owner를 `Systems/Combat/Launcher.md v1.0.0`으로 추가했다. 기존 USER PIE evidence는 보존하며 Angled/Vertical Release·Carrier Velocity·MuzzleBlocked는 Current Product-path Automation으로 마감했다.
+- 이미 2026-09-08 Done으로 승격된 `CF-FQ-030`의 stale Ready/Manual PIE row도 제거하고 `MissileGuidance`를 완료 Combat 기반에 반영했다.
+- 현재 단일 Active `CF-FQ-039 Production UI Visual Rework`는 변경하지 않았다.
 
 ### v2.45.6 - 2026-08-25
 

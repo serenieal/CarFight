@@ -1,6 +1,6 @@
 # CarFight Active Work
 
-- 문서 버전: v4.223
+- 문서 버전: v4.225
 - 최근 갱신일: 2026-09-11
 - 문서 상태: Current
 - 역할: CarFight 게임 프로젝트에서 현재 실제로 진행 중인 작업을 선택하고 대표 Plan으로 연결하는 **세션 복원 projection**
@@ -46,21 +46,20 @@ UI Resource 방법론 실험 `URT05_Plan.md v0.8`은 Method Validation Complete�
 
 ## 3. 최근 완료
 
-### CF-FQ-053 VehicleDefenseData Routine Onboarding / Process Benchmark — Done
+### CF-FQ-029 모듈형 런처 및 발사 인계 — Done
 
 ```text
-상태: Done / Technical Complete / VDR-P0-03 Final Acceptance + Process Benchmark PASS
-Process Benchmark: Faster Confirmed
-Current owner: Document/Systems/DataManagement/DataAssetAuthoring.md v1.6.0
-Historical Plan: Document/Plan/VehicleDefenseOnboarding/VehicleDefenseOnboardingPlan.md v0.1.5 — Historical + Retained Path / G5 Deferred
+상태: Done / P0 Complete / LM-P0-06 Final Technical Integration PASS
+Current owner: Document/Systems/Combat/Launcher.md v1.0.1
+Historical Plan: Document/Plan/LauncherMissile/LauncherMissilePlan.md v0.15.0 — Historical + Retained Path
 ```
 
 보존 판정:
 
-- VehicleDefenseData는 Production provider/mixed operational admission explicit exact4의 fourth Current type이며 `ReviewedMutationReady / DACE ContractReady / accepted history exact1 / canonical Product target exact0`이다.
-- Gate 4 executable mutation0이라 Gate 3 final Build/VDR7/DACE15/DDO14 Accepted evidence를 반복하지 않았고 fresh AssetDump에서 protected `DA_VehicleDefense_Test` authored exact17 / reference0 / errors0과 Git `.uasset` dirty0을 확인했다.
-- Process Benchmark는 VehicleDefense Production exact5/1,613 LOC가 Damage exact5/1,574보다 크고 SourceShape exact29로 더 복잡함에도 Primary Gate 6→4, redundant Review0, C++ test LOC 2,808→2,266, projection churn +16→+6으로 감소해 `Faster Confirmed`다. shared semantic rewrite0 / prohibited duplication0 / Architecture Gap 없음이다.
-- 현재 단일 Active `CF-FQ-039 Production UI Visual Rework`는 변경하지 않았다.
+- 기존 USER PIE의 Direct/Ripple/SingleCycle/Salvo, Muzzle 1→4→2→3, Command Target 고정, 동일 차량 Salvo 상호 Impact 없음과 차량·월드 일반 충돌 PASS를 반복하지 않는다.
+- 2026-09-11 Current Product-path Automation에서 남아 있던 Angled/Vertical Release, Carrier Velocity와 실제 InitialLaunchDirection MuzzleBlocked를 `LM_P0_06.FinalIntegration` 1/1, 전체 `CarFight.Launcher` 5/5 PASS로 닫았다.
+- fresh AssetDump에서 `DA_RocketLauncher` 저장 기본값 Direct / EjectionSpeed 0 / CarrierVelocityRatio 0을 확인했다. Product runtime Source/Asset mutation은 0이며 신규 Source 변경은 test-only `CFLauncherFinalTests.cpp v1.0.0`이다.
+- 대표 Plan은 `LauncherMissilePlan.md v0.15.0`으로 직접 갱신되어 Done / Historical + Retained Path를 소유한다. Plan Index v3.81과 Archive Index v1.27도 같은 closure를 가리키며 현재 단일 Active `CF-FQ-039 Production UI Visual Rework`는 변경하지 않았다.
 
 ---
 
@@ -70,7 +69,6 @@ Historical Plan: Document/Plan/VehicleDefenseOnboarding/VehicleDefenseOnboarding
 | --- | --- | --- | --- |
 | `CF-FQ-038` 차량 데이터 Authoring | Paused | `Document/Plan/DataAuthoring/DataAuthoringPlan.md v0.2.52` + `Document/Plan/DataAuthoring/DataAuthoringRoadmap.md v0.1.56` → Deprecated transition Technical Complete / `Document/Systems/Vehicles/VehicleBuilder.md v1.4.1` 기준 Builder Backend + Advanced Workspace 역할 / 다음 non-blocking `DEL6 compatibility retirement` 또는 `UA-08 quantitative comparison Deferred` | P0-12 USER PASS 7/8 유지. UA-01~08·P0-08~11·DG1~DG5·deprecation validation replay 금지. DEL6 Pending이라 physical Wizard deletion 금지 |
 | `CF-FQ-034` 차량 피팅·질량 | Paused | `Document/Plan/VehicleFitting/VehicleFittingPlan.md v0.17.0` → `FIT-P0-07D USER Driving Feel Comparison` | FIT-P0-07A~07C 정량 Mobility evidence 반복 금지 |
-| `CF-FQ-029` 모듈형 런처 | Paused | `Document/Plan/LauncherMissile/LauncherMissilePlan.md v0.14.0` → `LM-P0-06 USER PIE` | LM-P0-06A Failure Policy Technical PASS 반복 금지 |
 | `CF-FQ-041` 런타임 콘텐츠 적용 메뉴 | Ready | `Document/Plan/RuntimeApply/RuntimeApplyPlan.md v0.1.17` → `RTA-P0-05 USER PASS / Closed / next RTA-P0-06 Packaged Demo` | RuntimeApply Vehicle/Equipment UI와 Legacy Current Equipment readback까지 USER 확인 완료, 최종 RuntimeApply regression 14/14 PASS(CF-FQ-044 `CatalogOptionSync` 포함). CF-FQ-044에서 persisted `DA_Vehicle_Wagon`을 Builder-produced Packaged Demo candidate로 handoff했다. 기존 RuntimeApply authorization/apply 계약을 재작업하지 않는다. |
 | `CF-FQ-046` Vehicle Builder 사용자 정보 UX | Ready | `Document/Plan/VehicleBuilderInfoUX/VehicleBuilderInfoUXPlan.md v0.1.6` → pre-CF-FQ-047 Technical PASS evidence preserved / CF-FQ-047 Done으로 dependency 충족 / next `VBIUX-P0-05B Step 1~8 Common Page Layout Audit` | Step 1~8 common Page Shell/height/scroll/overflow는 046 owner다. 047의 Step 5 Physics 영향 경계와 Step 7/8 durable/save/readiness 계약은 Current VehicleBuilder v1.4.1으로 동기화됐으며, 공통 scroll/page-shell을 047 방식으로 중복 구현하지 않는다. |
 | `CF-FQ-048` Vehicle Pawn Slimming | Ready | `Document/Plan/VehiclePawnSlimming/VehiclePawnSlimmingPlan.md v0.1.0` → Initial Design Audit Correction + Re-review PASS / next `VPS-P0-00 Contract / State / Lifecycle Freeze` | Gameplay semantics, Blueprint/Asset contract, Pawn observable state authority와 lifecycle ordering을 P0에서 동결한다. 기존 CF-FQ-039 Active 및 Wagon/RuntimeTestCatalog/WeaponDef/VehiclePanel 병렬 dirty를 보호하며 Source mutation은 아직 0이다. |
@@ -121,6 +119,18 @@ ActiveWork가 다시 상세 Build/Automation/USER 로그를 누적하거나 서�
 ---
 
 ## 8. Changelog
+
+### v4.225 - 2026-09-11
+
+- `CF-FQ-029` representative Historical Plan을 `LauncherMissilePlan.md v0.15.0`으로 동기화했다.
+- 이전 `plan_repo read-only라 Plan 갱신 불가` 해석을 제거했다. `plan_repo` 텍스트 write는 정상 수행되며 v0.15.0이 Done / Historical + Retained Path를 직접 기록한다.
+- 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty는 변경하지 않았다.
+
+### v4.224 - 2026-09-11
+
+- `CF-FQ-029 / LM-P0-06 Final Technical Integration`을 Current Product path 기준 PASS로 닫고 Paused 복원 경로에서 제거했다.
+- Current owner는 `Document/Systems/Combat/Launcher.md v1.0.0`이다. 기존 USER PIE evidence를 보존하고 남은 Angled/Vertical·Carrier Velocity·MuzzleBlocked를 1/1 + Launcher 5/5 Automation으로 기술 마감했다.
+- CF-FQ-029를 최근 완료 1건으로 projection하고 CF-FQ-053 상세 완료 블록은 `DataAssetAuthoring.md v1.6.0`과 Historical Plan authority에 맡겼다. 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
 
 ### v4.223 - 2026-09-11
 

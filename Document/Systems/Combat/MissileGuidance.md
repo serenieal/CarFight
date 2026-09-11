@@ -1,7 +1,7 @@
 # Missile Guidance
 
-- Version: 1.0.1
-- Date: 2026-09-08
+- Version: 1.0.2
+- Date: 2026-09-11
 - Status: Current System / CF-FQ-030 P0 Complete / CF-TC-027 PASS / Final Audit Correction PASS
 - Feature: `CF-FQ-030 물리 제한형 미사일 비행·유도`
 - Validation: Technical PASS + USER Guidance Feel ACCEPTED
@@ -414,7 +414,7 @@ USER Feel
 - 네트워크 복제와 서버 권한 미사일 Guidance
 ```
 
-특히 여러 방향으로 동시 사출된 다수 미사일이 같은 Target으로 수렴하는 장면은 Launcher의 Multi-Muzzle/Salvo, 공통 Volley Target Snapshot, Angled/Vertical Release와 이 Guidance 시스템을 **구조상 조합할 수 있는 후속 장비 저작 범위**다. 다만 Angled/Vertical Release의 실제 통합 USER PIE는 `CF-FQ-029`에 남아 있으므로 이 문장은 해당 사출 모드의 USER acceptance를 뜻하지 않는다. CF-FQ-030 P0 완료 범위에 추가 구현하지 않는다.
+특히 여러 방향으로 동시 사출된 다수 미사일이 같은 Target으로 수렴하는 장면은 Launcher의 Multi-Muzzle/Salvo, 공통 Volley Target Snapshot, Angled/Vertical Release와 이 Guidance 시스템을 **구조상 조합할 수 있는 후속 장비 저작 범위**다. `CF-FQ-029`의 Angled/Vertical Release·Carrier Velocity·MuzzleBlocked 기술 계약은 2026-09-11 Current Product-path Automation으로 완료됐지만, 장비별 실제 Salvo 연출과 Attack Profile 저작은 여전히 별도 후속 범위다. CF-FQ-030 P0 완료 범위에 추가 구현하지 않는다.
 
 ---
 
@@ -425,7 +425,10 @@ Document/Systems/Combat/Projectile.md
 - 공통 Projectile Actor, 이동, 충돌, Impact, Pool과 Missile 컴포넌트 통합 경계
 
 Document/Systems/Combat/WeaponFire.md
-- 발사 명령과 Projectile 활성화 진입 경계
+- 일반 발사 명령과 Fire validation/result 경계
+
+Document/Systems/Combat/Launcher.md
+- Multi-Muzzle/Ripple/Salvo, Direct/Angled/Vertical Release, Carrier Velocity, MuzzleBlocked와 Launch Context 인계
 
 Document/Systems/Combat/WeaponData.md
 - 무기 정적 Launcher/Projectile 참조 설정
@@ -434,7 +437,7 @@ Document/Systems/Vehicles/VehicleAim.md
 - 발사 전 Aim/Target 방향 계산 경계
 ```
 
-Launcher의 Multi-Muzzle/Ripple/Salvo와 Angled/Vertical Release는 CF-FQ-029가 별도 lifecycle로 관리하며, 현재 미완료 USER PIE 범위를 이 문서의 Missile Guidance 완료로 확대하지 않는다.
+Launcher의 Multi-Muzzle/Ripple/Salvo와 Angled/Vertical Release는 완료된 `CF-FQ-029`의 `Combat/Launcher.md`가 소유한다. 이 문서는 Launcher 분리 이후 Missile Flight/Guidance만 소유하며 장비별 Salvo 연출이나 Attack Profile을 자동으로 완료 범위에 포함하지 않는다.
 
 ---
 
@@ -478,6 +481,15 @@ Missile Guidance 관련 Source/Asset 변경 시 최소 보호 기준:
 ---
 
 ## 17. Changelog
+
+### v1.0.2 - 2026-09-11
+
+```text
+- CF-FQ-029 완료와 Combat/Launcher.md v1.0.0 Current System Promotion을 반영해 Angled/Vertical USER PIE Pending 표현을 제거했다.
+- Launcher의 Multi-Muzzle/Ripple/Salvo, Direct/Angled/Vertical Release, Carrier Velocity와 MuzzleBlocked 책임을 Launcher Current System으로 연결했다.
+- Missile Guidance는 분리 이후 Flight/Guidance만 계속 소유하며 장비별 Salvo 연출·Attack Profile은 비차단 후속 범위로 유지한다.
+- Missile Guidance Product Source/Asset/기존 P0 evidence는 변경하지 않았다.
+```
 
 ### v1.0.1 - 2026-09-08
 

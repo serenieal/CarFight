@@ -1,6 +1,6 @@
 # CarFight — 03_FeatureQueue
 
-> 문서 버전: v1.57.100
+> 문서 버전: v1.57.102
 > 최근 갱신일(Asia/Seoul): 2026-09-11
 > 문서 상태: Current
 > 역할: CarFight의 **Feature 후보 / 착수 판단 / 현재 상태 / 완료 후 Current owner**를 한 곳에서 관리한다.
@@ -90,9 +90,9 @@ FeatureQueue는 상세 설계서나 검증 로그가 아니다.
 | `CF-FQ-026` | 타겟 선택 시스템 | P1 | Paused | `TS-P0-08 USER PIE Pending` | TargetSelect 관련 Current 후속 |
 | `CF-FQ-027` | 투사체 비행 FX | P1 | Done | USER PIE PASS / CF-TC-023 PASS | Projectile |
 | `CF-FQ-028` | 발사체 추진 시스템 | P1 | Done | USER PIE PASS / CF-TC-024 PASS | Projectile |
-| `CF-FQ-029` | 모듈형 런처 및 발사 인계 | P1 | Paused | `LauncherMissilePlan.md v0.14.0` / `LM-P0-06 USER PIE` | Launcher / WeaponFire / Projectile 후속 |
-| `CF-FQ-030` | 물리 제한형 미사일 비행·유도 | P1 | Done | P0 Complete / CF-TC-027 Complete PASS / Post-Closure Final Audit PASS / Current owner `Systems/Combat/MissileGuidance.md v1.0.1` + `Systems/Combat/Projectile.md v1.9.0` integration boundary / Historical Plan `MissileGuidancePlan.md v0.6.25` retained | LaserPoint·DataLink/Inertial 실제 Runtime, Angled/Vertical/Loft/TopAttack, 실제 Expire, 장비별 Salvo 연출은 후속 비차단 범위 |
-| `CF-FQ-031` | 차량 탄약·재장전 런타임 | P1 | Done | AMMO-P0-00~08 + USER PIE PASS | `Systems/Combat/Ammo.md v1.0.0` |
+| `CF-FQ-029` | 모듈형 런처 및 발사 인계 | P1 | Done | `LM-P0-06 Final Technical Integration PASS` / Historical USER PIE 보존 / Current Product-path Automation 1/1 + Launcher 5/5 PASS / Historical Plan `LauncherMissilePlan.md v0.15.0` retained | `Systems/Combat/Launcher.md v1.0.1` |
+| `CF-FQ-030` | 물리 제한형 미사일 비행·유도 | P1 | Done | P0 Complete / CF-TC-027 Complete PASS / Post-Closure Final Audit PASS / Current owner `Systems/Combat/MissileGuidance.md v1.0.2` + `Systems/Combat/Projectile.md v1.9.0` integration boundary / Historical Plan `MissileGuidancePlan.md v0.6.25` retained | LaserPoint·DataLink/Inertial 실제 Runtime, Angled/Vertical/Loft/TopAttack, 실제 Expire, 장비별 Salvo 연출은 후속 비차단 범위 |
+| `CF-FQ-031` | 차량 탄약·재장전 런타임 | P1 | Done | AMMO-P0-00~08 + USER PIE PASS | `Systems/Combat/Ammo.md v1.0.1` |
 | `CF-FQ-032` | 인게임 전투 HUD 및 UI 프레임워크 | P1 | Done | UI-P0-11 Systems Promotion + 2026-08-22 post-closure remediation PASS. Radar/Edge Visual·Zoom Feel과 D1-11-ART 잔여 Visual은 비차단 Deferred/Pending | `Systems/UI/InGameUI.md v1.1.5`, `UI/AimReticle.md v1.10.0`, `Targeting/SensorContact.md v1.2.0` |
 | `CF-FQ-033` | 차량 방어·손상 런타임 | P0 | Done | DR-P0-00~07 + USER PIE PASS | VehicleDefense / HitDamage |
 | `CF-FQ-034` | 차량 피팅·질량 런타임 | P1 | Paused | `Document/Plan/VehicleFitting/VehicleFittingPlan.md v0.17.0` / `FIT-P0-07D USER Driving Feel Comparison` | VehicleFitting / VehicleData / VehicleRuntime 후속 |
@@ -129,7 +129,6 @@ FeatureQueue는 상세 설계서나 검증 로그가 아니다.
 | `CF-FQ-041` | Ready | `RTA-P0-06 Packaged Demo` |
 | `CF-FQ-046` | Ready | `VBIUX-P0-05B Step 1~8 Common Page Layout Audit` |
 | `CF-FQ-048` | Ready | `VPS-P0-00 Contract / State / Lifecycle Freeze` |
-| `CF-FQ-029` | Paused | `LM-P0-06 USER PIE` |
 | `CF-FQ-038` | Paused | non-blocking `DEL6 compatibility retirement` 또는 `UA-08 quantitative comparison Deferred` |
 | `CF-FQ-034` | Paused | `FIT-P0-07D USER Driving Feel Comparison` |
 | `CF-FQ-035` | Paused | USER Field UI·Mobility |
@@ -159,6 +158,19 @@ Feature가 Done되면 Current System 링크와 남은 Deferred/Pending 경계만
 ---
 
 ## 7. Changelog
+
+### v1.57.102 - 2026-09-11
+
+- `CF-FQ-029` representative Historical Plan을 `LauncherMissilePlan.md v0.15.0`으로 동기화하고 Current owner를 `Launcher.md v1.0.1`로 전진했다.
+- `plan_repo policy.read_only`를 텍스트 write 금지로 해석했던 잘못된 projection을 교정했다. Plan 텍스트 write는 정상 수행됐으며 Plan Index v3.81 / Archive Index v1.27도 closure 상태와 정렬됐다.
+- CF-FQ-029 Done 판정과 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v1.57.101 - 2026-09-11
+
+- `CF-FQ-029 / LM-P0-06 Final Technical Integration`을 Current Product path 기준 PASS로 닫고 Feature를 Paused → Done으로 전환했다.
+- 기존 USER PIE의 Direct/Ripple/SingleCycle/Salvo/Muzzle 순서/동일 차량 Salvo 격리 evidence를 보존하고, 남은 Angled/Vertical Release·Carrier Velocity·실제 InitialLaunchDirection MuzzleBlocked를 transient World Product-path Automation 1/1과 `CarFight.Launcher` 5/5로 기술 마감했다.
+- Current owner는 `Systems/Combat/Launcher.md v1.0.0`이다. fresh AssetDump에서 `DA_RocketLauncher`는 Direct / EjectionSpeed 0 / CarrierVelocityRatio 0 저장 기본값을 유지했으며 Product Source/Asset mutation은 0이다.
+- 당시 main_game closure 직후 representative Plan은 아직 `LauncherMissilePlan.md v0.14.0`의 완료 직전 checkpoint였으며, 후속 v1.57.102에서 plan_repo 텍스트 write를 정상 수행해 v0.15.0 Done / Historical + Retained Path로 동기화했다. 인접 Current owner 포인터는 `MissileGuidance.md v1.0.2`, `Ammo.md v1.0.1`이며 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
 
 ### v1.57.100 - 2026-09-11
 

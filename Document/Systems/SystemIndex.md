@@ -1,6 +1,6 @@
 # SystemIndex
 
-- Version: 1.36.0
+- Version: 1.37.1
 - Date: 2026-09-11
 
 - Status: Active
@@ -35,6 +35,7 @@
 | --- | --- |
 | `Document/Systems/Combat/WeaponData.md` | `CF-FQ-008`에서 완료한 `UCFWeaponData` 정적 무기 DataAsset Current System이다. Identity·Mount·Mass·Fire·TargetUse·Launcher·Ammo·Projectile/FX 정적 설정, DataValidation, fallback과 legacy field 책임 경계를 기록한다. |
 | `Document/Systems/Combat/WeaponFire.md` | 싱글플레이 로컬 차량 Pawn에서 Fire 입력을 발사 명령으로 만들고, Weapon Aim Solution을 기준으로 Projectile Actor 또는 Dummy HitScan 경로로 넘기며, 발사 결과와 거부 사유를 Aim / Debug / 후속 UI 피드백이 읽을 수 있게 남기는 현재 발사 기능 문서다. Ammo 수량·Reload 상태는 `UCFVehicleAmmoComp`가 소유한다. |
+| `Document/Systems/Combat/Launcher.md` | `CF-FQ-029`에서 완료한 모듈형 Launcher Current System이다. Launch Context, 가변 Muzzle, SingleCycle/Ripple/Salvo, Direct/Angled/Vertical Release, Carrier Velocity, 실제 사출 방향 MuzzleBlocked, Sequence 실패/취소와 Projectile Pool 인계 경계를 기록한다. |
 | `Document/Systems/Combat/Ammo.md` | `CF-FQ-031`에서 완료한 차량 finite Ammo Current System이다. WeaponInstanceId별 Loaded, AmmoId별 Reserve, SingleCycle Commit·Rollback, Ripple·Salvo 전체 예약, FullMagazine Reload, WeaponPanel `Loaded / MagazineCapacity + Reserve`와 출격 Ammo 질량 계약을 기록한다. Heavy·Ripple USER PIE를 완료했다. |
 | `Document/Systems/Combat/FireFeedback.md` | `WeaponFire`가 남긴 로컬 발사 성공·실패·쿨다운·NoWeapon·AimBlocked·TurretAligning·MuzzleBlocked 결과를 Reticle 텍스트와 색상으로 표시한다. P0 상태 전환과 피드백 만료를 사용자 PIE로 확인했다. |
 | `Document/Systems/Combat/Projectile.md` | `ProjectileData`, 공통 `CFProjectileActor`, `ProjectileMotorComp`와 `ProjectilePoolComp`를 통한 비추진 포탄·비유도 Rocket 이동, Missile Flight/Guidance 컴포넌트 통합 경계, 지속형 Trail·Thruster, 충돌·Impact·Pool 생명주기를 기록한다. Guidance 세부 Current 계약은 `MissileGuidance.md`가 소유한다. |
@@ -136,6 +137,7 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 | --- | --- |
 | 무기 정적 DataAsset 계약, 장착 호환·질량·Fire·TargetUse·Launcher·Ammo 설정, DataValidation과 legacy/fallback 경계 | `Combat/WeaponData.md` |
 | 현재 로컬 발사 명령, WeaponData 해석, 쿨다운, FireOrigin, 발사 결과 기록 | `Combat/WeaponFire.md` |
+| 가변 Muzzle, SingleCycle/Ripple/Salvo, Direct/Angled/Vertical 사출, Carrier Velocity, MuzzleBlocked와 Launch Context 인계 | `Combat/Launcher.md` |
 | 차량 finite Ammo, 무기별 장전량·탄종별 Reserve, Launcher 예약, FullMagazine Reload, WeaponPanel 탄약 표시와 출격 탄약 질량 | `Combat/Ammo.md` |
 | 발사 성공/실패/쿨다운/무기 없음 상태를 Reticle, HUD와 시각 VFX로 표시하는 기준 | `Combat/FireFeedback.md` |
 | 프로젝트 전역 게임 사운드 비지원 결정과 오디오 도입 금지 기준 | `Document/ProjectSSOT/04_ProjectDecisions.md` |
@@ -185,6 +187,20 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 ---
 
 ## 13. Changelog
+
+### v1.37.1 - 2026-09-11
+
+- `CF-FQ-029` closure 문서 정합성을 `Combat/Launcher.md v1.0.1`과 `LauncherMissilePlan.md v0.15.0`으로 동기화했다.
+- `plan_repo policy.read_only`를 Plan 텍스트 수정 불가로 해석했던 잘못된 상태를 제거했다. representative Plan은 정상적으로 v0.15.0 Done / Historical + Retained Path까지 갱신됐다.
+- Launcher runtime 구현과 Build/Automation evidence는 변경하지 않았다.
+
+### v1.37.0 - 2026-09-11
+
+- `CF-FQ-029 / LM-P0-06 Final Technical Integration` PASS와 `Combat/Launcher.md v1.0.0` Current System Promotion을 index에 추가했다.
+- Launcher Current 범위는 Launch Context, 가변 Muzzle, SingleCycle/Ripple/Salvo, Direct/Angled/Vertical Release, Carrier Velocity, 실제 사출 방향 MuzzleBlocked와 Sequence failure/cancel이다.
+- 기존 Missile Guidance는 분리 이후 Flight/Guidance를 계속 소유하며 Launcher와 책임을 합치지 않는다.
+
+Migration: CF-FQ-029 완료 이후 런처 현재 구현 판단은 `Combat/Launcher.md v1.0.1`과 실제 Source를 우선한다. 현재 retained Plan은 `LauncherMissilePlan.md v0.15.0`이며, v0.14.0의 Paused/USER PIE Pending은 2026-08-16 완료 전 Historical checkpoint다.
 
 ### v1.36.0 - 2026-09-11
 

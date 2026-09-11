@@ -1,7 +1,7 @@
 # Ammo
 
-- Version: 1.0.0
-- Date: 2026-08-13
+- Version: 1.0.1
+- Date: 2026-09-11
 - Status: Current System
 - Feature: `CF-FQ-031 차량 탄약·재장전 런타임`
 - Verification: UE 5.8 Editor Build PASS / CarFight Automation 64 tests·Failed 0 / AMMO-P0-08 Heavy·Ripple USER PIE PASS
@@ -515,11 +515,17 @@ Document/Systems/UI/VehicleDebugPanel.md
 Document/Systems/Vehicles/VehicleRuntime.md
 ```
 
-Launcher 자체는 아직 `CF-FQ-029 LM-P0-06` 체크포인트가 남아 있으므로 Launcher 전체를 이 Ammo 완료와 함께 자동으로 Done 처리하지 않는다.
+Launcher 자체는 `CF-FQ-029`에서 별도 lifecycle로 완료됐으며 현재 구현 owner는 `Document/Systems/Combat/Launcher.md v1.0.1`이다. Ammo는 Launcher Sequence의 Reservation/Loaded/Reserve 계약만 소유하며 Launch Context·Muzzle·Release·MuzzleBlocked 책임을 중복 소유하지 않는다.
 
 ---
 
 ## 15. Changelog
+
+### v1.0.1 - 2026-09-11
+
+- `CF-FQ-029` 완료와 `Combat/Launcher.md v1.0.0` Current System Promotion을 반영해 Launcher 미완료 표현을 제거했다.
+- Ammo의 책임은 Launcher Sequence 탄약 Reservation/Loaded/Reserve에 유지하고, Launch Context·Muzzle·Release·MuzzleBlocked는 Launcher Current System이 소유하도록 경계를 명확히 했다.
+- Ammo runtime Source/Asset/검증 evidence는 변경하지 않았다.
 
 ### v1.0.0 - 2026-08-13
 
@@ -537,4 +543,4 @@ Launcher 자체는 아직 `CF-FQ-029 LM-P0-06` 체크포인트가 남아 있으�
 - `Document/Plan/Archive/AmmoSystem/AmmoSystemPlan.md`는 완료 당시 구현·검증 체크포인트를 보존하는 Historical + Archived Path이며 Current System을 대체하지 않는다.
 - 기존 무한탄 WeaponData는 명시적인 finite Ammo 설정이 없으면 계속 기존 호환 동작을 유지한다.
 - `MaximumLoadableAmmoCount`를 인게임 현재 탄약으로 사용하지 않는다.
-- Launcher 전체 기능의 완료 여부는 별도 `CF-FQ-029` 체크포인트를 따른다.
+- Launcher 전체 기능의 현재 구현 판단은 `Document/Systems/Combat/Launcher.md`와 실제 Source를 따른다.
