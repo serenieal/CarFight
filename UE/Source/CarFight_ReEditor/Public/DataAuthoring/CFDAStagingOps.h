@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDAStagingOps.h
-// Version: v1.3.0
+// Version: v1.4.0
 // Date: 2026-09-11
-// Description: CF-FQ-049/051/052 canonical Product Staging bootstrap/rebase, selected discovery Preview와 reviewed operational session public contract입니다.
+// Description: CF-FQ-049/051/052/053 canonical Product Staging bootstrap/rebase, selected discovery Preview와 reviewed operational session public contract입니다.
 // Changelog:
+// - v1.4.0: VDR-P0-02에서 VehicleDefenseData DACE acceptance 뒤 mixed explicit session의 production operational scope를 MissileGuidePreset+AmmoData+DamageData+VehicleDefenseData exact4로 전진시켰습니다. Public session API는 변경하지 않습니다.
 // - v1.3.0: DDO-P0-04에서 mixed explicit session의 production operational scope를 MissileGuidePreset+AmmoData+DamageData exact3로 전진시키고 actual backing authority를 관측하는 test-only read projection을 추가했습니다.
 // - v1.2.0: DAO-P0-05에서 session non-empty exact path selection만 Missile+Ammo provider-neutral mixed discovery로 확장하고 empty Missile whole-root/Public Missile discovery/console shorthand/SyncProduct 호환성을 보존했습니다.
 // - v1.1.1: UE 5.8 console registration API correction과 final operational contract version 정렬.
@@ -13,7 +14,7 @@
 // - Product Sync는 Product .uasset을 수정·저장하지 않으며 기존 Staging Update/Conflict/Invalid을 자동 덮어쓰지 않습니다.
 // - Preview selection은 canonical repository-relative JSON path exact-list입니다. empty list는 canonical folder 전체를 의미합니다.
 // - 실제 UE Asset materialize/save는 reviewed session의 explicit ApplyReviewed 또는 기존 FCFDAStagingApplyService만 소유합니다.
-// - v1.3.0부터 session의 non-empty full relative JSON path는 trusted MissileGuidePreset+AmmoData+DamageData exact3를 mixed 선택할 수 있습니다. operational scope는 provider registry에서 자동 생성하지 않으며 empty selection과 StableLogicalId console shorthand는 기존 Missile 의미를 유지합니다.
+// - v1.4.0부터 session의 non-empty full relative JSON path는 trusted MissileGuidePreset+AmmoData+DamageData+VehicleDefenseData exact4를 mixed 선택할 수 있습니다. operational scope는 provider registry에서 자동 생성하지 않으며 empty selection과 StableLogicalId console shorthand는 기존 Missile 의미를 유지합니다.
 // - mixed session의 Rows는 공통 envelope를 기존 Preview DTO에 투영한 구조 요약이며 typed Missile Payload는 authoritative하지 않습니다. 기존 Missile-only discovery/session은 종전 typed row를 그대로 반환합니다.
 
 #pragma once

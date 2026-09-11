@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDATypeDispatch.cpp
-// Version: v1.8.0
+// Version: v1.10.0
 // Date: 2026-09-11
-// Description: CF-FQ-052 Missile + Ammo + Damage exact TypeKey provider registry, mutation readiness와 DACE boundary 구현입니다.
+// Description: CF-FQ-053 Missile + Ammo + Damage + VehicleDefense exact TypeKey provider registry, mutation readiness와 DACE boundary 구현입니다.
 // Changelog:
-// - v1.8.0: DDO-P0-02에서 DamageData provider가 ReviewedMutationReady로 전진했음을 반영했습니다. registry exact3는 유지하고 mixed operational admission exact2는 변경하지 않습니다.
+// - v1.10.0: VDR-P0-02 VehicleDefenseData independent DACE bootstrap acceptance와 explicit mixed operational admission exact4 전진을 current projection에 반영했습니다. Registry exact4와 shared dispatch algorithm은 변경하지 않습니다.
+// - v1.9.0: VDR-P0-01에서 VehicleDefenseData ReviewedMutationReady fourth provider를 production registry에 추가했습니다. DACE ContractNotReady와 existing mixed operational admission exact3 경계는 유지했습니다.
+// - v1.8.0: DDO-P0-02에서 DamageData provider가 ReviewedMutationReady로 전진했음을 반영했습니다. registry exact3는 유지하고 당시 mixed operational admission exact2는 변경하지 않았습니다.
 // - v1.7.0: DDO-P0-01에서 DamageData를 ReadOnlyPreviewReady로 production registry에 추가해 provider registry exact3를 구성했습니다. mixed operational admission은 CFDAStagingOps의 Missile + Ammo exact2를 그대로 유지합니다.
 // - v1.6.0: DAO-P0-05에서 production registry를 노출하지 않고 exact Staging path의 provider-owned root owner를 JSON read 전에 하나만 확정하는 resolver와 overlapping-root test seam을 추가했습니다.
 // - v1.5.0: DAO-P0-04 correction에서 DACE readiness와 explicit per-TypeKey canonical Staging target-set validation을 추가해 empty exact0과 미선언 상태를 분리했습니다.
@@ -19,24 +21,27 @@
 // - ReadOnlyPreviewReady provider는 Parse/Current만 요구하고 Apply callback은 금지합니다. ReviewedMutationReady provider만 Apply callback을 소유할 수 있습니다.
 // - v1.5.0부터 DACE canonical target set은 provider별 explicit declaration입니다. 선언된 empty set은 valid exact0이며 DACE readiness와 authoring readiness는 독립입니다.
 // - v1.6.0부터 mixed operational selection은 JSON payload의 TypeKey를 읽기 전에 full registered-provider root ownership을 먼저 exact1로 확정하고, 그 뒤 caller allowed TypeKey scope를 검증합니다.
-// - v1.8.0의 Damage provider는 Reviewed mutation callback을 소유하지만 operational allowed TypeKey exact2에는 아직 추가되지 않습니다. DACE production admission도 ContractNotReady로 유지합니다.
+// - v1.8.0의 Damage provider는 Reviewed mutation callback을 소유했습니다. 이후 DDO-P0-04에서 mixed operational admission은 exact3로 승격됐습니다.
+// - v1.10.0에서 VehicleDefense provider는 independent DACE bootstrap exact1 acceptance 뒤 ContractReady이며 CFDAStagingOps explicit operational allowlist도 exact4로 전진했습니다.
 
 #include "CFDATypeDispatch.h"
 #include "CFDAAmmoProvider.h"
 #include "CFDADamageProvider.h"
 #include "CFDAMissileProvider.h"
+#include "CFDAVehicleDefenseProvider.h"
 
 namespace CFDATypeDispatchPrivate
 {
 	// Production exact provider registry입니다. JSON/DTO가 implementation을 직접 선택하지 못하도록 code-owned list로 고정합니다.
 	const TArray<const FCFDATypeProviderEntry*>& GetRegisteredProviders()
 	{
-		// DDO-P0-02 implementation 시점 production provider registry는 Missile + Ammo + Damage ReviewedMutationReady exact3입니다. operational admission은 별도 exact2입니다.
+		// VDR-P0-02 시점 production registry는 Missile + Ammo + Damage + VehicleDefense ReviewedMutationReady exact4이며 operational admission도 별도 explicit exact4입니다.
 		static const TArray<const FCFDATypeProviderEntry*> RegisteredProviders =
 		{
 			&CFDAMissileProvider::GetProvider(),
 			&CFDAAmmoProvider::GetProvider(),
-			&CFDADamageProvider::GetProvider()
+			&CFDADamageProvider::GetProvider(),
+			&CFDAVehicleDefenseProvider::GetProvider()
 		};
 		return RegisteredProviders;
 	}

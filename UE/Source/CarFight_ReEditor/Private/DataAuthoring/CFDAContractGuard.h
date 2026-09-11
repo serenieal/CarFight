@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDAContractGuard.h
-// Version: v1.5.0
+// Version: v1.6.0
 // Date: 2026-09-10
 // Description: CF-FQ-050 Missile compatibility facade와 CF-FQ-051 per-TypeKey DACE common contract입니다.
 // Changelog:
+// - v1.6.0: CF-FQ-053 VDR-P0-01에서 nested USTRUCT authored field를 Type-neutral하게 재귀 관측하는 additive Reflection seam을 추가했습니다. 기존 direct/Missile facade 의미는 유지합니다.
 // - v1.5.0: AmmoData SourceShape bootstrap을 위해 int32 authored property의 stable Reflection kind `Int`를 공용 contract에 추가했습니다. 기존 Missile Source에는 해당 kind가 없어 accepted Missile signature는 변하지 않습니다.
 // - v1.4.0: DAO-P0-04 correction에서 descriptor hashing, direct Reflection, serialized adapter observation, revision/history/canonical Staging validation에 provider-parameterized common seam을 추가했습니다. 기존 Missile facade는 보존합니다.
 // - v1.3.0: canonical Product Staging exact3 read-only strict-parse compatibility, migration Resolution/Evidence, Staging/Product Pending과 accepted append/Current promotion gate를 추가했습니다.
@@ -19,6 +20,7 @@
 // - v1.3.0부터 Guard는 canonical Product Staging을 read-only로만 읽고 strict parser에 전달합니다. Pending/invalid migration은 accepted append와 Current System promotion을 허용하지 않으며 SyncProduct/ApplyReviewed/SavePackage를 호출하지 않습니다.
 // - v1.4.0의 provider-parameterized common seam은 accepted history를 생성/append하지 않습니다. AmmoData bootstrap은 별도 후속 단계이며 protected Missile accepted history를 수정하지 않습니다.
 // - v1.5.0부터 direct Reflection의 int32는 `Int` stable token으로 기록합니다. 이 token 추가는 AmmoData descriptor에만 사용하며 Missile accepted history를 rebaseline하지 않습니다.
+// - v1.6.0부터 recursive Reflection seam은 nested FStructProperty만 dot-path로 펼치며 Array/Set/Map element와 Object/SoftObject reference는 따라가지 않습니다. 기존 direct helper와 Missile facade는 그대로 유지합니다.
 
 #pragma once
 
@@ -258,6 +260,8 @@ public:
 	static bool BuildReflectedSourceShapeDescriptor(TArray<FCFDASourceFieldDescriptor>& OutDescriptors, FString& OutError);
 	// 임의 native DataAsset class가 직접 소유한 CPF_Edit property shape를 TypeKey-neutral하게 관측합니다.
 	static bool BuildDirectReflectedSourceShapeDescriptor(const UClass& SourceClass, TArray<FCFDASourceFieldDescriptor>& OutDescriptors, FString& OutError);
+	// 임의 native DataAsset class의 direct authored property와 nested USTRUCT CPF_Edit member를 Type-neutral하게 재귀 관측합니다.
+	static bool BuildRecursiveReflectedSourceShapeDescriptor(const UClass& SourceClass, TArray<FCFDASourceFieldDescriptor>& OutDescriptors, FString& OutError);
 	// Expected Source descriptor와 observed Reflection/fixture descriptor를 exact 비교합니다.
 	static FCFDAContractGuardResult ValidateSourceShapeCoverage(const TArray<FCFDASourceFieldDescriptor>& ExpectedDescriptors, const TArray<FCFDASourceFieldDescriptor>& ObservedDescriptors);
 	// Expected Adapter descriptor와 observed/fixture Adapter descriptor를 exact 비교합니다.

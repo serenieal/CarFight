@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDAContractGuard.cpp
-// Version: v1.5.0
+// Version: v1.6.0
 // Date: 2026-09-10
 // Description: CF-FQ-050 Missile compatibility facade와 CF-FQ-051 per-TypeKey DACE common 구현입니다.
 // Changelog:
+// - v1.6.0: CF-FQ-053 VDR-P0-01에서 nested USTRUCT authored field를 Type-neutral하게 재귀 관측하는 additive Reflection seam을 추가했습니다. 기존 direct/Missile facade 의미는 유지합니다.
 // - v1.5.0: AmmoData SourceShape bootstrap을 위해 int32 authored property의 stable Reflection kind `Int`를 추가했습니다. 기존 Missile descriptor/signature에는 영향이 없습니다.
 // - v1.4.0: DAO-P0-04 correction에서 provider-parameterized descriptor/revision/history/canonical Staging seam, Array element JSON observation과 scalar SoftObject target-class Reflection을 추가했습니다. 기존 Missile facade/accepted history는 보존합니다.
 // - v1.3.0: canonical Product Staging exact3 read-only strict parse, Resolution/Evidence validation, Staging/Product Pending machine state와 accepted append/Current promotion gate를 추가했습니다.
@@ -22,6 +23,7 @@
 // - v1.3.0부터 canonical Product Staging은 disk read + production strict parser만 사용합니다. Guard는 파일/UObject/package를 수정하거나 SyncProduct/ApplyReviewed/SavePackage를 호출하지 않습니다.
 // - v1.4.0 common seam은 accepted snapshot을 생성/append하지 않습니다. AmmoData bootstrap은 후속 구현이며 Missile accepted chain과 Product exact3는 그대로 유지합니다.
 // - v1.5.0부터 FIntProperty는 `Int` stable token으로 Reflection descriptor에 기록합니다. Missile accepted baseline을 rebaseline하지 않습니다.
+// - v1.6.0부터 recursive Reflection seam은 nested FStructProperty만 dot-path로 펼치고 Array/Set/Map element 및 Object/SoftObject reference는 따라가지 않습니다. 기존 direct helper와 Missile facade 결과는 변경하지 않습니다.
 
 #include "CFDAContractGuard.h"
 
@@ -386,6 +388,55 @@ namespace CFDAContractGuardPrivate
 		return Descriptor;
 	}
 
+	// 한 UStruct가 직접 소유한 CPF_Edit property를 관측하고 nested FStructProperty만 dot-path로 재귀 전개합니다.
+	void CollectRecursiveReflectedSourceDescriptors(
+		const UStruct* OwningStruct,
+		const FString& RootClassPath,
+		const FString& ParentPropertyPath,
+		const FString& OwningNestedStructPath,
+		TArray<FCFDASourceFieldDescriptor>& OutDescriptors)
+	{
+		if (OwningStruct == nullptr)
+		{
+			return;
+		}
+
+		for (TFieldIterator<FProperty> PropertyIterator(OwningStruct); PropertyIterator; ++PropertyIterator)
+		{
+			// 현재 UStruct가 직접 소유한 authored reflected property입니다.
+			const FProperty* Property = *PropertyIterator;
+			if (Property == nullptr || Property->GetOwnerStruct() != OwningStruct || !Property->HasAnyPropertyFlags(CPF_Edit))
+			{
+				continue;
+			}
+
+			// Root class부터 이어지는 canonical dot-path입니다.
+			const FString PropertyPath = ParentPropertyPath.IsEmpty()
+				? Property->GetName()
+				: ParentPropertyPath + TEXT(".") + Property->GetName();
+			// 실제 nested USTRUCT container인지 확인합니다.
+			const FStructProperty* StructProperty = CastField<const FStructProperty>(Property);
+			// 현재 descriptor row가 사용할 nested struct path입니다.
+			const FString DescriptorNestedStructPath = StructProperty != nullptr && StructProperty->Struct != nullptr
+				? StructProperty->Struct->GetPathName()
+				: OwningNestedStructPath;
+			OutDescriptors.Add(BuildReflectedSourceDescriptor(*Property, RootClassPath, PropertyPath, DescriptorNestedStructPath));
+
+			if (StructProperty == nullptr || StructProperty->Struct == nullptr)
+			{
+				continue;
+			}
+
+			// Nested USTRUCT 자체가 직접 소유한 authored member만 재귀 관측합니다.
+			CollectRecursiveReflectedSourceDescriptors(
+				StructProperty->Struct,
+				RootClassPath,
+				PropertyPath,
+				StructProperty->Struct->GetPathName(),
+				OutDescriptors);
+		}
+	}
+
 	// JSON value의 actual physical kind를 반환합니다.
 	FString GetObservedJsonKind(const TSharedPtr<FJsonValue>& Value)
 	{
@@ -701,6 +752,30 @@ bool FCFDAContractGuard::BuildDirectReflectedSourceShapeDescriptor(
 	if (OutDescriptors.IsEmpty())
 	{
 		OutError = FString::Printf(TEXT("%s direct authored Reflection 결과가 비었습니다."), *RootClassPath);
+		return false;
+	}
+	OutError.Reset();
+	return true;
+}
+
+// 임의 native DataAsset class의 direct authored property와 nested USTRUCT CPF_Edit member를 Type-neutral하게 재귀 관측합니다.
+bool FCFDAContractGuard::BuildRecursiveReflectedSourceShapeDescriptor(
+	const UClass& SourceClass,
+	TArray<FCFDASourceFieldDescriptor>& OutDescriptors,
+	FString& OutError)
+{
+	OutDescriptors.Reset();
+	// Reflection이 보고한 exact root class path입니다.
+	const FString RootClassPath = SourceClass.GetClassPathName().ToString();
+	CFDAContractGuardPrivate::CollectRecursiveReflectedSourceDescriptors(
+		&SourceClass,
+		RootClassPath,
+		FString(),
+		FString(),
+		OutDescriptors);
+	if (OutDescriptors.IsEmpty())
+	{
+		OutError = FString::Printf(TEXT("%s recursive authored Reflection 결과가 비었습니다."), *RootClassPath);
 		return false;
 	}
 	OutError.Reset();

@@ -1,12 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDADamageMixedTests.cpp
-// Version: v1.1.0
+// Version: v1.2.0
 // Date: 2026-09-11
 // Description: CF-FQ-052 DDO-P0-04 DamageData operational admission + Missile/Ammo/Damage exact3 mixed integration focused Automation입니다.
 // Changelog:
+// - v1.2.0: VDR-P0-02 fourth-type admission 뒤 current production operational backing exact4를 반영하되 기존 Missile/Ammo/Damage first-three order와 exact3 lifecycle 회귀 의미를 그대로 보존합니다.
 // - v1.1.0: OperationalAdmission에 unknown/out-of-scope production full-path fail-closed와 test-owned registry-only synthetic provider owner-capable / operational auto-admission0 direct regression을 추가합니다.
 // - v1.0.0: production mixed backing authority exact3 direct regression, three-type durable lifecycle, global TargetObjectPath duplicate, Damage source/current TOCTOU mutation0를 actual-provider disposable fixture로 검증합니다.
 // Migration:
+// - v1.2.0부터 OperationalAdmission current-authority projection은 exact4를 기대하지만 ThreeTypeDurable/Duplicate/Stale는 predecessor Missile+Ammo+Damage exact3 subset regression으로 유지합니다.
 // - v1.1.0은 production registry/allowlist/Normalize/Discover를 수정하지 않고 기존 test-owned provider-set owner seam과 actual production session만 사용합니다.
 // - 실제 Save/Delete는 /Game/Test/CarFight/DDODamageP04 및 각 provider __AutomationP04__ Staging root에만 한정합니다.
 // - Product Missile/Ammo/Damage asset, canonical Product Staging과 Missile/Ammo/Damage accepted DACE history는 mutation하지 않습니다.
@@ -553,16 +555,18 @@ bool FCFDADamageOperationalAdmissionTest::RunTest(const FString& Parameters)
 	// Normalize/Discover가 실제 사용하는 production backing authority의 class-path projection입니다.
 	TArray<FString> ClassPaths;
 	FCFDAStagingOpsTestControl::GetMixedOperationalAllowedTypeKeys(SchemaIds, ClassPaths);
-	TestEqual(TEXT("Production mixed backing SchemaId count is exact3"), SchemaIds.Num(), 3);
-	TestEqual(TEXT("Production mixed backing ClassPath count is exact3"), ClassPaths.Num(), 3);
-	if (SchemaIds.Num() == 3 && ClassPaths.Num() == 3)
+	TestEqual(TEXT("Production mixed backing SchemaId count is exact4"), SchemaIds.Num(), 4);
+	TestEqual(TEXT("Production mixed backing ClassPath count is exact4"), ClassPaths.Num(), 4);
+	if (SchemaIds.Num() == 4 && ClassPaths.Num() == 4)
 	{
-		TestEqual(TEXT("Operational TypeKey[0] SchemaId is MissileGuidePreset"), SchemaIds[0], FString(TEXT("CarFight.DataAsset.MissileGuidePreset")));
-		TestEqual(TEXT("Operational TypeKey[0] ClassPath is MissileGuidePreset"), ClassPaths[0], FString(TEXT("/Script/CarFight_Re.CFMissileGuidePresetData")));
-		TestEqual(TEXT("Operational TypeKey[1] SchemaId is AmmoData"), SchemaIds[1], FString(TEXT("CarFight.DataAsset.AmmoData")));
-		TestEqual(TEXT("Operational TypeKey[1] ClassPath is AmmoData"), ClassPaths[1], FString(TEXT("/Script/CarFight_Re.CFAmmoData")));
-		TestEqual(TEXT("Operational TypeKey[2] SchemaId is DamageData"), SchemaIds[2], FString(TEXT("CarFight.DataAsset.DamageData")));
-		TestEqual(TEXT("Operational TypeKey[2] ClassPath is DamageData"), ClassPaths[2], FString(TEXT("/Script/CarFight_Re.CFDamageData")));
+		TestEqual(TEXT("Operational TypeKey[0] SchemaId remains MissileGuidePreset"), SchemaIds[0], FString(TEXT("CarFight.DataAsset.MissileGuidePreset")));
+		TestEqual(TEXT("Operational TypeKey[0] ClassPath remains MissileGuidePreset"), ClassPaths[0], FString(TEXT("/Script/CarFight_Re.CFMissileGuidePresetData")));
+		TestEqual(TEXT("Operational TypeKey[1] SchemaId remains AmmoData"), SchemaIds[1], FString(TEXT("CarFight.DataAsset.AmmoData")));
+		TestEqual(TEXT("Operational TypeKey[1] ClassPath remains AmmoData"), ClassPaths[1], FString(TEXT("/Script/CarFight_Re.CFAmmoData")));
+		TestEqual(TEXT("Operational TypeKey[2] SchemaId remains DamageData"), SchemaIds[2], FString(TEXT("CarFight.DataAsset.DamageData")));
+		TestEqual(TEXT("Operational TypeKey[2] ClassPath remains DamageData"), ClassPaths[2], FString(TEXT("/Script/CarFight_Re.CFDamageData")));
+		TestEqual(TEXT("Operational TypeKey[3] SchemaId is VehicleDefenseData"), SchemaIds[3], FString(TEXT("CarFight.DataAsset.VehicleDefenseData")));
+		TestEqual(TEXT("Operational TypeKey[3] ClassPath is VehicleDefenseData"), ClassPaths[3], FString(TEXT("/Script/CarFight_Re.CFVehicleDefenseData")));
 	}
 	TestFalse(TEXT("Future synthetic provider SchemaId is not auto-admitted"), SchemaIds.Contains(TEXT("CarFight.DataAsset.FutureSynthetic")));
 
@@ -595,7 +599,7 @@ bool FCFDADamageOperationalAdmissionTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Registry-only synthetic provider path normalizes exactly"), SyntheticNormalizedPath, SyntheticOwnedPath);
 	TestFalse(TEXT("Owner-capable registry-only synthetic provider is still absent from production operational backing"), SchemaIds.Contains(SyntheticProvider.Descriptor.TypeKey.SchemaId));
 
-	// Actual production mixed session must reject the same synthetic provider-owned full path before JSON read because production operational admission is exact3 only.
+	// Actual production mixed session must reject the same synthetic provider-owned full path before JSON read because production operational admission is explicit exact4 only.
 	FCFDAStagingOpsSession SyntheticProductionSession;
 	// Unknown/out-of-scope production Preview projection입니다.
 	FCFDAStagingOpsPreview SyntheticProductionPreview;

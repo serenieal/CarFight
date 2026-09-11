@@ -1,11 +1,11 @@
 # CarFight Data Asset Staging / Batch Authoring
 
-- 문서 버전: v1.5.15
+- 문서 버전: v1.6.0
 - 최근 갱신일: 2026-09-11
 - 문서 상태: Current
-- 완료 Feature: `CF-FQ-049 Data Asset Staging·Batch Authoring` + `CF-FQ-050 Data Asset Contract Evolution Guard` + `CF-FQ-051 Data Asset Multi-Type Onboarding` + `CF-FQ-052 DamageData Third-Type Onboarding / Reuse Verification`
-- Current extension checkpoint: `CF-FQ-052 DDO-P0-05 Reuse Measurement / Acceptance / Current System Promotion PASS / P0 0 / blocking P1 0 / P2 2 non-blocking / prohibited shared algorithm duplication 0 / shared core algorithm rewrite 0 required / DamageData Current promotion Accepted / fourth-type onboarding readiness PASS / 4th+ Routine Onboarding Standard Current`
-- 현재 구현 범위: `CFMissileGuidePresetData` + `CFAmmoData` + `CFDamageData` typed Staging / Preview / Reviewed Apply capability + Contract Evolution Guard P0 + Editor Private shared Type Dispatch + shared typed durable core / Production provider registry MissileGuidePreset `ReviewedMutationReady` + AmmoData `ReviewedMutationReady` + DamageData `ReviewedMutationReady` exact3 / mixed operational admission MissileGuidePreset + AmmoData + DamageData exact3 / Damage DACE `ContractReady` + accepted bootstrap exact1, canonical Product Damage target exact0
+- 완료 Feature: `CF-FQ-049 Data Asset Staging·Batch Authoring` + `CF-FQ-050 Data Asset Contract Evolution Guard` + `CF-FQ-051 Data Asset Multi-Type Onboarding` + `CF-FQ-052 DamageData Third-Type Onboarding / Reuse Verification` + `CF-FQ-053 VehicleDefenseData Routine Onboarding / Process Benchmark`
+- Current extension checkpoint: `CF-FQ-053 VDR-P0-03 Final Acceptance + Process Benchmark PASS / P0 0 / blocking P1 0 / P2 0 / VehicleDefenseData Current promotion Accepted / Process Benchmark Faster Confirmed / prohibited shared algorithm duplication 0 / shared core algorithm semantic rewrite 0 / 4th+ Routine Onboarding Standard proven by fourth-type production use`
+- 현재 구현 범위: `CFMissileGuidePresetData` + `CFAmmoData` + `CFDamageData` + `CFVehicleDefenseData` typed Staging / Preview / Reviewed Apply capability + Contract Evolution Guard P0 + Editor Private shared Type Dispatch + shared typed durable core / Production provider registry exact4 모두 `ReviewedMutationReady` + DACE `ContractReady` / mixed operational admission MissileGuidePreset + AmmoData + DamageData + VehicleDefenseData explicit exact4 / VehicleDefense accepted bootstrap exact1, canonical Product VehicleDefense target exact0
 - Current System owner: 이 문서 + 실제 `UE/Source/CarFight_ReEditor/Public/DataAuthoring/` + `UE/Source/CarFight_ReEditor/Private/DataAuthoring/` Source
 
 ---
@@ -45,7 +45,7 @@ Disk Reload + Typed Semantic Readback
 
 ## 2. 현재 P0 범위
 
-현재 Production registry에 등록된 Typed Provider는 **MissileGuidePreset + AmmoData + DamageData exact3**이며 세 provider 모두 `ReviewedMutationReady` capability를 보유한다. DamageData는 DDO-P0-02의 exact12 materializer + provider-local Reviewed mutation callback/shared durable·TOCTOU에 이어 DDO-P0-03에서 independent DACE descriptor exact4 + accepted bootstrap exact1 + production behavior/fingerprint probe까지 구현·Mid-review Accepted되어 `DaceReadiness=ContractReady`다. **등록된 provider/readiness와 operational mixed admission은 같은 의미가 아니며 별도 explicit gate다.** DDO-P0-04 implementation + fresh validation 이후 mixed operational admission도 explicit **MissileGuidePreset + AmmoData + DamageData exact3**로 전진했다.
+현재 Production registry에 등록된 Typed Provider는 **MissileGuidePreset + AmmoData + DamageData + VehicleDefenseData exact4**이며 네 provider 모두 `ReviewedMutationReady` capability와 DACE `ContractReady`를 보유한다. VehicleDefenseData는 CF-FQ-053 Routine Gate 2에서 top-level exact17 + nested directional armor exact12의 typed provider/durable path를 추가하고, Gate 3에서 SourceShape exact29 / AdapterShape exact37 / SourceAdapterMapping exact30 / SemanticContract exact14 DACE와 `DACE-VehicleDefenseData-S1-A1-Bootstrap` exact1을 Accepted했다. **등록된 provider/readiness와 operational mixed admission은 같은 의미가 아니며 별도 explicit gate다.** VehicleDefense DACE acceptance 뒤 mixed operational admission도 explicit **MissileGuidePreset + AmmoData + DamageData + VehicleDefenseData exact4**로 전진했다.
 
 ```text
 UCFMissileGuidePresetData
@@ -74,6 +74,19 @@ DaceContractOwner: CFDADamageDace
 AcceptedHistoryNamespace: DACE-DamageData
 AcceptedHistory: DACE-DamageData-S1-A1-Bootstrap exact1
 Canonical Product Damage target set: explicit exact0
+
+UCFVehicleDefenseData
+SchemaId: CarFight.DataAsset.VehicleDefenseData
+SchemaRevision: 1
+AdapterContractRevision: 1
+ClassPath: /Script/CarFight_Re.CFVehicleDefenseData
+Readiness: ReviewedMutationReady
+ApplyReviewedMutation: provider-local callback
+DaceReadiness: ContractReady
+DaceContractOwner: CFDAVehicleDefenseDace
+AcceptedHistoryNamespace: DACE-VehicleDefenseData
+AcceptedHistory: DACE-VehicleDefenseData-S1-A1-Bootstrap exact1
+Canonical Product VehicleDefense target set: explicit exact0
 ```
 
 MissileGuidePreset의 현재 canonical Product Pilot은 다음 세 개다.
@@ -92,7 +105,7 @@ Authoring/DataAssetStaging/MissileGuidePreset/MissileFeel_Normal.json
 Authoring/DataAssetStaging/MissileGuidePreset/MissileFeel_High.json
 ```
 
-`CFAmmoData`는 CF-FQ-051을 통해 Current operational 지원 타입으로 승격됐다. `CFDamageData`는 CF-FQ-052 DDO-P0-03에서 DACE `ContractReady`까지 구현·fresh validation·Post-Implementation Mid-review Technical PASS로 Accepted된 뒤, DDO-P0-04에서 explicit mixed operational admission exact3까지 구현했다. DDO-P0-04 Mid-review Correction + Re-review에서는 `OperationalAdmission`의 owner-capable registry-only synthetic provider + actual production full-path fail-closed direct regression까지 보강해 `P0 0 / blocking P1 0 / P2 2 non-blocking / Final Technical Acceptance PASS`로 닫았다. `CFVehicleSensorData` 및 그 밖의 신규 DataAsset 타입은 자동 지원되지 않으며 각각 별도 lifecycle에서 typed provider/schema/DACE와 가치·공수를 검토한 뒤 onboarding한다.
+`CFAmmoData`는 CF-FQ-051, `CFDamageData`는 CF-FQ-052를 통해 Current operational 지원 타입으로 승격됐다. `CFVehicleDefenseData`는 CF-FQ-053에서 4th+ Routine Onboarding Standard의 첫 실제 production 적용 대상으로 Gate 1~4를 완료해 Current fourth type으로 승격됐다. VehicleDefense는 `ReviewedMutationReady + DACE ContractReady + accepted history exact1 + canonical exact0 + explicit mixed admission exact4` 상태이며 protected persisted `DA_VehicleDefense_Test`는 onboarding 동안 Apply·Save 0을 유지했다. `CFVehicleSensorData` 및 그 밖의 신규 DataAsset 타입은 자동 지원되지 않으며 각각 별도 Routine lifecycle에서 typed provider/schema/DACE와 가치·공수를 검토한 뒤 onboarding한다.
 
 ### 2.1 Shared Type Dispatch Foundation — CF-FQ-051 DAO-P0-01
 
@@ -113,7 +126,7 @@ CFDAMissileProvider
 
 registry와 provider implementation 선택권은 production code가 소유한다. JSON/DTO가 arbitrary callback이나 implementation 이름을 지정하지 않는다.
 
-현재 Production registry의 provider entry는 **MissileGuidePreset `ReviewedMutationReady` + AmmoData `ReviewedMutationReady` + DamageData `ReviewedMutationReady` exact3**다. 각 exact TypeKey entry는 descriptor와 readiness에 맞는 shared-safe operation을 함께 소유하고 Stable Identity policy/resolver와 DACE owner/history namespace authority까지 결속한다. DamageData는 DDO-P0-02 exact12 materializer/provider-local `ApplyReviewedMutation`과 existing `CFDADurableCore`를 재사용하고, DDO-P0-03에서 `CFDADamageDace` exact4 descriptor와 dedicated `CFDADamageDaceBase.cpp` accepted bootstrap exact1을 추가해 DACE readiness를 `ContractReady`로 전진시켰다. DDO-P0-04에서 별도 explicit operational admission policy도 MissileGuidePreset+AmmoData+DamageData exact3로 전진했지만 provider registry와 admission authority를 자동 결속하지 않는 원칙은 유지한다. 기존 Public `FCFDAStagingRecord`, `FCFDAStagingService`, `FCFDAStagingOps`, `FCFDAStagingApplyService` Missile API는 compatibility facade로 유지된다.
+현재 Production registry의 provider entry는 **MissileGuidePreset + AmmoData + DamageData + VehicleDefenseData exact4 `ReviewedMutationReady`**다. 각 exact TypeKey entry는 descriptor와 readiness에 맞는 shared-safe operation을 함께 소유하고 Stable Identity policy/resolver와 DACE owner/history namespace authority까지 결속한다. VehicleDefense는 provider-local materializer/`ApplyReviewedMutation`으로 existing `CFDADurableCore`를 재사용하고, independent `CFDAVehicleDefenseDace` descriptor + dedicated `CFDAVehicleDefenseDaceBase.cpp` accepted bootstrap exact1을 소유한다. 별도 explicit operational admission policy도 MissileGuidePreset+AmmoData+DamageData+VehicleDefenseData exact4로 전진했지만 provider registry와 admission authority를 자동 결속하지 않는 원칙은 유지한다. 기존 Public `FCFDAStagingRecord`, `FCFDAStagingService`, `FCFDAStagingOps`, `FCFDAStagingApplyService` Missile API는 compatibility facade로 유지된다.
 
 Shared Preview/duplicate/BatchPlanHash/Reviewed Approval/TOCTOU는 payload-free common row에서 실행하고, typed record/payload는 provider-local parse/extract/materialize 경계 안에만 유지한다. Apply는 reviewed source를 fresh re-read한 뒤 exact TypeKey provider entry로 parse/current resolve/materialize를 dispatch하며 shared core가 Missile typed payload를 보관하지 않는다.
 
@@ -513,6 +526,43 @@ Routine Gate 하나가 끝날 때마다 ActiveWork/FeatureQueue/Systems 전체�
 
 따라서 “새 DataAsset 타입은 원래 오래 걸린다”는 설명은 Current 기본값이 아니다. CF-FQ-049~052에서 비용을 들여 확보한 shared foundation의 목적은 이후 타입 onboarding을 **타입 전용 구현 + 제한된 통합 검증**으로 축소하는 데 있다.
 
+### 2.9 VehicleDefenseData Fourth-Type Routine Acceptance — CF-FQ-053 VDR-P0-03
+
+CF-FQ-053은 §2.8 Routine 4-Gate를 실제 fourth production type에 처음 적용했다. 최종 판정은 **P0 0 / blocking P1 0 / P2 0 / PASS / Process Benchmark `Faster Confirmed`**이며 VehicleDefenseData를 Current 지원 타입으로 승격한다.
+
+```text
+Production registry: MissileGuidePreset + AmmoData + DamageData + VehicleDefenseData exact4
+Operational admission: MissileGuidePreset + AmmoData + DamageData + VehicleDefenseData explicit exact4
+VehicleDefense readiness: ReviewedMutationReady
+VehicleDefense DACE: ContractReady
+VehicleDefense accepted history: DACE-VehicleDefenseData-S1-A1-Bootstrap exact1
+VehicleDefense canonical Product DACE target: explicit exact0
+Protected persisted VehicleDefense: DA_VehicleDefense_Test exact1 / onboarding Apply·Save 0
+```
+
+Gate 4 fresh persisted AssetDump에서 `/Game/CarFight/Vehicles/Data/Defense/DA_VehicleDefense_Test.DA_VehicleDefense_Test`는 authored top-level exact17, reference field 0, errors 0으로 확인됐다. `DefenseId=VehicleDefense_Test`, `DefenseMassKg=100`, Shield `100 / delay5 / regen10`, ArmorResistance `100`, six-direction armor `100`과 기존 damage multipliers, component damage scales가 protected baseline과 일치한다. Git status에도 해당 `.uasset` dirty가 없어 onboarding이 protected Product asset을 저장하지 않았음을 재확인했다.
+
+Final executable candidate는 Gate 3 final Build `c441c381776e4ea2b027d66ce3221bb1` PASS, VDR focused exact7 `67be3260fe4d4180a2b6f97a9a581df7` 7/7 PASS, affected DACE exact15 `b8d7015c316444f8a6e295cb21bce15d` 15/15 PASS, affected DDO exact14 `e361e4be7df841efa02a1b4a7e6fd043` 14/14 PASS다. Gate 3 final validation 뒤 executable Source mutation이 0이므로 §2.8.3에 따라 Gate 4에서 동일 Build/Automation을 반복 실행하지 않았다.
+
+Process Benchmark는 다음 근거로 `Faster Confirmed`다.
+
+| 측정 항목 | DamageData third onboarding / CF-FQ-052 | VehicleDefense fourth Routine / CF-FQ-053 | 판정 |
+| --- | ---: | ---: | --- |
+| primary Gate | 6 | 4 | Routine 축소 확인 |
+| actual Correction + Re-review | 반복 review/correction 흐름 존재 | 1회 / Gate 1 실제 blocking P1 exact4만 | 결함 기반 삽입 확인 |
+| redundant defect-free Review Gate | 다수 세부 review 단계 | 0 | PASS |
+| type-owned Production file / physical LOC | exact5 / 1,574 | exact5 / 1,613 | +39 LOC / 약 +2.5%; 더 작은 구현이라 빨라진 것이 아님 |
+| feature-owned C++ test file / physical LOC | exact4 / 2,808 | exact4 / 2,266 | -542 LOC / 약 -19.3% |
+| shared touched production file | exact5 | exact6 | VehicleDefense nested USTRUCT용 Type-neutral recursive Reflection seam 때문에 +1 |
+| shared algorithm semantic rewrite | exact0 | exact0 | PASS |
+| prohibited shared algorithm duplication | exact0 | exact0 | PASS |
+| ActiveWork projection version increments | +16 | +6 | 약 62.5% 감소 |
+| FeatureQueue projection version increments | +16 | +6 | 약 62.5% 감소 |
+
+VehicleDefense는 Damage exact12보다 큰 SourceShape exact29(top-level17 + nested12)를 가진다. 그럼에도 Routine 4-Gate, defect가 실제 있을 때만 1회 correction, no-redundant-review, 축소된 test/document churn으로 완료됐으므로 CF-FQ-049~052 기반 투자의 amortization이 실제 fourth type에서 확인됐다. 다만 CF-FQ-052의 신뢰 가능한 active-work elapsed baseline을 별도로 계측하지 않았으므로 분 단위 wall-clock 비율은 주장하지 않고, Gate/review/regression/document churn과 구현 난이도 대비 결과를 benchmark authority로 사용한다.
+
+Shared-core diff 감사에서 `CFDADurableCore.cpp`와 `CFDAStagingApply.cpp`는 diff0이다. `CFDAContractGuard.cpp/.h`는 nested USTRUCT authored field를 관측하는 Type-neutral additive recursive Reflection seam만 추가했고 기존 direct/Missile facade 의미를 바꾸지 않았다. `CFDATypeDispatch.cpp/.h`는 provider exact4 registration/readiness projection, `CFDAStagingOps.cpp/.h`는 explicit allowlist exact4 projection만 변경했다. 따라서 **Architecture Gap은 성립하지 않고 shared Preview/Review/TOCTOU/Durable/DACE semantics도 재작성되지 않았다.**
+
 ---
 
 ## 3. Authority / Source of Truth
@@ -817,7 +867,7 @@ approval은 one-shot이다. stale/blocker로 mutation 0 종료돼도 같은 appr
 
 ## 10. Typed Materializer / Durable Writer
 
-현재 materializer는 generic Reflection writer가 아니다. Production registry의 **MissileGuidePreset + AmmoData + DamageData exact3 `ReviewedMutationReady` provider**가 각 타입의 payload 의미만 소유하고, durable transaction algorithm은 `CFDADurableCore` 단일 authority가 소유한다.
+현재 materializer는 generic Reflection writer가 아니다. Production registry의 **MissileGuidePreset + AmmoData + DamageData + VehicleDefenseData exact4 `ReviewedMutationReady` provider**가 각 타입의 payload 의미만 소유하고, durable transaction algorithm은 `CFDADurableCore` 단일 authority가 소유한다.
 
 ```text
 MissileGuidePreset provider
@@ -825,6 +875,12 @@ MissileGuidePreset provider
 
 AmmoData provider
 - Ammo exact8 typed materialize / extract / fingerprint
+
+DamageData provider
+- Damage exact12 typed materialize / extract / fingerprint
+
+VehicleDefenseData provider
+- VehicleDefense top-level exact17 + nested armor exact12 typed materialize / extract / fingerprint
 
 CFDADurableCore
 - CreatePackage / exact typed NewObject
@@ -1403,6 +1459,17 @@ CF-FQ-039 Active lifecycle: unchanged
 ---
 
 ## 19. Changelog
+
+### v1.6.0 - 2026-09-11
+
+- `CF-FQ-053 / VDR-P0-03 Final Acceptance + Process Benchmark`를 `P0 0 / blocking P1 0 / P2 0 / PASS`로 완료하고 VehicleDefenseData를 Current fourth typed authoring/provider/mixed operational 지원 타입으로 승격했다.
+- Production registry와 explicit mixed operational admission은 MissileGuidePreset + AmmoData + DamageData + VehicleDefenseData exact4다. VehicleDefense는 `ReviewedMutationReady / DACE ContractReady / accepted history exact1 / canonical Product target exact0`이다.
+- Gate 4 fresh AssetDump에서 protected `DA_VehicleDefense_Test` authored exact17 / reference0 / errors0와 기존 persisted 값을 확인했고 Git `.uasset` dirty0으로 onboarding Apply·Save 0을 재확인했다.
+- Gate 3 final executable evidence인 Build `c441c381776e4ea2b027d66ce3221bb1`, VDR7 `67be3260fe4d4180a2b6f97a9a581df7`, DACE15 `b8d7015c316444f8a6e295cb21bce15d`, DDO14 `e361e4be7df841efa02a1b4a7e6fd043`를 승계했다. Gate 4 executable mutation0이므로 Build/Automation은 재실행하지 않았다.
+- Process Benchmark는 `Faster Confirmed`다. VehicleDefense Production은 exact5/1,613 LOC로 Damage exact5/1,574보다 약 2.5% 크고 SourceShape도 exact29로 더 복잡하지만, primary Gate 6→4, redundant review0, ActiveWork/FeatureQueue projection increment 각각 +16→+6, C++ test LOC 2,808→2,266으로 process churn이 명확히 감소했다.
+- shared touched production exact6은 Type-neutral recursive Reflection seam + provider registration/readiness + explicit operational admission뿐이며 `CFDADurableCore.cpp`/`CFDAStagingApply.cpp` diff0, shared algorithm semantic rewrite0, prohibited duplication0, Architecture Gap 없음이다.
+
+Migration: v1.6.0부터 VehicleDefenseData가 fourth Current production authoring type이다. 이후 fifth+ 타입도 §2.8 Routine 4-Gate를 기본값으로 사용하고, 실제 architecture gap이 없는데 CF-FQ-052 수준의 검수/문서 반복이 재발하면 Process Failure로 판정한다.
 
 ### v1.5.15 - 2026-09-11
 

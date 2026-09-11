@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDAStagingOps.cpp
-// Version: v1.5.0
+// Version: v1.6.0
 // Date: 2026-09-11
-// Description: CF-FQ-051/052 trusted provider-owned StagingRoot를 사용하는 Missile compatibility + mixed exact-path operational session 구현입니다.
+// Description: CF-FQ-051/052/053 trusted provider-owned StagingRoot를 사용하는 Missile compatibility + mixed exact-path operational session 구현입니다.
 // Changelog:
+// - v1.6.0: VDR-P0-02에서 VehicleDefenseData DACE acceptance 뒤 production mixed operational explicit TypeKey authority를 MissileGuidePreset+AmmoData+DamageData+VehicleDefenseData exact4로 확장했습니다. shared Preview/Review/TOCTOU/Durable algorithm은 변경하지 않습니다.
 // - v1.5.0: DDO-P0-04에서 production mixed operational explicit TypeKey authority를 MissileGuidePreset+AmmoData+DamageData exact3로 확장하고 동일 backing list를 읽는 test-only read projection을 추가했습니다. shared Preview/Review/TOCTOU/Durable algorithm은 변경하지 않습니다.
 // - v1.4.0: session non-empty selection에만 provider-neutral exact-path discovery를 추가하고 JSON read 전 path owner exact1, actual provider Parse/Current/common Preview, mixed Review evidence를 연결했습니다. Empty Missile whole-root discovery, Public Missile facade, console shorthand와 SyncProduct exact3는 보존합니다.
 // - v1.3.0: hard-coded Missile StagingRoot authority를 Editor Private TypeKey provider로 이동하고 selection/discovery/Product Sync path validation을 provider-owned root exact containment으로 재배선. Public Ops API와 Product write semantics는 보존.
@@ -16,13 +17,14 @@
 // - Review는 마지막 Preview의 same selection만 fresh re-discovery/hash 검증하고, ApplyReviewed는 그 Reviewed one-shot approval만 전달합니다.
 // - SyncProduct는 Product .uasset을 저장하지 않으며 write/verification 실패 시 이번 호출에서 touched된 Staging 파일을 호출 전 raw bytes/absence로 rollback합니다.
 // - v1.3.0에서도 `GetMissilePresetStagingRoot()` Public signature/value와 Product Low/Normal/High canonical path는 그대로이며, authority만 Private provider로 이동합니다.
-// - v1.5.0부터 mixed explicit selection은 MissileGuidePreset+AmmoData+DamageData exact3를 explicit code-owned authority로 허용합니다. provider registry에서 자동 admission하지 않으며 Product Ammo/Damage canonical exact0을 fake target/Staging으로 보충하지 않습니다.
+// - v1.6.0부터 mixed explicit selection은 MissileGuidePreset+AmmoData+DamageData+VehicleDefenseData exact4를 explicit code-owned authority로 허용합니다. provider registry에서 자동 admission하지 않으며 Product Ammo/Damage/VehicleDefense canonical exact0을 fake target/Staging으로 보충하지 않습니다.
 
 #include "DataAuthoring/CFDAStagingOps.h"
 #include "CFDAContractGuard.h"
 #include "CFDAAmmoProvider.h"
 #include "CFDADamageProvider.h"
 #include "CFDAMissileProvider.h"
+#include "CFDAVehicleDefenseProvider.h"
 #include "CFDATypeDispatch.h"
 
 #include "CFMissileGuidePresetData.h"
@@ -44,15 +46,16 @@ namespace CFDAStagingOpsPrivate
 	// main_game root 문자열을 slash-normalized prefix 비교용 형태로 반환합니다.
 	FString GetMainGameRootPrefix();
 
-	// DDO-P0-04 mixed operational path가 명시적으로 허용하는 production TypeKey exact3를 반환합니다.
+	// VDR-P0-02 mixed operational path가 명시적으로 허용하는 production TypeKey exact4를 반환합니다.
 	const TArray<FCFDATypeKey>& GetMixedOperationalAllowedTypeKeys()
 	{
-		// Provider registry에서 자동 합성하지 않는 explicit MissileGuidePreset + AmmoData + DamageData scope입니다.
+		// Provider registry에서 자동 합성하지 않는 explicit MissileGuidePreset + AmmoData + DamageData + VehicleDefenseData scope입니다.
 		static const TArray<FCFDATypeKey> AllowedTypeKeys =
 		{
 			CFDAMissileProvider::GetProvider().Descriptor.TypeKey,
 			CFDAAmmoProvider::GetProvider().Descriptor.TypeKey,
-			CFDADamageProvider::GetProvider().Descriptor.TypeKey
+			CFDADamageProvider::GetProvider().Descriptor.TypeKey,
+			CFDAVehicleDefenseProvider::GetProvider().Descriptor.TypeKey
 		};
 		return AllowedTypeKeys;
 	}

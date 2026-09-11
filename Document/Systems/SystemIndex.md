@@ -1,7 +1,7 @@
 # SystemIndex
 
-- Version: 1.35.1
-- Date: 2026-09-10
+- Version: 1.36.0
+- Date: 2026-09-11
 
 - Status: Active
 - Scope: `Document/Systems/` 하위 문서 위치 안내 색인
@@ -59,7 +59,7 @@
 | 경로 | 문서 내용 |
 | --- | --- |
 | `Document/Systems/DataManagement/DataAssetManagement.md` | `CF-FQ-045`에서 완료한 CarFight Data Asset Manager Current System이다. native/persisted DataAsset 자동 발견, Typed Semantic Registry, metadata-only 새로고침, 명시적 검사·참조 관계 조회, generation-bound `재검사 필요 / 재확인 필요`, 한글 우선 관리 UI와 Product Asset no-auto-mutation/save 경계를 기록한다. |
-| `Document/Systems/DataManagement/DataAssetAuthoring.md` | `CF-FQ-049` Editor-off Staging + Reviewed Batch Apply, `CF-FQ-050` Contract Evolution Guard와 `CF-FQ-051` MissileGuidePreset+AmmoData multi-type onboarding을 통합한 Current System이다. Production provider exact2, provider-neutral mixed Explicit Paths, shared Preview/Review/TOCTOU/Apply/Durable/DACE core, 타입별 typed adapter/descriptor/history와 Product no-auto-apply/save 경계를 기록한다. Third DataAsset type는 provider registration + explicit operational admission으로 확장하며 common core algorithm을 복제하지 않는다. |
+| `Document/Systems/DataManagement/DataAssetAuthoring.md` | `CF-FQ-049~053` DataAsset Staging/Reviewed Apply, Contract Evolution Guard와 MissileGuidePreset+AmmoData+DamageData+VehicleDefenseData fourth-type Routine onboarding을 통합한 Current System이다. Production provider/mixed operational admission explicit exact4, shared Preview/Review/TOCTOU/Apply/Durable/DACE core, 타입별 typed adapter/descriptor/append-only history와 Product no-auto-apply/save 경계를 기록한다. 5th+ DataAsset type는 §2.8 Routine 4-Gate로 확장하고 common core semantic rewrite가 필요하면 Architecture Gap HOLD한다. |
 
 ---
 
@@ -185,6 +185,14 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 ---
 
 ## 13. Changelog
+
+### v1.36.0 - 2026-09-11
+
+- `CF-FQ-053 / VDR-P0-03 Final Acceptance + Process Benchmark` PASS와 `DataManagement/DataAssetAuthoring.md v1.6.0` Current promotion을 index에 동기화했다.
+- Current production authoring 범위는 MissileGuidePreset + AmmoData + DamageData + VehicleDefenseData provider/mixed operational admission explicit exact4이며 VehicleDefense는 `ReviewedMutationReady / DACE ContractReady / accepted history exact1 / canonical target exact0`이다.
+- CF-FQ-053은 Routine 4-Gate 첫 production 적용에서 `Faster Confirmed`로 종료했다. 5th+ type도 Routine을 기본값으로 사용하며 shared core semantic rewrite가 필요할 때만 Architecture Gap lifecycle을 연다.
+
+Migration: Data Asset Authoring의 현재 구현 판단은 `DataManagement/DataAssetAuthoring.md v1.6.0`과 실제 `CarFight_ReEditor/DataAuthoring` Source를 우선한다. v1.35.1의 provider exact2 설명은 CF-FQ-051 당시 Historical projection이며 현재 지원 범위로 사용하지 않는다.
 
 ### v1.35.1 - 2026-09-10
 
