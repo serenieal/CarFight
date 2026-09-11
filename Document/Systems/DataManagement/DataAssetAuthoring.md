@@ -1,10 +1,10 @@
 # CarFight Data Asset Staging / Batch Authoring
 
-- 문서 버전: v1.5.14
+- 문서 버전: v1.5.15
 - 최근 갱신일: 2026-09-11
 - 문서 상태: Current
 - 완료 Feature: `CF-FQ-049 Data Asset Staging·Batch Authoring` + `CF-FQ-050 Data Asset Contract Evolution Guard` + `CF-FQ-051 Data Asset Multi-Type Onboarding` + `CF-FQ-052 DamageData Third-Type Onboarding / Reuse Verification`
-- Current extension checkpoint: `CF-FQ-052 DDO-P0-05 Reuse Measurement / Acceptance / Current System Promotion PASS / P0 0 / blocking P1 0 / P2 2 non-blocking / prohibited shared algorithm duplication 0 / shared core algorithm rewrite 0 required / DamageData Current promotion Accepted / fourth-type onboarding readiness PASS`
+- Current extension checkpoint: `CF-FQ-052 DDO-P0-05 Reuse Measurement / Acceptance / Current System Promotion PASS / P0 0 / blocking P1 0 / P2 2 non-blocking / prohibited shared algorithm duplication 0 / shared core algorithm rewrite 0 required / DamageData Current promotion Accepted / fourth-type onboarding readiness PASS / 4th+ Routine Onboarding Standard Current`
 - 현재 구현 범위: `CFMissileGuidePresetData` + `CFAmmoData` + `CFDamageData` typed Staging / Preview / Reviewed Apply capability + Contract Evolution Guard P0 + Editor Private shared Type Dispatch + shared typed durable core / Production provider registry MissileGuidePreset `ReviewedMutationReady` + AmmoData `ReviewedMutationReady` + DamageData `ReviewedMutationReady` exact3 / mixed operational admission MissileGuidePreset + AmmoData + DamageData exact3 / Damage DACE `ContractReady` + accepted bootstrap exact1, canonical Product Damage target exact0
 - Current System owner: 이 문서 + 실제 `UE/Source/CarFight_ReEditor/Public/DataAuthoring/` + `UE/Source/CarFight_ReEditor/Private/DataAuthoring/` Source
 
@@ -416,6 +416,102 @@ Damage가 touch한 shared exact5는 `CFDATypeDispatch.cpp/.h`, `CFDAStagingApply
 Fourth-type onboarding은 **Ready**다. 새 타입은 type-owned schema/provider/parser/serializer/extractor/materializer/current-state + type-owned DACE descriptor/probe/append-only history + production registry registration + explicit operational admission + focused regression으로 확장한다. Product canonical DACE target이 exact0이어도 readiness/admission과 독립적으로 허용된다. 향후 타입 추가에서 common Preview/Review/TOCTOU/Durable/ContractGuard algorithm 변경이 필요해지면 routine onboarding으로 처리하지 않고 architecture gap Stop Rule로 HOLD한다.
 
 P2 exact2는 기존 stale Source/comment projection family와 generic/shared + legacy Missile physical ownership debt다. 둘 다 이번 third onboarding에서 새로 생긴 architecture blocker가 아니며 Current promotion을 막지 않는다.
+
+### 2.8 4th+ DataAsset Routine Onboarding Standard
+
+CF-FQ-049~052는 DataAsset Staging/Batch Authoring, DACE, multi-type generalization과 third-type reuse를 실제 구현·회귀로 검증한 **기반 구축기**로 취급한다. 네 번째 이후 신규 DataAsset 타입은 동일한 위험을 처음부터 다시 증명하는 신규 architecture Feature가 아니라, 아래 조건을 만족하는 한 **Routine Onboarding** 경로를 기본값으로 사용한다.
+
+Routine Onboarding의 목표는 안전성 기준을 낮추는 것이 아니라, 이미 Accepted된 shared foundation을 반복 검수하지 않고 **새 타입이 추가하는 계약과 새 위험만 검증**하는 것이다.
+
+#### 2.8.1 기본 4-Gate 흐름
+
+```text
+Gate 1 — Contract Freeze
+- Runtime authored field와 실제 persistence 의미 확인
+- StableLogicalId source/semantic 확정
+- strict validation / cross-field invariant 확정
+- Product asset 보호 범위와 canonical DACE target 의미 확정
+
+Gate 2 — Typed Provider + Durable
+- type-owned schema / parser / serializer / semantic fingerprint
+- extractor / current-state resolver / materializer
+- provider registration과 readiness
+- disposable Create/Update durable readback + source/current TOCTOU focused regression
+
+Gate 3 — DACE + Operational Admission
+- type-owned DACE descriptor / production probe
+- dedicated append-only accepted bootstrap/history
+- canonical target compatibility / migration no-delta 또는 실제 migration contract
+- explicit mixed operational admission
+- cross-TypeKey isolation / duplicate / stale regression
+
+Gate 4 — Final Acceptance
+- executable Source가 바뀐 최종 후보에 대해 필요한 Official Build
+- 새 타입 focused regression
+- 실제 영향이 있는 predecessor/shared affected regression
+- shared-core semantic diff audit
+- Current System promotion과 최소 문서 projection
+```
+
+기본 흐름에는 각 Gate마다 `사전검수 → 교정 → 재검수 → 구현 → 중간검수 → 교정 → 재검수`를 기계적으로 예약하지 않는다. Gate 진입 시 계약을 충분히 동결한 뒤 구현하고, **P0 또는 blocking P1이 실제로 발견됐을 때만 Correction + Re-review를 삽입**한다. 단순히 이전 Feature에서 사용했다는 이유만으로 같은 검수 단계를 반복하지 않는다.
+
+#### 2.8.2 Shared Foundation 재검수 제한
+
+다음 Current shared authority는 새 타입이 실제 semantic 변경을 요구하지 않는 한 기존 Accepted contract를 재사용한다.
+
+```text
+Preview / duplicate / BatchPlanHash
+Reviewed approval lifecycle
+source/current TOCTOU sequencing
+result aggregation / PartialApplied semantics
+Durable Create/Update/Save/reload/readback orchestration
+FCFDAContractGuard signature / accepted-chain / revision guard
+canonical Staging compatibility / migration gate framework
+```
+
+새 타입 onboarding에서 위 공용 알고리즘의 재작성, 타입별 복제 또는 의미 변경이 필요하다고 판명되면 Routine Onboarding을 계속 밀어붙이지 않는다. 즉시 **Architecture Gap HOLD**로 전환하고, 공용 구조 변경을 별도 설계·검수 범위로 승격한다. 반대로 provider registration, readiness projection, explicit operational admission과 test observation처럼 이미 정의된 extension seam만 수정하는 것은 architecture gap이 아니다.
+
+#### 2.8.3 검증 재사용과 재실행 기준
+
+검증은 변경 영향에 비례한다. executable Source가 변경된 최종 후보에서는 해당 Source를 실제로 덮는 focused test와 필요한 Build를 fresh 실행한다. predecessor/shared regression은 새 변경이 그 계약을 건드렸을 때 실행하며, **문서-only·measurement-only·comment-only 후속 단계에서는 직전 Accepted executable evidence를 이유 없이 반복 실행하지 않는다.**
+
+중간 Gate마다 전체 regression matrix를 습관적으로 재실행하지 않는다. 다만 P0/blocking P1 correction이 executable behavior에 영향을 주었거나 shared authority touch가 발생했다면 affected regression 범위를 다시 계산한다.
+
+#### 2.8.4 문서 projection 제한
+
+Routine Onboarding의 상세 계약·검수 이력은 해당 대표 Plan이 존재하면 그 Plan이 소유하고, Current 구현 계약은 이 Systems 문서가 소유한다. `ActiveWork`와 `FeatureQueue`는 복원 포인터와 상태 전환만 기록하며 Gate별 상세 로그를 누적하지 않는다.
+
+```text
+대표 Plan = 상세 진행 / 계약 freeze / 발견된 defect / correction / acceptance evidence
+Systems = 현재 지원 타입과 현재 운영 계약
+ActiveWork = 현재 작업 포인터
+FeatureQueue = Ready / Active / Done + Current owner
+```
+
+Routine Gate 하나가 끝날 때마다 ActiveWork/FeatureQueue/Systems 전체에 같은 내용을 복제하지 않는다. 실제 상태 전환이나 Current contract 변화가 있을 때만 최소 projection을 갱신한다.
+
+#### 2.8.5 `exact N` 사용 제한
+
+`exact N`은 drift를 즉시 차단할 가치가 있는 계약 경계에 우선 사용한다.
+
+```text
+권장: authored schema membership, provider/admission set, accepted history, canonical target set, protected set, acceptance test matrix
+비권장: 설명용 문장 수, 일반 진행 상태, 임시 측정치, 여러 문서에 반복 복제되는 bookkeeping count
+```
+
+새 타입의 field/schema exact count는 실제 계약이면 유지할 수 있지만, 단순 설명을 정밀해 보이게 만들기 위해 exact count를 추가하지 않는다. 하나의 count 변경이 여러 projection 문서의 기계적 버전업을 유발한다면 그 count가 정말 normative contract인지 먼저 재검토한다.
+
+#### 2.8.6 Routine 성공/실패 판정
+
+네 번째 이후 타입이 기존 MissileGuidePreset/AmmoData/DamageData와 유사한 구조적 난이도라면 CF-FQ-052와 같은 기반 구축 수준의 장기 프로세스를 반복하지 않는 것이 Current 운영 목표다. 다음 중 하나가 발생하면 단순 일정 지연으로 처리하지 않고 원인을 분류한다.
+
+```text
+- shared core algorithm semantic rewrite 필요 → Architecture Gap HOLD
+- 새 UE Reflection/SoftObject/중첩 자료구조/migration 의미 등 실제 신규 계약 발견 → 해당 계약만 추가 설계
+- 기존 계약 문제 없이 검수/문서 반복 때문에 장기화 → Process Failure로 판정하고 Gate/문서/회귀 범위를 축소
+```
+
+따라서 “새 DataAsset 타입은 원래 오래 걸린다”는 설명은 Current 기본값이 아니다. CF-FQ-049~052에서 비용을 들여 확보한 shared foundation의 목적은 이후 타입 onboarding을 **타입 전용 구현 + 제한된 통합 검증**으로 축소하는 데 있다.
 
 ---
 
@@ -1307,6 +1403,16 @@ CF-FQ-039 Active lifecycle: unchanged
 ---
 
 ## 19. Changelog
+
+### v1.5.15 - 2026-09-11
+
+- CF-FQ-049~052 사후 회고를 Current 운영 규칙으로 승격해 `§2.8 4th+ DataAsset Routine Onboarding Standard`를 추가했다.
+- 네 번째 이후 신규 DataAsset 타입은 기본 4-Gate(`Contract Freeze → Typed Provider + Durable → DACE + Operational Admission → Final Acceptance`)로 진행하며, 각 Gate마다 Correction/Re-review 단계를 선예약하지 않고 P0 또는 blocking P1이 실제 발견될 때만 삽입하도록 고정했다.
+- Accepted shared Preview/Review/TOCTOU/Durable/ContractGuard algorithm은 실제 semantic 변경 필요성이 없으면 재증명하지 않는다. 공용 알고리즘 재작성/복제가 필요하면 Routine을 중단하고 Architecture Gap HOLD로 전환한다.
+- 문서 projection은 Plan=상세 이력, Systems=Current 계약, ActiveWork=복원 포인터, FeatureQueue=상태/owner로 제한하고 Gate별 중복 로그를 누적하지 않는다. `exact N`도 schema/provider/history/canonical/protected/test matrix 같은 normative 경계에 제한한다.
+- 유사 난이도 신규 타입이 shared architecture 문제 없이 검수·문서 반복 때문에 CF-FQ-052 수준으로 장기화되면 이를 정상 온보딩 비용으로 보지 않고 Process Failure로 판정한다.
+
+Migration: v1.5.15부터 4th+ DataAsset onboarding은 Routine 4-Gate가 기본 절차다. 과거 CF-FQ-049~052의 세부 Gate 구조를 신규 타입에 기계적으로 복제하지 않는다. 실제 신규 계약 또는 Architecture Gap이 확인된 경우에만 추가 Gate/검수 범위를 확장한다.
 
 ### v1.5.14 - 2026-09-11
 
