@@ -1,9 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDATypeDispatch.h
-// Version: v1.6.0
-// Date: 2026-09-10
-// Description: CF-FQ-051 payload-free shared orchestration, mutation readiness와 per-TypeKey DACE boundary 계약입니다.
+// Version: v1.8.0
+// Date: 2026-09-11
+// Description: CF-FQ-052 payload-free shared orchestration, exact3 provider registry readiness와 per-TypeKey DACE boundary 계약입니다.
 // Changelog:
+// - v1.8.0: DamageData provider의 ReviewedMutationReady 전진을 반영했습니다. shared DTO/API와 mixed operational admission exact2 계약은 변경하지 않습니다.
+// - v1.7.0: DamageData ReadOnlyPreviewReady third provider registration을 반영했습니다. shared DTO/API와 mixed operational admission 계약은 변경하지 않습니다.
 // - v1.6.0: DAO-P0-05에서 JSON read 전 provider-owned CanonicalStagingRoot containment로 exact Staging path owner를 하나만 결정하는 provider-neutral resolver와 test-owned provider-set seam을 추가했습니다.
 // - v1.5.0: DAO-P0-04 correction에서 authoring readiness와 독립된 DACE readiness, explicit canonical Staging target-set authority를 exact TypeKey provider descriptor에 추가했습니다.
 // - v1.4.0: DAO-P0-03에서 AmmoData durable writer가 등록되며 production exact2 provider가 ReviewedMutationReady로 공존하는 current contract를 반영.
@@ -13,7 +15,7 @@
 // - v1.0.0: MissileGuidePreset trusted provider, common envelope, provider-owned StagingRoot, class-scoped StableLogicalId key와 exact contract validation을 최초 추가.
 // Migration:
 // - 기존 FCFDAStagingRecord/FCFDAStagingService Public Missile API는 변경하지 않습니다. typed payload는 provider-local stack에서만 해석하고 shared Review/TOCTOU/Batch lifecycle에는 payload-free common row만 전달합니다.
-// - read-only provider는 Parse/Current operation만으로 registry에 등록할 수 있지만 Reviewed Apply 진입은 capability 검증에서 차단됩니다. 현재 MissileGuidePreset과 AmmoData exact2는 ReviewedMutationReady입니다.
+// - read-only provider는 Parse/Current operation만으로 registry에 등록할 수 있지만 Reviewed Apply 진입은 capability 검증에서 차단됩니다. 현재 MissileGuidePreset, AmmoData, DamageData exact3 provider는 ReviewedMutationReady지만 mixed operational admission은 MissileGuidePreset+AmmoData exact2입니다.
 // - v1.5.0부터 DACE readiness는 authoring readiness와 별도입니다. canonical target set은 empty라도 explicit declared 상태여야 하며, empty set은 현재 canonical Product target exact0을 의미합니다.
 // - v1.6.0부터 mixed operational selection은 payload를 읽기 전에 exact path owner를 먼저 확정해야 하며 owner0/owner>1/allowed TypeKey scope mismatch는 fail-closed합니다.
 

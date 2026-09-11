@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFDAStagingOps.cpp
-// Version: v1.4.0
-// Date: 2026-09-10
-// Description: CF-FQ-051 DAO-P0-05 trusted provider-owned StagingRoot를 사용하는 Missile compatibility + mixed exact-path operational session 구현입니다.
+// Version: v1.5.0
+// Date: 2026-09-11
+// Description: CF-FQ-051/052 trusted provider-owned StagingRoot를 사용하는 Missile compatibility + mixed exact-path operational session 구현입니다.
 // Changelog:
+// - v1.5.0: DDO-P0-04에서 production mixed operational explicit TypeKey authority를 MissileGuidePreset+AmmoData+DamageData exact3로 확장하고 동일 backing list를 읽는 test-only read projection을 추가했습니다. shared Preview/Review/TOCTOU/Durable algorithm은 변경하지 않습니다.
 // - v1.4.0: session non-empty selection에만 provider-neutral exact-path discovery를 추가하고 JSON read 전 path owner exact1, actual provider Parse/Current/common Preview, mixed Review evidence를 연결했습니다. Empty Missile whole-root discovery, Public Missile facade, console shorthand와 SyncProduct exact3는 보존합니다.
 // - v1.3.0: hard-coded Missile StagingRoot authority를 Editor Private TypeKey provider로 이동하고 selection/discovery/Product Sync path validation을 provider-owned root exact containment으로 재배선. Public Ops API와 Product write semantics는 보존.
 // - v1.2.0: CF-FQ-050 DACE-P0-01이 anonymous production BuildProductStagingJson을 직접 관측할 수 있는 WITH_DEV_AUTOMATION_TESTS private serializer probe를 추가. Product Sync/write behavior는 변경하지 않음.
@@ -15,11 +16,12 @@
 // - Review는 마지막 Preview의 same selection만 fresh re-discovery/hash 검증하고, ApplyReviewed는 그 Reviewed one-shot approval만 전달합니다.
 // - SyncProduct는 Product .uasset을 저장하지 않으며 write/verification 실패 시 이번 호출에서 touched된 Staging 파일을 호출 전 raw bytes/absence로 rollback합니다.
 // - v1.3.0에서도 `GetMissilePresetStagingRoot()` Public signature/value와 Product Low/Normal/High canonical path는 그대로이며, authority만 Private provider로 이동합니다.
-// - v1.4.0에서 mixed explicit selection은 MissileGuidePreset+AmmoData exact2만 허용하며 parent root recursive scan과 payload-first provider 선택을 하지 않습니다. Product Ammo exact0은 이 경로에서 fake target/Staging으로 보충하지 않습니다.
+// - v1.5.0부터 mixed explicit selection은 MissileGuidePreset+AmmoData+DamageData exact3를 explicit code-owned authority로 허용합니다. provider registry에서 자동 admission하지 않으며 Product Ammo/Damage canonical exact0을 fake target/Staging으로 보충하지 않습니다.
 
 #include "DataAuthoring/CFDAStagingOps.h"
 #include "CFDAContractGuard.h"
 #include "CFDAAmmoProvider.h"
+#include "CFDADamageProvider.h"
 #include "CFDAMissileProvider.h"
 #include "CFDATypeDispatch.h"
 
@@ -42,14 +44,15 @@ namespace CFDAStagingOpsPrivate
 	// main_game root 문자열을 slash-normalized prefix 비교용 형태로 반환합니다.
 	FString GetMainGameRootPrefix();
 
-	// DAO-P0-05 mixed operational path가 명시적으로 허용하는 production TypeKey exact2를 반환합니다.
+	// DDO-P0-04 mixed operational path가 명시적으로 허용하는 production TypeKey exact3를 반환합니다.
 	const TArray<FCFDATypeKey>& GetMixedOperationalAllowedTypeKeys()
 	{
-		// P0-05에서 자동 확장하지 않는 explicit MissileGuidePreset + AmmoData scope입니다.
+		// Provider registry에서 자동 합성하지 않는 explicit MissileGuidePreset + AmmoData + DamageData scope입니다.
 		static const TArray<FCFDATypeKey> AllowedTypeKeys =
 		{
 			CFDAMissileProvider::GetProvider().Descriptor.TypeKey,
-			CFDAAmmoProvider::GetProvider().Descriptor.TypeKey
+			CFDAAmmoProvider::GetProvider().Descriptor.TypeKey,
+			CFDADamageProvider::GetProvider().Descriptor.TypeKey
 		};
 		return AllowedTypeKeys;
 	}
@@ -1575,6 +1578,24 @@ void FCFDAStagingOpsTestControl::Reset()
 void FCFDAStagingOpsTestControl::ForceSyncFailureAfterWrite(const int32 WriteOrdinal)
 {
 	CFDAStagingOpsPrivate::GForceSyncFailureAfterWriteOrdinal = WriteOrdinal;
+}
+
+// 실제 mixed operational backing authority를 mutation 없이 문자열 projection으로 반환합니다.
+void FCFDAStagingOpsTestControl::GetMixedOperationalAllowedTypeKeys(
+	TArray<FString>& OutSchemaIds,
+	TArray<FString>& OutDataAssetTypeClassPaths)
+{
+	OutSchemaIds.Reset();
+	OutDataAssetTypeClassPaths.Reset();
+	// Normalize/Discover가 직접 사용하는 동일 backing authority입니다.
+	const TArray<FCFDATypeKey>& AllowedTypeKeys = CFDAStagingOpsPrivate::GetMixedOperationalAllowedTypeKeys();
+	OutSchemaIds.Reserve(AllowedTypeKeys.Num());
+	OutDataAssetTypeClassPaths.Reserve(AllowedTypeKeys.Num());
+	for (const FCFDATypeKey& AllowedTypeKey : AllowedTypeKeys)
+	{
+		OutSchemaIds.Add(AllowedTypeKey.SchemaId);
+		OutDataAssetTypeClassPaths.Add(AllowedTypeKey.DataAssetTypeClassPath);
+	}
 }
 
 // Production canonical Product→Staging serializer를 CF-FQ-050 private probe로 직접 호출합니다.

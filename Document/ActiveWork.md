@@ -1,7 +1,7 @@
 # CarFight Active Work
 
-- 문서 버전: v4.200
-- 최근 갱신일: 2026-09-10
+- 문서 버전: v4.217
+- 최근 갱신일: 2026-09-11
 - 문서 상태: Current
 - 역할: CarFight 게임 프로젝트에서 현재 실제로 진행 중인 작업을 선택하고 대표 Plan으로 연결하는 **세션 복원 projection**
 
@@ -46,20 +46,19 @@ UI Resource 방법론 실험 `URT05_Plan.md v0.8`은 Method Validation Complete�
 
 ## 3. 최근 완료
 
-### CF-FQ-051 Data Asset Multi-Type Onboarding — Done
+### CF-FQ-052 DamageData Third-Type Onboarding / Reuse Verification — Done
 
 ```text
-상태: Done / Technical Complete / DAO-P0-06 Final Audit Correction + Re-review PASS
-Current owner: Document/Systems/DataManagement/DataAssetAuthoring.md v1.4.1
-Historical Plan: Document/Plan/DataAssetOnboarding/DataAssetOnboardingPlan.md v0.3.22 — Historical + Retained Path / G5 Deferred
+상태: Done / Technical Complete / DDO-P0-05 Reuse Measurement + Current System Promotion PASS
+Current owner: Document/Systems/DataManagement/DataAssetAuthoring.md v1.5.14
+Historical Plan: Document/Plan/DamageDataOnboarding/DamageDataOnboardingPlan.md v0.2.14 — Historical + Retained Path / G5 Deferred
 ```
 
 보존 판정:
 
-- MissileGuidePreset 단일 Staging/DACE 기반을 AmmoData까지 확장해 Production provider exact2와 provider-neutral mixed Explicit Paths authoring을 Current 계약으로 승격했다.
-- DAO-P0-06 사전 Acceptance/Measurement는 P0 0 / blocking P1 0 / P2 1 non-blocking PASS다. second onboarding의 prohibited shared algorithm duplication은 0이며 third type는 typed provider/DACE + provider registration + explicit operational admission으로 확장하고 shared Preview/Review/TOCTOU/Apply/Durable/DACE core algorithm rewrite는 요구하지 않는다.
-- final executable baseline은 Build `39e4973ff0ad4e31803c679d272533ff`, focused4 `148c4f325b724b2fa7bfd7158819c531`, affected13 `0f2f69983f024986aa87a98afee2aed9`, Missile DACE15 `8967abe39f1a4d128c3ce455ede970a5` PASS다. DAO-P0-06은 executable Source mutation 0이라 이 evidence를 반복 실행하지 않았다.
-- Product canonical Ammo exact0, Missile Product exact3, HeavyFinite/RocketFinite exact2, protected exact10을 보존했다. Final Audit의 문서-only P1/P2 projection 교정 후 최종 판정은 P0 0 / blocking P1 0 / P2 1 non-blocking PASS다. DamageData는 third onboarding Candidate / Not Started이며 자동 Active로 승격하지 않는다.
+- DamageData third onboarding은 Production provider/mixed operational admission exact3, Damage DACE ContractReady, accepted history `DACE-DamageData-S1-A1-Bootstrap` exact1, canonical Product Damage exact0으로 Current 승격됐다.
+- second→third 측정은 type-owned Production exact5/1,789 LOC → exact5/1,574 LOC이며 shared touch exact5 전부 registration/admission/read-only projection이다. prohibited shared algorithm duplication exact0, shared core algorithm rewrite 0 required, fourth-type onboarding readiness PASS다.
+- DDO-P0-05 executable mutation0이므로 latest Build/DDO exact14를 재사용하고 predecessor4/affected13은 재실행하지 않았다. 최종 판정은 P0 0 / blocking P1 0 / P2 2 non-blocking PASS다.
 - 현재 단일 Active `CF-FQ-039 Production UI Visual Rework`는 변경하지 않았다.
 
 ---
@@ -121,6 +120,113 @@ ActiveWork가 다시 상세 Build/Automation/USER 로그를 누적하거나 서�
 ---
 
 ## 8. Changelog
+
+### v4.217 - 2026-09-11
+
+- `CF-FQ-052 / DDO-P0-05 Reuse Measurement / Acceptance / Current System Promotion`을 `P0 0 / blocking P1 0 / P2 2 non-blocking / PASS`로 완료하고 `CF-FQ-052`를 Done / Technical Complete로 전환했다.
+- Current owner는 `Document/Systems/DataManagement/DataAssetAuthoring.md v1.5.14`, representative Plan은 `Document/Plan/DamageDataOnboarding/DamageDataOnboardingPlan.md v0.2.14` Historical + Retained Path다. Ready 복원 행은 제거했고 G5 physical move는 Deferred다.
+- executable mutation0이라 latest Build/DDO exact14와 predecessor4/affected13 evidence를 반복하지 않았다. 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v4.216 - 2026-09-11
+
+- `CF-FQ-052 / DDO-P0-04 Mid-review Correction + Re-review`에서 `OperationalAdmission` direct negative regression P1-1을 test-only로 닫고 `P0 0 / blocking P1 0 / P2 2 non-blocking / Final Technical Acceptance PASS`로 전진했다.
+- Official UE 5.8 Build `c1d0a410311b4399a6b601813ce504d8` PASS, DDO exact14 `e61b14268ab84638af2942bcfc46320f` 14/14 PASS다. Production/shared/DACE mutation0이며 predecessor4/affected13은 재실행하지 않았다.
+- representative Plan은 v0.2.13이며 exact next는 `DDO-P0-05 Reuse Measurement / Acceptance / Current System Promotion`이다. 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v4.215 - 2026-09-11
+
+- `CF-FQ-052 / DDO-P0-04 Post-Implementation Mid-review`를 `P0 0 / blocking P1 1 / P2 2 non-blocking / HOLD`로 판정하고 representative Plan을 v0.2.12로 전진했다.
+- Production exact3 same-backing authority, actual three-type durable/duplicate/TOCTOU와 per-TypeKey DACE/history/Product Damage exact0는 정상이며 production behavior defect evidence는 0이다.
+- P1은 `OperationalAdmission` direct negative acceptance regression completeness 1건이다. Current exact3 implementation은 rollback하지 않으며 exact next는 `DDO-P0-04 Mid-review Correction + Re-review`다.
+- Review에서 executable mutation과 Build/Automation rerun은 0이며 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v4.214 - 2026-09-11
+
+- `CF-FQ-052 / DDO-P0-04 Three-Type Mixed Integration` implementation + fresh validation을 PASS로 전진했다. current executable mixed operational admission은 MissileGuidePreset+AmmoData+DamageData exact3다.
+- Official Build `6141ed709072432693b6d2171c22d599`, DDO exact14 `0ccb7da7728242038bc124697ec315fd` 14/14, predecessor DAO mixed exact4 `087dff5abe6f4103af63f2bc1ae79fe0` 4/4, affected13 `002d646b644c4160a836765d68e6605c` 13/13 PASS다. protected exact13 mutation0, shared forbidden core diff0, disposable residue0를 확인했다.
+- representative Plan은 v0.2.11이며 exact next는 `DDO-P0-04 Post-Implementation Mid-review`다. 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v4.213 - 2026-09-11
+
+- `CF-FQ-052 / DDO-P0-04 Contract Correction + Re-review`를 document-only로 수행해 Pre-review blocking P1 exact4를 모두 닫고 `P0 0 / blocking P1 0 / P2 2 non-blocking / Technical Contract PASS`로 전진했다.
+- production exact3 explicit authority/direct regression, three-type positive lifecycle, Damage 참여 class-scoped StableLogicalId/global TargetObjectPath duplicate와 Apply 전 source/current stale mutation0, per-TypeKey DACE/history+canonical Damage exact0/Product-disposable isolation을 representative Plan v0.2.10에 동결했다.
+- current executable mixed admission은 계속 MissileGuidePreset+AmmoData exact2다. Source/Asset/Test 구현과 Build/Automation은 이번 단계 0이며 exact next는 `DDO-P0-04 Three-Type Mixed Integration — Implementation + Fresh Validation`이다. 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v4.212 - 2026-09-11
+
+- `CF-FQ-052 / DDO-P0-04 Three-Type Mixed Integration — Pre-Implementation Contract Review`를 `P0 0 / blocking P1 4 / P2 2 non-blocking / HOLD`로 기록하고 representative Plan을 v0.2.9로 전진했다.
+- P1 exact4는 production exact3 admission authority+direct regression, three-type success lifecycle, Damage 참여 duplicate/TOCTOU negative matrix, DACE/history+canonical Damage exact0/Product-disposable isolation contract 미동결이다. 기존 production allowlist direct-regression P2는 이번 Gate에서 P1로 승격했다.
+- shared Preview/Review/TOCTOU/Durable/DACE algorithm rewrite 필요성은 0이며 production mixed admission은 계속 MissileGuidePreset+AmmoData exact2다. Source/Test/Build/Automation implementation 0, exact next는 `DDO-P0-04 Contract Correction + Re-review`다. 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v4.211 - 2026-09-11
+
+- `CF-FQ-052 / DDO-P0-03 Post-Implementation Mid-review`를 `P0 0 / blocking P1 0 / P2 3 non-blocking / Technical PASS`로 닫고 representative Plan을 v0.2.8로 전진했다.
+- Damage DACE exact4, bootstrap exact1, provider ContractReady, production fingerprint exact16 independent probe, no-delta canonical exact0와 cross-TypeKey history isolation을 독립 재검수했다. existing Build/focused10/affected13 terminal PASS와 protected exact12/shared guard/Missile·Ammo history diff0를 재확인했다.
+- production mixed operational admission은 MissileGuidePreset+AmmoData exact2를 유지하고 DDO-P0-04 구현은 시작하지 않았다. exact next는 `DDO-P0-04 Three-Type Mixed Integration — Pre-Implementation Contract Review`이며 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v4.210 - 2026-09-11
+
+- `CF-FQ-052 / DDO-P0-03` Damage DACE exact4 descriptor + `DACE-DamageData-S1-A1-Bootstrap` exact1 + provider `ContractReady` candidate를 구현하고 fresh validation까지 PASS했다. representative Plan은 v0.2.7이다.
+- Official UE 5.8 Build `9cb16c52112f4a448f97c14b25cd57dd` PASS, focused DDO exact10 `d7acaa78e415424488951a081b8d7db0` 10/10 PASS, affected CF-FQ-049 exact13 `3880ebbf462440c6868ade0065ed64c3` 13/13 PASS + fixture residue0이다.
+- shared `FCFDAContractGuard`, Missile/Ammo accepted history와 protected exact12 diff0, canonical Product Damage target exact0, Product Damage Apply/Save0와 mixed admission Missile+Ammo exact2를 보존했다.
+- 현재 checkpoint는 `Implementation + Fresh Validation PASS / Post-Implementation Mid-review Pending`이며 exact next는 `DDO-P0-03 Post-Implementation Mid-review`다. 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v4.209 - 2026-09-11
+
+- `CF-FQ-052 / DDO-P0-03 Contract Correction + Re-review`를 `P0 0 / blocking P1 0 / P2 3 non-blocking / Technical Contract PASS`로 닫고 representative Plan을 v0.2.6으로 전진했다.
+- SourceShape exact12, AdapterShape exact20, Mapping exact19, Semantic exact14, production fingerprint token exact16, `DACE-DamageData-S1-A1-Bootstrap` exact1, ContractReady activation transaction과 no-delta canonical exact0 machine-state를 normative contract로 동결했다.
+- 독립 재검수에서 shared descriptor signature의 ordinal canonicalization과 production token emission order 계약을 분리 확인했다. `CFDADamageDace.*`/history base는 아직 존재하지 않고 provider는 계속 `ContractNotReady`; shared guard/protected exact12 fresh diff0이다.
+- exact next는 `DDO-P0-03 Damage DACE Descriptor / Accepted History — Implementation + Fresh Validation`이다. 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v4.208 - 2026-09-11
+
+- `CF-FQ-052 / DDO-P0-03 Pre-Implementation Contract Review`를 `P0 0 / blocking P1 4 / P2 3 non-blocking / HOLD`로 기록하고 representative Plan을 v0.2.5로 전진했다.
+- P1은 Damage four-descriptor exact matrix, SemanticContract+production probe independent manifest, bootstrap exact1/history owner+ContractReady activation ordering, no-delta revision/migration+canonical exact0 machine-state 미동결이다.
+- shared `FCFDAContractGuard` algorithm rewrite 필요성은 0이며 protected exact12와 guard `.h/.cpp` fresh diff0을 확인했다. Damage DACE implementation/history/readiness mutation과 Build/Automation은 0이다.
+- exact next는 `DDO-P0-03 Contract Correction + Re-review`다. 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v4.207 - 2026-09-11
+
+- `CF-FQ-052 / DDO-P0-02 Post-Implementation Mid-review`를 `P0 0 / blocking P1 0 / P2 3 non-blocking / Technical PASS`로 닫고 representative Plan을 v0.2.4로 전진했다.
+- exact12 materializer/provider-local Reviewed Apply/shared durable+TOCTOU reuse/disk reload readback/source-current stale mutation0을 independent Source review로 확인했다. protected exact12와 shared implementation exact4 diff는 0이다.
+- Damage DACE는 `ContractNotReady`, mixed operational admission은 MissileGuidePreset+AmmoData exact2를 유지한다. exact next는 DDO-P0-03 Pre-Implementation Contract Review이며 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v4.206 - 2026-09-11
+
+- `CF-FQ-052 / DDO-P0-02` 구현과 fresh validation을 완료해 representative Plan을 v0.2.3으로 전진했다. 현재 checkpoint는 `Implementation + Fresh Validation PASS / Post-Implementation Mid-review Pending`이다.
+- Damage provider에 exact12 materializer + provider-local Reviewed mutation callback을 추가했고 official UE 5.8 Build, DDO focused6, affected CF-FQ-049 exact13이 PASS했다. protected exact12와 shared Durable/Apply/Ops `.cpp` diff는 0이다.
+- Damage DACE는 `ContractNotReady`, mixed operational admission은 MissileGuidePreset+AmmoData exact2를 유지한다. exact next는 `DDO-P0-02 Post-Implementation Mid-review`이며 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v4.205 - 2026-09-11
+
+- `CF-FQ-052 / DDO-P0-01 Contract Correction + Re-review`를 `P0 0 / blocking P1 0 / P2 2 non-blocking / Technical PASS`로 닫고 representative Plan을 v0.2.2로 전진했다.
+- BaseDamage exact-zero와 radial-enabled readiness P1을 provider-local로 교정했고 corrected focused4, official UE 5.8 Build, affected CF-FQ-049 exact13이 모두 PASS했다. protected exact12와 shared core diff는 0이다.
+- Damage Apply/Durable/DACE/operational admission은 아직 열지 않았으며 exact next는 `DDO-P0-02 Current-State / Materializer / Durable Apply / TOCTOU`다. 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v4.204 - 2026-09-10
+
+- `CF-FQ-052 / DDO-P0-01 Post-Implementation Mid-review`를 `P0 0 / blocking P1 2 / P2 2 non-blocking / HOLD`로 복원 포인터에 반영하고 representative Plan을 v0.2.1로 전진했다.
+- P1은 BaseDamage exact-zero acceptance와 `bUseRadialDamage=true`의 Runtime-aligned `ExplosionRadius > 0 && ExplosionDamage > 0` validation 누락이다. shared core rewrite 필요성은 0이며 provider-local correction이 exact next다.
+- protected exact12 fresh scoped diff 0을 확보했고 blocking P1 발견 즉시 HOLD해 affected13은 fresh 실행하지 않았다. Damage Apply/Durable/DACE/operational admission과 DDO-P0-02는 열지 않았으며 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v4.203 - 2026-09-10
+
+- `CF-FQ-052 / DDO-P0-00 Contract Correction + Re-review`를 `P0 0 / blocking P1 0 / P2 2 non-blocking / PASS`로 복원 포인터에 반영하고 representative Plan을 v0.2.0으로 전진했다.
+- ArmorPenetration current Runtime-active semantic, Damage exact12 validation, provider/DACE readiness transition, persisted exact2 read-only 보호와 DACE canonical Product Staging explicit exact0 경계를 normative contract로 동결했다.
+- exact next는 `DDO-P0-01 Damage Typed Schema / Provider / Parse / Fingerprint / Preview`다. 이번 단계 Source/Asset/Test mutation과 Build/Automation 실행은 0이며 Current authoring support exact2, CF-FQ-039 Active와 기존 병렬 dirty를 유지한다.
+
+### v4.202 - 2026-09-10
+
+- `CF-FQ-052 / DDO-P0-00 Initial Design Review` 결과를 `P0 0 / blocking P1 4 / P2 2 / Implementation HOLD`로 복원 포인터에 반영하고 representative Plan을 v0.1.1로 전진했다.
+- fresh persisted DamageData exact2와 Current Runtime을 교차검증해 `DA_DamageAsset` Product/runtime baseline, `DA_DamageArmorPenTest` AP50 technical baseline을 보호 대상으로 확정했다. current ArmorPenetration은 이미 VehicleDefense 관통 계산에서 실제 사용 중이다.
+- exact next는 `DDO-P0-00 Contract Correction + Re-review`다. Source/Asset mutation과 Build/Automation은 0이며 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty를 유지한다.
+
+### v4.201 - 2026-09-10
+
+- 사용자 승인으로 `CF-FQ-052 DamageData Third-Type Onboarding / Reuse Verification`을 P2 / Ready 복원 체크포인트에 등록했다. 대표 Plan은 `Document/Plan/DamageDataOnboarding/DamageDataOnboardingPlan.md v0.1.0`이다.
+- CF-FQ-051 최근 완료 블록의 DamageData Candidate handoff를 CF-FQ-052 Ready로 정리했다. 현재 DataAsset Authoring Current support는 MissileGuidePreset + AmmoData exact2이며 DamageData 구현은 아직 시작하지 않았다.
+- exact next는 `DDO-P0-00 Third-Type Contract / Reuse Baseline Freeze + Initial Design Review`다. shared core semantic rewrite가 필요해지는 즉시 구현을 멈추는 Stop Rule을 복원 포인터에도 반영했다.
+- 이번 승격은 문서/계획 등록만 수행하며 Source/Asset/Build/Automation mutation은 0이다. 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty를 변경하지 않는다.
 
 ### v4.200 - 2026-09-10
 
