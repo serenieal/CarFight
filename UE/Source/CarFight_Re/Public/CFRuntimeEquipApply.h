@@ -1,13 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-09-02
-// Description: CF-FQ-041 RTA-P0-03 장비 슬롯 Runtime Apply 서비스 계약
-// Scope: Runtime Test Catalog 장비 허용 검증, transient Fitting 후보 생성, 단일 Mount 교체, Runtime 적용·복구 결과와 readback을 제공합니다.
+// Version: 1.1.0
+// Date: 2026-09-14
+// Description: CF-FQ-041 장비 슬롯 Runtime Apply 재사용 서비스 계약
+// Scope: 선택 frontend와 분리된 Catalog 장비 허용 검증, transient Fitting 후보 생성, 단일 Mount 교체, Runtime 적용·복구 결과와 readback을 제공합니다.
 // Changelog:
+// - v1.1.0: RuntimeApply를 Debug UI 전용 구현이 아니라 Garage/Inventory 등 후속 frontend가 같은 Fitting Runtime authority를 재사용할 수 있는 application seam으로 문서 계약을 명확히 했습니다.
 // - v1.0.0: RTA-P0-03 Equipment Slot Runtime Apply의 Succeeded/ValidationFailed/ApplyFailed/RecoveryFailed 결과 계약과 Catalog/직접 적용 API를 추가.
 // Migration:
-// - Debug/Demo Runtime Apply는 Inventory를 우회하지만 UCFVehicleFittingData::BuildFittingSnapshot과 기존 Fitting Runtime Commit 계약을 그대로 사용합니다.
+// - 현재 RuntimeApply frontend는 Inventory ownership을 우회하지만 UCFVehicleFittingData::BuildFittingSnapshot과 기존 Fitting Runtime Commit 계약을 그대로 사용합니다.
 // - 기존 FittingData와 같은 VehicleData면 MountSelections, InitialSortieAmmoLoads, DefenseSelection을 transient 후보에 보존합니다.
 // - finite 무기에 필요한 출격 탄약이 없으면 BuildFittingSnapshot 검증 실패를 그대로 반환하며 탄약 수량을 자동 생성하지 않습니다.
 
@@ -109,7 +110,7 @@ struct CARFIGHT_RE_API FCFRuntimeEquipApplyResult
 	bool IsSuccessful() const { return Status == ECFRuntimeEquipApplyStatus::Succeeded; }
 };
 
-/** RTA-P0-03 Debug/Demo 장비 슬롯 Runtime Apply를 기존 Fitting authority에 연결하는 C++ 서비스입니다. */
+/** 선택 frontend와 분리된 장비 슬롯 Runtime Apply를 기존 Fitting authority에 연결하는 재사용 C++ 서비스입니다. */
 struct CARFIGHT_RE_API FCFRuntimeEquipApplyService
 {
 	// [v1.0.0] Runtime Test Catalog 전체 계약과 exact EquipmentPresetData membership을 mutation 없이 검증합니다.

@@ -1,12 +1,14 @@
 # Copyright (c) CarFight. All Rights Reserved.
-# Version: v1.1.0
-# Date: 2026-08-17
+# Version: v1.2.0
+# Date: 2026-09-14
 # Description: CF-FQ-034 FIT-P0-07B 동일 SUV 플랫폼의 Light / Default / Heavy 공식 Mobility Fitting Fixture 3종을 생성하고 Snapshot 질량과 사용자 표시명을 검증합니다.
 # Changelog:
+# - v1.2.0: Product DA_RocketBody의 Provisional Gameplay Balance 350→150kg 반영에 따라 이를 공유하는 Default Fixture 기대 Equipment/Total 질량을 270/1370kg으로 갱신. 격리된 HeavyFinite mount/weapon은 350+120kg을 유지하므로 Heavy 기대값 1600kg은 유지.
 # - v1.1.0: 공식 Fixture 3종의 DisplayName을 모빌리티 경량/기본/중량 피팅으로 고정하고, 기존 3종이 모두 존재할 때 Snapshot 계약 검증 후 DisplayName만 안전하게 교정하는 경로를 추가.
 # - v1.0.0: 기존 저장 VehicleData / Defense / HeavyFinite payload만 재사용해 1000kg / 1570kg / 1600kg Fixture를 생성하고 BuildFittingSnapshot readback을 검증하는 최초 버전.
 # Migration:
-# - Production VehicleData, WeaponData, DefenseData, AmmoData의 질량값은 변경하지 않습니다.
+# - 이 runner 자체는 Production VehicleData, WeaponData, DefenseData, AmmoData의 질량값을 변경하지 않습니다.
+# - Default Fixture는 Product DA_RocketBody를 참조하므로 해당 Product mount 질량 변경을 파생 Snapshot 기대값에 반영합니다. Heavy Fixture는 격리 테스트 mount/weapon을 사용하므로 기존 470kg 장비 질량을 유지합니다.
 # - 대상 3종이 모두 없을 때만 생성하고, 부분 존재는 안전하게 거부합니다. 3종이 모두 존재하면 질량·참조 계약을 먼저 검증한 뒤 DisplayName만 공식 이름으로 교정합니다.
 
 import json
@@ -16,7 +18,7 @@ import unreal
 
 # 공식 Mobility Fixture가 공유할 Fitting-ready SUV VehicleData입니다.
 SOURCE_VEHICLE = "/Game/CarFight/Vehicles/Data/Defense/DA_VehicleDefense_TestSUV"
-# Default 1570kg 구성의 검증된 기존 FittingData입니다.
+# 현재 Product DA_RocketBody 질량을 반영하면 1370kg이 되는 검증된 기존 Default FittingData입니다.
 SOURCE_DEFAULT_FITTING = "/Game/CarFight/Tests/VehicleDefense/Data/DA_Fit_DefenseTestSUV"
 # Heavy payload의 Mount / Weapon / Ammo 선택을 보존한 기존 FittingData입니다.
 SOURCE_HEAVY_FITTING = "/Game/CarFight/Tests/AmmoIntegration/DA_Fit_HeavyFinite"
@@ -24,7 +26,7 @@ SOURCE_HEAVY_FITTING = "/Game/CarFight/Tests/AmmoIntegration/DA_Fit_HeavyFinite"
 TARGET_FOLDER = "/Game/CarFight/Tests/Fitting"
 # 장비·방어·탄약이 없는 동일 SUV Light Fixture입니다.
 TARGET_LIGHT = f"{TARGET_FOLDER}/DA_Fit_MobilityLight"
-# 기존 검증된 1570kg 구성을 복제한 Default Fixture입니다.
+# Product DA_RocketBody의 현재 임시 질량을 반영한 1370kg Default Fixture입니다.
 TARGET_DEFAULT = f"{TARGET_FOLDER}/DA_Fit_MobilityDefault"
 # 기존 HeavyFinite payload를 동일 SUV와 기본 방어에 재조합한 Heavy Fixture입니다.
 TARGET_HEAVY = f"{TARGET_FOLDER}/DA_Fit_MobilityHeavy"
@@ -323,10 +325,10 @@ def main():
             default_snapshot,
             {
                 "base_mass_kg": 1000.0,
-                "equipment_mass_kg": 470.0,
+                "equipment_mass_kg": 270.0,
                 "ammo_mass_kg": 0.0,
                 "defense_mass_kg": 100.0,
-                "total_mass_kg": 1570.0,
+                "total_mass_kg": 1370.0,
                 "maximum_gross_mass_kg": 2500.0,
             },
         )

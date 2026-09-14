@@ -1,10 +1,10 @@
 # WeaponData
 
-- Version: 1.1.0
-- Date: 2026-08-18
-- Status: Current System / UI-P0-06 Weapon Heat Runtime Additive Integration
+- Version: 1.2.0
+- Date: 2026-09-14
+- Status: Current System / Prototype Weapon Provisional Gameplay Balance
 - Feature: `CF-FQ-008 무장 데이터 정의` + `CF-FQ-032 UI-P0-06 Weapon Heat Runtime 소비 확장`
-- Verification: 기존 CF-FQ-008 검증 보존 / Heat final UE 5.8 Editor Build `0ecfed49ab3a4f41b349fc707c44e5f2` PASS / exact `CarFight.UI.UI_P0_06.HeatRuntimeResourceContract` `c736d1a6d6134a798a4b84452750e3d6` 1/1 PASS / WeaponData Content Asset mutation 0
+- Verification: 기존 CF-FQ-008/Heat 검증 보존 / 2026-09-14 Product Prototype Weapon Mass Persisted AssetDump 11/11 PASS / UE 5.8 Editor Build `8c957a50fe594132b3448d6f0358eed2` PASS / RuntimeApply `54dbac4be35b45ce914e915002867561` 16/16 PASS
 
 ---
 
@@ -107,6 +107,24 @@ WeaponMassKg = 0
 
 음수 또는 비유한 값은 DataValidation Invalid다.
 실제 차량 총 질량 계산과 Runtime 재적용은 Fitting 계층이 소유한다.
+
+현재 Prototype 무기 질량은 실물 공식 제원이 아니라 **Provisional Gameplay Balance**다. 실존 차량의 차체 질량·허용 총중량은 가능한 범위에서 제조사 Reference를 우선하지만, 자체 제작 무기는 공식 질량 출처가 없으므로 현재 개발 단계의 장착·통합 테스트 가능성을 우선한다.
+
+2026-09-14 현재 Small/Medium 대표 무기군이 아직 충분히 준비되지 않은 상태에서 기존 Large Prototype 무기가 질량만으로 대표 차량 장착 경로를 막지 않도록 다음 임시값을 사용한다.
+
+```text
+Prototype Roof Cannon Kit
+- TurretMountData.TurretMountWeightKg = 200 kg
+- WeaponData.WeaponMassKg = 100 kg
+- Equipment 합계 = 300 kg
+
+Prototype Rocket Launcher Kit
+- TurretMountData.TurretMountWeightKg = 150 kg
+- WeaponData.WeaponMassKg = 80 kg
+- Equipment 합계 = 230 kg
+```
+
+이 정책은 GrossMass 검증을 완화하는 것이 아니다. Fitting은 위 질량을 그대로 합산하고 `MaximumGrossMassKg` 초과를 계속 fail-closed한다. 향후 Small/Medium/Large 무기군과 차량 차급이 충분히 갖춰지면 Product DataAsset의 질량값을 정식 게임 밸런스로 다시 조정한다.
 
 ### 3.4 Fire
 
@@ -410,20 +428,20 @@ Launcher Config의 clamp/fallback은 기존 `GetEffective...()` 함수가 소유
 
 ## 6. 대표 WeaponData 기준선
 
-CF-FQ-008은 기존 Content Asset을 수정하지 않고 다음 두 대표 자산을 Load-only로 검증했다.
+현재 대표 Product WeaponData는 다음 값으로 운용한다. CF-FQ-008 당시 Load-only 기준값은 Historical evidence이며, 2026-09-14 Provisional Gameplay Balance 이후 현재 Product 값과 구분한다.
 
 ### 6.1 DA_ProtoTurretCannon
 
 ObjectPath:
 `/Game/CarFight/Weapons/Data/WeaponDefs/DA_ProtoTurretCannon.DA_ProtoTurretCannon`
 
-검증된 대표 값:
+현재 대표 값:
 
 ```text
 WeaponId = Proto_TurretCannon
 WeaponSize = Large
 CompatibleMountTypes = Turret
-WeaponMassKg = 0
+WeaponMassKg = 100
 FireMode = Projectile
 FireRatePerMinute = 120
 MaxRange = 10000
@@ -441,13 +459,13 @@ DefaultFireFxData = DA_FX_ProtoWeaponFire
 ObjectPath:
 `/Game/CarFight/Weapons/Data/WeaponDefs/DA_RocketLauncher.DA_RocketLauncher`
 
-검증된 대표 값:
+현재 대표 값:
 
 ```text
 WeaponId = Proto_RocketLauncher
 WeaponSize = Large
 CompatibleMountTypes = Turret
-WeaponMassKg = 0
+WeaponMassKg = 80
 FireMode = Projectile
 FireRatePerMinute = 20
 MaxRange = 15000
@@ -460,7 +478,9 @@ DefaultProjectileData = DA_Rocket_PropTest
 DefaultFireFxData = DA_FX_ProtoWeaponFire
 ```
 
-신규 Ammo 세부 필드는 AssetDump projection 누락값을 추정하지 않았다. 최종 정적 계약 유효 여부와 `UsesFiniteAmmoRuntime()` 판정은 C++ Load-only Automation 결과를 기준으로 한다.
+CF-FQ-008 완료 당시 두 대표 WeaponData의 `WeaponMassKg = 0` 관측은 당시 Load-only Historical baseline이다. 이후 Product authoring에서 120kg placeholder가 사용되었고, 2026-09-14 현재는 Cannon 100kg / Rocket Launcher 80kg의 Provisional Gameplay Balance로 교체됐다. `WeaponMassKg = 0` 자체를 허용하는 Validator 호환 계약은 그대로 유지한다.
+
+신규 Ammo 세부 필드는 과거 AssetDump projection 누락값을 추정하지 않았다. 최종 정적 계약 유효 여부와 `UsesFiniteAmmoRuntime()` 판정은 C++ 계약과 최신 persisted Asset evidence를 함께 기준으로 한다.
 
 ---
 
@@ -492,6 +512,31 @@ Content Asset mutation = 0
 첫 Build `f3cd9332aa854248979f164053a7e4c4`의 Exit 6은 `CFWeaponDataTests.cpp`에서 존재하지 않는 `TNumericLimits<float>::Infinity()`를 사용한 테스트 코드 오류였다. `std::numeric_limits<float>::infinity()`로 교정한 뒤 최종 Build가 PASS했으며 WeaponData Runtime/DataValidation 본체 결함으로 판정하지 않는다.
 
 CF-FQ-008은 정적 DataAsset 계약 기능이므로 별도 USER PIE를 완료 조건으로 요구하지 않는다. 이 판정은 기존 WeaponFire·Launcher·Ammo·UI USER 체크포인트를 새 USER PASS로 승격한다는 의미가 아니다.
+
+2026-09-14 Prototype Weapon Provisional Gameplay Balance 검증:
+
+```text
+Product persisted mass mutation
+- DA_CannonBody.TurretMountWeightKg: 350 → 200 kg
+- DA_ProtoTurretCannon.WeaponMassKg: 120 → 100 kg
+- DA_RocketBody.TurretMountWeightKg: 350 → 150 kg
+- DA_RocketLauncher.WeaponMassKg: 120 → 80 kg
+
+Fresh AssetDump
+- /Game/CarFight/Weapons/Data: 11/11 success, 0 failed
+
+Official UE 5.8 Editor Build
+- Job: 8c957a50fe594132b3448d6f0358eed2
+- PASS / Exit 0
+
+RuntimeApply Automation
+- Process: 54dbac4be35b45ce914e915002867561
+- EngineExitCode=0
+- Success=16 / Failure=0
+- Result SHA-256: 29eef74aaa1617b313829fbc9a14f82b64d4e560a129175649ff9f35d5cd1732
+```
+
+이 변경은 Weapon/Fitting 질량 입력 데이터의 밸런스 조정이며 GrossMass Validator, Mount 호환 판정, Runtime Apply safety contract는 변경하지 않았다.
 
 ---
 
@@ -569,8 +614,15 @@ Runtime 상태 머신만 변경되고 WeaponData의 정적 입력 의미가 바�
 
 ## 12. 버전 관리
 
-- 현재 문서 버전: `1.1.0`
+- 현재 문서 버전: `1.2.0`
 - 문서 상태: `Current System`
+
+### v1.2.0 - 2026-09-14
+
+- Prototype 무기 질량을 실물 고증값이 아닌 `Provisional Gameplay Balance`로 명시하고, 현재 Small/Medium 무기군 부족 때문에 대표 Large 무기가 질량만으로 개발·통합 테스트를 막지 않게 하는 운영 기준을 추가했다.
+- Product Prototype Roof Cannon Kit을 Mount 200kg + Weapon 100kg = 300kg, Prototype Rocket Launcher Kit을 Mount 150kg + Weapon 80kg = 230kg으로 조정한 Current persisted 값을 기록했다.
+- 과거 CF-FQ-008의 `WeaponMassKg=0`과 이후 120kg placeholder를 Historical baseline으로 분리하고 현재 Representative Asset 값을 100kg/80kg으로 교정했다.
+- GrossMass 검증 코드는 변경하지 않았으며 fresh AssetDump 11/11, UE 5.8 Build PASS, RuntimeApply 16/16 PASS를 Current evidence로 연결했다.
 
 ### v1.1.0 - 2026-08-18
 
@@ -598,6 +650,7 @@ Runtime 상태 머신만 변경되고 WeaponData의 정적 입력 의미가 바�
 - FireRate=0, MaxRange=0, WeaponMass=0, DefaultProjectileData=None과 infinite-ammo 호환은 현재 허용 계약을 유지한다.
 - MagazineSize와 ReloadTimeSeconds는 현재 CF-FQ-031 Ammo Runtime의 정적 입력이며 “미구현 예약 필드”로 해석하지 않는다.
 - HeatPerShot / MaxHeat / HeatDissipationPerSecond는 현재 Heat Runtime의 정적 입력이다. 세 값이 모두 양수일 때만 활성화하며 현재 Heat·과열 상태 자체는 WeaponData에 저장하지 않는다.
+- 자체 제작 Prototype Weapon/Mount 질량은 공식 실물 제원이 없으므로 현재 Product 개발 단계에서는 `Provisional Gameplay Balance`로 운용한다. 차량 GrossMass 검증을 우회하지 않고 Product DataAsset 값만 조정하며, 정식 무기군 밸런스가 생기면 같은 DataAsset authority에서 재조정한다.
 ```
 
 ---
@@ -608,6 +661,9 @@ Runtime 상태 머신만 변경되고 WeaponData의 정적 입력 의미가 바�
   - 기존 CF-FQ-008 Automation `eefe58aa87d74dcaa79a1764a5f7611b`
   - Heat final Build `0ecfed49ab3a4f41b349fc707c44e5f2`
   - Heat exact Automation `c736d1a6d6134a798a4b84452750e3d6` / Result SHA-256 `1abf0dc7a4788d6543c7933abef38433849ae57d569229cfab220f14937abad5`
+  - 2026-09-14 Provisional Weapon Mass fresh AssetDump `/Game/CarFight/Weapons/Data` 11/11 PASS
+  - 2026-09-14 UE 5.8 Build `8c957a50fe594132b3448d6f0358eed2` PASS
+  - 2026-09-14 RuntimeApply `54dbac4be35b45ce914e915002867561` 16/16 PASS / Result SHA-256 `29eef74aaa1617b313829fbc9a14f82b64d4e560a129175649ff9f35d5cd1732`
   - `Document/Systems/Combat/Ammo.md v1.0.0`
   - `Document/Systems/Combat/WeaponFire.md`
   - `Document/Plan/Archive/WeaponDataPlan.md v0.2.0`

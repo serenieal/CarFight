@@ -1,16 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.2.0
-// Date: 2026-09-04
+// Version: 1.3.0
+// Date: 2026-09-14
 // Description: CF-FQ-041 Runtime Equipment Apply + CF-FQ-047 Standard Mount active identity handoff 구현
-// Scope: transient VehicleFittingData 후보, Fitting/Mass checkpoint, 장비 의존 Runtime refresh, 실패 복구와 final readback을 소유합니다.
+// Scope: frontend와 분리된 transient VehicleFittingData 후보, 완전한 Mount 상태 표현, Fitting/Mass checkpoint, 장비 의존 Runtime refresh, 실패 복구와 final readback을 소유합니다.
 // Changelog:
+// - v1.3.0: Legacy→Snapshot 첫 장비 적용에서 VehicleData의 모든 Mount를 기본 장비 또는 명시적 빈 장착으로 materialize해 다중 Mount의 정상 빈 슬롯이 MissingEquipmentPreset 오류로 오인되지 않도록 교정했습니다.
 // - v1.2.0: CF-FQ-047 mid-review correction. 기존 active weapon이 candidate에서 사라졌는데 USER target이 weapon-bearing이 아니면 Fitting Prepare 전에 ValidationFailed로 명시 거부합니다.
 // - v1.1.0: CF-FQ-047 P0 correction. 기존 Weapon active Mount가 candidate weapon-bearing Snapshot에 없고 USER target Mount가 유효한 무기 Mount이면 candidate active identity를 exact target으로 전환합니다.
 // - v1.0.0: Runtime Test Catalog authorization, 단일 Mount 교체, Snapshot validation, Fitting+Mass 적용·복구와 readback을 최초 구현.
 // Migration:
 // - Inventory Ledger/FieldFit Inventory transaction을 위조하지 않습니다. 기존 Fitting Runtime authority와 Chaos Mass authority만 재사용합니다.
-// - 현재 VehicleFittingData가 같은 VehicleData를 가리키면 선택/탄약/방어를 복사하고, 아니면 VehicleData 기본값에서 transient 후보를 구성합니다.
+// - 현재 Applied Snapshot을 가진 VehicleFittingData가 같은 VehicleData를 가리키면 선택/탄약/방어를 복사합니다.
+// - Legacy Runtime에서 첫 Snapshot 후보를 만들 때는 VehicleData의 모든 Mount를 완전 상태로 materialize합니다. 유효한 기본 장비는 활성 선택, 기본 장비가 없는 Mount는 명시적 빈 장착이며 누락 선택은 fail-closed입니다.
 // - 후보 또는 복구 Refresh는 Applied Snapshot의 InitialSortieAmmoLoads 기준으로 Ammo Runtime을 재구성하며 현재 전투 중 잔탄 상태를 checkpoint하지 않습니다.
 
 #include "CFRuntimeEquipApply.h"
@@ -147,6 +149,42 @@ namespace
 			&& CurrentVehicleFittingData->GetOutermost() == GetTransientPackage();
 	}
 
+	// [v1.3.0] Legacy Runtime의 VehicleData Mount 전체를 기본 장비 또는 명시적 빈 장착으로 완전하게 materialize합니다.
+	bool BuildCompleteLegacyMountSelections(
+		UCFVehicleFittingData* CandidateFittingData,
+		const UCFVehicleData* VehicleData,
+		FString& OutFailureReason)
+	{
+		if (!IsValid(CandidateFittingData) || !IsValid(VehicleData))
+		{
+			OutFailureReason = TEXT("Legacy 장착 상태를 구성할 VehicleFittingData 또는 VehicleData가 유효하지 않습니다.");
+			return false;
+		}
+
+		CandidateFittingData->MountSelections.Reset();
+		CandidateFittingData->MountSelections.Reserve(VehicleData->MountProfiles.Num());
+
+		// [v1.3.0] VehicleData에 선언된 한 Mount의 Legacy 기본 상태를 완전 선택으로 변환합니다.
+		for (const FCFVehicleMountProfile& MountProfile : VehicleData->MountProfiles)
+		{
+			// [v1.3.0] 현재 Mount가 가진 유효한 기본 장비입니다. 없으면 이 Mount는 정상적인 빈 장착으로 materialize합니다.
+			UCFEquipmentPresetData* DefaultEquipmentPresetData = MountProfile.DefaultEquipmentPresetData.Get();
+
+			// [v1.3.0] 후보 Snapshot에서 현재 Mount 상태를 누락 없이 표현할 명시적 선택입니다.
+			FCFVehicleMountSelection CompleteMountSelection;
+			CompleteMountSelection.MountProfileId = MountProfile.MountProfileId;
+			CompleteMountSelection.EquipmentPresetData = IsValid(DefaultEquipmentPresetData)
+				? DefaultEquipmentPresetData
+				: nullptr;
+			CompleteMountSelection.bEnabled = IsValid(DefaultEquipmentPresetData);
+			CandidateFittingData->MountSelections.Add(CompleteMountSelection);
+		}
+
+		// [v1.3.0] 모든 현재 Mount를 위에서 명시했으므로 이후 누락은 후보 구성 결함으로 fail-closed 처리합니다.
+		CandidateFittingData->MissingMountSelectionPolicy = ECFMissingMountPolicy::TreatAsError;
+		return true;
+	}
+
 	// [v1.0.0] 대상 Mount의 현재 선택을 교체하면서 나머지 Fitting 선택을 그대로 보존합니다.
 	void ReplaceTargetMountSelection(
 		UCFVehicleFittingData* CandidateFittingData,
@@ -198,8 +236,18 @@ namespace
 			return false;
 		}
 
-		// 현재 Pawn source pointer의 FittingData가 동일 VehicleData에 속하면 모든 기존 선택을 보존할 원본입니다.
+		// 현재 Pawn source pointer의 FittingData가 동일 VehicleData에 속하고 실제 Applied Snapshot authority가 있으면 모든 기존 선택을 보존할 원본입니다.
 		UCFVehicleFittingData* CurrentVehicleFittingData = VehiclePawn->VehicleFittingData.Get();
+
+		// [v1.3.0] source FittingData를 그대로 복제해도 되는 실제 Snapshot Runtime 상태인지 확인할 컴포넌트입니다.
+		const UCFVehicleFittingComp* CurrentVehicleFittingComp = VehiclePawn->GetVehicleFittingComp();
+
+		// [v1.3.0] 현재 source FittingData가 실제 적용된 Snapshot과 함께 존재하는지 여부입니다.
+		const bool bCanPreserveCurrentFittingSelectionState =
+			IsValid(CurrentVehicleFittingData)
+			&& CurrentVehicleFittingData->VehicleData == VehiclePawn->VehicleData
+			&& IsValid(CurrentVehicleFittingComp)
+			&& CurrentVehicleFittingComp->HasAppliedFittingSnapshot();
 
 		// 저장 Asset을 직접 변경하지 않기 위한 unique transient Fitting UObject 이름입니다.
 		const FName TransientFittingDataName = MakeUniqueObjectName(
@@ -207,8 +255,7 @@ namespace
 			UCFVehicleFittingData::StaticClass(),
 			TEXT("RTA_EquipFitting"));
 
-		if (IsValid(CurrentVehicleFittingData)
-			&& CurrentVehicleFittingData->VehicleData == VehiclePawn->VehicleData)
+		if (bCanPreserveCurrentFittingSelectionState)
 		{
 			OutTransientFittingData = DuplicateObject<UCFVehicleFittingData>(
 				CurrentVehicleFittingData,
@@ -225,7 +272,13 @@ namespace
 			if (IsValid(OutTransientFittingData))
 			{
 				OutTransientFittingData->VehicleData = VehiclePawn->VehicleData.Get();
-				OutTransientFittingData->MissingMountSelectionPolicy = ECFMissingMountPolicy::UseVehicleDefault;
+				if (!BuildCompleteLegacyMountSelections(
+					OutTransientFittingData,
+					VehiclePawn->VehicleData.Get(),
+					OutFailureReason))
+				{
+					return false;
+				}
 			}
 		}
 
