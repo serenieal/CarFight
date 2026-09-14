@@ -1,7 +1,7 @@
 # CarFight — 05_TestChecklist
 
-> 문서 버전: v1.23.1
-> 작성일(Asia/Seoul): 2026-08-02
+> 문서 버전: v1.24.0
+> 작성일(Asia/Seoul): 2026-09-14
 > 문서 상태: Active
 > 역할: CarFight의 **완료된 Systems 기준 최소 회귀 테스트**를 관리한다.
 
@@ -442,7 +442,7 @@ DA_PFX_ThrusterTest
 | `CF-TC-003` | Vehicle | 카메라 | 차량 기준 카메라가 정상 추적/회전 | `Document/Systems/Vehicles/VehicleCamera.md` | `TODO` |
 | `CF-TC-004` | Input | 기본 입력 등록 | Enhanced Input Mapping Context 등록 성공 | `Document/Systems/Input/Input.md` | `TODO` |
 | `CF-TC-005` | UI | 차량 디버그 표시 | 현재 VehicleDebugPanel이 필요한 조건에서 표시 | `Document/Systems/UI/VehicleDebugPanel.md` | `TODO` |
-| `CF-TC-006` | UI | 조준 Reticle | 조준 Reticle 표시/갱신이 정상이며 로컬 발사 결과 피드백 후보와 충돌하지 않음 | `Document/Systems/UI/AimReticle.md`, `Document/Systems/Combat/FireFeedback.md` | `PASS` |
+| `CF-TC-006` | UI | 조준 Reticle | 유효한 무기 터렛 조준 해가 있을 때 정상 표시/갱신되며, 무기 터렛 미장착 상태에서는 조준각과 NoWeapon 피드백에 관계없이 메인 Reticle이 Hidden을 유지함 | `Document/Systems/UI/AimReticle.md`, `Document/Systems/Vehicles/VehicleAim.md`, `Document/Systems/Combat/FireFeedback.md` | `PARTIAL` |
 | `CF-TC-007` | Network | Dedicated Server 실행 | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md` | `N/A` |
 | `CF-TC-008` | Network | 1클라 Spawn/Possess | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md` | `N/A` |
 | `CF-TC-009` | Network | 2클라 Spawn/Possess | 현재 싱글 전환 기준에서는 기본 회귀에서 제외 | `Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md` | `N/A` |
@@ -835,6 +835,9 @@ CF-FQ-029의 과거 USER PIE 대상은 이미 확인된 evidence를 보존하며
 - UI Reticle과 연결되는 데이터가 유효하다.
 - LocalAimState와 FireValidationState를 구분해 확인할 수 있다.
 - bLocalWithinWeaponArc / OutOfArc는 표시/디버그 상태로 확인한다.
+- 무기 터렛 미장착 상태에서 조준이 DefaultAimProfile 내부이면 LocalReticleState가 Hidden인지 확인한다.
+- 무기 터렛 미장착 상태에서 조준이 DefaultAimProfile 밖으로 이동해 bLocalWithinWeaponArc=false가 되어도 LocalReticleState가 OutOfArc로 승격하지 않고 Hidden을 유지하는지 확인한다.
+- 무기 터렛 미장착 상태에서 발사 입력으로 NoWeapon FireFeedback가 생성되어도 메인 Reticle RenderOpacity가 0을 유지하는지 확인한다.
 - Reticle 월드 목표점이 DesiredAimTargetLocation 단일 기준으로 유지되는지 확인한다.
 - Muzzle → DesiredAimTargetLocation 요구 방향과 CurrentMuzzleDirection의 정렬 오차를 확인한다.
 - TurretAligning과 OutOfArc가 서로 다른 원인으로 구분되는지 확인한다.

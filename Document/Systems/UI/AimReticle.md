@@ -1,8 +1,8 @@
 # AimReticle
 
-- Version: 1.10.0
-- Date: 2026-08-22
-- Status: Current / P0 Aim·FireFeedback Verified / UI-P0-04 USER PASS / Post-Closure Refresh Optimization Accepted
+- Version: 1.11.0
+- Date: 2026-09-14
+- Status: Current / P0 Aim·FireFeedback Verified / UI-P0-04 USER PASS / Post-Closure Refresh Optimization Accepted / No-Turret Reticle Hidden Contract
 - Scope: 로컬 Aim/FireFeedback 표시 의미와 UCFUISubsystem 소유 AimReticle 수명·Rebind의 현재 구현 계약
 
 ---
@@ -89,9 +89,11 @@ ACFVehiclePawn::BuildFireFeedbackViewData()
   -> FireSuccess / Cooldown / FireRejected / NoWeapon / AimBlocked / OutOfArcWarning / TurretAligning 표시 데이터 생성
 
 UCFAimReticleWidget::RefreshFromPawn()
-  -> VehicleAimComp의 BaseReticleState 읽기
+  -> VehicleAimComp의 BaseReticleState / WeaponAimSolution 읽기
   -> Pawn의 FireFeedbackViewData 읽기
-  -> ResolveReticleStateFromFireFeedback()로 최종 Reticle 상태 결정
+  -> WeaponAimSolution.bHasValidSolution 확인
+      -> false: Hidden을 최종 상태로 유지
+      -> true: ResolveReticleStateFromFireFeedback()로 최종 Reticle 상태 결정
   -> RefreshTextBlocks()와 RefreshVisualStyle()로 텍스트/색상 적용
 ```
 
@@ -323,22 +325,23 @@ CurrentPawn 변경
 ```text
 NativeConstruct
   -> RefreshFromPawn
-  -> UpdateReticleVisibility
 
 NativeTick
   -> bAutoRefreshEveryTick 확인
   -> RefreshFromPawn
-  -> UpdateReticleVisibility
 
 RefreshFromPawn
   -> VehiclePawnRef 확인
   -> VehicleAimComp 확인
-  -> LocalAimState / BaseReticleState 읽기
+  -> LocalAimState / WeaponAimSolution / BaseReticleState 읽기
   -> VehiclePawnRef.BuildFireFeedbackViewData() 읽기
-  -> ResolveReticleStateFromFireFeedback()로 최종 상태 결정
-  -> ApplyFireFeedbackViewData() / ApplyReticleState() 호출
+  -> WeaponAimSolution.bHasValidSolution 확인
+      -> false: FinalReticleState = Hidden
+      -> true: ResolveReticleStateFromFireFeedback()로 최종 상태 결정
+  -> Cache 직접 갱신
   -> RefreshTextBlocks() / RefreshVisualStyle() 갱신
-  -> RenderOpacity 갱신
+  -> RefreshWeaponReticle() 갱신
+  -> UpdateReticleVisibility()로 RenderOpacity 갱신
 ```
 
 ---
@@ -354,7 +357,9 @@ RefreshFromPawn
 - UISubsystem의 `DefaultAimReticleWidgetClass`가 현재 `WBP_AimReticle`로 해석되어야 한다.
 - LocalPlayer의 `ACFPlayerController`와 UI Root가 유효해야 한다.
 - VehicleAimComp가 있어야 의미 있는 상태를 읽을 수 있다.
-- Pawn 표시 조건이 true이고 VehicleAimComp가 Hidden이 아닌 Reticle 상태를 반환해야 위젯 RenderOpacity가 1로 복구된다.
+- `WeaponAimSolution.bHasValidSolution=true`여야 기본 Reticle 상태와 FireFeedback가 메인 Reticle 표시 상태로 승격될 수 있다.
+- `WeaponAimSolution.bHasValidSolution=false`이면 조준각과 NoWeapon 등 FireFeedback에 관계없이 `CachedReticleState=Hidden`, `RenderOpacity=0`을 유지한다.
+- 유효한 무기 터렛 조준 해가 있는 상태에서만 Hidden이 아닌 Reticle 상태가 위젯 RenderOpacity를 1로 복구한다.
 ```
 
 조건 해석:
@@ -447,10 +452,12 @@ ACFVehiclePawn
 
 UCFAimReticleWidget
   -> Weak VehiclePawnRef.GetVehicleAimComp
-  -> BaseReticleState / LocalAimState
+  -> BaseReticleState / LocalAimState / WeaponAimSolution
   -> VehiclePawnRef.BuildFireFeedbackViewData
   -> CachedFireFeedbackViewData
-  -> ResolveReticleStateFromFireFeedback
+  -> WeaponAimSolution.bHasValidSolution 확인
+      -> false: CachedReticleState = Hidden
+      -> true: ResolveReticleStateFromFireFeedback
   -> CachedReticleState / bCachedCanFire
   -> RefreshTextBlocks / RefreshVisualStyle / RenderOpacity 갱신
 ```
@@ -469,7 +476,7 @@ UCFAimReticleWidget
 | --- | --- | --- | --- |
 | `LastFireResult.bAccepted == true` | `FireSuccess` | 기본 Aim 상태 유지, 성공 색상 우선 | 밝은 녹색 |
 | 남은 쿨다운 > 0 | `Cooldown` | `Cooldown`으로 덮어쓰기 | 파란색 |
-| `RejectReason == NoWeapon` | `NoWeapon` | `NoWeapon`으로 덮어쓰기 | 회색 |
+| `RejectReason == NoWeapon` | `NoWeapon` | 피드백 데이터는 유지하되 `WeaponAimSolution.bHasValidSolution=false`이면 Hidden gate 우선 | 유효한 무기 조준 해에서만 회색 표시 의미 |
 | `RejectReason == AimBlocked` | `AimBlocked` | `Blocked`로 덮어쓰기 | 주황색 |
 | `RejectReason == OutOfWeaponArc` | `OutOfArcWarning` | 기본 상태 유지, 전용 보조 경고 | 노란색 경고 |
 | `RejectReason == TurretAligning` | `OutOfArcWarning` + `FeedbackDisplayKey=TurretAligning` | 기본 상태 유지, 전용 보조 경고 | amber |
@@ -607,8 +614,8 @@ OutOfArc 전용 경고 정책:
 
 ## 17. 문서 버전 관리
 
-- 현재 문서 버전: `1.10.0`
-- 문서 상태: `Current / P0 Aim·FireFeedback Verified / UI-P0-04 UISubsystem Singleton·Pawn Rebind USER PASS`
+- 현재 문서 버전: `1.11.0`
+- 문서 상태: `Current / P0 Aim·FireFeedback Verified / UI-P0-04 UISubsystem Singleton·Pawn Rebind USER PASS / No-Turret Reticle Hidden Contract`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
   - 기능 설명 본문이 바뀌면 체인지로그도 같이 갱신한다.
@@ -632,6 +639,15 @@ OutOfArc 전용 경고 정책:
 ---
 
 ## 18. Migration
+
+### v1.10.0 -> v1.11.0
+
+```text
+- WeaponAimSolution.bHasValidSolution=false이면 BaseReticleState 및 FireFeedback override보다 Hidden을 우선한다.
+- 무기 터렛 미장착 상태에서는 조준각이 DefaultAimProfile 밖으로 이동해도 OutOfArc Reticle을 표시하지 않는다.
+- NoWeapon 발사 피드백 데이터가 있어도 같은 AimReticle 위젯의 메인 Reticle RenderOpacity는 0을 유지한다.
+- 유효한 무기 터렛이 있는 상태의 Ready / Blocked / OutOfArc / TurretAligning / FireFeedback 의미는 변경하지 않는다.
+```
 
 ### v1.9.0 -> v1.10.0
 
@@ -730,6 +746,15 @@ OutOfArc 전용 경고 정책:
 ---
 
 ## 19. Changelog
+
+### v1.11.0 - 2026-09-14
+
+```text
+- WeaponAimSolution.bHasValidSolution=false인 무기 터렛 미장착 상태에서 Hidden을 최우선으로 적용하는 현재 UI 계약을 반영했다.
+- 조준각이 DefaultAimProfile 밖으로 이동해도 OutOfArc가 메인 Reticle을 다시 표시하지 못하도록 명시했다.
+- NoWeapon 등 FireFeedback 데이터가 존재해도 no-turret Hidden gate를 우회하지 못하도록 현재 RefreshFromPawn 흐름을 기록했다.
+- 2026-07-15 NoWeapon 회색 Reticle PASS는 당시 FireFeedback 표시 검증의 Historical evidence로 유지하며, 2026-09-14 이후 무기 터렛 미장착 상태에는 Hidden 우선 계약을 적용한다.
+```
 
 ### v1.10.0 - 2026-08-22
 

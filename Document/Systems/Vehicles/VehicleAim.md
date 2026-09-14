@@ -1,8 +1,8 @@
 # VehicleAim
 
-- Version: 1.8.1
-- Date: 2026-07-21
-- Status: Current / P0 Aim Alignment and CF-FQ-025 Turret Reticle User PIE Verified
+- Version: 1.9.0
+- Date: 2026-09-14
+- Status: Current / P0 Aim Alignment and CF-FQ-025 Turret Reticle User PIE Verified / No-Turret Reticle Hidden Contract
 - Scope: `VehicleCamera`가 만든 조준 결과와 `FCFVehicleWeaponAimSolution`을 로컬 표시/검증/시각 상태로 관리하는 현재 구현
 
 ---
@@ -364,9 +364,20 @@ UI는 이 터렛 레티클 전용 값만 소비하고 기존 `ECFWeaponReticleMo
 
 ## 10. Reticle 상태 생성
 
-`BuildLocalReticleState()`는 현재 Local Aim 조건을 `ECFVehicleReticleState`로 바꾼다.
+`RefreshLocalAimState()`는 먼저 `WeaponAimSolution.bHasValidSolution`을 확인하고, 유효한 무기 터렛 조준 해가 있을 때만 `BuildLocalReticleState()`의 표시 상태를 사용한다.
 
-현재 실제 계산에서 사용하는 상태:
+무기 터렛 미장착/사용 불가 상태의 현재 계약:
+
+```text
+WeaponAimSolution.bHasValidSolution == false
+-> LocalReticleState = Hidden
+-> bLocalWithinWeaponArc 값은 조준 방향/디버그 관측용으로 계속 계산
+-> 조준각 밖이어도 OutOfArc로 승격하지 않음
+```
+
+즉 **무기 터렛이 장착되어 있지 않으면 카메라 조준각과 관계없이 메인 Reticle을 표시하지 않는다.**
+
+유효한 Weapon Aim Solution이 있을 때 `BuildLocalReticleState()`가 사용하는 상태:
 
 ```text
 - Hidden
@@ -376,7 +387,7 @@ UI는 이 터렛 레티클 전용 값만 소비하고 기존 `ECFWeaponReticleMo
 - Ready
 ```
 
-현재 코드 기준 판정 순서:
+유효한 무기 터렛 조준 해가 있는 경우의 판정 순서:
 
 ```text
 1. Aim 런타임이 준비되지 않으면 Hidden
@@ -393,8 +404,9 @@ UI는 이 터렛 레티클 전용 값만 소비하고 기존 `ECFWeaponReticleMo
 따라서 현재 P0 싱글플레이 기준에서는 아래처럼 해석한다.
 
 ```text
-OutOfArc = 조준각 경고/디버그 상태
+OutOfArc = 유효한 무기 터렛이 있을 때의 조준각 경고/디버그 상태
 OutOfArc != 무조건 발사 불가
+무기 터렛 없음 = Hidden
 ```
 
 `ECFVehicleReticleState` enum에는 그 외에도 아래 상태가 정의돼 있다.
@@ -412,7 +424,8 @@ OutOfArc != 무조건 발사 불가
 ```text
 - enum은 후속 무기/탄약/쿨다운/발사 처리 상태까지 고려해 넓게 정의돼 있다.
 - 하지만 현재 BuildLocalReticleState() 계산에서 상시 사용하는 상태는 제한적이다.
-- NoWeapon, Cooldown, Reloading, FirePending, FireRejected는 weapon fire UI / FireFeedback 확장 단계에서 실제 표시 경로가 정리되어야 한다.
+- NoWeapon은 FireFeedback 데이터 상태로 유지할 수 있지만, 무기 터렛 미장착 상태의 AimReticle 표시 게이트를 우회해 메인 Reticle을 다시 보이게 만들지 않는다.
+- Cooldown, Reloading, FirePending, FireRejected는 유효한 무기 조준 해가 있는 상태의 weapon fire UI / FireFeedback 표시 경로에서 해석한다.
 ```
 
 ---
@@ -812,8 +825,8 @@ HandleFireStarted
 
 ## 25. 문서 버전 관리
 
-- 현재 문서 버전: `1.6.0`
-- 문서 상태: `Current / P0 Aim Alignment PIE Verified`
+- 현재 문서 버전: `1.9.0`
+- 문서 상태: `Current / P0 Aim Alignment and CF-FQ-025 Turret Reticle User PIE Verified / No-Turret Reticle Hidden Contract`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
   - 기능 설명 본문이 바뀌면 체인지로그도 같이 갱신한다.
@@ -837,6 +850,15 @@ HandleFireStarted
 ---
 
 ## 26. Migration
+
+### v1.8.1 -> v1.9.0
+
+```text
+- 유효한 Weapon Aim Solution이 없는 무기 터렛 미장착/사용 불가 상태는 LocalReticleState=Hidden으로 fail-closed 처리한다.
+- bLocalWithinWeaponArc는 기존처럼 조준 방향/디버그 관측용으로 계산하지만 무기 미장착 상태에서 OutOfArc 표시로 승격하지 않는다.
+- FireFeedback의 NoWeapon 등은 상태 데이터로 유지할 수 있으나 AimReticle의 no-turret Hidden 표시 계약을 우회하지 않는다.
+- 기존 터렛 장착 상태의 Blocked / OutOfArc / TurretAligning / Ready 의미는 변경하지 않는다.
+```
 
 ### v1.5.0 -> v1.6.0
 
@@ -908,6 +930,14 @@ HandleFireStarted
 ---
 
 ## 27. Changelog
+
+### v1.9.0 - 2026-09-14
+
+```text
+- 유효한 Weapon Aim Solution이 없는 무기 터렛 미장착 상태에서 LocalReticleState를 Hidden으로 고정하는 현재 계약을 반영했다.
+- bLocalWithinWeaponArc는 미장착 상태에서도 디버그 값으로 유지하되 OutOfArc 표시로 승격하지 않는다고 명시했다.
+- AimReticle FireFeedback가 no-turret Hidden을 다시 표시 상태로 덮지 못하는 UI 연계 계약을 기록했다.
+```
 
 ### v1.8.1 - 2026-07-21
 

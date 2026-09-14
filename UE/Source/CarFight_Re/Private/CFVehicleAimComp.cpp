@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.11.0
-// Date: 2026-07-14
+// Version: 1.12.0
+// Date: 2026-09-14
 // Description: CarFight 싱글플레이 차량 Aim 시스템 구현
 // Changelog:
+// - v1.12.0: 유효한 Weapon Aim Solution이 없으면 조준각 상태와 무관하게 LocalReticleState를 Hidden으로 고정해 무기 터렛 미장착 상태의 메인 Reticle이 OutOfArc로 다시 나타나지 않도록 교정.
 // - v1.11.0: 터렛 정책에 따라 정렬 중 bLocalCanFire를 허용하고 TurretAligning Reticle 상태는 독립적으로 유지.
 // - v1.10.1: 정상 정렬 대기 경로가 Hidden으로 떨어지지 않도록 TurretAligning Reticle 우선순위를 추가.
 // - v1.10.0: Weapon Aim Solution 저장/조회와 LocalAimState 반영 로직을 추가.
@@ -13,6 +14,7 @@
 // - v1.5.0: 싱글플레이 기준선에서 Aim 시각 상태의 UE 복제 등록과 OnRep 경로를 제거.
 // - v1.4.0: 싱글플레이 전환에 맞춰 AimComp 기본 컴포넌트 복제를 비활성화.
 // Migration:
+// - v1.12.0부터 bLocalWithinWeaponArc는 무기 터렛 미장착 상태에서도 조준 방향/디버그 관측용으로 계속 계산하지만, WeaponAimSolution.bHasValidSolution=false이면 LocalReticleState는 Hidden을 우선한다.
 // - bLocalCanFire는 유효한 Weapon Aim Solution, 유효한 최종 AimDirection, MuzzleBlocked=false, 정렬 정책을 함께 반영한다.
 // - BuildLocalReticleState는 Runtime 미준비, MuzzleBlocked, OutOfArc, TurretAligning, Ready, Hidden 순서로 상태를 해석한다.
 // - Pawn이 SetWeaponAimSolution으로 전달한 MuzzleBlocked/정렬 상태를 LocalAimState의 CanFire/Blocked/ReticleState에 반영한다.
@@ -252,7 +254,7 @@ bool UCFVehicleAimComp::IsFireRequestWithinDefaultProfile(const FCFVehicleFireRe
 	return bHasAimAngles && IsAimWithinDefaultProfile(AimYawDeg, AimPitchDeg);
 }
 
-// [v1.11.0] Weapon Aim Solution의 정책과 정렬 상태를 반영해 로컬 Aim 및 Reticle 상태를 갱신합니다.
+// [v1.12.0] Weapon Aim Solution의 유효성, 정책과 정렬 상태를 반영해 로컬 Aim 및 Reticle 상태를 갱신합니다.
 void UCFVehicleAimComp::RefreshLocalAimState(const float DeltaSeconds)
 {
 	// [v1.1.0] 현재 호출에서 DeltaSeconds 인자를 의도적으로 보관하지 않음을 명확히 합니다.
@@ -351,7 +353,11 @@ void UCFVehicleAimComp::RefreshLocalAimState(const float DeltaSeconds)
 	LocalAimState.bLocalAimBlocked = bWeaponAimBlocked;
 	LocalAimState.bLocalAimTraceHasBlockingHit = bAimTraceHasBlockingHit;
 	LocalAimState.bLocalCanFire = bCanFire;
-	LocalAimState.LocalReticleState = BuildLocalReticleState(bWithinWeaponArc, bWeaponAimBlocked, bWeaponIsAligning, bCanFire);
+
+	// [v1.12.0] 유효한 무기 터렛 조준 해가 없으면 조준각 상태와 무관하게 메인 Reticle을 숨깁니다.
+	LocalAimState.LocalReticleState = bHasWeaponAimSolution
+		? BuildLocalReticleState(bWithinWeaponArc, bWeaponAimBlocked, bWeaponIsAligning, bCanFire)
+		: ECFVehicleReticleState::Hidden;
 }
 
 bool UCFVehicleAimComp::CalculateAimAnglesRelativeToVehicle(const FVector& AimDirection, float& OutYawDeg, float& OutPitchDeg) const

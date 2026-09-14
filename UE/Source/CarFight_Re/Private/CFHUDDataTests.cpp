@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.35.0
-// Date: 2026-08-25
+// Version: 1.36.1
+// Date: 2026-09-14
 // Description: CF-FQ-032 HUD Runtime Automation + CF-FQ-039 VehiclePanel Production Visual 회귀 검증
 // Scope: 실제 Runtime 계약과 저장 Production HUD의 Vehicle Frame·Shield/Integrity·Armor·ViewMode·Alert·Style Context·다중 해상도 Root Layout 의미 Presentation을 검증합니다.
 // Changelog:
+// - v1.36.1: v1.36.0 NoTurret Reticle 테스트가 protected ApplyFireResult를 직접 호출해 빌드 실패하던 문제를 제거. Product 공개 API/test friend를 늘리지 않고 TestMap의 AimProfile 내부/외부 Hidden과 실제 AimReticle Refresh RenderOpacity 0만 검증하도록 교정.
+// - v1.36.0: 무기 터렛 미장착 상태의 AimProfile 내부/외부와 NoWeapon FireFeedback까지 검증하려던 초기 Technical PIE 회귀. protected ApplyFireResult 직접 호출로 컴파일 불가하여 v1.36.1에서 공개 계약 범위로 축소 교정.
 // - v1.35.0: CF-FQ-039 modular Armor migration 단계에 맞춰 ArmorSectorProductionVisualContract를 common Plate + additive Image_DirectionIcon + Text fallback 계약으로 전환. DirectionIcon Texture가 아직 Source Binding되지 않은 현재 persisted 상태에서는 Icon Collapsed / Text HitTestInvisible을 검증하고 Ratio/Tint 회귀는 그대로 유지.
 // - v1.34.2: fresh PIE에서는 Defense Bar가 실제 픽셀로 정상 렌더링되지만 viewport에 붙지 않은 transient Widget의 GetDesiredSize()가 계속 0을 반환하는 test-harness 불일치를 교정. 실제 회귀 원인인 ProgressBar Style Background/Fill/Marquee Brush intrinsic height > 0을 직접 검증하도록 변경.
 // - v1.34.1: 실제 PIE pixel review에서 발견된 Defense Bar 높이 0 회귀를 막기 위해 Presenter 적용 후 Layout Prepass를 수행하고 Shield/Integrity ProgressBar DesiredSize.Y가 0보다 큰지 검증.
@@ -50,6 +52,8 @@
 // - v1.0.1: Provider Rebind Fixture의 UCFUISubsystem Outer를 실제 ClassWithin 계약인 ULocalPlayer로 교정.
 // - v1.0.0: ViewData Availability와 Provider Rebind Generation/Old Pawn 해제 계약 테스트를 최초 추가.
 // Migration:
+// - v1.36.1부터 NoTurret Reticle PIE 검증은 protected Fire 경로를 호출하지 않으며 Production public API, friend 선언, Runtime 동작을 추가하지 않습니다.
+// - v1.36.0 NoTurret Reticle PIE 검증은 TestMap의 실제 Local Vehicle Pawn을 transient runtime에서만 조작하며 Content/Asset을 생성·수정·저장하지 않습니다.
 // - 테스트는 Transient ULocalPlayer/UObject와 Automation World만 사용하며 Unreal Asset을 생성하거나 저장하지 않습니다.
 // - Defense 검증은 Production 계산을 복제하지 않고 실제 UCFVehicleDefenseComp::TryApplyDamageToActor와 Shield 재생 Tick을 사용합니다.
 // - FirePattern은 RIPPLE/SALVO 문구 선택에만 사용하며 Presentation 수명 전이는 LauncherSequenceRevision과 Active 상태로 검증합니다.
@@ -85,6 +89,7 @@
 #include "CFVehicleAimComp.h"
 #include "CFVehicleAimTypes.h"
 #include "CFVehicleCameraComp.h"
+#include "CFVehicleFireFeedbackTypes.h"
 #include "CFVehicleData.h"
 #include "CFVehicleDefenseComp.h"
 #include "CFVehicleDefenseData.h"
@@ -110,9 +115,11 @@
 #include "Engine/Texture2D.h"
 #include "Engine/UserInterfaceSettings.h"
 #include "EngineUtils.h"
+#include "GameFramework/PlayerController.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/AutomationEditorCommon.h"
+#include "UI/CFAimReticleWidget.h"
 #include "UI/CFArmorSectorWidget.h"
 #include "UI/CFHUDDataProvider.h"
 #include "UI/CFHUDPresenter.h"
@@ -4436,6 +4443,176 @@ bool FCFHUDP010ResolutionLayoutTest::RunTest(const FString& Parameters)
 			}
 		}
 	}
+	return true;
+}
+
+// [v1.36.0] TestMap 실제 Local 차량에서 무기 터렛 미장착 Reticle 계약을 검증하는 PIE Latent Command입니다.
+class FCFNoTurretReticlePIECmd final : public IAutomationLatentCommand
+{
+public:
+	// [v1.36.0] 검증 결과를 기록할 Automation Test와 시작 시간을 저장합니다.
+	explicit FCFNoTurretReticlePIECmd(FAutomationTestBase* InTest)
+		: Test(InTest)
+		, StartTimeSeconds(FPlatformTime::Seconds())
+	{
+	}
+
+	// [v1.36.0] PIE World 준비 후 no-turret Aim/FireFeedback/Widget 표시 상태를 한 번 검증합니다.
+	virtual bool Update() override
+	{
+		// [v1.36.0] 현재 실행 중인 실제 PIE World입니다.
+		UWorld* PIEWorld = nullptr;
+		if (GEngine)
+		{
+			// [v1.36.0] 현재 엔진 World Context 중 실제 PIE World를 찾기 위한 순회 항목입니다.
+			for (const FWorldContext& WorldContext : GEngine->GetWorldContexts())
+			{
+				if (WorldContext.WorldType == EWorldType::PIE && WorldContext.World())
+				{
+					PIEWorld = WorldContext.World();
+					break;
+				}
+			}
+		}
+
+		// [v1.36.0] PIE 준비 대기 경과 시간입니다.
+		const double ElapsedSeconds = FPlatformTime::Seconds() - StartTimeSeconds;
+
+		// [v1.36.0] PIE World 및 Local Pawn 준비를 기다릴 최대 시간입니다.
+		constexpr double MaxWaitSeconds = 30.0;
+
+		if (!PIEWorld || !PIEWorld->AreActorsInitialized())
+		{
+			if (ElapsedSeconds >= MaxWaitSeconds)
+			{
+				Test->AddError(TEXT("UI-P0-04 NoTurret Reticle PIE World 준비 제한 시간 초과"));
+				return true;
+			}
+			return false;
+		}
+
+		// [v1.36.0] TestMap의 첫 로컬 플레이어 컨트롤러입니다.
+		APlayerController* LocalPlayerController = PIEWorld->GetFirstPlayerController();
+
+		// [v1.36.0] 실제 로컬 플레이어가 Possess한 차량 Pawn입니다.
+		ACFVehiclePawn* VehiclePawn = LocalPlayerController
+			? Cast<ACFVehiclePawn>(LocalPlayerController->GetPawn())
+			: nullptr;
+
+		if (!LocalPlayerController || !VehiclePawn)
+		{
+			if (ElapsedSeconds >= MaxWaitSeconds)
+			{
+				Test->AddError(TEXT("UI-P0-04 NoTurret Reticle Local Vehicle Pawn 준비 제한 시간 초과"));
+				return true;
+			}
+			return false;
+		}
+
+		Test->TestTrue(TEXT("UI-P0-04 NoTurret PIE Pawn LocallyControlled"), VehiclePawn->IsLocallyControlled());
+
+		// [v1.36.0] 실제 조준 입력/방향 상태를 제공하는 VehicleCameraComp입니다.
+		UCFVehicleCameraComp* VehicleCameraComponent = VehiclePawn->GetVehicleCameraComp();
+
+		// [v1.36.0] 실제 LocalAimState와 Reticle 상태를 계산하는 VehicleAimComp입니다.
+		UCFVehicleAimComp* VehicleAimComponent = VehiclePawn->GetVehicleAimComp();
+
+		if (!Test->TestNotNull(TEXT("UI-P0-04 VehicleCameraComp"), VehicleCameraComponent)
+			|| !Test->TestNotNull(TEXT("UI-P0-04 VehicleAimComp"), VehicleAimComponent))
+		{
+			return true;
+		}
+
+		// [v1.36.0] 무기 터렛이 없거나 사용할 수 없는 상태를 나타내는 invalid Weapon Aim Solution입니다.
+		FCFVehicleWeaponAimSolution NoTurretAimSolution;
+		NoTurretAimSolution.bHasValidSolution = false;
+
+		VehicleCameraComponent->ClearLookInput();
+		VehicleCameraComponent->ResetAimToVehicleForward();
+		VehicleCameraComponent->TickComponent(0.016f, LEVELTICK_All, nullptr);
+		VehicleAimComponent->SetWeaponAimSolution(NoTurretAimSolution);
+		VehicleAimComponent->TickComponent(0.0f, LEVELTICK_All, nullptr);
+
+		// [v1.36.0] 정면 조준에서 읽은 no-turret Local Aim 상태입니다.
+		const FCFVehicleLocalAimState ForwardAimState = VehicleAimComponent->GetLocalAimState();
+
+		Test->TestTrue(TEXT("UI-P0-04 NoTurret 정면 AimProfile 내부"), ForwardAimState.bLocalWithinWeaponArc);
+		Test->TestEqual(TEXT("UI-P0-04 NoTurret 정면 Hidden"), ForwardAimState.LocalReticleState, ECFVehicleReticleState::Hidden);
+
+		// [v1.36.0] 테스트에서 조준각 밖 상태를 안정적으로 만들기 위한 넓은 Camera Aim Profile입니다.
+		FCFVehicleCameraAimProfile TestCameraAimProfile;
+		TestCameraAimProfile.MinYawDeg = -90.0f;
+		TestCameraAimProfile.MaxYawDeg = 90.0f;
+		TestCameraAimProfile.MinPitchDeg = -20.0f;
+		TestCameraAimProfile.MaxPitchDeg = 20.0f;
+		VehicleCameraComponent->SetAimProfileOverride(TestCameraAimProfile);
+
+		VehicleCameraComponent->SetLookInput(FVector2D(1.0f, 0.0f));
+		VehicleCameraComponent->TickComponent(0.5f, LEVELTICK_All, nullptr);
+		VehicleAimComponent->SetWeaponAimSolution(NoTurretAimSolution);
+		VehicleAimComponent->TickComponent(0.0f, LEVELTICK_All, nullptr);
+
+		// [v1.36.0] 조준각 밖에서 읽은 no-turret Local Aim 상태입니다.
+		const FCFVehicleLocalAimState OutsideAimState = VehicleAimComponent->GetLocalAimState();
+
+		Test->TestFalse(TEXT("UI-P0-04 NoTurret 조준각 밖 상태"), OutsideAimState.bLocalWithinWeaponArc);
+		Test->TestEqual(TEXT("UI-P0-04 NoTurret 조준각 밖 Hidden"), OutsideAimState.LocalReticleState, ECFVehicleReticleState::Hidden);
+
+		VehicleAimComponent->SetWeaponAimSolution(NoTurretAimSolution);
+
+		// [v1.36.1] 실제 AimReticle C++ Refresh 경로를 실행할 transient Widget입니다.
+		UCFAimReticleWidget* AimReticleWidget = CreateWidget<UCFAimReticleWidget>(
+			LocalPlayerController,
+			UCFAimReticleWidget::StaticClass());
+
+		if (!Test->TestNotNull(TEXT("UI-P0-04 AimReticle Widget"), AimReticleWidget))
+		{
+			VehicleCameraComponent->ClearLookInput();
+			VehicleCameraComponent->ClearAimProfileOverride();
+			return true;
+		}
+
+		AimReticleWidget->SetVehiclePawnRef(VehiclePawn);
+
+		Test->TestTrue(
+			TEXT("UI-P0-04 NoTurret Main Reticle RenderOpacity 0"),
+			FMath::IsNearlyZero(AimReticleWidget->GetRenderOpacity()));
+
+		Test->AddInfo(FString::Printf(
+			TEXT("UI-P0-04 NoTurret Technical PIE | Pawn=%s | ForwardState=%d | OutsideArc=%s | OutsideState=%d | Opacity=%.3f"),
+			*VehiclePawn->GetPathName(),
+			static_cast<int32>(ForwardAimState.LocalReticleState),
+			OutsideAimState.bLocalWithinWeaponArc ? TEXT("Inside") : TEXT("Outside"),
+			static_cast<int32>(OutsideAimState.LocalReticleState),
+			AimReticleWidget->GetRenderOpacity()));
+
+		VehicleCameraComponent->ClearLookInput();
+		VehicleCameraComponent->ClearAimProfileOverride();
+		return true;
+	}
+
+private:
+	// [v1.36.0] Latent PIE 검증 결과를 기록할 현재 Automation Test입니다.
+	FAutomationTestBase* Test = nullptr;
+
+	// [v1.36.0] PIE World/Pawn 준비 제한 시간을 계산할 시작 시각입니다.
+	double StartTimeSeconds = 0.0;
+};
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFNoTurretReticlePIETest,
+	"CarFight.UI.UI_P0_04.NoTurretReticlePIE",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.36.1] TestMap 실제 Local Pawn에서 no-turret Reticle의 AimProfile 내부/외부와 최종 Hidden 표시 계약을 검증합니다.
+bool FCFNoTurretReticlePIETest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	ADD_LATENT_AUTOMATION_COMMAND(FEditorLoadMap(TEXT("/Game/Maps/TestMap")));
+	ADD_LATENT_AUTOMATION_COMMAND(FStartPIECommand(false));
+	ADD_LATENT_AUTOMATION_COMMAND(FCFNoTurretReticlePIECmd(this));
+	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
 	return true;
 }
 
