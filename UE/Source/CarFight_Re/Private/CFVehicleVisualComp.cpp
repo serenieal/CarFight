@@ -1,13 +1,15 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.2
-// Date: 2026-09-07
+// Version: 1.0.3
+// Date: 2026-09-08
 // Description: CF-FQ-048 VPS-P0-01 차량 시각 행동 전용 내부 컴포넌트 구현
 // Changelog:
+// - v1.0.3: UE 5.8 standalone compile에서 AActor::GetComponents<T>(OutComponents, bIncludeFromChildActors) exact overload를 사용하도록 false 인자를 명시. Runtime 동작 변경 없음.
 // - v1.0.2: standalone non-unity compile에서 AActor::GetComponents를 직접 사용할 수 있도록 GameFramework/Actor.h 명시 include를 추가. Runtime 동작 변경 없음.
 // - v1.0.1: 중간검수 교정으로 BP/SCS SceneComponent 장기 포인터 bookkeeping cache를 제거하고 각 행동의 fresh resolve 계약을 유지.
 // - v1.0.0: Chassis/Wheel/Layout/Turret/Owner Visual 행동과 순수 시각 캐시를 Pawn에서 분리하고 fresh BP/SCS component resolve 계약을 유지.
 // Migration:
+// - v1.0.3은 UE 5.8 AActor::GetComponents overload 명시만 수행하며 Vehicle Visual 런타임 계약, Blueprint/Public API와 Product Asset은 변경하지 않음.
 // - v1.0.2는 IWYU/독립 컴파일 안정화만 수행하며 Vehicle Visual 런타임 계약, Blueprint/Public API와 Product Asset은 변경하지 않음.
 // - Pawn의 기존 wrapper와 observable state authority를 유지하므로 Blueprint/Product Asset 수정은 필요하지 않음.
 
@@ -42,7 +44,7 @@ namespace
 
 		// Owner에 현재 등록된 StaticMeshComponent 후보 목록입니다.
 		TArray<UStaticMeshComponent*> StaticMeshComponents;
-		OwnerActor->GetComponents<UStaticMeshComponent>(StaticMeshComponents);
+		OwnerActor->GetComponents<UStaticMeshComponent>(StaticMeshComponents, false);
 		for (UStaticMeshComponent* StaticMeshComponent : StaticMeshComponents)
 		{
 			if (StaticMeshComponent && StaticMeshComponent->GetFName() == ComponentName)
@@ -64,7 +66,7 @@ namespace
 
 		// Owner에 현재 등록된 SceneComponent 후보 목록입니다.
 		TArray<USceneComponent*> SceneComponents;
-		OwnerActor->GetComponents<USceneComponent>(SceneComponents);
+		OwnerActor->GetComponents<USceneComponent>(SceneComponents, false);
 		for (USceneComponent* SceneComponent : SceneComponents)
 		{
 			if (SceneComponent && SceneComponent->GetFName() == ComponentName)
@@ -86,7 +88,7 @@ namespace
 
 		// Owner에 현재 등록된 SkeletalMeshComponent 후보 목록입니다.
 		TArray<USkeletalMeshComponent*> SkeletalMeshComponents;
-		OwnerActor->GetComponents<USkeletalMeshComponent>(SkeletalMeshComponents);
+		OwnerActor->GetComponents<USkeletalMeshComponent>(SkeletalMeshComponents, false);
 		for (USkeletalMeshComponent* SkeletalMeshComponent : SkeletalMeshComponents)
 		{
 			if (SkeletalMeshComponent && SkeletalMeshComponent->GetFName() == ComponentName)
