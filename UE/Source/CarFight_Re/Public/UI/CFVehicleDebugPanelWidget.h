@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.34.1
-// Date: 2026-09-02
-// Description: VehicleDebug Panel용 C++ 부모 위젯 클래스 / RTA Runtime Apply 전용 Navigation child integration
+// Version: 1.35.0
+// Date: 2026-09-14
+// Description: VehicleDebug Panel용 C++ 부모 위젯 / direct DebugTypes consumer boundary
 // Changelog:
+// - v1.35.0: VPS-P0-04로 CFVehiclePawn.h transitive include를 제거하고 CFVehicleDebugTypes.h를 직접 소비하며 Pawn은 forward declaration으로 제한.
 // - v1.34.1: P0에 불필요한 RuntimeApplyWidgetClass reflected override를 제거하고 C++ 기본 UCFRuntimeApplyWidget으로 고정해 UHT dependency와 설정 표면을 최소화.
 // - v1.34.0: RuntimeApply Navigation 섹션과 전용 UCFRuntimeApplyWidget child slot을 추가하고 기존 Generic Section ViewData는 read-only 구조로 유지.
 // - v1.33.0: 현재 선택 대상의 표시 정보, 추적 상태, Shield·6방향 Armor·재생 상태와 Integrity를 보여주는 Target Navigation 섹션을 추가.
@@ -25,6 +26,7 @@
 // - v1.10.0: Weapon 섹션에 활성 WeaponData ID, 호환성, 요약 표시를 추가.
 // - v1.9.0: VehicleDebug Weapon 카테고리를 Navigation 섹션으로 추가해 WeaponComp 런타임과 FireOrigin 상태를 표시.
 // Migration:
+// - v1.35.0 Public header dependency만 정리하며 Pawn Debug facade, RuntimeApply child, Blueprint API와 Widget behavior는 변경하지 않습니다.
 // - v1.34.1 RuntimeApply child는 P0에서 C++ 기본 클래스로 고정합니다. WBP 스타일 override가 실제 필요해질 때 별도 UI 작업으로 추가합니다.
 // - v1.34.0 RuntimeApply는 기존 VerticalBox_SelectedSectionHost에 전용 C++ child를 교체 표시하므로 WBP_VehicleDebugPanel Asset 수정이 필요 없다. Vehicle/Equipment mutation은 child가 Runtime Apply service에 위임한다.
 // - Target 섹션은 기존 동적 Section 레이아웃에 C++ ViewData로 추가되므로 WBP_VehicleDebugPanel의 위젯 트리나 Blueprint 그래프를 수정할 필요가 없다.
@@ -50,9 +52,10 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "UI/CFDebugPanelViewData.h"
-#include "CFVehiclePawn.h"
+#include "CFVehicleDebugTypes.h"
 #include "CFVehicleDebugPanelWidget.generated.h"
 
+class ACFVehiclePawn;
 class UTextBlock;
 class UWidget;
 class UVerticalBox;

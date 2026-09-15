@@ -1,7 +1,7 @@
 # CarFight — 03_FeatureQueue
 
-> 문서 버전: v1.57.104
-> 최근 갱신일(Asia/Seoul): 2026-09-11
+> 문서 버전: v1.57.118
+> 최근 갱신일(Asia/Seoul): 2026-09-15
 > 문서 상태: Current
 > 역할: CarFight의 **Feature 후보 / 착수 판단 / 현재 상태 / 완료 후 Current owner**를 한 곳에서 관리한다.
 
@@ -69,7 +69,7 @@ FeatureQueue는 상세 설계서나 검증 로그가 아니다.
 | `CF-FQ-005` | 전투 결과 기록 | Icebox | Deferred | 현재 싱글 핵심 루프 이후 | Combat/MatchResult 후속 |
 | `CF-FQ-006` | 테스트 계정/상태 초기화 도구 | Icebox | Deferred | 서버 운영 범위 보류 | Admin/TestReset 후속 |
 | `CF-FQ-007` | 차량 로드아웃 저장 | Icebox | Deferred | 장기 저장/서버 범위 보류 | Data/VehicleLoadout 후속 |
-| `CF-FQ-008` | 무장 데이터 정의 | P2 | Done | Current WeaponData 계약 유지 | `Systems/Combat/WeaponData.md v1.1.0` |
+| `CF-FQ-008` | 무장 데이터 정의 | P2 | Done | Current WeaponData 계약 유지 / Prototype Weapon 질량은 `Provisional Gameplay Balance`로 운용 | `Systems/Combat/WeaponData.md v1.2.0` |
 | `CF-FQ-009` | 운영 로그 조회 기준 | Icebox | Deferred | 서버 운영 범위 보류 | Admin/LogView 후속 |
 | `CF-FQ-010` | 세션/로비 기초 | Icebox | Deferred | Dedicated Server 이후 | Network/Session 후속 |
 | `CF-FQ-011` | 싱글 실행 기준선 전환 | P0 | Done | 현재 싱글 기준선 | ProjectRuntimeConfig / VehicleRuntime |
@@ -87,7 +87,7 @@ FeatureQueue는 상세 설계서나 검증 로그가 아니다.
 | `CF-FQ-023` | 고속 Projectile 연속 충돌 | P0 | Done | 완료 기반 | Projectile / DamageHitContext |
 | `CF-FQ-024` | 전투 FX 구현 | P0 | Done | USER PIE PASS / 게임 사운드 제외 | CombatFx |
 | `CF-FQ-025` | 이중 레티클 및 터렛방향 시각화 | P0 | Done | 완료 기반 | AimReticle / VehicleAim |
-| `CF-FQ-026` | 타겟 선택 시스템 | P1 | Paused | `TS-P0-08 USER PIE Pending` | TargetSelect 관련 Current 후속 |
+| `CF-FQ-026` | 타겟 선택 시스템 | P1 | Done | Rebaseline Complete / `TS-P0-00~07` Historical Technical PASS / old `TS-P0-08` Superseded·Not Executed / USER Inconclusive + Deferred tuning debt / Historical Plan `Document/Plan/TargetSelect/TargetSelectPlan.md v0.13.0` Retained Path | `Systems/Targeting/TargetSelect.md v1.0.0` |
 | `CF-FQ-027` | 투사체 비행 FX | P1 | Done | USER PIE PASS / CF-TC-023 PASS | Projectile |
 | `CF-FQ-028` | 발사체 추진 시스템 | P1 | Done | USER PIE PASS / CF-TC-024 PASS | Projectile |
 | `CF-FQ-029` | 모듈형 런처 및 발사 인계 | P1 | Done | `LM-P0-06 Final Technical Integration PASS` / Historical USER PIE 보존 / Current Product-path Automation 1/1 + Launcher 5/5 PASS / Historical Plan `LauncherMissilePlan.md v0.15.0` retained | `Systems/Combat/Launcher.md v1.0.1` |
@@ -95,21 +95,21 @@ FeatureQueue는 상세 설계서나 검증 로그가 아니다.
 | `CF-FQ-031` | 차량 탄약·재장전 런타임 | P1 | Done | AMMO-P0-00~08 + USER PIE PASS | `Systems/Combat/Ammo.md v1.0.1` |
 | `CF-FQ-032` | 인게임 전투 HUD 및 UI 프레임워크 | P1 | Done | UI-P0-11 Systems Promotion + 2026-08-22 post-closure remediation PASS. Radar/Edge Visual·Zoom Feel과 D1-11-ART 잔여 Visual은 비차단 Deferred/Pending | `Systems/UI/InGameUI.md v1.1.5`, `UI/AimReticle.md v1.10.0`, `Targeting/SensorContact.md v1.2.0` |
 | `CF-FQ-033` | 차량 방어·손상 런타임 | P0 | Done | DR-P0-00~07 + USER PIE PASS | VehicleDefense / HitDamage |
-| `CF-FQ-034` | 차량 피팅·질량 런타임 | P1 | Paused | `Document/Plan/VehicleFitting/VehicleFittingPlan.md v0.17.0` / `FIT-P0-07D USER Driving Feel Comparison` | VehicleFitting / VehicleData / VehicleRuntime 후속 |
-| `CF-FQ-035` | 인벤토리 Foundation | P1 | Paused | Technical checkpoint 보존 / USER Field UI·Mobility Pending | InventoryFoundation + 관련 Systems 후속 |
+| `CF-FQ-034` | 차량 피팅·질량 런타임 | P1 | Done | Rebaseline Complete / Fitting·Mass Runtime current Source 유지·확장 / `FIT-P0-07A~07C` Historical Technical PASS 보존 / `FIT-P0-07D` Superseded·Not Executed / Historical Plan `Document/Plan/VehicleFitting/VehicleFittingPlan.md v0.18.0` Retained Path | `Systems/Vehicles/VehicleRuntime.md v1.3.0` + `VehicleData.md v2.3.0` + `VehicleBuilder.md v1.6.0` |
+| `CF-FQ-035` | 인벤토리 Foundation | P1 | Done | Rebaseline Complete / Inventory Foundation current Source 유지 / `INV-P0-00~05` + `INV-P0-06` Technical Integration Historical PASS 보존 / `FFIT-P0-05` Superseded·Not Executed / Historical Plan `Document/Plan/InventoryFoundation/InventoryFoundationPlan.md v0.10.0` Retained Path | `Systems/Vehicles/VehicleInventory.md v1.0.0` + `VehicleRuntime.md v1.3.0` runtime boundary |
 | `CF-FQ-036` | 차량 센서·Contact Intelligence Runtime | P1 | Done | Sensor Runtime 완료, Scanner와 Current 통합 | `Systems/Targeting/SensorContact.md v1.2.0` |
 | `CF-FQ-037` | 차량 스캐너 입력·장비 통합 | P1 | Done | SCAN-P0-00~07 / USER PIE PASS | `Systems/Targeting/SensorContact.md v1.2.0` |
 | `CF-FQ-038` | 차량 데이터 Authoring 시스템 | P2 | Done | DEL1~DEL7 PASS / Legacy Vehicle DA Wizard retired / final UE 5.8 Build PASS / 전체 `CarFight.DataAuthoring` 111/111 PASS / P0-12 USER PASS 7/8 Historical 보존 / UA-08 quantitative comparison 비차단 Deferred / Historical Plan `Document/Plan/DataAuthoring/DataAuthoringPlan.md v0.2.53` Retained Path | `Systems/Vehicles/VehicleBuilder.md v1.6.0` |
 | `CF-FQ-039` | Production UI Visual Rework | P1 | Active | `Document/Plan/InGameUIVisual/InGameUIVisualPlan.md v0.1.29` / `VPR-P0-01 VT07 VehiclePanel Asset-First whole-panel Review Ready / USER Visual PASS Pending / UE Import 0 / Production Asset mutation 0` | 완료 시 `Systems/UI/InGameUI.md` Visual ownership 갱신 + Production UI Asset 기준 |
 | `CF-FQ-040` | Guided Vehicle Builder | P2 | Done | VB-P0-10 Current System Promotion Complete / VB-P0-09 End-to-End USER Acceptance PASS / WSA P0 Complete / ESH-01~06 Final Audit Clean PASS / representative Plan은 `Document/Plan/Archive/VehicleBuilder/` Historical + Archived Path | `Systems/Vehicles/VehicleBuilder.md v1.6.0` |
-| `CF-FQ-041` | 런타임 콘텐츠 적용 메뉴 | P2 | Ready | `Document/Plan/RuntimeApply/RuntimeApplyPlan.md v0.1.17` / `RTA-P0-05 USER PASS / Closed` / RuntimeApply regression 14/14 PASS(CF-FQ-044 CatalogOptionSync 포함) / Builder-promoted persisted Wagon candidate handoff / next `RTA-P0-06 Packaged Demo` | 완료 시 Runtime Apply 재사용 계약을 관련 Vehicle/Fitting/UI Systems에 승격 |
+| `CF-FQ-041` | 런타임 콘텐츠 적용 메뉴 | P2 | Ready | `Document/Plan/RuntimeApply/RuntimeApplyPlan.md v0.1.18` / RTA-P0-05 Historical USER PASS·기존 regression evidence 보존 / Wagon Multi-Mount Empty-State + Prototype Weapon Provisional Gameplay Balance current regression 16/16 PASS / next `RTA-P0-06 Packaged Demo` | `Systems/Vehicles/RuntimeApply.md v1.1.0` + 기존 Vehicle/Fitting Runtime authority |
 | `CF-FQ-042` | Vehicle Builder 신규 차량 생성 UX | P2 | Done | `VBCUX-P0-05 USER Acceptance PASS` / A Blank Start + B 기존 Chassis 재사용 + C 미사용 Mesh Quick Start PASS / final audit P1 old-selection refresh restore 교정 + focused/affected 5/0 PASS / `Document/Plan/Archive/VehicleBuilderCreationUX/VehicleBuilderCreationUXPlan.md v0.2.1` Historical + Archived Path / G5 Physical Move Complete / Vehicle ID 직접 입력 관리 부담은 비차단 UX 피드백 | `Systems/Vehicles/VehicleBuilder.md v1.6.0` |
 | `CF-FQ-043` | Vehicle Builder 장비 장착점 Guidance UX | P2 | Done | `VMG-P0-07 USER Acceptance PASS` / Socket-Naming USER PASS + Wagon persistent USER Driving receipt save/Step8 Complete / DataAuthoring 100/100 PASS / `Document/Plan/Archive/VehicleMountGuidance/VehicleMountGuidancePlan.md v0.2.0` Historical + Archived Path / G5 Physical Move Complete | `Systems/Vehicles/VehicleBuilder.md v1.6.0` |
 | `CF-FQ-044` | Vehicle Builder Runtime Catalog Promotion | P2 | Done | `VRCP-P0-05 USER Acceptance PASS` + `VRCP-P0-06 Current System Promotion Complete` / USER explicit Save 뒤 persisted Catalog Vehicles=4 + Wagon exact membership 1 / `Document/Plan/Archive/VehicleRuntimeCatalogPromotion/VehicleRuntimeCatalogPromotionPlan.md v0.2.0` Historical + Archived Path / G5 Physical Move Complete / RuntimeApply RTA-P0-06 handoff 완료 | `Systems/Vehicles/VehicleBuilder.md v1.6.0` |
 | `CF-FQ-045` | CarFight Data Asset Management | P2 | Done | `DAM-P0-04E USER Acceptance PASS` / P0 Complete / Current System Promotion Complete / `Document/Plan/Archive/DataAssetManagement/DataAssetManagementPlan.md v0.2.0` Historical + Archived Path / G5 Physical Move Complete / residual P2 2건 non-blocking | `Systems/DataManagement/DataAssetManagement.md v1.0.0` |
 | `CF-FQ-046` | Vehicle Builder 사용자 정보 UX | P2 | Ready | `Document/Plan/VehicleBuilderInfoUX/VehicleBuilderInfoUXPlan.md v0.1.6` / pre-CF-FQ-047 P0-05 Technical PASS evidence preserved / CF-FQ-047 Done으로 dependency 충족 / common Step 1~8 Page Shell·scroll·overflow owner / next `VBIUX-P0-05B Step 1~8 Common Page Layout Audit` | 완료 시 `Systems/Vehicles/VehicleBuilder.md`에 User-Facing Information Architecture 계약 승격 |
 | `CF-FQ-047` | Vehicle Builder Hardpoint Authoring Integrity | P1 | Done | `VBHAI-P0-07G USER Re-Acceptance PASS` + fresh persisted Driving receipt readback PASS + `VBHAI-P0-08 Current System Promotion Complete` + post-closure final audit remediation Technical Clean PASS / `Document/Plan/Archive/VehicleBuilderHardpointIntegrity/VehicleBuilderHardpointIntegrityPlan.md v0.2.1` Historical + Archived Path / G5 Physical Move Complete / remediation evidence sync complete / current USER-approved Wagon Hardpoint/Mount baseline 2/2 | `Systems/Vehicles/VehicleBuilder.md v1.6.0` |
-| `CF-FQ-048` | Vehicle Pawn Slimming | P2 | Ready | `Document/Plan/VehiclePawnSlimming/VehiclePawnSlimmingPlan.md v0.1.0` / Initial Design Audit Correction + Re-review PASS / Behavior Extraction + Contract State Freeze / exact next `VPS-P0-00 Contract / State / Lifecycle Freeze` / Source mutation 0 | 완료 시 Vehicle Runtime/WeaponFire/Visual 관련 Systems에 축소된 Pawn composition/facade 계약 승격 |
+| `CF-FQ-048` | Vehicle Pawn Slimming | P2 | Done | `Document/Plan/VehiclePawnSlimming/VehiclePawnSlimmingPlan.md v0.7.0` / VPS-P0-00~05 Complete / source final audit mutation0 / P0-04 Official Build PASS baseline / final exact28 28/28 PASS / RuntimeRead T0는 UE MCP unavailable로 Waived·Deferred / USER representative regression smoke PASS — Slimming-induced breakage 미관찰 / Vehicle Builder 기본 Sensor·Active Scan baseline 누락은 별도 선행 설계-구현 불일치로 분리 | `Systems/Vehicles/VehicleRuntime.md v1.6.0` |
 | `CF-FQ-049` | Data Asset Staging·Batch Authoring | P2 | Done | `DAS-P0-05 Final Acceptance PASS` / post-promotion final review correction PASS / P0 Complete / Current System Promotion Complete / Product Low·Normal·High Apply·Save 0 / Historical Plan `Document/Plan/DataAssetStaging/DataAssetStagingPlan.md v0.7.0` Retained Path / G5 Deferred | `Systems/DataManagement/DataAssetAuthoring.md v1.1.0` |
 | `CF-FQ-050` | Data Asset Contract Evolution Guard | P2 | Done | `DACE-P0-06 Final Acceptance PASS` / P0 Complete / Current System Promotion Complete / representative Historical Plan `Document/Plan/DAContractEvolution/DAContractEvolutionPlan.md v0.7.0` Retained Path / Product Apply·Save 0 / canonical Product Staging mutation 0 / accepted snapshot append 0 | `Systems/DataManagement/DataAssetAuthoring.md v1.1.0` |
 | `CF-FQ-051` | Data Asset Multi-Type Onboarding | P2 | Done | `DAO-P0-06 Final Audit Correction + Re-review PASS` / P0 0 / blocking P1 0 / P2 1 non-blocking / prohibited shared algorithm duplication 0 / third-type shared core rewrite 0 required / Historical Plan `Document/Plan/DataAssetOnboarding/DataAssetOnboardingPlan.md v0.3.22` Retained Path / DamageData handoff completed to CF-FQ-052 | `Systems/DataManagement/DataAssetAuthoring.md v1.4.1` |
@@ -128,10 +128,6 @@ FeatureQueue는 상세 설계서나 검증 로그가 아니다.
 | --- | --- | --- |
 | `CF-FQ-041` | Ready | `RTA-P0-06 Packaged Demo` |
 | `CF-FQ-046` | Ready | `VBIUX-P0-05B Step 1~8 Common Page Layout Audit` |
-| `CF-FQ-048` | Ready | `VPS-P0-00 Contract / State / Lifecycle Freeze` |
-| `CF-FQ-034` | Paused | `FIT-P0-07D USER Driving Feel Comparison` |
-| `CF-FQ-035` | Paused | USER Field UI·Mobility |
-| `CF-FQ-026` | Paused | `TS-P0-08 USER PIE` |
 
 Candidate는 `CF-FQ-012`, `014`, `020`, `021`이다.
 
@@ -156,6 +152,97 @@ Feature가 Done되면 Current System 링크와 남은 Deferred/Pending 경계만
 ---
 
 ## 7. Changelog
+
+### v1.57.118 - 2026-09-15
+
+- `CF-FQ-048 Vehicle Pawn Slimming`을 VPS-P0-00~05 완료와 사용자 representative regression smoke PASS를 근거로 Ready → Done 승격했다. 사용자는 Slimming에 의한 기능 고장이 관찰되지 않았다고 판정했으며 확인하지 않은 개별 세부 항목을 임의 USER PASS로 확대하지 않는다.
+- P0-04 Official UE 5.8 Build `241ef0b05aa9455c94ca562fc93d81cc` PASS와 final affected exact28 `6431180d7e7d4b11ac9f8dc51a25b5c2` 28/28 PASS를 closure evidence로 유지한다. RuntimeRead T0는 UE MCP unavailable에 따른 `Waived / Deferred Observation`이며 미관측 내부 상태를 PASS로 간주하지 않는다.
+- Current owner를 `Systems/Vehicles/VehicleRuntime.md v1.6.0`으로 승격하고 Ready 재개 후보에서 CF-FQ-048을 제거했다. Vehicle Builder 신규 차량의 기본 Sensor/Active Scan baseline 누락은 VPS 회귀가 아닌 별도 선행 설계/구현 불일치로 분리하며 새 Feature ID를 임의 생성하지 않는다.
+- 현재 단일 Active `CF-FQ-039`와 Ready `CF-FQ-041`/`CF-FQ-046`은 변경하지 않았다.
+
+### v1.57.117 - 2026-09-15
+
+- 사용자 결정으로 `CF-FQ-048 / VPS-P0-05`의 RuntimeRead T0를 UE MCP unavailable에 따른 `Waived / Deferred Observation`으로 전환했다.
+- source final audit mutation0 + P0-04 Official Build PASS baseline + final exact28 28/28 PASS를 기술 근거로 `Technical Ready`를 부여했다. RuntimeRead waiver는 미관측 내부 상태를 PASS로 간주하지 않으며 UE MCP 복구 후 optional non-blocking revalidation으로 남긴다.
+- CF-FQ-048은 Ready를 유지하고 exact next를 `VPS-P0-05 USER Smoke`로 전진했다. USER smoke PASS 전 Done promotion은 계속 금지하며 현재 단일 Active `CF-FQ-039`는 변경하지 않는다.
+
+### v1.57.116 - 2026-09-15
+
+- `CF-FQ-048 / VPS-P0-05 Final Integration` source re-audit에서 추가 Product source 변경 필요성을 0건으로 재확인하고 P0-04 Official Build PASS baseline을 보존했다.
+- final unique exact28은 fresh same-process 실행으로 28/28 PASS했다. Product Source/Asset mutation과 save는 0이다.
+- canonical Editor Ready 뒤 exact managed Runtime 대상 UE ReadOnly `ue.status`가 반복 502를 반환해 RuntimeRead T0를 닫지 못했다. GoPyMCP core/adapter self-test와 UE environment는 정상이며 현재 Product failure evidence는 0이다.
+- 따라서 CF-FQ-048은 Ready를 유지하지만 `Technical Ready`는 아직 부여하지 않고 USER smoke/Done promotion도 시작하지 않는다. exact next는 `VPS-P0-05 RuntimeRead T0 Revalidation`이다.
+
+### v1.57.115 - 2026-09-14
+
+- `CF-FQ-048 / VPS-P0-05 Contract Correction + Re-review`에서 v0.6.1의 blocking P1 3건을 모두 닫아 P0 0 / blocking P1 0 / P2 0 PASS / CONTRACT READY로 전진했다.
+- final Pawn owner와 facade 삭제 5조건을 동결했고 추가 삭제 대상은 0건이다. P0-05 Product source mutation 0도 정상 Final Integration 결과로 허용한다.
+- P0-01~04 current Automation을 fresh resolve·dedupe해 final affected union을 unique exact28로 확정하고 expected success28 / failure0 / missing0 / unexpected0 / duplicate0을 고정했다.
+- representative runtime entry는 current `TestMap` + configured `BP_CFVehiclePawn`이며 RuntimeRead T0/T1 AI technical validation과 USER functional/feel smoke를 분리했다. Technical closure만으로 Done 승격하지 않고 USER PASS 후에만 Current System promotion/FeatureQueue Done/ActiveWork cleanup을 수행한다.
+- 이번 Gate는 document/contract-only라 final exact28, PIE RuntimeRead, USER smoke와 Product Source/Asset mutation은 실행하지 않았다. exact next는 `VPS-P0-05 Final Integration — Technical Validation / USER Smoke`이며 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v1.57.114 - 2026-09-14
+
+- `CF-FQ-048 / VPS-P0-05` 사전검수에서 추가 대형 extraction 필요 근거는 0이지만 final Pawn responsibility/facade 삭제 경계, final affected union exact-name·dedupe·count, AI RuntimeRead technical validation↔USER smoke↔Done promotion 경계의 blocking P1 3건을 확인해 HOLD로 기록했다.
+- 대표 Plan은 v0.6.1이며 P0-00~04 accepted Build/Automation/final-review evidence는 보존한다. P0-05 Product source/Asset/Build/Automation/PIE mutation은 아직 0이다.
+- exact next는 `VPS-P0-05 Contract Correction + Re-review`다. Lifecycle은 Ready, 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v1.57.113 - 2026-09-14
+
+- `CF-FQ-048 / VPS-P0-04 Debug / Header Cleanup` 구현과 최종검수를 **P0 0 / blocking P1 0 / P2 0 / Technical PASS**로 닫았다.
+- `CFVehicleInputTypes.h` / `CFVehicleDebugTypes.h` exact reflected declaration owner 분리와 Debug HUD/Panel/VehicleUtils Public include cleanup을 완료했다. Pawn Debug facade·aggregation과 RuntimeApply `GetVehicleDebugRuntime()` readback은 보존했다.
+- Official UE 5.8 Build `241ef0b05aa9455c94ca562fc93d81cc` PASS + affected exact12 process `7f9806d89c98491ca4ee89cdec95ae2b` 12/12 PASS이며 Product Asset mutation/save 0이다.
+- 대표 Plan은 v0.6.0, Current `VehicleRuntime.md`는 v1.5.0이며 exact next는 `VPS-P0-05 Pawn Facade Cleanup / Final Integration`이다. Lifecycle은 Ready, 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v1.57.112 - 2026-09-14
+
+- `CF-FQ-048 / VPS-P0-04 Contract Correction + Re-review`에서 기존 blocking P1 3건을 모두 계약상 교정해 P0 0 / blocking P1 0 / P2 0 PASS로 전진했다.
+- 대표 Plan v0.5.2에서 InputTypes/DebugTypes reflected declaration owner, Public consumer include, Pawn Debug facade·RuntimeApply readback과 Official Build + affected exact12 implementation acceptance를 확정했다.
+- 이번 Gate는 document-only로 Source/Asset/Build/Automation mutation은 0이며 P0-03 accepted evidence를 보존한다. Lifecycle은 Ready, 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+- exact next는 `VPS-P0-04 Debug / Header Cleanup — Implementation`이다.
+
+### v1.57.111 - 2026-09-14
+
+- `CF-FQ-048 / VPS-P0-04` 구현 전 계약검수에서 Debug/Input reflected type owner, Public consumer include, Pawn Debug facade·RuntimeApply readback·affected validation freeze의 blocking P1 3건을 확인해 HOLD로 기록했다.
+- 대표 Plan은 v0.5.1, exact next는 `VPS-P0-04 Contract Correction + Re-review`다. P0-03 accepted Build/exact9/final-review evidence는 보존하며 Source/Asset mutation은 0이다.
+- Lifecycle은 Ready, 현재 단일 Active는 `CF-FQ-039` 그대로다.
+
+### v1.57.110 - 2026-09-14
+
+- `CF-FQ-048 Vehicle Pawn Slimming`의 VPS-P0-03 Runtime Behavior Extraction이 Official UE 5.8 Build + affected exact9 + 최종 source review를 통과해 Technical PASS로 전진했다.
+- Lifecycle은 Ready 유지, 대표 Plan은 v0.5.0, exact next는 `VPS-P0-04 Debug / Header Cleanup`으로 갱신했다. 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v1.57.109 - 2026-09-14
+
+- `CF-FQ-008` Current owner를 `Systems/Combat/WeaponData.md v1.2.0`으로 동기화하고, 자체 제작 Prototype Weapon 질량은 현실 공식 제원이 아니라 현재 개발용 `Provisional Gameplay Balance`로 관리함을 Current projection에 반영했다.
+- `CF-FQ-041` Current owner를 `Systems/Vehicles/RuntimeApply.md v1.1.0`으로 동기화했다. 현재 Product HeavyCannon/RocketLauncher는 Wagon Top Mount에서 장착·교체가 모두 성공하며 non-target Front Mount `ExplicitEmpty`와 strict GrossMass 검증 계약은 유지된다.
+- `CF-FQ-041` 상태는 Ready, exact next는 `RTA-P0-06 Packaged Demo` 그대로이며 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v1.57.108 - 2026-09-14
+
+- `CF-FQ-041 RuntimeApply`에서 Builder-produced Wagon 2-Mount의 정상 빈 `Mount_Front_01`이 첫 Equipment Apply 후보에서 `MissingEquipmentPreset`으로 오인되는 post-closure 회귀를 교정했다.
+- Current owner를 `Systems/Vehicles/RuntimeApply.md v1.0.0`으로 승격하고, Catalog/VehicleDebug frontend와 재사용 가능한 Runtime Apply application seam, Complete Mount State/ExplicitEmpty/GrossMass/rollback 경계를 Current 계약으로 고정했다.
+- Official UE 5.8 Build PASS 뒤 fresh RuntimeApply 16/16 PASS(Process Job `a96777df47924589a909ddf4cd4d965b`, EngineExitCode=0)를 확보해 Multi-Mount remediation을 Technical PASS로 닫았다. 기존 RTA-P0-05 USER PASS와 과거 regression PASS는 Historical evidence로 별도 보존한다.
+- `CF-FQ-041`은 Ready를 유지하며 exact next는 기존 `RTA-P0-06 Packaged Demo`다. 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v1.57.107 - 2026-09-14
+
+- `CF-FQ-026 타겟 선택 시스템`을 current Source/Asset/System Rebaseline 결과 Paused → Done / Historical로 전환하고 재개 후보에서 제거했다.
+- Candidate/Selected Actor authority는 `Systems/Targeting/TargetSelect.md v1.0.0`, Detection/Contact/Knowledge는 `SensorContact.md v1.2.0`으로 분리하며 과거 20Hz 전체 World 반복 후보 수집은 TargetRegistry successor 구조로 해결됐다.
+- `TS-P0-00~07` 및 remote technical evidence는 Historical Technical PASS로 보존한다. old `TS-P0-08 USER PIE`는 USER PASS가 아닌 `Superseded / Not Executed`; 동일 차량 TargetPoint는 USER Inconclusive, 7°/1200m 체감과 Debug Sphere는 Deferred debt다. Source/Asset/Build/Automation/PIE mutation 0, 현재 단일 Active `CF-FQ-039` 유지다.
+
+### v1.57.106 - 2026-09-14
+
+- `CF-FQ-035 인벤토리 Foundation`을 current Source/System 기준으로 Rebaseline해 Paused → Done / Historical로 전환하고 재개 후보에서 제거했다.
+- ItemInstance 단일 소유, VehicleCargo/MountedEquipment, Access/Capacity, Reservation, Atomic Transfer/Rollback, read-only ViewData, Inventory→Fitting Adapter와 Field Fit completion/recovery를 `VehicleInventory.md v1.0.0` Current 계약으로 승격했다.
+- `INV-P0-00~05`와 `INV-P0-06` technical integration evidence는 Historical Technical PASS로 보존한다. `FFIT-P0-05 Field Fitting UI and PIE`는 USER PASS가 아닌 `Superseded / Not Executed`이며, formal ownership-aware frontend가 실제 요구될 때 새 Product/UI lifecycle로 다룬다.
+- `CF-FQ-041 RuntimeApply`는 non-owning 즉시 적용 UX로 유지하며 Inventory ownership/Reservation/Transaction을 대체하지 않는다. Source/Asset/Build/Automation/PIE mutation 0, 현재 단일 Active `CF-FQ-039` 유지다.
+
+### v1.57.105 - 2026-09-14
+
+- `CF-FQ-034 차량 피팅·질량 런타임`을 current Source/System 기준으로 Rebaseline해 Paused → Done / Historical로 전환하고 재개 후보에서 제거했다.
+- Fitting Snapshot, Initial/Field Runtime Apply와 Chaos Mass 적용·검증·rollback은 현재 Source에 유지·확장되어 있으며 Current owner는 `VehicleRuntime.md v1.3.0` + `VehicleData.md v2.3.0`이다. 향후 질량 체감 튜닝 절차는 `VehicleBuilder.md v1.6.0`을 사용한다.
+- `FIT-P0-07A~07C` quantitative evidence는 Historical Technical PASS로 보존하고 `FIT-P0-07D`는 USER PASS가 아닌 `Superseded / Not Executed`로 종료했다. Source/Asset/Build/Automation/PIE mutation은 0이며 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
 
 ### v1.57.104 - 2026-09-11
 

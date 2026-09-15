@@ -1,7 +1,7 @@
 # CarFight Active Work
 
-- 문서 버전: v4.227
-- 최근 갱신일: 2026-09-11
+- 문서 버전: v4.241
+- 최근 갱신일: 2026-09-15
 - 문서 상태: Current
 - 역할: CarFight 게임 프로젝트에서 현재 실제로 진행 중인 작업을 선택하고 대표 Plan으로 연결하는 **세션 복원 projection**
 
@@ -46,22 +46,21 @@ UI Resource 방법론 실험 `URT05_Plan.md v0.8`은 Method Validation Complete�
 
 ## 3. 최근 완료
 
-### CF-FQ-015 차량 데이터 튜닝 패스 — Done
+### CF-FQ-048 Vehicle Pawn Slimming — Done
 
 ```text
-상태: Done / Rebaseline Complete / Historical + Retained Path
-Current tuning owner: Document/Systems/Vehicles/VehicleBuilder.md v1.6.0
-Current data foundation: Document/Systems/Vehicles/VehicleData.md v2.3.0
-Historical Plan: Document/Plan/VehicleDataTuning/VehicleDataTuningPlan.md v0.3.0
+상태: Done / VPS-P0-00~05 Complete / Historical + Retained Path
+Current owner: Document/Systems/Vehicles/VehicleRuntime.md v1.6.0
+Historical Plan: Document/Plan/VehiclePawnSlimming/VehiclePawnSlimmingPlan.md v0.7.0
 ```
 
 보존 판정:
 
-- VD-P0-00~03 Validator / Representative Compare / Runtime Apply Technical PASS와 당시 Build·`CarFight.VehicleData` 3/3 evidence를 Historical로 보존하고 재실행하지 않는다.
-- VD-P0-04 Sedan/SUV Raw USER Tuning은 실제 USER PASS를 한 것으로 처리하지 않는다. 후속 Data Authoring / VehicleBuilder 경로가 상위 기능을 제공하므로 `Superseded / Not Executed`로 종료한다.
-- 유지 가치가 있는 네 계약은 VehicleBuilder Current System으로 승격했다: Controlled Axis Tuning, Technical Benchmark + USER Feel Pair, Vehicle Character / Reference Baseline, Measurement Gap / Benchmark Extension Ownership.
-- 제동거리·Yaw Rate·횡가속·Slip Angle·Suspension stroke/settling은 현재 구현 완료가 아니라 Measurement Gap 후보다. 필요할 때 별도 lifecycle에서 구현한다.
-- 이번 closure는 문서/책임 Rebaseline이며 Source/Asset/Build/Automation mutation은 0이다.
+- Pawn은 lifecycle/composition/input/target identity/compatibility facade/state Authority를 유지하고 Visual/Fire/Runtime behavior는 각각 coordinator로 분리한 Current 경계를 보존한다.
+- P0-04 Official UE 5.8 Build PASS와 final affected exact28 28/28 PASS를 반복하지 않는다. 사용자 representative regression smoke에서는 Slimming에 의한 기능 고장이 관찰되지 않아 USER Smoke PASS로 마감했다.
+- RuntimeRead T0는 UE MCP unavailable로 `Waived / Deferred Observation`이며 관측하지 않은 runtime 내부 상태를 PASS로 확대하지 않는다. UE MCP 복구 시 optional non-blocking revalidation만 가능하다.
+- Vehicle Builder 신규 차량의 기본 Sensor/Active Scan baseline 누락은 VPS 회귀가 아닌 별도 선행 설계/구현 불일치다. 이 문제를 이유로 CF-FQ-048을 재개하지 않으며 별도 lifecycle에서 다룬다.
+- 현재 단일 Active `CF-FQ-039`와 Ready `CF-FQ-041`/`CF-FQ-046`은 변경하지 않는다.
 
 ---
 
@@ -69,12 +68,8 @@ Historical Plan: Document/Plan/VehicleDataTuning/VehicleDataTuningPlan.md v0.3.0
 
 | Feature | 상태 | 대표 owner / 재개 지점 | 반복 금지 범위 |
 | --- | --- | --- | --- |
-| `CF-FQ-034` 차량 피팅·질량 | Paused | `Document/Plan/VehicleFitting/VehicleFittingPlan.md v0.17.0` → `FIT-P0-07D USER Driving Feel Comparison` | FIT-P0-07A~07C 정량 Mobility evidence 반복 금지 |
-| `CF-FQ-041` 런타임 콘텐츠 적용 메뉴 | Ready | `Document/Plan/RuntimeApply/RuntimeApplyPlan.md v0.1.17` → `RTA-P0-05 USER PASS / Closed / next RTA-P0-06 Packaged Demo` | RuntimeApply Vehicle/Equipment UI와 Legacy Current Equipment readback까지 USER 확인 완료, 최종 RuntimeApply regression 14/14 PASS(CF-FQ-044 `CatalogOptionSync` 포함). CF-FQ-044에서 persisted `DA_Vehicle_Wagon`을 Builder-produced Packaged Demo candidate로 handoff했다. 기존 RuntimeApply authorization/apply 계약을 재작업하지 않는다. |
+| `CF-FQ-041` 런타임 콘텐츠 적용 메뉴 | Ready | `Document/Plan/RuntimeApply/RuntimeApplyPlan.md v0.1.18` / Current `Document/Systems/Vehicles/RuntimeApply.md v1.1.0` → Multi-Mount Empty-State + Prototype Weapon Provisional Gameplay Balance fresh RuntimeApply 16/16 PASS / next `RTA-P0-06 Packaged Demo` | RTA-P0-05 당시 USER PASS와 기존 regression evidence는 Historical로 보존한다. Complete Mount State/ExplicitEmpty 계약과 strict GrossMass 검증은 유지하며 현재 Product HeavyCannon/RocketLauncher는 Wagon Top Mount 장착·교체를 모두 통과한다. Catalog/VehicleDebug는 non-owning frontend, Runtime Apply service는 향후 Garage/Inventory가 재사용하는 application seam이다. |
 | `CF-FQ-046` Vehicle Builder 사용자 정보 UX | Ready | `Document/Plan/VehicleBuilderInfoUX/VehicleBuilderInfoUXPlan.md v0.1.6` → pre-CF-FQ-047 Technical PASS evidence preserved / CF-FQ-047 Done으로 dependency 충족 / next `VBIUX-P0-05B Step 1~8 Common Page Layout Audit` | Step 1~8 common Page Shell/height/scroll/overflow는 046 owner다. 047의 Step 5 Physics 영향 경계와 Step 7/8 durable/save/readiness, 038 Data Authoring, 015 Performance Tuning protocol은 Current VehicleBuilder v1.6.0으로 동기화됐으며 공통 scroll/page-shell을 중복 구현하지 않는다. |
-| `CF-FQ-048` Vehicle Pawn Slimming | Ready | `Document/Plan/VehiclePawnSlimming/VehiclePawnSlimmingPlan.md v0.1.0` → Initial Design Audit Correction + Re-review PASS / next `VPS-P0-00 Contract / State / Lifecycle Freeze` | Gameplay semantics, Blueprint/Asset contract, Pawn observable state authority와 lifecycle ordering을 P0에서 동결한다. 기존 CF-FQ-039 Active 및 Wagon/RuntimeTestCatalog/WeaponDef/VehiclePanel 병렬 dirty를 보호하며 Source mutation은 아직 0이다. |
-| `CF-FQ-035` 인벤토리 Foundation | Paused | FeatureQueue/대표 Plan → USER Field UI·Mobility | 기존 Inventory/Fitting Technical checkpoint 반복 금지 |
-| `CF-FQ-026` 타겟 선택 | Paused | FeatureQueue/대표 Plan → `TS-P0-08 USER PIE` | TS-P0-00~07 및 Remote Technical evidence 반복 금지 |
 
 ---
 
@@ -119,6 +114,96 @@ ActiveWork가 다시 상세 Build/Automation/USER 로그를 누적하거나 서�
 ---
 
 ## 8. Changelog
+
+### v4.241 - 2026-09-15
+
+- `CF-FQ-048 Vehicle Pawn Slimming`을 사용자 representative regression smoke PASS 뒤 Done / Historical + Retained Path로 마감하고 Paused/Ready 복원 체크포인트에서 제거했다.
+- 최근 완료 포인터를 `VehicleRuntime.md v1.6.0` + 대표 Historical Plan v0.7.0으로 교체했다. Build/exact28 accepted evidence는 반복하지 않고 RuntimeRead T0의 `Waived / Deferred Observation` 경계를 보존한다.
+- Vehicle Builder 신규 차량의 기본 Sensor/Active Scan baseline 누락은 VPS 회귀가 아닌 별도 선행 설계/구현 불일치로 분리했다. 현재 단일 Active `CF-FQ-039`와 Ready `CF-FQ-041`/`CF-FQ-046`은 변경하지 않았다.
+
+### v4.240 - 2026-09-15
+
+- 사용자 결정으로 `CF-FQ-048 / VPS-P0-05`의 RuntimeRead T0를 UE MCP unavailable에 따른 `Waived / Deferred Observation`으로 전환했다.
+- source final audit mutation0 + P0-04 Official Build PASS baseline + final exact28 28/28 PASS를 기술 근거로 **Technical Ready**를 부여하고, USER functional/feel smoke를 최종 필수 gate로 유지한다.
+- 복원 포인터를 대표 Plan v0.6.4 / `VPS-P0-05 USER Smoke`로 전진했다. USER PASS 전 Done promotion은 계속 금지하며 CF-FQ-039 Active와 기존 병렬 dirty는 유지한다.
+
+### v4.239 - 2026-09-15
+
+- `CF-FQ-048 / VPS-P0-05 Final Integration`에서 Product source 추가 변경 필요성을 0건으로 재확인해 P0-04 Official Build PASS baseline을 보존하고, final unique exact28을 28/28 PASS로 닫았다.
+- canonical Editor는 Ready였지만 exact managed Runtime 대상 UE ReadOnly `ue.status`가 반복 502를 반환해 RuntimeRead T0 prerequisite를 관측하지 못했다. GoPyMCP core/adapter self-test와 UE environment는 정상이라 Product failure가 아닌 observation-path tooling blocker로 분류한다.
+- Technical Ready는 아직 부여하지 않고 USER smoke도 시작하지 않는다. exact next는 `VPS-P0-05 RuntimeRead T0 Revalidation`이며 대표 Plan은 v0.6.3이다.
+
+### v4.238 - 2026-09-14
+
+- `CF-FQ-048 / VPS-P0-05 Contract Correction + Re-review`를 P0 0 / blocking P1 0 / P2 0 PASS / CONTRACT READY로 닫아 대표 Plan v0.6.2와 복원 포인터를 동기화했다.
+- final Pawn owner와 facade 삭제 5조건을 동결했으며 fresh audit의 추가 삭제 대상은 0건이다. Product source mutation 0도 정상 Final Integration 결과로 허용한다.
+- P0-01 Visual/Aim exact11 + P0-02 Fire exact6 + P0-04 exact12에서 `RuntimeVisualFallback` 1건을 dedupe하고 P0-03 exact9의 P0-04 완전 포함을 반영해 final affected union을 unique exact28로 확정했다.
+- RuntimeRead T0/T1 AI technical validation과 `TestMap` + configured `BP_CFVehiclePawn` representative USER smoke, `Technical Ready / USER Smoke Pending`→USER PASS→Done promotion 경계를 고정했다.
+- 이번 Gate에서는 final regression/PIE/USER smoke를 실행하지 않았고 P0-00~04 accepted evidence, 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty를 그대로 보존했다. exact next는 `VPS-P0-05 Final Integration — Technical Validation / USER Smoke`다.
+
+### v4.237 - 2026-09-14
+
+- `CF-FQ-048 / VPS-P0-05` 사전 계약검수에서 P0 0 / blocking P1 3 / P2 0 HOLD를 확인해 복원 포인터를 대표 Plan v0.6.1로 동기화했다.
+- 추가 대형 extraction 필요 근거는 0이며, Lifecycle/Composition/Input/Target identity/Compatibility facade/Contract state를 final Pawn 역할로 우선 분류했다. P0-05 Product source mutation은 아직 0이다.
+- final Pawn facade 삭제 경계, P0-01~04 accepted affected union의 exact-name·dedupe·count, AI RuntimeRead technical validation↔USER smoke↔Done promotion 계약을 교정하기 전 구현/최종 회귀/USER smoke를 시작하지 않는다.
+- P0-00~04 accepted evidence, 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty는 그대로 보존한다. exact next는 `VPS-P0-05 Contract Correction + Re-review`다.
+
+### v4.236 - 2026-09-14
+
+- `CF-FQ-048 / VPS-P0-04 Debug / Header Cleanup` 구현과 최종검수를 P0 0 / blocking P1 0 / P2 0 Technical PASS로 닫아 대표 Plan v0.6.0과 복원 포인터를 동기화했다.
+- `CFVehicleInputTypes.h` / `CFVehicleDebugTypes.h` exact reflected owner 분리, Public consumer direct DebugTypes include와 Pawn Debug facade·RuntimeApply readback 보존을 완료했다.
+- Official UE 5.8 Build PASS + affected exact12 12/12 PASS이며 Product Asset mutation/save와 작업 전용 helper residue는 0이다.
+- exact next는 `VPS-P0-05 Pawn Facade Cleanup / Final Integration`이다. 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v4.235 - 2026-09-14
+
+- `CF-FQ-048 / VPS-P0-04 Contract Correction + Re-review`를 P0 0 / blocking P1 0 / P2 0 PASS로 닫아 대표 Plan v0.5.2와 복원 포인터를 동기화했다.
+- `CFVehicleInputTypes` / `CFVehicleDebugTypes` declaration owner, Public consumer include, Pawn Debug facade·RuntimeApply readback과 Official Build + affected exact12 implementation acceptance 계약을 확정했다.
+- 이번 Gate는 document-only이며 P0-04 Source/Asset/Build/Automation mutation은 0이다. P0-03 accepted evidence와 현재 단일 Active `CF-FQ-039`는 그대로 보존한다.
+- exact next는 `VPS-P0-04 Debug / Header Cleanup — Implementation`이다.
+
+### v4.234 - 2026-09-14
+
+- `CF-FQ-048 / VPS-P0-04` 사전 계약검수에서 P0 0 / blocking P1 3 / P2 0 HOLD를 확인해 복원 포인터를 대표 Plan v0.5.1로 동기화했다.
+- Debug/Input reflected type owner, Public consumer include, Pawn Debug facade·RuntimeApply readback·affected exact12 validation 계약을 교정하기 전 구현을 시작하지 않는다.
+- P0-03 accepted Build/exact9/final-review evidence는 그대로 보존하고 Source/Asset mutation은 0이다. 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v4.233 - 2026-09-14
+
+- `CF-FQ-048 Vehicle Pawn Slimming` 복원 포인터를 대표 Plan v0.5.0 / VPS-P0-03 Implementation + Final Review PASS로 동기화했다.
+- exact next는 `VPS-P0-04 Debug / Header Cleanup`이며 CF-FQ-048은 Ready를 유지하고 현재 단일 Active `CF-FQ-039`는 변경하지 않는다.
+- 상세 Build/exact9 evidence는 대표 Plan이 소유하며 ActiveWork에는 중복하지 않는다.
+
+### v4.232 - 2026-09-14
+
+- `CF-FQ-041 RuntimeApply` Current owner를 `RuntimeApply.md v1.1.0`으로 동기화하고 Prototype Cannon/Rocket 질량을 `Provisional Gameplay Balance`로 조정한 현재 Product 상태를 복원 포인터에 반영했다.
+- Product HeavyCannon 첫 장착과 RocketLauncher 교체가 Wagon Top Mount에서 모두 성공하고 Front Mount는 `ExplicitEmpty`로 보존되는 fresh RuntimeApply 16/16 PASS를 확보했다. strict GrossMass validator는 그대로 유지한다.
+- 공식 UE 5.8 Build와 Fitting Mobility Fixture 파생 검증도 PASS이며 exact next는 기존 `RTA-P0-06 Packaged Demo` 그대로다. 현재 단일 Active `CF-FQ-039`와 다른 병렬 dirty는 변경하지 않았다.
+
+### v4.231 - 2026-09-14
+
+- `CF-FQ-041 RuntimeApply`의 Wagon 2-Mount 정상 빈 슬롯 `MissingEquipmentPreset` post-closure 회귀 교정을 Ready 복원 체크포인트에 반영했다.
+- representative Plan은 `RuntimeApplyPlan.md v0.1.18`, Current owner는 `RuntimeApply.md v1.0.0`이다. Legacy→Snapshot Complete Mount State/ExplicitEmpty와 실제 Applied Snapshot authority를 현재 재사용 계약으로 고정했다.
+- Official UE 5.8 Build PASS 뒤 fresh RuntimeApply 16/16 PASS(Process Job `a96777df47924589a909ddf4cd4d965b`, EngineExitCode=0)를 확보해 remediation Technical PASS로 닫았다. 기존 RTA-P0-05 USER PASS와 과거 regression PASS는 Historical evidence로 별도 보존한다.
+- exact next는 `RTA-P0-06 Packaged Demo`다. 현재 단일 Active `CF-FQ-039`와 다른 병렬 dirty는 변경하지 않았다.
+
+### v4.230 - 2026-09-14
+
+- `CF-FQ-026 타겟 선택 시스템`을 current Source/Asset/System Rebaseline 결과 Paused → Done / Historical로 전환하고 복원 체크포인트에서 제거했다.
+- Current owner는 `TargetSelect.md v1.0.0`이며 Sensor/Scanner는 `SensorContact.md v1.2.0`의 Detection/Contact/Knowledge owner로 분리한다. Historical Plan은 `TargetSelectPlan.md v0.13.0` Retained Path다.
+- TS-P0-00~07 및 remote technical evidence는 Historical Technical PASS로 보존한다. old `TS-P0-08 USER PIE`는 USER PASS가 아닌 `Superseded / Not Executed`; 동일 차량 TargetPoint USER 상태는 Inconclusive, 7°/1200m 체감과 Debug Sphere는 Deferred debt다. Source/Asset/Build/Automation/PIE mutation 0, 현재 단일 Active `CF-FQ-039` 유지다.
+
+### v4.229 - 2026-09-14
+
+- `CF-FQ-035 인벤토리 Foundation`을 current Source/System Rebaseline 결과 Paused → Done으로 전환하고 복원 체크포인트에서 제거했다.
+- Current foundation owner는 `VehicleInventory.md v1.0.0`, Fitting/Mass runtime boundary는 `VehicleRuntime.md v1.3.0`이며 RuntimeApply는 non-owning 즉시 적용 UX로 구분한다. Historical Plan은 `InventoryFoundationPlan.md v0.10.0` Retained Path다.
+- `FFIT-P0-05`는 USER PASS가 아닌 `Superseded / Not Executed`이며 formal ownership-aware frontend가 실제 요구될 때 새 lifecycle로 연다. Source/Asset/Build/Automation/PIE mutation 0, 현재 단일 Active `CF-FQ-039` 유지다.
+
+### v4.228 - 2026-09-14
+
+- `CF-FQ-034 차량 피팅·질량 런타임`을 current Source/System Rebaseline 결과 Paused → Done으로 전환하고 복원 체크포인트에서 제거했다.
+- Current owner는 `VehicleRuntime.md v1.3.0` + `VehicleData.md v2.3.0`, 질량 관련 USER feel/tuning workflow는 `VehicleBuilder.md v1.6.0`이다. Historical Plan은 `VehicleFittingPlan.md v0.18.0` Retained Path다.
+- `FIT-P0-07D`는 USER PASS가 아닌 `Superseded / Not Executed`이며 향후 필요 시 Deferred observational debt로 successor tuning workflow에서 관찰한다. Source/Asset/Build/Automation/PIE mutation 0, 현재 단일 Active `CF-FQ-039` 유지다.
 
 ### v4.227 - 2026-09-11
 

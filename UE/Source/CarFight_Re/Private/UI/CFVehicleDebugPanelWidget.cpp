@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.34.1
-// Date: 2026-09-02
-// Description: VehicleDebug Panel용 C++ 부모 위젯 / RTA Runtime Apply dedicated child integration 구현
+// Version: 1.35.0
+// Date: 2026-09-14
+// Description: VehicleDebug Panel용 C++ 부모 위젯 / explicit Pawn implementation dependency
 // Changelog:
+// - v1.35.0: VPS-P0-04 Public header의 Pawn transitive include 제거에 맞춰 실제 Pawn facade 호출 translation unit에서 CFVehiclePawn.h를 명시적으로 include.
 // - v1.34.1: P0에 필요 없는 RuntimeApplyWidgetClass override를 제거하고 C++ 기본 UCFRuntimeApplyWidget으로 child 생성 경로를 단순화.
 // - v1.34.0: RuntimeApply Navigation을 추가하고 선택 시 Generic Section 대신 UCFRuntimeApplyWidget 전용 interactive child를 표시. 기존 섹션 복귀 시 generic child 재부착도 보장.
 // - v1.33.0: 동적 Navigation에 선택 대상 전용 섹션을 추가해 TargetSelect 표시 정보와 대상 방어·내구도 상태를 매 프레임 갱신.
@@ -37,6 +38,7 @@
 // - v1.8.2: Aim 검증 하위 섹션 표시명을 서버 조준에서 로컬 발사 검증 기준으로 변경.
 // - v1.8.1: 싱글플레이 기준에 맞춰 Aim 디버그 패널의 복제 시각 표시 문구를 Aim 시각 표시로 변경.
 // Migration:
+// - v1.35.0 include ownership만 정리하며 VehicleDebug/RuntimeApply 동작, Blueprint API와 WBP Asset 계약은 변경하지 않습니다.
 // - v1.34.0 RuntimeApply는 기존 SelectedSectionHost를 재사용하며 WBP Asset 변경이 없다. Widget은 Current/Selected/Explicit Apply만 소유하고 Vehicle/Fitting mutation은 Runtime Apply service에 위임한다.
 // - Target 섹션은 기존 동적 Section 렌더링 경로를 사용하므로 WBP 에셋 수정 없이 새 Navigation 항목과 하위 방어·내구도 정보를 표시한다.
 // - 터렛 레티클 검증은 신규 Turret Reticle 세 행을 사용하며 기존 Weapon Preview 행은 과거 구현 확인용 Legacy Debug로만 해석한다.
@@ -64,6 +66,7 @@
 
 #include "UI/CFVehicleDebugPanelWidget.h"
 
+#include "CFVehiclePawn.h"
 #include "CFVehicleAimComp.h"
 #include "Blueprint/WidgetTree.h"
 #include "UI/CFRuntimeApplyWidget.h"

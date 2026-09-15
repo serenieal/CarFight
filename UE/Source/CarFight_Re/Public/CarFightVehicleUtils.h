@@ -1,9 +1,11 @@
-﻿// Version: 1.3.0
-// Date: 2026-08-29
-// Description: CarFight 차량 디버그 유틸리티 라이브러리 헤더
+﻿// Version: 1.4.0
+// Date: 2026-09-14
+// Description: CarFight 차량 디버그 유틸리티 / direct Drive·Debug type consumer header
 // Changelog:
+// - v1.4.0: VPS-P0-04로 CFVehiclePawn.h transitive dependency를 제거하고 CFVehicleDebugTypes.h를 직접 include하도록 정리했습니다.
 // - v1.3.0: 사용 중단된 GetRealWheelTransform legacy reflection API를 제거했습니다.
 // Migration:
+// - v1.4.0 Blueprint 함수 signature와 Debug 문자열 동작은 변경되지 않습니다. Pawn 전체 타입이 필요한 consumer는 자체 translation unit에서 명시적으로 include해야 합니다.
 // - WheelSync runtime은 UCFWheelSyncComp의 정식 Chaos wheel 경로를 사용합니다. GetRealWheelTransform 대체 호출은 필요하지 않습니다.
 
 #pragma once
@@ -11,7 +13,7 @@
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "CFVehicleDriveComp.h"
-#include "CFVehiclePawn.h"
+#include "CFVehicleDebugTypes.h"
 #include "CarFightVehicleUtils.generated.h"
 
 /**

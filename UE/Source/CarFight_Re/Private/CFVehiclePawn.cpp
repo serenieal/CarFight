@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.169.1
-// Date: 2026-09-06
-// Description: CarFight 싱글플레이 차량 Pawn 구현 / VPS-P0-02 Fire behavior extraction / RTA Fitting-dependent Runtime refresh seam
+// Version: 2.170.0
+// Date: 2026-09-14
+// Description: CarFight 싱글플레이 차량 Pawn 구현 / VPS-P0-03 Runtime behavior extraction
 // Changelog:
+// - v2.170.0: CF-FQ-048 VPS-P0-03로 Runtime 초기화·피팅 refresh·Initial Mass prepare/verify·VehicleData 적용 orchestration을 UCFVehicleRuntimeComp로 위임. Pawn lifecycle/Public/BP/Automation facade와 Runtime observable/serialized Authority는 유지.
 // - v2.169.1: VPS-P0-02 Authority 교정으로 FireRequest ID/시간 할당과 입력 순간 LastFireRequest commit을 Pawn에 명시적으로 복귀. FireComp는 전달받은 요청의 계산·검증·실행만 수행.
 // - v2.169.0: CF-FQ-048 VPS-P0-02로 Fire Command 생성·검증·Muzzle/Aim glue·HitScan/Projectile 실행·Launcher 후속 발사와 Fire side effect를 UCFVehicleFireComp로 위임. Pawn은 Fire observable/Damage Debug Authority와 기존 Launcher/Automation compatibility facade를 유지.
 // - v2.168.0: CF-FQ-048 VPS-P0-01로 차체·휠·레이아웃·터렛·Owner 표시 행동과 순수 시각 캐시를 UCFVehicleVisualComp에 위임. Pawn은 기존 lifecycle 순서, private Automation wrapper, Runtime/Turret observable state Authority와 SM_Body gameplay hit collision을 유지.
@@ -118,6 +119,7 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth Visual/Shell 적용 전 기준선을 깨끗하게 만들기 위해 차량 진단 로그와 Owner 표시 안정화 기본값을 False로 통일.
 // Migration:
+// - v2.170.0 기존 BP_CFVehiclePawn 계열은 VehicleRuntimeComp 기본 서브오브젝트를 자동 상속합니다. Product Asset 수동 추가/저장은 필요하지 않으며 기존 InitializeVehicleRuntime/RefreshFittingDependentRuntime/readiness/summary 계약은 Pawn에 그대로 유지됩니다.
 // - v2.169.1 FireRequest ID/시간과 LastFireRequest 입력 commit은 다시 Pawn Authority가 직접 수행합니다. Blueprint/Product Asset과 기존 Public/BP/Automation 호출 계약에는 변경이 없습니다.
 // - v2.169.0 기존 BP_CFVehiclePawn 계열은 VehicleFireComp 기본 서브오브젝트를 자동 상속합니다. Launcher는 기존 Pawn callback을 계속 사용하고 Fire observable/Damage Debug state는 Pawn에 유지되며 Product Asset 수동 추가/저장은 필요하지 않습니다.
 // - v2.168.0 기존 BP_CFVehiclePawn 계열은 VehicleVisualComp 기본 서브오브젝트를 자동 상속합니다. Product Asset 수동 추가/저장은 필요하지 않으며 기존 Public/BP 함수·프로퍼티와 Runtime/Turret observable state는 Pawn에 그대로 유지됩니다.
@@ -216,6 +218,7 @@
 #include "CFVehicleCameraComp.h"
 #include "CFVehicleVisualComp.h"
 #include "CFVehicleFireComp.h"
+#include "CFVehicleRuntimeComp.h"
 #include "CFVehicleDriveComp.h"
 #include "CFCombatFxComp.h"
 #include "CFVehicleHealthComp.h"
@@ -934,6 +937,7 @@ namespace
 
 }
 
+// [v2.170.0] 기존 차량 기본 서브오브젝트와 내부 coordinator들을 생성하고 초기 Runtime 기본값을 설정합니다.
 ACFVehiclePawn::ACFVehiclePawn()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -943,6 +947,8 @@ ACFVehiclePawn::ACFVehiclePawn()
 	VehicleVisualComp = CreateDefaultSubobject<UCFVehicleVisualComp>(TEXT("VehicleVisualComp"));
 	// [v2.169.0] Fire 계산/검증/실행 행동만 소유하고 Pawn observable state를 복제하지 않는 내부 coordinator 기본 서브오브젝트입니다.
 	VehicleFireComp = CreateDefaultSubobject<UCFVehicleFireComp>(TEXT("VehicleFireComp"));
+	// [v2.170.0] Runtime 초기화·피팅 refresh·Initial Mass·VehicleData 적용 순서만 수행하는 내부 coordinator 기본 서브오브젝트입니다.
+	VehicleRuntimeComp = CreateDefaultSubobject<UCFVehicleRuntimeComp>(TEXT("VehicleRuntimeComp"));
 	VehicleCameraComp = CreateDefaultSubobject<UCFVehicleCameraComp>(TEXT("VehicleCameraComp"));
 		VehicleAimComp = CreateDefaultSubobject<UCFVehicleAimComp>(TEXT("VehicleAimComp"));
 		VehicleWeaponComp = CreateDefaultSubobject<UCFVehicleWeaponComp>(TEXT("VehicleWeaponComp"));
@@ -1566,329 +1572,34 @@ bool ACFVehiclePawn::RegisterDefaultInputMappingContext()
 	return true;
 }
 
-// [v2.167.0] 현재 Applied Fitting 기준으로 장비 의존 Ammo·TurretVisual·Launcher와 CombatReady만 다시 구성합니다.
+// [v2.170.0] 현재 Applied Fitting 기준 장비 의존 Runtime 재구성을 내부 Runtime coordinator에 위임합니다.
 bool ACFVehiclePawn::RefreshFittingDependentRuntime()
 {
-	// [v2.167.0] Fitting Commit이 완료되어 장비 Runtime 입력을 readback할 수 있는지 여부입니다.
-	const bool bFittingRuntimeApplied = VehicleFittingComp && VehicleFittingComp->HasAppliedRuntimeInput();
-	if (!bFittingRuntimeApplied)
+	if (!VehicleRuntimeComp)
 	{
+		// [v2.170.0] 내부 coordinator 누락 시 기존 Core/compat 상태는 보존하고 Combat readiness만 fail-closed 처리합니다.
 		bVehicleCombatRuntimeReady = false;
-		LastVehicleRuntimeSummary = TEXT("FittingDependentRuntime: Failed, AppliedFittingRuntimeMissing");
+		LastVehicleRuntimeSummary = TEXT("FittingDependentRuntime: Failed, VehicleRuntimeCompMissing");
 		return false;
 	}
 
-	// [v2.167.0] 이전 장전·예비·예약·Reload 상태가 새 Snapshot에 잔류하지 않게 비울 Ammo Runtime입니다.
-	if (VehicleAmmoComp)
-	{
-		VehicleAmmoComp->ResetAmmoRuntime();
-	}
-
-	// [v2.167.0] Ammo 기본 서브오브젝트 존재와 finite Snapshot 초기화 결과를 합친 탄약 준비 상태입니다.
-	bool bAmmoReady = VehicleAmmoComp != nullptr;
-
-	// [v2.167.0] 현재 Applied Snapshot에 실제 finite Ammo Runtime이 필요한 무기가 하나라도 있는지 여부입니다.
-	bool bFiniteAmmoRuntimeRequired = false;
-
-	// [v2.167.0] 현재 Applied Runtime이 Snapshot 모드인지 여부입니다.
-	const bool bHasAppliedFittingSnapshot = VehicleFittingComp->HasAppliedFittingSnapshot();
-	if (bHasAppliedFittingSnapshot)
-	{
-		// [v2.167.0] 새 Ammo/Turret/Launcher를 구성할 현재 Applied Fitting Snapshot입니다.
-		const FCFVehicleFittingSnapshot AppliedFittingSnapshot = VehicleFittingComp->GetAppliedFittingSnapshot();
-
-		// [v2.167.0] WeaponInstanceId별 독립 장전 상태를 만들 finite 무기 초기화 입력입니다.
-		TArray<FCFWeaponAmmoInitialization> WeaponAmmoInitializations;
-		for (const FCFResolvedFittingMount& ResolvedMount : AppliedFittingSnapshot.ResolvedMounts)
-		{
-			// [v2.167.0] 이 Mount에 Snapshot이 실제 해결한 WeaponData입니다.
-			UCFWeaponData* ResolvedWeaponData = ResolvedMount.WeaponData;
-			if (!IsValid(ResolvedWeaponData) || ResolvedWeaponData->bUseInfiniteAmmoForDebug)
-			{
-				continue;
-			}
-
-			bFiniteAmmoRuntimeRequired = true;
-			if (!ResolvedWeaponData->UsesFiniteAmmoRuntime() || ResolvedMount.MountProfileId.IsNone())
-			{
-				bAmmoReady = false;
-				continue;
-			}
-
-			// [v2.167.0] 같은 WeaponData를 여러 Mount에 장착해도 Loaded 상태를 독립 소유할 초기화 입력입니다.
-			FCFWeaponAmmoInitialization WeaponAmmoInitialization;
-			WeaponAmmoInitialization.WeaponInstanceId = ResolvedMount.MountProfileId;
-			WeaponAmmoInitialization.WeaponData = ResolvedWeaponData;
-			WeaponAmmoInitialization.InitialLoadedAmmoCountOverride = INDEX_NONE;
-			WeaponAmmoInitializations.Add(WeaponAmmoInitialization);
-		}
-
-		// [v2.167.0] 명시적 출격 탄약 또는 finite WeaponInstance 때문에 실제 Ammo Runtime 구성이 필요한지 여부입니다.
-		const bool bShouldInitializeAmmoRuntime = !AppliedFittingSnapshot.InitialSortieAmmoLoads.IsEmpty()
-			|| !WeaponAmmoInitializations.IsEmpty();
-		if (bAmmoReady && bShouldInitializeAmmoRuntime)
-		{
-			bAmmoReady = VehicleAmmoComp
-				&& VehicleAmmoComp->InitializeAmmoRuntime(
-					this,
-					AppliedFittingSnapshot.InitialSortieAmmoLoads,
-					WeaponAmmoInitializations);
-		}
-		else if (bFiniteAmmoRuntimeRequired)
-		{
-			bAmmoReady = false;
-		}
-	}
-
-	// [v2.167.0] Snapshot 또는 Legacy 복구 후 현재 Weapon Runtime Source에 맞게 단일 활성 Turret Visual을 재구성합니다.
-	ApplyVehicleTurretVisualConfig();
-
-	// [v2.167.0] 최종 Weapon Runtime에 Launcher를 다시 연결한 결과입니다.
-	const bool bLauncherReady = LauncherComp
-		? LauncherComp->InitializeLauncherRuntime(this, VehicleWeaponComp)
-		: false;
-
-	// [v2.167.0] 장비 교체 뒤에도 기존 Aim Runtime이 준비 상태인지 readback합니다.
-	const bool bAimReady = VehicleAimComp && VehicleAimComp->IsAimRuntimeReady();
-
-	// [v2.167.0] Fitting Commit 결과 Weapon Runtime이 준비 상태인지 readback합니다.
-	const bool bWeaponReady = VehicleWeaponComp && VehicleWeaponComp->IsWeaponRuntimeReady();
-
-	// [v2.167.0] 기존 전투 입력 계약에 필요한 TargetSelectComp가 존재하는지 여부입니다.
-	const bool bTargetSelectReady = TargetSelectComp != nullptr;
-
-	bVehicleCombatRuntimeReady = bVehicleCoreRuntimeReady
-		&& bAimReady
-		&& bWeaponReady
-		&& bAmmoReady
-		&& bLauncherReady
-		&& bTargetSelectReady;
-
-	// [v2.167.0] 기존 호환 RuntimeReady는 장비 hot apply에서도 CoreReady와 동일 의미를 유지합니다.
-	bVehicleRuntimeReady = bVehicleCoreRuntimeReady;
-
-	// [v2.167.0] 현재 Ammo 상태를 finite 준비/무한탄 호환/실패로 구분한 bounded readback입니다.
-	const TCHAR* AmmoRuntimeState = !VehicleAmmoComp
-		? TEXT("Missing")
-		: (!bAmmoReady
-			? TEXT("Failed")
-			: (VehicleAmmoComp->IsAmmoRuntimeInitialized() ? TEXT("Ready") : TEXT("InfiniteCompatibility")));
-
-	LastVehicleRuntimeSummary = FString::Printf(
-		TEXT("FittingDependentRuntime: Fitting=%s, Aim=%s, Weapon=%s, Ammo=%s, Launcher=%s, TargetSelect=%s, CoreReady=%s, CombatReady=%s | %s | %s"),
-		bHasAppliedFittingSnapshot ? TEXT("Snapshot") : TEXT("Legacy"),
-		bAimReady ? TEXT("Ready") : TEXT("Missing"),
-		bWeaponReady ? TEXT("Ready") : TEXT("Missing"),
-		AmmoRuntimeState,
-		bLauncherReady ? TEXT("Ready") : TEXT("Missing"),
-		bTargetSelectReady ? TEXT("Ready") : TEXT("Missing"),
-		bVehicleCoreRuntimeReady ? TEXT("True") : TEXT("False"),
-		bVehicleCombatRuntimeReady ? TEXT("True") : TEXT("False"),
-		VehicleFittingComp ? *VehicleFittingComp->GetLastFittingRuntimeSummary() : TEXT("FittingRuntime: ComponentMissing"),
-		*LastTurretVisualSummary);
-	return bVehicleCombatRuntimeReady;
+	return VehicleRuntimeComp->RefreshFittingDependentRuntime(*this);
 }
 
-// [v2.68.0] VehicleData와 표시 계층을 준비한 뒤 WheelSync가 최종 앵커 기준을 캡처할 수 있게 런타임을 초기화합니다.
+// [v2.170.0] 기존 Public/BP 진입점을 유지하면서 차량 Runtime 초기화 orchestration을 내부 Runtime coordinator에 위임합니다.
 bool ACFVehiclePawn::InitializeVehicleRuntime()
 {
-	// [v2.134.0] 새 초기화 시도에서 차량 코어 Runtime 준비 상태를 먼저 초기화합니다.
-	bVehicleCoreRuntimeReady = false;
-
-	// [v2.134.0] 새 초기화 시도에서 전투 Runtime 준비 상태를 먼저 초기화합니다.
-	bVehicleCombatRuntimeReady = false;
-
-	// [v2.134.0] 기존 호환 준비 상태도 차량 코어 상태와 함께 초기화합니다.
+	if (!VehicleRuntimeComp)
+	{
+		// [v2.170.0] coordinator 누락은 차량 Core/Combat/compat readiness를 모두 fail-closed 처리합니다.
+		bVehicleCoreRuntimeReady = false;
+		bVehicleCombatRuntimeReady = false;
 		bVehicleRuntimeReady = false;
-	LastVehicleRuntimeSummary = TEXT("VehicleRuntime: InitializeStarted");
-
-	// [v2.139.0] 명시 재초기화에서 이전 출격 탄약 상태가 재사용되지 않도록 P0-02 Runtime을 먼저 비웁니다.
-	if (VehicleAmmoComp)
-	{
-		VehicleAmmoComp->ResetAmmoRuntime();
+		LastVehicleRuntimeSummary = TEXT("VehicleRuntime: VehicleRuntimeCompMissing");
+		return false;
 	}
 
-	// [v2.163.0] VehicleData 자체가 runtime에서 교체될 수 있으므로 새 ChassisMesh를 Layout/WheelSync보다 먼저 SM_Body에 재적용합니다.
-	ApplyVehicleVisualConfig();
-	ApplyVehicleDataConfig();
-
-	// [v2.68.0] VehicleData 기반 공통 설정 적용 직후의 요약 문자열입니다.
-	const FString DataConfigSummary = LastVehicleRuntimeSummary;
-
-	// [v2.48.0] 로컬 Owner 표시 안정화 계층 준비 결과입니다.
-	const bool bOwnerVisualReady = PrepareOwnerVisualStabilization();
-
-	// [v2.68.0] Owner 표시 루트 재부착 이후 최종 부모 기준으로 레이아웃을 다시 적용합니다.
-	ApplyVehicleLayoutConfig();
-
-	// [v2.86.0] Owner 표시 루트 재부착 이후 최종 부모 기준으로 터렛 시각 장착을 다시 적용합니다.
-	ApplyVehicleTurretVisualConfig();
-
-	// [v2.68.0] WheelSync 캡처 직전에 확정된 레이아웃 적용 요약 문자열입니다.
-	const FString LayoutConfigSummary = LastVehicleRuntimeSummary;
-
-	// [v2.86.0] VehicleRuntime 요약에 함께 남길 최신 터렛 시각 장착 요약입니다.
-	const FString TurretVisualConfigSummary = LastTurretVisualSummary;
-
-	// [v2.68.0] 차량 입력/물리 Drive 컴포넌트 캐시 준비 결과입니다.
-	const bool bDriveReady = (VehicleDriveComp != nullptr) && VehicleDriveComp->CacheVehicleMovementComponent();
-
-	// [v2.68.0] DataAsset 레이아웃 적용 이후 WheelSync 준비가 성공했는지 여부입니다.
-	const bool bWheelSyncReady = PrepareWheelSync();
-
-		// [v2.15.0] AimComp가 Owner Pawn과 VehicleCameraComp를 안전하게 찾았는지 여부입니다.
-	const bool bAimReady = VehicleAimComp ? VehicleAimComp->InitializeAimRuntime() : false;
-
-	// [v2.111.0] VehicleData 최대 내구도 또는 안전 기본값으로 차량 내구도가 준비됐는지 여부입니다.
-	const bool bHealthReady = VehicleHealthComp ? VehicleHealthComp->InitializeFromVehicleData(VehicleData) : false;
-
-	// [v2.132.0] 기존 활성 프로파일을 Snapshot Weapon 적용 대상으로 유지할 ID입니다.
-	const FName RequestedActiveMountProfileId = VehicleWeaponComp
-		? VehicleWeaponComp->GetActiveMountProfileId()
-		: NAME_None;
-
-		// [v2.133.0] 첫 BeginPlay는 PreRegister의 Cached 입력을 사용하고, 명시 재초기화는 같은 질량인지 검증한 새 입력만 준비합니다.
-	const bool bFittingPrepared = VehicleFittingComp
-		? (VehicleFittingComp->HasPreparedRuntimeInput()
-			? true
-			: VehicleFittingComp->PrepareInitialSortieFitting(VehicleFittingData, VehicleData, RequestedActiveMountProfileId))
-		: false;
-
-	// [v2.133.0] Snapshot 경로는 Configured Mass와 VehicleMesh 실제 질량 검증을 통과해야 하위 Runtime Commit을 허용합니다.
-	const bool bInitialMassReady = bFittingPrepared && VerifyInitialSortieRuntimeMass();
-
-	// [v2.133.0] 질량 검증을 통과한 같은 Cached Snapshot의 Weapon·Defense 입력만 한 트랜잭션으로 Commit합니다.
-	const bool bFittingApplied = bInitialMassReady && VehicleFittingComp
-		? VehicleFittingComp->CommitPreparedSortieFittingToVehicle(this, VehicleWeaponComp, VehicleDefenseComp)
-		: false;
-
-		// [v2.132.0] Commit 후 실제 Weapon Runtime 준비 상태입니다.
-	const bool bWeaponReady = VehicleWeaponComp && VehicleWeaponComp->IsWeaponRuntimeReady();
-
-	// [v2.143.0] Ammo 기본 서브오브젝트 존재와 finite Snapshot 초기화 결과를 합친 전투 탄약 준비 상태입니다.
-	bool bAmmoReady = VehicleAmmoComp != nullptr;
-
-	// [v2.143.0] 이번 Applied Snapshot에서 실제 finite Ammo Runtime 초기화가 필요한 무기가 하나라도 있는지 여부입니다.
-	bool bFiniteAmmoRuntimeRequired = false;
-
-	if (bFittingApplied && VehicleFittingComp && VehicleFittingComp->HasAppliedFittingSnapshot())
-	{
-		// [v2.143.0] Initial Mass와 Weapon·Defense Commit에 사용한 바로 그 Applied Fitting Snapshot 복사본입니다.
-		const FCFVehicleFittingSnapshot AppliedFittingSnapshot = VehicleFittingComp->GetAppliedFittingSnapshot();
-
-		// [v2.143.0] WeaponInstanceId별 독립 장전 상태를 만들 finite 무기 초기화 입력 목록입니다.
-		TArray<FCFWeaponAmmoInitialization> WeaponAmmoInitializations;
-		for (const FCFResolvedFittingMount& ResolvedMount : AppliedFittingSnapshot.ResolvedMounts)
-		{
-			UCFWeaponData* ResolvedWeaponData = ResolvedMount.WeaponData;
-			if (!IsValid(ResolvedWeaponData) || ResolvedWeaponData->bUseInfiniteAmmoForDebug)
-			{
-				continue;
-			}
-
-			bFiniteAmmoRuntimeRequired = true;
-			if (!ResolvedWeaponData->UsesFiniteAmmoRuntime() || ResolvedMount.MountProfileId.IsNone())
-			{
-				bAmmoReady = false;
-				continue;
-			}
-
-			// [v2.143.0] 같은 WeaponData를 여러 Mount에 장착해도 Loaded를 독립 소유하게 할 WeaponInstance 초기화 입력입니다.
-			FCFWeaponAmmoInitialization WeaponAmmoInitialization;
-			WeaponAmmoInitialization.WeaponInstanceId = ResolvedMount.MountProfileId;
-			WeaponAmmoInitialization.WeaponData = ResolvedWeaponData;
-			WeaponAmmoInitialization.InitialLoadedAmmoCountOverride = INDEX_NONE;
-			WeaponAmmoInitializations.Add(WeaponAmmoInitialization);
-		}
-
-		// [v2.143.0] 명시적 출격 탄약 또는 finite WeaponInstance가 있으면 VehicleAmmoComp에 실제 Runtime을 구성해야 하는지 여부입니다.
-		const bool bShouldInitializeAmmoRuntime = !AppliedFittingSnapshot.InitialSortieAmmoLoads.IsEmpty()
-			|| !WeaponAmmoInitializations.IsEmpty();
-		if (bAmmoReady && bShouldInitializeAmmoRuntime)
-		{
-			bAmmoReady = VehicleAmmoComp
-				&& VehicleAmmoComp->InitializeAmmoRuntime(
-					this,
-					AppliedFittingSnapshot.InitialSortieAmmoLoads,
-					WeaponAmmoInitializations);
-		}
-		else if (bFiniteAmmoRuntimeRequired)
-		{
-			bAmmoReady = false;
-		}
-	}
-
-	// [v2.132.0] Snapshot 장비가 반영된 최종 Weapon 캐시로 터렛 시각화를 다시 적용합니다.
-	if (bFittingApplied)
-	{
-		ApplyVehicleTurretVisualConfig();
-	}
-
-	// [v2.126.0] LauncherComp를 최종 Weapon Runtime에 연결합니다.
-	const bool bLauncherReady = LauncherComp ? LauncherComp->InitializeLauncherRuntime(this, VehicleWeaponComp) : false;
-
-	// [v2.132.0] Commit 후 실제 DefenseData 초기화 여부입니다.
-	const bool bDefenseDataReady = VehicleDefenseComp && VehicleDefenseComp->IsDefenseInitialized();
-
-	// [v2.129.0] Legacy Fallback 상태여도 정식 방어 진입점을 제공할 컴포넌트 존재 여부입니다.
-	const bool bDefenseComponentReady = VehicleDefenseComp != nullptr;
-
-				if (CombatFxComp)
-	{
-		CombatFxComp->InitializeCombatFxRuntime(this, VehicleData, VehicleHealthComp);
-	}
-
-	// [v2.144.0] Sensor Foundation은 TargetSelect와 독립 초기화하며 아직 기존 CoreReady/CombatReady의 필수 조건으로 사용하지 않습니다.
-	if (VehicleSensorComp)
-	{
-		VehicleSensorComp->InitializeSensorRuntime();
-	}
-
-						// [v2.134.0] 기본 주행·물리·내구도·피팅을 사용할 수 있는 차량 코어 Runtime 준비 상태입니다.
-	bVehicleCoreRuntimeReady = bDriveReady
-		&& bWheelSyncReady
-		&& bHealthReady
-		&& bDefenseComponentReady
-		&& bFittingApplied;
-
-	// [v2.134.0] 전투 Runtime 준비 판정에 포함할 TargetSelectComp 존재 여부입니다.
-	const bool bTargetSelectReady = TargetSelectComp != nullptr;
-
-		// [v2.143.0] 차량 코어에 Aim·Weapon·Ammo·Launcher·TargetSelect가 모두 연결된 전투 Runtime 준비 상태입니다.
-	bVehicleCombatRuntimeReady = bVehicleCoreRuntimeReady
-		&& bAimReady
-		&& bWeaponReady
-		&& bAmmoReady
-		&& bLauncherReady
-		&& bTargetSelectReady;
-
-	// [v2.134.0] 기존 Tick·Debug·Blueprint 호환 값은 차량 코어 Runtime 준비 상태와 동일하게 유지합니다.
-	bVehicleRuntimeReady = bVehicleCoreRuntimeReady;
-
-		// [v2.143.0] 실제 finite Ammo Runtime, 기존 무한탄 호환 또는 초기화 실패를 구분해 표시할 탄약 런타임 상태입니다.
-	const TCHAR* AmmoRuntimeState = !VehicleAmmoComp
-		? TEXT("Missing")
-		: (!bAmmoReady
-			? TEXT("Failed")
-			: (VehicleAmmoComp->IsAmmoRuntimeInitialized() ? TEXT("Ready") : TEXT("InfiniteCompatibility")));
-
-	// [v2.129.0] 실제 DefenseData 초기화 또는 Legacy Fallback 상태를 구분해 표시할 방어 런타임 상태입니다.
-	const TCHAR* DefenseRuntimeState = !bDefenseComponentReady
-		? TEXT("Missing")
-		: (bDefenseDataReady ? TEXT("Ready") : TEXT("LegacyFallback"));
-
-				// [v2.132.0] VehicleFittingComp가 기록한 Legacy·Snapshot 적용 결과입니다.
-	const FString FittingRuntimeSummary = VehicleFittingComp
-		? VehicleFittingComp->GetLastFittingRuntimeSummary()
-		: TEXT("FittingRuntime: ComponentMissing");
-
-	// [v2.133.0] Initial Mass Prepare·실제 VehicleMesh 검증 결과입니다.
-	const FString InitialMassSummary = VehicleFittingComp
-		? VehicleFittingComp->GetLastInitialMassSummary()
-		: TEXT("InitialMass: ComponentMissing");
-
-			LastVehicleRuntimeSummary = FString::Printf(TEXT("VehicleRuntime: Data=%s, Fitting=%s, Mass=%s, Drive=%s, WheelSync=%s, Aim=%s, Weapon=%s, Ammo=%s, Launcher=%s, Health=%s, Defense=%s, TargetSelect=%s, OwnerVisual=%s, CoreReady=%s, CombatReady=%s | %s | %s | %s | %s | %s"), VehicleData ? TEXT("Present") : TEXT("Missing"), bFittingApplied ? TEXT("Applied") : TEXT("Failed"), bInitialMassReady ? TEXT("Ready") : TEXT("Failed"), bDriveReady ? TEXT("Ready") : TEXT("Missing"), bWheelSyncReady ? TEXT("Ready") : TEXT("Missing"), bAimReady ? TEXT("Ready") : TEXT("Missing"), bWeaponReady ? TEXT("Ready") : TEXT("Missing"), AmmoRuntimeState, bLauncherReady ? TEXT("Ready") : TEXT("Missing"), bHealthReady ? TEXT("Ready") : TEXT("Missing"), DefenseRuntimeState, bTargetSelectReady ? TEXT("Ready") : TEXT("Missing"), bOwnerVisualReady ? TEXT("Ready") : TEXT("Skipped"), bVehicleCoreRuntimeReady ? TEXT("True") : TEXT("False"), bVehicleCombatRuntimeReady ? TEXT("True") : TEXT("False"), *FittingRuntimeSummary, *InitialMassSummary, *DataConfigSummary, *LayoutConfigSummary, *LastTurretVisualSummary);
-	return bVehicleRuntimeReady;
+	return VehicleRuntimeComp->InitializeVehicleRuntime(*this);
 }
 
 #if WITH_EDITOR
@@ -2116,97 +1827,28 @@ UChaosWheeledVehicleMovementComponent* ACFVehiclePawn::ResolveVehicleMovementCom
 	return ResolvedVehicleMovementComponent;
 }
 
-// [v2.133.0] PreRegister에서 Cached Snapshot Target을 Movement Mass에 적용하거나 실패 시 Legacy 입력으로 복원합니다.
+// [v2.170.0] PreRegister Super 호출 전 Initial Sortie 질량 준비를 내부 Runtime coordinator에 위임합니다.
 bool ACFVehiclePawn::PrepareInitialSortieRuntimeMass()
 {
-	if (!VehicleFittingComp)
+	if (!VehicleRuntimeComp)
 	{
-		LastVehicleRuntimeSummary = TEXT("InitialMass: VehicleFittingCompMissing");
+		LastVehicleRuntimeSummary = TEXT("InitialMass: VehicleRuntimeCompMissing");
 		return false;
 	}
 
-	// [v2.133.0] PreRegister Snapshot의 활성 장착 입력으로 유지할 프로파일 ID입니다.
-	const FName RequestedActiveMountProfileId = VehicleWeaponComp
-		? VehicleWeaponComp->GetActiveMountProfileId()
-		: NAME_None;
-	if (!VehicleFittingComp->PrepareInitialSortieFitting(VehicleFittingData, VehicleData, RequestedActiveMountProfileId))
-	{
-		LastVehicleRuntimeSummary = VehicleFittingComp->GetLastInitialMassSummary();
-		return false;
-	}
-
-	if (!VehicleFittingComp->ShouldApplyPreparedInitialMass())
-	{
-		LastVehicleRuntimeSummary = VehicleFittingComp->GetLastInitialMassSummary();
-		return true;
-	}
-
-	// [v2.133.0] 물리 생성 전에 Target Mass를 기록할 실제 Chaos Wheeled Movement 컴포넌트입니다.
-	UChaosWheeledVehicleMovementComponent* ResolvedVehicleMovementComponent = FindComponentByClass<UChaosWheeledVehicleMovementComponent>();
-	if (!ResolvedVehicleMovementComponent)
-	{
-		const bool bFallbackPrepared = VehicleFittingComp->FallbackPreparedInitialMassToLegacy(VehicleData, RequestedActiveMountProfileId, TEXT("VehicleMovementMissingBeforePhysics"));
-		LastVehicleRuntimeSummary = VehicleFittingComp->GetLastInitialMassSummary();
-		return bFallbackPrepared;
-	}
-
-	// [v2.133.0] 실패 시 Super 호출 전에 복원할 기존 Chaos Movement Mass입니다.
-	const float PreviousMovementMassKg = ResolvedVehicleMovementComponent->Mass;
-	// [v2.133.0] Cached Snapshot에서 읽은 초기 출격 Target Mass입니다.
-	const float TargetMovementMassKg = VehicleFittingComp->GetPreparedInitialMassKg();
-	ResolvedVehicleMovementComponent->Mass = TargetMovementMassKg;
-
-	if (!VehicleFittingComp->RecordInitialMassBeforePhysics(PreviousMovementMassKg, ResolvedVehicleMovementComponent->Mass))
-	{
-		ResolvedVehicleMovementComponent->Mass = PreviousMovementMassKg;
-		const bool bFallbackPrepared = VehicleFittingComp->FallbackPreparedInitialMassToLegacy(VehicleData, RequestedActiveMountProfileId, TEXT("MovementMassRecordFailed"));
-		LastVehicleRuntimeSummary = VehicleFittingComp->GetLastInitialMassSummary();
-		return bFallbackPrepared;
-	}
-
-	LastVehicleRuntimeSummary = VehicleFittingComp->GetLastInitialMassSummary();
-	return true;
+	return VehicleRuntimeComp->PrepareInitialSortieRuntimeMass(*this);
 }
 
-// [v2.133.0] BeginPlay에서 Movement 설정 질량과 VehicleMesh 실제 질량·PhysicsAsset 계약을 검증합니다.
+// [v2.170.0] BeginPlay Runtime 초기화 중 Initial Sortie 질량 검증을 내부 Runtime coordinator에 위임합니다.
 bool ACFVehiclePawn::VerifyInitialSortieRuntimeMass()
 {
-	if (!VehicleFittingComp)
+	if (!VehicleRuntimeComp)
 	{
+		LastVehicleRuntimeSummary = TEXT("InitialMass: VehicleRuntimeCompMissingDuringVerify");
 		return false;
 	}
 
-	if (VehicleFittingComp->UsesLegacyInitialMass())
-	{
-		return VehicleFittingComp->VerifyInitialMassAfterPhysics(0.0f, 0.0f, false, false, false);
-	}
-
-	// [v2.133.0] Snapshot Target과 비교할 현재 Chaos Movement 설정값입니다.
-	UChaosWheeledVehicleMovementComponent* ResolvedVehicleMovementComponent = ResolveVehicleMovementComponent(TEXT("InitialMass: DriveCompCacheFailed"), TEXT("InitialMass: VehicleMovementMissing"));
-	// [v2.133.0] 실제 Physics State·PhysicsAsset·Body Mass를 제공할 상속 VehicleMesh입니다.
-	USkeletalMeshComponent* VehicleMeshComponent = GetMesh();
-	if (!ResolvedVehicleMovementComponent || !VehicleMeshComponent)
-	{
-		return VehicleFittingComp->VerifyInitialMassAfterPhysics(0.0f, 0.0f, false, false, false);
-	}
-
-	// [v2.133.0] Movement Component에 현재 설정된 Chaos 차량 질량입니다.
-	const float ConfiguredMovementMassKg = ResolvedVehicleMovementComponent->Mass;
-	// [v2.133.0] Physics State 생성 뒤 VehicleMesh BodyInstance가 보고하는 실제 총질량입니다.
-	const float ActualVehicleMeshMassKg = VehicleMeshComponent->GetMass();
-	// [v2.133.0] VehicleMesh가 실제 Physics State를 생성했는지 여부입니다.
-	const bool bHasVehiclePhysicsState = VehicleMeshComponent->IsPhysicsStateCreated();
-	// [v2.133.0] VehicleMesh Root Body가 Chaos 물리 시뮬레이션 중인지 여부입니다.
-	const bool bVehicleSimulatesPhysics = VehicleMeshComponent->IsSimulatingPhysics();
-	// [v2.133.0] VehicleMesh가 실제 충돌·관성 원본 PhysicsAsset을 해석했는지 여부입니다.
-	const bool bHasVehiclePhysicsAsset = VehicleMeshComponent->GetPhysicsAsset() != nullptr;
-
-	return VehicleFittingComp->VerifyInitialMassAfterPhysics(
-		ConfiguredMovementMassKg,
-		ActualVehicleMeshMassKg,
-		bHasVehiclePhysicsState,
-		bVehicleSimulatesPhysics,
-		bHasVehiclePhysicsAsset);
+	return VehicleRuntimeComp->VerifyInitialSortieRuntimeMass(*this);
 }
 
 FString ACFVehiclePawn::BuildVehicleDebugTextSingleLine(const FCFVehicleDebugSnapshot& VehicleDebugSnapshot, bool bIncludeRuntimeSummary, bool bIncludeTransitionSummary, bool bIncludeInputState) const
@@ -2503,17 +2145,16 @@ void ACFVehiclePawn::ApplyResolvedVehicleMoveInput(const FCFVehicleMoveInputResu
 
 
 
+// [v2.170.0] 기존 Automation seam을 유지하면서 VehicleData 적용 orchestration을 내부 Runtime coordinator에 위임합니다.
 void ACFVehiclePawn::ApplyVehicleDataConfig()
 {
-	ApplyVehicleMovementConfig();
-	ApplyVehicleReferenceConfig();
-	ApplyVehicleWheelPhysicsConfig();
-	ApplyVehicleWheelVisualConfig();
-	ApplyVehicleTurretVisualConfig();
-	if (VehicleDriveComp && VehicleData)
+	if (!VehicleRuntimeComp)
 	{
-		VehicleDriveComp->ApplyDriveStateConfig(VehicleData->DriveStateConfig);
+		LastVehicleRuntimeSummary = TEXT("VehicleRuntime: VehicleRuntimeCompMissing during ApplyVehicleDataConfig.");
+		return;
 	}
+
+	VehicleRuntimeComp->ApplyVehicleDataConfig(*this);
 }
 
 // [v2.168.0] 차체 mesh 시각 행동은 VisualComp로 위임하고 gameplay hit collision과 TargetPoint 정렬은 Pawn 책임으로 유지합니다.

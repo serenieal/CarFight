@@ -1,12 +1,17 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-04-23
-// Description: VehicleDebug HUD용 C++ 부모 위젯 클래스 구현입니다.
+// Version: 1.1.0
+// Date: 2026-09-14
+// Description: VehicleDebug HUD용 C++ 부모 위젯 / explicit Pawn implementation dependency
+// Changelog:
+// - v1.1.0: VPS-P0-04 Public header의 Pawn transitive include 제거에 맞춰 실제 Pawn 호출 translation unit에서 CFVehiclePawn.h를 명시적으로 include.
+// Migration:
+// - 런타임 동작과 Blueprint API는 변경하지 않습니다.
 // Scope: VehicleDebug Overview를 읽어 HUD 텍스트를 갱신하고 HUD 가시성을 제어합니다.
 
 #include "UI/CFVehicleDebugHudWidget.h"
 
+#include "CFVehiclePawn.h"
 #include "Components/TextBlock.h"
 
 void UCFVehicleDebugHudWidget::SetVehiclePawnRef(ACFVehiclePawn* InVehiclePawnRef)
