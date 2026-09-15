@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderTab.h
-// Version: v1.28.1
-// Date: 2026-09-04
-// Description: CF-FQ-046 사용자 정보 구조 + CF-FQ-047 Hardpoint/Mount/Physics provenance / Step 8 Progress·Driving Apply·Explicit Recipe Save UI 계약입니다.
+// Version: v1.29.0
+// Date: 2026-09-15
+// Description: CF-FQ-046 공통 Page Shell/scroll UX + CF-FQ-047 Hardpoint/Mount/Physics provenance / Step 8 Progress·Driving Apply·Explicit Recipe Save UI 계약입니다.
 // Changelog:
+// - v1.29.0: VBIUX-P0-05B/C 공통 Page Scroll owner와 Step 전환 시 scroll-to-start 계약을 추가. 기존 Step별 backend/Apply/Save authority는 변경하지 않음.
 // - v1.28.1: P0-07E Source 중간검수 교정. 7/7 결과 정리 단계가 terminal 성공 전에 100%로 오인되지 않도록 progress percent를 완료된 단계 수 기준으로 표시하는 계약을 명확화하고 header description을 실제 P0-07E 범위와 동기화.
 // - v1.28.0: VBHAI-P0-07E에서 PowerShell child lifetime에 결합된 0.5초 coarse benchmark progress cache/elapsed UI와 persistent acceptance receipt 기반 exact current Recipe explicit Save UX 계약을 추가.
 // - v1.27.0: VBHAI-P0-07B에서 Step 8 PIE Apply 버튼의 typed stable blocker/준비 완료 상태를 USER 문장으로 직접 노출하고 버튼 enable과 production Apply guard가 같은 VM preflight를 사용하도록 계약 추가.
@@ -36,6 +37,7 @@
 // - v1.1.0: Step 1 Mesh-only 후보에 기존 safe VehicleData+Recipe Preview→명시 승인 생성 UI를 연결.
 // - v1.0.0: 차량/메시 후보 목록, 고정 8-step navigation, current-step 단일 content, Back/Refresh/Next를 추가.
 // Migration:
+// - v1.29.0부터 Step 1~8은 CommonPageScrollBox 하나를 공유하며 Step 직접 선택/이전/다음/차량 target 전환 시 새 페이지 상단부터 보이도록 scroll offset을 초기화합니다.
 // - v1.28.1 progress bar는 terminal success percent가 아니라 완료된 coarse 단계 비율을 표시합니다. 실제 성공은 기존 final result JSON + process exit code authority가 계속 판정합니다.
 // - v1.28.0 progress polling은 Tab-local process orchestration이며 disk read를 Slate getter에 넣지 않습니다. Recipe Save는 USER click으로 current Recipe package 1개만 저장하며 CF-FQ-046 공통 Page Shell/scroll owner는 변경하지 않습니다.
 // - v1.27.0 Step 8 Driving Apply readiness는 local Step 8 presentation만 확장하며 CF-FQ-046 공통 Page Shell/scroll owner, PIE lifecycle, Product Save 권한을 변경하지 않습니다.
@@ -68,6 +70,7 @@ class UCFVehicleData;
 template<typename ItemType> class SListView;
 class SBox;
 class SEditableTextBox;
+class SScrollBox;
 class SVerticalBox;
 
 /** P0-09 USER Acceptance에서 사용할 Guided Vehicle Builder Slate Shell입니다. */
@@ -103,6 +106,9 @@ private:
 
 	// 현재 Step Definition projection 기반 navigation UI를 생성합니다.
 	TSharedRef<SWidget> BuildStepNavigation();
+
+	// 공통 Page Scroll을 새 Step/target의 시작 위치로 되돌립니다.
+	void ResetCommonPageScrollToStart();
 
 	// Step button을 눌렀을 때 허용된 visible page로 이동합니다.
 	FReply HandleSelectStep(int32 StepIndex);
@@ -479,6 +485,9 @@ private:
 
 	// current definition-driven Step button container입니다.
 	TSharedPtr<SVerticalBox> StepNavigationBox;
+
+	// Step 1~8 본문/상세/진단을 공유하는 단일 세로 Page Scroll입니다.
+	TSharedPtr<SScrollBox> CommonPageScrollBox;
 
 	// Guided 신규 차량 일반 naming의 단일 Vehicle ID 입력입니다.
 	TSharedPtr<SEditableTextBox> NewVehicleIdTextBox;

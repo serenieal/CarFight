@@ -1,6 +1,6 @@
 # SystemIndex
 
-- Version: 1.46.0
+- Version: 1.47.0
 - Date: 2026-09-15
 
 - Status: Active
@@ -122,7 +122,7 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 | `Document/Systems/Vehicles/VehicleAim.md` | `VehicleCamera`가 만든 조준 결과와 Weapon Aim Solution을 Local 표시·검증 상태로 관리하고, 사용자 조준점과 `CurrentMuzzleDirection` 기반 터렛 레티클 월드 지점을 분리해 제공한다. 정렬 정책, `MuzzleBlocked`와 CF-FQ-025 터렛 레티클을 사용자 PIE로 확인했다. |
 | `Document/Systems/Vehicles/VehicleCamera.md` | Look 입력을 차량 기준 누적 조준 상태로 변환하고, 카메라 모드, Aim Profile, 속도, 충돌 상태를 반영해 SpringArm, FOV, AimTrace를 계산/적용하는 차량 카메라 기능 문서다. |
 | `Document/Systems/Vehicles/VehicleCoreDecisions.md` | 현재 차량 코어의 유지 결정, 교체 결정, 임시 운영 판단을 기록하는 결정 로그 문서다. 차량 코어 변경 전 확인해야 하는 기준 문서다. |
-| `Document/Systems/Vehicles/VehicleBuilder.md` | `CF-FQ-015` + `CF-FQ-038` + `CF-FQ-040` + `CF-FQ-042` + `CF-FQ-043` + `CF-FQ-044` + `CF-FQ-047` 완료 기준 Vehicle Builder·Data Authoring·Performance Tuning Current System이다. 8-Step Guided Shell, Data Authoring Backend, 전문가용 Advanced Workspace, Controlled Axis Tuning, Technical Benchmark + USER Feel Pair, Vehicle Character / Reference Baseline, Measurement Gap ownership, Legacy Vehicle DA Wizard retirement, 신규 차량 Creation Entry, Hardpoint/Mount/Socket authoring integrity, durable final commit와 persistent USER Driving receipt, Runtime Catalog promotion 경계를 기록한다. |
+| `Document/Systems/Vehicles/VehicleBuilder.md` | `CF-FQ-015` + `CF-FQ-038` + `CF-FQ-040` + `CF-FQ-042` + `CF-FQ-043` + `CF-FQ-044` + `CF-FQ-046` + `CF-FQ-047` 완료 기준 Vehicle Builder·Data Authoring·Performance Tuning Current System이다. 8-Step Guided Shell, User-Facing Information Architecture, 단일 Common Page Shell/scroll/overflow 계약, Data Authoring Backend, 전문가용 Advanced Workspace, Controlled Axis Tuning, Technical Benchmark + USER Feel Pair, Vehicle Character / Reference Baseline, Measurement Gap ownership, Legacy Vehicle DA Wizard retirement, 신규 차량 Creation Entry, Hardpoint/Mount/Socket authoring integrity, durable final commit와 persistent USER Driving receipt, Runtime Catalog promotion 경계를 기록한다. |
 | `Document/Systems/Vehicles/VehicleData.md` | `UCFVehicleData`의 외형·Layout·Hardpoint·MountProfile·Fitting Mass·Movement·WheelVisual·Reference·Defense/Fx·DriveState 구성과 실제 Pawn 적용 순서를 기록한다. CF-FQ-015 Historical Validator/Representative Compare/Runtime Apply 기반을 보존하며, 실제 성능 튜닝 workflow는 VehicleBuilder가 소유한다. WSA 완료 기준 USER-authored Wheel Socket Scale → visual/physics size authority도 포함한다. |
 | `Document/Systems/Vehicles/VehicleDrive.md` | 차량 입력을 Chaos Vehicle Movement에 적용하고, 속도/방향/접지/입력 상태를 바탕으로 DriveState를 계산/유지하는 주행 상태 기능 문서다. |
 | `Document/Systems/Vehicles/VehiclePawnLegacy.md` | `CFModVehiclePawn / BP_ModularVehicle` 계열을 현재 주력 차량 Pawn이 아닌 레거시 계열로 정리하는 문서다. |
@@ -166,7 +166,7 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 | 인게임 UI Root·Layer 수명, Production HUD 데이터 흐름, Pause, Radar·Target·Weapon UI의 현재 구현 | `UI/InGameUI.md` |
 | 조준점/Reticle 표시, 로컬 발사 결과 피드백과 UISubsystem singleton/Rebind | `UI/AimReticle.md` |
 | 차량 코어 변경 전 결정 기준 | `Vehicles/VehicleCoreDecisions.md` |
-| Guided Vehicle Builder 8-Step 제작 흐름, Data Authoring Backend·Advanced Workspace, 차량 성능 튜닝의 Controlled Axis / Technical Benchmark+USER Feel / Vehicle Character Baseline / Measurement Gap 계약, Blank/Unused/Reused Mesh Creation Entry, Hardpoint/Mount/Socket integrity, AI Reference/Physics Proposal, Step 7 durable final commit, Step 8 persistent Driving acceptance, Runtime Demo Catalog promotion과 Legacy Vehicle DA Wizard retirement | `Vehicles/VehicleBuilder.md` |
+| Guided Vehicle Builder 8-Step 제작 흐름, USER 정보 우선순위와 Level 0/1/2 정보 계층, 단일 Common Page Shell/Scroll/overflow 계약, Data Authoring Backend·Advanced Workspace, 차량 성능 튜닝의 Controlled Axis / Technical Benchmark+USER Feel / Vehicle Character Baseline / Measurement Gap 계약, Blank/Unused/Reused Mesh Creation Entry, Hardpoint/Mount/Socket integrity, AI Reference/Physics Proposal, Step 7 durable final commit, Step 8 persistent Driving acceptance, Runtime Demo Catalog promotion과 Legacy Vehicle DA Wizard retirement | `Vehicles/VehicleBuilder.md` |
 | 차량 DataAsset 구조 | `Vehicles/VehicleData.md` |
 | 차량 BeginPlay 준비, Fitting Snapshot, Initial/Field Mass 적용·검증·rollback과 Ready 판정 | `Vehicles/VehicleRuntime.md` |
 | 실제 소유 ItemInstance, VehicleCargo/MountedEquipment, Inventory Reservation·Atomic Transfer·ViewData와 Inventory→Fitting 경계 | `Vehicles/VehicleInventory.md` |
@@ -193,6 +193,12 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 ---
 
 ## 13. Changelog
+
+### v1.47.0 - 2026-09-15
+
+- `CF-FQ-046 Vehicle Builder 사용자 정보 UX` P0-06 Current System Promotion을 반영해 `Vehicles/VehicleBuilder.md v1.7.0`을 Current owner로 갱신했다.
+- VehicleBuilder 색인에 USER 정보 계층, Step 1~8 단일 Common Page Shell/scroll/overflow와 고정 Action/Navigation 접근 계약을 추가했다.
+- backend authoring, durable save/Driving, Performance Tuning owner는 기존 Current System 경계를 유지한다.
 
 ### v1.46.0 - 2026-09-15
 

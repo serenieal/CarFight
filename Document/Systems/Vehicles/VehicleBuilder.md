@@ -1,10 +1,10 @@
 # Vehicle Builder
 
-- 문서 버전: v1.6.0
-- 최근 갱신일: 2026-09-11
+- 문서 버전: v1.7.0
+- 최근 갱신일: 2026-09-15
 - 문서 상태: Current Implementation
-- 적용 범위: `CF-FQ-015 Vehicle Data Tuning`, `CF-FQ-038 Vehicle Data Authoring`, `CF-FQ-040 Guided Vehicle Builder`, `CF-FQ-042 Vehicle Builder 신규 차량 생성 UX`, `CF-FQ-043 Vehicle Builder 장비 장착점 Guidance UX`, `CF-FQ-044 Vehicle Builder Runtime Catalog Promotion`, `CF-FQ-047 Vehicle Builder Hardpoint Authoring Integrity`, Guided Builder Editor Shell, Builder-private Authoring ownership, Data Authoring Backend/Advanced Workspace, Vehicle Performance Tuning Protocol
-- 완료 기반: `CF-FQ-015 Rebaseline Complete / VD-P0-00~03 Historical Technical PASS / VD-P0-04 Superseded` + `CF-FQ-038 Done / DEL1~DEL7 PASS / Legacy Wizard Retired` + `VB-P0-09 End-to-End USER Acceptance PASS` + `VB-P0-10 Current System Promotion Complete` + `VBCUX-P0-05 USER Acceptance PASS` + `VMG-P0-07 USER Acceptance PASS` + `VMG-P0-08 Current System Promotion Complete` + `VRCP-P0-05 USER Acceptance PASS` + `VRCP-P0-06 Current System Promotion Complete` + `VBHAI-P0-07G USER Re-Acceptance PASS` + `VBHAI-P0-08 Current System Promotion Complete`
+- 적용 범위: `CF-FQ-015 Vehicle Data Tuning`, `CF-FQ-038 Vehicle Data Authoring`, `CF-FQ-040 Guided Vehicle Builder`, `CF-FQ-042 Vehicle Builder 신규 차량 생성 UX`, `CF-FQ-043 Vehicle Builder 장비 장착점 Guidance UX`, `CF-FQ-044 Vehicle Builder Runtime Catalog Promotion`, `CF-FQ-046 Vehicle Builder 사용자 정보 UX`, `CF-FQ-047 Vehicle Builder Hardpoint Authoring Integrity`, Guided Builder Editor Shell, Builder-private Authoring ownership, Data Authoring Backend/Advanced Workspace, Vehicle Performance Tuning Protocol
+- 완료 기반: `CF-FQ-015 Rebaseline Complete / VD-P0-00~03 Historical Technical PASS / VD-P0-04 Superseded` + `CF-FQ-038 Done / DEL1~DEL7 PASS / Legacy Wizard Retired` + `VB-P0-09 End-to-End USER Acceptance PASS` + `VB-P0-10 Current System Promotion Complete` + `VBCUX-P0-05 USER Acceptance PASS` + `VMG-P0-07 USER Acceptance PASS` + `VMG-P0-08 Current System Promotion Complete` + `VRCP-P0-05 USER Acceptance PASS` + `VRCP-P0-06 Current System Promotion Complete` + `VBIUX-P0-05B~05E Technical PASS` + `VBIUX-P0-05F USER Acceptance PASS` + `VBIUX-P0-06 Current System Promotion Complete` + `VBHAI-P0-07G USER Re-Acceptance PASS` + `VBHAI-P0-08 Current System Promotion Complete`
 
 ---
 
@@ -76,7 +76,8 @@ Builder는 새로운 Runtime 차량 정의 체계나 별도 raw writer를 만들
 ```text
 차량/메시 후보 표시와 선택
 Stable Step 기반 단계 이동
-현재 Step의 상태/Blocker/해결 방법 표시
+현재 Step의 목적/상태/Blocker/해결 방법을 USER 우선순위로 표시
+Step 1~8 공통 Page Shell / 단일 본문 Scroll / overflow-safe 고정 Action·Navigation
 Reference Draft 검토와 승인 UI
 Mesh/Socket 준비 안내와 current Chassis Socket 편집 진입
 Hardpoint Plan Mode / Standard Hardpoint / MountProfile Guidance
@@ -237,7 +238,69 @@ USER Driving PASS는 Recipe의 persistent `BuilderDrivingAcceptanceReceipt`에 e
 
 Step 8의 explicit Recipe 저장은 **현재 Recipe package 하나의 전체 unsaved package state**를 저장하는 USER action이다. receipt field 하나만 따로 쓰는 저장이 아니며 자동 Save All/Target/StaticMesh/Catalog 저장은 하지 않는다.
 
-Wagon의 CF-FQ-047 closure 기준 semantic baseline은 USER가 직접 만든 Hardpoint/Mount **2/2**이며 historical 1/1 상태로 자동 복구하지 않는다. 공통 Step 1~8 Page Shell/scroll/overflow는 계속 `CF-FQ-046`의 Presentation owner 범위다.
+Wagon의 CF-FQ-047 closure 기준 semantic baseline은 USER가 직접 만든 Hardpoint/Mount **2/2**이며 historical 1/1 상태로 자동 복구하지 않는다. 공통 Step 1~8 Page Shell/scroll/overflow의 Current Presentation 계약은 아래 §3.1.4가 소유한다.
+
+#### 3.1.4 User-Facing Information Architecture / Common Page Shell
+
+`CF-FQ-046` 완료 뒤 Step 1~8은 backend 내부 상태를 그대로 나열하는 화면이 아니라 **사용자가 다음 행동을 결정할 수 있는 정보 계층**을 공통 계약으로 사용한다.
+
+기본 정보 우선순위:
+
+```text
+사용자가 지금 해야 할 행동
+→ 현재 상태
+→ 문제가 있으면 해결 방법
+→ 사용자 판단에 필요한 상세 값과 의미
+→ 세부 기술 진단
+```
+
+USER 기본 화면은 다음을 우선한다.
+
+```text
+Level 0
+= 단계 이름 / 목적 / 현재 상태 / 지금 할 일 / 핵심 경고·완료
+
+Level 1
+= 실제 제작 판단에 필요한 Asset·값·단위·의미·게임 영향
+= AI Draft / 승인된 차량 전용 제작 프로필 / 최종 VehicleData source authority를 구분
+
+Level 2
+= Hash / Fingerprint / RunId / internal path / exact binding / backend message 같은 기술 진단
+= 정상 제작 진행에 필수 아님
+```
+
+내부 C++/backend 용어를 USER 기본 문장에 그대로 노출하지 않는다. 사용자 행동에 필요한 Unreal/차량 식별자와 `Mesh / Socket / Hardpoint / Mount / VehicleData / RPM / Torque` 같은 실제 작업 용어는 유지하되 한글 설명을 우선하고 필요한 경우에만 영어 원문 또는 exact identifier를 병기한다.
+
+오류·복구 표시는 가능하면 다음 구조를 사용한다.
+
+```text
+무엇이 잘못됐는지
+→ 지금 무엇을 해야 하는지
+→ 필요할 때만 진단 정보
+```
+
+Step 1~8의 세로 공간 계약은 공통 Page Shell이 소유한다.
+
+```text
+고정 USER header
+→ FillHeight 단일 CommonPageScrollBox
+   └─ 현재 Step body / detail / diagnostic
+→ Scroll 밖 Step별 핵심 Action
+→ Scroll 밖 Global 이전 / 현재 상태 다시 확인 / 다음 / Advanced 진입
+```
+
+현재 계약:
+
+- Builder page의 주 세로 Scroll owner는 `CommonPageScrollBox` 하나다.
+- Step 3/6의 과거 독립 vertical Scroll과 Step 7/8의 `430/380` 고정 높이 nested Scroll은 사용하지 않는다.
+- Step 5/7/8의 핵심 Action과 Global Navigation은 긴 본문과 독립적으로 접근 가능해야 한다.
+- Step 직접 선택, 이전/다음, 차량 target 변경과 신규 차량 진입은 새 page 상단으로 scroll을 되돌린다.
+- `현재 상태 다시 확인`은 사용자가 읽던 위치를 불필요하게 잃지 않도록 현재 scroll 위치를 유지한다.
+- 긴 한국어 문장, Asset path, Validation message와 진단 내용은 화면 밖으로 Widget을 밀어내는 대신 wrap/scroll 가능한 표현을 사용한다.
+- nested vertical Scroll은 독립 viewport가 반드시 필요한 별도 기능이 아닌 한 추가하지 않는다.
+- 작은 Editor 높이와 긴 콘텐츠에서도 본문 최하단과 고정 Action/Navigation 모두 접근 가능해야 한다.
+
+이 Presentation 계약은 `FCFVehicleBuilderVM`, Recipe/Resolver/Apply, Step 7 durable save, Step 8 Driving readiness/receipt와 Performance Tuning 계산 의미를 바꾸지 않는다. 각각의 backend authority는 기존 `CF-FQ-038/047/015` Current 계약을 계속 따른다.
 
 ### 3.2 Builder ViewModel
 
@@ -749,6 +812,16 @@ Document/Plan/Archive/README.md
 ---
 
 ## 13. Changelog
+
+### v1.7.0 - 2026-09-15
+
+- `CF-FQ-046 / VBIUX-P0-06 Current System Promotion / Final Closure Audit`으로 Step 1~8 User-Facing Information Architecture와 Common Page Shell/scroll/overflow 계약을 Current System에 승격했다.
+- USER 정보 우선순위를 `행동 → 상태 → 복구 → 사용자 상세 → 기술 진단`으로 고정하고 Level 0/1/2 분리, 한글 우선 표시, Draft/Profile/VehicleData source authority 구분과 USER Error Summary/Recovery/Diagnostic 경계를 Current 계약으로 기록했다.
+- Step 1~8 body/detail/diagnostic은 FillHeight 단일 `CommonPageScrollBox`를 공유하고, Step 5/7/8 핵심 Action과 Global Navigation은 Scroll 밖에 유지한다. Step/target 전환 scroll-to-start와 refresh 위치 유지 의미도 Current UX로 승격했다.
+- 완료 evidence는 Official UE 5.8 Build PASS, focused/affected VBIUX exact8 8/8 PASS, Post-Implementation Mid-review P0 0 / blocking P1 0 / P2 0, P0-05F USER Acceptance PASS다. 상세 job/fixture evidence는 Historical representative Plan이 보존한다.
+- `CF-FQ-038` Data Authoring Backend, `CF-FQ-047` durable Save/Driving, `CF-FQ-015` Performance Tuning authority는 변경하지 않았고 Product Asset schema/content migration과 자동 Save는 없다.
+
+Migration: Vehicle Builder의 현재 사용자 정보 구조와 Step 1~8 page-shell 판단은 `VehicleBuilder.md v1.7.0`과 실제 `CFVehicleBuilderTab` Source를 우선한다. 기존 VehicleData/Recipe/Profile/Product Asset resave는 필요하지 않는다.
 
 ### v1.6.0 - 2026-09-11
 

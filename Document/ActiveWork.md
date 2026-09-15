@@ -1,6 +1,6 @@
 # CarFight Active Work
 
-- 문서 버전: v4.241
+- 문서 버전: v4.244
 - 최근 갱신일: 2026-09-15
 - 문서 상태: Current
 - 역할: CarFight 게임 프로젝트에서 현재 실제로 진행 중인 작업을 선택하고 대표 Plan으로 연결하는 **세션 복원 projection**
@@ -46,21 +46,21 @@ UI Resource 방법론 실험 `URT05_Plan.md v0.8`은 Method Validation Complete�
 
 ## 3. 최근 완료
 
-### CF-FQ-048 Vehicle Pawn Slimming — Done
+### CF-FQ-046 Vehicle Builder 사용자 정보 UX — Done
 
 ```text
-상태: Done / VPS-P0-00~05 Complete / Historical + Retained Path
-Current owner: Document/Systems/Vehicles/VehicleRuntime.md v1.6.0
-Historical Plan: Document/Plan/VehiclePawnSlimming/VehiclePawnSlimmingPlan.md v0.7.0
+상태: Done / Historical + Retained Path / G0~G4 PASS / G5 Deferred
+Current owner: Document/Systems/Vehicles/VehicleBuilder.md v1.7.0
+Historical Plan: Document/Plan/VehicleBuilderInfoUX/VehicleBuilderInfoUXPlan.md v0.2.0
 ```
 
 보존 판정:
 
-- Pawn은 lifecycle/composition/input/target identity/compatibility facade/state Authority를 유지하고 Visual/Fire/Runtime behavior는 각각 coordinator로 분리한 Current 경계를 보존한다.
-- P0-04 Official UE 5.8 Build PASS와 final affected exact28 28/28 PASS를 반복하지 않는다. 사용자 representative regression smoke에서는 Slimming에 의한 기능 고장이 관찰되지 않아 USER Smoke PASS로 마감했다.
-- RuntimeRead T0는 UE MCP unavailable로 `Waived / Deferred Observation`이며 관측하지 않은 runtime 내부 상태를 PASS로 확대하지 않는다. UE MCP 복구 시 optional non-blocking revalidation만 가능하다.
-- Vehicle Builder 신규 차량의 기본 Sensor/Active Scan baseline 누락은 VPS 회귀가 아닌 별도 선행 설계/구현 불일치다. 이 문제를 이유로 CF-FQ-048을 재개하지 않으며 별도 lifecycle에서 다룬다.
-- 현재 단일 Active `CF-FQ-039`와 Ready `CF-FQ-041`/`CF-FQ-046`은 변경하지 않는다.
+- Step 1~8 USER 정보 계층과 Common Page Shell/scroll/overflow 계약은 Current `VehicleBuilder.md v1.7.0`이 소유한다.
+- Official UE 5.8 Build PASS, focused/affected VBIUX exact8 8/8 PASS, Post-Implementation Mid-review P0 0 / blocking P1 0 / P2 0과 P0-05F USER Acceptance PASS를 반복하지 않는다.
+- CF-FQ-038 Data Authoring, CF-FQ-047 durable Save/Driving, CF-FQ-015 Performance Tuning backend authority는 재설계하지 않는다.
+- USER UAT 중 관측된 `DA_Recipe_Wagon.uasset` dirty는 CF-FQ-046 closure가 소유하지 않으며 변경·정리하지 않는다.
+- 현재 단일 Active `CF-FQ-039`와 Ready `CF-FQ-041`은 변경하지 않는다.
 
 ---
 
@@ -69,7 +69,6 @@ Historical Plan: Document/Plan/VehiclePawnSlimming/VehiclePawnSlimmingPlan.md v0
 | Feature | 상태 | 대표 owner / 재개 지점 | 반복 금지 범위 |
 | --- | --- | --- | --- |
 | `CF-FQ-041` 런타임 콘텐츠 적용 메뉴 | Ready | `Document/Plan/RuntimeApply/RuntimeApplyPlan.md v0.1.18` / Current `Document/Systems/Vehicles/RuntimeApply.md v1.1.0` → Multi-Mount Empty-State + Prototype Weapon Provisional Gameplay Balance fresh RuntimeApply 16/16 PASS / next `RTA-P0-06 Packaged Demo` | RTA-P0-05 당시 USER PASS와 기존 regression evidence는 Historical로 보존한다. Complete Mount State/ExplicitEmpty 계약과 strict GrossMass 검증은 유지하며 현재 Product HeavyCannon/RocketLauncher는 Wagon Top Mount 장착·교체를 모두 통과한다. Catalog/VehicleDebug는 non-owning frontend, Runtime Apply service는 향후 Garage/Inventory가 재사용하는 application seam이다. |
-| `CF-FQ-046` Vehicle Builder 사용자 정보 UX | Ready | `Document/Plan/VehicleBuilderInfoUX/VehicleBuilderInfoUXPlan.md v0.1.6` → pre-CF-FQ-047 Technical PASS evidence preserved / CF-FQ-047 Done으로 dependency 충족 / next `VBIUX-P0-05B Step 1~8 Common Page Layout Audit` | Step 1~8 common Page Shell/height/scroll/overflow는 046 owner다. 047의 Step 5 Physics 영향 경계와 Step 7/8 durable/save/readiness, 038 Data Authoring, 015 Performance Tuning protocol은 Current VehicleBuilder v1.6.0으로 동기화됐으며 공통 scroll/page-shell을 중복 구현하지 않는다. |
 
 ---
 
@@ -114,6 +113,24 @@ ActiveWork가 다시 상세 Build/Automation/USER 로그를 누적하거나 서�
 ---
 
 ## 8. Changelog
+
+### v4.244 - 2026-09-15
+
+- `CF-FQ-046 Vehicle Builder 사용자 정보 UX`의 P0-06 Current System Promotion / Final Closure Audit을 G0~G4 PASS로 마감했다.
+- Current owner는 `Document/Systems/Vehicles/VehicleBuilder.md v1.7.0`, representative Historical Plan은 `VehicleBuilderInfoUXPlan.md v0.2.0`이며 Ready 복원 행을 제거했다. G5 physical move는 Deferred다.
+- 최근 완료 포인터를 CF-FQ-046으로 교체했고 현재 단일 Active `CF-FQ-039`와 Ready `CF-FQ-041`, 기존 병렬 dirty 및 `DA_Recipe_Wagon.uasset` dirty는 그대로 보호한다.
+
+### v4.243 - 2026-09-15
+
+- `CF-FQ-046 Vehicle Builder 사용자 정보 UX`의 `VBIUX-P0-05F USER Acceptance`를 사용자 직접 확인으로 PASS 처리했다.
+- 대표 Plan은 `VehicleBuilderInfoUXPlan.md v0.1.8`, exact next는 `VBIUX-P0-06 Current System Promotion / Final Closure Audit`다.
+- 이번 USER PASS 기록에서는 P0-06이나 Done/Historical 전환을 시작하지 않았고, USER 검수 중 새로 dirty가 된 `DA_Recipe_Wagon.uasset`도 건드리지 않고 보호했다.
+
+### v4.242 - 2026-09-15
+
+- `CF-FQ-046 Vehicle Builder 사용자 정보 UX`를 post-CF-FQ-047 fresh rebaseline 기준 P0-05B~05E Technical PASS까지 전진했다.
+- 대표 Plan은 `VehicleBuilderInfoUXPlan.md v0.1.7`, exact next는 `VBIUX-P0-05F USER Acceptance`다. 상세 Build/exact8 evidence는 대표 Plan이 소유하며 ActiveWork에는 중복하지 않는다.
+- USER 시각·읽기 편함 승인 전 P0-06 Current System Promotion과 Done 전환은 시작하지 않는다. 현재 단일 Active `CF-FQ-039`와 기존 병렬 dirty는 변경하지 않았다.
 
 ### v4.241 - 2026-09-15
 

@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderTab.cpp
-// Version: v1.38.0
-// Date: 2026-09-05
-// Description: CF-FQ-046 사용자 정보 구조 + CF-FQ-047 Step 7 durable final commit / Step 8 Progress·Driving Apply·Explicit Recipe Save UI입니다.
+// Version: v1.39.0
+// Date: 2026-09-15
+// Description: CF-FQ-046 공통 Page Shell/scroll UX + CF-FQ-047 Step 7 durable final commit / Step 8 Progress·Driving Apply·Explicit Recipe Save UI입니다.
 // Changelog:
+// - v1.39.0: VBIUX-P0-05B/C rebaseline 결과를 반영해 Step 1~8 본문을 하나의 FillHeight 세로 Scroll 계약으로 통합하고 Step 3/6 로컬 Scroll과 Step 7/8 430/380 고정 높이 Scroll을 제거. Step 전환/차량 target 전환 시 공통 Scroll을 상단으로 복귀시키고 긴 Step 1/Global action 행을 작은 폭에 덜 민감한 배치로 교정. 기존 Step별 callback/enable/save/apply authority는 변경하지 않음.
 // - v1.38.0: CF-FQ-047 최종 재감사 교정. guarded Undo도 reverted VehicleData→Recipe exact pair durable 저장까지 완료하는 P0-07H 계약으로 USER 확인/성공/partial-failure 문구를 교정하고 Save All/자동 retry 금지를 명시.
 // - v1.37.0: VBHAI-P0-07H에서 Step 7 primary action을 `최종 적용 및 저장`으로 전환하고, fresh durable action에 따라 VehicleData Apply/AppliedState repair/exact Target→Recipe 저장 범위를 USER 확인창에 명확히 표시. 공통 Page Shell/scroll 구조는 변경하지 않음.
 // - v1.36.1: P0-07E Source 중간검수 교정. progress bar를 현재 phase index가 아니라 완료된 coarse 단계 수 기준으로 계산해 `7/7 결과 정리`가 terminal 성공 전 100%로 보이지 않게 함.
@@ -53,6 +54,7 @@
 // - v1.1.0: Step 1 Mesh-only 후보에 기존 two-record Preview→explicit USER approval→commit UI를 연결. Profile/차급/물리 추론과 Save는 계속 0.
 // - v1.0.0: 별도 Guided Shell에서 차량 선택 → 8 Step 상태 확인 → Back/Refresh/Next를 제공하고 Advanced Workspace는 보존.
 // Migration:
+// - v1.39.0부터 Step 1~8의 page body/detail/diagnostic은 오른쪽 Page Shell의 단일 세로 Scroll을 공유하며 Step/차량 target 전환 시 새 화면 상단으로 복귀합니다. Step 3/6/7/8의 과거 로컬 Scroll/고정 높이는 폐기하고 Step 5/7/8 핵심 action과 Global Navigation은 Scroll 밖에 유지하며 기존 VM/Recipe/Save/RuntimeApply 의미는 그대로 유지합니다.
 // - v1.38.0부터 Step 7 guarded Undo 확인은 되돌린 VehicleData와 Recipe의 exact pair 저장까지 포함합니다. 저장 partial failure는 이미 성공한 Undo를 숨기거나 자동 rollback/retry하지 않고 USER에게 현재 상태 확인/후속 복구를 안내합니다.
 // - v1.37.0 Step 7 버튼은 exact current VehicleData/Recipe 두 package의 durable commit을 명시적으로 승인하며 Save All/다른 Asset Save/자동 retry를 추가하지 않습니다. CF-FQ-046 common Page Shell/scroll owner와 레이아웃은 그대로 유지합니다.
 // - v1.36.1 progress bar는 완료된 coarse 단계 비율만 표시합니다. terminal 100% 성공 표시는 기존 result/exit authority가 계속 소유하며 progress sidecar는 성공 판정 authority가 아닙니다.
@@ -463,12 +465,22 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 							]
 						]
 
+						// Step 1~8의 본문/상세/진단은 이 FillHeight 단일 세로 Scroll을 공유합니다.
 						+ SVerticalBox::Slot()
-						.AutoHeight()
-						.Padding(0.0f, 12.0f, 0.0f, 8.0f)
+						.FillHeight(1.0f)
 						[
-							SNew(SBorder)
-							.Visibility(this, &SCFVehicleBuilderTab::GetMeshCreationVisibility)
+							SAssignNew(CommonPageScrollBox, SScrollBox)
+
+							+ SScrollBox::Slot()
+							[
+								SNew(SVerticalBox)
+
+								+ SVerticalBox::Slot()
+								.AutoHeight()
+								.Padding(0.0f, 12.0f, 0.0f, 8.0f)
+								[
+									SNew(SBorder)
+									.Visibility(this, &SCFVehicleBuilderTab::GetMeshCreationVisibility)
 							.Padding(12.0f)
 							[
 								SNew(SVerticalBox)
@@ -641,11 +653,9 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 								+ SVerticalBox::Slot()
 								.AutoHeight()
 								[
-									SNew(SHorizontalBox)
+									SNew(SVerticalBox)
 
-									+ SHorizontalBox::Slot()
-									.AutoWidth()
-									.Padding(0.0f, 0.0f, 6.0f, 0.0f)
+									+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 4.0f)
 									[
 										SNew(SButton)
 											.Text(LOCTEXT("LoadResearchDraft", "AI 차량 정보 불러오기"))
@@ -653,9 +663,7 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 											.OnClicked(this, &SCFVehicleBuilderTab::HandleLoadResearchDraft)
 									]
 
-									+ SHorizontalBox::Slot()
-									.AutoWidth()
-									.Padding(0.0f, 0.0f, 6.0f, 0.0f)
+									+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 4.0f)
 									[
 										SNew(SButton)
 											.Text(LOCTEXT("ReviewResearchCompanion", "필요한 제작 데이터 생성 검토"))
@@ -663,8 +671,7 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 											.OnClicked(this, &SCFVehicleBuilderTab::HandleResearchCompanionReview)
 									]
 
-									+ SHorizontalBox::Slot()
-									.AutoWidth()
+									+ SVerticalBox::Slot().AutoHeight()
 									[
 										SNew(SButton)
 											.Text(LOCTEXT("AcceptReferenceSet", "이 기준 정보로 진행"))
@@ -791,16 +798,15 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 						]
 
 						+ SVerticalBox::Slot()
-						.FillHeight(1.0f)
+						.AutoHeight()
 						.Padding(0.0f, 4.0f, 0.0f, 8.0f)
 						[
 							SNew(SBorder)
 							.Visibility(this, &SCFVehicleBuilderTab::GetSocketPreparationVisibility)
 							.Padding(12.0f)
 							[
-								SNew(SScrollBox)
-
-								+ SScrollBox::Slot()
+								// 과거 Step 3 전용 Scroll을 non-scroll container로 교체해 공통 Page Scroll만 vertical owner가 되게 합니다.
+								SNew(SBox)
 								[
 									SNew(SVerticalBox)
 
@@ -1064,54 +1070,19 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 										]
 								]
 
-								+ SVerticalBox::Slot()
-								.AutoHeight()
-								[
-									SNew(SHorizontalBox)
-
-									+ SHorizontalBox::Slot()
-									.AutoWidth()
-									.Padding(0.0f, 0.0f, 6.0f, 0.0f)
-									[
-										SNew(SButton)
-											.Text(LOCTEXT("LoadPhysicsProposalDraft", "AI 물리 설정 불러오기"))
-											.ToolTipText(LOCTEXT("LoadPhysicsProposalDraftTooltip", "AI가 작성한 물리 설정 초안을 불러와 현재 차량과 맞는지 확인합니다. 이 버튼만으로 차량 데이터는 변경되지 않습니다."))
-											.OnClicked(this, &SCFVehicleBuilderTab::HandleLoadPhysicsProposalDraft)
-									]
-
-									+ SHorizontalBox::Slot()
-									.AutoWidth()
-									.Padding(0.0f, 0.0f, 6.0f, 0.0f)
-									[
-										SNew(SButton)
-											.Text(LOCTEXT("ReviewPhysicsProposal", "AI 물리 설정 검토 후 반영"))
-											.ToolTipText(LOCTEXT("ReviewPhysicsProposalTooltip", "불러온 물리 설정의 변경 내용을 확인창에서 보여줍니다. 승인할 때만 제작용 물리 프로필에 반영되며 실제 VehicleData 반영은 7단계에서 합니다. 자동 저장하지 않습니다."))
-											.OnClicked(this, &SCFVehicleBuilderTab::HandlePhysicsProposalReview)
-									]
-
-									+ SHorizontalBox::Slot()
-									.AutoWidth()
-									[
-										SNew(SButton)
-											.Text(LOCTEXT("RefreshPhysicsReceipt", "현재 물리 설정 재검증"))
-											.ToolTipText(LOCTEXT("RefreshPhysicsReceiptTooltip", "장비 장착 설정이 바뀌어 차량 전체 상태가 달라졌지만 기존에 승인한 물리값 자체는 변하지 않았을 때 사용합니다. 물리값은 그대로 유지하고 현재 차량 상태에 맞춰 승인 상태만 다시 확인합니다. VehicleData와 물리값은 변경하지 않으며 자동 저장하지 않습니다."))
-											.OnClicked(this, &SCFVehicleBuilderTab::HandlePhysicsReceiptRefresh)
-									]
-								]
 							]
 						]
 
 						+ SVerticalBox::Slot()
-						.FillHeight(1.0f)
+						.AutoHeight()
 						.Padding(0.0f, 4.0f, 0.0f, 8.0f)
 						[
 							SNew(SBorder)
 							.Visibility(this, &SCFVehicleBuilderTab::GetGameplaySetupVisibility)
 							.Padding(12.0f)
 							[
-								SNew(SScrollBox)
-
-								+ SScrollBox::Slot()
+								// Step 6 카드 편집은 page content와 함께 공통 Scroll을 사용하고 nested vertical Scroll은 만들지 않습니다.
+								SNew(SBox)
 								[
 									SNew(SVerticalBox)
 
@@ -1194,52 +1165,12 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 								.AutoHeight()
 								.Padding(0.0f, 0.0f, 0.0f, 10.0f)
 								[
-									// Final Review는 수십 개 Field Diff를 표시할 수 있으므로 상세 본문만 bounded scroll 영역으로 제한합니다.
-									SNew(SBox)
-									.HeightOverride(430.0f)
-									[
-										SNew(SScrollBox)
-
-										+ SScrollBox::Slot()
-										[
-											SNew(STextBlock)
-												.Text(this, &SCFVehicleBuilderTab::GetFinalReviewSummaryText)
-												.AutoWrapText(true)
-										]
-									]
+									// Final Review의 긴 diff도 공통 Page Scroll이 소유하므로 고정 높이/nested Scroll을 사용하지 않습니다.
+									SNew(STextBlock)
+										.Text(this, &SCFVehicleBuilderTab::GetFinalReviewSummaryText)
+										.AutoWrapText(true)
 								]
 
-								+ SVerticalBox::Slot()
-								.AutoHeight()
-								.Padding(0.0f, 0.0f, 0.0f, 8.0f)
-								[
-									SNew(SHorizontalBox)
-
-									+ SHorizontalBox::Slot()
-									.AutoWidth()
-									.Padding(0.0f, 0.0f, 6.0f, 0.0f)
-									[
-										SNew(SButton)
-											.Text(LOCTEXT("ApplyFinalReview", "최종 적용 및 저장"))
-											.ToolTipText(LOCTEXT(
-												"ApplyFinalReviewTooltip",
-												"현재 최종 검토 결과와 저장 상태를 다시 확인한 뒤 필요한 작업만 수행합니다. 차량 데이터 변경이 있으면 적용하고, 적용 상태 기록이 오래됐으면 복구하며, 현재 선택 차량의 VehicleData와 Recipe만 필요한 범위로 VehicleData → Recipe 순서로 저장합니다. Save All이나 자동 재시도는 하지 않습니다."))
-											.IsEnabled(this, &SCFVehicleBuilderTab::CanApplyFinalReview)
-											.OnClicked(this, &SCFVehicleBuilderTab::HandleFinalReviewApply)
-									]
-
-									+ SHorizontalBox::Slot()
-									.AutoWidth()
-									[
-										SNew(SButton)
-											.Text(LOCTEXT("UndoFinalReview", "방금 적용한 변경 되돌리기"))
-											.ToolTipText(LOCTEXT(
-												"UndoFinalReviewTooltip",
-												"이 차량 제작 가이드에서 방금 적용한 변경이 아직 가장 최근 작업이고 이후 VehicleData가 다른 경로에서 바뀌지 않았을 때만 되돌립니다. 다른 Unreal 작업을 임의로 되돌리지 않습니다."))
-											.IsEnabled(this, &SCFVehicleBuilderTab::CanUndoFinalReview)
-											.OnClicked(this, &SCFVehicleBuilderTab::HandleFinalReviewUndo)
-									]
-								]
 
 								+ SVerticalBox::Slot()
 								.AutoHeight()
@@ -1291,17 +1222,10 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 								.AutoHeight()
 								.Padding(0.0f, 0.0f, 0.0f, 10.0f)
 								[
-									SNew(SBox)
-									.HeightOverride(380.0f)
-									[
-										SNew(SScrollBox)
-										+ SScrollBox::Slot()
-										[
-											SNew(STextBlock)
-												.Text(this, &SCFVehicleBuilderTab::GetDrivingTestSummaryText)
-												.AutoWrapText(true)
-										]
-									]
+									// Step 8의 saved state/metric/checklist도 공통 Page Scroll이 소유해 viewport height에 맞춰 자연스럽게 스크롤됩니다.
+									SNew(STextBlock)
+										.Text(this, &SCFVehicleBuilderTab::GetDrivingTestSummaryText)
+										.AutoWrapText(true)
 								]
 
 								+ SVerticalBox::Slot()
@@ -1313,50 +1237,6 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 										.AutoWrapText(true)
 								]
 
-								+ SVerticalBox::Slot()
-								.AutoHeight()
-								.Padding(0.0f, 0.0f, 0.0f, 8.0f)
-								[
-									SNew(SHorizontalBox)
-
-									+ SHorizontalBox::Slot()
-									.AutoWidth()
-									.Padding(0.0f, 0.0f, 6.0f, 0.0f)
-									[
-										SNew(SButton)
-											.Text(LOCTEXT("RunDrivingBenchmark", "기술 주행 측정 실행"))
-											.ToolTipText(LOCTEXT(
-												"RunDrivingBenchmarkTooltip",
-												"현재 저장된 VehicleData로 가속, 최고속도, 제동, 회전반경 같은 기술 측정값을 자동 계측합니다. 저장되지 않은 변경이 있으면 실행하지 않으며 측정 자체가 차량 데이터를 수정하거나 저장하지 않습니다."))
-											.IsEnabled(this, &SCFVehicleBuilderTab::CanRunDrivingBenchmark)
-											.OnClicked(this, &SCFVehicleBuilderTab::HandleRunDrivingBenchmark)
-									]
-
-									+ SHorizontalBox::Slot()
-									.AutoWidth()
-									.Padding(0.0f, 0.0f, 6.0f, 0.0f)
-									[
-										SNew(SButton)
-											.Text(LOCTEXT("ApplyDrivingTargetToPIE", "현재 PIE에 선택 차량 적용"))
-											.ToolTipText(LOCTEXT(
-												"ApplyDrivingTargetToPIETooltip",
-												"현재 기술 측정에 사용한 저장된 VehicleData를 플레이 중인 차량에 임시 적용합니다. 원본 VehicleData Asset은 수정하거나 저장하지 않습니다."))
-											.IsEnabled(this, &SCFVehicleBuilderTab::CanApplyDrivingTargetToPIE)
-											.OnClicked(this, &SCFVehicleBuilderTab::HandleApplyDrivingTargetToPIE)
-									]
-
-									+ SHorizontalBox::Slot()
-									.AutoWidth()
-									[
-										SNew(SButton)
-											.Text(LOCTEXT("AcceptUserDriving", "주행 테스트 통과"))
-											.ToolTipText(LOCTEXT(
-												"AcceptUserDrivingTooltip",
-												"선택 차량을 PIE에서 직접 주행하고 체크리스트에 이상이 없다고 판단했을 때 현재 차량 상태를 주행 확인 완료로 기록합니다. 완료 뒤 데모 차량 목록 등록도 시도하며 관련 Asset은 자동 저장하지 않습니다."))
-											.IsEnabled(this, &SCFVehicleBuilderTab::CanAcceptUserDriving)
-											.OnClicked(this, &SCFVehicleBuilderTab::HandleAcceptUserDriving)
-									]
-								]
 
 								+ SVerticalBox::Slot()
 								.AutoHeight()
@@ -1400,31 +1280,7 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 										.AutoWrapText(true)
 								]
 
-								+ SVerticalBox::Slot()
-								.AutoHeight()
-								.Padding(0.0f, 0.0f, 0.0f, 8.0f)
-								[
-									SNew(SButton)
-										.Text(LOCTEXT("SaveDrivingRecipe", "차량 제작 기록 저장"))
-										.ToolTipText(LOCTEXT(
-											"SaveDrivingRecipeTooltip",
-											"현재 차량의 Recipe Asset 1개에 있는 미저장 변경 전체를 저장합니다. VehicleData, StaticMesh, 데모 차량 목록과 다른 차량 Recipe는 저장하지 않으며 Save All이나 자동 재시도를 하지 않습니다."))
-										.IsEnabled(this, &SCFVehicleBuilderTab::CanSaveCurrentRecipe)
-										.OnClicked(this, &SCFVehicleBuilderTab::HandleSaveCurrentRecipe)
-								]
 
-								+ SVerticalBox::Slot()
-								.AutoHeight()
-								.Padding(0.0f, 0.0f, 0.0f, 8.0f)
-								[
-									SNew(SButton)
-										.Text(LOCTEXT("RetryRuntimeCatalogPromotion", "데모 차량 목록 등록 재시도"))
-										.ToolTipText(LOCTEXT(
-											"RetryRuntimeCatalogPromotionTooltip",
-											"현재 주행 테스트 통과 기록이 여전히 유효할 때만 데모 차량 목록 등록을 다시 시도합니다. 주행 테스트 결과를 다시 기록하거나 취소하지 않으며 목록 Asset은 자동 저장하지 않습니다."))
-										.IsEnabled(this, &SCFVehicleBuilderTab::CanRetryRuntimeCatalogPromotion)
-										.OnClicked(this, &SCFVehicleBuilderTab::HandleRetryRuntimeCatalogPromotion)
-								]
 
 								+ SVerticalBox::Slot()
 								.AutoHeight()
@@ -1453,59 +1309,243 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 							]
 						]
 
+								+ SVerticalBox::Slot()
+								.AutoHeight()
+								.Padding(0.0f, 4.0f, 0.0f, 6.0f)
+								[
+									SNew(STextBlock)
+										.Text_Lambda([this]() { return LastStatusText; })
+										.AutoWrapText(true)
+								]
+							]
+						]
+
+						// Step 5/7/8의 핵심 작업 버튼은 긴 detail Scroll과 독립된 고정 영역에 둡니다.
 						+ SVerticalBox::Slot()
 						.AutoHeight()
-						.Padding(0.0f, 4.0f, 0.0f, 6.0f)
+						.Padding(0.0f, 4.0f, 0.0f, 4.0f)
 						[
-							SNew(STextBlock)
-								.Text_Lambda([this]() { return LastStatusText; })
-								.AutoWrapText(true)
+							SNew(SHorizontalBox)
+							.Visibility(this, &SCFVehicleBuilderTab::GetPhysicsProposalVisibility)
+
+							+ SHorizontalBox::Slot().FillWidth(1.0f).Padding(0.0f, 0.0f, 4.0f, 0.0f)
+							[
+								SNew(SButton)
+									.ToolTipText(LOCTEXT("LoadPhysicsProposalDraftTooltip", "AI가 작성한 물리 설정 초안을 불러와 현재 차량과 맞는지 확인합니다. 이 버튼만으로 차량 데이터는 변경되지 않습니다."))
+									.OnClicked(this, &SCFVehicleBuilderTab::HandleLoadPhysicsProposalDraft)
+								[
+									SNew(STextBlock)
+										.Text(LOCTEXT("LoadPhysicsProposalDraft", "AI 물리 설정 불러오기"))
+										.AutoWrapText(true)
+										.Justification(ETextJustify::Center)
+								]
+							]
+
+							+ SHorizontalBox::Slot().FillWidth(1.0f).Padding(0.0f, 0.0f, 4.0f, 0.0f)
+							[
+								SNew(SButton)
+									.ToolTipText(LOCTEXT("ReviewPhysicsProposalTooltip", "불러온 물리 설정의 변경 내용을 확인창에서 보여줍니다. 승인할 때만 제작용 물리 프로필에 반영되며 실제 VehicleData 반영은 7단계에서 합니다. 자동 저장하지 않습니다."))
+									.OnClicked(this, &SCFVehicleBuilderTab::HandlePhysicsProposalReview)
+								[
+									SNew(STextBlock)
+										.Text(LOCTEXT("ReviewPhysicsProposal", "AI 물리 설정 검토 후 반영"))
+										.AutoWrapText(true)
+										.Justification(ETextJustify::Center)
+								]
+							]
+
+							+ SHorizontalBox::Slot().FillWidth(1.0f)
+							[
+								SNew(SButton)
+									.ToolTipText(LOCTEXT("RefreshPhysicsReceiptTooltip", "장비 장착 설정이 바뀌어 차량 전체 상태가 달라졌지만 기존에 승인한 물리값 자체는 변하지 않았을 때 사용합니다. 물리값은 그대로 유지하고 현재 차량 상태에 맞춰 승인 상태만 다시 확인합니다. VehicleData와 물리값은 변경하지 않으며 자동 저장하지 않습니다."))
+									.OnClicked(this, &SCFVehicleBuilderTab::HandlePhysicsReceiptRefresh)
+								[
+									SNew(STextBlock)
+										.Text(LOCTEXT("RefreshPhysicsReceipt", "현재 물리 설정 재검증"))
+										.AutoWrapText(true)
+										.Justification(ETextJustify::Center)
+								]
+							]
+						]
+
+						+ SVerticalBox::Slot()
+						.AutoHeight()
+						.Padding(0.0f, 4.0f, 0.0f, 4.0f)
+						[
+							SNew(SHorizontalBox)
+							.Visibility(this, &SCFVehicleBuilderTab::GetFinalReviewVisibility)
+
+							+ SHorizontalBox::Slot().FillWidth(1.0f).Padding(0.0f, 0.0f, 4.0f, 0.0f)
+							[
+								SNew(SButton)
+									.ToolTipText(LOCTEXT(
+										"ApplyFinalReviewTooltip",
+										"현재 최종 검토 결과와 저장 상태를 다시 확인한 뒤 필요한 작업만 수행합니다. 차량 데이터 변경이 있으면 적용하고, 적용 상태 기록이 오래됐으면 복구하며, 현재 선택 차량의 VehicleData와 Recipe만 필요한 범위로 VehicleData → Recipe 순서로 저장합니다. Save All이나 자동 재시도는 하지 않습니다."))
+									.IsEnabled(this, &SCFVehicleBuilderTab::CanApplyFinalReview)
+									.OnClicked(this, &SCFVehicleBuilderTab::HandleFinalReviewApply)
+								[
+									SNew(STextBlock)
+										.Text(LOCTEXT("ApplyFinalReview", "최종 적용 및 저장"))
+										.AutoWrapText(true)
+										.Justification(ETextJustify::Center)
+								]
+							]
+
+							+ SHorizontalBox::Slot().FillWidth(1.0f)
+							[
+								SNew(SButton)
+									.ToolTipText(LOCTEXT(
+										"UndoFinalReviewTooltip",
+										"이 차량 제작 가이드에서 방금 적용한 변경이 아직 가장 최근 작업이고 이후 VehicleData가 다른 경로에서 바뀌지 않았을 때만 되돌립니다. 다른 Unreal 작업을 임의로 되돌리지 않습니다."))
+									.IsEnabled(this, &SCFVehicleBuilderTab::CanUndoFinalReview)
+									.OnClicked(this, &SCFVehicleBuilderTab::HandleFinalReviewUndo)
+								[
+									SNew(STextBlock)
+										.Text(LOCTEXT("UndoFinalReview", "방금 적용한 변경 되돌리기"))
+										.AutoWrapText(true)
+										.Justification(ETextJustify::Center)
+								]
+							]
+						]
+
+						+ SVerticalBox::Slot()
+						.AutoHeight()
+						.Padding(0.0f, 4.0f, 0.0f, 4.0f)
+						[
+							SNew(SVerticalBox)
+							.Visibility(this, &SCFVehicleBuilderTab::GetDrivingTestVisibility)
+
+							+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 4.0f)
+							[
+								SNew(SHorizontalBox)
+
+								+ SHorizontalBox::Slot().FillWidth(1.0f).Padding(0.0f, 0.0f, 4.0f, 0.0f)
+								[
+									SNew(SButton)
+										.ToolTipText(LOCTEXT(
+											"RunDrivingBenchmarkTooltip",
+											"현재 저장된 VehicleData로 가속, 최고속도, 제동, 회전반경 같은 기술 측정값을 자동 계측합니다. 저장되지 않은 변경이 있으면 실행하지 않으며 측정 자체가 차량 데이터를 수정하거나 저장하지 않습니다."))
+										.IsEnabled(this, &SCFVehicleBuilderTab::CanRunDrivingBenchmark)
+										.OnClicked(this, &SCFVehicleBuilderTab::HandleRunDrivingBenchmark)
+									[
+										SNew(STextBlock)
+											.Text(LOCTEXT("RunDrivingBenchmark", "기술 주행 측정 실행"))
+											.AutoWrapText(true)
+											.Justification(ETextJustify::Center)
+									]
+								]
+
+								+ SHorizontalBox::Slot().FillWidth(1.0f).Padding(0.0f, 0.0f, 4.0f, 0.0f)
+								[
+									SNew(SButton)
+										.ToolTipText(LOCTEXT(
+											"ApplyDrivingTargetToPIETooltip",
+											"현재 기술 측정에 사용한 저장된 VehicleData를 플레이 중인 차량에 임시 적용합니다. 원본 VehicleData Asset은 수정하거나 저장하지 않습니다."))
+										.IsEnabled(this, &SCFVehicleBuilderTab::CanApplyDrivingTargetToPIE)
+										.OnClicked(this, &SCFVehicleBuilderTab::HandleApplyDrivingTargetToPIE)
+									[
+										SNew(STextBlock)
+											.Text(LOCTEXT("ApplyDrivingTargetToPIE", "현재 PIE에 선택 차량 적용"))
+											.AutoWrapText(true)
+											.Justification(ETextJustify::Center)
+									]
+								]
+
+								+ SHorizontalBox::Slot().FillWidth(1.0f)
+								[
+									SNew(SButton)
+										.ToolTipText(LOCTEXT(
+											"AcceptUserDrivingTooltip",
+											"선택 차량을 PIE에서 직접 주행하고 체크리스트에 이상이 없다고 판단했을 때 현재 차량 상태를 주행 확인 완료로 기록합니다. 완료 뒤 데모 차량 목록 등록도 시도하며 관련 Asset은 자동 저장하지 않습니다."))
+										.IsEnabled(this, &SCFVehicleBuilderTab::CanAcceptUserDriving)
+										.OnClicked(this, &SCFVehicleBuilderTab::HandleAcceptUserDriving)
+									[
+										SNew(STextBlock)
+											.Text(LOCTEXT("AcceptUserDriving", "주행 테스트 통과"))
+											.AutoWrapText(true)
+											.Justification(ETextJustify::Center)
+									]
+								]
+							]
+
+							+ SVerticalBox::Slot().AutoHeight()
+							[
+								SNew(SHorizontalBox)
+
+								+ SHorizontalBox::Slot().FillWidth(1.0f).Padding(0.0f, 0.0f, 4.0f, 0.0f)
+								[
+									SNew(SButton)
+										.ToolTipText(LOCTEXT(
+											"SaveDrivingRecipeTooltip",
+											"현재 차량의 Recipe Asset 1개에 있는 미저장 변경 전체를 저장합니다. VehicleData, StaticMesh, 데모 차량 목록과 다른 차량 Recipe는 저장하지 않으며 Save All이나 자동 재시도를 하지 않습니다."))
+										.IsEnabled(this, &SCFVehicleBuilderTab::CanSaveCurrentRecipe)
+										.OnClicked(this, &SCFVehicleBuilderTab::HandleSaveCurrentRecipe)
+									[
+										SNew(STextBlock)
+											.Text(LOCTEXT("SaveDrivingRecipe", "차량 제작 기록 저장"))
+											.AutoWrapText(true)
+											.Justification(ETextJustify::Center)
+									]
+								]
+
+								+ SHorizontalBox::Slot().FillWidth(1.0f)
+								[
+									SNew(SButton)
+										.ToolTipText(LOCTEXT(
+											"RetryRuntimeCatalogPromotionTooltip",
+											"현재 주행 테스트 통과 기록이 여전히 유효할 때만 데모 차량 목록 등록을 다시 시도합니다. 주행 테스트 결과를 다시 기록하거나 취소하지 않으며 목록 Asset은 자동 저장하지 않습니다."))
+										.IsEnabled(this, &SCFVehicleBuilderTab::CanRetryRuntimeCatalogPromotion)
+										.OnClicked(this, &SCFVehicleBuilderTab::HandleRetryRuntimeCatalogPromotion)
+									[
+										SNew(STextBlock)
+											.Text(LOCTEXT("RetryRuntimeCatalogPromotion", "데모 차량 목록 등록 재시도"))
+											.AutoWrapText(true)
+											.Justification(ETextJustify::Center)
+									]
+								]
+							]
 						]
 
 						+ SVerticalBox::Slot()
 						.AutoHeight()
 						[
-							SNew(SHorizontalBox)
+							SNew(SVerticalBox)
 
-							+ SHorizontalBox::Slot()
-							.AutoWidth()
-							.Padding(0.0f, 0.0f, 6.0f, 0.0f)
+							+ SVerticalBox::Slot().AutoHeight()
 							[
-								SNew(SButton)
-									.Text(LOCTEXT("Previous", "이전"))
-									.IsEnabled(this, &SCFVehicleBuilderTab::CanMovePrevious)
-									.OnClicked(this, &SCFVehicleBuilderTab::HandlePreviousStep)
+								SNew(SHorizontalBox)
+
+								+ SHorizontalBox::Slot().FillWidth(1.0f).Padding(0.0f, 0.0f, 4.0f, 0.0f)
+								[
+									SNew(SButton)
+										.HAlign(HAlign_Center)
+										.Text(LOCTEXT("Previous", "이전"))
+										.IsEnabled(this, &SCFVehicleBuilderTab::CanMovePrevious)
+										.OnClicked(this, &SCFVehicleBuilderTab::HandlePreviousStep)
+								]
+
+								+ SHorizontalBox::Slot().FillWidth(1.0f).Padding(0.0f, 0.0f, 4.0f, 0.0f)
+								[
+									SNew(SButton)
+										.HAlign(HAlign_Center)
+										.Text(LOCTEXT("RefreshCurrent", "현재 상태 다시 확인"))
+										.OnClicked(this, &SCFVehicleBuilderTab::HandleRefreshCurrentStep)
+								]
+
+								+ SHorizontalBox::Slot().FillWidth(1.0f)
+								[
+									SNew(SButton)
+										.HAlign(HAlign_Center)
+										.Text(LOCTEXT("Next", "다음"))
+										.IsEnabled(this, &SCFVehicleBuilderTab::CanMoveNext)
+										.OnClicked(this, &SCFVehicleBuilderTab::HandleNextStep)
+								]
 							]
 
-							+ SHorizontalBox::Slot()
-							.AutoWidth()
-							.Padding(0.0f, 0.0f, 6.0f, 0.0f)
+							+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 4.0f, 0.0f, 0.0f)
 							[
 								SNew(SButton)
-									.Text(LOCTEXT("RefreshCurrent", "현재 상태 다시 확인"))
-									.OnClicked(this, &SCFVehicleBuilderTab::HandleRefreshCurrentStep)
-							]
-
-							+ SHorizontalBox::Slot()
-							.AutoWidth()
-							.Padding(0.0f, 0.0f, 6.0f, 0.0f)
-							[
-								SNew(SButton)
-									.Text(LOCTEXT("Next", "다음"))
-									.IsEnabled(this, &SCFVehicleBuilderTab::CanMoveNext)
-									.OnClicked(this, &SCFVehicleBuilderTab::HandleNextStep)
-							]
-
-							+ SHorizontalBox::Slot()
-							.FillWidth(1.0f)
-							[
-								SNew(SSpacer)
-							]
-
-							+ SHorizontalBox::Slot()
-							.AutoWidth()
-							[
-								SNew(SButton)
+									.HAlign(HAlign_Center)
 									.Text(LOCTEXT("OpenAdvanced", "고급 차량 데이터 제작 열기"))
 									.ToolTipText(LOCTEXT("OpenAdvancedTooltip", "기존 Advanced Workspace를 별도 탭으로 엽니다. Guided Builder 상태를 우회해서 자동 적용하지 않습니다."))
 									.OnClicked(this, &SCFVehicleBuilderTab::HandleOpenAdvancedWorkspace)
@@ -1625,6 +1665,7 @@ FReply SCFVehicleBuilderTab::HandleBeginNewVehicleEntry()
 	LastStatusText = LOCTEXT(
 		"BeginNewVehicleReady",
 		"새 차량 제작 모드로 들어왔습니다. 아직 Asset 생성/Save/VehicleData Apply는 수행하지 않았습니다.");
+	ResetCommonPageScrollToStart();
 	return FReply::Handled();
 }
 
@@ -1635,6 +1676,8 @@ void SCFVehicleBuilderTab::HandleVehicleSelectionChanged(FVehicleRowPtr Selected
 	{
 		return;
 	}
+
+	ResetCommonPageScrollToStart();
 
 	FString Error;
 	if (!ViewModel->SelectVehicle(*SelectedItem, Error))
@@ -1738,12 +1781,22 @@ TSharedRef<SWidget> SCFVehicleBuilderTab::BuildStepNavigation()
 	return StepNavigationBox.ToSharedRef();
 }
 
+// 공통 Page Scroll을 새 Step/target의 시작 위치로 되돌립니다.
+void SCFVehicleBuilderTab::ResetCommonPageScrollToStart()
+{
+	if (CommonPageScrollBox.IsValid())
+	{
+		CommonPageScrollBox->ScrollToStart();
+	}
+}
+
 // Step button을 눌렀을 때 허용된 visible page로 이동합니다.
 FReply SCFVehicleBuilderTab::HandleSelectStep(const int32 StepIndex)
 {
 	if (ViewModel.IsValid() && ViewModel->SelectVisibleStep(StepIndex))
 	{
 		LastStatusText = FText::FromString(FString::Printf(TEXT("%d단계 화면을 열었습니다."), StepIndex + 1));
+		ResetCommonPageScrollToStart();
 	}
 	return FReply::Handled();
 }
@@ -1754,6 +1807,7 @@ FReply SCFVehicleBuilderTab::HandlePreviousStep()
 	if (ViewModel.IsValid())
 	{
 		ViewModel->MovePreviousStep();
+		ResetCommonPageScrollToStart();
 	}
 	return FReply::Handled();
 }
@@ -1797,6 +1851,7 @@ FReply SCFVehicleBuilderTab::HandleNextStep()
 	{
 		LastDiagnosticText.Reset();
 		LastStatusText = LOCTEXT("MovedNext", "현재 단계의 필수 조건을 확인하고 다음 단계로 이동했습니다.");
+		ResetCommonPageScrollToStart();
 	}
 	return FReply::Handled();
 }
