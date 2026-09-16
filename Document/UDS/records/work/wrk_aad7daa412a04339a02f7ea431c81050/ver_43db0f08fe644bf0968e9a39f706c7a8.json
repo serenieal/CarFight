@@ -1,0 +1,20 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_aad7daa412a04339a02f7ea431c81050",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_43db0f08fe644bf0968e9a39f706c7a8",
+  "parent_version_ids": [],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-041",
+    "title": "Runtime Content Apply",
+    "phase": "RTA-P0-06",
+    "next_action": "Packaged Demo",
+    "blockers": [],
+    "owner_scope": ["carfight:feature:CF-FQ-041"],
+    "legacy_refs": ["Document/Plan/RuntimeApply/RuntimeApplyPlan.md v0.1.18", "Document/ActiveWork.md", "Document/ProjectSSOT/03_FeatureQueue.md"]
+  },
+  "provenance": {"migration_gate": "UDS-08/MIG-03"}
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_81624fe259a849d28c6ddf31f1b95236",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_51c63a1d34ea458389299b694e1394f7",
+  "parent_version_ids": ["ver_8b24fd298efe4409becb7f8a421b6f89"],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-054",
+    "title": "Equipment Authoring / Guided Equipment Builder",
+    "phase": "EBA-P0-05",
+    "next_action": "USER Editor UX",
+    "blockers": [],
+    "owner_scope": ["carfight:feature:CF-FQ-054"],
+    "legacy_refs": ["Document/Plan/EquipmentAuthoring/EquipmentAuthoringPlan.md v0.1.14", "Document/ProjectSSOT/03_FeatureQueue.md"]
+  },
+  "provenance": {"migration_gate": "UDS-08/MIG-05", "resolution_basis": "fresh representative Plan v0.1.14 read before cutover; technical acceptance PASS preserved"}
+}

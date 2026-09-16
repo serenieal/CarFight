@@ -1,0 +1,29 @@
+{
+  "schema_version":"uds-record/v1",
+  "object_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "object_type":"project",
+  "project_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id":"ver_8d5af5db4c7d4b46b32cdb1b93a6429e",
+  "parent_version_ids":["ver_6377737a8ffe4641a0a4dc95cf55df1c"],
+  "state":"current",
+  "relations":[],
+  "payload":{
+    "name":"CarFight",
+    "consumer_alias":"carfight",
+    "uds_compatibility":"core-v0.1.2",
+    "migration_state":"retention_triage_full_inventory_pending",
+    "uds_write_authority":true,
+    "legacy_write_authority":false,
+    "full_durable_owner_inventory_complete":false,
+    "retention_triage_complete":false,
+    "known_gap":"Previous correction covered dirty Active/Ready/terminal Work and selected current Systems/spec/evidence, but fresh full inventory found many additional Current System and CombatPlan durable owners not represented in UDS Knowledge.",
+    "authority_cutover_valid":true,
+    "global_complete_claim_valid":false,
+    "uncertain_disposition_policy":"KEEP_PENDING_REVIEW"
+  },
+  "provenance":{
+    "migration_gate":"UDS-08 Retention Triage re-audit",
+    "captured_date":"2026-09-16",
+    "basis":"Shared Migration Spec v0.1.2 M-11; fresh inventory found Current Systems such as Ammo, CombatFx, HitDamage, Launcher, MissileGuidance, Projectile and broader CombatPlan owners outside current UDS Knowledge coverage"
+  }
+}

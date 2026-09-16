@@ -1,0 +1,19 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "object_type": "project",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_cdd186b3596d4aafa0f78401adc2a8d2",
+  "parent_version_ids": [],
+  "state": "current",
+  "relations": [],
+  "payload": {
+    "name": "CarFight",
+    "consumer_alias": "carfight",
+    "uds_compatibility": "core-v0.1.2",
+    "legacy_write_authority": true,
+    "active_ready_work_count": 3,
+    "planning_catalog_retained": "Document/ProjectSSOT/03_FeatureQueue.md"
+  },
+  "provenance": {"migration_gate": "UDS-08/MIG-03", "captured_date": "2026-09-16"}
+}

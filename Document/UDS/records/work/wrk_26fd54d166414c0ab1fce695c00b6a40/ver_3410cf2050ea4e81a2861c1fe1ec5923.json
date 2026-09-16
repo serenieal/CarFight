@@ -1,0 +1,6 @@
+{
+  "schema_version":"uds-record/v1","object_id":"wrk_26fd54d166414c0ab1fce695c00b6a40","object_type":"work","project_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da","version_id":"ver_3410cf2050ea4e81a2861c1fe1ec5923","parent_version_ids":[],"state":"closed",
+  "relations":[{"type":"references","target_object_id":"knw_57e5143a41b7461b932793638c227cc7"}],
+  "payload":{"consumer_alias":"CF-FQ-046","title":"Vehicle Builder User Information UX","phase":"VBIUX-P0-06 Final Closure Audit","closure_reason":"completed","next_action":null,"blockers":[],"owner_scope":["carfight:feature:CF-FQ-046"],"user_technical_boundary":"VBIUX-P0-05F USER Acceptance PASS; P0-06 Current System Promotion / Final Closure Audit PASS.","legacy_refs":["Document/Plan/VehicleBuilderInfoUX/VehicleBuilderInfoUXPlan.md v0.2.0","Document/Systems/Vehicles/VehicleBuilder.md v1.9.0"]},
+  "provenance":{"migration_gate":"UDS-08 semantic correction/MIG-01~03","captured_date":"2026-09-16","resolution_basis":"fresh dirty semantic decomposition after premature MIG-07 closure audit"}
+}

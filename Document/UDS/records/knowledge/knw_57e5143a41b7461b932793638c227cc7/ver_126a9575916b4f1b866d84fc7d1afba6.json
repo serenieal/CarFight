@@ -1,0 +1,5 @@
+{
+  "schema_version":"uds-record/v1","object_id":"knw_57e5143a41b7461b932793638c227cc7","object_type":"knowledge","project_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da","version_id":"ver_126a9575916b4f1b866d84fc7d1afba6","parent_version_ids":[],"state":"current","relations":[],
+  "payload":{"kind":"system","title":"Vehicle Builder Current Contract","summary":"New normal vehicle records use UseProjectBasicSensor; existing None is ExplicitNone; sensor intent supports UseProjectBasicSensor / ExplicitNone / ExplicitAsset without auto-migrating legacy vehicles.","body_ref":"Document/Systems/Vehicles/VehicleBuilder.md v1.9.0","legacy_source_versions":["VehicleBuilder.md v1.9.0"]},
+  "provenance":{"migration_gate":"UDS-08 semantic correction/MIG-01~03","captured_date":"2026-09-16","body_policy":"canonical body retained in existing Systems owner; UDS record owns semantic identity/reference"}
+}

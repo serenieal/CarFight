@@ -1,0 +1,5 @@
+{
+  "schema_version":"uds-record/v1","object_id":"knw_0819750f9b824c7596503ca5f0745b83","object_type":"knowledge","project_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da","version_id":"ver_89559b7d3963403895f2546fb6639ae6","parent_version_ids":[],"state":"current","relations":[],
+  "payload":{"kind":"system","title":"Sensor / Contact Intelligence Current Contract","summary":"Vehicle base SensorData + Scanner override priority, single-scan completion invariant, AnalysisCompletionRevision terminal completion semantics, and TargetPanel completed-state latch.","body_ref":"Document/Systems/Targeting/SensorContact.md v1.8.0","legacy_source_versions":["SensorContact.md v1.8.0"]},
+  "provenance":{"migration_gate":"UDS-08 semantic correction/MIG-01~03","captured_date":"2026-09-16","body_policy":"canonical body retained in existing Systems owner; UDS record owns semantic identity/reference"}
+}

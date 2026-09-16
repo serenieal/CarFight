@@ -1,0 +1,28 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "object_type": "project",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_315732371b9f47d59cf8b3092a73b273",
+  "parent_version_ids": ["ver_cdd186b3596d4aafa0f78401adc2a8d2"],
+  "state": "current",
+  "relations": [],
+  "payload": {
+    "name": "CarFight",
+    "consumer_alias": "carfight",
+    "uds_compatibility": "core-v0.1.2",
+    "migration_state": "permanent_adoption",
+    "uds_write_authority": true,
+    "legacy_write_authority": false,
+    "active_ready_work_count": 3,
+    "planning_catalog_retained": "Document/ProjectSSOT/03_FeatureQueue.md",
+    "legacy_projection_disposition": {
+      "Document/ActiveWork.md": "retained_frozen_authority0",
+      "Document/ProjectSSOT/01_ProjectState.md#active_slice": "authority0_reference",
+      "Document/ProjectSSOT/02_Roadmap.md#active_slice": "authority0_reference",
+      "Document/ProjectSSOT/03_FeatureQueue.md#promoted_work_lifecycle": "authority0_mirror_planning_catalog_retained",
+      "Document/Plan/README.md#active_ready_lifecycle": "authority0_navigation"
+    }
+  },
+  "provenance": {"migration_gate": "UDS-08/MIG-05", "captured_date": "2026-09-16", "cutover_basis": "user-confirmed CarFight work stopped + repository lock absent + fresh exact3 representative Plan rebaseline"}
+}

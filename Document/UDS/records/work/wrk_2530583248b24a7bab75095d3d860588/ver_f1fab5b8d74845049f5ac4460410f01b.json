@@ -1,0 +1,6 @@
+{
+  "schema_version":"uds-record/v1","object_id":"wrk_2530583248b24a7bab75095d3d860588","object_type":"work","project_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da","version_id":"ver_f1fab5b8d74845049f5ac4460410f01b","parent_version_ids":[],"state":"closed",
+  "relations":[{"type":"references","target_object_id":"knw_6e940053803545b2b0a6da44f9c60b29"},{"type":"references","target_object_id":"knw_901a13c4354141cb909b1827460d0786"}],
+  "payload":{"consumer_alias":"CF-FQ-035","title":"Inventory Foundation","phase":"Rebaseline Complete","closure_reason":"superseded","next_action":null,"blockers":[],"owner_scope":["carfight:feature:CF-FQ-035"],"user_technical_boundary":"FFIT-P0-05 Field Fitting UI and PIE = Superseded / Not Executed; formal ownership-aware USER frontend remains deferred.","legacy_refs":["Document/Plan/InventoryFoundation/InventoryFoundationPlan.md v0.10.0","Document/Systems/Vehicles/VehicleInventory.md v1.0.0"]},
+  "provenance":{"migration_gate":"UDS-08 semantic correction/MIG-01~03","captured_date":"2026-09-16","resolution_basis":"fresh dirty semantic decomposition after premature MIG-07 closure audit"}
+}

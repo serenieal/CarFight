@@ -1,0 +1,12 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_3b264618f8cb4755b016eb5e3cb163cb",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_cd5d248e187d4d3c89efb22efc224049",
+  "parent_version_ids": [],
+  "state": "closed",
+  "relations": [{"type":"references","target_object_id":"knw_901a13c4354141cb909b1827460d0786"},{"type":"references","target_object_id":"knw_34983b8e8317418398fb90990b6ce9b0"},{"type":"references","target_object_id":"knw_57e5143a41b7461b932793638c227cc7"}],
+  "payload": {"consumer_alias":"CF-FQ-034","title":"Vehicle Fitting / Mass Runtime","phase":"Rebaseline Complete","closure_reason":"superseded","next_action":null,"blockers":[],"owner_scope":["carfight:feature:CF-FQ-034"],"user_technical_boundary":"FIT-P0-07D USER Driving Feel Comparison = Superseded / Not Executed; USER PASS not claimed; future feel tuning belongs to VehicleBuilder successor workflow.","legacy_refs":["Document/Plan/VehicleFitting/VehicleFittingPlan.md v0.18.0","Document/ProjectSSOT/01_ProjectState.md","Document/ProjectSSOT/02_Roadmap.md"]},
+  "provenance": {"migration_gate":"UDS-08 semantic correction/MIG-01~03","captured_date":"2026-09-16","resolution_basis":"fresh dirty semantic decomposition after premature MIG-07 closure audit"}
+}

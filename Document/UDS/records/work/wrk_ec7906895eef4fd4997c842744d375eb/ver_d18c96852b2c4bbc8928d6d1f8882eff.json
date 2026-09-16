@@ -1,0 +1,20 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_ec7906895eef4fd4997c842744d375eb",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_d18c96852b2c4bbc8928d6d1f8882eff",
+  "parent_version_ids": [],
+  "state": "active",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-039",
+    "title": "Production UI Visual Rework",
+    "phase": "VPR-P0-01",
+    "next_action": "VehiclePanel Actual-Asset Prototype — VT12 SPEED/RPM + ARMOR composition USER review",
+    "blockers": ["USER composition review pending"],
+    "owner_scope": ["carfight:feature:CF-FQ-039"],
+    "legacy_refs": ["Document/Plan/InGameUIVisual/InGameUIVisualPlan.md v0.1.33", "Document/ActiveWork.md", "Document/ProjectSSOT/03_FeatureQueue.md", "Document/ProjectSSOT/01_ProjectState.md", "Document/ProjectSSOT/02_Roadmap.md"]
+  },
+  "provenance": {"migration_gate": "UDS-08/MIG-03", "resolution_basis": "fresh representative Plan read"}
+}

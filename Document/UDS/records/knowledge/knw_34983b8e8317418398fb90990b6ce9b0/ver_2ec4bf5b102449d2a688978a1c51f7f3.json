@@ -1,0 +1,5 @@
+{
+  "schema_version":"uds-record/v1","object_id":"knw_34983b8e8317418398fb90990b6ce9b0","object_type":"knowledge","project_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da","version_id":"ver_2ec4bf5b102449d2a688978a1c51f7f3","parent_version_ids":[],"state":"current","relations":[],
+  "payload":{"kind":"system","title":"VehicleData Current Contract","summary":"DefaultSensorData is a vehicle-base sensor source; reviewed existing-vehicle migration preserves explicit None semantics and uses normal Vehicle Authoring validation.","body_ref":"Document/Systems/Vehicles/VehicleData.md v2.5.0","legacy_source_versions":["VehicleData.md v2.5.0"]},
+  "provenance":{"migration_gate":"UDS-08 semantic correction/MIG-01~03","captured_date":"2026-09-16","body_policy":"canonical body retained in existing Systems owner; UDS record owns semantic identity/reference"}
+}

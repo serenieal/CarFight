@@ -1,0 +1,5 @@
+{
+  "schema_version":"uds-record/v1","object_id":"knw_f6785baa68a44f6ab1017923f79cccb2","object_type":"knowledge","project_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da","version_id":"ver_6dae19f56db048658175afcb6901eedd","parent_version_ids":[],"state":"current","relations":[],
+  "payload":{"kind":"specification","title":"Basic Sensor P0 Technical / Playtest Baseline","summary":"DA_VehicleSensor_Basic P0 baseline uses Passive20m/Visual30m/Active40m, 3s scan, 0.2s update, AnalysisGain 0.40/s and single-scan completion invariant; this is not final balance.","body_ref":"Document/ProjectSSOT/CombatPlan/09_LockSensorEW.md v0.3.2","legacy_source_versions":["09_LockSensorEW.md v0.3.2"]},
+  "provenance":{"migration_gate":"UDS-08 semantic correction/MIG-01~03","captured_date":"2026-09-16","body_policy":"canonical body retained in existing ProjectSSOT specification owner; UDS record owns semantic identity/reference"}
+}

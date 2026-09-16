@@ -1,0 +1,34 @@
+{
+  "schema_version":"uds-record/v1",
+  "object_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "object_type":"project",
+  "project_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id":"ver_651687541f8d4d8b8269eb1a322626ad",
+  "parent_version_ids":["ver_8d5af5db4c7d4b46b32cdb1b93a6429e"],
+  "state":"current",
+  "relations":[],
+  "payload":{
+    "name":"CarFight",
+    "consumer_alias":"carfight",
+    "uds_compatibility":"core-v0.1.2/migration-v0.1.3",
+    "migration_state":"retention_triage_complete",
+    "uds_write_authority":true,
+    "legacy_write_authority":false,
+    "full_durable_owner_inventory_complete":true,
+    "retention_triage_complete":true,
+    "retention_inventory_ref":"Document/UDS/RetentionInventory.md v0.1.0",
+    "durable_owner_router_refs":["Document/Document_Entry.md","Document/Systems/SystemIndex.md","Document/ProjectSSOT/README.md","Document/ProjectSSOT/CombatPlan/README.md"],
+    "retained_body_policy":"ProjectSSOT/Systems/CombatPlan/Plan/DesignSource/Archive bodies remain their own semantic body owners; UDS does not duplicate full text.",
+    "keep_pending_review_policy":"Any unclassified CarFight-owned Document semantic unit is retained until explicit superseding owner plus semantic-loss0 is proven.",
+    "retire_discard_candidate_count":0,
+    "unknown_ambiguous_discard_count":0,
+    "retained_body_delete_empty_count":0,
+    "authority_cutover_valid":true,
+    "global_complete_claim_valid":true
+  },
+  "provenance":{
+    "migration_gate":"UDS-08 Retention Triage full-inventory closure",
+    "captured_date":"2026-09-16",
+    "basis":"Shared Migration Spec v0.1.3 M-11/exact14; Document_Entry + SystemIndex + ProjectSSOT/CombatPlan indexes plus conservative KEEP_PENDING_REVIEW catch-all cover CarFight documentation semantics with discard0"
+  }
+}

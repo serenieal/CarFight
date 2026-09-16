@@ -1,0 +1,6 @@
+{
+  "schema_version":"uds-record/v1","object_id":"evd_169e8466e1524027925020b6e687e889","object_type":"evidence","project_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da","version_id":"ver_cf24ceb96de74fbb9caca20fbc492ef9","parent_version_ids":[],"state":"recorded",
+  "relations":[{"type":"validates","target_object_id":"knw_34983b8e8317418398fb90990b6ce9b0"},{"type":"validates","target_object_id":"knw_57e5143a41b7461b932793638c227cc7"}],
+  "payload":{"evidence_kind":"test","result":"PASS","observation":"Reviewed existing-vehicle Basic Sensor migration completed for TestSUV/DefenseSUV without bypassing authoring blockers. Build dbef9176e89a4f849995bc26c40ed8c1 PASS; Scanner 5/5, DAUTH_P0_08 47/47, Vehicle Builder RecordCreation 1/1 PASS. Wagon and legacy/test assets were not auto-migrated. Live PIE RuntimeRead remained unverified due GoPyMCP infrastructure blocker and is not represented as Product failure or USER PASS.","source_refs":["Document/Systems/Vehicles/VehicleData.md v2.5.0","Document/Systems/Vehicles/VehicleBuilder.md v1.9.0"]},
+  "provenance":{"captured_at":"2026-09-16","migration_gate":"UDS-08 semantic correction","technical_user_boundary":"Technical persisted/build/automation PASS; live PIE observation deferred by infrastructure blocker"}
+}

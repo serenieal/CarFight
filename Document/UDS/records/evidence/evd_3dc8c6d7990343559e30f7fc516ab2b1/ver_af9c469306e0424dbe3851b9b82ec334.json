@@ -1,0 +1,6 @@
+{
+  "schema_version":"uds-record/v1","object_id":"evd_3dc8c6d7990343559e30f7fc516ab2b1","object_type":"evidence","project_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da","version_id":"ver_af9c469306e0424dbe3851b9b82ec334","parent_version_ids":[],"state":"recorded",
+  "relations":[{"type":"validates","target_object_id":"wrk_42d763b4f30a43c599785f5d714da0aa"},{"type":"validates","target_object_id":"knw_64a86ecfbe794656b444f982f2ab665a"}],
+  "payload":{"evidence_kind":"audit","result":"PASS","observation":"CF-FQ-015 rebaseline closure preserves VD-P0-00~03 Historical Technical PASS and promotes the durable tuning protocol to current VehicleBuilder ownership. Historical Official UE 5.8 Editor Build 0cffed2f02674b6692d4f8af811d9036 PASS and CarFight.VehicleData 3/3 PASS are retained. VD-P0-04 USER Tuning was Superseded / Not Executed and is not USER PASS.","source_refs":["Document/Plan/VehicleDataTuning/VehicleDataTuningPlan.md v0.3.0","Document/Systems/Vehicles/VehicleBuilder.md v1.9.0"]},
+  "provenance":{"captured_at":"2026-09-11","migration_gate":"UDS-08 semantic correction","body_policy":"detailed evidence retained in representative Plan"}
+}

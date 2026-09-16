@@ -1,0 +1,6 @@
+{
+  "schema_version":"uds-record/v1","object_id":"wrk_42d763b4f30a43c599785f5d714da0aa","object_type":"work","project_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da","version_id":"ver_97f3297f730042cea5b844de03ab0d56","parent_version_ids":[],"state":"closed",
+  "relations":[{"type":"references","target_object_id":"knw_64a86ecfbe794656b444f982f2ab665a"},{"type":"references","target_object_id":"knw_57e5143a41b7461b932793638c227cc7"},{"type":"references","target_object_id":"knw_34983b8e8317418398fb90990b6ce9b0"}],
+  "payload":{"consumer_alias":"CF-FQ-015","title":"Vehicle Data Tuning Pass","phase":"Rebaseline Complete","closure_reason":"superseded","next_action":null,"blockers":[],"owner_scope":["carfight:feature:CF-FQ-015"],"user_technical_boundary":"VD-P0-04 USER Tuning = Superseded / Not Executed; USER PASS not claimed. Responsibility moved to VehicleBuilder Performance Tuning Protocol.","legacy_refs":["Document/Plan/VehicleDataTuning/VehicleDataTuningPlan.md v0.3.0","Document/Systems/Vehicles/VehicleBuilder.md v1.9.0","Document/Systems/Vehicles/VehicleData.md v2.5.0"]},
+  "provenance":{"migration_gate":"UDS-08 semantic correction/MIG-01~03","captured_date":"2026-09-16","resolution_basis":"complete dirty Plan owner-set audit"}
+}

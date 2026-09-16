@@ -1,0 +1,5 @@
+{
+  "schema_version":"uds-record/v1","object_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da","object_type":"project","project_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da","version_id":"ver_defa7085b07f4590a6a115fcf1685095","parent_version_ids":["ver_315732371b9f47d59cf8b3092a73b273"],"state":"current","relations":[],
+  "payload":{"name":"CarFight","consumer_alias":"carfight","uds_compatibility":"core-v0.1.2","migration_state":"semantic_correction_validation_pending","uds_write_authority":true,"legacy_write_authority":false,"active_ready_work_count":3,"terminal_work_count":4,"current_knowledge_count":7,"recorded_evidence_count":6,"premature_mig07_closure_retracted":true,"correction_reason":"Initial MIG-03/05 mapping captured Active/Ready Work only and omitted meaningful dirty terminal Work, Current Knowledge, and accepted Evidence references."},
+  "provenance":{"migration_gate":"UDS-08 semantic correction","captured_date":"2026-09-16","parent_note":"Previous permanent-adoption head retained as immutable historical version; this successor retracts its completeness claim pending corrected MIG-03/06 validation."}
+}

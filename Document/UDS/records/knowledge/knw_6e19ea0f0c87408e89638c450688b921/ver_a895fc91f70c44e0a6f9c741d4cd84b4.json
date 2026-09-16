@@ -1,0 +1,5 @@
+{
+  "schema_version":"uds-record/v1","object_id":"knw_6e19ea0f0c87408e89638c450688b921","object_type":"knowledge","project_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da","version_id":"ver_a895fc91f70c44e0a6f9c741d4cd84b4","parent_version_ids":[],"state":"current","relations":[],
+  "payload":{"kind":"system","title":"Target Select Current Contract","summary":"TargetSelect owns candidate/selected actor state and lifetime; TargetRegistry supplies candidates; Sensor/Contact, Aim/Fire, and UI remain separate consumers/owners.","body_ref":"Document/Systems/Targeting/TargetSelect.md v1.0.0","legacy_source_versions":["TargetSelect.md v1.0.0"]},
+  "provenance":{"migration_gate":"UDS-08 semantic correction/MIG-01~03","captured_date":"2026-09-16","body_policy":"canonical body retained in existing Systems owner; UDS record owns semantic identity/reference"}
+}

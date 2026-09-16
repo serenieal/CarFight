@@ -1,0 +1,6 @@
+{
+  "schema_version":"uds-record/v1","object_id":"evd_78d14c7107bc43b6b2e7cf85db0b654a","object_type":"evidence","project_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da","version_id":"ver_e6538c6591794c0faf89dc098dfbfb1a","parent_version_ids":[],"state":"recorded",
+  "relations":[{"type":"validates","target_object_id":"knw_0819750f9b824c7596503ca5f0745b83"},{"type":"validates","target_object_id":"knw_901a13c4354141cb909b1827460d0786"},{"type":"validates","target_object_id":"knw_f6785baa68a44f6ab1017923f79cccb2"}],
+  "payload":{"evidence_kind":"test","result":"PASS","observation":"Basic Sensor / SensorContact correction: Official UE 5.8 Build 416e3c1490d34a8eb0429dcb46824b2b PASS; SEN_P0_04 4/4 PASS; CarFight.Sensor 15/15 PASS; TargetKnowledgePanelContract 1/1 PASS; persisted AssetDump confirms canonical Basic Sensor Duration3.0/Gain0.40/Decay0.15/Detailed1.0 and range/radar baseline.","source_refs":["Document/Systems/Targeting/SensorContact.md v1.8.0","Document/ProjectSSOT/CombatPlan/09_LockSensorEW.md v0.3.2","adset_v1_d6b3d8267c658bd0a856de77952d8663.a3f327c8be153f255487c151"]},
+  "provenance":{"captured_at":"2026-09-16","migration_gate":"UDS-08 semantic correction","technical_user_boundary":"Technical PASS; no new visual/feel USER acceptance claimed"}
+}

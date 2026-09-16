@@ -1,0 +1,6 @@
+{
+  "schema_version":"uds-record/v1","object_id":"evd_4bc7e0bfe11340d3b27aa94e7127f0ba","object_type":"evidence","project_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da","version_id":"ver_cb2854d611d94b9bb669dc98a7fc97a0","parent_version_ids":[],"state":"recorded",
+  "relations":[{"type":"validates","target_object_id":"wrk_e60da91bc5ca4f9e8d8c42a149bba073"},{"type":"validates","target_object_id":"knw_6e19ea0f0c87408e89638c450688b921"}],
+  "payload":{"evidence_kind":"audit","result":"PASS","observation":"CF-FQ-026 current Source/Asset/System rebaseline closes the Historical Feature while preserving TS-P0-00~07 and remote technical evidence. Old TS-P0-08 USER workflow is Superseded / Not Executed; TargetPoint USER outcome remains Inconclusive and tuning debt remains explicit.","source_refs":["Document/Plan/TargetSelect/TargetSelectPlan.md v0.13.0","Document/Systems/Targeting/TargetSelect.md v1.0.0"]},
+  "provenance":{"captured_at":"2026-09-14","migration_gate":"UDS-08 semantic correction","body_policy":"detailed evidence retained in representative Plan/System"}
+}

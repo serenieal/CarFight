@@ -1,0 +1,6 @@
+{
+  "schema_version":"uds-record/v1","object_id":"evd_bfc5505d48f0423e8f0dcd0541a70505","object_type":"evidence","project_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da","version_id":"ver_c46806da4db04fb28166095164af5807","parent_version_ids":[],"state":"recorded",
+  "relations":[{"type":"validates","target_object_id":"wrk_3b264618f8cb4755b016eb5e3cb163cb"}],
+  "payload":{"evidence_kind":"audit","result":"PASS","observation":"CF-FQ-034 rebaseline closure preserves FIT-P0-00~07C technical evidence and current Fitting/Mass runtime coverage. FIT-P0-07D USER Driving Feel was Superseded / Not Executed and is not represented as USER PASS.","source_refs":["Document/Plan/VehicleFitting/VehicleFittingPlan.md v0.18.0"]},
+  "provenance":{"captured_at":"2026-09-14","migration_gate":"UDS-08 semantic correction","body_policy":"detailed evidence retained in representative Plan"}
+}

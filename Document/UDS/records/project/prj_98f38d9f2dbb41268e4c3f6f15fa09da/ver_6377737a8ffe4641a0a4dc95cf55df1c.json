@@ -1,0 +1,5 @@
+{
+  "schema_version":"uds-record/v1","object_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da","object_type":"project","project_id":"prj_98f38d9f2dbb41268e4c3f6f15fa09da","version_id":"ver_6377737a8ffe4641a0a4dc95cf55df1c","parent_version_ids":["ver_defa7085b07f4590a6a115fcf1685095"],"state":"current","relations":[],
+  "payload":{"name":"CarFight","consumer_alias":"carfight","uds_compatibility":"core-v0.1.2","migration_state":"permanent_adoption_semantic_correction_complete","uds_write_authority":true,"legacy_write_authority":false,"active_ready_work_count":3,"terminal_work_count":5,"current_knowledge_count":8,"recorded_evidence_count":7,"mig03_semantic_loss":{"active_restartable_work_missing":0,"next_action_meaning_loss":0,"current_knowledge_owner_missing":0,"accepted_evidence_reference_loss":0,"user_technical_boundary_loss":0},"premature_mig07_closure_corrected":true},
+  "provenance":{"migration_gate":"UDS-08 semantic correction final validation","captured_date":"2026-09-16","parent_note":"Successor closes the correction after full dirty documentation owner-set audit; previous versions are retained immutably."}
+}
