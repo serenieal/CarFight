@@ -90,11 +90,11 @@ Windows PowerShell에서 한글/비ASCII가 포함된 파일을 읽을 때는 �
 - `Document/Document_Entry.md`를 읽고 작업에 필요한 ProjectSSOT, Systems, Plan 문서만 선택해서 확인한다.
 - 이전 대화나 AI 기억보다 현재 저장소와 ProjectSSOT를 우선한다.
 - 기존 미커밋 변경을 임의로 수정, 정리 또는 되돌리지 않는다.
-- 작업 상태가 변경된 경우 관련 대표 Plan 또는 현재 구현 문서에 완료 범위, 미검증 항목 및 다음 작업을 기록한다.
+- Active/Ready Work lifecycle 상태가 변경된 경우 기존 UDS record를 rewrite하지 않고 `Document/UDS/records/**`에 immutable successor version을 추가하고 authority0 Current/head projection을 재생성한다. 상세 checkpoint/evidence는 representative Plan, 현재 구현은 Systems에 기록한다.
 - 작업을 완료한 뒤 실제 다음 단계나 이어서 수행할 작업이 남아 있으면 최종 보고에 사용자가 바로 붙여넣을 수 있는 짧은 추천 프롬프트 1개를 제공한다. 후속 작업이 없거나 단순한 가능성만 있는 경우에는 억지로 제안하지 않는다.
-- 사용자가 `이전 작업 이어서 진행해줘`라고 요청하면 `Document/ActiveWork.md`에서 마지막 작업 초점을 찾고 대표 Plan, 관련 Systems와 실제 코드를 교차검증한 뒤 복원 결과를 먼저 보고한다.
-- 사용자가 특정 작업명 또는 작업 ID로 재개를 요청하면 `Document/ActiveWork.md`의 해당 작업을 마지막 작업 초점보다 우선한다.
-- 사용자가 `새 세션 인계 준비해줘`라고 요청하면 상태가 바뀐 활성 작업의 대표 Plan 체크포인트와 `Document/ActiveWork.md`를 갱신하고 새 세션용 짧은 시작 문구만 제공한다.
+- 사용자가 `이전 작업 이어서 진행해줘`라고 요청하면 `Document/UDS/derived/Current.md`를 bounded 탐색 힌트로 확인한 뒤 `Document/UDS/records/work/**`를 bounded fresh enumerate하고 선택한 Work의 immutable lineage에서 maximal head-set을 검증한다. recomputed head-set과 `derived/heads.json`/Current가 다르면 derived projection을 STALE로 보고, head-set size >1이면 CONFLICT로 fail-visible하며 explicit resolution 전에는 unique Current를 주장하거나 lifecycle mutation을 진행하지 않는다. unique head exact1 확인 후 canonical Work → representative Plan → 관련 Systems와 실제 코드를 교차검증해 복원 결과를 먼저 보고한다.
+- 사용자가 특정 작업명 또는 작업 ID로 재개를 요청하면 UDS Current에서 해당 Work를 먼저 선택하고 canonical record를 기준으로 한다. `Document/ActiveWork.md`는 pre-cutover retained snapshot이며 Current 선택 authority가 아니다.
+- 사용자가 `새 세션 인계 준비해줘`라고 요청하면 lifecycle 변경은 immutable UDS successor record + authority0 Current/head 재생성으로 기록하고, 상세 checkpoint가 변했을 때만 representative Plan을 갱신한다. `Document/ActiveWork.md`에는 새 Current를 기록하지 않는다.
 
 # 독립 저장소 경계 규칙
 
@@ -157,6 +157,8 @@ Windows PowerShell에서 한글/비ASCII가 포함된 파일을 읽을 때는 �
 
 # Changelog
 
+- 2026-09-16: production UDS concurrency smoke 결과를 반영해 session restore에서 `Current`를 탐색 힌트로만 사용하고 `records/work/**` fresh DAG head-set을 최종 복원/mutation precondition으로 검증하도록 강화했다. stale projection은 STALE, multi-head는 CONFLICT로 fail-visible한다.
+- 2026-09-16: UDS-08 MIG-05 permanent adoption으로 CarFight Active/Ready Work lifecycle 복원·갱신·세션 인계 경로를 `Document/UDS/derived/Current.md` → immutable canonical `Document/UDS/records/**` → representative Plan로 전환했다. `Document/ActiveWork.md`는 retained frozen authority0 snapshot이며 lifecycle dual-write를 금지한다.
 - 2026-08-27: `Document/SSOT`를 독립 `ssot_repo`로 명시하고 Shared SSOT 수정 시 자체 `AGENTS.md`와 Git 상태를 우선하도록 경계를 추가했다. CarFight는 공용 규칙을 소비하되 프로젝트 전용 상태를 Shared 본문에 복제하지 않는다.
 - 2026-08-26: Accepted GoPyMCP Runtime Coordination을 Consumer lifecycle 종합방침에 최소 반영했다. Current canonical managed Runtime이 증명되면 세션이 달라도 attach/reuse하고, managed provenance와 별도 lifecycle 안전 권한을 구분한다. 상세 lease/Maintenance/Runtime identity 구현은 GoPyMCP Current policy가 소유한다.
 - 2026-08-23: Accepted GoPyMCP Project External Image Vision을 CarFight의 비-UE 정적 이미지 기본 관측 경로로 반영했다. SourceArt/Review/Concept 이미지는 사용자 업로드나 임시 UE Import/Editor 조작보다 exact Project-authorized `ImageContent` 직접 관측을 우선하며, 상세 decoder/security 계약은 GoPyMCP Current policy에 둔다.

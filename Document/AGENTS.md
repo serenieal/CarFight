@@ -1,7 +1,7 @@
 # CarFight Document 작업 규칙
 
-- 문서 버전: v2.4
-- 최근 갱신일: 2026-08-22
+- 문서 버전: v2.6
+- 최근 갱신일: 2026-09-16
 - 문서 상태: Current
 - 적용 범위: `Document/` 이하의 문서 읽기, 작성, 정리, 색인 갱신과 상태 기록
 
@@ -45,10 +45,11 @@ TaskSource, WorkOrder와 Codex YAML은 선택 산출물이며 필수 착수 조�
 작업별로 필요한 대표 문서만 선택한다.
 
 ```text
-현재 프로젝트 판단: Document/ProjectSSOT/README.md
+현재 Project/Work lifecycle 복원: Document/UDS/derived/Current.md → Document/UDS/records/**
+현재 프로젝트 기준/Planning 판단: Document/ProjectSSOT/README.md
 현재 구현 확인: Document/Systems/SystemIndex.md
-진행 중 계획 확인: Document/Plan/README.md
-활성 작업 복원: Document/ActiveWork.md
+상세 checkpoint/evidence 확인: 해당 representative Plan
+Legacy snapshot: Document/ActiveWork.md (authority0/frozen)
 ```
 
 `Document/` 전체, Plan 전체와 Archive 전체를 작업 시작 입력으로 재귀 탐색하지 않는다.
@@ -139,9 +140,10 @@ Document/Plan/AGENTS.md
 실제 코드·에셋, 기능 상태, 빌드·PIE 결과, 중요한 결정이나 다음 작업이 바뀐 경우에만 관련 대표 Plan 또는 Current 문서를 필요한 범위로 갱신한다.
 단순 설명, 조사와 질의응답은 상태 문서 갱신을 강제하지 않는다.
 
-`Document/ActiveWork.md`는 활성 작업 선택과 대표 체크포인트 연결만 담당한다.
-상세 상태는 대표 Plan과 실제 저장소가 소유한다.
-특정 작업명이나 작업 ID가 있으면 마지막 작업 초점보다 해당 작업을 우선한다.
+MIG-05 이후 Active/Ready Work lifecycle의 canonical authority는 `Document/UDS/records/**`다. `Document/UDS/derived/Current.md`는 bounded authority0 restore view이며 직접 Current truth를 작성하지 않는다.
+세션 복원·handoff resume·lifecycle mutation 전에는 `Document/UDS/records/work/**`를 bounded fresh enumerate하고 선택한 logical Work의 immutable lineage에서 maximal head-set을 재계산한다. recomputed head-set과 `derived/heads.json`/Current가 다르면 derived projection은 STALE이며 current selection/mutation authority가 아니다. head-set size >1이면 CONFLICT로 fail-visible하고 모든 divergent head를 parent로 소비하는 explicit resolution 전에는 unique Current를 주장하지 않는다. mutation 직전 fresh DAG head-set을 최종 stale precondition authority로 사용한다.
+`Document/ActiveWork.md`는 pre-cutover retained frozen authority0 snapshot이다. 상세 checkpoint/evidence는 representative Plan, 현재 구현은 Systems와 실제 저장소가 소유한다.
+특정 작업명이나 작업 ID가 있으면 UDS Current를 탐색 힌트로 사용해 해당 Work를 찾은 뒤 fresh unique head exact1을 확인하고 canonical record와 representative Plan을 확인한다.
 
 빌드와 PIE 상태를 분리한다. Accepted GoPyMCP UE MCP/`GoPyMCP.RuntimeRead`로 직접 관측한 PIE runtime 기술 사실은 AI Technical PASS로 기록할 수 있지만, 시각 품질·UX·조작감·주행감·조준감·연출 감각은 사용자가 확인하지 않은 상태에서 USER PASS나 Completed로 확대하지 않는다.
 
@@ -177,9 +179,9 @@ D:\Work\CarFight_git\Tools\BuildEditor.bat
 ```text
 - Feature 종료 시 상세 Build·Automation·PIE·USER evidence는 대표 Plan이 보존한다.
 - 현재 구현 계약은 Systems가 소유한다.
-- FeatureQueue는 상태·next checkpoint·Current owner만 유지한다.
-- ActiveWork는 현재 복원 포인터만 유지하고 완료 상세 로그를 누적하지 않는다.
-- ProjectState/Roadmap은 프로젝트 수준 상태나 순서가 실제로 바뀔 때만 갱신한다.
+- FeatureQueue는 후보·우선순위·착수 판단·완료 후 Current owner를 유지한다. UDS로 승격된 Work의 state/phase/next는 authority0 mirror/reference다.
+- ActiveWork는 pre-cutover retained frozen authority0 snapshot이며 새 Current lifecycle을 기록하지 않는다.
+- ProjectState/Roadmap은 프로젝트 수준 기준선·순서가 실제로 바뀔 때만 갱신하고 Active/Ready Work lifecycle slice는 UDS를 참조한다.
 - 다른 authoritative owner가 없는 고유 정보는 문서 길이만을 이유로 삭제하지 않는다.
 - projection 압축만으로 기존 PASS를 무효화하거나 재검증하지 않는다.
 - 역할 이탈, stale pointer 또는 Current 상태 충돌이 나타날 때만 Health Check를 수행한다.
@@ -190,6 +192,17 @@ D:\Work\CarFight_git\Tools\BuildEditor.bat
 ---
 
 ## 7. Changelog
+
+### v2.6 - 2026-09-16
+
+- Shared UDS Core v0.1.3 Operational Freshness Gate를 반영해 session restore / handoff / lifecycle mutation 전 `records/work/**` fresh DAG head-set 검증을 의무화했다.
+- `Current`/`heads`와 recomputed head-set이 다르면 STALE, multi-head면 CONFLICT로 fail-visible하고 explicit resolution 전 unique Current 선택을 금지했다.
+
+### v2.5 - 2026-09-16
+
+- UDS-08 MIG-05 permanent adoption으로 Active/Ready Work lifecycle canonical authority를 `Document/UDS/records/**`로 전환했다.
+- 세션 복원은 authority0 `Document/UDS/derived/Current.md` → canonical Work record → representative Plan 순서를 사용한다.
+- FeatureQueue planning authority는 유지하되 promoted Work lifecycle은 authority0 mirror/reference로 분리하고 ActiveWork는 retained frozen authority0 snapshot으로 retirement했다.
 
 ### v2.4 - 2026-08-22
 
