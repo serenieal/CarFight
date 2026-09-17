@@ -1,7 +1,7 @@
 # CarFight Document 작업 규칙
 
-- 문서 버전: v2.6
-- 최근 갱신일: 2026-09-16
+- 문서 버전: v2.8
+- 최근 갱신일: 2026-09-17
 - 문서 상태: Current
 - 적용 범위: `Document/` 이하의 문서 읽기, 작성, 정리, 색인 갱신과 상태 기록
 
@@ -145,6 +145,8 @@ MIG-05 이후 Active/Ready Work lifecycle의 canonical authority는 `Document/UD
 `Document/ActiveWork.md`는 pre-cutover retained frozen authority0 snapshot이다. 상세 checkpoint/evidence는 representative Plan, 현재 구현은 Systems와 실제 저장소가 소유한다.
 특정 작업명이나 작업 ID가 있으면 UDS Current를 탐색 힌트로 사용해 해당 Work를 찾은 뒤 fresh unique head exact1을 확인하고 canonical record와 representative Plan을 확인한다.
 
+동일 logical Work와 동일 representative Plan에 대한 일반 mutation은 기본적으로 **exact1 mutating session**만 허용한다. 다른 세션은 동시에 read/review할 수 있지만 같은 Work/Plan을 병렬 수정하지 않는다. 의도적으로 작업을 분리해야 하면 서로 다른 소유 파일·범위를 먼저 나누고, shared projection이나 representative Plan 갱신은 한 세션에서 수렴한다. 이를 위해 별도 대형 lock framework를 만들지는 않는다.
+
 빌드와 PIE 상태를 분리한다. Accepted GoPyMCP UE MCP/`GoPyMCP.RuntimeRead`로 직접 관측한 PIE runtime 기술 사실은 AI Technical PASS로 기록할 수 있지만, 시각 품질·UX·조작감·주행감·조준감·연출 감각은 사용자가 확인하지 않은 상태에서 USER PASS나 Completed로 확대하지 않는다.
 
 검증 기록은 가능한 범위에서 다음을 분리한다.
@@ -179,7 +181,7 @@ D:\Work\CarFight_git\Tools\BuildEditor.bat
 ```text
 - Feature 종료 시 상세 Build·Automation·PIE·USER evidence는 대표 Plan이 보존한다.
 - 현재 구현 계약은 Systems가 소유한다.
-- FeatureQueue는 후보·우선순위·착수 판단·완료 후 Current owner를 유지한다. UDS로 승격된 Work의 state/phase/next는 authority0 mirror/reference다.
+- FeatureQueue는 후보·우선순위·착수 판단·UDS promotion pointer·완료 후 Current owner를 유지한다. 승격된 Work는 `Promoted` catalog disposition만 기록하고 `Active/Ready/Paused/Blocked`, phase/next와 기술 checkpoint/evidence는 복제하지 않는다.
 - ActiveWork는 pre-cutover retained frozen authority0 snapshot이며 새 Current lifecycle을 기록하지 않는다.
 - ProjectState/Roadmap은 프로젝트 수준 기준선·순서가 실제로 바뀔 때만 갱신하고 Active/Ready Work lifecycle slice는 UDS를 참조한다.
 - 다른 authoritative owner가 없는 고유 정보는 문서 길이만을 이유로 삭제하지 않는다.
@@ -192,6 +194,17 @@ D:\Work\CarFight_git\Tools\BuildEditor.bat
 ---
 
 ## 7. Changelog
+
+### v2.8 - 2026-09-17
+
+- FeatureQueue의 promoted Work status mirror를 완전히 제거하고 `Promoted` catalog disposition만 유지하도록 규칙을 강화했다.
+- `Active/Ready/Paused/Blocked` lifecycle은 UDS exact1 authority에서만 소유하므로 UDS 내부 lifecycle 전환만으로 FeatureQueue를 갱신하지 않는다.
+
+### v2.7 - 2026-09-17
+
+- FeatureQueue의 promoted Work 역할을 catalog status mirror + UDS/Plan pointer로 축소하고 phase/next/기술 checkpoint 복제를 금지했다.
+- mutable shared document 충돌을 줄이기 위해 동일 logical Work + representative Plan에는 기본 exact1 mutating session 원칙을 추가했다. 병렬 세션은 read/review 또는 명시적으로 분리된 소유 범위에서만 진행하고 shared projection/Plan 갱신은 한 세션에서 수렴한다.
+- 새 lock/control framework를 추가하지 않고 운영 규칙으로 동시 수정 비용을 제한한다.
 
 ### v2.6 - 2026-09-16
 
@@ -246,7 +259,7 @@ D:\Work\CarFight_git\Tools\BuildEditor.bat
 - v1.7의 Browser 작업지시서 강제 게이트는 폐기되었으며 현재 판단에 사용하지 않는다.
 - 기존 TaskSource, WorkOrder와 Codex YAML은 당시 기록 또는 선택 참고 자료로 유지한다.
 - `Document/Plan` 작업은 `Document/Plan/AGENTS.md`에서 시작한다.
-- 기존 ProjectSSOT, Plan, Systems, Archive와 ActiveWork 경로는 변경하지 않는다.
+- 기존 ProjectSSOT, Plan, Systems, Archive와 `ActiveWork.md`의 물리 경로·Historical evidence는 보존한다. 다만 Current 운영 authority와 restore/write route는 각 문서의 최신 UDS 규칙을 따른다.
 - 기존 미커밋 변경은 자동으로 정리하거나 되돌리지 않는다.
 - 과거 검증 도구 부재와 Not Run 기록은 날짜가 있는 역사 상태로 유지하며 현재 검증 가능 여부는 최신 도구·저장소·범위·증거로 다시 판단한다.
 - 작업 전용 임시 실행 경로는 명시적 공용화 결정이 없는 한 공식 도구나 Git 등록 대상으로 해석하지 않는다.

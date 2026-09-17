@@ -1,7 +1,7 @@
 # Link Audit Checklist (Document)
 
-- 문서 버전: v3.1
-- 최근 갱신일: 2026-08-29
+- 문서 버전: v3.3
+- 최근 갱신일: 2026-09-17
 - 문서 상태: Current
 - 역할: `Document/`의 경로, 문서 역할, 색인 등록, 기본 읽기 범위를 점검하는 체크리스트
 
@@ -31,28 +31,32 @@
 - [ ] `Document/Document_Entry.md`가 개별 파일 전체 목록이 아니라 작업별 진입 라우터로 작성되어 있다.
 - [ ] `Document/AGENTS.md`가 먼저 `Document/Document_Entry.md`를 읽도록 지시한다.
 
-### 2.1.1 ActiveWork 세션 복원
+### 2.1.1 UDS 세션 복원
 
-- [ ] `Document/ActiveWork.md`가 존재하고 문서 상태가 `Current`다.
-- [ ] `ActiveWork.md`에는 Candidate·Deferred가 아니라 실제 활성 작업만 등록되어 있다.
-- [ ] 마지막 작업 초점이 현재 활성 작업 표의 작업 ID와 대표 체크포인트를 가리킨다.
-- [ ] 각 대표 체크포인트 경로가 실제로 존재한다.
-- [ ] 각 활성 대표 Plan에 `현재 작업 체크포인트` 섹션이 존재한다.
-- [ ] 체크포인트에 현재 상태, 완료 범위, 미검증 범위, 빌드 상태, PIE 상태와 바로 다음 작업이 기록되어 있다.
-- [ ] `ActiveWork.md`와 대표 Plan의 상태가 FeatureQueue, Git 상태와 실제 코드에 모순되지 않는다.
-- [ ] 특정 작업명 또는 작업 ID를 지정한 재개 요청이 마지막 작업 초점보다 우선하도록 규칙에 명시되어 있다.
+- [ ] `Document/UDS/derived/Current.md`가 존재하고 authority0 bounded restore view로 명시되어 있다.
+- [ ] Active/Ready Work lifecycle의 canonical authority가 `Document/UDS/records/**` immutable Work record로 정의되어 있다.
+- [ ] 세션 복원 전 `records/work/**`를 bounded fresh enumerate하고 선택한 Work의 immutable lineage에서 maximal head-set을 재계산하도록 규칙에 명시되어 있다.
+- [ ] recomputed head-set과 `derived/heads.json` 또는 Current가 다르면 projection을 `STALE`로 판정하고 unique Current를 주장하지 않는다.
+- [ ] head-set size가 1보다 크면 `CONFLICT`로 fail-visible하고 explicit resolution 전 lifecycle mutation을 금지한다.
+- [ ] unique head exact1 확인 후 canonical Work → representative Plan → 필요한 Systems/Source 순서로만 확장한다.
+- [ ] representative Plan이 상세 checkpoint, 완료 범위, 미검증 범위, Build/Automation/PIE/USER evidence와 바로 다음 기술 작업을 소유한다.
+- [ ] 특정 작업명 또는 작업 ID를 지정한 재개 요청은 UDS Current를 탐색 힌트로 해당 Work를 선택한 뒤 fresh canonical head를 확인한다.
+- [ ] `Document/ActiveWork.md`는 pre-cutover retained frozen Historical snapshot이며 Current 선택·lifecycle mutation·future write authority가 아니다.
 
 ### 2.1.2 전체 문서 아키텍처
 
-- [ ] `Document/Document_Entry.md`가 코드 작업에서 `AGENTS → CodeWorkGate → Document_Entry → ActiveWork → ProjectSSOT → Plan → 코드·에셋 → Systems → Archive` 전체 흐름을 공식 정의한다.
+- [ ] `Document/Document_Entry.md`가 승격된 Work 복원에서 `AGENTS → CodeWorkGate → Document_Entry → UDS Current 탐색 힌트 → fresh canonical Work → representative Plan → 필요한 Systems/Source`의 bounded 흐름을 공식 정의한다.
 - [ ] DesignSource, 공용 SSOT와 Link Audit의 보조 책임이 전체 구조에 포함되어 있다.
 - [ ] 각 문서 영역의 책임과 비책임이 분리되어 있다.
-- [ ] ActiveWork가 작업 선택과 대표 Plan 연결만 담당하고 상세 체크포인트를 복사하지 않는다.
+- [ ] `ActiveWork.md`가 retained frozen Historical snapshot으로만 남아 있고 Current 작업 선택·대표 Plan 연결·상태 동기화에 사용되지 않는다.
 - [ ] 대표 Plan이 완료 범위, 미검증 범위, 빌드·PIE 상태와 다음 작업을 담당한다.
 - [ ] `ProjectSSOT/CombatPlan`이 장기 전투 설계이고 일반 `Document/Plan/<Feature>`가 현재 착수 기능의 구현 계획으로 구분된다.
 - [ ] 현재 구현, 다음 작업, 장기 방향을 판단하는 문서 권한 우선순위가 각각 정의되어 있다.
 - [ ] Draft, Working, Notes, Candidate, Active Plan, Current System, Deferred, Done, Archived 상태 모델이 정의되어 있다.
-- [ ] `ProjectSSOT/README.md`가 ActiveWork 역할을 포함하면서 Roadmap과 FeatureQueue를 대체하지 않는다고 명시한다.
+- [ ] `ProjectSSOT/README.md`가 UDS lifecycle authority와 ProjectState/Roadmap/FeatureQueue의 planning 역할을 구분하고 `ActiveWork.md`를 Historical frozen reference로 한정한다.
+- [ ] `FeatureQueue`는 승격된 Work를 `Promoted` planning disposition + UDS/Plan pointer로만 표시하고 `Active/Ready/Paused/Blocked`, phase/next, Build/Test checkpoint를 Current truth로 복제하지 않는다.
+- [ ] `ProjectState`와 `Roadmap`은 Active/Ready exact 목록을 독립 Current truth로 복제하지 않고 project baseline 또는 macro sequence/dependency가 실제로 바뀔 때만 갱신한다.
+- [ ] Plan Index는 default session restore 입력이 아니며 representative Plan path/navigation이 바뀔 때만 갱신한다. Historical changelog의 존재만으로 Current lifecycle authority로 취급하지 않는다.
 - [ ] Systems 색인이 코드·빌드 완료와 사용자 PIE 검증 완료를 구분한다.
 
 ### 2.1.3 독립 저장소 경계
@@ -83,7 +87,7 @@
 - [ ] 더 가까운 하위 `AGENTS.md`가 존재하면 상위 규칙에 추가하거나 명시적으로 재정의하는 범위가 분명하다.
 - [ ] `Document/Plan/AGENTS.md`가 별도 configured repository인 `plan_repo`의 루트 대문으로 존재한다.
 - [ ] `Document/Plan/AGENTS.md`가 Plan의 논리적 CarFight 소유권과 별도 Git 저장소 경계를 구분한다.
-- [ ] Plan 작업이 현재 상태나 구현을 판단할 때 main_game의 ActiveWork, ProjectSSOT, Systems와 실제 코드·에셋을 교차검증하도록 안내한다.
+- [ ] Plan 작업이 현재 Work 상태를 판단할 때 main_game의 UDS canonical Work, 현재 구현을 판단할 때 Systems와 실제 코드·에셋을 우선하며 ProjectSSOT는 planning/baseline이 필요한 경우에만 교차검증하도록 안내한다.
 - [ ] `Document/CodeWorkGate.md`가 존재하고 문서 상태가 `Current`다.
 - [ ] CarFight 코드 작업의 기본 경로가 현재 AI 세션의 직접 구현, diff 검수와 가능한 빌드·테스트로 정의되어 있다.
 - [ ] TaskSource, WorkOrder와 Codex YAML이 선택 산출물이며 직접 구현의 필수 착수 조건으로 사용되지 않는다.
@@ -227,6 +231,19 @@
 ---
 
 ## 9. Changelog
+
+### v3.3 - 2026-09-17
+
+- FeatureQueue의 promoted Work 상태가 `Promoted` planning disposition으로만 남고 UDS lifecycle을 mirror하지 않는지 검사하는 항목을 추가했다.
+- ProjectState/Roadmap의 Active/Ready exact mirror 재발과 Plan Index의 default restore 재진입을 Health Check 대상으로 추가했다.
+- 큰 Historical changelog는 보존 가능하지만 Current authority나 기본 세션 입력으로 다시 사용되면 실패로 판정하도록 경계를 명시했다.
+
+### v3.2 - 2026-09-17
+
+- pre-UDS `ActiveWork 세션 복원` 감사를 UDS fresh head-set 기반 복원 감사로 교체했다.
+- Current restore 검사를 `Current authority0 hint → fresh canonical Work head → representative Plan → 필요한 Systems/Source`로 제한하고 STALE/CONFLICT fail-visible 조건을 추가했다.
+- `ActiveWork.md`가 Current 선택·lifecycle mutation·future write 경로에 다시 들어오지 않는지 검사하는 Legacy Path Retirement 항목을 추가했다.
+- ProjectSSOT와 Plan 감사도 lifecycle owner를 UDS로, current implementation owner를 Systems/Source로 분리하도록 교정했다.
 
 ### v3.1 - 2026-08-29
 

@@ -1,10 +1,10 @@
 # CarFight — 01_ProjectState
 
-> 역할: CarFight 프로젝트의 **현재 실제 기준선 / 현재 Feature 상태 / 현재 리스크**를 고정한다.
+> 역할: CarFight 프로젝트의 **프로젝트 전역 기준선 / 현재 리스크 / 전역 결정**을 고정한다.
 > 공통 규칙 원본: `Document/SSOT/`
-> 문서 버전: v2.45.9
-> 마지막 정리(Asia/Seoul): 2026-09-11
-> 문서 상태: Current
+> 문서 버전: v2.45.14
+> 마지막 정리(Asia/Seoul): 2026-09-17
+> 문서 상태: Current / Work Lifecycle Slice UDS Authority0
 
 ---
 
@@ -26,44 +26,36 @@ Editor Run Entry: D:\Work\CarFight_git\Tools\RunEditor.bat
 
 ## 2. 현재 프로젝트 상태
 
-### 2.1 현재 Active
+### 2.1 현재 Active / Ready Work — UDS Reference
 
-현재 단일 Active Feature는 **`CF-FQ-039 Production UI Visual Rework`**다.
+현재 Active/Ready Work lifecycle의 canonical authority는 `Document/UDS/records/**`다. 사람용 bounded restore view는 `Document/UDS/derived/Current.md`를 사용한다.
 
-```text
-대표 Plan: Document/Plan/InGameUIVisual/InGameUIVisualPlan.md v0.1.24
-Roadmap: Document/Plan/InGameUIVisual/InGameUIVisualRoadmap.md v0.1.24
-Current Gate: VPR-P0-01 VehiclePanel Production Vertical Slice — VEHICLE-SPECIFIC SILHOUETTE SOURCE + PRODUCTION TEXTURE/CATALOG ASSETIZATION PASS / DEFENSE SOURCE FAMILY NEXT / MASTER SOURCE BINDING PENDING
-```
+이 문서는 프로젝트 기준선·전역 결정·Current implementation/risk owner 역할을 계속 유지하지만, Active/Ready Work의 state/phase/next를 독립적으로 소유하거나 dual-write하지 않는다.
 
-이 후속 Feature는 `CF-FQ-032 Done`을 취소하지 않는다. 기존 Runtime·Provider·Presenter·ViewData·Designer ownership과 완료 evidence를 보존하면서 Visual Production 품질만 별도 범위로 진행한다.
+현재 Active/Ready Work 목록과 state/phase/next는 이 문서에 복제하지 않는다. 필요할 때 `Document/UDS/derived/Current.md`를 탐색 힌트로 사용하고 fresh canonical Work head를 확인하며, 상세 checkpoint/evidence는 각 representative Plan이 소유한다.
 
 ### 2.2 최근 완료
 
-`CF-FQ-015 차량 데이터 튜닝 패스`는 Done이다.
+`CF-FQ-026 타겟 선택 시스템`은 current Source/Asset/System Rebaseline 결과 Done / Historical이다.
 
 현재 구현 owner:
 
 ```text
-Document/Systems/Vehicles/VehicleBuilder.md v1.6.0
-Document/Systems/Vehicles/VehicleData.md v2.3.0
+Target Candidate/Selected Actor authority → Document/Systems/Targeting/TargetSelect.md v1.0.0
+Detection/Contact/Knowledge boundary → Document/Systems/Targeting/SensorContact.md v1.2.0
 ```
 
-기존 `VD-P0-00~03` Validator / Representative Compare / Runtime Apply Technical PASS와 당시 Official UE 5.8 Build 및 `CarFight.VehicleData` 3/3 evidence는 Historical로 보존한다. 남아 있던 `VD-P0-04 USER Tuning`은 실제 USER PASS를 수행한 것이 아니라 후속 Data Authoring / Vehicle Builder가 더 완전한 Authoring·Benchmark·Acceptance 경로를 제공하게 되어 `Superseded / Not Executed`로 종료했다.
+기존 `TS-P0-00~07`과 TS-P0-08 remote technical evidence는 Historical Technical PASS로 보존한다. old `TS-P0-08 USER PIE` 전체는 USER PASS가 아니라 `Superseded / Not Executed`다.
 
-현재 성능 튜닝 계약은 VehicleBuilder가 `Controlled Axis Tuning`, `Technical Benchmark + USER Feel Pair`, `Vehicle Character / Reference Baseline`, `Measurement Gap / Benchmark Extension Ownership` 네 항목을 소유한다. VehicleData는 저장 구조·Validator·Representative Compare·Runtime 입력 계약을 계속 소유한다.
+동일 차량 TargetPoint/인식 영역은 기술 교정 evidence만 보존하고 USER 상태는 `Inconclusive`; 7°/1200m 범위 체감은 Deferred USER tuning, Debug Sphere는 Deferred observational debt다. 후보 텍스트/old 16:9·32:9 UI workflow는 successor UISubsystem + TargetPanel 구조로 역할이 바뀌었다.
 
-제동거리, Yaw Rate, 횡가속, Slip Angle, Suspension stroke/settling은 아직 구현 완료된 일반 계측 기능이 아니며 필요 시 별도 lifecycle로 추가한다. 이번 closure는 문서/책임 Rebaseline이며 Source/Asset/Build/Automation mutation은 0이다. 상세 Historical evidence는 `Document/Plan/VehicleDataTuning/VehicleDataTuningPlan.md v0.3.0`이 보존한다.
+과거 20Hz 전체 World 반복 후보 수집은 현재 `UCFTargetRegistrySubsystem`의 bootstrap + 증분 등록 + snapshot 공급으로 successor-resolved 됐다. 이번 closure는 문서 lifecycle 마감이며 Source/Asset/Build/Automation/PIE mutation과 새 USER PASS는 0이다. 상세 Historical evidence는 `Document/Plan/TargetSelect/TargetSelectPlan.md v0.13.0`이 보존한다.
 
 ---
 
 ## 3. 현재 재개 가능한 체크포인트
 
-| Feature | 상태 | 현재 재개 지점 |
-| --- | --- | --- |
-| `CF-FQ-034` 차량 피팅·질량 런타임 | Paused | `Document/Plan/VehicleFitting/VehicleFittingPlan.md v0.17.0` / `FIT-P0-07D USER Driving Feel Comparison` |
-| `CF-FQ-035` 인벤토리 Foundation | Paused | 기존 Technical checkpoint 보존 / USER Field UI·Mobility Pending |
-| `CF-FQ-026` 타겟 선택 시스템 | Paused | `TS-P0-08 USER PIE Pending` |
+현재 Paused/Ready Work의 정확한 lifecycle과 재개 Gate는 UDS Current를 탐색 힌트로 fresh canonical Work record를 확인한다. 승격 전 Candidate의 우선순위와 착수 판단은 FeatureQueue를 우선한다.
 
 `CF-FQ-020 조작감/전투 템포/피드백 개선`, `CF-FQ-021 핵심 게임 루프 검증`, `CF-FQ-012 1대 차량 주행감 고도화`, `CF-FQ-014 WheelSync 시각 품질 폴리싱`은 Candidate다.
 
@@ -85,7 +77,8 @@ Combat
 - Projectile / MissileGuidance / DamageHitContext / HitDamage / VehicleDefense / CombatFx
 
 Targeting
-- SensorContact + Scanner integration
+- TargetSelect candidate/selected authority
+- SensorContact + Scanner detection/contact/knowledge integration
 
 UI
 - InGameUI / AimReticle / VehicleDebug
@@ -96,7 +89,9 @@ Vehicles
 - VehicleBuilder / Data Authoring Backend + Advanced Workspace + Performance Tuning Protocol
 
 Inventory/Fitting
-- 완료 또는 부분 완료 Current 계약은 Systems와 대표 Plan의 실제 상태를 함께 확인
+- Inventory ownership / Container / Reservation / Atomic Transfer는 `VehicleInventory.md v1.0.0` Current 계약을 우선
+- Fitting/Mass Runtime은 `VehicleRuntime.md v1.3.0` Current 계약을 우선
+- RuntimeApply는 Inventory ownership을 조작하지 않는 non-owning 즉시 적용 경로
 ```
 
 Feature가 Done으로 승격되지 않은 영역은 Systems 일부가 존재하더라도 해당 Feature 전체를 Done으로 추정하지 않는다.
@@ -151,12 +146,43 @@ AI Technical PASS와 USER PASS를 서로 대체하지 않는다.
 - 반대로 Deferred/Pending USER Visual·Feel 항목을 Technical PASS만으로 USER PASS 처리하지 않는다.
 - Paused Feature의 완료 Gate를 재개 시 반복하지 않는다.
 - Current 구현 판단은 실제 Source/Asset과 Systems를 우선한다.
-- ProjectSSOT/ActiveWork/FeatureQueue는 상세 evidence 저장소로 사용하지 않는다.
+- ProjectSSOT/FeatureQueue/UDS Current는 상세 evidence 저장소로 사용하지 않는다. `ActiveWork.md`는 pre-cutover retained frozen Historical snapshot으로만 보존한다.
 ```
 
 ---
 
 ## 8. Changelog
+
+### v2.45.14 - 2026-09-17
+
+- ProjectState의 역할을 프로젝트 전역 기준선·리스크·전역 결정으로 좁히고 Active/Ready exact 목록의 Current mirror를 제거했다.
+- Ready/Paused 재개 판단에서 legacy `ActiveWork.md` 경로를 제거하고 UDS Current 탐색 힌트 → fresh canonical Work record를 사용하도록 교정했다.
+- Candidate 우선순위·착수 판단은 FeatureQueue, 상세 checkpoint/evidence는 representative Plan이 소유하도록 owner 경계를 다시 고정했다.
+- `ActiveWork.md`는 retained frozen Historical snapshot이며 ProjectState의 Current/evidence 경로가 아님을 명시했다.
+
+### v2.45.13 - 2026-09-16
+
+- UDS-08 MIG-05 cutover에 따라 Active/Ready Work lifecycle slice를 authority0 UDS reference로 전환했다.
+- 프로젝트 엔진 기준선, 전역 결정, Current implementation/risk owner 역할은 이 문서가 계속 유지하며 Work state/phase/next는 `Document/UDS/records/**`에 dual-write하지 않는다.
+- 세션 복원은 `Document/UDS/derived/Current.md`에서 시작하고 상세 checkpoint/evidence는 representative Plan을 따른다.
+
+### v2.45.12 - 2026-09-14
+
+- `CF-FQ-026 타겟 선택 시스템`을 current Source/Asset/System Rebaseline 결과 Paused → Done / Historical로 전환하고 현재 재개 체크포인트에서 제거했다.
+- Current owner는 `TargetSelect.md v1.0.0`; Sensor/Scanner Detection·Contact·Knowledge는 `SensorContact.md v1.2.0`으로 분리한다. 과거 전체 World 반복 후보 수집은 TargetRegistry successor 구조로 해결됐다.
+- old `TS-P0-08 USER PIE`는 USER PASS가 아닌 `Superseded / Not Executed`다. 동일 차량 TargetPoint는 USER Inconclusive, 7°/1200m 후보 범위와 Debug Sphere는 Deferred debt로 보존한다. Source/Asset/Build/Automation/PIE mutation과 새 USER PASS는 0이며 단일 Active `CF-FQ-039`는 유지한다.
+
+### v2.45.11 - 2026-09-14
+
+- `CF-FQ-035 인벤토리 Foundation`을 current Source/System Rebaseline로 Paused → Done 전환하고 재개 가능한 체크포인트에서 제거했다.
+- Inventory ownership·Container·Reservation·Atomic Transfer·ViewData·Inventory→Fitting 경계를 `VehicleInventory.md v1.0.0` Current System으로 승격했다. RuntimeApply는 non-owning 즉시 적용 UX로 구분한다.
+- `FFIT-P0-05`는 USER PASS가 아닌 `Superseded / Not Executed`이며 formal ownership-aware frontend가 필요해질 때 별도 lifecycle로 연다. Source/Asset/Build/Automation/PIE mutation 0, 현재 단일 Active `CF-FQ-039` 유지다.
+
+### v2.45.10 - 2026-09-14
+
+- `CF-FQ-034 차량 피팅·질량 런타임`을 current Source/System Rebaseline로 Paused → Done 전환하고 재개 가능한 체크포인트에서 제거했다.
+- Fitting/Mass Current owner를 `VehicleRuntime.md v1.3.0`, Vehicle mass data foundation을 `VehicleData.md v2.3.0`, 향후 feel/tuning workflow를 `VehicleBuilder.md v1.6.0`으로 고정했다.
+- `FIT-P0-07D`는 USER PASS가 아닌 `Superseded / Not Executed`이며 향후 필요 시 Deferred observational debt로 successor tuning workflow에서 관찰한다. Source/Asset/Build/Automation/PIE mutation 0, 현재 단일 Active `CF-FQ-039` 유지다.
 
 ### v2.45.9 - 2026-09-11
 

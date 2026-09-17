@@ -1,9 +1,9 @@
 # CarFight Code Work Gate
 
-- 문서 버전: v2.7
+- 문서 버전: v2.8
 
 - 작성일: 2026-07-16
-- 최근 갱신일: 2026-08-19
+- 최근 갱신일: 2026-09-17
 
 - 문서 상태: Current
 - 적용 범위: `main_game` CarFight 저장소의 실제 코드·설정·스크립트 작업
@@ -85,7 +85,7 @@ Blueprint, DataAsset, Niagara, StaticMesh와 기타 바이너리 에셋은 더 �
 3. 루트 또는 가장 가까운 AGENTS.md 확인
 4. 이 CodeWorkGate 확인
 5. Document/Document_Entry.md 확인
-6. ActiveWork와 관련 ProjectSSOT 확인
+6. UDS Current를 탐색 힌트로 확인하고, 대상 Work가 있으면 canonical UDS Work record와 representative Plan 확인; ProjectSSOT는 planning/baseline 판단이 필요한 경우에만 확인
 7. 관련 Systems, 대표 Plan과 실제 코드 확인
 8. 이번 작업의 목표와 완료 조건 확정
 9. 변경 허용 파일과 보호 범위 확정
@@ -110,7 +110,7 @@ Blueprint, DataAsset, Niagara, StaticMesh와 기타 바이너리 에셋은 더 �
 6. 필요한 빌드 또는 자동 테스트 실행
 7. 실패 시 로그 근거로 같은 범위 안에서 보정
 8. 필요한 AssetDump/UE MCP 기술 검증을 먼저 수행한다. PIE-runtime 기술 사실은 Accepted `GoPyMCP.RuntimeRead`로 직접 관측 가능한지 우선 판정하고, 사람의 시각·감각 판단이나 현재 capability 밖의 사실만 사용자 PIE 또는 Editor 작업으로 남긴다.
-9. 대표 Plan, ActiveWork, ProjectSSOT 또는 Systems 중 필요한 문서만 동기화
+9. 상세 checkpoint/evidence가 바뀌면 representative Plan, current implementation contract가 바뀌면 Systems, project-level baseline/sequence가 바뀌면 ProjectSSOT를 필요한 범위만 동기화; lifecycle 변화가 있을 때만 immutable UDS successor + Current/head projection 갱신
 10. 변경 파일, 검증 결과, 미검증 항목과 다음 단계를 보고
 ```
 
@@ -148,10 +148,13 @@ CFVehicleData.h/.cpp
 CFWeaponData.h/.cpp
 CFProjectileActor.h/.cpp
 CFPlayerController.h/.cpp
-Document/ActiveWork.md
+Document/UDS/derived/Current.md
+Document/UDS/derived/heads.json
 Document/ProjectSSOT/03_FeatureQueue.md
 Document/Plan/README.md
 ```
+
+`Document/ActiveWork.md`는 pre-cutover retained frozen Historical snapshot이므로 Current 공용 통합 파일과 동기화 대상에서 제외한다.
 
 동시 작업 규칙:
 
@@ -512,6 +515,13 @@ clean
 ---
 
 ## 12. Changelog
+
+### v2.8 - 2026-09-17
+
+- UDS permanent adoption 이후 남아 있던 `ActiveWork.md` Current 운영 경로를 retire했다.
+- 작업 전 확인은 `UDS Current → canonical Work record → representative Plan → 필요한 Systems/Source`를 기본으로 하고, ProjectSSOT는 planning/baseline 판단이 필요한 경우에만 읽도록 축소했다.
+- 일반 기술 checkpoint는 representative Plan, current implementation contract는 Systems가 소유하며 lifecycle 변화가 있을 때만 immutable UDS successor와 authority0 Current/head projection을 갱신하도록 동기화 규칙을 정리했다.
+- `ActiveWork.md`는 pre-cutover frozen Historical snapshot으로 고정하고 공용 Current 통합 파일 및 future-write 대상에서 제외했다.
 
 ### v2.7 - 2026-08-19
 

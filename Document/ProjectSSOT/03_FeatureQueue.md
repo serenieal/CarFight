@@ -1,9 +1,9 @@
 # CarFight — 03_FeatureQueue
 
-> 문서 버전: v1.57.121
-> 최근 갱신일(Asia/Seoul): 2026-09-15
-> 문서 상태: Current
-> 역할: CarFight의 **Feature 후보 / 착수 판단 / 현재 상태 / 완료 후 Current owner**를 한 곳에서 관리한다.
+> 문서 버전: v1.57.139
+> 최근 갱신일(Asia/Seoul): 2026-09-17
+> 문서 상태: Current Planning Catalog / Promoted Work Lifecycle UDS Authority0
+> 역할: CarFight의 **Feature 후보 / 우선순위 / 착수 판단 / 완료 후 Current owner**를 관리한다. UDS로 승격된 Work의 current lifecycle은 `Document/UDS/records/**`가 소유한다.
 
 ---
 
@@ -14,17 +14,18 @@ FeatureQueue는 다음 질문에 답한다.
 ```text
 - 어떤 Feature가 존재하는가?
 - 우선순위와 상태는 무엇인가?
-- 지금 재개한다면 어디서 시작하는가?
+- 아직 UDS로 승격되지 않은 후보를 지금 착수할지, 어떤 우선순위로 둘 것인가?
 - 완료된 구현은 어느 Systems 문서가 소유하는가?
 ```
 
 FeatureQueue는 상세 설계서나 검증 로그가 아니다.
 
 ```text
-후보/상태 → FeatureQueue
+후보/우선순위/착수 판단 → FeatureQueue
+UDS 승격 Work의 state/phase/next → Document/UDS/records/**
 상세 설계·Build·Automation·PIE·USER evidence → 대표 Plan
 현재 구현 → Systems
-세션 복원 → ActiveWork
+세션 복원 → Document/UDS/derived/Current.md
 ```
 
 ---
@@ -33,16 +34,15 @@ FeatureQueue는 상세 설계서나 검증 로그가 아니다.
 
 | 상태 | 의미 |
 | --- | --- |
-| `Candidate` | 아직 착수하지 않은 후보 |
-| `Ready` | 선행 조건이 준비됐지만 현재 Active가 아님 |
-| `Active` | 현재 진행 중인 단일 주력 Feature |
-| `Paused` | 완료 체크포인트를 보존하고 일시중지 |
-| `Blocked` | 외부 선행 조건 때문에 진행 불가 |
+| `Candidate` | 아직 UDS lifecycle로 승격하지 않은 착수 후보 |
+| `Promoted` | UDS Work로 승격됨. 실제 `Active/Ready/Paused/Blocked` lifecycle은 UDS에서만 확인 |
 | `Done` | 현재 범위 완료, Systems 승격 또는 Current 계약 반영 완료 |
 | `Deferred` | 현재 사이클에서 보류 |
 | `Rejected` | 기각 |
 
-현재 단일 `Active`는 **`CF-FQ-039 Production UI Visual Rework`**다.
+`Ready/Active/Paused/Blocked`는 UDS Work lifecycle vocabulary이며 신규 FeatureQueue catalog 상태로 기록하지 않는다. FeatureQueue의 `Promoted`는 lifecycle 상태가 아니라 "canonical UDS Work가 존재한다"는 planning disposition이다.
+
+현재 promoted Work의 실제 lifecycle 목록은 `Document/UDS/derived/Current.md`를 탐색 힌트로 사용해 fresh canonical Work record에서 확인한다.
 
 ---
 
@@ -100,9 +100,9 @@ FeatureQueue는 상세 설계서나 검증 로그가 아니다.
 | `CF-FQ-036` | 차량 센서·Contact Intelligence Runtime | P1 | Done | Sensor Runtime 완료, Scanner와 Current 통합 | `Systems/Targeting/SensorContact.md v1.2.0` |
 | `CF-FQ-037` | 차량 스캐너 입력·장비 통합 | P1 | Done | SCAN-P0-00~07 / USER PIE PASS | `Systems/Targeting/SensorContact.md v1.2.0` |
 | `CF-FQ-038` | 차량 데이터 Authoring 시스템 | P2 | Done | DEL1~DEL7 PASS / Legacy Vehicle DA Wizard retired / final UE 5.8 Build PASS / 전체 `CarFight.DataAuthoring` 111/111 PASS / P0-12 USER PASS 7/8 Historical 보존 / UA-08 quantitative comparison 비차단 Deferred / Historical Plan `Document/Plan/DataAuthoring/DataAuthoringPlan.md v0.2.53` Retained Path | `Systems/Vehicles/VehicleBuilder.md v1.7.0` |
-| `CF-FQ-039` | Production UI Visual Rework | P1 | Active | `Document/Plan/InGameUIVisual/InGameUIVisualPlan.md v0.1.29` / `VPR-P0-01 VT07 VehiclePanel Asset-First whole-panel Review Ready / USER Visual PASS Pending / UE Import 0 / Production Asset mutation 0` | 완료 시 `Systems/UI/InGameUI.md` Visual ownership 갱신 + Production UI Asset 기준 |
+| `CF-FQ-039` | Production UI Visual Rework | P1 | Promoted | UDS promoted Work. Current state/phase/next는 `Document/UDS/derived/Current.md`를 탐색 힌트로 fresh canonical Work record에서 확인. Representative Plan: `Document/Plan/InGameUIVisual/InGameUIVisualPlan.md` | 완료 시 `Systems/UI/InGameUI.md` Visual ownership 갱신 + Production UI Asset 기준 |
 | `CF-FQ-040` | Guided Vehicle Builder | P2 | Done | VB-P0-10 Current System Promotion Complete / VB-P0-09 End-to-End USER Acceptance PASS / WSA P0 Complete / ESH-01~06 Final Audit Clean PASS / representative Plan은 `Document/Plan/Archive/VehicleBuilder/` Historical + Archived Path | `Systems/Vehicles/VehicleBuilder.md v1.7.0` |
-| `CF-FQ-041` | 런타임 콘텐츠 적용 메뉴 | P2 | Ready | `Document/Plan/RuntimeApply/RuntimeApplyPlan.md v0.1.18` / RTA-P0-05 Historical USER PASS·기존 regression evidence 보존 / Wagon Multi-Mount Empty-State + Prototype Weapon Provisional Gameplay Balance current regression 16/16 PASS / next `RTA-P0-06 Packaged Demo` | `Systems/Vehicles/RuntimeApply.md v1.1.0` + 기존 Vehicle/Fitting Runtime authority |
+| `CF-FQ-041` | 런타임 콘텐츠 적용 메뉴 | P2 | Promoted | UDS promoted Work. Current state/phase/next는 `Document/UDS/derived/Current.md`를 탐색 힌트로 fresh canonical Work record에서 확인. Representative Plan: `Document/Plan/RuntimeApply/RuntimeApplyPlan.md` | `Systems/Vehicles/RuntimeApply.md v1.1.0` + 기존 Vehicle/Fitting Runtime authority |
 | `CF-FQ-042` | Vehicle Builder 신규 차량 생성 UX | P2 | Done | `VBCUX-P0-05 USER Acceptance PASS` / A Blank Start + B 기존 Chassis 재사용 + C 미사용 Mesh Quick Start PASS / final audit P1 old-selection refresh restore 교정 + focused/affected 5/0 PASS / `Document/Plan/Archive/VehicleBuilderCreationUX/VehicleBuilderCreationUXPlan.md v0.2.1` Historical + Archived Path / G5 Physical Move Complete / Vehicle ID 직접 입력 관리 부담은 비차단 UX 피드백 | `Systems/Vehicles/VehicleBuilder.md v1.7.0` |
 | `CF-FQ-043` | Vehicle Builder 장비 장착점 Guidance UX | P2 | Done | `VMG-P0-07 USER Acceptance PASS` / Socket-Naming USER PASS + Wagon persistent USER Driving receipt save/Step8 Complete / DataAuthoring 100/100 PASS / `Document/Plan/Archive/VehicleMountGuidance/VehicleMountGuidancePlan.md v0.2.0` Historical + Archived Path / G5 Physical Move Complete | `Systems/Vehicles/VehicleBuilder.md v1.7.0` |
 | `CF-FQ-044` | Vehicle Builder Runtime Catalog Promotion | P2 | Done | `VRCP-P0-05 USER Acceptance PASS` + `VRCP-P0-06 Current System Promotion Complete` / USER explicit Save 뒤 persisted Catalog Vehicles=4 + Wagon exact membership 1 / `Document/Plan/Archive/VehicleRuntimeCatalogPromotion/VehicleRuntimeCatalogPromotionPlan.md v0.2.0` Historical + Archived Path / G5 Physical Move Complete / RuntimeApply RTA-P0-06 handoff 완료 | `Systems/Vehicles/VehicleBuilder.md v1.7.0` |
@@ -115,42 +115,160 @@ FeatureQueue는 상세 설계서나 검증 로그가 아니다.
 | `CF-FQ-051` | Data Asset Multi-Type Onboarding | P2 | Done | `DAO-P0-06 Final Audit Correction + Re-review PASS` / P0 0 / blocking P1 0 / P2 1 non-blocking / prohibited shared algorithm duplication 0 / third-type shared core rewrite 0 required / Historical Plan `Document/Plan/DataAssetOnboarding/DataAssetOnboardingPlan.md v0.3.22` Retained Path / DamageData handoff completed to CF-FQ-052 | `Systems/DataManagement/DataAssetAuthoring.md v1.4.1` |
 | `CF-FQ-052` | DamageData Third-Type Onboarding / Reuse Verification | P2 | Done | `DDO-P0-05 Reuse Measurement / Acceptance / Current System Promotion PASS` / P0 0 / blocking P1 0 / P2 2 non-blocking / prohibited shared algorithm duplication exact0 / shared core algorithm rewrite 0 required / fourth-type onboarding readiness PASS / Historical Plan `Document/Plan/DamageDataOnboarding/DamageDataOnboardingPlan.md v0.2.14` Retained Path / G5 Deferred | `Systems/DataManagement/DataAssetAuthoring.md v1.5.14` |
 | `CF-FQ-053` | VehicleDefenseData Routine Onboarding / Process Benchmark | P2 | Done | `VDR-P0-03 Final Acceptance + Process Benchmark PASS` / Faster Confirmed / P0 0 / blocking P1 0 / P2 0 / Historical Plan `Document/Plan/VehicleDefenseOnboarding/VehicleDefenseOnboardingPlan.md v0.1.5` Retained Path / G5 Deferred | `Systems/DataManagement/DataAssetAuthoring.md v1.6.0` |
+| `CF-FQ-054` | Equipment Authoring / Guided Equipment Builder | P2 | Promoted | UDS promoted Work. Current state/phase/next는 `Document/UDS/derived/Current.md`를 탐색 힌트로 fresh canonical Work record에서 확인. Representative Plan: `Document/Plan/EquipmentAuthoring/EquipmentAuthoringPlan.md` | 완료 시 Equipment Authoring Current owner 확정 |
 
 ---
 
-## 5. 현재 재개 후보
+## 5. 현재 착수 후보와 Promoted Work 참조
 
-현재 Active는 `CF-FQ-039 / VPR-P0-01 VT07 VehiclePanel Asset-First whole-panel Review Ready / USER Visual PASS Pending`이다.
-
-아래 항목은 현재 Active를 자동 대체하지 않는 **Paused/Ready 재개 후보**다.
-
-| Feature | 상태 | 정확한 다음 Gate |
-| --- | --- | --- |
-| `CF-FQ-041` | Ready | `RTA-P0-06 Packaged Demo` |
-
-Candidate는 `CF-FQ-012`, `014`, `020`, `021`이다.
-
----
-
-## 6. 상태 변경 규칙
-
-Feature 상태가 바뀔 때만 이 문서를 갱신한다.
+UDS로 승격된 Work의 현재 Active/Ready/Paused/Blocked 상태, phase와 exact next Gate는 이 문서에서 별도 목록으로 복제하지 않는다.
 
 ```text
-Candidate → Ready/Active
-Ready → Active
-Active → Paused/Done/Blocked
-Paused → Active/Done
-Done → 원칙적으로 유지; 실제 회귀 결함이 Feature 재개를 요구할 때만 별도 판단
+Promoted Work 재개 → Document/UDS/derived/Current.md 탐색 힌트 → fresh canonical Work record → representative Plan
+승격 전 Candidate 선택 → FeatureQueue
 ```
 
-Build ID, Automation UUID, 개별 AssetDump generation, 긴 RCA, USER가 누른 버튼 순서는 FeatureQueue에 기록하지 않는다. 그 정보는 대표 Plan이 소유한다.
+현재 승격 전 Candidate는 `CF-FQ-012`, `014`, `020`, `021`이다. 표의 `Promoted`는 canonical UDS Work 존재 여부만 나타내며 실제 lifecycle state를 mirror하지 않는다.
 
-Feature가 Done되면 Current System 링크와 남은 Deferred/Pending 경계만 기록한다.
+---
+
+## 6. 갱신 규칙
+
+FeatureQueue는 planning catalog fact가 바뀔 때만 갱신한다.
+
+```text
+- Candidate 등록·기각·Deferred 판단
+- 우선순위 또는 dependency 변경
+- UDS 승격 결정과 대표 Work/Plan pointer 등록
+- Feature closure 후 Done disposition과 Current System owner 등록
+```
+
+UDS로 승격된 Work의 `Active/Ready/Paused/Blocked`, phase, exact next Gate와 기술 checkpoint 변경은 FeatureQueue 갱신 사유가 아니다. 해당 lifecycle mutation은 immutable UDS successor가 소유하고, 상세 checkpoint/evidence는 representative Plan이 소유한다.
+
+Build ID, Automation UUID, 개별 AssetDump generation, P0/P1/P2 review count, 긴 RCA, exact test count, USER가 누른 버튼 순서는 FeatureQueue에 기록하지 않는다.
+
+Feature가 Done되면 Current System 링크와 남은 Deferred/Pending 경계 중 planning 판단에 필요한 항목만 기록한다.
 
 ---
 
 ## 7. Changelog
+
+> `v1.57.137` 이하의 상세 Gate/Build/Test 진행 기록은 role normalization 이전 Historical retained changelog다. 과거 evidence를 보존하기 위해 유지하지만 Current session restore 입력이나 새 FeatureQueue 작성 형식으로 사용하지 않는다.
+
+### v1.57.139 - 2026-09-17
+
+- Promoted Work의 `Active/Ready` status mirror까지 제거하고 FeatureQueue 전용 catalog disposition `Promoted`로 정규화했다.
+- `Promoted`는 canonical UDS Work가 존재한다는 planning fact만 의미하며 실제 Active/Ready/Paused/Blocked lifecycle은 UDS exact1 authority에서만 확인한다.
+- 이 교정으로 UDS 내부 lifecycle 전환만 발생한 경우 FeatureQueue future-write가 필요하지 않도록 dual-write를 한 단계 더 제거했다.
+
+### v1.57.138 - 2026-09-17
+
+- Promoted Work의 state/phase/next와 기술 checkpoint를 FeatureQueue에서 독립 보관하지 않도록 current projection을 축소했다.
+- `CF-FQ-039`, `CF-FQ-041`, `CF-FQ-054`의 상세 Gate·Build·Test·exact-next 복제를 제거하고 UDS fresh canonical Work + representative Plan pointer만 유지했다.
+- `CF-FQ-039`에 남아 있던 stale `v0.1.29 / VT07` mirror를 제거해 FeatureQueue가 representative Plan checkpoint를 stale copy할 수 있는 경로를 닫았다.
+- 갱신 조건을 Candidate/Priority/Dependency/Promotion/Closure/Current owner 중심으로 한정하고, promoted Work의 일반 기술 진행은 FeatureQueue future-write 0으로 정리했다.
+- 기존 상세 changelog는 Historical evidence로 보존하되 Current restore 입력과 신규 작성 형식에서 제외했다.
+
+### v1.57.137 - 2026-09-16
+
+- UDS-08 MIG-05 cutover에서 FeatureQueue를 planning catalog owner로 유지하고, UDS로 승격된 Work의 state/phase/next lifecycle은 authority0 mirror/reference로 분리했다.
+- 후보·우선순위·착수 판단·완료 후 Current owner는 FeatureQueue가 계속 소유하며, canonical Active/Ready lifecycle은 `Document/UDS/records/**`가 소유한다.
+- 세션 복원은 `Document/UDS/derived/Current.md`에서 시작하고 상세 checkpoint/evidence는 representative Plan을 따른다.
+
+### v1.57.136 - 2026-09-16
+
+- `CF-FQ-054 EBA-P0-05 End-to-End Technical Acceptance`를 `P0 0 / blocking P1 0 / 새 P2 0 / TECHNICAL PASS`로 전진했다. Product logic 변경 없이 test-only acceptance exact4를 추가해 representative Weapon new, Scanner error→recovery→new, fresh existing→Update와 residue0 흐름을 검증했다.
+- final Official UE 5.8 Build PASS, focused P005 exact4/4, affected EquipmentAuthoring exact33/33, fresh AssetDump persisted EquipmentPreset exact10 baseline 유지와 disposable residue exact0을 확보했다. Product EquipmentPreset/child write-save 및 VehicleData/Fitting/RuntimeApply mutation-execution은 0이다.
+- USER Editor UX는 `Pending / Not Run`이며 대표 Plan은 `EquipmentAuthoringPlan.md v0.1.14`, exact next는 `EBA-P0-05 USER Editor UX`다. USER PASS 전 `EBA-P0-06 Current System Promotion`은 BLOCKED / Not Started이고 current Active `CF-FQ-039`는 unchanged다.
+
+### v1.57.135 - 2026-09-16
+
+- `CF-FQ-054 EBA-P0-04 Vehicle Mount Compatibility / Cross-Builder UX` 구현과 Post-Implementation Mid-review를 `P0 0 / blocking P1 0 / P2 1 non-blocking / TECHNICAL PASS`로 전진했다.
+- transient `VehicleDataObjectPath + MountProfileId` exact2와 `Compatible / Incompatible / CannotEvaluate` exact3를 구현하고 persisted+clean VehicleData, current MountProfiles exact1 lookup, runtime-equivalent `CanUseOnMount` 의미를 사용한다. compatibility context는 Equipment durable save gate와 분리되어 ReviewProposalDigest/semantic fingerprint/Apply readiness를 변경하지 않는다.
+- Cross-Builder는 Vehicle Builder tab navigation-only이며 VehicleData/Fitting/RuntimeApply mutation·execution, context injection, shared business state는 0이다. final Official UE 5.8 Build PASS, focused P004 exact9/9, affected EquipmentAuthoring exact29/29, disposable EquipmentPreset residue exact0을 확보했다.
+- 대표 Plan은 `EquipmentAuthoringPlan.md v0.1.13`, exact next는 `EBA-P0-05 End-to-End Technical Acceptance + USER Editor UX`다. Lifecycle Ready와 current Active `CF-FQ-039`는 unchanged다.
+
+### v1.57.134 - 2026-09-16
+
+- `CF-FQ-054 EBA-P0-04 Contract Correction + Re-review`를 `P0 0 / blocking P1 0 / P2 1 non-blocking / TECHNICAL CONTRACT PASS / RE-ACCEPTED`로 전진했다.
+- compatibility probe는 Equipment durable save gate와 분리된 Editor-only transient advisory context로 동결했다. transient identity는 `VehicleDataObjectPath + MountProfileId`, outcome은 `Compatible / Incompatible / CannotEvaluate` exact3이며 dirty/unresolved/non-unique source는 CannotEvaluate reason으로만 표현한다.
+- Cross-Builder P0는 existing Vehicle Builder tab navigation-only로 제한하고 shared business state/context injection은 0, exact-context focus handoff는 P2 후속 후보로 유지한다. 이번 Gate의 Source/Asset, VehicleData/Fitting/RuntimeApply mutation·execution과 Build/Automation은 0/Not Run이다.
+- 대표 Plan은 `EquipmentAuthoringPlan.md v0.1.12`, exact next는 `EBA-P0-04 Vehicle Mount Compatibility / Cross-Builder UX Implementation + Fresh Validation`이다. Lifecycle Ready와 current Active `CF-FQ-039`는 unchanged다.
+
+### v1.57.133 - 2026-09-16
+
+- `CF-FQ-054 EBA-P0-04 Vehicle Mount Compatibility / Cross-Builder UX` Pre-Implementation Design Review를 `P0 0 / blocking P1 3 / P2 1 non-blocking / HOLD`로 기록했다.
+- blocking P1은 concrete mount compatibility와 Equipment durable save gate 분리, transient VehicleDataObjectPath + MountProfileId identity/freshness, Cross-Builder navigation-only authority다. exact-context Vehicle Builder focus handoff는 P2 후속 후보다.
+- 이번 Gate는 document-only review이며 VehicleData/Fitting/RuntimeApply mutation/execution과 EquipmentAuthoring Source/Asset mutation, Build/Automation은 0/Not Run이다. EBA-P0-03 Technical PASS evidence는 보존하고 대표 Plan v0.1.11의 exact next `EBA-P0-04 Contract Correction + Re-review`로 전환했다. Lifecycle Ready와 current Active `CF-FQ-039`는 unchanged다.
+
+### v1.57.132 - 2026-09-16
+
+- `CF-FQ-054 EBA-P0-03 Review / Durable Apply-and-Save`를 Technical PASS로 전진했다. final Official UE 5.8 Build PASS, focused P003 exact8/8, affected EquipmentAuthoring exact20/20, fresh disposable EquipmentPreset residue exact0을 확보했다.
+- durable authority는 existing `CFDADurableCore::ApplyTypedTarget` exact1 production seam으로 유지하며 child DataAsset write/save와 RuntimeApply execution은 0이다. 병렬 Sensor private-access blocker는 owning scope의 test friend exact1 추가로 정상화했고 EBA Source는 해당 correction에서 변경하지 않았다.
+- 대표 Plan은 `EquipmentAuthoringPlan.md v0.1.10`, exact next는 `EBA-P0-04 Vehicle Mount Compatibility / Cross-Builder UX`다. lifecycle Ready와 current Active `CF-FQ-039`는 unchanged다.
+
+### v1.57.131 - 2026-09-16
+
+- `CF-FQ-054 EBA-P0-03 Contract Correction + Re-review`에서 Design Review blocking P1 exact4를 모두 contract-level로 닫고 `P0 0 / blocking P1 0 / P2 0 / Technical Contract PASS / RE-ACCEPTED`로 전진했다.
+- approval exact7 digest에 exact TargetClassPath + `ValidationState=Ready`, complete inventory + loaded-only EquipmentPreset identity union, persisted/clean child dependency truth, `Reviewed→ApplyAttempted→Consumed` one-shot + same-approval retry0 + immediate no-yield TOCTOU를 동결했다. 새 generic framework/provider onboarding/child writer는 요구하지 않는다.
+- 이번 Gate는 document-only라 Source/durable mutation, Product/child Asset write/save, `CFDADurableCore` execution과 Build/Automation은 0/Not Run이다. 대표 Plan은 `EquipmentAuthoringPlan.md v0.1.9`, exact next는 `EBA-P0-03 Review / Durable Apply-and-Save Implementation + Fresh Validation`이다. lifecycle Ready와 current Active `CF-FQ-039`는 unchanged다.
+
+### v1.57.130 - 2026-09-16
+
+- `CF-FQ-054 EBA-P0-03` 착수 전 Design Review를 `P0 0 / blocking P1 4 / P2 0 / HOLD`로 기록했다. Revision 1 exact7 semantic과 shared `CFDADurableCore`/`SaveStateUnconfirmed` 자체는 재사용 가능하지만 ReviewProposalDigest stable binding, loaded-only identity coverage, dirty child dependency fail-closed, one-shot approval/retry0 TOCTOU lifecycle을 correction해야 한다.
+- 이번 Gate는 document-only review이며 EBA-P0-03 Source/durable mutation, Product/child Asset write/save, CFDADurableCore execution, Build/Automation은 0/Not Run이다. EBA-P0-02 prior Build PASS + focused9/9 + affected12/12 evidence는 보존한다.
+- 대표 Plan은 `EquipmentAuthoringPlan.md v0.1.8`, exact next는 `EBA-P0-03 Contract Correction + Re-review`다. lifecycle Ready와 current Active `CF-FQ-039`는 unchanged다.
+
+### v1.57.129 - 2026-09-16
+
+- `CF-FQ-054 EBA-P0-02 Correction + Re-review`을 final `P0 0 / blocking P1 0 / P2 0 / Technical PASS / RE-ACCEPTED`로 전진했다. intrinsic mount contradiction validation, deterministic Weapon/Scanner/native-failure acceptance와 session-local mode selection restore 교정을 보존한다.
+- owning 병렬 작업에서 unrelated `CFSUVMigrateCommandlet` linker blocker 구현이 나타난 뒤 final Official UE 5.8 Build PASS, focused P002 exact9/9 PASS, affected EquipmentAuthoring exact12/12 PASS를 fresh 확보했다. 초기 linker failure는 대표 Plan의 Historical evidence로만 남긴다.
+- 대표 Plan은 `EquipmentAuthoringPlan.md v0.1.7`, exact next는 `EBA-P0-03 Review / Durable Apply-and-Save`다. Product/child Asset write/save와 durable/runtime mutation은 0이며 lifecycle Ready와 current Active `CF-FQ-039`는 unchanged다.
+
+### v1.57.128 - 2026-09-16
+
+- `CF-FQ-054 EBA-P0-02 Mid-review Correction`의 blocking P1 exact2와 P2 exact1을 bounded EquipmentAuthoring scope에서 교정하고 Source re-review를 `P0 0 / blocking P1 0 / P2 0`으로 닫았다. intrinsic mount contradiction fail-closed, deterministic Weapon/Scanner/native-failure acceptance surface와 session-local mode selection restore를 반영했다.
+- fresh Official UE 5.8 Build는 EBA `CFEquipmentBuilderTests/VM/Tab` compile까지 PASS했으나 별도 `CFSUVMigrateCommandlet` constructor/Main unresolved external로 최종 link가 FAIL했다. migration commandlet은 EBA ownership 밖이고 current header diff 0 / method implementation 0으로 확인되어 범위 밖 수정하지 않았다.
+- current EBA DLL이 link되지 않아 stale binary를 피하기 위해 fresh P002 expected exact9 / affected expected exact12 Automation은 Not Run이다. 대표 Plan은 `EquipmentAuthoringPlan.md v0.1.6`, exact next는 external linker blocker 해결 뒤 fresh validation이며 `EBA-P0-03` 착수는 계속 금지한다. Lifecycle Ready와 current Active `CF-FQ-039`는 unchanged다.
+
+### v1.57.127 - 2026-09-16
+
+- `CF-FQ-054 EBA-P0-02 Post-Implementation Mid-review`를 `P0 0 / blocking P1 2 / P2 1 / HOLD`로 기록했다. 기존 Official UE 5.8 Build PASS와 affected `CarFight.EquipmentAuthoring` exact8/8 PASS는 실행 evidence로 보존한다.
+- blocking P1은 concrete Vehicle 없이 판정 가능한 intrinsic DraftMode/RequiredMountType/WeaponData mount contradiction validation 누락과 Weapon/Scanner principal success path를 결정적으로 모두 증명하지 못하는 focused acceptance gap이다. P2는 mode 전환 시 opposite transient selection 즉시 소거 UX다.
+- 대표 Plan은 `EquipmentAuthoringPlan.md v0.1.5`, exact next는 `EBA-P0-02 Mid-review Correction + Re-review`다. P0/P1 0 재검수 전 `EBA-P0-03 Review / Durable Apply-and-Save`를 시작하지 않는다. Lifecycle은 Ready, current Active `CF-FQ-039`는 unchanged다.
+
+### v1.57.126 - 2026-09-16
+
+- `CF-FQ-054 EBA-P0-02 Weapon / Scanner Guided Composition + Child Validation`을 Technical PASS로 전진했다. Weapon은 TurretMountData + WeaponData, Scanner는 VehicleSensorData를 transient Draft에서 exact typed select하고 child DataAsset은 read/select/validate only로 유지한다.
+- Weapon/Sensor native validation과 Ammo identity check를 재사용하고 Turret/Projectile/Damage는 bounded limited validation으로 구분했다. final Official UE 5.8 Build PASS와 affected `CarFight.EquipmentAuthoring` exact8/8 PASS를 확보했다.
+- EBA scope Product Asset mutation/save 및 child DataAsset write/save는 0이다. 대표 Plan은 `EquipmentAuthoringPlan.md v0.1.4`, exact next는 `EBA-P0-03 Review / Durable Apply-and-Save`다. Lifecycle은 Ready이고 current Active `CF-FQ-039`를 변경하지 않는다.
+
+### v1.57.125 - 2026-09-16
+
+- `CF-FQ-054 EBA-P0-01 Editor Shell / Browser / Draft Model`을 Technical PASS로 전진했다. 독립 Native Slate Equipment Builder 진입, metadata-only EquipmentPreset browser와 existing/new transient Draft Model을 구현했다.
+- Official UE 5.8 Build PASS와 focused `CarFight.EquipmentAuthoring.P001` exact3/3 PASS를 확보했다. EBA scope Product Asset mutation/save는 0이며 child authoring / Apply / Save는 아직 후속 Gate가 소유한다.
+- 대표 Plan은 `EquipmentAuthoringPlan.md v0.1.3`, exact next는 `EBA-P0-02 Weapon / Scanner Guided Composition + Child Validation`이다. Lifecycle은 Ready이고 current Active `CF-FQ-039`를 변경하지 않는다.
+
+### v1.57.124 - 2026-09-16
+
+- `CF-FQ-054 EBA-P0-00` blocking P1 exact4를 contract correction하고 fresh re-review해 `P0 0 / blocking P1 0 / P2 0 / Technical Contract PASS`로 전진했다.
+- durable write는 existing `CFDADurableCore`를 재사용하며 별도 generic DA writer, CFDA provider exact5/DACE onboarding, Vehicle Builder broad refactor는 요구하지 않는다.
+- representative Plan은 `EquipmentAuthoringPlan.md v0.1.2`, exact next는 `EBA-P0-01 Editor Shell / Browser / Draft Model`이다. Lifecycle은 Ready이며 current Active `CF-FQ-039`를 대체하지 않는다.
+- Product Source/Asset mutation과 Build/Automation은 0이다. fresh AssetDump CFEquipmentPresetData exact10은 protected baseline으로만 사용했고 근거 없는 fixed Product sub-root를 만들지 않았다.
+
+### v1.57.123 - 2026-09-16
+
+- `CF-FQ-054 EBA-P0-00` Design Review를 `P0 0 / blocking P1 4 / P2 0 / HOLD`로 기록했다.
+- blocking P1은 current shared `CFDADurableCore` durable sequencing 재사용, Review/TOCTOU binding, EquipmentPreset validation composition, canonical Product target path/naming/protection 계약이다.
+- 대표 Plan은 `EquipmentAuthoringPlan.md v0.1.1`, exact next는 `EBA-P0-00 Contract Correction + Re-review`다. P0/P1 0 재검수 전 EBA-P0-01 구현은 시작하지 않는다.
+- Source/Asset mutation과 Build/Automation은 0이며 현재 단일 Active `CF-FQ-039` 및 기존 병렬 dirty를 변경하지 않았다.
+
+### v1.57.122 - 2026-09-16
+
+- 사용자 승인으로 `CF-FQ-054 Equipment Authoring / Guided Equipment Builder`를 P2 / Ready 정식 Feature로 등록했다.
+- 2026-09-15 Ownership Audit 결과를 Accepted baseline으로 사용하며 `UCFEquipmentPresetData`만 직접 write하는 bounded Editor authoring authority를 동결 후보로 삼는다. `WeaponData`, `TurretMountData`, `ProjectileData`, `VehicleSensorData`, `AmmoData`, `DamageData`와 Vehicle Mount는 read/select/validate/reuse 경계이며 Fitting·Inventory·RuntimeApply·Runtime Catalog ownership은 가져오지 않는다.
+- 대표 Plan은 `Document/Plan/EquipmentAuthoring/EquipmentAuthoringPlan.md v0.1.0`, exact next는 `EBA-P0-00 Contract Freeze + Vehicle Builder Reuse Baseline`이다. 이번 승격은 문서/계획 등록만 수행하며 Source/Asset/Build/Automation mutation은 0이다.
+- 현재 단일 Active `CF-FQ-039`와 기존 Ready `CF-FQ-041`, 기존 병렬 dirty는 변경하지 않는다.
 
 ### v1.57.121 - 2026-09-15
 

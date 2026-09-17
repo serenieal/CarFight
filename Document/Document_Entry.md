@@ -1,8 +1,8 @@
 # Document Entry (CarFight)
 
-- 문서 버전: v2.14
+- 문서 버전: v2.18
 - 작성일: 2026-06-19
-- 최근 갱신일: 2026-08-27
+- 최근 갱신일: 2026-09-17
 - 문서 상태: Current
 - 역할: `Document/` 전체의 작업별 진입 라우터
 
@@ -32,7 +32,9 @@
 | --- | --- | --- |
 | `Document/DesignSource/` | 장기 방향과 원본 기획 참고 | 북극성 참고 자료 |
 | `Document/CodeWorkGate.md` | 현재 AI 세션의 직접 코드 구현, 변경 보호, 검증과 완료 판정 통제 | 코드 작업 실행 최우선 기준 |
-| `Document/ActiveWork.md` | 현재 활성 작업, 마지막 작업 초점과 대표 체크포인트 연결 | 세션 복원 기준 |
+| `Document/UDS/records/**` | Active/Ready Work lifecycle identity/state/phase/next의 canonical semantic authority | Work lifecycle 기준 |
+| `Document/UDS/derived/Current.md` | canonical Work record에서 재생성하는 bounded 세션 복원 view | authority0 세션 복원 view |
+| `Document/ActiveWork.md` | MIG-05 이전 활성 작업 projection의 retained snapshot | Historical / authority0 / frozen |
 | `Document/ProjectSSOT/` | CarFight의 현재 상태, 우선순위, 확정 결정, 검증 기준 | 프로젝트 판단 기준 |
 | `Document/Systems/` | 구현 완료된 기능의 현재 구조와 책임 | 현재 구현 기준 |
 | `Document/Plan/` | 앞으로 개발하거나 검증할 기능의 상세 계획 | 진행 중 계획 기준 |
@@ -59,9 +61,10 @@ CarFight 문서체계는 다음 계층이 서로 다른 책임을 가지는 구�
 AGENTS
 → CodeWorkGate (실제 코드·설정·스크립트 작업일 때)
 → Document_Entry
-→ ActiveWork
-→ ProjectSSOT
-→ Plan
+→ UDS Current (authority0)
+→ canonical UDS Work record
+→ ProjectSSOT planning/baseline
+→ representative Plan
 → 실제 코드와 에셋
 → Systems
 → Archive
@@ -76,7 +79,9 @@ AGENTS
 AGENTS = 작업 방법과 금지사항을 통제한다.
 CodeWorkGate = 현재 AI 세션의 직접 구현, 변경 보호, 검증, 완료 판정과 선택적 외부 위임을 통제한다.
 Document_Entry = 작업 종류에 맞는 진입 경로를 선택한다.
-ActiveWork = 현재 어떤 활성 작업을 복원하거나 전환할지 선택한다.
+UDS Current = 현재 Active/Ready Work를 bounded view로 선택한다.
+UDS Work record = 선택한 Work의 canonical lifecycle identity/state/phase/next를 소유한다.
+ActiveWork = MIG-05 이전 retained snapshot이며 Current write-authority가 아니다.
 ProjectSSOT = 현재 무엇을 왜 해야 하는지 판단한다.
 Plan = 선택된 기능을 어떻게 구현하고 검증할지 정의한다.
 코드와 에셋 = 실제 구현 그 자체다.
@@ -94,7 +99,9 @@ Link_Audit_Check = 위 관계가 서로 모순되지 않는지 검사한다.
 | `AGENTS.md` | 작업 절차, Git 보호, 빌드·검증, 세션 복원 규칙 | 기능 설계, 현재 구현 설명, 진행률 기록 |
 | `CodeWorkGate.md` | 직접 코드 구현의 사전 확인, 변경 보호, 검증, 완료 판정과 선택적 외부 위임 통제 | 개별 기능 설계와 현재 구현 상세 설명 |
 | `Document_Entry.md` | 문서 아키텍처와 작업별 라우팅 | 개별 기능 상세 상태와 파일 전체 목록 |
-| `ActiveWork.md` | 활성 작업 선택, 마지막 작업 초점, 대표 Plan 연결 | 상세 구현 설계, 장문의 세션 로그, 전체 FeatureQueue 복사 |
+| `UDS/records/**` | Active/Ready Work lifecycle identity/state/phase/next의 canonical owner | 상세 설계·검증 evidence·현재 구현 설명 |
+| `UDS/derived/Current.md` | canonical Work record에서 재생성되는 authority0 세션 복원 view | canonical lifecycle truth 직접 작성 |
+| `ActiveWork.md` | MIG-05 이전 retained frozen snapshot / historical reference | Current Work 선택, lifecycle mutation, 최신 상태 projection |
 | `DesignSource/` | 원본 기획과 장기 북극성 | 현재 착수 승인, 현재 구현 판정 |
 | `ProjectSSOT/` | 프로젝트 전용 방향, 상태, 우선순위, 결정, 회귀 기준 | 개별 기능의 상세 구현 절차, 공용 UE 규칙 |
 | `ProjectSSOT/CombatPlan/` | 전투 정체성과 장기 도메인 설계 | 현재 기능의 착수 승인과 세부 구현 체크포인트 |
@@ -105,20 +112,23 @@ Link_Audit_Check = 위 관계가 서로 모순되지 않는지 검사한다.
 | `Archive/` | 완료·보류·대체된 과거 기록 보존 | 현재 착수 또는 현재 구현 기준 |
 | `Maintenance/Link_Audit_Check.md` | 링크, 역할, 버전과 상태 정합성 감사 | 프로젝트 기능 우선순위 결정 |
 
-### 2.3 ActiveWork와 대표 Plan의 책임 경계
+### 2.3 UDS Work와 대표 Plan의 책임 경계
 
 ```text
-ActiveWork
-= 현재 실제로 진행 중인 작업을 찾고 대표 Plan으로 연결한다.
+UDS Work record
+= Work identity + lifecycle state + phase + next action의 canonical owner
+
+UDS Current
+= canonical record에서 재생성하는 bounded authority0 restore view
 
 대표 Plan
-= 그 작업의 완료 범위, 미완료 범위, 빌드 상태, PIE 상태와 바로 다음 작업을 기록한다.
+= 그 작업의 상세 완료 범위, 미완료 범위, Build/Automation/PIE/USER evidence와 checkpoint owner
 ```
 
-`ActiveWork.md`에는 대표 Plan의 상세 내용을 복사하지 않는다.
-대표 Plan이 detailed work status owner이고 `ActiveWork.md`와 `Plan/README.md`는 현재 상태를 짧게 보여주는 projection이다.
-projection과 대표 Plan이 충돌하면 FeatureQueue·실제 저장소·대표 Plan을 다시 확인하고 projection을 stale로 판정해 교정한다. 최신 수정 시각만으로 projection을 authoritative 상태로 취급하지 않는다.
-사용자가 특정 작업명이나 작업 ID를 지정하면 마지막 작업 초점보다 해당 작업을 우선한다.
+`Document/ActiveWork.md`는 MIG-05 이전 retained frozen snapshot이며 새 Current lifecycle을 기록하지 않는다. `Document/Plan/README.md`는 Plan navigation을 위한 authority0 projection이며 Work lifecycle authority가 아니다.
+
+Work lifecycle과 대표 Plan이 충돌하면 canonical UDS record의 lifecycle과 실제 저장소/evidence를 기준으로 원인을 분리한다. 상세 checkpoint/evidence 자체는 representative Plan이 계속 소유한다.
+사용자가 특정 작업명이나 작업 ID를 지정하면 UDS Current에서 해당 Work를 선택한 뒤 canonical record와 representative Plan을 확인한다.
 새 세션은 대표 Plan을 읽은 뒤 관련 Systems, ProjectSSOT와 실제 코드·에셋을 교차검증해야 한다.
 
 ### 2.4 CombatPlan과 일반 Plan의 차이
@@ -143,17 +153,18 @@ CombatPlan에 존재하는 아이디어는 자동으로 현재 구현 대상이 
 2. 관련 Systems 문서
 3. ProjectSSOT/01_ProjectState.md
 4. 대표 Plan의 현재 작업 체크포인트
-5. ActiveWork의 상태 요약
-6. 이전 대화와 AI 기억
+5. 이전 대화와 AI 기억
 ```
+
+`UDS Work record`는 lifecycle identity/state/phase/next의 authority이며 현재 구현 자체의 authority는 아니다. `ActiveWork.md`는 retained frozen snapshot이므로 현재 구현 판정에 사용하지 않는다.
 
 다음 작업과 우선순위를 판단할 때는 다음 순서를 사용한다.
 
 ```text
-1. ProjectSSOT/02_Roadmap.md
-2. ProjectSSOT/03_FeatureQueue.md
-3. ActiveWork.md
-4. 해당 대표 Plan
+1. ProjectSSOT/02_Roadmap.md의 cycle/sequence
+2. ProjectSSOT/03_FeatureQueue.md의 후보·우선순위·착수 판단
+3. Document/UDS/derived/Current.md → canonical Work record의 current lifecycle/next
+4. 해당 representative Plan의 detailed checkpoint/evidence
 5. 실제 코드의 차단 상태와 의존 관계
 6. DesignSource와 장기 CombatPlan
 ```
@@ -171,20 +182,27 @@ CombatPlan에 존재하는 아이디어는 자동으로 현재 구현 대상이 
 
 ### 2.6 공식 상태와 lifecycle 모델
 
-FeatureQueue의 기능 상태와 Plan 문서 lifecycle을 구분한다.
+FeatureQueue의 planning disposition과 Plan 문서 lifecycle을 구분한다. FeatureQueue는 `Candidate/Promoted/Done/Deferred/Rejected` planning disposition을 소유하고, UDS로 승격된 Work의 `Active/Ready/Paused/Blocked` lifecycle 값은 canonical UDS record만 소유한다.
 
-#### Feature 상태
+#### FeatureQueue planning disposition
 
 | 상태 | 의미 |
 | --- | --- |
-| Candidate | 아직 착수하지 않은 기능 후보 |
-| Ready | 설계·선행조건이 준비됐지만 현재 Active는 아님 |
-| Active | 현재 대표 Plan에서 진행 중 |
-| Paused | 체크포인트를 보존한 채 일시중지 |
-| Blocked | 선행 조건 때문에 진행 불가 |
+| Candidate | 아직 UDS Work로 승격하지 않은 기능 후보 |
+| Promoted | canonical UDS Work가 존재함; 실제 lifecycle state는 UDS에서 확인 |
 | Done | 정의된 완료 조건 통과 + Current Knowledge 승격 완료 |
 | Deferred | 현재 일정에서 보류 |
 | Rejected | 기각 |
+
+#### UDS Work lifecycle
+
+| 상태 | 의미 |
+| --- | --- |
+| Ready | 승격됐고 선행조건이 준비됐지만 현재 실행 중은 아님 |
+| Active | 현재 실행 중인 Work |
+| Paused | 체크포인트와 resume 조건을 보존한 채 일시중지 |
+| Blocked | 명시된 blocker 때문에 진행 불가 |
+| Closed / Retired | lifecycle이 종료되어 Current view에서 내려감 |
 
 #### Plan 문서 lifecycle
 
@@ -199,7 +217,9 @@ Active / In Progress
 ```text
 실제 구현 + 필요한 Build/Automation/USER PIE
 → Current Knowledge를 Systems와 필요한 ProjectSSOT로 승격
-→ ActiveWork / Plan Index의 stale current route 제거
+→ immutable UDS successor로 Work를 closed/retired 상태에 수렴
+→ authority0 Current/head projection 재생성
+→ Plan Index에서 stale navigation route 정리
 → 대표 Plan/Result 탐색 경로 보존
 → semantic Historical
 → 필요할 때만 optional physical move
@@ -267,7 +287,7 @@ Shared SSOT는 예외적으로 CarFight 작업에서 read-only 공용 기준으�
 | 작업 종류 | 첫 진입 문서 | 다음에 선택할 문서 |
 | --- | --- | --- |
 | 실제 코드·설정·스크립트 구현 또는 수정 | `Document/CodeWorkGate.md` | 소유 저장소 Git 상태, 대표 Plan, 실제 코드, 변경 범위와 검증 방법 |
-| 이전 세션 복원 또는 활성 작업 전환 | `Document/ActiveWork.md` | 선택한 작업의 대표 Plan, 관련 Systems, 실제 코드와 에셋 |
+| 이전 세션 복원 또는 활성 작업 전환 | `Document/UDS/derived/Current.md` | 선택한 `Document/UDS/records/**` canonical Work record → 대표 Plan → 관련 Systems → 실제 코드와 에셋 |
 | 프로젝트 현재 상태와 우선순위 확인 | `Document/ProjectSSOT/README.md` | `01_ProjectState.md`, `02_Roadmap.md`, `03_FeatureQueue.md` |
 | 프로젝트 비전과 장기 방향 확인 | `Document/ProjectSSOT/00_Vision.md` | 필요 시 `Document/DesignSource/README.md` |
 | 현재 구현 구조 확인 | `Document/Systems/SystemIndex.md` | 해당 기능의 Systems 문서 |
@@ -307,19 +327,19 @@ Shared SSOT는 예외적으로 CarFight 작업에서 read-only 공용 기준으�
 2. main_game Git 브랜치와 미커밋 변경 확인
 3. Document/CodeWorkGate.md 확인
 4. Document/Document_Entry.md 확인
-5. Document/ProjectSSOT/01_ProjectState.md 확인
-6. Document/ProjectSSOT/03_FeatureQueue.md 확인
-7. Document/Systems/SystemIndex.md에서 현재 구현 문서 선택
-8. Document/Plan/README.md에서 해당 작업 대표 Plan 선택
-9. 필요한 실제 코드와 에셋 확인
-10. 작업 범위, 보호 범위, 완료 조건과 검증 방법 확정
-11. 현재 AI 세션이 승인된 저장소 도구로 실제 코드·설정·스크립트 수정
-12. 수정 직후 Git diff 검수
-13. 공식 빌드와 관련 자동 테스트 실행
-14. 필요한 후속 보정과 재검증
-15. PIE-runtime 기술 검증이 필요하면 Accepted `GoPyMCP.RuntimeRead`로 관측 가능한 사실을 AI가 먼저 직접 검증
-16. 시각·UX·조작감·주행감·조준감·연출 감각처럼 사람 판단이 남거나 현재 capability 밖인 경우에만 사용자 PIE 또는 Editor 작업 절차 제공
-17. 관련 대표 Plan, ActiveWork, ProjectSSOT 또는 Systems 동기화
+5. 이미 승격된 Work를 재개하면 UDS Current를 탐색 힌트로 사용해 fresh canonical Work head를 확인하고, Candidate/우선순위 판단이면 필요한 ProjectSSOT만 확인
+6. canonical Work가 가리키는 representative Plan 또는 새로 선택한 Feature의 representative Plan 확인
+7. 필요한 Systems 문서에서 current implementation contract 확인
+8. 필요한 실제 코드와 에셋 확인
+9. 작업 범위, 보호 범위, 완료 조건과 검증 방법 확정
+10. 현재 AI 세션이 승인된 저장소 도구로 실제 코드·설정·스크립트 수정
+11. 수정 직후 Git diff 검수
+12. 공식 빌드와 관련 자동 테스트 실행
+13. 필요한 후속 보정과 재검증
+14. PIE-runtime 기술 검증이 필요하면 Accepted `GoPyMCP.RuntimeRead`로 관측 가능한 사실을 AI가 먼저 직접 검증
+15. 시각·UX·조작감·주행감·조준감·연출 감각처럼 사람 판단이 남거나 현재 capability 밖인 경우에만 사용자 PIE 또는 Editor 작업 절차 제공
+16. 상세 checkpoint/evidence가 바뀌면 representative Plan, implementation contract가 바뀌면 Systems, project-level baseline/sequence가 바뀌면 ProjectSSOT를 필요한 범위에서 동기화
+17. Work lifecycle이 바뀐 경우에만 immutable UDS successor record와 authority0 Current/head projection을 갱신하며 `ActiveWork.md`에는 새 Current를 기록하지 않음
 ```
 
 현재 AI 세션의 기본 완료 조건은 실제 구현, diff 검수와 가능한 검증을 같은 작업 흐름에서 수행하는 것이다.
@@ -351,7 +371,8 @@ CarFight 게임 작업
 → 저장소 루트 AGENTS.md
 → 코드 작업이면 Document/CodeWorkGate.md
 → Document/Document_Entry.md
-→ Document/ActiveWork.md
+→ Document/UDS/derived/Current.md
+→ 선택한 Document/UDS/records/** canonical Work record
 
 AssetDump 작업
 → assetdump_repo Git 상태
@@ -373,16 +394,17 @@ CarFight 게임 작업의 복원 순서는 다음과 같다.
 2. main_game Git 상태 확인
 3. 코드 작업이면 Document/CodeWorkGate.md 확인
 4. Document/Document_Entry.md 확인
-5. Document/ActiveWork.md에서 마지막 작업 초점 또는 사용자가 지정한 CarFight 작업 선택
-6. 선택한 작업의 대표 Plan 체크포인트와 실행 출처 확인
-7. 관련 Systems, ProjectSSOT와 실제 코드·에셋 확인
-8. 완료 범위, 미완료 범위, 빌드 상태, PIE 상태와 다음 작업을 먼저 보고
-9. 코드 작업 재개 전 변경 허용 파일, 보호 범위와 검증 방법 확인
-10. 저장소와 체크포인트가 일치할 때 현재 AI 세션이 미완료 단계부터 직접 구현 재개
+5. Document/UDS/derived/Current.md에서 사용자가 지정한 또는 재개할 CarFight Work 선택
+6. 선택한 Document/UDS/records/** canonical Work record의 lifecycle/representative reference 확인
+7. representative Plan의 detailed checkpoint와 실행 출처 확인
+8. 관련 Systems, ProjectSSOT와 실제 코드·에셋 확인
+9. 완료 범위, 미완료 범위, 빌드 상태, PIE 상태와 다음 작업을 먼저 보고
+10. 코드 작업 재개 전 변경 허용 파일, 보호 범위와 검증 방법 확인
+11. 저장소와 체크포인트가 일치할 때 현재 AI 세션이 미완료 단계부터 직접 구현 재개
 ```
 
-사용자가 CarFight 작업명 또는 작업 ID를 지정하면 `ActiveWork.md`의 마지막 작업 초점보다 해당 작업을 우선한다.
-독립 저장소 작업을 지정하면 CarFight `ActiveWork.md`를 사용하지 않는다.
+사용자가 CarFight 작업명 또는 작업 ID를 지정하면 UDS Current에서 해당 Work를 선택하고 canonical record를 기준으로 한다. `ActiveWork.md`는 pre-cutover retained snapshot이며 Current 선택 authority가 아니다.
+독립 저장소 작업을 지정하면 해당 독립 저장소의 current authority를 사용한다.
 
 ---
 
@@ -466,7 +488,8 @@ Document/SSOT/UE_SSOT/BP_Text_Format/cases/**
 Document/
   AGENTS.md                 # 이 경로 이하 AI 문서 작업 강제 규칙
   CodeWorkGate.md           # 브라우저 AI 코드 작업 사전 게이트와 실행 출처 통제
-  ActiveWork.md             # 현재 활성 작업과 대표 체크포인트 연결
+  UDS/                      # Active/Ready Work canonical records + authority0 Current/head projection
+  ActiveWork.md             # MIG-05 이전 retained frozen snapshot / authority0
   Document_Entry.md         # 작업별 총괄 진입 라우터
   Maintenance/              # 문서체계 유지보수·감사 문서
     Link_Audit_Check.md     # 링크와 역할 정합성 점검표
@@ -498,7 +521,9 @@ Document/
 ## 10. Quick Links
 
 - `Document/CodeWorkGate.md`
-- `Document/ActiveWork.md`
+- `Document/UDS/derived/Current.md`
+- `Document/UDS/README.md`
+- `Document/ActiveWork.md` — Legacy retained snapshot
 - `Document/Maintenance/Link_Audit_Check.md`
 - `Document/ProjectSSOT/README.md`
 - `Document/Systems/SystemIndex.md`
@@ -516,6 +541,31 @@ Document/
 ---
 
 ## 11. Changelog
+
+### v2.18 - 2026-09-17
+
+- FeatureQueue에서 promoted Work의 `Active/Ready/Paused/Blocked` lifecycle mirror를 제거한 현재 규칙에 맞춰 상태 모델 설명을 교정했다.
+- FeatureQueue는 `Candidate/Promoted/Done/Deferred/Rejected` planning disposition만 소유하고, 승격된 Work의 실제 lifecycle은 canonical UDS record가 exact1로 소유하도록 고정했다.
+- 혼합되어 있던 기존 Feature 상태 표를 `FeatureQueue planning disposition`과 `UDS Work lifecycle` 두 표로 분리해 owner와 vocabulary 충돌을 제거했다.
+
+### v2.17 - 2026-09-17
+
+- 직접 구현 흐름에서 `ActiveWork.md`를 Current 동기화 대상으로 남겨 두었던 마지막 legacy write route를 제거했다.
+- 승격된 Work의 기본 복원 경로를 `UDS Current 탐색 힌트 → fresh canonical Work → representative Plan → 필요한 Systems/Source`로 축소하고, ProjectSSOT는 Candidate·우선순위·프로젝트 기준선 판단이 필요한 경우에만 읽도록 조정했다.
+- 문서 동기화를 owner 기반으로 분리해 일반 checkpoint는 representative Plan, current implementation contract는 Systems, project-level baseline/sequence는 ProjectSSOT, lifecycle 변화는 immutable UDS successor + Current/head projection만 갱신하도록 고정했다.
+- `ActiveWork.md`의 future Current write는 0으로 유지하며 Historical frozen snapshot으로만 보존한다.
+
+### v2.16 - 2026-09-17
+
+- UDS permanent adoption 이후 남아 있던 `ActiveWork.md` Current-role 표현 exact3을 교정했다.
+- 문서 역할표에 `UDS/records/**` canonical lifecycle owner와 `UDS/derived/Current.md` authority0 restore view를 명시하고, `ActiveWork.md`를 retained frozen historical reference로 한정했다.
+- 현재 구현 판정에서 ActiveWork를 제거하고, 이전 세션 복원/활성 작업 전환의 첫 진입을 UDS Current → canonical Work record → representative Plan으로 정렬했다.
+
+### v2.15 - 2026-09-16
+
+- UDS-08 MIG-05 permanent adoption에 따라 세션 복원과 Active/Ready Work lifecycle routing을 `Document/UDS/derived/Current.md` → canonical `Document/UDS/records/**` → representative Plan 순서로 전환했다.
+- `ActiveWork.md`는 pre-cutover retained frozen authority0 snapshot, `Plan/README.md`는 authority0 navigation projection으로 재분류했다.
+- ProjectSSOT는 planning/baseline, FeatureQueue는 후보·우선순위·착수 판단 owner를 유지하고 promoted Work의 current lifecycle은 UDS가 소유하도록 권한 우선순위를 정리했다.
 
 ### v2.14 - 2026-08-27
 
@@ -628,6 +678,13 @@ Document/
 ---
 
 ## 12. Migration
+
+### v2.15 적용 안내
+
+- Active/Ready Work lifecycle의 canonical write path는 immutable `Document/UDS/records/**`다.
+- 세션 복원용 `Document/UDS/derived/Current.md`와 head cache는 authority0이며 직접 truth로 편집하지 않는다.
+- `ActiveWork.md`에는 새 Current를 기록하지 않고, Plan Index도 lifecycle authority가 아닌 representative Plan navigation으로 사용한다.
+- FeatureQueue planning catalog, ProjectState baseline, Roadmap sequencing, representative Plan evidence와 Systems Current implementation ownership은 보존한다.
 
 ### v2.12 적용 안내
 

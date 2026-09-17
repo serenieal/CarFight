@@ -1,7 +1,7 @@
 # ProjectSSOT 운영 가이드 (CarFight)
 
-> 문서 버전: v2.9.0
-> 마지막 정리(Asia/Seoul): 2026-08-22
+> 문서 버전: v2.10.1
+> 마지막 정리(Asia/Seoul): 2026-09-17
 > 문서 상태: Current
 > 역할: `Document/ProjectSSOT/`의 읽기 순서, 문서 역할과 생명주기를 고정한다.
 
@@ -16,8 +16,8 @@
 ```text
 - 이 프로젝트가 어디로 가는가?
 - 지금 실제로 어디까지 구현되어 있는가?
-- 현재 Active는 무엇인가?
-- 다음에 선택할 수 있는 작업은 무엇인가?
+- 현재 Active/Ready Work는 어디에서 canonical하게 확인하는가?
+- 다음에 선택할 수 있는 Feature 후보와 순서는 무엇인가?
 - 어떤 프로젝트 수준 결정이 확정되어 있는가?
 - 완료된 기능의 현재 구현은 어디서 확인하는가?
 ```
@@ -30,8 +30,10 @@
 
 | 위치 | 책임 |
 | --- | --- |
-| `Document/ActiveWork.md` | 현재 Active/Paused 작업의 세션 복원 projection과 대표 Plan 연결 |
-| `Document/ProjectSSOT/` | 프로젝트 방향, 현재 상태, 우선순위, 확정 결정, 회귀 기준 |
+| `Document/UDS/records/**` | UDS로 승격된 Active/Ready Work lifecycle identity/state/phase/next의 canonical authority |
+| `Document/UDS/derived/Current.md` | canonical Work에서 재생성하는 bounded 세션 복원 view; authority0 |
+| `Document/ActiveWork.md` | MIG-05 이전 세션 복원 projection의 retained snapshot; authority0/frozen |
+| `Document/ProjectSSOT/` | 프로젝트 방향, 기준선, planning 우선순위, 확정 결정, 회귀 기준 |
 | `Document/Plan/` | 착수된 기능의 상세 구현·검증 계획, 체크포인트, evidence |
 | `Document/Systems/` | 검증된 현재 구현 구조와 책임 |
 | `Document/DesignSource/` | 원본 기획과 장기 방향 |
@@ -42,8 +44,10 @@
 핵심 경계는 다음과 같다.
 
 ```text
-ProjectSSOT = 무엇을 왜 개발하는가
-ActiveWork = 지금 무엇을 복원하거나 선택하는가
+ProjectSSOT = 무엇을 왜 개발하고 어떤 후보·순서로 갈 것인가
+UDS Work = 지금 승격된 Work의 canonical lifecycle state/phase/next
+UDS Current = bounded session restore view; authority0
+ActiveWork = pre-cutover retained snapshot; authority0/frozen
 Plan = 선택된 작업을 어떻게 구현하고 검증하는가
 Systems = 현재 실제로 어떻게 구현되어 있는가
 Archive = 현재 기준에서 내려온 기록을 보존한다
@@ -62,7 +66,7 @@ CarFight의 현재 개발 선로는 **싱글 플레이 기준 차량 전투 게�
 
 프로젝트 전역 사운드 정책은 `04_ProjectDecisions.md`의 `CF-PDL-0009`를 따른다. CarFight는 현재 게임 사운드를 구현·제공하지 않으며 사운드는 기능 완료 조건에 포함하지 않는다.
 
-현재 Feature 상태와 다음 선택지는 `01_ProjectState.md`, `02_Roadmap.md`, `03_FeatureQueue.md`를 본다. 완료 기능의 실제 구현은 `Document/Systems/SystemIndex.md`에서 해당 Current System으로 이동한다.
+현재 승격 Work의 lifecycle은 `Document/UDS/derived/Current.md`에서 찾고 canonical `Document/UDS/records/**`로 확인한다. 다음 Feature 후보·우선순위·cycle 순서는 `02_Roadmap.md`, `03_FeatureQueue.md`가 소유하며, `01_ProjectState.md`는 프로젝트 기준선과 리스크를 유지한다. 완료 기능의 실제 구현은 `Document/Systems/SystemIndex.md`에서 해당 Current System으로 이동한다.
 
 ---
 
@@ -73,9 +77,9 @@ CarFight의 현재 개발 선로는 **싱글 플레이 기준 차량 전투 게�
 | 순서 | 문서 | 역할 |
 | ---: | --- | --- |
 | 0 | `00_Vision.md` | 최종 방향과 장기 구조 원칙 |
-| 1 | `01_ProjectState.md` | 현재 실제 기준선, 현재 Feature 상태, 현재 리스크 |
-| 2 | `02_Roadmap.md` | 현재 사이클의 진행 순서와 선택 가능한 다음 작업 |
-| 3 | `03_FeatureQueue.md` | 전체 Feature 후보와 상태 |
+| 1 | `01_ProjectState.md` | 프로젝트 전역 기준선, 현재 리스크와 전역 결정; Work lifecycle 목록은 소유하지 않음 |
+| 2 | `02_Roadmap.md` | 현재 사이클 목표, 거시 진행 순서, dependency와 Candidate ordering |
+| 3 | `03_FeatureQueue.md` | Feature 후보·우선순위·착수 판단·UDS promotion pointer·완료 후 Current owner |
 | 4 | `04_ProjectDecisions.md` | 프로젝트 전체 확정 결정 로그 |
 | 5 | `05_TestChecklist.md` | 완료된 Systems 기준 최소 회귀 테스트 |
 
@@ -85,20 +89,18 @@ CarFight의 현재 개발 선로는 **싱글 플레이 기준 차량 전투 게�
 
 ## 5. 읽기 순서
 
-프로젝트 전체 상태를 처음 복원할 때:
+승격된 특정 Work를 재개할 때의 기본 복원 경로는 다음으로 제한한다.
 
 ```text
-1. Document/ProjectSSOT/README.md
-2. Document/ProjectSSOT/01_ProjectState.md
-3. Document/ProjectSSOT/02_Roadmap.md
-4. Document/ProjectSSOT/03_FeatureQueue.md
+1. Document/UDS/derived/Current.md를 탐색 힌트로 사용
+2. records/work/** fresh head-set 검증 후 선택한 canonical Work record 확인
+3. canonical Work가 가리키는 representative Plan 확인
+4. 작업에 실제 필요한 Systems / Source / Asset만 확인
 ```
 
-장기 방향이 필요한 경우 `00_Vision.md`와 `DesignSource`를 추가로 읽는다.
+프로젝트 전역 기준선·리스크 판단이 필요할 때만 `01_ProjectState.md`, 거시 순서·dependency 판단이 필요할 때만 `02_Roadmap.md`, 승격 전 Candidate·우선순위·착수 판단이 필요할 때만 `03_FeatureQueue.md`를 추가로 읽는다. 장기 방향이 필요한 경우 `00_Vision.md`와 `DesignSource`를 추가한다.
 
-현재 구현 상세가 필요한 경우 `Document/Systems/SystemIndex.md`에서 관련 Systems 문서만 읽는다.
-
-특정 작업을 재개하는 경우 `Document/ActiveWork.md`에서 대표 Plan과 next gate를 찾은 뒤 해당 Plan과 관련 Systems만 읽는다. Plan 전체와 Archive 전체를 기본 입력으로 재귀 탐색하지 않는다.
+`Document/ActiveWork.md`는 Current 복원에 사용하지 않는다. ProjectSSOT 전체, Plan Index 전체와 Archive 전체를 기본 입력으로 재귀 탐색하지 않는다.
 
 ---
 
@@ -110,17 +112,9 @@ Feature 후보는 `03_FeatureQueue.md`에 한 행으로 등록한다. 이 단계
 
 ### 6.2 Ready / Active / Paused
 
-착수된 Feature의 상세 설계, 구현 체크포인트, 빌드·Automation·PIE·USER evidence는 대표 Plan이 소유한다.
+UDS로 승격된 Feature/Work의 lifecycle identity/state/phase/next는 canonical `Document/UDS/records/**`가 소유한다. 착수된 Feature의 상세 설계, 구현 체크포인트, 빌드·Automation·PIE·USER evidence는 representative Plan이 소유한다.
 
-`ActiveWork.md`에는 다음만 projection한다.
-
-```text
-Feature ID / 상태
-대표 Plan
-현재 또는 다음 Gate
-반복하면 안 되는 대표 완료 Gate
-현재 구현 owner 또는 주요 dependency
-```
+`Document/UDS/derived/Current.md`는 필요한 최소 restore fields만 projection하며 authority0다. `ActiveWork.md`에는 새 Current를 기록하지 않는다.
 
 ### 6.3 Done
 
@@ -129,9 +123,10 @@ Feature가 Done이 되면:
 ```text
 대표 Plan = 구현 과정과 검증 evidence 보존
 Systems = 현재 구현 계약으로 승격 또는 기존 Current System 갱신
-FeatureQueue = 상태를 Done으로 변경
-ActiveWork = 상세 로그 제거, 필요하면 최근 완료 1건만 짧게 유지
-ProjectState/Roadmap = 프로젝트 수준 상태나 순서가 실제로 바뀐 경우에만 갱신
+UDS Work = immutable successor로 closed/retired state에 수렴
+UDS Current/head = canonical record에서 authority0로 재생성
+FeatureQueue = planning catalog에서 완료 disposition / Current owner 정리
+ProjectState/Roadmap = 프로젝트 수준 기준선이나 순서가 실제로 바뀐 경우에만 갱신
 ```
 
 Done이라고 해서 대표 Plan의 evidence를 삭제하지 않는다. 반대로 Build ID, Automation run history, USER 조작 로그를 Current projection 문서에 계속 복제하지 않는다.
@@ -168,10 +163,11 @@ Current projection 문서는 시간이 지날수록 과거 로그를 붙여넣�
 다음 신호가 나타나면 짧은 문서 Health Check를 수행한다.
 
 ```text
-- ActiveWork에 완료 Feature의 상세 Build/Automation/USER 로그가 누적된다.
-- FeatureQueue가 상세 구현 설계서처럼 변한다.
-- ProjectState 또는 Roadmap에 서로 다른 세대의 "현재 Active"가 둘 이상 존재한다.
-- 같은 상태가 ProjectState/Roadmap/FeatureQueue/ActiveWork에서 서로 다르다.
+- authority0 UDS Current/head projection이 canonical records와 달라진다.
+- ActiveWork에 cutover 이후 새 Current 상태가 추가된다.
+- FeatureQueue가 상세 구현 설계서 또는 promoted Work lifecycle second authority처럼 변한다.
+- ProjectState 또는 Roadmap이 UDS와 독립적으로 current Work lifecycle을 주장한다.
+- 같은 lifecycle fact가 UDS와 Legacy surface에서 서로 다르다.
 - Current 문서가 오래된 Plan/System 버전을 계속 가리킨다.
 ```
 
@@ -180,6 +176,20 @@ Health Check는 일정 주기로 강제하지 않는다. 큰 Feature 여러 개�
 ---
 
 ## 9. Changelog
+
+### v2.10.1 - 2026-09-17
+
+- ProjectState를 전역 기준선·리스크·전역 결정, Roadmap을 macro sequence/dependency/Candidate ordering, FeatureQueue를 후보·우선순위·착수·promotion pointer·closure owner로 역할 축소했다.
+- 승격된 Work의 기본 복원 경로를 `UDS Current hint → fresh canonical Work → representative Plan → 필요한 Systems/Source/Asset`로 고정했다.
+- ProjectState/Roadmap/FeatureQueue는 해당 판단이 실제로 필요한 경우에만 추가 읽도록 하여 Current session restore의 토큰 비용과 stale projection 노출을 줄였다.
+- `ActiveWork.md`, ProjectSSOT 전체, Plan Index 전체와 Archive 전체를 기본 복원 입력에서 명시적으로 제외했다.
+
+### v2.10.0 - 2026-09-16
+
+- UDS-08 MIG-05 permanent adoption으로 UDS 승격 Work의 current lifecycle authority를 immutable `Document/UDS/records/**`로 전환했다.
+- `UDS/derived/Current.md`를 authority0 bounded restore view로 연결하고 `ActiveWork.md`를 pre-cutover retained frozen snapshot으로 retirement했다.
+- ProjectSSOT는 프로젝트 기준선/planning, FeatureQueue는 후보·우선순위·착수 판단, Roadmap은 cycle/sequence, representative Plan은 detailed checkpoint/evidence를 계속 소유하도록 경계를 정리했다.
+- Current lifecycle dual-write와 stale Legacy projection을 Health Check failure signal로 추가했다.
 
 ### v2.9.0 - 2026-08-22
 

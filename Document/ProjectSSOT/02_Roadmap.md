@@ -1,11 +1,11 @@
 # CarFight — 02_Roadmap
 
-> 역할: CarFight 프로젝트의 **현재 해야 할 일 / 우선순위 / 완료 조건 / 진행 순서**를 고정한다.
+> 역할: CarFight 프로젝트의 **현재 사이클 목표 / 거시 진행 순서 / dependency / Candidate ordering**을 고정한다.
 > 기준 상태 문서: `01_ProjectState.md`
 > 상위 방향 문서: `00_Vision.md`
-> 문서 버전: v2.30.8
-> 마지막 정리(Asia/Seoul): 2026-09-11
-> 문서 상태: Current
+> 문서 버전: v2.30.13
+> 마지막 정리(Asia/Seoul): 2026-09-17
+> 문서 상태: Current / Work Lifecycle Slice UDS Authority0
 
 ---
 
@@ -17,19 +17,13 @@
 
 ---
 
-## 2. 현재 Active
+## 2. 현재 Active / Ready Work — UDS Reference
 
-현재 단일 Active Feature는 **`CF-FQ-039 Production UI Visual Rework`**다.
+현재 Active/Ready Work lifecycle의 canonical authority는 `Document/UDS/records/**`다. bounded human view는 `Document/UDS/derived/Current.md`를 사용한다.
 
-```text
-대표 Plan: Document/Plan/InGameUIVisual/InGameUIVisualPlan.md v0.1.5
-Roadmap: Document/Plan/InGameUIVisual/InGameUIVisualRoadmap.md v0.1.5
-Current Gate: VPR-P0-01 VehiclePanel Production Vertical Slice — ARMOR TECHNICAL PASS / USER VISUAL REVIEW PENDING
-```
+이 Roadmap은 cycle 목표, sequencing, 다음 후보와 deferred scope를 계속 소유한다. 다만 UDS로 승격된 Work의 current state/phase/next를 독립적으로 소유하거나 dual-write하지 않는다.
 
-`CF-FQ-032 인게임 전투 HUD 및 UI 프레임워크`는 Done을 유지한다. 이번 작업은 기존 기능 기반을 다시 여는 대신 승인 Visual Target → Art Breakdown → Production Asset → Designer → Visual Match 순서로 시각 품질만 후속 정리한다.
-
-Feature 상태의 전체 목록은 `03_FeatureQueue.md`, 세션 복원 체크포인트는 `Document/ActiveWork.md`를 우선한다.
+현재 Active/Ready Work의 exact 목록과 state/phase/next는 Roadmap에 복제하지 않는다. 필요할 때 `Document/UDS/derived/Current.md`를 탐색 힌트로 fresh canonical Work를 확인하며, Ready Work가 자동으로 Active가 되지 않는 정책은 유지한다.
 
 ---
 
@@ -45,10 +39,13 @@ Feature 상태의 전체 목록은 `03_FeatureQueue.md`, 세션 복원 체크포
 | 물리 제한형 미사일 비행·유도 | `CF-FQ-030` / MissileGuidance·Projectile |
 | 탄약 | `CF-FQ-031` / Ammo |
 | 방어 | `CF-FQ-033` / VehicleDefense·HitDamage |
+| 타겟 선택 | `CF-FQ-026` / TargetSelect / USER feel·Debug debt는 필요 시 별도 lifecycle |
 | 센서·Scanner | `CF-FQ-036`, `037` / SensorContact |
 | 인게임 HUD/UI | `CF-FQ-032` / InGameUI·AimReticle·SensorContact |
 | 무기 Data | `CF-FQ-008` / WeaponData |
 | 차량 제작·Authoring·Performance Tuning | `CF-FQ-015`, `038`, `040`, `042`, `043`, `044`, `047` / VehicleBuilder + VehicleData |
+| 차량 Fitting·Mass Runtime | `CF-FQ-034` / VehicleRuntime + VehicleData / USER feel tuning은 VehicleBuilder |
+| Inventory Foundation | `CF-FQ-035` / VehicleInventory + VehicleRuntime / formal ownership-aware USER frontend는 필요 시 새 lifecycle |
 
 완료 evidence의 세부 Build ID, Automation 결과와 USER Acceptance는 각 대표 Plan을 우선한다. 새 관련 failure evidence 없이 완료 검증을 습관적으로 반복하지 않는다.
 
@@ -58,13 +55,9 @@ Feature 상태의 전체 목록은 `03_FeatureQueue.md`, 세션 복원 체크포
 
 현재 자동 우선순위를 강제하지 않는다. 아래 항목은 각각 독립적인 재개 후보이며 사용자가 고르면 Active로 승격한다.
 
-| Feature | 상태 | 재개 지점 | 성격 |
-| --- | --- | --- | --- |
-| `CF-FQ-034` 차량 피팅·질량 | Paused | `FIT-P0-07D USER Driving Feel Comparison` | 정량 Mobility 이후 실제 체감 비교 |
-| `CF-FQ-035` 인벤토리 Foundation | Paused | USER Field UI·Mobility | Field Fitting 사용자 흐름 |
-| `CF-FQ-026` 타겟 선택 | Paused | `TS-P0-08 USER PIE` | 실제 선택 범위·표시·조작감 |
+승격된 Ready/Paused Work의 정확한 lifecycle과 재개 Gate는 UDS Current를 탐색 힌트로 fresh canonical Work에서 확인한다. 승격 전 Candidate의 우선순위와 착수 판단은 FeatureQueue가 소유하며, 사용자 착수 결정 뒤 실제 lifecycle 전환은 immutable UDS successor로 기록한다.
 
-UI의 `Radar/Edge Visual·Zoom Feel`과 D1-11-ART 잔여 Visual Review를 포함한 Production Visual 후속은 현재 `CF-FQ-039`로 선택됐다. `CF-FQ-032 Done`을 되돌리지 않고 새 Visual Plan의 `VPR-*` Gate에서 진행한다.
+Production Visual 후속이 현재 실행 중인지와 정확한 Gate는 UDS가 소유한다. Roadmap은 `CF-FQ-032 Done` 기반을 되돌리지 않고 후속 Visual 작업이 별도 lifecycle에서 진행된다는 거시 의존성만 유지한다.
 
 ---
 
@@ -123,17 +116,50 @@ Roadmap은 진행 순서와 선택지에 집중한다. Feature별 세부 P0 목�
 이 문서는 다음 경우에만 갱신한다.
 
 ```text
-- 현재 Active가 바뀐다.
-- Feature의 Ready/Paused/Done/Deferred 상태가 프로젝트 진행 순서를 실질적으로 바꾼다.
-- 우선순위나 dependency가 바뀐다.
+- Work lifecycle 변화가 현재 사이클의 거시 진행 순서나 dependency를 실질적으로 바꾼다.
+- Candidate 우선순위나 dependency가 바뀐다.
+- 완료 기반 변화가 다음 단계의 거시 순서를 바꾼다.
 - 현재 사이클의 목표가 바뀐다.
 ```
+
+Active/Ready state가 바뀌었다는 사실만으로 Roadmap을 갱신하지 않는다. 정확한 lifecycle 변화는 UDS가 소유한다.
 
 개별 Build PASS, 작은 bugfix, Automation run 하나가 추가됐다는 이유만으로 Roadmap에 상세 로그를 붙이지 않는다.
 
 ---
 
 ## 9. Changelog
+
+### v2.30.13 - 2026-09-17
+
+- Roadmap 역할을 cycle goal·거시 sequencing·dependency·Candidate ordering으로 좁히고 Active/Ready exact 목록 mirror를 제거했다.
+- Ready/Paused 선택 경로에서 legacy `ActiveWork.md` 참조를 제거하고 UDS Current 탐색 힌트 → fresh canonical Work를 사용하도록 교정했다.
+- Candidate 우선순위·착수 판단은 FeatureQueue, 실제 lifecycle 전환은 immutable UDS successor가 소유하도록 분리했다.
+- Active/Ready state 변화 자체는 Roadmap 갱신 사유가 아니며 macro sequence/dependency가 실제로 변할 때만 갱신하도록 write frequency를 축소했다.
+
+### v2.30.12 - 2026-09-16
+
+- UDS-08 MIG-05 cutover에 따라 Active/Ready Work lifecycle slice를 authority0 UDS reference로 전환했다.
+- cycle goal, sequencing, candidate ordering과 deferred scope는 Roadmap이 계속 소유하며 current Work state/phase/next는 `Document/UDS/records/**`에 dual-write하지 않는다.
+- current lifecycle 확인은 `Document/UDS/derived/Current.md`에서 시작한다.
+
+### v2.30.11 - 2026-09-14
+
+- `CF-FQ-026 타겟 선택 시스템`을 current Source/Asset/System Rebaseline 결과 완료 기반에 편입하고 Paused 선택지에서 제거했다.
+- Candidate/Selected Actor authority는 `TargetSelect.md v1.0.0`, Sensor Detection/Contact/Knowledge는 `SensorContact.md v1.2.0`이 소유하며 과거 전체 World 반복 후보 수집은 TargetRegistry successor 구조로 해결됐다.
+- old `TS-P0-08 USER PIE`는 USER PASS가 아니라 `Superseded / Not Executed`다. 동일 차량 TargetPoint USER 상태는 Inconclusive, 7°/1200m 후보 체감과 Debug Sphere 가시성은 Deferred이며 필요 시 Current TargetSelect 기준 새 tuning/UX lifecycle로 연다. 현재 단일 Active `CF-FQ-039`는 변경하지 않았다.
+
+### v2.30.10 - 2026-09-14
+
+- `CF-FQ-035 인벤토리 Foundation`을 current Source/System Rebaseline 결과 완료 기반에 편입하고 Paused 선택지에서 제거했다.
+- ItemInstance ownership, VehicleCargo/MountedEquipment, Access/Capacity, Reservation, Atomic Transfer/Rollback, ViewData와 Inventory→Fitting 경계는 `VehicleInventory.md v1.0.0` Current Foundation이 소유한다.
+- `FFIT-P0-05 Field Fitting UI and PIE`는 USER PASS가 아니라 `Superseded / Not Executed`이며, 현재 RuntimeApply non-owning UX와 구분해 formal ownership-aware frontend가 실제 요구될 때 별도 lifecycle로 다룬다. 현재 단일 Active `CF-FQ-039`와 다른 재개 후보 순서는 변경하지 않았다.
+
+### v2.30.9 - 2026-09-14
+
+- `CF-FQ-034 차량 피팅·질량 런타임`을 current Source/System Rebaseline 결과 완료 기반에 편입하고 Paused 선택지에서 제거했다.
+- `FIT-P0-07A~07C` quantitative Mobility evidence는 Historical Technical PASS로 보존하며 `FIT-P0-07D USER Driving Feel Comparison`은 USER PASS가 아니라 `Superseded / Not Executed`다.
+- 현재 Fitting/Mass Runtime은 `VehicleRuntime.md v1.3.0` + `VehicleData.md v2.3.0`, 향후 질량 체감 튜닝은 `VehicleBuilder.md v1.6.0`이 소유한다. 현재 단일 Active `CF-FQ-039`와 다른 재개 후보 순서는 변경하지 않았다.
 
 ### v2.30.8 - 2026-09-11
 
