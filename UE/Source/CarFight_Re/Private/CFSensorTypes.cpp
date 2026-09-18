@@ -1,13 +1,23 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.0
-// Date: 2026-08-15
-// Description: CF-FQ-036 Sensor Contact 공개 데이터 계약 구현 / SEN-P0-02 bounded 설정 검증
-// Scope: Sensor Config 검증, Actor-free Contact 검증과 Snapshot 결정 정렬을 구현합니다.
+// Version: 1.5.0
+// Date: 2026-09-17
+// Description: CF-FQ-036 Sensor Contact 공개 데이터 계약 구현 / Legacy Contact Scan Progress 제거
+// Scope: Sensor Config, 영구 DetailedScan Knowledge, 현재 Scan Attempt, Actor-free Contact와 Snapshot 검증을 구현합니다.
 // Changelog:
+// - v1.5.0: FCFSensorContact에서 제거된 Legacy AnalysisProgress01 범위 검증을 삭제해 Contact 계약을 Knowledge/lifecycle 전용으로 정리.
+// - v1.4.0: FCFSensorScanAttempt의 active/idle 진행 상태와 완료 전이 Revision/ContactId 일관성 검증을 추가하고 Snapshot 공개 계약에 포함.
+// - v1.3.0: DetailedScan Contact는 양수 AnalysisCompletionRevision을, 미완료 Contact는 Revision 0을 가져야 하는 공개 일관성 검증을 추가.
+// - v1.2.1: 0보다 큰 극소 AnalysisGainPerSec도 분석 활성 상태로 취급해 단발 완료 예산 검증을 우회하지 못하도록 exact-zero 경계를 고정.
+// - v1.2.0: Tactical Analysis가 활성인 SensorConfig에 한 번의 정상 Active Scan으로 DetailedScan까지 완료 가능한 cross-field 시간 예산 검증을 추가.
 // - v1.1.0: ActiveScanRangeCm=0 비활성 계약과 MaxActorScansPerUpdate 범위 검증을 추가.
 // - v1.0.0: SEN-P0-01 Config/Contact/Snapshot 기본 검증과 결정 정렬을 최초 구현.
 // Migration:
+// - v1.5.0부터 FCFSensorContact는 Scan 진행률을 검증하거나 보존하지 않습니다. 진행률 유효성은 FCFSensorScanAttempt::IsPublicContractValid에서만 검증합니다.
+// - v1.4.0부터 현재 Scan Attempt 진행 상태는 FCFSensorScanAttempt가 검증하며 Idle이면 TargetContactId=None, Progress01=0을 요구합니다. 완료 전이가 있으면 LastCompletedContactId가 반드시 존재합니다.
+// - v1.3.0부터 공개 Contact 검증은 DetailedScan ↔ 양수 AnalysisCompletionRevision의 일관성을 fail-closed로 요구합니다.
+// - v1.2.1부터 AnalysisGainPerSec의 비활성 의미는 exact 0이며, 유한한 양수는 크기와 관계없이 단발 완료 예산 계약을 만족해야 합니다.
+// - v1.2.0부터 AnalysisGainPerSec > 0이면 ActiveScanDurationSec - UpdateIntervalSec 구간의 누적 gain이 DetailedScanThreshold 이상이어야 합니다.
 // - 이 파일은 월드 검색, LOS Trace, Contact 생성·수명 갱신을 수행하지 않습니다.
 
 #include "CFSensorTypes.h"
@@ -36,13 +46,40 @@ namespace
 	}
 }
 
+// [v1.2.0] Tactical Analysis가 활성인 경우 한 번의 정상 Active Scan에서 DetailedScan까지 완료 가능한 시간 예산인지 반환합니다.
+bool FCFSensorConfig::IsSingleScanAnalysisBudgetValid() const
+{
+	if (!FMath::IsFinite(AnalysisGainPerSec) || AnalysisGainPerSec <= 0.0f)
+	{
+		return FMath::IsFinite(AnalysisGainPerSec) && AnalysisGainPerSec == 0.0f;
+	}
+
+	if (!FMath::IsFinite(ActiveScanRangeCm)
+		|| ActiveScanRangeCm <= KINDA_SMALL_NUMBER
+		|| !FMath::IsFinite(ActiveScanDurationSec)
+		|| !FMath::IsFinite(UpdateIntervalSec)
+		|| UpdateIntervalSec <= 0.0f
+		|| !FMath::IsFinite(DetailedScanThreshold)
+		|| DetailedScanThreshold <= 0.0f)
+	{
+		return false;
+	}
+
+	// [v1.2.0] 마지막 scan-expiry update의 비활성 tail에 의존하지 않도록 1회 nominal update를 제외한 보장 분석 시간입니다.
+	const float GuaranteedAnalysisTimeSec = FMath::Max(0.0f, ActiveScanDurationSec - UpdateIntervalSec);
+	// [v1.2.0] 정상 LOS/범위가 유지될 때 scan 만료 전에 확보 가능한 최소 분석 진행량입니다.
+	const float GuaranteedAnalysisProgress = AnalysisGainPerSec * GuaranteedAnalysisTimeSec;
+	return FMath::IsFinite(GuaranteedAnalysisProgress)
+		&& GuaranteedAnalysisProgress + KINDA_SMALL_NUMBER >= DetailedScanThreshold;
+}
+
 // [v1.0.0] Sensor 설정이 유한하고 P0 의미 범위를 만족하는지 반환합니다.
 bool FCFSensorConfig::IsValid() const
 {
 	// [v1.0.0] Passive 탐지 거리가 유한하고 0 이상인지 여부입니다.
 	const bool bPassiveRangeValid = IsFiniteNonNegative(PassiveDetectionRangeCm);
 
-		// [v1.1.0] Active Scan 거리가 0으로 비활성이거나, 활성 시 Passive 거리 이상인지 여부입니다.
+	// [v1.1.0] Active Scan 거리가 0으로 비활성이거나, 활성 시 Passive 거리 이상인지 여부입니다.
 	const bool bActiveRangeValid = IsFiniteNonNegative(ActiveScanRangeCm)
 		&& (ActiveScanRangeCm <= KINDA_SMALL_NUMBER || ActiveScanRangeCm >= PassiveDetectionRangeCm);
 
@@ -53,7 +90,7 @@ bool FCFSensorConfig::IsValid() const
 	const bool bUpdateIntervalValid = FMath::IsFinite(UpdateIntervalSec)
 		&& UpdateIntervalSec > 0.0f;
 
-		// [v1.1.0] 한 update의 bounded Actor 검사 예산이 허용 범위인지 여부입니다.
+	// [v1.1.0] 한 update의 bounded Actor 검사 예산이 허용 범위인지 여부입니다.
 	const bool bActorScanBudgetValid = MaxActorScansPerUpdate >= 1
 		&& MaxActorScansPerUpdate <= 4096;
 
@@ -82,10 +119,13 @@ bool FCFSensorConfig::IsValid() const
 		&& DetailedScanThreshold > IdentifiedThreshold
 		&& DetailedScanThreshold <= 1.0f;
 
+	// [v1.2.0] 분석 기능이 활성이라면 정상 Active Scan 1회가 DetailedScan까지 완료 가능한지 여부입니다.
+	const bool bSingleScanAnalysisBudgetValid = IsSingleScanAnalysisBudgetValid();
+
 	return bPassiveRangeValid
 		&& bActiveRangeValid
 		&& bVisualRangeValid
-				&& bUpdateIntervalValid
+		&& bUpdateIntervalValid
 		&& bActorScanBudgetValid
 		&& bContactMemoryValid
 		&& bDestroyedHoldValid
@@ -93,19 +133,20 @@ bool FCFSensorConfig::IsValid() const
 		&& bAnalysisGainValid
 		&& bAnalysisDecayValid
 		&& bIdentifiedThresholdValid
-		&& bDetailedThresholdValid;
+		&& bDetailedThresholdValid
+		&& bSingleScanAnalysisBudgetValid;
 }
 
 // [v1.0.0] 현재 Sensor 설정을 한 줄 디버그 문자열로 생성합니다.
 FString FCFSensorConfig::BuildDebugSummary() const
 {
 	return FString::Printf(
-				TEXT("SensorConfig: Valid=%s Passive=%.1fcm Active=%.1fcm Visual=%.1fcm Update=%.3fs ActorBudget=%d Memory=%.2fs DestroyedHold=%.2fs ActiveDuration=%.2fs Gain=%.3f/s Decay=%.3f/s Identified=%.2f Detailed=%.2f"),
+		TEXT("SensorConfig: Valid=%s Passive=%.1fcm Active=%.1fcm Visual=%.1fcm Update=%.3fs ActorBudget=%d Memory=%.2fs DestroyedHold=%.2fs ActiveDuration=%.2fs Gain=%.3f/s Decay=%.3f/s Identified=%.2f Detailed=%.2f"),
 		IsValid() ? TEXT("True") : TEXT("False"),
 		PassiveDetectionRangeCm,
 		ActiveScanRangeCm,
 		VisualDetectionRangeCm,
-				UpdateIntervalSec,
+		UpdateIntervalSec,
 		MaxActorScansPerUpdate,
 		ContactMemoryTimeSec,
 		DestroyedHoldTimeSec,
@@ -137,15 +178,52 @@ bool FCFSensorContact::IsPublicContractValid() const
 	if (!IsFiniteVector(LastKnownWorldLocation)
 		|| !FMath::IsFinite(LastObservedWorldTimeSeconds)
 		|| LastObservedWorldTimeSeconds < 0.0
-		|| !IsFiniteNonNegative(FreshnessSeconds)
-		|| !FMath::IsFinite(AnalysisProgress01)
-		|| AnalysisProgress01 < 0.0f
-		|| AnalysisProgress01 > 1.0f)
+		|| !IsFiniteNonNegative(FreshnessSeconds))
+	{
+		return false;
+	}
+
+	// [v1.3.0] DetailedScan terminal Knowledge와 완료 Revision은 항상 같은 공개 의미 상태를 표현해야 합니다.
+	const bool bDetailedScanCompleted = InformationLevel == ECFTargetInfoLevel::DetailedScan;
+	if ((bDetailedScanCompleted && AnalysisCompletionRevision <= 0)
+		|| (!bDetailedScanCompleted && AnalysisCompletionRevision != 0))
 	{
 		return false;
 	}
 
 	if (bDestroyedConfirmed != (ContactState == ECFSensorContactState::DestroyedHold))
+	{
+		return false;
+	}
+
+	return true;
+}
+
+// [v1.4.0] 현재 Scan Attempt 실행 상태, 진행률과 가장 최근 완료 전이 식별자가 서로 일관적인지 반환합니다.
+bool FCFSensorScanAttempt::IsPublicContractValid() const
+{
+	if (!FMath::IsFinite(Progress01)
+		|| Progress01 < 0.0f
+		|| Progress01 > 1.0f
+		|| CompletionTransitionRevision < 0)
+	{
+		return false;
+	}
+
+	if (bScanning)
+	{
+		if (TargetContactId.IsNone())
+		{
+			return false;
+		}
+	}
+	else if (!TargetContactId.IsNone() || !FMath::IsNearlyZero(Progress01))
+	{
+		return false;
+	}
+
+	if ((CompletionTransitionRevision == 0 && !LastCompletedContactId.IsNone())
+		|| (CompletionTransitionRevision > 0 && LastCompletedContactId.IsNone()))
 	{
 		return false;
 	}
@@ -189,7 +267,7 @@ bool FCFSensorSnapshot::HasUniqueContactIds() const
 	return true;
 }
 
-// [v1.0.0] Snapshot과 모든 Contact가 공개 데이터 최소 계약을 만족하는지 반환합니다.
+// [v1.0.0] Snapshot, 현재 Scan Attempt와 모든 Contact가 공개 데이터 최소 계약을 만족하는지 반환합니다.
 bool FCFSensorSnapshot::IsPublicContractValid() const
 {
 	if (Revision < 0
@@ -197,6 +275,7 @@ bool FCFSensorSnapshot::IsPublicContractValid() const
 		|| SnapshotWorldTimeSeconds < 0.0
 		|| !IsFiniteVector(SensorOriginWorldLocation)
 		|| !IsFiniteVector(SensorForwardWorldDirection)
+		|| !ScanAttempt.IsPublicContractValid()
 		|| !HasUniqueContactIds())
 	{
 		return false;

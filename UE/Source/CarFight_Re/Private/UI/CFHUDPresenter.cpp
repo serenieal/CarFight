@@ -1,10 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.26.1
-// Date: 2026-08-25
-// Description: CF-FQ-039 VehiclePanel 차량별 Armor silhouette + Shield/Integrity Production Presentation
-// Scope: Provider ViewData, UISubsystem HUD Visual Data와 Root UI Style Data만 사용해 차량별 silhouette 및 기존 HUD Presentation을 적용합니다.
+// Version: 1.30.0
+// Date: 2026-09-18
+// Description: Phase 6 Selection / Target Lock / Target Scan 독립 Production HUD Presentation
+// Scope: Provider ViewData만 사용해 Selection Knowledge, Vehicle Target Lock, Target Scan과 기존 HUD 영역을 서로 독립된 Presentation lifecycle로 적용합니다.
 // Changelog:
+// - v1.30.0: Phase 6에서 Selection Knowledge, Target Lock, Target Scan Apply 경로를 분리하고 Lock Break/Scan Completion exact-once feedback을 각각 독립 소비.
+// - v1.29.0: completion feedback도 현재 Sensor Contact가 Known일 때만 표시해 Contact Unknown 전환 시 남은 feedback 시간을 즉시 숨기는 fail-closed 규칙을 추가.
+// - v1.28.0: Current Scan Attempt active/progress만 진행 UI로 사용하고 새 completion transition은 0.75초 `스캔 완료` feedback으로 한 번 소비한 뒤 Progress UI를 자동 종료. DetailedScan 영구 100% latch 제거.
+// - v1.27.0: [폐기] DetailedScan + 양수 AnalysisCompletionRevision이면 raw progress decay와 무관하게 TargetPanel을 `스캔 완료`와 100% Bar로 latch.
 // - v1.26.1: VehicleData catalog miss와 fallback null에서 이전 차량 silhouette Brush가 남지 않도록 resource를 명시적으로 비우고 Image를 Collapsed 처리. 다음 유효 차량에서는 같은 Designer Slot을 HitTestInvisible로 복구.
 // - v1.26.0: VehicleViewData.VehicleDataAsset identity를 HUDVisualData vehicle silhouette catalog에 해석해 `Image_VehicleSilhouette` Brush resource를 차량 전환 시에만 교체. Presenter의 Gameplay 조회 0과 Designer Position/Size ownership을 유지.
 // - v1.25.1: v1.25.0의 FSlateColorBrush 기본 ImageSize=0 때문에 VerticalBox 안 Shield/Integrity ProgressBar가 실제 픽셀에서 높이 0으로 수축한 결함을 교정. Designer Slot은 유지하고 Track/Fill Brush intrinsic height만 10px로 명시.
@@ -35,6 +39,12 @@
 // - v1.1.0: AlertKey 의미 기반 Warning/Launcher 슬롯 라우팅과 단독 Launcher Alert 가시성을 교정.
 // - v1.0.0: Vehicle/Defense/Weapon/Target/Radar/Alert Runtime 적용과 Mock 값 제거 경로를 구현.
 // Migration:
+// - v1.30.0부터 Selection/Knowledge는 ApplyTargetViewData, Vehicle Lock은 ApplyTargetLockViewData, Target Scan은 ApplyTargetScanViewData가 각각 소유합니다. Selection Clear가 Lock/Scan 표시를 지우지 않습니다.
+// - v1.30.0 Lock Break는 BreakTransitionRevision, Scan 완료는 CompletionTransitionRevision으로 같은 전이를 중복 표시하지 않으며 Player-facing 이름은 각 ViewData의 Sensor Knowledge만 사용합니다.
+// - v1.29.0부터 completion feedback도 SensorContactAvailability가 Known일 때만 표시합니다. Contact가 Unknown이면 남은 feedback 시간과 무관하게 즉시 숨깁니다.
+// - v1.28.0부터 TargetPanel은 bScanAttemptActive/ScanAttemptProgress01일 때만 진행 UI를 표시합니다. 새 ScanCompletionTransitionRevision은 0.75초 Presentation-only 완료 feedback으로 표시한 뒤 숨깁니다.
+// - v1.28.0 DetailedScan Knowledge와 AnalysisCompletionRevision은 상세 정보 공개를 유지하지만 Scan Progress Bar를 영구 100%로 만들지 않습니다.
+// - v1.27.0의 DetailedScan 영구 100% latch 정책은 v1.28.0에서 폐기됐습니다.
 // - 정상 Launcher Sequence 진행은 AlertFeed가 아니라 WeaponPanel의 HorizontalBox_LauncherSequence/Text_WeaponLauncherSequence/ProgressBar_LauncherSequence가 소유합니다.
 // - Ammo 행은 finite Runtime Snapshot의 LoadedAmmoCount/MagazineCapacity만 Primary로 표시하고 ReserveAmmoCount는 별도 Text_WeaponReserveAmmo에 표시합니다.
 // - ImmediateUsableAmmoCount와 CurrentUsableAmmoCount는 UI 상태 판정·회귀용으로 유지하며 Primary Ammo 문자열을 만들지 않습니다.
@@ -298,6 +308,8 @@ void UCFHUDPresenter::ShutdownPresenter()
 	bVehicleSilhouettePresentationInitialized = false;
 	LastPresentedVehicleDataAssetPath.Reset();
 	ResetLauncherPresentationLifecycle();
+	ResetTargetLockPresentationLifecycle();
+	ResetTargetScanPresentationLifecycle();
 	ResetAlertPresentationLifecycle();
 	LastAppliedBindingGeneration = INDEX_NONE;
 }
@@ -317,10 +329,12 @@ void UCFHUDPresenter::SetHUDVisualData(UCFHUDVisualData* InHUDVisualData)
 // [v1.0.0] 현재 Production WBP_CFInGameHUD 인스턴스를 Presenter 출력 대상으로 연결합니다.
 void UCFHUDPresenter::SetProductionWidget(UCFStyledWidgetBase* InProductionWidget)
 {
-			ProductionWidget = InProductionWidget;
+	ProductionWidget = InProductionWidget;
 	bVehicleSilhouettePresentationInitialized = false;
 	LastPresentedVehicleDataAssetPath.Reset();
 	ResetLauncherPresentationLifecycle();
+	ResetTargetLockPresentationLifecycle();
+	ResetTargetScanPresentationLifecycle();
 	ResetAlertPresentationLifecycle();
 	LastAppliedBindingGeneration = INDEX_NONE;
 	if (DataProvider && ProductionWidget.IsValid())
@@ -344,18 +358,26 @@ void UCFHUDPresenter::ApplyViewData(const FCFInGameUIViewData& ViewData)
 		return;
 	}
 
-	// [v1.7.0] Pawn Source가 바뀌면 이전 차량의 Launcher Presentation lifecycle을 새 차량 HUD에 넘기지 않습니다.
-			if (LastAppliedBindingGeneration != ViewData.BindingGeneration)
+	// [v1.30.0] Pawn Source가 바뀌면 이전 차량의 Launcher/Lock/Scan/Alert Presentation lifecycle을 새 차량 HUD에 넘기지 않습니다.
+	if (LastAppliedBindingGeneration != ViewData.BindingGeneration)
 	{
 		ResetLauncherPresentationLifecycle();
+		ResetTargetLockPresentationLifecycle();
+		ResetTargetScanPresentationLifecycle();
 		ResetAlertPresentationLifecycle();
+		// [v1.30.0] 새 Binding에 이미 존재하던 과거 Lock Break Revision을 새 피드백처럼 재생하지 않도록 현재 값을 기준선으로 채택합니다.
+		LastTargetLockBreakTransitionRevision = FMath::Max(ViewData.TargetLock.BreakTransitionRevision, 0);
+		// [v1.30.0] 새 Binding에 이미 존재하던 과거 Scan 완료 Revision을 새 완료 전이처럼 재생하지 않도록 현재 값을 기준선으로 채택합니다.
+		LastTargetScanCompletionTransitionRevision = FMath::Max(ViewData.TargetScan.CompletionTransitionRevision, 0);
 		LastAppliedBindingGeneration = ViewData.BindingGeneration;
 	}
 
-			ApplyVehicleAndDefenseViewData(RootWidget, ViewData.Vehicle, ViewData.Defense);
+	ApplyVehicleAndDefenseViewData(RootWidget, ViewData.Vehicle, ViewData.Defense);
 	ApplyViewModeViewData(RootWidget, ViewData.ViewMode);
 	ApplyWeaponViewData(RootWidget, ViewData.Weapon);
 	ApplyTargetViewData(RootWidget, ViewData.Target);
+	ApplyTargetLockViewData(RootWidget, ViewData.TargetLock);
+	ApplyTargetScanViewData(RootWidget, ViewData.TargetScan);
 	ApplyRadarViewData(RootWidget, ViewData.Radar);
 	ApplyAlertViewData(RootWidget, ViewData.Alerts);
 }
@@ -1094,6 +1116,21 @@ void UCFHUDPresenter::ResetLauncherPresentationLifecycle()
 	LastLauncherSequenceProgress = 0.0f;
 }
 
+// [v1.30.0] Pawn·Widget 수명 변경 시 Target Lock Break feedback의 소비 Revision과 만료 상태를 초기화합니다.
+void UCFHUDPresenter::ResetTargetLockPresentationLifecycle()
+{
+	LastTargetLockBreakTransitionRevision = 0;
+	TargetLockBreakFeedbackEndGameTimeSeconds = 0.0;
+}
+
+// [v1.30.0] Pawn·Widget 수명 변경 시 Target Scan completion feedback의 소비 Revision과 만료 상태를 초기화합니다.
+void UCFHUDPresenter::ResetTargetScanPresentationLifecycle()
+{
+	LastTargetScanCompletionTransitionRevision = 0;
+	TargetScanCompletionFeedbackContactId = NAME_None;
+	TargetScanCompletionFeedbackEndGameTimeSeconds = 0.0;
+}
+
 // [v1.16.0] raw ResourceChannels를 직접 Visual Row로 사용하지 않고 Compact Primary/Secondary/FireState Presentation Entry로 Projection합니다.
 void UCFHUDPresenter::BuildWeaponResourceEntries(
 	const FCFWeaponHUDData& WeaponViewData,
@@ -1477,8 +1514,8 @@ void UCFHUDPresenter::ApplyWeaponViewData(UUserWidget* RootWidget, const FCFWeap
 	SetNamedVisibility(WeaponPanel, FName(TEXT("HorizontalBox_WeaponRail")), !RailEntries.IsEmpty());
 }
 
-// [v1.19.0] 선택 Target의 공개 Sensor Knowledge만 Production TargetPanel에 적용합니다.
-void UCFHUDPresenter::ApplyTargetViewData(UUserWidget* RootWidget, const FCFTargetHUDData& TargetViewData) const
+// [v1.30.0] 현재 Selection과 선택 Contact Knowledge만 Production TargetPanel의 기존 Target 영역에 적용합니다.
+void UCFHUDPresenter::ApplyTargetViewData(UUserWidget* RootWidget, const FCFTargetHUDData& TargetViewData)
 {
 	// [v1.19.0] 저장 Production HUD에서 Target Knowledge를 표시할 의미 Panel입니다.
 	UUserWidget* TargetPanel = FindNamedUserWidget(RootWidget, FName(TEXT("WBP_CFTargetPanel")));
@@ -1493,8 +1530,6 @@ void UCFHUDPresenter::ApplyTargetViewData(UUserWidget* RootWidget, const FCFTarg
 		SetNamedVisibility(TargetPanel, FName(TEXT("Text_TargetDistance")), false);
 		SetNamedVisibility(TargetPanel, FName(TEXT("Text_TargetIdentity")), false);
 		SetNamedVisibility(TargetPanel, FName(TEXT("Text_TargetArmor")), false);
-		SetNamedVisibility(TargetPanel, FName(TEXT("Text_TargetScan")), false);
-		SetNamedVisibility(TargetPanel, FName(TEXT("ProgressBar_TargetScan")), false);
 		return;
 	}
 
@@ -1532,33 +1567,179 @@ void UCFHUDPresenter::ApplyTargetViewData(UUserWidget* RootWidget, const FCFTarg
 			: FText::GetEmpty(),
 		bShowDistance);
 
-	// [v1.19.0] Sensor Knowledge 단계가 실제 존재하고 AnalysisProgress가 유한할 때만 분석 진행률을 표시합니다.
-	const bool bKnowledgeDetected = TargetViewData.InformationLevel == ECFTargetInfoLevel::Detected
-		|| TargetViewData.InformationLevel == ECFTargetInfoLevel::Identified
-		|| TargetViewData.InformationLevel == ECFTargetInfoLevel::DetailedScan;
-	// [v1.19.0] Sensor의 0~1 AnalysisProgress를 UI용으로만 clamp한 최종 진행률입니다.
-	const float TargetScanProgress = FMath::IsFinite(TargetViewData.AnalysisProgress01)
-		? FMath::Clamp(TargetViewData.AnalysisProgress01, 0.0f, 1.0f)
-		: 0.0f;
-	// [v1.19.0] Contact 연결과 Knowledge가 둘 다 실제일 때만 Scan Text/Bar를 공개합니다.
-	const bool bShowScanProgress = bSensorContactKnown
-		&& bKnowledgeDetected
-		&& FMath::IsFinite(TargetViewData.AnalysisProgress01);
-	SetTextValue(
-		TargetPanel,
-		FName(TEXT("Text_TargetScan")),
-		bShowScanProgress
-			? FText::FromString(FString::Printf(TEXT("스캔  %d%%"), FMath::RoundToInt(TargetScanProgress * 100.0f)))
-			: FText::GetEmpty(),
-		bShowScanProgress);
-	SetProgressValue(
-		TargetPanel,
-		FName(TEXT("ProgressBar_TargetScan")),
-		TargetScanProgress,
-		bShowScanProgress);
-
 	// [v1.19.0] Target Armor Intelligence는 현재 FCFTargetHUDData에 authoritative source가 없으므로 기존 Mock Row를 계속 숨깁니다.
 	SetNamedVisibility(TargetPanel, FName(TEXT("Text_TargetArmor")), false);
+}
+
+// [v1.30.0] Vehicle Target Lock ViewData를 Selection과 독립된 Lock sink에 적용합니다.
+void UCFHUDPresenter::ApplyTargetLockViewData(UUserWidget* RootWidget, const FCFTargetLockHUDData& TargetLockViewData)
+{
+	// [v1.30.0] 저장 Production HUD에서 Target Lock을 표시할 기존 Target Panel입니다.
+	UUserWidget* TargetPanel = FindNamedUserWidget(RootWidget, FName(TEXT("WBP_CFTargetPanel")));
+	if (!TargetPanel)
+	{
+		return;
+	}
+
+	// [v1.30.0] Lock Break feedback의 실제 경과 시간을 측정할 현재 Widget World입니다.
+	const UWorld* PresentationWorld = RootWidget ? RootWidget->GetWorld() : nullptr;
+	// [v1.30.0] World가 유효할 때만 사용할 현재 Game-Time 초입니다.
+	const double CurrentGameTimeSeconds = PresentationWorld
+		? FMath::Max(0.0, static_cast<double>(PresentationWorld->GetTimeSeconds()))
+		: 0.0;
+	// [v1.30.0] 동일 Break Revision 반복 Refresh가 feedback 시간을 다시 시작하지 않도록 새 전이만 검출합니다.
+	const bool bNewBreakTransition = TargetLockViewData.BreakTransitionRevision > LastTargetLockBreakTransitionRevision;
+	if (bNewBreakTransition)
+	{
+		// [v1.30.0] 실제 Lock Break를 인지할 수 있게 유지할 Presentation-only 시간입니다.
+		constexpr double TargetLockBreakFeedbackDurationSeconds = 0.75;
+		LastTargetLockBreakTransitionRevision = TargetLockViewData.BreakTransitionRevision;
+		TargetLockBreakFeedbackEndGameTimeSeconds = CurrentGameTimeSeconds + TargetLockBreakFeedbackDurationSeconds;
+	}
+
+	// [v1.30.0] Idle과 구분되는 현재 Acquiring/Locked 지속 상태가 실제 존재하는지 나타냅니다.
+	const bool bPersistentLockState = TargetLockViewData.Availability == ECFUIViewAvailability::Known
+		&& (TargetLockViewData.State == ECFTargetLockState::Acquiring
+			|| TargetLockViewData.State == ECFTargetLockState::Locked);
+	// [v1.30.0] 현재 Lock 대상 이름을 Sensor Knowledge로 공개할 수 있는지 나타냅니다.
+	const bool bLockIdentityKnown = TargetLockViewData.IdentityAvailability == ECFUIViewAvailability::Known
+		&& !TargetLockViewData.DisplayName.IsEmpty();
+	// [v1.30.0] 내부 ContactId 대신 UI에 표시할 Lock 대상 이름 또는 일반 미식별 문구입니다.
+	const FText LockTargetLabel = bLockIdentityKnown
+		? TargetLockViewData.DisplayName
+		: FText::FromString(TEXT("미식별"));
+	// [v1.30.0] 새 Break가 발생했고 현재 새 Lock 상태가 없을 때만 짧게 Break feedback을 표시합니다.
+	const bool bBreakFeedbackActive = !bPersistentLockState
+		&& TargetLockViewData.LastBreakReason != ECFTargetLockBreakReason::None
+		&& (PresentationWorld
+			? CurrentGameTimeSeconds <= TargetLockBreakFeedbackEndGameTimeSeconds
+			: bNewBreakTransition);
+
+	// [v1.30.0] Lock 상태 또는 Break feedback에 사용할 Player-facing 문구입니다.
+	FText LockStatusText = FText::GetEmpty();
+	// [v1.30.0] Acquiring은 진행률, Locked는 품질을 같은 Lock 전용 Bar에 표시할 0~1 값입니다.
+	float LockGaugeValue = 0.0f;
+	// [v1.30.0] Lock 전용 ProgressBar를 현재 지속 상태에서 표시할지 나타냅니다.
+	bool bShowLockGauge = false;
+	if (bPersistentLockState && TargetLockViewData.State == ECFTargetLockState::Acquiring)
+	{
+		LockGaugeValue = FMath::Clamp(TargetLockViewData.LockProgress01, 0.0f, 1.0f);
+		bShowLockGauge = FMath::IsFinite(TargetLockViewData.LockProgress01);
+		LockStatusText = FText::Format(
+			FText::FromString(TEXT("락 획득  {0}  {1}%")),
+			LockTargetLabel,
+			FText::AsNumber(FMath::RoundToInt(LockGaugeValue * 100.0f)));
+	}
+	else if (bPersistentLockState && TargetLockViewData.State == ECFTargetLockState::Locked)
+	{
+		LockGaugeValue = FMath::Clamp(TargetLockViewData.LockQuality01, 0.0f, 1.0f);
+		bShowLockGauge = FMath::IsFinite(TargetLockViewData.LockQuality01);
+		LockStatusText = FText::Format(
+			FText::FromString(TEXT("락 완료  {0}  품질 {1}%")),
+			LockTargetLabel,
+			FText::AsNumber(FMath::RoundToInt(LockGaugeValue * 100.0f)));
+	}
+	else if (bBreakFeedbackActive)
+	{
+		switch (TargetLockViewData.LastBreakReason)
+		{
+		case ECFTargetLockBreakReason::ContactLost:
+			LockStatusText = FText::FromString(TEXT("락 상실  CONTACT 유실"));
+			break;
+		case ECFTargetLockBreakReason::TargetDestroyed:
+			LockStatusText = FText::FromString(TEXT("락 상실  대상 파괴"));
+			break;
+		case ECFTargetLockBreakReason::SensorUnavailable:
+			LockStatusText = FText::FromString(TEXT("락 상실  센서 사용 불가"));
+			break;
+		case ECFTargetLockBreakReason::QualityDepleted:
+			LockStatusText = FText::FromString(TEXT("락 상실  추적 품질 소진"));
+			break;
+		default:
+			LockStatusText = FText::FromString(TEXT("락 상실"));
+			break;
+		}
+	}
+
+	// [v1.30.0] Lock 전용 Text는 현재 지속 상태 또는 짧은 Break feedback 중 하나가 있을 때만 표시합니다.
+	const bool bShowLockText = bPersistentLockState || bBreakFeedbackActive;
+	SetTextValue(TargetPanel, FName(TEXT("Text_TargetLock")), LockStatusText, bShowLockText);
+	SetProgressValue(TargetPanel, FName(TEXT("ProgressBar_TargetLock")), LockGaugeValue, bShowLockGauge);
+}
+
+// [v1.30.0] Target Scan ViewData를 Selection과 독립된 Scan sink에 적용합니다.
+void UCFHUDPresenter::ApplyTargetScanViewData(UUserWidget* RootWidget, const FCFTargetScanHUDData& TargetScanViewData)
+{
+	// [v1.30.0] 저장 Production HUD에서 Target Scan을 표시할 기존 Target Panel입니다.
+	UUserWidget* TargetPanel = FindNamedUserWidget(RootWidget, FName(TEXT("WBP_CFTargetPanel")));
+	if (!TargetPanel)
+	{
+		return;
+	}
+
+	// [v1.30.0] Scan completion feedback의 실제 경과 시간을 측정할 현재 Widget World입니다.
+	const UWorld* PresentationWorld = RootWidget ? RootWidget->GetWorld() : nullptr;
+	// [v1.30.0] World가 유효할 때만 사용할 현재 Game-Time 초입니다.
+	const double CurrentGameTimeSeconds = PresentationWorld
+		? FMath::Max(0.0, static_cast<double>(PresentationWorld->GetTimeSeconds()))
+		: 0.0;
+	// [v1.30.0] 동일 completion Revision 반복 Refresh가 feedback 시간을 다시 시작하지 않도록 새 전이만 검출합니다.
+	const bool bNewCompletionTransition = TargetScanViewData.CompletionTransitionRevision > LastTargetScanCompletionTransitionRevision;
+	if (bNewCompletionTransition)
+	{
+		// [v1.30.0] Target Scan 완료를 인지할 수 있게 유지할 Presentation-only 시간입니다.
+		constexpr double TargetScanCompletionFeedbackDurationSeconds = 0.75;
+		LastTargetScanCompletionTransitionRevision = TargetScanViewData.CompletionTransitionRevision;
+		TargetScanCompletionFeedbackContactId = TargetScanViewData.LastCompletedContactId;
+		TargetScanCompletionFeedbackEndGameTimeSeconds = CurrentGameTimeSeconds + TargetScanCompletionFeedbackDurationSeconds;
+	}
+
+	// [v1.30.0] 현재 Scan Attempt가 살아 있고 대상 Contact와 진행률이 표시 가능한지 나타냅니다.
+	const bool bShowActiveScanProgress = TargetScanViewData.bScanAttemptActive
+		&& TargetScanViewData.ActiveTargetContactAvailability == ECFUIViewAvailability::Known
+		&& FMath::IsFinite(TargetScanViewData.ScanAttemptProgress01);
+	// [v1.30.0] 현재 Scan 대상 이름을 Sensor Knowledge로 공개할 수 있는지 나타냅니다.
+	const bool bActiveScanIdentityKnown = TargetScanViewData.ActiveTargetIdentityAvailability == ECFUIViewAvailability::Known
+		&& !TargetScanViewData.ActiveTargetDisplayName.IsEmpty();
+	// [v1.30.0] 내부 ContactId 대신 UI에 표시할 현재 Scan 대상 이름 또는 일반 미식별 문구입니다.
+	const FText ActiveScanTargetLabel = bActiveScanIdentityKnown
+		? TargetScanViewData.ActiveTargetDisplayName
+		: FText::FromString(TEXT("미식별"));
+	// [v1.30.0] 마지막 완료 대상 이름을 Sensor Knowledge로 공개할 수 있는지 나타냅니다.
+	const bool bCompletedScanIdentityKnown = TargetScanViewData.CompletedTargetIdentityAvailability == ECFUIViewAvailability::Known
+		&& !TargetScanViewData.CompletedTargetDisplayName.IsEmpty();
+	// [v1.30.0] 내부 ContactId 대신 UI에 표시할 완료 대상 이름 또는 일반 미식별 문구입니다.
+	const FText CompletedScanTargetLabel = bCompletedScanIdentityKnown
+		? TargetScanViewData.CompletedTargetDisplayName
+		: FText::FromString(TEXT("미식별"));
+	// [v1.30.0] 완료 Contact가 현재 Snapshot에도 존재하며 동일 completion event의 feedback 시간이 남았는지 나타냅니다.
+	const bool bCompletionFeedbackActive = TargetScanViewData.CompletedTargetContactAvailability == ECFUIViewAvailability::Known
+		&& TargetScanCompletionFeedbackContactId == TargetScanViewData.LastCompletedContactId
+		&& !TargetScanCompletionFeedbackContactId.IsNone()
+		&& (PresentationWorld
+			? CurrentGameTimeSeconds <= TargetScanCompletionFeedbackEndGameTimeSeconds
+			: bNewCompletionTransition);
+	// [v1.30.0] 새 Scan Attempt가 이미 진행 중이면 과거 완료 feedback보다 현재 진행 상태를 우선합니다.
+	const bool bShowCompletionFeedback = !bShowActiveScanProgress && bCompletionFeedbackActive;
+	// [v1.30.0] 현재 표시할 Scan Bar 값은 active progress 또는 completion 100% 중 하나입니다.
+	const float TargetScanProgress = bShowCompletionFeedback
+		? 1.0f
+		: (bShowActiveScanProgress
+			? FMath::Clamp(TargetScanViewData.ScanAttemptProgress01, 0.0f, 1.0f)
+			: 0.0f);
+	// [v1.30.0] Target Scan Text/Bar를 실제 진행 또는 짧은 completion feedback에서만 표시합니다.
+	const bool bShowScanProgress = bShowActiveScanProgress || bShowCompletionFeedback;
+	// [v1.30.0] 현재 Scan 상태에 대응하는 Player-facing 문구입니다.
+	const FText ScanStatusText = bShowCompletionFeedback
+		? FText::Format(FText::FromString(TEXT("스캔 완료  {0}")), CompletedScanTargetLabel)
+		: (bShowActiveScanProgress
+			? FText::Format(
+				FText::FromString(TEXT("스캔  {0}  {1}%")),
+				ActiveScanTargetLabel,
+				FText::AsNumber(FMath::RoundToInt(TargetScanProgress * 100.0f)))
+			: FText::GetEmpty());
+	SetTextValue(TargetPanel, FName(TEXT("Text_TargetScan")), ScanStatusText, bShowScanProgress);
+	SetProgressValue(TargetPanel, FName(TEXT("ProgressBar_TargetScan")), TargetScanProgress, bShowScanProgress);
 }
 
 // [v1.21.0] Radar ViewData의 Display Range, in-range Contact와 selected range-out edge를 Production RadarPanel에 전용 Image 기반으로 적용합니다.

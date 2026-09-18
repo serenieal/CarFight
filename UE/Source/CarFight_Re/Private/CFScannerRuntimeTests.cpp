@@ -1,12 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-08-16
-// Description: CF-FQ-037 SCAN-P0-02 Runtime Config Apply asset-free Automation
-// Scope: SensorData 명시 적용, applied-config 고정, invalid 원자 거부, Contact/Knowledge 보존, range 감소 reconcile과 Active Scan 상태 조정을 검증합니다.
+// Version: 1.2.0
+// Date: 2026-09-17
+// Description: CF-FQ-037 SCAN-P0-02 Runtime Config Apply + Vehicle Basic Sensor 우선순위 asset-free Automation
+// Scope: Vehicle Basic → fitted Scanner override → Basic 복귀와 terminal Knowledge 보존 계약을 함께 검증합니다.
 // Changelog:
+// - v1.2.0: 제거된 Contact AnalysisProgress fixture/assertion을 삭제하고 hot reapply 보존 계약을 DetailedScan + AnalysisCompletionRevision 기준으로 고정.
+// - v1.1.1: synthetic DetailedScan fixture를 새 AnalysisCompletionRevision 공개 계약에 정렬. Runtime behavior 기대값은 변경하지 않음.
+// - v1.1.0: Vehicle base SensorData와 fitted Scanner의 우선순위/복귀 및 base 제거 시 기존 0-range fallback 회귀 검증을 추가.
 // - v1.0.0: SCAN-P0-02 ConfigApply Automation을 최초 추가.
 // Migration:
+// - v1.2.0부터 Contact에 Scan progress를 주입하거나 보존 여부를 검사하지 않습니다. terminal Knowledge 보존은 InformationLevel + AnalysisCompletionRevision으로 검증합니다.
+// - v1.1.1 synthetic DetailedScan Contact는 공개 계약에 맞춰 양수 AnalysisCompletionRevision을 명시합니다.
+// - Vehicle Basic Sensor 검증도 transient SensorData만 사용하므로 Production Basic Sensor 수치와 독립적인 source-priority 계약만 검증합니다.
 // - transient Editor World와 transient VehicleSensorData만 사용하며 프로젝트 Content Asset, Blueprint와 InputAction을 생성·수정·저장하지 않습니다.
 // - 실제 FittingSnapshot 연결과 Field Fitting transaction은 SCAN-P0-04 범위이므로 이 테스트에서 수행하지 않습니다.
 
@@ -99,15 +105,14 @@ bool FCFScannerRuntimeConfigTest::RunTest(const FString& Parameters)
 		UCFVehicleSensorComp* SensorComponent,
 		const FName ContactId,
 		const FName TargetId,
-		const bool bBaselineDetectionValid,
-		const float AnalysisProgress) -> int32
+		const bool bBaselineDetectionValid) -> int32
 	{
 		if (!SensorComponent)
 		{
 			return INDEX_NONE;
 		}
 
-		// [v1.0.0] hot reapply 전후 identity, Knowledge와 Analysis를 비교할 새 private Runtime Contact입니다.
+		// [v1.2.0] hot reapply 전후 identity와 terminal Knowledge를 비교할 새 private Runtime Contact입니다.
 		UCFVehicleSensorComp::FCFSensorContactRuntime& RuntimeContact = SensorComponent->RuntimeContacts.AddDefaulted_GetRef();
 		RuntimeContact.SourceDisplayInfo.TargetId = TargetId;
 		RuntimeContact.SourceDisplayInfo.DisplayName = FText::FromName(TargetId);
@@ -119,11 +124,11 @@ bool FCFScannerRuntimeConfigTest::RunTest(const FString& Parameters)
 		RuntimeContact.PublicContact.TargetCategory = ECFTargetCategory::Vehicle;
 		RuntimeContact.PublicContact.Relation = ECFTargetRelation::Hostile;
 		RuntimeContact.PublicContact.InformationLevel = ECFTargetInfoLevel::DetailedScan;
+		RuntimeContact.PublicContact.AnalysisCompletionRevision = 1;
 		RuntimeContact.PublicContact.ContactState = ECFSensorContactState::Live;
 		RuntimeContact.PublicContact.LastKnownWorldLocation = FVector(1000.0f, 200.0f, 50.0f);
 		RuntimeContact.PublicContact.LastObservedWorldTimeSeconds = 0.0;
 		RuntimeContact.PublicContact.FreshnessSeconds = 0.0f;
-		RuntimeContact.PublicContact.AnalysisProgress01 = AnalysisProgress;
 		RuntimeContact.PublicContact.bDestroyedConfirmed = false;
 		RuntimeContact.bBaselineDetectionValidAtLastObservation = bBaselineDetectionValid;
 		return SensorComponent->RuntimeContacts.Num() - 1;
@@ -152,6 +157,46 @@ bool FCFScannerRuntimeConfigTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("초기화 전 선택 Source 보존"), PreInitializeSensorComponent->SensorData.Get(), InitialSensorData);
 	TestTrue(TEXT("선택 Source로 Runtime 초기화"), PreInitializeSensorComponent->InitializeSensorRuntime());
 	TestTrue(TEXT("초기화 후 Applied Config Passive 3000"), FMath::IsNearlyEqual(PreInitializeSensorComponent->GetResolvedSensorConfig().PassiveDetectionRangeCm, 3000.0f));
+
+	// [v1.1.0] Vehicle Basic → Scanner override → Basic 복귀 source-priority 계약을 검증할 별도 Component입니다.
+	UCFVehicleSensorComp* BasicPrioritySensorComponent = CreateSensorComponent(
+		TEXT("VehicleBasicPriorityOwner"),
+		TEXT("VehicleBasicPrioritySensor"));
+	if (!TestNotNull(TEXT("Vehicle Basic priority Sensor Component 생성"), BasicPrioritySensorComponent))
+	{
+		return false;
+	}
+
+	// [v1.1.0] 모든 정상 차량의 공통 Basic Sensor 역할을 대신하는 transient SensorData입니다.
+	UCFVehicleSensorData* VehicleBasicSensorData = NewObject<UCFVehicleSensorData>(GetTransientPackage());
+	ConfigureSensorData(VehicleBasicSensorData, 2000.0f, 4000.0f, 3000.0f, 3.0f);
+	TestTrue(TEXT("Vehicle Basic SensorData 계약 유효"), VehicleBasicSensorData->IsSensorConfigValid());
+	TestTrue(TEXT("Vehicle Basic SensorData 적용"), BasicPrioritySensorComponent->ApplyVehicleBaseSensorData(VehicleBasicSensorData));
+	TestTrue(TEXT("Vehicle Basic source로 Runtime 초기화"), BasicPrioritySensorComponent->InitializeSensorRuntime());
+	TestTrue(TEXT("Vehicle Basic Passive 2000 적용"), FMath::IsNearlyEqual(BasicPrioritySensorComponent->GetResolvedSensorConfig().PassiveDetectionRangeCm, 2000.0f));
+	TestNull(TEXT("Vehicle Basic만 있을 때 Scanner override Source는 비어 있음"), BasicPrioritySensorComponent->SensorData.Get());
+
+	// [v1.1.0] Vehicle Basic보다 우선해야 하는 fitted Scanner 역할의 transient SensorData입니다.
+	UCFVehicleSensorData* ScannerOverrideSensorData = NewObject<UCFVehicleSensorData>(GetTransientPackage());
+	ConfigureSensorData(ScannerOverrideSensorData, 5000.0f, 9000.0f, 6000.0f, 5.0f);
+	TestTrue(TEXT("Scanner override SensorData 계약 유효"), ScannerOverrideSensorData->IsSensorConfigValid());
+	TestTrue(TEXT("Scanner override 적용"), BasicPrioritySensorComponent->ApplySensorData(ScannerOverrideSensorData));
+	TestEqual(TEXT("Scanner override Source 포인터 적용"), BasicPrioritySensorComponent->SensorData.Get(), ScannerOverrideSensorData);
+	TestTrue(TEXT("Scanner override Passive 5000 우선"), FMath::IsNearlyEqual(BasicPrioritySensorComponent->GetResolvedSensorConfig().PassiveDetectionRangeCm, 5000.0f));
+	TestTrue(TEXT("Scanner 제거 시 Vehicle Basic으로 복귀"), BasicPrioritySensorComponent->ApplySensorData(nullptr));
+	TestNull(TEXT("Scanner 제거 뒤 override Source 비어 있음"), BasicPrioritySensorComponent->SensorData.Get());
+	TestTrue(TEXT("Scanner 제거 뒤 Vehicle Basic Passive 2000 복귀"), FMath::IsNearlyEqual(BasicPrioritySensorComponent->GetResolvedSensorConfig().PassiveDetectionRangeCm, 2000.0f));
+
+	// [v1.1.0] 기존 Vehicle Basic을 원자 거부해야 하는 invalid transient SensorData입니다.
+	UCFVehicleSensorData* InvalidVehicleBasicSensorData = NewObject<UCFVehicleSensorData>(GetTransientPackage());
+	ConfigureSensorData(InvalidVehicleBasicSensorData, 1500.0f, 3000.0f, 2000.0f, 2.0f);
+	InvalidVehicleBasicSensorData->SensorConfig.UpdateIntervalSec = 0.0f;
+	TestFalse(TEXT("invalid Vehicle Basic SensorData 계약"), InvalidVehicleBasicSensorData->IsSensorConfigValid());
+	TestFalse(TEXT("invalid Vehicle Basic SensorData 원자 거부"), BasicPrioritySensorComponent->ApplyVehicleBaseSensorData(InvalidVehicleBasicSensorData));
+	TestTrue(TEXT("invalid base 거부 뒤 기존 Vehicle Basic Passive 유지"), FMath::IsNearlyEqual(BasicPrioritySensorComponent->GetResolvedSensorConfig().PassiveDetectionRangeCm, 2000.0f));
+	TestTrue(TEXT("Vehicle Basic 제거 시 기존 scanner-less fallback 적용"), BasicPrioritySensorComponent->ApplyVehicleBaseSensorData(nullptr));
+	TestTrue(TEXT("Vehicle Basic도 Scanner도 없으면 Passive 0"), FMath::IsNearlyZero(BasicPrioritySensorComponent->GetResolvedSensorConfig().PassiveDetectionRangeCm));
+	TestTrue(TEXT("Vehicle Basic도 Scanner도 없으면 Active 0"), FMath::IsNearlyZero(BasicPrioritySensorComponent->GetResolvedSensorConfig().ActiveScanRangeCm));
 
 	// [v1.0.0] hot reapply 전체 계약을 한 Runtime 수명에서 검증할 Sensor Component입니다.
 	UCFVehicleSensorComp* SensorComponent = CreateSensorComponent(
@@ -193,16 +238,14 @@ bool FCFScannerRuntimeConfigTest::RunTest(const FString& Parameters)
 		SensorComponent,
 		TEXT("Contact_700001"),
 		TEXT("ScannerBaselineTarget"),
-		true,
-		0.65f);
+		true);
 
 	// [v1.0.0] Active Scan으로만 마지막 관측된 Knowledge 보유 Contact 인덱스입니다.
 	const int32 ActiveOnlyContactIndex = AddKnownLiveContact(
 		SensorComponent,
 		TEXT("Contact_700002"),
 		TEXT("ScannerActiveOnlyTarget"),
-		false,
-		0.45f);
+		false);
 	if (!TestTrue(TEXT("Baseline Contact 생성"), BaselineContactIndex != INDEX_NONE)
 		|| !TestTrue(TEXT("Active-only Contact 생성"), ActiveOnlyContactIndex != INDEX_NONE))
 	{
@@ -246,22 +289,21 @@ bool FCFScannerRuntimeConfigTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Active remaining은 새 duration으로 clamp"), FMath::IsNearlyEqual(SensorComponent->GetActiveScanRemainingSeconds(), 2.5f));
 	TestEqual(TEXT("Active 감소 후 ContactId 보존"), SensorComponent->RuntimeContacts[ActiveOnlyContactIndex].PublicContact.ContactId, FName(TEXT("Contact_700002")));
 	TestEqual(TEXT("Active 감소 후 획득 Knowledge 보존"), SensorComponent->RuntimeContacts[ActiveOnlyContactIndex].PublicContact.KnownTargetId, FName(TEXT("ScannerActiveOnlyTarget")));
-	TestTrue(TEXT("Active 감소 후 Analysis 보존"), FMath::IsNearlyEqual(SensorComponent->RuntimeContacts[ActiveOnlyContactIndex].PublicContact.AnalysisProgress01, 0.45f));
+	TestEqual(TEXT("Active 감소 후 Detailed Knowledge 보존"), SensorComponent->RuntimeContacts[ActiveOnlyContactIndex].PublicContact.InformationLevel, ECFTargetInfoLevel::DetailedScan);
+	TestEqual(TEXT("Active 감소 후 완료 Revision 보존"), SensorComponent->RuntimeContacts[ActiveOnlyContactIndex].PublicContact.AnalysisCompletionRevision, 1);
 
 	// [v1.0.0] Passive/Visual 능력을 줄이되 Active duration은 크게 늘려 remaining 비증가를 함께 검증할 SensorData입니다.
 	UCFVehicleSensorData* ReducedBaselineSensorData = NewObject<UCFVehicleSensorData>(GetTransientPackage());
 	ConfigureSensorData(ReducedBaselineSensorData, 1000.0f, 4000.0f, 500.0f, 10.0f);
 	TestTrue(TEXT("Baseline 감소 SensorData 계약 유효"), ReducedBaselineSensorData->IsSensorConfigValid());
 
-	// [v1.0.0] Baseline 감소 apply 전 보존돼야 할 Knowledge/Analysis 비교값입니다.
-	const float BaselineAnalysisBeforeReduction = SensorComponent->RuntimeContacts[BaselineContactIndex].PublicContact.AnalysisProgress01;
 	TestTrue(TEXT("Baseline 감소 SensorData 적용"), SensorComponent->ApplySensorData(ReducedBaselineSensorData));
 	TestEqual(TEXT("Baseline 감소에서도 Contact 즉시 삭제 금지"), SensorComponent->RuntimeContacts.Num(), 2);
 	TestEqual(TEXT("Baseline 감소 시 기존 Live는 LastKnown"), SensorComponent->RuntimeContacts[BaselineContactIndex].PublicContact.ContactState, ECFSensorContactState::LastKnown);
 	TestEqual(TEXT("Baseline 감소 후 ContactId 보존"), SensorComponent->RuntimeContacts[BaselineContactIndex].PublicContact.ContactId, FName(TEXT("Contact_700001")));
 	TestEqual(TEXT("Baseline 감소 후 Detailed Knowledge 보존"), SensorComponent->RuntimeContacts[BaselineContactIndex].PublicContact.InformationLevel, ECFTargetInfoLevel::DetailedScan);
 	TestEqual(TEXT("Baseline 감소 후 KnownTargetId 보존"), SensorComponent->RuntimeContacts[BaselineContactIndex].PublicContact.KnownTargetId, FName(TEXT("ScannerBaselineTarget")));
-	TestTrue(TEXT("Baseline 감소 후 AnalysisProgress 보존"), FMath::IsNearlyEqual(SensorComponent->RuntimeContacts[BaselineContactIndex].PublicContact.AnalysisProgress01, BaselineAnalysisBeforeReduction));
+	TestEqual(TEXT("Baseline 감소 후 완료 Revision 보존"), SensorComponent->RuntimeContacts[BaselineContactIndex].PublicContact.AnalysisCompletionRevision, 1);
 	TestTrue(TEXT("새 duration이 길어도 Active remaining 증가 금지"), FMath::IsNearlyEqual(SensorComponent->GetActiveScanRemainingSeconds(), 2.5f));
 
 	// [v1.0.0] null Apply가 사용해야 할 현재 Component의 scanner-less 0-range Fallback Config입니다.

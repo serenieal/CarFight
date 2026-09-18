@@ -1,8 +1,8 @@
 # CombatPlan Index
 
-- 문서 버전: v0.23
+- 문서 버전: v0.28
 - 작성일: 2026-06-02
-- 최근 갱신일: 2026-07-27
+- 최근 갱신일: 2026-09-18
 - 문서 상태: Current
 - 담당 범위: CarFight 전략 / 전투 시스템 전체 목차
 
@@ -39,6 +39,7 @@
 | 07 | `07_AmmoDamageTypes.md` | Current | 탄종, 피해 타입, 탄수, 적재 중량 규칙 정의 |
 | 08 | `08_DefenseArmor.md` | Current | 피해 타입, 장갑 방향, 방어 타입, 모듈 손상 정의 |
 | 09 | `09_LockSensorEW.md` | Current | 락온, 센서, 전자전 구조 정의 |
+| 09A | `09A_TargetingSensorArch.md` | Phase 7 Guided Weapon Source Technical PASS | Targeting / Sensor / Scan Runtime 책임·상태·Migration 구조와 Phase 1~7 Technical evidence 정의 |
 | 10 | `10_BattFuel.md` | Current | 배터리 / 연료 / 탄약 / 중량 자원 구조 정의 |
 | 11 | `11_WeaponHeat.md` | Current | 무기별 과열 / 냉각 구조 세부 정의 |
 | 12 | `12_Hardpoints.md` | Current | 하드포인트, 무기 그룹, 장착 위치 정의 |
@@ -251,30 +252,38 @@ P0 부품:
 ## 12. 현재 확정된 락온 / 센서 / 전자전 원칙
 
 `09_LockSensorEW.md`에서 확정한 핵심 구조는 아래와 같다.
+상세 Runtime 책임·상태·Migration·검증 기준은 `09A_TargetingSensorArch.md`가 구현 전 Architecture Baseline으로 소유한다.
 
-- 타겟 선택과 장비 락온은 별도 상태다.
-- 별도 락온 입력을 필수로 두지 않으며 기본 방식은 선택 타겟 조준 영역 유지형이다.
-- 무기와 장비별로 다른 락온 획득 방식을 지원한다.
+- `Detection / Contact / Selection / Target Lock / Target Scan / Knowledge`는 서로 독립된 상태와 책임이다.
+- Selection은 플레이어 UI·명령 의도만 소유하며 Sensor, Lock, Scan을 자동 시작하지 않는다.
+- Target Lock은 개별 무기 상태가 아니라 차량 공용 `Vehicle Targeting Runtime`이 소유한다.
+- P0 Target Lock은 단일 Locked Target으로 시작하고 Guided Weapon / EW / 일부 보조 장비가 공용으로 소비한다.
+- Direct Fire 무기는 Target Lock 없이 직접 조준·발사할 수 있다.
+- Active Detection Pulse와 Target Scan은 별도 Operation이며 하나가 다른 하나를 암묵적으로 시작하지 않는다.
 - 레이더는 월드 Actor를 직접 검색하는 미니맵이 아니라 Sensor Contact를 표시한다.
-- 가시 식별과 센서 스캔은 별도 정보 획득 경로다.
+- 가시 식별과 Target Scan은 별도 정보 획득 경로다.
+- Contact 수명과 Knowledge 수명을 분리하고, 장기적으로 Persistent / Dynamic Knowledge Freshness를 구분한다.
+- `ContactId / TargetEntityId / TargetTypeId`를 구분하고 Persistent Knowledge의 실제 개체 귀속은 안정 `TargetEntityId` 기준으로 한다.
 - 미공개 타겟 정보는 `???`로 유지한다.
-- 락온은 자동 명중 시스템이 아니라 전투 압박 상태다.
-- 락온은 센서 범위, 시야, 거리, 목표 움직임, 배터리 상태에 영향을 받는다.
-- 빠른 차량은 락온 안정도를 흔드는 방식으로 생존할 수 있어야 한다.
-- 엄폐, 연막, 플레어, 재밍은 락온에 대한 명확한 대응 수단이다.
-- 대응 없는 락온은 금지한다.
+- Target Lock은 자동 명중 시스템이 아니라 전투 압박 상태다.
+- Target Lock은 센서 범위, 시야, 거리, 목표 움직임, 배터리 상태에 영향을 받는다.
+- 빠른 차량은 Lock Quality를 흔드는 방식으로 생존할 수 있어야 한다.
+- 엄폐, 연막, 플레어, 재밍은 Target Lock과 유도 추적에 대한 명확한 대응 수단이다.
+- 대응 없는 Target Lock은 금지한다.
 
 P0 최소 구현:
 
-1. Sensor Contact와 기본 레이더
-2. 선택 대상과 장비 락온 상태 분리
-3. 기본 조준 유지형 락온 게이지
-4. 가시 식별과 센서 스캔 공개 상태
-5. 배터리 소모
-6. 엄폐로 락온 차단
-7. 횡방향 속도에 따른 락온 시간 증가
-8. 경량 락온 미사일
-9. 연막 또는 플레어 1종
+1. 기존 Sensor / Scan 상태 모델의 6축 책임 분리
+2. Active Detection Pulse와 Target Scan Runtime 상태 분리
+3. 단일 Vehicle Target Lock Runtime
+4. Selection / Lock / Scan 독립 Gameplay Command
+5. Sensor Contact와 기본 레이더
+6. 가시 식별과 Target Scan Knowledge 공개 상태
+7. Direct Fire / Guided Weapon Lock 요구 분리
+8. 배터리 소모와 Lock 유지
+9. 엄폐 / 횡방향 속도에 따른 Lock 약화
+10. 경량 락온 미사일
+11. 연막 또는 플레어 1종
 
 ---
 
@@ -505,6 +514,34 @@ P1 우선순위 후보:
 ---
 
 ## 23. Changelog
+
+### v0.28
+
+- `09A_TargetingSensorArch.md v0.1.16`의 Phase 1~7 구현·Fresh Technical Validation 완료 상태를 현재 CombatPlan 목차에 동기화했다.
+- 09A Current 상태를 `Phase 7 Guided Weapon Source Technical PASS`로 갱신하고, Phase 3B-2 Dynamic Knowledge Domain/Freshness/Rescan만 실제 요구 발생 시 후속 범위로 유지했다.
+
+### v0.27
+
+- `09A_TargetingSensorArch.md v0.1.2` Correction + Design Re-review 결과 `P0 0 / blocking P1 0 / P2 2 non-blocking` PASS를 반영했다.
+- 09A 상태를 `Design Re-review PASS / Implementation Ready`로 갱신했으며 실제 Source/Systems는 후속 구현 전까지 Transitional Current를 유지한다.
+
+### v0.26
+
+- `09A_TargetingSensorArch.md v0.1.1` 교정에 맞춰 실제 대상 개체 Identity를 `TargetEntityId`로 분리하고 Persistent Knowledge 귀속 기준을 상위 원칙에 동기화했다.
+- P0 Lock Requirement exact2, Break Event, Guided Missile 발사 후 Seeker 독립 ownership 등 상세 계약은 09/09A 문서가 소유하도록 유지했다.
+
+### v0.25
+
+- `09A_TargetingSensorArch.md v0.1.0`을 CombatPlan의 공식 Targeting / Sensor / Scan 상세 Architecture Baseline으로 등록했다.
+- `09_LockSensorEW.md`는 상위 전투 기획을, `09A_TargetingSensorArch.md`는 구현 전 Runtime 책임·상태·Migration·검증 구조를 소유하도록 문서 역할을 분리했다.
+
+### v0.24
+
+- `09_LockSensorEW.md v0.4.0` 재설계에 맞춰 `Detection / Contact / Selection / Target Lock / Target Scan / Knowledge` 6축 책임 분리를 CombatPlan 상위 원칙으로 동기화했다.
+- 장비별 Lock ownership을 폐기하고 차량 공용 `Vehicle Targeting Runtime`이 단일 P0 Target Lock을 소유하도록 변경했다.
+- Selection이 Lock/Scan을 암묵적으로 시작하지 않고 Active Detection Pulse와 Target Scan도 독립 Operation으로 유지하도록 고정했다.
+- Direct Fire는 Lock 불필요, Guided Weapon / EW / 일부 보조 장비만 공용 Target Lock을 소비하도록 액션 전투 기준을 정리했다.
+- Contact 수명과 Knowledge 수명, Persistent / Dynamic Knowledge Freshness 확장 방향을 상위 요약에 반영했다.
 
 ### v0.23
 

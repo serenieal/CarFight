@@ -1,15 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.0
-// Date: 2026-08-22
-// Description: CarFight 선택 가능 대상 인터페이스 / Player-facing Identity fail-closed 계약
-// Scope: 대상 선택 가능 여부, 표시 정보, 대표 선택 위치와 추적 상태를 제공하는 최소 Blueprint 계약을 정의합니다.
+// Version: 1.2.0
+// Date: 2026-09-17
+// Description: CarFight 선택 가능 대상 인터페이스 / Gameplay Entity Identity 계약
+// Scope: 대상 선택 가능 여부, Entity Identity, 표시 정보, 대표 선택 위치와 추적 상태를 제공하는 최소 Blueprint 계약을 정의합니다.
 // Changelog:
+// - v1.2.0: 같은 Gameplay Entity lifetime에서 안정적이고 개체별 유일한 TargetEntityId(FGuid) 계약을 추가. 기본 구현은 추측 Identity를 만들지 않고 Invalid Guid로 fail-closed.
 // - v1.1.0: 기본 TargetDisplayInfo가 Actor UObject 이름을 TargetId/DisplayName으로 자동 공개하지 않는 fail-closed 계약을 명시. 안정 ID/Player-facing 이름은 구현체가 명시적으로 제공해야 함.
 // - v1.0.1: BlueprintNativeEvent 기본 구현 함수를 명시적으로 선언하여 생성 코드와의 중복 정의를 방지.
 // - v1.0.0: TS-P0-01용 BlueprintNativeEvent 선택 가능 인터페이스를 추가.
 // Migration:
 // - 선택 대상 Actor 또는 Blueprint는 이 인터페이스를 구현해야 TargetSelectComp에서 사용할 수 있다.
+// - v1.2.0부터 TargetEntityId는 ContactId와 표시용 TargetId를 대체하지 않습니다. Gameplay Entity 재식별이 필요한 구현체만 같은 Entity lifetime 동안 변하지 않는 유효 FGuid를 제공합니다.
+// - v1.2.0 기본 구현은 Invalid Guid를 반환하므로 기존 Blueprint/C++ Targetable은 Detection/Selection을 계속 사용할 수 있지만 Entity 기반 Knowledge 재결합에는 사용되지 않습니다.
 // - v1.1.0부터 기본 표시 정보는 TargetId=None, DisplayName=Empty를 유지합니다. 저장/로그/UI에 사용할 안정 ID와 Player-facing 이름이 필요한 구현체는 명시적으로 제공해야 합니다.
 // - 기본 구현은 유효 Actor를 선택 가능 대상으로 보고 TargetPoint/Bounds 중심을 선택 위치 fallback으로 사용합니다.
 
@@ -23,7 +26,7 @@
 /**
  * Blueprint와 C++ 대상이 구현할 타겟 선택 가능 인터페이스 UObject 타입입니다.
  */
-UINTERFACE(BlueprintType, meta=(DisplayName="타겟 선택 가능 (Target Selectable)", ToolTip="대상이 선택 가능 여부, 표시 정보, 대표 위치와 추적 상태를 제공하도록 하는 인터페이스입니다."))
+UINTERFACE(BlueprintType, meta=(DisplayName="타겟 선택 가능 (Target Selectable)", ToolTip="대상이 선택 가능 여부, Entity ID, 표시 정보, 대표 위치와 추적 상태를 제공하도록 하는 인터페이스입니다."))
 class CARFIGHT_RE_API UCFTargetSelectable : public UInterface
 {
 	GENERATED_BODY()
@@ -44,11 +47,18 @@ public:
 	// [v1.0.1] C++ 또는 Blueprint가 재정의하지 않았을 때 호출할 기본 선택 가능 여부 구현입니다.
 	virtual bool IsTargetSelectable_Implementation(const FCFTargetSelectionContext& SelectionContext) const;
 
-		// [v1.1.0] UI와 장비 시스템이 사용할 대상 표시 정보를 반환하며 명시 Identity가 없으면 내부 UObject 이름을 공개하지 않습니다.
+	// [v1.2.0] 같은 Gameplay Entity lifetime에서 유지되는 개체별 Entity ID를 반환하며 ContactId/표시용 TargetId와 독립입니다.
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category="CarFight|TargetSelect|Selectable", meta=(DisplayName="타겟 엔티티 ID 반환 (Get Target Entity ID)", ToolTip="같은 Gameplay Entity lifetime 동안 변하지 않는 개체별 FGuid를 반환합니다. ContactId나 VehicleData 기반 TargetId를 재사용하지 마십시오. 기본 구현은 Invalid Guid입니다."))
+	FGuid GetTargetEntityId() const;
+
+	// [v1.2.0] C++ 또는 Blueprint가 재정의하지 않았을 때 추측 Identity를 만들지 않고 Invalid Guid를 반환합니다.
+	virtual FGuid GetTargetEntityId_Implementation() const;
+
+	// [v1.1.0] UI와 장비 시스템이 사용할 대상 표시 정보를 반환하며 명시 Identity가 없으면 내부 UObject 이름을 공개하지 않습니다.
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category="CarFight|TargetSelect|Selectable", meta=(DisplayName="타겟 표시 정보 반환 (Get Target Display Info)", ToolTip="타겟 ID, 표시 이름, 분류, 관계, 정보 단계와 속성 태그를 반환합니다. 기본 C++ 구현은 TargetId와 표시 이름을 비운 채 미분류/미확인 의미만 제공합니다."))
 	FCFTargetDisplayInfo GetTargetDisplayInfo() const;
 
-		// [v1.1.0] C++ 또는 Blueprint가 재정의하지 않았을 때 TargetId/DisplayName을 비워 내부 UObject 이름 노출을 막는 기본 표시 정보 구현입니다.
+	// [v1.1.0] C++ 또는 Blueprint가 재정의하지 않았을 때 TargetId/DisplayName을 비워 내부 UObject 이름 노출을 막는 기본 표시 정보 구현입니다.
 	virtual FCFTargetDisplayInfo GetTargetDisplayInfo_Implementation() const;
 
 	// [v1.0.0] 후보 평가와 UI 투영에 사용할 대표 선택 월드 위치를 반환합니다.

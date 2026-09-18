@@ -1,8 +1,8 @@
 # WeaponFire
 
-- Version: 1.8.0
-- Date: 2026-08-18
-- Status: Current / Applied Fitting Weapon Selection + Ammo + Weapon Heat Runtime Integrated / Muzzle Clearance User PIE Verified
+- Version: 1.9.1
+- Date: 2026-09-18
+- Status: Current / Applied Fitting + Ammo/Heat + Phase 7 Guided Weapon Locked Target Admission Technical PASS / Final Audit Correction PASS
 - Scope: 현재 구현된 차량 로컬 발사 명령, Applied Fitting 기반 실제 무기 선택, WeaponData 해석, Weapon Aim Solution, 쿨다운·Ammo·Heat 발사 가능 경계, HitScan / Projectile 분기, 발사 결과 기록과 UI 피드백 연결 기준
 
 ---
@@ -12,7 +12,7 @@
 이 문서는 CarFight의 현재 `WeaponFire` 구현이 실제로 어떤 일을 하는지 기록한다.
 
 이 문서는 미래 설계서가 아니다.
-현재 문서 기준 `WeaponFire`는 **싱글플레이 로컬 Pawn에서 Fire 입력을 받아 발사 명령을 만들고, 무기/장착/발사체 데이터를 해석한 뒤 HitScan 또는 Projectile 실행 경로로 넘기며, 그 결과를 Aim / Debug / 후속 UI 피드백이 읽을 수 있게 기록하는 기능**이다.
+현재 문서 기준 `WeaponFire`는 **싱글플레이 로컬 Pawn에서 Fire 입력을 받아 발사 명령을 만들고, 무기/장착/발사체 데이터를 해석한 뒤 HitScan 또는 Projectile 실행 경로로 넘기며, TargetActor Guided Projectile에 한해서 발사 전 Vehicle Locked Target을 Guidance source로 admission하고, 그 결과를 Aim / Debug / 후속 UI 피드백이 읽을 수 있게 기록하는 기능**이다.
 
 현재 CarFight의 전투 구현 기준은 **싱글플레이 로컬 차량 전투**다.
 따라서 서버 권한 발사, 복제, 2클라 검증, 서버 대기 UI는 현재 구현 범위로 보지 않는다.
@@ -46,7 +46,8 @@
 
 | 구분 | 현재 구현 |
 | --- | --- |
-| 차량 발사 주체 | `ACFVehiclePawn` |
+| 차량 입력 / Fire observable authority | `ACFVehiclePawn` |
+| 발사 계산·검증·실행 coordinator | `UCFVehicleFireComp` |
 | 조준 입력 공급 | `UCFVehicleAimComp` |
 | 무기 / 장착 해석 | `UCFVehicleWeaponComp` |
 | 무기 데이터 | `UCFWeaponData` |
@@ -57,9 +58,12 @@
 | 발사 명령 타입 | `FCFVehicleFireRequest` |
 | 발사 결과 타입 | `FCFVehicleFireResult` |
 | 발사 입력 함수 | `ACFVehiclePawn::HandleFireStarted` |
-| 발사 명령 생성 | `ACFVehiclePawn::BuildFireCommand` |
-| 발사 검증 | `ACFVehiclePawn::ValidateFireCommand` |
-| 결과 반영 | `ACFVehiclePawn::ApplyFireResult` |
+| 발사 명령 생성 | `ACFVehiclePawn::BuildFireCommand` facade → `UCFVehicleFireComp::BuildFireCommand` |
+| 입력 발사 orchestration | `UCFVehicleFireComp::HandleFireStarted` |
+| 발사 검증 | `ACFVehiclePawn::ValidateFireCommand` compatibility facade → `UCFVehicleFireComp::ValidateFireCommand` |
+| 실제 실행 | `UCFVehicleFireComp::ExecuteAcceptedFireCommand` |
+| 결과 observable commit | `ACFVehiclePawn::ApplyFireResultInternal` |
+| 결과 side effect | `UCFVehicleFireComp::ApplyFireResultSideEffects` |
 
 ---
 
@@ -67,19 +71,26 @@
 
 ### 4.1 Fire 입력을 로컬 발사 명령으로 변환
 
-현재 `ACFVehiclePawn::HandleFireStarted`는 Fire 입력이 들어오면 아래 흐름을 실행한다.
+현재 `ACFVehiclePawn::HandleFireStarted`는 Enhanced Input과 입력 순간 Fire observable commit만 Pawn에 유지하고 실제 발사 행동을 `UCFVehicleFireComp`로 위임한다.
 
 ```text
-HandleFireStarted
-→ BuildFireCommand
+ACFVehiclePawn::HandleFireStarted
+→ LastFireRequest = Pawn BuildFireCommand facade
+→ UCFVehicleFireComp::BuildFireCommand
+→ UCFVehicleFireComp::HandleFireStarted
 → ValidateFireCommand
-→ Projectile Actor 사용 가능 시 TrySpawnProjectileActorFromFireCommand
-→ Projectile Actor 사용 불가 또는 확보 실패 시 RunLocalDummyHitScan
-→ ApplyFireResult
+→ TargetActor Guided Projectile이면 ResolveInitialGuidanceTargetActor
+→ 필요한 Launcher Ammo reservation
+→ ExecuteAcceptedFireCommand
+   ├─ HitScan
+   └─ Projectile LaunchContext → ProjectilePool
+→ ACFVehiclePawn::ApplyFireResultInternal
+→ UCFVehicleFireComp::ApplyFireResultSideEffects
 ```
 
-현재 발사 흐름은 싱글플레이 로컬 기준이다.
-기존 서버 RPC 발사 흐름은 현재 기본 실행 경로가 아니다.
+`ACFVehiclePawn::BuildFireCommand / ValidateFireCommand / ExecuteAcceptedFireCommand` 등의 기존 Public 함수는 compatibility facade로 남아 있지만 계산·검증·실행 behavior owner는 `UCFVehicleFireComp`다. FireRequest ID/시간, LastFireRequest/LastFireResult 같은 observable state authority는 Pawn에 유지한다.
+
+현재 발사 흐름은 싱글플레이 로컬 기준이다. 기존 서버 RPC 발사 흐름은 현재 기본 실행 경로가 아니다.
 
 ### 4.2 Aim 상태에서 기본 FireRequest 생성
 
@@ -183,9 +194,14 @@ TraceMiss
 TurretAligning
 WeaponNotAligned
 MuzzleBlocked
+Reloading
+WeaponActionLocked
+WeaponOverheated
+WeaponChargeInsufficient
+GuidanceTargetUnavailable
 ```
 
-현재 `ValidateFireCommand`에서 실제로 핵심 사용되는 거부 사유는 아래 범주다. `TurretAligning`과 `WeaponNotAligned`는 `bAllowFireWhileAligning=false`일 때만 거부하며, `MuzzleBlocked`는 정책과 관계없이 항상 거부한다.
+`ValidateFireCommand`는 조준·무기·쿨다운·Ammo/Heat/Charge 등 발사 전 조건을 검사하고, `VehicleFireComp::HandleFireStarted / ExecuteAcceptedFireCommand`는 그 뒤 실행 경계에서 추가 거부를 만들 수 있다. Phase 7의 `GuidanceTargetUnavailable`은 후자에 속하며 TargetActor Guided Projectile의 Locked Target admission이 실패했을 때 Projectile acquire와 Launcher Ammo reservation 전에 사용한다. `TurretAligning`과 `WeaponNotAligned`는 `bAllowFireWhileAligning=false`일 때만 거부하며, `MuzzleBlocked`는 정책과 관계없이 항상 거부한다.
 
 `MuzzleBlocked`는 전체 Command 경로가 아니라 총구 바로 앞의 안전 구간에만 적용한다. 기본 안전 거리는 `TurretMountData.MuzzleClearanceDistanceCm=150cm`이며, Command 목표가 더 가까우면 목표 거리까지만 검사한다. 안전 구간 이후의 벽·지형·차량은 발사를 막지 않고 실제 HitScan 또는 Projectile 충돌로 처리한다. 안전 구간 안에서도 첫 적중 Actor가 `VehicleHealthComp`를 가진 차량이면 유효 피해 대상으로 발사를 허용한다. 값이 `0`이면 총구 가림 사전 검사를 비활성화한다.
 
@@ -521,6 +537,7 @@ CooldownRatio = ActiveWeaponRemainingCooldownSeconds / ActiveWeaponCooldownSecon
 - Weapon Debug Snapshot 필드 변경
 - 실제 피해 적용이 WeaponFire 안으로 들어오는 구조 변경
 - RejectReason 종류 또는 의미 변경
+- TargetActor Guided Projectile의 Vehicle Locked Target admission / GuidanceTargetActor source 변경
 - Weapon Heat 발사 차단 또는 회복 정책 변경
 - OutOfWeaponArc를 실제 발사 거부 조건으로 사용하게 될 때
 - AimReticle / FireFeedback이 WeaponFire 결과를 읽는 최종 경로가 확정될 때
@@ -528,10 +545,48 @@ CooldownRatio = ActiveWeaponRemainingCooldownSeconds / ActiveWeaponCooldownSecon
 
 ---
 
+## 12.1 Phase 7 Guided Weapon 발사 전 Target admission
+
+Phase 7부터 WeaponFire는 **실제 Projectile Actor 실행 경로이면서 TargetActor Guidance가 활성인 경우에만** Vehicle Lock을 발사 전 필수 source로 사용한다.
+
+```text
+ShouldUseProjectileActorFire() == true
+AND MissileGuideConfig.IsGuidanceEnabled() == true
+AND GuideMode == TargetActor
+→ VehicleTargetingComp::GetLockedTargetActor() 필수
+→ 첫 승인 발사 순간 GuidanceTargetActor snapshot
+```
+
+다음은 새 Lock 요구 대상이 아니다.
+
+```text
+HitScan
+비유도 Projectile / Rocket
+Guidance disabled
+TargetActor 이외 GuideMode
+```
+
+TargetActor Guided Projectile에서 Targeting Runtime 미준비, Idle, Acquiring, invalid Locked Snapshot/Actor이면 `GuidanceTargetUnavailable`으로 fail-closed한다. 이 거부는 Projectile Pool acquire와 SingleCycle/Ripple/Salvo Ammo reservation/commit보다 먼저 확정한다.
+
+`CommandTargetLocation`과 Aim Direction은 기존 Weapon Aim Solution 계약을 유지한다. Locked Actor의 현재 위치로 강제 교체하지 않는다.
+
+Ripple/Salvo는 첫 승인 발사의 Locked Guidance Actor snapshot을 Launcher에 전달하며, 이후 Selection 또는 새 Lock 변경으로 진행 중 Volley를 자동 retarget하지 않는다.
+
+Final focused evidence:
+
+```text
+Official UE 5.8 Build = 052b1fc8d0414f6187013655dd19f44d PASS
+Phase 7 Guided source = 731a047740c244e096e43c1f048243a1 PASS
+Launcher snapshot = 1e0ad2dafbee477e83e8bbd07583c951 PASS
+Direct Missile Runtime = fe4e25d60dcb4bfaa752325555bbd362 PASS
+```
+
+---
+
 ## 13. 문서 버전 관리
 
-- 현재 문서 버전: `1.8.0`
-- 문서 상태: `Current / Ammo + Weapon Heat Runtime Integrated / Muzzle Clearance User PIE Verified`
+- 현재 문서 버전: `1.9.1`
+- 문서 상태: `Current / Ammo + Weapon Heat + Phase 7 Guided Weapon Locked Target Admission Technical PASS / Final Audit Correction PASS`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
   - 기능 설명 본문이 바뀌면 체인지로그도 같이 갱신한다.
@@ -643,6 +698,29 @@ CooldownRatio = ActiveWeaponRemainingCooldownSeconds / ActiveWeaponCooldownSecon
 ---
 
 ## 15. Changelog
+
+### v1.9.1 - 2026-09-18
+
+```text
+- Phase 7 Final Audit에서 남아 있던 VPS 이전 Pawn 직접 실행 설명을 현재 Pawn observable/facade + UCFVehicleFireComp coordinator 구조로 교정했다.
+- Current 실행 흐름을 Pawn input → FireComp Build/Validate/Guidance admission/Execute → Pawn observable commit → FireComp side effect 순서로 정렬했다.
+- ECFVehicleFireRejectReason 현재 enum에 Reloading, WeaponActionLocked, WeaponOverheated, WeaponChargeInsufficient, GuidanceTargetUnavailable을 반영했다.
+- GuidanceTargetUnavailable이 ValidateFireCommand 자체가 아니라 TargetActor Guided Projectile의 pre-launch execution admission에서 발생하는 사유임을 명시했다.
+- Runtime behavior 변경은 없으며 CFVehicleFireComp Source 변경은 stale comment correction exact1뿐이다.
+```
+
+### v1.9.0 - 2026-09-18
+
+```text
+- Phase 7 TargetActor Guided Weapon의 Guidance source를 Selected Target에서 Vehicle Locked Target으로 이동했다.
+- 실제 Projectile Actor + TargetActor Guidance에만 Lock을 요구하며 HitScan/비유도 Projectile/다른 GuideMode의 기존 발사 계약은 보존했다.
+- Targeting 미준비/Idle/Acquiring/invalid Locked Actor는 GuidanceTargetUnavailable으로 Projectile acquire와 Ammo reservation 전에 fail-closed한다.
+- Selected B / Locked A 실제 launch에서 MissileGuideComp GuidanceTargetActor가 A임을 확인했고 HitScan/Guidance-disabled Projectile의 무Lock 호환도 검증했다.
+- Ripple/Salvo는 첫 승인 발사의 Guidance snapshot을 유지하며 이후 Selection/새 Lock 변경으로 자동 retarget하지 않는다.
+- Final Official UE 5.8 Build 052b1fc8d0414f6187013655dd19f44d PASS, Phase7/Launcher/Direct Missile focused exact3 모두 PASS다.
+```
+
+Migration: TargetActor Guided Projectile의 발사 전 목표 admission은 VehicleFireComp + VehicleTargetingComp가 소유한다. TargetSelect는 계속 Selection authority이며 Guidance source가 아니다.
 
 ### v1.8.0 - 2026-08-18
 
@@ -758,15 +836,19 @@ Migration: Applied Fitting 기반 차량은 Weapon Selection fixed order/Selecte
 
 ## 16. 마지막 확인 기준
 
-- 확인 일시: `2026-08-18`
+- 확인 일시: `2026-09-18`
 - 확인 근거:
-  - `UE/Source/CarFight_Re/Public/CFVehiclePawn.h v2.150.0`
-  - `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp v2.150.0`
-  - `UE/Source/CarFight_Re/Public/CFVehicleWeaponComp.h v1.23.0`
-  - `UE/Source/CarFight_Re/Private/CFVehicleWeaponComp.cpp v1.23.0`
+  - `UE/Source/CarFight_Re/Public/CFVehiclePawn.h v2.176.0`
+  - `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp v2.176.0`
+  - `UE/Source/CarFight_Re/Public/CFVehicleWeaponComp.h v1.25.0`
+  - `UE/Source/CarFight_Re/Private/CFVehicleWeaponComp.cpp v1.25.0`
   - `UE/Source/CarFight_Re/Public/CFWeaponHeatRuntime.h v1.0.0`
   - `UE/Source/CarFight_Re/Public/CFVehicleWeaponTypes.h`
-  - `UE/Source/CarFight_Re/Public/CFVehicleAimTypes.h`
+  - `UE/Source/CarFight_Re/Public/CFVehicleAimTypes.h v1.15.0`
+  - `UE/Source/CarFight_Re/Public/CFVehicleFireComp.h v1.1.0`
+  - `UE/Source/CarFight_Re/Private/CFVehicleFireComp.cpp v1.1.0`
+  - `UE/Source/CarFight_Re/Public/CFVehicleTargetingComp.h v1.0.2`
+  - `UE/Source/CarFight_Re/Private/CFVehicleTargetingComp.cpp v1.0.2`
   - `UE/Source/CarFight_Re/Public/CFEquipmentPresetData.h`
     - `UE/Source/CarFight_Re/Public/CFTurretMountData.h`
     - `UE/Source/CarFight_Re/Public/CFWeaponData.h v1.12.1`
@@ -777,4 +859,9 @@ Migration: Applied Fitting 기반 차량은 Weapon Selection fixed order/Selecte
     - `Document/Systems/Vehicles/VehicleAim.md`
   - Heat final Build `0ecfed49ab3a4f41b349fc707c44e5f2`
   - Heat exact Automation `c736d1a6d6134a798a4b84452750e3d6` / Result SHA-256 `1abf0dc7a4788d6543c7933abef38433849ae57d569229cfab220f14937abad5`
+  - Phase 7 Final Audit Official UE 5.8 Build `437efa728f814c0e85ddfba59163d69c` PASS
+  - Phase 7 Final Audit exact Automation `6325eb8d13124656b00b6427b40f7042` / `CarFight.Targeting.Phase7.GuidedWeaponLockedTargetSource` 1/1 PASS
+  - `Document/Systems/Targeting/VehicleTargeting.md v1.3.0`
+  - `Document/Systems/Combat/Launcher.md v1.1.0`
+  - `Document/Systems/Combat/MissileGuidance.md v1.1.0`
   - `Document/Systems/UI/AimReticle.md`

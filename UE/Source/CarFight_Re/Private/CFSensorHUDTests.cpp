@@ -1,13 +1,17 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.0
-// Date: 2026-08-20
-// Description: CF-FQ-036 Sensor Snapshot HUD + CF-FQ-032 UI-P0-08 Radar Range Foundation asset-free Automation
-// Scope: Sensor Knowledge/Radar Snapshot, DestroyedHold와 Scanner Range Profile 기반 Display Range/Zoom/normalized selected-edge 계약을 검증합니다.
+// Version: 1.3.0
+// Date: 2026-09-18
+// Description: Phase 6 HUD Presentation + Sensor Snapshot/Radar Range asset-free Automation
+// Scope: Sensor Knowledge/Radar Snapshot, Selection·Vehicle Target Lock·Target Scan 독립 HUD ViewData, DestroyedHold와 Scanner Range Profile 기반 표시 계약을 검증합니다.
 // Changelog:
+// - v1.3.0: 실제 VehiclePawn/Sensor/TargetSelect/VehicleTargeting/HUDDataProvider 조합에서 Selected B / Locked A / Scanning A와 Selection Clear 이후 Lock/Scan 유지가 독립 ViewData로 투영되는 Phase 6 회귀를 추가.
+// - v1.2.0: 제거된 Contact/HUD AnalysisProgress fixture/assertion을 삭제하고 Identified/DestroyedHold 검증을 Knowledge + 완료 Revision 의미로 정리.
 // - v1.1.0: RadarRangeFoundationContract를 추가해 transient Scanner Range Profile의 explicit default, 50m→25m Zoom In, 선택 Contact range-out edge direction, Zoom Out, Applied-copy source isolation을 검증.
 // - v1.0.0: HUDSnapshot 단일 계약 Automation을 최초 추가.
 // Migration:
+// - v1.3.0부터 Phase 6 HUD 회귀는 FCFTargetHUDData=Selection/Knowledge, FCFTargetLockHUDData=Vehicle Targeting Snapshot, FCFTargetScanHUDData=Sensor ScanAttempt의 독립 source 경계를 실제 Provider에서 검증합니다.
+// - v1.2.0부터 Target/Radar HUD는 Contact 기반 AnalysisProgress를 노출하지 않습니다. 현재 Scan 진행률은 ScanAttempt 전용 ViewData에서만 검증합니다.
 // - UI-P0-08 테스트 Range 수치는 transient Automation 전용이며 Production SensorData/Scanner Asset에 저장하지 않습니다.
 // - 기존 HUDSnapshot의 scanner-less 빈 Radar Range Profile은 NormalizedPosition Unavailable 회귀를 그대로 검증합니다.
 // - transient Editor World, C++ ACFVehiclePawn/ACFMissileTestTarget, transient Health/DamageData만 사용하며 Content Asset을 생성·수정·저장하지 않습니다.
@@ -23,6 +27,7 @@
 #include "CFVehiclePawn.h"
 #include "CFVehicleSensorComp.h"
 #include "CFVehicleSensorData.h"
+#include "CFVehicleTargetingComp.h"
 
 #include "Engine/World.h"
 #include "Misc/AutomationTest.h"
@@ -98,15 +103,15 @@ namespace
 
 		SensorComponent->ResetSensorRuntime();
 		SensorComponent->FallbackSensorConfig.PassiveDetectionRangeCm = 5000.0f;
-		SensorComponent->FallbackSensorConfig.ActiveScanRangeCm = 0.0f;
+		SensorComponent->FallbackSensorConfig.ActiveScanRangeCm = 5000.0f;
 		SensorComponent->FallbackSensorConfig.VisualDetectionRangeCm = 0.0f;
 		SensorComponent->FallbackSensorConfig.UpdateIntervalSec = 0.1f;
 		SensorComponent->FallbackSensorConfig.MaxActorScansPerUpdate = 64;
 		SensorComponent->FallbackSensorConfig.ContactMemoryTimeSec = 5.0f;
 		SensorComponent->FallbackSensorConfig.DestroyedHoldTimeSec = 2.0f;
-		SensorComponent->FallbackSensorConfig.ActiveScanDurationSec = 0.0f;
-		SensorComponent->FallbackSensorConfig.AnalysisGainPerSec = 0.0f;
-		SensorComponent->FallbackSensorConfig.AnalysisDecayPerSec = 0.0f;
+		SensorComponent->FallbackSensorConfig.ActiveScanDurationSec = 3.0f;
+		SensorComponent->FallbackSensorConfig.AnalysisGainPerSec = 0.5f;
+		SensorComponent->FallbackSensorConfig.AnalysisDecayPerSec = 0.2f;
 		SensorComponent->FallbackSensorConfig.IdentifiedThreshold = 0.5f;
 		SensorComponent->FallbackSensorConfig.DetailedScanThreshold = 1.0f;
 		return SensorComponent->InitializeSensorRuntime();
@@ -308,7 +313,7 @@ bool FCFSensorHUDSnapshotTest::RunTest(const FString& Parameters)
 	IdentifiedRuntimeContact.PublicContact.InformationLevel = ECFTargetInfoLevel::Identified;
 	IdentifiedRuntimeContact.PublicContact.KnownTargetId = TEXT("SensorHUDTarget");
 	IdentifiedRuntimeContact.PublicContact.KnownDisplayName = FText::FromString(TEXT("SENSOR HUD TARGET"));
-	IdentifiedRuntimeContact.PublicContact.AnalysisProgress01 = 0.60f;
+	IdentifiedRuntimeContact.PublicContact.AnalysisCompletionRevision = 0;
 	SensorComponent->PublishRuntimeSnapshot();
 	HUDDataProvider->RefreshViewData();
 
@@ -318,7 +323,7 @@ bool FCFSensorHUDSnapshotTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("HUD KnownTargetId 공개"), IdentifiedHUDViewData.Target.TargetId, FName(TEXT("SensorHUDTarget")));
 	TestEqual(TEXT("HUD Identity Known"), IdentifiedHUDViewData.Target.IdentityAvailability, ECFUIViewAvailability::Known);
 	TestEqual(TEXT("HUD KnownDisplayName 공개"), IdentifiedHUDViewData.Target.DisplayName.ToString(), FString(TEXT("SENSOR HUD TARGET")));
-	TestTrue(TEXT("HUD AnalysisProgress Snapshot 값 보존"), FMath::IsNearlyEqual(IdentifiedHUDViewData.Target.AnalysisProgress01, 0.60f, KINDA_SMALL_NUMBER));
+	TestEqual(TEXT("HUD Identified는 Detailed 완료 Revision 없음"), IdentifiedHUDViewData.Target.AnalysisCompletionRevision, 0);
 
 	// [v1.0.0] DestroyedHold 뒤에도 같은 Contact인지 확인할 승격 완료 ContactId입니다.
 	const FName IdentifiedContactId = IdentifiedHUDViewData.Target.ContactId;
@@ -352,7 +357,6 @@ bool FCFSensorHUDSnapshotTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("DestroyedHold 상태 전달"), DestroyedRadarContact.ContactState, ECFSensorContactState::DestroyedHold);
 		TestTrue(TEXT("DestroyedHold bDestroyedConfirmed 전달"), DestroyedRadarContact.bDestroyedConfirmed);
 		TestEqual(TEXT("DestroyedHold Knowledge Identified 유지"), DestroyedRadarContact.InformationLevel, ECFTargetInfoLevel::Identified);
-		TestTrue(TEXT("DestroyedHold AnalysisProgress 유지"), FMath::IsNearlyEqual(DestroyedRadarContact.AnalysisProgress01, 0.60f, KINDA_SMALL_NUMBER));
 		TestTrue(TEXT("선택은 clear됐으므로 DestroyedHold bSelected false"), !DestroyedRadarContact.bSelected);
 		TestTrue(TEXT("DestroyedHold 마지막 신뢰 전방 위치 약 30m"), FMath::IsNearlyEqual(DestroyedRadarContact.RelativePositionMeters.X, 30.0f, 0.05f));
 		TestTrue(TEXT("DestroyedHold 마지막 신뢰 우측 위치 약 10m"), FMath::IsNearlyEqual(DestroyedRadarContact.RelativePositionMeters.Y, 10.0f, 0.05f));
@@ -360,6 +364,157 @@ bool FCFSensorHUDSnapshotTest::RunTest(const FString& Parameters)
 
 	HUDDataProvider->ShutdownProvider();
 	TargetActor->Destroy();
+	VehiclePawn->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFPhase6HUDChannelsTest,
+	"CarFight.Targeting.Phase6.HUDPresentationChannels",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.3.0] 실제 Provider가 Selection, Vehicle Target Lock, Target Scan을 서로 다른 Runtime source에서 독립 ViewData로 투영하는지 검증합니다.
+bool FCFPhase6HUDChannelsTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.3.0] Content Asset 저장 없이 Phase 6 Runtime→Provider 경계를 검증할 transient Editor World입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("Phase 6 HUD Presentation 테스트 World 생성"), TestWorld))
+	{
+		return false;
+	}
+
+	AddExpectedError(
+		TEXT("VehicleVisualHitCollision: SM_Body component missing on Phase6HUDVehiclePawn."),
+		EAutomationExpectedErrorFlags::Contains,
+		1);
+
+	// [v1.3.0] Sensor/Selection/Targeting Runtime과 HUD Provider의 실제 source가 될 차량 Pawn Spawn 설정입니다.
+	FActorSpawnParameters PawnSpawnParameters;
+	PawnSpawnParameters.Name = TEXT("Phase6HUDVehiclePawn");
+
+	// [v1.3.0] Phase 6 독립 HUD 채널을 제공할 실제 기본 Component 조합 차량입니다.
+	ACFVehiclePawn* VehiclePawn = TestWorld->SpawnActor<ACFVehiclePawn>(
+		ACFVehiclePawn::StaticClass(),
+		FVector::ZeroVector,
+		FRotator::ZeroRotator,
+		PawnSpawnParameters);
+
+	// [v1.3.0] Scan과 Lock이 캡처한 뒤 Selection 변경에도 유지해야 할 Target A입니다.
+	ACFMissileTestTarget* TargetActorA = SpawnSensorHUDTarget(
+		TestWorld,
+		TEXT("Phase6HUDTargetA"),
+		FVector(3000.0f, 0.0f, 0.0f),
+		TEXT("Phase6HUDTargetA"),
+		FText::FromString(TEXT("PHASE 6 TARGET A")));
+
+	// [v1.3.0] Lock/Scan A가 유지되는 동안 새 Selection으로 바꿀 Target B입니다.
+	ACFMissileTestTarget* TargetActorB = SpawnSensorHUDTarget(
+		TestWorld,
+		TEXT("Phase6HUDTargetB"),
+		FVector(3500.0f, 500.0f, 0.0f),
+		TEXT("Phase6HUDTargetB"),
+		FText::FromString(TEXT("PHASE 6 TARGET B")));
+	if (!TestNotNull(TEXT("Phase 6 HUD Vehicle Pawn 생성"), VehiclePawn)
+		|| !TestNotNull(TEXT("Phase 6 HUD Target A 생성"), TargetActorA)
+		|| !TestNotNull(TEXT("Phase 6 HUD Target B 생성"), TargetActorB))
+	{
+		return false;
+	}
+
+	// [v1.3.0] Target Scan Attempt와 actor-free Sensor Snapshot을 소유하는 차량 Sensor Runtime입니다.
+	UCFVehicleSensorComp* SensorComponent = VehiclePawn->GetVehicleSensorComp();
+	// [v1.3.0] 현재 Selection만 소유하고 Lock/Scan source가 아닌 TargetSelect Runtime입니다.
+	UCFTargetSelectComp* TargetSelectComponent = VehiclePawn->GetTargetSelectComp();
+	// [v1.3.0] Vehicle Target Lock Snapshot을 소유하는 독립 Targeting Runtime입니다.
+	UCFVehicleTargetingComp* TargetingComponent = VehiclePawn->GetVehicleTargetingComp();
+	if (!TestNotNull(TEXT("Phase 6 HUD Sensor Component"), SensorComponent)
+		|| !TestNotNull(TEXT("Phase 6 HUD TargetSelect Component"), TargetSelectComponent)
+		|| !TestNotNull(TEXT("Phase 6 HUD Targeting Component"), TargetingComponent))
+	{
+		TargetActorB->Destroy();
+		TargetActorA->Destroy();
+		VehiclePawn->Destroy();
+		return false;
+	}
+
+	TestTrue(TEXT("Phase 6 HUD Sensor Runtime 초기화"), ConfigureSensorHUDRuntime(SensorComponent));
+	TargetingComponent->ResetTargetingRuntime();
+	TestTrue(TEXT("Phase 6 HUD Targeting Runtime 초기화"), TargetingComponent->InitializeTargetingRuntime());
+	TargetSelectComponent->bAutoRefreshCandidate = false;
+
+	// [v1.3.0] Target A/B를 같은 Sensor Snapshot의 Live Contact로 만드는 현재 Applied Sensor Config입니다.
+	const FCFSensorConfig AppliedSensorConfig = SensorComponent->GetResolvedSensorConfig();
+	TestTrue(TEXT("Phase 6 HUD Target A Passive Contact 생성"), SensorComponent->ProcessPassiveScanActor(TargetActorA, AppliedSensorConfig));
+	TestTrue(TEXT("Phase 6 HUD Target B Passive Contact 생성"), SensorComponent->ProcessPassiveScanActor(TargetActorB, AppliedSensorConfig));
+	SensorComponent->PublishRuntimeSnapshot();
+
+	// [v1.3.0] 이후 독립 채널 비교에서 사용할 Target A의 안정 Sensor ContactId입니다.
+	FName TargetAContactId = NAME_None;
+	// [v1.3.0] 이후 Selection ViewData 비교에서 사용할 Target B의 안정 Sensor ContactId입니다.
+	FName TargetBContactId = NAME_None;
+	TestTrue(TEXT("Phase 6 HUD Target A ContactId 해석"), SensorComponent->TryGetContactIdForActor(TargetActorA, TargetAContactId));
+	TestTrue(TEXT("Phase 6 HUD Target B ContactId 해석"), SensorComponent->TryGetContactIdForActor(TargetActorB, TargetBContactId));
+	TestFalse(TEXT("Phase 6 HUD Target A ContactId 유효"), TargetAContactId.IsNone());
+	TestFalse(TEXT("Phase 6 HUD Target B ContactId 유효"), TargetBContactId.IsNone());
+
+	// [v1.3.0] Lock/Scan command가 캡처할 최초 Selection A입니다.
+	TestTrue(
+		TEXT("Phase 6 HUD Target A Selection"),
+		TargetSelectComponent->SetSelectedTarget(TargetActorA, TargetSelectComponent->GetDefaultSelectionContext()));
+	TestTrue(TEXT("Phase 6 HUD Target A Scan 시작"), VehiclePawn->RequestStartTargetScan());
+	TestEqual(
+		TEXT("Phase 6 HUD Target A Lock 요청 Accepted"),
+		VehiclePawn->RequestLockSelectedTarget(),
+		ECFTargetLockRequestResult::Accepted);
+
+	// [v1.3.0] Lock/Scan은 A를 캡처한 뒤 현재 Selection만 B로 변경합니다.
+	TestTrue(
+		TEXT("Phase 6 HUD Selection A→B 변경"),
+		TargetSelectComponent->SetSelectedTarget(TargetActorB, TargetSelectComponent->GetDefaultSelectionContext()));
+
+	// [v1.3.0] 실제 Runtime Snapshot들을 ViewData로 변환할 transient HUD Provider입니다.
+	UCFHUDDataProvider* HUDDataProvider = NewObject<UCFHUDDataProvider>(
+		GetTransientPackage(),
+		TEXT("HUDDataProvider_Phase6Channels"));
+	if (!TestNotNull(TEXT("Phase 6 HUD Provider 생성"), HUDDataProvider))
+	{
+		TargetActorB->Destroy();
+		TargetActorA->Destroy();
+		VehiclePawn->Destroy();
+		return false;
+	}
+	HUDDataProvider->RebindCurrentPawn(VehiclePawn);
+	HUDDataProvider->RefreshViewData();
+
+	// [v1.3.0] 같은 Refresh에서 Selection B, Lock A, Scan A가 동시에 존재해야 하는 독립 통합 ViewData입니다.
+	const FCFInGameUIViewData IndependentChannelsViewData = HUDDataProvider->GetCurrentViewData();
+	TestEqual(TEXT("Phase 6 Selection 채널은 Target B"), IndependentChannelsViewData.Target.ContactId, TargetBContactId);
+	TestEqual(TEXT("Phase 6 Lock 채널은 Target A"), IndependentChannelsViewData.TargetLock.TargetContactId, TargetAContactId);
+	TestEqual(TEXT("Phase 6 Lock 채널 Acquiring"), IndependentChannelsViewData.TargetLock.State, ECFTargetLockState::Acquiring);
+	TestEqual(TEXT("Phase 6 Scan 채널은 Target A"), IndependentChannelsViewData.TargetScan.ActiveTargetContactId, TargetAContactId);
+	TestTrue(TEXT("Phase 6 Scan 채널 active"), IndependentChannelsViewData.TargetScan.bScanAttemptActive);
+	TestEqual(TEXT("Phase 6 Scan 대상 Contact Known"), IndependentChannelsViewData.TargetScan.ActiveTargetContactAvailability, ECFUIViewAvailability::Known);
+
+	// [v1.3.0] Selection만 수동 Clear해 Lock/Scan Runtime이 Presentation source에서 독립적으로 유지되는지 검증합니다.
+	TestTrue(TEXT("Phase 6 Selection 수동 Clear"), VehiclePawn->ClearSelectedTargetManually());
+	HUDDataProvider->RefreshViewData();
+
+	// [v1.3.0] Selection Clear 직후 같은 Provider가 내놓은 Phase 6 독립 채널 결과입니다.
+	const FCFInGameUIViewData SelectionClearedViewData = HUDDataProvider->GetCurrentViewData();
+	TestEqual(TEXT("Phase 6 Selection Clear 뒤 Target KnownZero"), SelectionClearedViewData.Target.Availability, ECFUIViewAvailability::KnownZero);
+	TestFalse(TEXT("Phase 6 Selection Clear 뒤 bHasSelectedTarget false"), SelectionClearedViewData.Target.bHasSelectedTarget);
+	TestEqual(TEXT("Phase 6 Selection Clear 뒤 Lock A 유지"), SelectionClearedViewData.TargetLock.TargetContactId, TargetAContactId);
+	TestEqual(TEXT("Phase 6 Selection Clear 뒤 Lock Acquiring 유지"), SelectionClearedViewData.TargetLock.State, ECFTargetLockState::Acquiring);
+	TestEqual(TEXT("Phase 6 Selection Clear 뒤 Scan A 유지"), SelectionClearedViewData.TargetScan.ActiveTargetContactId, TargetAContactId);
+	TestTrue(TEXT("Phase 6 Selection Clear 뒤 Scan active 유지"), SelectionClearedViewData.TargetScan.bScanAttemptActive);
+
+	TestTrue(TEXT("Phase 6 HUD Scan-only 정리"), VehiclePawn->RequestCancelTargetScan());
+	TestTrue(TEXT("Phase 6 HUD Lock-only 정리"), VehiclePawn->RequestClearTargetLock());
+	HUDDataProvider->ShutdownProvider();
+	TargetActorB->Destroy();
+	TargetActorA->Destroy();
 	VehiclePawn->Destroy();
 	return true;
 }

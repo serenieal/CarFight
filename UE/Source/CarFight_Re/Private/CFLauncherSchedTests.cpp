@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.2.0
-// Date: 2026-08-16
-// Description: CF-FQ-029 LM-P0-03B/LM-P0-06A 런처 발사 시퀀스 스케줄러 자동화 테스트
+// Version: 1.2.1
+// Date: 2026-09-18
+// Description: CF-FQ-029 LM-P0-03B/LM-P0-06A 런처 발사 시퀀스 스케줄러 자동화 테스트 / Phase 7 snapshot 의미 정렬
 // Scope: SingleCycle 완료, Ripple 시간 진행, Salvo 처리 묶음, Volley 목표 Snapshot, 실패 정책, 취소와 Reset 계약을 검증합니다.
 // Changelog:
+// - v1.2.1: 기존 snapshot 회귀의 Actor 설명을 Selected Target 의미에서 첫 승인 발사 시 확정된 Guidance source 의미로 교정. Selection/후속 Lock 변경과 독립된 Volley snapshot 계약은 유지.
 // - v1.2.0: LM-P0-06A Failure Policy Technical Closure를 위해 StopSequence 실패 직후 추가 Dispatch 예산과 Dispatch 기록이 모두 차단되는 계약을 명시적으로 검증합니다.
 // - v1.1.0: 첫 발사 순간 위치·Actor Snapshot이 이후 선택 변경과 독립적으로 유지되고 Reset에서 함께 제거되는 계약을 추가.
 // - v1.0.0: Launcher Scheduler RuntimeContract 최초 추가.
@@ -42,11 +43,11 @@ bool FCFLauncherSchedulerContractTest::RunTest(const FString& Parameters)
 	// [v1.1.0] 첫 발사 순간 Snapshot에 저장할 Command Target 월드 위치입니다.
 	const FVector InitialCommandTargetLocation(1250.0f, -340.0f, 85.0f);
 
-	// [v1.1.0] 첫 발사 순간 선택되어 같은 Volley가 유지해야 하는 유도 목표 Actor입니다.
+	// [v1.2.1] 첫 승인 발사 순간 상위 Fire authority가 확정해 같은 Volley가 유지해야 하는 Guidance source Actor입니다.
 	AActor* InitialGuidanceTargetActor = GetMutableDefault<AActor>();
 
-	// [v1.1.0] 첫 발사 뒤 플레이어가 새로 선택했다고 가정할 다른 Actor입니다.
-	AActor* LaterSelectedTargetActor = GetMutableDefault<APawn>();
+	// [v1.2.1] 첫 발사 뒤 Selection 또는 새 Lock source가 바뀌었다고 가정할 다른 Actor입니다.
+	AActor* LaterGuidanceSourceActor = GetMutableDefault<APawn>();
 
 	// [v1.1.0] 위치와 Actor가 한 번에 캡처되는 Volley 명령 목표 Snapshot입니다.
 	FCFLauncherCommandTargetSnapshot CommandTargetSnapshot;
@@ -54,7 +55,7 @@ bool FCFLauncherSchedulerContractTest::RunTest(const FString& Parameters)
 
 	TestTrue(TEXT("Command Target 위치 Snapshot 유지"), CommandTargetSnapshot.CommandTargetLocation.Equals(InitialCommandTargetLocation));
 	TestTrue(TEXT("Guidance Target Actor Snapshot 유지"), CommandTargetSnapshot.GetGuidanceTargetActor() == InitialGuidanceTargetActor);
-	TestTrue(TEXT("후속 선택 변경과 Snapshot Actor 분리"), CommandTargetSnapshot.GetGuidanceTargetActor() != LaterSelectedTargetActor);
+	TestTrue(TEXT("후속 Selection/Lock source 변경과 Snapshot Actor 분리"), CommandTargetSnapshot.GetGuidanceTargetActor() != LaterGuidanceSourceActor);
 
 	CommandTargetSnapshot.Reset();
 	TestTrue(TEXT("Snapshot Reset 뒤 위치 초기화"), CommandTargetSnapshot.CommandTargetLocation.IsNearlyZero());

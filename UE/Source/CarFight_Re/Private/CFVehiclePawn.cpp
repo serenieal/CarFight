@@ -1,9 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.170.0
-// Date: 2026-09-14
-// Description: CarFight 싱글플레이 차량 Pawn 구현 / VPS-P0-03 Runtime behavior extraction
+// Version: 2.176.0
+// Date: 2026-09-18
+// Description: CarFight 싱글플레이 차량 Pawn 구현 / Phase 5 Selection-Lock-Scan Gameplay Command Boundary
 // Changelog:
+// - v2.176.0: 현재 Selected Target을 요청 시점에만 소비하는 Lock facade와 Lock-only clear, Scan-only cancel facade를 추가. Selection 변경으로 Lock/Scan을 자동 동기화하지 않고 Input/HUD/Guided Weapon 경로는 유지.
+// - v2.175.0: UCFVehicleTargetingComp 기본 서브오브젝트를 추가해 TargetSelect/Sensor와 독립된 Vehicle Target Lock Runtime Foundation을 Pawn에 연결. Fire/HUD/Input 경로는 Phase 5~7 전까지 기존 의미 유지.
+// - v2.174.0: VehiclePawn이 같은 Gameplay Entity lifetime 동안 한 번 발급한 TargetEntityId(FGuid)를 반환하도록 구현. VehicleData PrimaryAssetId 기반 표시 TargetId와 독립 유지하며 기존 caller migration은 필요 없음.
+// - v2.172.0: Pawn Sensor command canonical facade를 RequestStartTargetScan / RequestCancelSensorOperations로 전환하고 기존 ActiveScan 이름 facade는 compatibility wrapper로 유지. 저장된 IA_ActiveScan/InputAction 이름은 변경하지 않음.
+// - v2.171.0: V Active Scan 요청을 broad Sensor pulse가 아니라 현재 TargetSelect의 선택 Actor 단일 Targeted Scan으로 연결. 선택 없음/무효 대상은 fail-closed.
 // - v2.170.0: CF-FQ-048 VPS-P0-03로 Runtime 초기화·피팅 refresh·Initial Mass prepare/verify·VehicleData 적용 orchestration을 UCFVehicleRuntimeComp로 위임. Pawn lifecycle/Public/BP/Automation facade와 Runtime observable/serialized Authority는 유지.
 // - v2.169.1: VPS-P0-02 Authority 교정으로 FireRequest ID/시간 할당과 입력 순간 LastFireRequest commit을 Pawn에 명시적으로 복귀. FireComp는 전달받은 요청의 계산·검증·실행만 수행.
 // - v2.169.0: CF-FQ-048 VPS-P0-02로 Fire Command 생성·검증·Muzzle/Aim glue·HitScan/Projectile 실행·Launcher 후속 발사와 Fire side effect를 UCFVehicleFireComp로 위임. Pawn은 Fire observable/Damage Debug Authority와 기존 Launcher/Automation compatibility facade를 유지.
@@ -134,8 +139,8 @@
 // - v2.152.0부터 `/Game/CarFight/Input/IA_SelectWeapon` Axis1D를 Pawn Gameplay Input으로 사용한다. 숫자키 1~9가 실제 SelectableWeapons의 1-based ordinal을 전달하며 Mouse Wheel은 Radar Range/Zoom 예약을 보존하고 게임패드 선택키는 이번 P0에서 지정하지 않는다.
 // - v2.152.0 handler는 정수 1~9 ordinal만 수락해 `RequestSelectWeaponIndex(Ordinal - 1)`에 위임한다. 실제 목록 범위·Launcher cancel·WeaponComp/Turret 전환은 기존 검증된 Gameplay command가 계속 소유한다.
 // - v2.148.0부터 AimReticle은 Pawn에서 CreateWidget/AddToViewport하지 않는다. UISubsystem이 HUD Layer 단일 인스턴스를 소유하고 Possess 변경마다 현재 Pawn만 SetVehiclePawnRef로 연결한다.
-// - v2.147.0부터 InputAction_StartActiveScan은 IA_ActiveScan을 기본 로드한다. IA_ActiveScan은 Boolean + Pressed이고 IMC_Vehicle_Default의 V 키 한 번으로 ActiveScanDurationSec 실행을 시작한다.
-// - InputAction_StopActiveScan은 기본 null이며 P0 키 매핑을 만들지 않는다. RequestStopActiveScan은 시스템/장비 전환용 명시적 중단 command로만 유지한다.
+// - v2.176.0부터 저장된 InputAction_StartActiveScan / IA_ActiveScan 이름은 자산 호환을 위해 유지하지만 V 입력의 canonical 의미는 현재 Selected Target 하나의 RequestStartTargetScan이다. broad Active Detection Pulse는 자동 시작하지 않는다.
+// - InputAction_StopActiveScan은 기본 null이며 새 키 매핑을 만들지 않는다. legacy RequestStopActiveScan은 시스템/장비 전환용 broad Sensor Operation cancel compatibility command로 유지하고 Target Scan 전용 취소는 RequestCancelTargetScan을 사용한다.
 // - v2.146.0의 Pawn wrapper는 VehicleSensorComp Start/Stop 명령에만 위임하며 SensorData Apply, InitializeSensorRuntime, ResetSensorRuntime과 FittingSnapshot 연결을 호출하지 않는다.
 // - bVehicleRuntimeReady는 기존 Tick·Debug 호환을 위해 bVehicleCoreRuntimeReady와 같은 값을 유지한다. 전투 HUD와 전투 명령은 bVehicleCombatRuntimeReady를 별도로 사용한다.
 // - 유효 피팅 Snapshot 질량은 게임 World의 PreRegisterAllComponents에서 Super 호출 전에 Movement Mass에 1회 기록한다.
@@ -229,6 +234,7 @@
 #include "CFVehicleAmmoComp.h"
 #include "CFTargetSelectComp.h"
 #include "CFVehicleSensorComp.h"
+#include "CFVehicleTargetingComp.h"
 #include "CFWeaponData.h"
 #include "CFVehicleWeaponComp.h"
 #include "CFWheelSyncComp.h"
@@ -974,6 +980,9 @@ ACFVehiclePawn::ACFVehiclePawn()
 	// [v2.144.0] TargetSelect와 독립적으로 Sensor Contact/Knowledge Snapshot을 소유할 기본 서브오브젝트입니다.
 	VehicleSensorComp = CreateDefaultSubobject<UCFVehicleSensorComp>(TEXT("VehicleSensorComp"));
 
+	// [v2.175.0] Selection/Sensor와 독립적인 단일 Vehicle Target Lock Runtime을 소유할 기본 서브오브젝트입니다.
+	VehicleTargetingComp = CreateDefaultSubobject<UCFVehicleTargetingComp>(TEXT("VehicleTargetingComp"));
+
 	// [v2.119.0] Per-vehicle target selection position. Disabled by default for bounds compatibility.
 	TargetPointComp = CreateDefaultSubobject<UCFTargetPointComp>(TEXT("TargetPoint"));
 	if (TargetPointComp)
@@ -1178,6 +1187,16 @@ bool ACFVehiclePawn::IsTargetSelectable_Implementation(const FCFTargetSelectionC
 	return IsValid(this)
 		&& IsValid(VehicleHealthComp)
 		&& !VehicleHealthComp->IsDestroyed();
+}
+
+// [v2.174.0] 같은 VehiclePawn Gameplay Entity lifetime에서 안정적인 개체별 Entity ID를 지연 발급해 반환합니다.
+FGuid ACFVehiclePawn::GetTargetEntityId_Implementation() const
+{
+	if (!TargetEntityId.IsValid())
+	{
+		TargetEntityId = FGuid::NewGuid();
+	}
+	return TargetEntityId;
 }
 
 // [v2.156.0] 타겟 HUD와 Sensor Knowledge가 사용할 차량 표시 정보를 VehicleData의 안정 PrimaryAssetId에서 만들고 내부 Actor 이름은 공개하지 않습니다.
@@ -1529,18 +1548,66 @@ bool ACFVehiclePawn::RequestSelectWeaponIndex(const int32 NewWeaponIndex)
 	return true;
 }
 
-// [v2.146.0] Pawn 입력 계층에서 VehicleSensorComp의 기존 Active Scan 시작 명령만 호출합니다.
-bool ACFVehiclePawn::RequestStartActiveScan()
+// [v2.176.0] 현재 Selection을 명령 시점에 한 번만 읽어 독립 Vehicle Target Lock Runtime에 전달합니다.
+ECFTargetLockRequestResult ACFVehiclePawn::RequestLockSelectedTarget()
 {
-	return IsValid(VehicleSensorComp)
-		&& VehicleSensorComp->StartActiveScan();
+	if (!IsValid(VehicleTargetingComp))
+	{
+		return ECFTargetLockRequestResult::RuntimeNotReady;
+	}
+
+	// [v2.176.0] Lock 요청 순간에만 읽고 이후 Selection 변경을 Targeting Runtime에 자동 전파하지 않을 대상입니다.
+	AActor* SelectedTargetActor = IsValid(TargetSelectComp)
+		? TargetSelectComp->GetSelectedTargetActor()
+		: nullptr;
+	return VehicleTargetingComp->RequestLock(SelectedTargetActor);
 }
 
-// [v2.146.0] Pawn 입력 계층에서 VehicleSensorComp의 기존 Active Scan 중단 명령만 호출합니다.
-bool ACFVehiclePawn::RequestStopActiveScan()
+// [v2.176.0] Vehicle Target Lock만 수동 해제하고 Selection/Scan/Detection에는 side effect를 만들지 않습니다.
+bool ACFVehiclePawn::RequestClearTargetLock()
+{
+	return IsValid(VehicleTargetingComp)
+		&& VehicleTargetingComp->ClearLock();
+}
+
+// [v2.172.0] Pawn 입력 계층에서 현재 TargetSelect가 선택한 Actor 하나만 VehicleSensorComp의 canonical Target Scan 대상으로 전달합니다.
+bool ACFVehiclePawn::RequestStartTargetScan()
+{
+	if (!IsValid(VehicleSensorComp) || !IsValid(TargetSelectComp))
+	{
+		return false;
+	}
+
+	// [v2.172.0] 플레이어가 현재 명시적으로 선택한 Target Scan 대상 Actor입니다.
+	AActor* SelectedTargetActor = TargetSelectComp->GetSelectedTargetActor();
+	return IsValid(SelectedTargetActor)
+		&& VehicleSensorComp->StartTargetScan(SelectedTargetActor);
+}
+
+// [v2.176.0] Target Scan Attempt만 취소하고 broad Active Detection Pulse와 Selection/Lock은 그대로 유지합니다.
+bool ACFVehiclePawn::RequestCancelTargetScan()
 {
 	return IsValid(VehicleSensorComp)
-		&& VehicleSensorComp->StopActiveScan();
+		&& VehicleSensorComp->CancelTargetScan();
+}
+
+// [v2.172.0] Pawn Gameplay 계층에서 실행 중인 Sensor Operation 전체 취소를 요청합니다.
+bool ACFVehiclePawn::RequestCancelSensorOperations()
+{
+	return IsValid(VehicleSensorComp)
+		&& VehicleSensorComp->CancelSensorOperations();
+}
+
+// [v2.172.0] 기존 Active Scan 시작 caller를 canonical Target Scan request로 전달하는 compatibility wrapper입니다.
+bool ACFVehiclePawn::RequestStartActiveScan()
+{
+	return RequestStartTargetScan();
+}
+
+// [v2.172.0] 기존 Active Scan 중단 caller를 canonical Sensor Operation cancel request로 전달하는 compatibility wrapper입니다.
+bool ACFVehiclePawn::RequestStopActiveScan()
+{
+	return RequestCancelSensorOperations();
 }
 
 bool ACFVehiclePawn::RegisterDefaultInputMappingContext()
@@ -3787,16 +3854,16 @@ void ACFVehiclePawn::HandleRadarZoomStarted(const FInputActionValue& InputAction
 	UISubsystem->RequestRadarZoomOut();
 }
 
-// [v2.146.0] optional Start Active Scan InputAction을 Sensor Gameplay command로 변환합니다.
+// [v2.172.0] 저장된 Active Scan 이름 InputAction을 canonical Target Scan command로 변환합니다.
 void ACFVehiclePawn::HandleStartActiveScanStarted(const FInputActionValue&)
 {
-	RequestStartActiveScan();
+	RequestStartTargetScan();
 }
 
-// [v2.146.0] optional Stop Active Scan InputAction을 Sensor Gameplay command로 변환합니다.
+// [v2.172.0] 저장된 Stop Active Scan 이름 InputAction을 canonical Sensor Operation cancel command로 변환합니다.
 void ACFVehiclePawn::HandleStopActiveScanStarted(const FInputActionValue&)
 {
-	RequestStopActiveScan();
+	RequestCancelSensorOperations();
 }
 
 // [v2.169.1] Enhanced Input binding과 입력 순간 Fire observable commit을 Pawn에 유지하고 이후 발사 행동만 FireComp로 위임합니다.

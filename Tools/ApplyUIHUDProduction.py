@@ -1,10 +1,11 @@
 # Copyright (c) CarFight. All Rights Reserved.
 #
-# Version: 1.7.0
-# Date: 2026-08-21
-# Description: CF-FQ-032 Production HUD Scaffold/Validate + UI-P0-09B View Mode Layout-Preserving Targeted Apply 도구
-# Scope: 기존 Production Designer Layout을 보존하고 신규 Scaffold 또는 명시적 additive Radar/ViewMode Visual migration만 허용합니다.
+# Version: 1.8.0
+# Date: 2026-09-18
+# Description: Phase 6 Target Lock HUD + Production HUD Layout-Preserving Targeted Apply 도구
+# Scope: 기존 Production Designer Layout을 보존하고 신규 Scaffold 또는 명시적 additive TargetLock/Radar/ViewMode migration만 허용합니다.
 # Changelog:
+# - v1.8.0: `target_phase6_apply`를 추가해 기존 WBP_CFTargetPanel exact1에 Text_TargetLock / ProgressBar_TargetLock만 additive 적용·compile·validate·save합니다.
 # - v1.7.0: `view_mode_visual_apply`를 추가해 기존 WBP_CFInGameHUD 정확히 1개 Asset만 저장하며 ReticleLayer 내부 Vehicle Direction Track/Image 누락분만 additive 추가. Root/Panel 기존 Slot Layout 재적용과 Gameplay Camera/Aim mutation 금지.
 # - v1.6.0: `radar_visual_apply`를 추가해 Radar PNG 7종 + DA_CFHUDVisual_Default + 기존 WBP_CFRadarPanel 정확히 9개 Asset만 갱신. RadarPanel은 Tree rebuild 없이 Frame/Range/Player/SelectedEdge 누락 Widget만 additive 추가하고 기존 Slot Layout은 보존.
 # - v1.5.0: 기존 Production Widget/Root의 Build→Compile→Save를 제거하고 Validate-only로 전환. 신규 Asset만 Scaffold Build를 허용하며 RPM targeted Apply는 Texture+Material+VisualData 3개만 저장하고 SpeedGauge Layout은 읽기/검증 전용으로 보호.
@@ -16,6 +17,7 @@
 # - v1.1.0: 사용자 결정에 맞춰 D1-11을 Structure-first Gate로 판정하고, 미술 승인/세부 배치를 별도 D1-11-ART Pending 상태로 분리.
 # - v1.0.0: Production 의미 단위 Widget 9개와 DA_CFHUDVisual_Default의 exact allowlist, 순차 Compile/Root Composition/Readback을 최초 추가.
 # Migration:
+# - v1.8.0 `target_phase6_apply`는 기존 TargetPanel Border/VerticalBox/Selection·Knowledge·Scan Widget을 재구축하지 않고 Lock Text/Progress 누락분만 추가합니다. 다른 Production Asset 저장은 금지합니다.
 # - 기존 ApplyUIHUDPrototype.py v1.x는 Historical Border Mock 재현용으로 보존합니다.
 # - Production Apply는 D1-09B Style/Density/Layout/Icon Asset을 읽기 전용으로 사용합니다.
 # - D1-11 Structure PASS는 Root/Panel/Element/VisualData exact 구조와 Validator 계약을 의미하며 최종 HUD Art 승인과 픽셀 폴리시는 D1-11-ART에서 별도 판정합니다.
@@ -41,7 +43,7 @@ import unreal
 
 
 # [v1.1.0] 구조화 보고서에서 식별할 현재 Production 도구 버전입니다.
-TOOL_VERSION = "1.7.0"
+TOOL_VERSION = "1.8.0"
 
 
 # [v1.0.0] Probe/DryRun/Apply/Readback 중 현재 실행 모드입니다.
@@ -142,6 +144,9 @@ RADAR_VISUAL_MUTABLE_ASSET_PATHS = {
 # [v1.7.0] ViewMode targeted Apply에서 실제 저장이 허용되는 기존 Production Root 정확히 1개 Asset입니다.
 VIEW_MODE_MUTABLE_ASSET_PATHS = {ROOT_ASSET_PATH}
 
+# [v1.8.0] Phase 6 Target Lock targeted Apply에서 실제 저장이 허용되는 기존 Production TargetPanel 정확히 1개 Asset입니다.
+TARGET_PHASE6_MUTABLE_ASSET_PATHS = {PANEL_ASSETS["TargetPanel"]}
+
 
 # [v1.3.0] Production Apply가 생성 또는 재구축할 수 있는 정확한 11개 Asset allowlist입니다.
 MUTABLE_ASSET_PATHS = {
@@ -159,6 +164,8 @@ REPORT_MUTABLE_ASSET_PATHS = (
     if RUN_MODE == "radar_visual_apply"
     else VIEW_MODE_MUTABLE_ASSET_PATHS
     if RUN_MODE == "view_mode_visual_apply"
+    else TARGET_PHASE6_MUTABLE_ASSET_PATHS
+    if RUN_MODE == "target_phase6_apply"
     else MUTABLE_ASSET_PATHS
 )
 
@@ -222,8 +229,9 @@ def require_bridge() -> Any:
     bridge_type = require_unreal_type("CFUIHUDProdEditorBridge")
     for method_name in (
         "build_production_widget_result",
-                "validate_production_widget_result",
-                "apply_radar_visual_migration_result",
+        "validate_production_widget_result",
+        "apply_target_presentation_migration_result",
+        "apply_radar_visual_migration_result",
         "apply_view_mode_visual_migration_result",
         "build_production_root_result",
         "validate_production_root_result",
@@ -599,6 +607,8 @@ def save_asset(asset_path: str, asset: Any) -> None:
         if RUN_MODE == "radar_visual_apply"
         else VIEW_MODE_MUTABLE_ASSET_PATHS
         if RUN_MODE == "view_mode_visual_apply"
+        else TARGET_PHASE6_MUTABLE_ASSET_PATHS
+        if RUN_MODE == "target_phase6_apply"
         else set()
     )
     if asset_path not in allowed_asset_paths:
@@ -1209,6 +1219,79 @@ def run_view_mode_visual_apply() -> None:
     REPORT["success"] = True
 
 
+# [v1.8.0] Phase 6 targeted 경로는 기존 TargetPanel Designer Tree를 보존하고 Lock Text/Progress만 additive migration합니다.
+def run_target_phase6_apply() -> None:
+    # [v1.8.0] TargetPanel 신규 Lock Widget Style과 Production Validator가 읽기 전용으로 사용할 Style/Density/Layout DataAsset 묶음입니다.
+    dependencies = load_read_only_dependencies()
+
+    # [v1.8.0] TargetPanel Validator의 기존 Production Visual 계약을 읽기 전용으로 유지할 HUD Visual DataAsset입니다.
+    visual_data = require_asset(VISUAL_ASSET_PATH)
+
+    # [v1.8.0] 신규 생성 없이 반드시 재사용할 저장 Production TargetPanel 경로입니다.
+    target_panel_path = PANEL_ASSETS["TargetPanel"]
+    # [v1.8.0] 기존 Border/VerticalBox/Selection·Knowledge·Scan 구조를 보존할 정확한 TargetPanel Blueprint입니다.
+    target_panel_asset = require_asset(target_panel_path)
+    validate_widget_parent(target_panel_asset, "TargetPanel")
+    REPORT["reused_assets"].append(target_panel_path)
+
+    # [v1.8.0] 기존 Designer Tree를 교체하지 않고 누락 Lock Text/Progress만 추가하는 C++ Bridge입니다.
+    bridge = require_bridge()
+    if not bool(
+        bridge.apply_target_presentation_migration_result(
+            target_panel_asset,
+            dependencies["layout"],
+            dependencies["style"],
+        )
+    ):
+        raise RuntimeError("TargetPanel Phase 6 layout-preserving presentation migration failed")
+
+    REPORT["layout_preserved_assets"].append(target_panel_path)
+    compile_widget(target_panel_path, target_panel_asset)
+
+    if not call_widget_bridge(
+        "validate_production_widget_result",
+        target_panel_asset,
+        "TargetPanel",
+        dependencies,
+        visual_data,
+        None,
+        None,
+        None,
+    ):
+        raise RuntimeError("TargetPanel Phase 6 post-migration Production validation failed")
+
+    # [v1.8.0] 실제 저장은 기존 WBP_CFTargetPanel 정확히 1개 Asset으로 제한합니다.
+    save_asset(target_panel_path, target_panel_asset)
+
+    REPORT["readback"] = {
+        "target_panel_generated_class": read_generated_class_path(target_panel_asset),
+        "target_panel_asset_path": target_panel_path,
+        "phase6_lock_text_widget": "Text_TargetLock",
+        "phase6_lock_progress_widget": "ProgressBar_TargetLock",
+        "layout_preserved_assets": sorted(set(REPORT["layout_preserved_assets"])),
+    }
+    REPORT["contracts"] = {
+        "operation_scope": "Phase6TargetPresentationLayoutPreservingAdditiveMigration",
+        "exact_mutated_asset_count": len(REPORT["saved_assets"]),
+        "exact_mutated_assets": sorted(REPORT["saved_assets"]),
+        "expected_mutated_asset_count": 1,
+        "other_production_asset_mutation_count": 0,
+        "target_panel_tree_rebuilt": False,
+        "existing_selection_knowledge_scan_widgets_reapplied": False,
+        "new_target_lock_semantic_widgets_additive_only": True,
+        "target_lock_text_widget": "Text_TargetLock",
+        "target_lock_progress_widget": "ProgressBar_TargetLock",
+        "target_armor_widget_reused_for_lock": False,
+        "phase5_runtime_mutated": False,
+        "phase7_guided_weapon_mutated": False,
+    }
+    if len(REPORT["saved_assets"]) != 1:
+        raise RuntimeError(
+            f"Phase 6 TargetPanel targeted save count mismatch: expected=1 actual={len(REPORT['saved_assets'])}"
+        )
+    REPORT["success"] = True
+
+
 # [v1.3.0] 저장된 Production 11개 Asset을 새 프로세스에서 수정 없이 다시 검증합니다.
 def run_readback() -> None:
     # [v1.0.0] Saved Readback에 사용할 기존 읽기 전용 DataAsset입니다.
@@ -1322,6 +1405,8 @@ try:
         run_radar_visual_apply()
     elif RUN_MODE == "view_mode_visual_apply":
         run_view_mode_visual_apply()
+    elif RUN_MODE == "target_phase6_apply":
+        run_target_phase6_apply()
     elif RUN_MODE == "readback":
         run_readback()
     else:

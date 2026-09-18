@@ -1,10 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.26.0
-// Date: 2026-08-25
-// Description: CF-FQ-039 차량별 Armor Body Map silhouette + 기존 Runtime HUD Presenter
-// Scope: Gameplay 참조 없이 FCFInGameUIViewData, HUD Visual Data와 Root Style Data를 소비해 차량별 silhouette와 기존 Presentation lifecycle을 적용합니다.
+// Version: 1.29.0
+// Date: 2026-09-18
+// Description: Phase 6 Selection / Target Lock / Target Scan 독립 HUD Presenter 계약
+// Scope: Gameplay 참조 없이 FCFInGameUIViewData의 Selection Knowledge, Target Lock, Target Scan과 기존 HUD Visual/Style Data를 독립 Presentation lifecycle로 적용합니다.
 // Changelog:
+// - v1.29.0: Phase 6에서 Target Selection/Knowledge, Vehicle Lock, Target Scan을 독립 Apply 경로로 분리하고 Lock Break / Scan Completion exact-once Presentation lifecycle을 각각 소유.
+// - v1.28.0: Sensor Contact가 Unknown으로 바뀌면 남아 있는 completion feedback도 즉시 fail-closed하도록 계약을 강화하고 UI-P0-07이 시간 대기 없이 lifecycle 만료를 검증할 dev-only friend를 추가.
+// - v1.27.0: Target Scan completion transition을 Contact Knowledge와 분리해 짧은 Presentation-only 완료 feedback으로 소비하고 Binding/Widget 수명 변경 시 lifecycle을 초기화.
 // - v1.26.0: UISubsystem이 해석한 UCFHUDVisualData를 Presenter에 주입하고 VehicleData soft identity 변경 시 `Image_VehicleSilhouette` Brush resource만 교체. Presenter가 Pawn/VehicleData Gameplay 필드를 조회하지 않고 Designer Brush size/layout을 유지.
 // - v1.23.0: 유한 Alert duration 시작점을 Active 진입이 아니라 실제 첫 Presentation 시각으로 교정. 높은 Priority Alert에 가려진 Alert는 표시 전에 시간을 소모하지 않으며, 한번 만료된 AlertKey는 상태 해제 전 재표시하지 않음.
 // - v1.22.0: 기존 AlertKey/Priority ViewData와 UI Style AlertStyle을 연결해 Notice/Warning의 자동 제거 시간과 Critical persistent lifecycle을 구현. 같은 AlertKey의 반복 Refresh는 시간을 리셋하지 않고 상태 해제 후 재발생할 때만 새 lifecycle을 시작.
@@ -31,6 +34,8 @@
 // - v1.1.0: Alert 배열 순번 대신 AlertKey 의미로 Warning/Launcher Production 슬롯을 결정해 단독 Ripple Alert가 전용 슬롯에 표시되도록 교정.
 // - v1.0.0: Vehicle/Defense/Weapon/Target/Radar/Alert Production Widget 적용과 Unavailable Collapse를 최초 구현.
 // Migration:
+// - v1.29.0부터 ApplyTargetViewData는 Selection/Knowledge만 적용하고, TargetLock/TargetScan 전용 Apply 함수가 각 독립 ViewData를 소비합니다. Selection Clear는 Lock/Scan 표시를 강제로 Clear하지 않습니다.
+// - v1.29.0 Lock Break feedback은 BreakTransitionRevision, Scan 완료 feedback은 CompletionTransitionRevision으로 중복 소비를 막으며 Gameplay Actor를 직접 조회하지 않습니다.
 // - Production WBP_CFInGameHUD Parent는 CFStyledWidgetBase를 그대로 유지합니다.
 // - Presenter는 Pawn, Actor Component, Gameplay DataAsset을 Cast하거나 탐색하지 않습니다.
 // - D1-11 Designer Mock 값은 Runtime ViewData가 연결되면 실제 값 또는 Unavailable 표현으로 대체됩니다.
@@ -41,6 +46,8 @@
 // - VehicleBattery는 실제 shared-power Runtime Provider가 생기기 전 Presentation Entry를 만들지 않습니다. WeaponCharge와 Heat는 actual Runtime Resource Channel이 있을 때만 Compact Resource/FireState로 Projection합니다.
 // - BuildWeaponResourceEntries는 LauncherSequenceRevision lifecycle을 소비하는 C++ 전용 단일-적용 함수이며 Blueprint에서 별도 반복 호출하지 않습니다.
 // - v1.10.0부터 ApplyWeaponViewData는 Resource Visual을 만들 때 BuildWeaponResourceEntries만 호출하고 Launcher/Ammo/Status Resolver를 별도로 다시 호출하지 않습니다.
+// - v1.28.0부터 Target Scan completion feedback도 현재 Sensor Contact가 Known일 때만 표시합니다. Contact가 Unknown이면 남은 0.75초 feedback 시간과 무관하게 즉시 fail-closed합니다.
+// - v1.27.0부터 Target Scan 진행 Bar는 현재 Scan Attempt가 active일 때만 표시하며, 새 completion transition은 0.75초 Presentation-only `스캔 완료` feedback으로 표시한 뒤 자동 종료합니다. DetailedScan Knowledge만으로 Bar를 100%에 고정하지 않습니다.
 // - v1.17.0부터 SpeedGauge는 UI Material Image 하나만 Runtime RPM sink로 사용합니다. RedlineStartRPM 미설정/invalid에서는 `RPMRatio=0`으로 reset하며 EngineMaxRPM 비율 fallback을 만들지 않습니다.
 // - v1.16.0부터 ArmorBodyMap의 여섯 방향 값은 WBP_ArmorFront~Bottom 재사용 Sector를 찾아 각 Sector의 실제 ProgressBar_Armor에 적용합니다.
 // - ReserveAmmo는 계속 Header 우측 label-less owner입니다.
@@ -232,8 +239,20 @@ private:
 	// [v1.7.0] Pawn·Widget·Weapon 전환에서 이전 Launcher Presentation lifecycle 상태를 초기화합니다.
 	void ResetLauncherPresentationLifecycle();
 
-	// [v1.0.0] 선택 Target 공개 정보를 Production TargetPanel에 적용합니다.
-	void ApplyTargetViewData(UUserWidget* RootWidget, const FCFTargetHUDData& TargetViewData) const;
+	// [v1.29.0] 현재 Selection과 선택 Contact Knowledge만 Production TargetPanel의 기존 Target 영역에 적용합니다.
+	void ApplyTargetViewData(UUserWidget* RootWidget, const FCFTargetHUDData& TargetViewData);
+
+	// [v1.29.0] Vehicle Target Lock ViewData를 Selection과 독립된 Lock sink에 적용합니다.
+	void ApplyTargetLockViewData(UUserWidget* RootWidget, const FCFTargetLockHUDData& TargetLockViewData);
+
+	// [v1.29.0] Target Scan ViewData를 Selection과 독립된 Scan sink에 적용합니다.
+	void ApplyTargetScanViewData(UUserWidget* RootWidget, const FCFTargetScanHUDData& TargetScanViewData);
+
+	// [v1.29.0] Pawn·Widget 수명이 바뀔 때 Target Lock Break feedback의 소비 Revision/만료 시각을 초기화합니다.
+	void ResetTargetLockPresentationLifecycle();
+
+	// [v1.29.0] Pawn·Widget 수명이 바뀔 때 Target Scan 완료 feedback의 소비 Revision/만료 시각을 초기화합니다.
+	void ResetTargetScanPresentationLifecycle();
 
 			// [v1.19.0] Radar ViewData의 in-range Contact와 선택 강조를 저장 Production RadarPanel의 runtime presentation layer에 적용합니다.
 	void ApplyRadarViewData(UUserWidget* RootWidget, const FCFRadarHUDData& RadarViewData) const;
@@ -301,8 +320,23 @@ private:
 	// [v1.7.0] 마지막 Active 또는 terminal Launcher 진행률 Cache입니다.
 	float LastLauncherSequenceProgress = 0.0f;
 
-			// [v1.7.0] Pawn Rebind 시 이전 차량의 Launcher Presentation lifecycle을 즉시 폐기하기 위한 마지막 BindingGeneration입니다.
+			// [v1.7.0] Pawn Rebind 시 이전 차량의 Launcher/Target Presentation lifecycle을 즉시 폐기하기 위한 마지막 BindingGeneration입니다.
 	int32 LastAppliedBindingGeneration = INDEX_NONE;
+
+	// [v1.29.0] 마지막으로 소비한 Vehicle Target Lock Break transition Revision입니다.
+	int32 LastTargetLockBreakTransitionRevision = 0;
+
+	// [v1.29.0] 현재 Target Lock Break feedback을 종료할 Game-Time 초입니다.
+	double TargetLockBreakFeedbackEndGameTimeSeconds = 0.0;
+
+	// [v1.29.0] 마지막으로 소비한 Target Scan completion transition Revision입니다.
+	int32 LastTargetScanCompletionTransitionRevision = 0;
+
+	// [v1.29.0] 현재 `스캔 완료` feedback이 연결된 ContactId입니다.
+	FName TargetScanCompletionFeedbackContactId = NAME_None;
+
+	// [v1.27.0] 현재 Target Scan completion feedback을 종료할 Game-Time 초입니다.
+	double TargetScanCompletionFeedbackEndGameTimeSeconds = 0.0;
 
 		// [v1.23.0] 유한 AlertKey가 실제 Primary로 처음 표시된 Game-Time을 보존해 suppression 시간을 duration에서 제외하고 반복 Refresh reset을 막습니다.
 	TMap<FName, double> AlertFirstPresentedGameTimeSeconds;
@@ -311,6 +345,9 @@ private:
 	TSet<FName> CompletedAlertPresentationKeys;
 
 #if WITH_DEV_AUTOMATION_TESTS
+	// [v1.29.0] UI-P0-07 Selection/Lock/Scan 독립성과 두 transient feedback 만료를 시간 대기 없이 검증할 Automation Test입니다.
+	friend class FCFHUDP007TargetKnowledgePanelTest;
+
 	// [v1.23.0] UI-P0-09C Alert duration/suppression lifecycle을 실제 시간 대기 없이 검증할 Automation Test입니다.
 	friend class FCFHUDP009AlertStyleTest;
 #endif

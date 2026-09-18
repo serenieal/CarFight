@@ -1,10 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.15.0
-// Date: 2026-08-25
-// Description: CF-FQ-039 차량별 HUD silhouette identity + 기존 HUD ViewData 계약
-// Scope: VehicleData visual identity, Vehicle, ViewMode, Weapon, Defense, Target, Radar Range·Contact 표시 상태와 Alert의 Player-facing ViewData 계약을 제공합니다.
+// Version: 1.19.0
+// Date: 2026-09-18
+// Description: Phase 6 Selection / Target Lock / Target Scan HUD ViewData 채널 분리
+// Scope: VehicleData visual identity, Vehicle, ViewMode, Weapon, Defense, Selection Knowledge, Target Lock, Target Scan, Radar Range·Contact와 Alert의 Player-facing ViewData 계약을 제공합니다.
 // Changelog:
+// - v1.19.0: Phase 6에서 Selection Knowledge, Vehicle Target Lock, Target Scan을 FCFTargetHUDData / FCFTargetLockHUDData / FCFTargetScanHUDData 독립 채널로 분리해 Selected B / Locked A / Scanning C 동시 표현을 허용.
+// - v1.18.0: Target/Radar ViewData의 Legacy AnalysisProgress01을 제거해 현재 Scan 진행률을 Target의 ScanAttemptProgress01 단일 경로로 고정.
+// - v1.17.0: Target HUD Data에 현재 Scan Attempt active/progress와 completion transition Revision을 추가해 영구 DetailedScan Knowledge와 일시 Scan UI 상태를 분리.
+// - v1.16.0: Target HUD Data에 AnalysisCompletionRevision을 추가해 raw AnalysisProgress decay와 terminal DetailedScan 완료를 분리.
 // - v1.15.0: 현재 차량의 VehicleData Soft identity를 Vehicle HUD Data에 additive 전달해 Presenter가 HUD Visual catalog에서 차종별 Armor Body Map silhouette를 선택할 수 있게 함. Texture와 Gameplay 설정은 ViewData에 넣지 않음.
 // - v1.14.0: 기존 VehicleCamera/Aim Runtime을 재계산하지 않고 Camera Mode, 차량 Heading, 카메라·터렛의 차량 기준 상대 Yaw/Pitch를 전달하는 ViewMode HUD 계약을 추가.
 // - v1.13.0: Radar에 Display/Maximum Range, Preset index/count/zoom 가능 상태와 Contact의 range-inside/selected-edge 방향 계약을 추가. NormalizedPosition은 명시 Range가 있을 때만 사용.
@@ -22,6 +26,12 @@
 // - v1.1.0: AMMO-P0-06 실제 Ammo Runtime의 장전·예약·예비·사용 가능량, Reload 상태·시간과 Action Lock을 Weapon ViewData에 추가.
 // - v1.0.0: UI-P0-03 최초 ViewData 계약과 통합 FCFInGameUIViewData를 추가.
 // Migration:
+// - v1.19.0부터 FCFTargetHUDData는 현재 Selection + 선택 Contact Knowledge만 소유합니다. Vehicle Lock은 TargetLock, 현재 Scan Attempt/완료 전이는 TargetScan 채널에서 독립 소비합니다.
+// - v1.19.0 TargetLock은 FCFTargetingSnapshot, TargetScan은 FCFSensorSnapshot.ScanAttempt를 source로 사용하며 Selection 일치 여부로 표시를 제한하지 않습니다.
+// - v1.18.0부터 Target/Radar ViewData에는 Contact 기반 AnalysisProgress01이 없습니다. 현재 Scan 진행 표시는 bScanAttemptActive/ScanAttemptProgress01만 사용합니다.
+// - v1.17.0부터 Target Scan 진행 UI는 bScanAttemptActive/ScanAttemptProgress01만 사용하고, 완료 피드백은 ScanCompletionTransitionRevision 전이를 일시 소비합니다. DetailedScan Knowledge 또는 AnalysisCompletionRevision만으로 100% Bar를 영구 표시하지 않습니다.
+// - v1.17.0 AnalysisCompletionRevision은 Contact가 DetailedScan Knowledge를 최초 획득한 영구 이력이고 ScanCompletionTransitionRevision은 현재 HUD가 한 번 소비할 완료 전이입니다.
+// - v1.16.0의 DetailedScan + AnalysisCompletionRevision 영구 완료 표시는 v1.17.0에서 폐기됐으며 해당 필드는 Knowledge/진단 호환으로 유지합니다.
 // - v1.12.0 WeaponChargeAvailability이 Known/KnownZero일 때만 CurrentWeaponCharge/MaximumWeaponCharge/WeaponChargeRatio/bWeaponChargeInsufficient를 소비하며 VehicleBattery나 정적 설정으로 현재 Charge를 추정하지 않습니다.
 // - v1.11.0 Weapon Selection은 Provider가 Applied Fitting 고정 순서를 표시 순서로 전달하며 내부 MountProfileId, WeaponId, EquipmentId와 Asset 이름을 선택 항목에 넣지 않습니다. Production Rail Visual은 별도 consumer migration 전까지 Collapsed를 유지합니다.
 // - v1.10.0 HeatAvailability이 Known/KnownZero일 때만 CurrentHeat/MaximumHeat/HeatRatio/bWeaponOverheated를 소비하며 정적 WeaponData만으로 현재 Heat를 만들지 않습니다.
@@ -40,6 +50,7 @@
 #include "CFAmmoTypes.h"
 #include "CFLauncherTypes.h"
 #include "CFSensorTypes.h"
+#include "CFTargetingTypes.h"
 #include "CFVehicleCameraTypes.h"
 #include "CFTargetSelectTypes.h"
 #include "CFHUDViewData.generated.h"
@@ -624,9 +635,10 @@ struct CARFIGHT_RE_API FCFTargetHUDData
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Target", meta=(Units="s", DisplayName="Contact 정보 경과 시간", ToolTip="Sensor Snapshot Contact의 FreshnessSeconds를 그대로 전달합니다."))
 	float FreshnessSeconds = 0.0f;
 
-	// [v1.4.0] Sensor Tactical Analysis의 현재 0~1 진행률입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Target", meta=(ClampMin="0.0", ClampMax="1.0", DisplayName="분석 진행률", ToolTip="Sensor Snapshot Contact의 AnalysisProgress01을 재계산 없이 전달합니다."))
-	float AnalysisProgress01 = 0.0f;
+	// [v1.17.0] 과거 Contact 기반 AnalysisProgress 호환/진단 값이며 현재 Scan UI authority가 아닙니다.
+	// [v1.17.0] Sensor Contact가 최초 DetailedScan Knowledge를 획득했을 때 발급한 영구 이력 Revision입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Target", meta=(DisplayName="DetailedScan 획득 Revision", ToolTip="0이면 아직 DetailedScan Knowledge 획득 전이며 양수이면 해당 Contact가 과거에 DetailedScan을 획득한 상태입니다. 현재 Scan Attempt 진행/완료 피드백과는 별개입니다."))
+	int32 AnalysisCompletionRevision = 0;
 
 	// [v1.4.0] Sensor가 대상 파괴를 확정했는지 나타냅니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Target", meta=(DisplayName="파괴 확인", ToolTip="Sensor Snapshot Contact가 DestroyedHold이면 True입니다. TargetSelect 선택 수명과 별개입니다."))
@@ -643,6 +655,112 @@ struct CARFIGHT_RE_API FCFTargetHUDData
 	// [v1.0.0] 실제 Sensor/Knowledge Provider가 제공할 때 사용할 거리입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Target", meta=(Units="m", DisplayName="타겟 거리 m", ToolTip="Player-facing Sensor/Knowledge Provider가 제공한 거리만 사용합니다."))
 	float DistanceMeters = 0.0f;
+};
+
+/**
+ * Vehicle Targeting의 actor-free Snapshot을 Selection과 독립적으로 표시하는 Lock HUD 데이터입니다.
+ */
+USTRUCT(BlueprintType, meta=(DisplayName="타겟 락 HUD 데이터 (Target Lock HUD Data)", ToolTip="Vehicle Targeting Snapshot의 Lock 상태, 진행률, 품질과 Break 전이를 현재 Selection과 독립적으로 UI에 전달합니다."))
+struct CARFIGHT_RE_API FCFTargetLockHUDData
+{
+	GENERATED_BODY()
+
+	// [v1.19.0] 현재 Vehicle Targeting Runtime / Lock 상태의 HUD 가용성입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetLock", meta=(DisplayName="타겟 락 데이터 상태", ToolTip="Targeting Runtime 부재·미준비, Idle 또는 Acquiring/Locked 상태를 구분합니다."))
+	ECFUIViewAvailability Availability = ECFUIViewAvailability::Unavailable;
+
+	// [v1.19.0] Vehicle Targeting Snapshot의 현재 Lock 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetLock", meta=(DisplayName="타겟 락 상태", ToolTip="현재 Vehicle Target Lock의 Idle, Acquiring, Locked 상태입니다. Selection 상태와 독립입니다."))
+	ECFTargetLockState State = ECFTargetLockState::Idle;
+
+	// [v1.19.0] Acquiring 또는 Locked 대상의 Sensor ContactId입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetLock", meta=(DisplayName="락 대상 Contact ID", ToolTip="현재 Lock Runtime이 추적하는 Sensor ContactId입니다. Player-facing 이름으로 직접 표시하지 않습니다."))
+	FName TargetContactId = NAME_None;
+
+	// [v1.19.0] Lock 대상 Contact를 같은 Refresh의 Sensor Snapshot에서 확인할 수 있는지 나타냅니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetLock", meta=(DisplayName="락 대상 Contact 상태", ToolTip="락 대상 ContactId가 현재 Sensor Snapshot에 있으면 Known이며, 없으면 Unknown입니다."))
+	ECFUIViewAvailability SensorContactAvailability = ECFUIViewAvailability::Unavailable;
+
+	// [v1.19.0] Lock 대상의 Player-facing 이름 공개 가능 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetLock", meta=(DisplayName="락 대상 이름 상태", ToolTip="Lock 대상 Sensor Knowledge가 Identified 이상이고 공개 이름이 있을 때 Known입니다."))
+	ECFUIViewAvailability IdentityAvailability = ECFUIViewAvailability::Unknown;
+
+	// [v1.19.0] Sensor Knowledge가 공개를 허용할 때 사용할 Lock 대상 표시 이름입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetLock", meta=(DisplayName="락 대상 표시 이름", ToolTip="같은 Sensor Snapshot Contact의 KnownDisplayName만 사용하며 Actor 이름이나 ContactId를 대신 표시하지 않습니다."))
+	FText DisplayName;
+
+	// [v1.19.0] Acquiring 상태의 0~1 Lock 획득 진행률입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetLock", meta=(ClampMin="0.0", ClampMax="1.0", DisplayName="락 획득 진행률", ToolTip="Vehicle Targeting Snapshot의 LockProgress01을 재계산 없이 전달합니다."))
+	float LockProgress01 = 0.0f;
+
+	// [v1.19.0] Locked 상태의 0~1 Lock 품질입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetLock", meta=(ClampMin="0.0", ClampMax="1.0", DisplayName="락 품질", ToolTip="Vehicle Targeting Snapshot의 LockQuality01을 재계산 없이 전달합니다."))
+	float LockQuality01 = 0.0f;
+
+	// [v1.19.0] 실제 Lock Break가 발생할 때만 증가하는 전이 Revision입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetLock", meta=(DisplayName="락 브레이크 전이 Revision", ToolTip="새 Lock Break 피드백을 같은 Revision에서 중복 표시하지 않기 위한 단조 증가 값입니다. Manual Clear는 증가시키지 않습니다."))
+	int32 BreakTransitionRevision = 0;
+
+	// [v1.19.0] 가장 최근 BreakTransitionRevision에 대응하는 Break 사유입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetLock", meta=(DisplayName="마지막 락 브레이크 사유", ToolTip="Contact Lost, Target Destroyed, Sensor Unavailable, Quality Depleted 중 가장 최근 실제 Break 사유입니다."))
+	ECFTargetLockBreakReason LastBreakReason = ECFTargetLockBreakReason::None;
+};
+
+/**
+ * Sensor ScanAttempt를 현재 Selection과 독립적으로 표시하는 Target Scan HUD 데이터입니다.
+ */
+USTRUCT(BlueprintType, meta=(DisplayName="타겟 스캔 HUD 데이터 (Target Scan HUD Data)", ToolTip="현재 Target Scan Attempt와 일시 완료 전이를 Selection과 독립적으로 UI에 전달합니다."))
+struct CARFIGHT_RE_API FCFTargetScanHUDData
+{
+	GENERATED_BODY()
+
+	// [v1.19.0] Sensor Runtime / Target Scan 채널의 HUD 가용성입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetScan", meta=(DisplayName="타겟 스캔 데이터 상태", ToolTip="Sensor Runtime 부재·미준비와 현재 Scan Attempt 유무를 구분합니다."))
+	ECFUIViewAvailability Availability = ECFUIViewAvailability::Unavailable;
+
+	// [v1.19.0] 현재 단일 Target Scan Attempt가 진행 중인지 나타냅니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetScan", meta=(DisplayName="현재 스캔 진행 중", ToolTip="FCFSensorSnapshot.ScanAttempt.bScanning을 그대로 전달하며 현재 Selection과 일치할 필요가 없습니다."))
+	bool bScanAttemptActive = false;
+
+	// [v1.19.0] 현재 진행 중 Scan Attempt가 시작 시 Capture한 대상 ContactId입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetScan", meta=(DisplayName="스캔 대상 Contact ID", ToolTip="현재 Scan Attempt의 TargetContactId입니다. Player-facing 이름으로 직접 표시하지 않습니다."))
+	FName ActiveTargetContactId = NAME_None;
+
+	// [v1.19.0] 현재 Scan 대상 Contact가 같은 Sensor Snapshot에 존재하는지 나타냅니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetScan", meta=(DisplayName="스캔 대상 Contact 상태", ToolTip="현재 Scan Attempt 대상 Contact가 Snapshot에 존재하면 Known이며 없으면 Unknown입니다."))
+	ECFUIViewAvailability ActiveTargetContactAvailability = ECFUIViewAvailability::Unavailable;
+
+	// [v1.19.0] 현재 Scan 대상 이름의 Player-facing 공개 가능 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetScan", meta=(DisplayName="스캔 대상 이름 상태", ToolTip="Scan 대상 Sensor Knowledge가 Identified 이상이고 공개 이름이 있을 때 Known입니다."))
+	ECFUIViewAvailability ActiveTargetIdentityAvailability = ECFUIViewAvailability::Unknown;
+
+	// [v1.19.0] 현재 Scan 대상의 공개 가능한 표시 이름입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetScan", meta=(DisplayName="스캔 대상 표시 이름", ToolTip="같은 Sensor Snapshot Contact의 KnownDisplayName만 사용하며 내부 ContactId를 이름으로 노출하지 않습니다."))
+	FText ActiveTargetDisplayName;
+
+	// [v1.19.0] 현재 Scan Attempt 자체의 0~1 진행률입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetScan", meta=(ClampMin="0.0", ClampMax="1.0", DisplayName="현재 스캔 진행률", ToolTip="FCFSensorSnapshot.ScanAttempt.Progress01을 UI 범위로 전달합니다. Persistent DetailedScan Knowledge와 별개입니다."))
+	float ScanAttemptProgress01 = 0.0f;
+
+	// [v1.19.0] 가장 최근 Target Scan 완료 순간에 증가한 Presentation 전이 Revision입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetScan", meta=(DisplayName="스캔 완료 전이 Revision", ToolTip="HUD가 새 Scan 완료를 짧게 한 번 표시하기 위한 Revision입니다. Persistent Knowledge 완료 Revision과 별개입니다."))
+	int32 CompletionTransitionRevision = 0;
+
+	// [v1.19.0] 가장 최근 완료 전이가 발생한 ContactId입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetScan", meta=(DisplayName="마지막 완료 Contact ID", ToolTip="CompletionTransitionRevision에 대응하는 LastCompletedContactId입니다. Player-facing 이름으로 직접 표시하지 않습니다."))
+	FName LastCompletedContactId = NAME_None;
+
+	// [v1.19.0] 마지막 완료 Contact가 같은 Sensor Snapshot에 존재하는지 나타냅니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetScan", meta=(DisplayName="완료 Contact 상태", ToolTip="마지막 완료 ContactId가 현재 Snapshot에 존재하면 Known이며 제거됐으면 Unknown입니다."))
+	ECFUIViewAvailability CompletedTargetContactAvailability = ECFUIViewAvailability::Unavailable;
+
+	// [v1.19.0] 마지막 완료 대상 이름의 Player-facing 공개 가능 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetScan", meta=(DisplayName="완료 대상 이름 상태", ToolTip="완료 대상 Sensor Knowledge가 Identified 이상이고 공개 이름이 있을 때 Known입니다."))
+	ECFUIViewAvailability CompletedTargetIdentityAvailability = ECFUIViewAvailability::Unknown;
+
+	// [v1.19.0] 마지막 완료 대상의 공개 가능한 표시 이름입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|TargetScan", meta=(DisplayName="완료 대상 표시 이름", ToolTip="같은 Sensor Snapshot Contact의 KnownDisplayName만 사용하며 내부 ContactId를 이름으로 노출하지 않습니다."))
+	FText CompletedTargetDisplayName;
 };
 
 /**
@@ -690,9 +808,6 @@ struct CARFIGHT_RE_API FCFRadarContactHUDData
 	float FreshnessSeconds = 0.0f;
 
 	// [v1.4.0] Tactical Analysis의 현재 진행률입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Radar", meta=(ClampMin="0.0", ClampMax="1.0", DisplayName="Contact 분석 진행률", ToolTip="Snapshot Contact의 AnalysisProgress01을 그대로 전달합니다."))
-	float AnalysisProgress01 = 0.0f;
-
 	// [v1.4.0] Sensor가 대상 파괴를 확정했는지 나타냅니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD|Radar", meta=(DisplayName="Contact 파괴 확인", ToolTip="DestroyedHold Contact이면 True입니다."))
 	bool bDestroyedConfirmed = false;
@@ -816,7 +931,7 @@ struct CARFIGHT_RE_API FCFCombatAlertViewData
 /**
  * Production HUD 한 프레임이 소비할 전체 표시 데이터입니다.
  */
-USTRUCT(BlueprintType, meta=(DisplayName="인게임 UI ViewData (InGame UI View Data)", ToolTip="Vehicle, ViewMode, Weapon, Defense, Target, Radar와 Alert ViewData를 한 번에 전달합니다."))
+USTRUCT(BlueprintType, meta=(DisplayName="인게임 UI ViewData (InGame UI View Data)", ToolTip="Vehicle, ViewMode, Weapon, Defense, Selection Target, Target Lock, Target Scan, Radar와 Alert ViewData를 한 번에 전달합니다."))
 struct CARFIGHT_RE_API FCFInGameUIViewData
 {
 	GENERATED_BODY()
@@ -845,9 +960,17 @@ struct CARFIGHT_RE_API FCFInGameUIViewData
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD", meta=(DisplayName="방어 HUD 데이터"))
 	FCFDefenseHUDData Defense;
 
-	// [v1.0.0] 현재 선택 Target ViewData입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD", meta=(DisplayName="타겟 HUD 데이터"))
+	// [v1.19.0] 현재 Selection과 선택 Contact Knowledge ViewData입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD", meta=(DisplayName="선택 타겟 HUD 데이터", ToolTip="현재 Selection과 그 대상의 Sensor Knowledge만 포함하며 Vehicle Lock과 Target Scan은 별도 채널입니다."))
 	FCFTargetHUDData Target;
+
+	// [v1.19.0] 현재 Vehicle Target Lock ViewData입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD", meta=(DisplayName="타겟 락 HUD 데이터", ToolTip="현재 Selection과 독립된 Vehicle Target Lock 상태와 Break 전이입니다."))
+	FCFTargetLockHUDData TargetLock;
+
+	// [v1.19.0] 현재 Target Scan Attempt / 완료 전이 ViewData입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD", meta=(DisplayName="타겟 스캔 HUD 데이터", ToolTip="현재 Selection과 독립된 Target Scan Attempt와 일시 완료 전이입니다."))
+	FCFTargetScanHUDData TargetScan;
 
 	// [v1.0.0] Radar/Sensor ViewData입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|UI|HUD", meta=(DisplayName="레이더 HUD 데이터"))

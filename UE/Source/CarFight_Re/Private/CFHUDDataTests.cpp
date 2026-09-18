@@ -1,10 +1,15 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.36.1
-// Date: 2026-09-14
-// Description: CF-FQ-032 HUD Runtime Automation + CF-FQ-039 VehiclePanel Production Visual 회귀 검증
-// Scope: 실제 Runtime 계약과 저장 Production HUD의 Vehicle Frame·Shield/Integrity·Armor·ViewMode·Alert·Style Context·다중 해상도 Root Layout 의미 Presentation을 검증합니다.
+// Version: 1.41.0
+// Date: 2026-09-18
+// Description: Phase 6 Selection / Target Lock / Target Scan 독립 HUD Presentation 회귀
+// Scope: 실제 Runtime 계약과 저장 Production HUD의 Vehicle/Defense/Weapon/Selection Knowledge·Target Lock·Target Scan/Radar/Alert 의미 Presentation을 검증합니다.
 // Changelog:
+// - v1.41.0: UI-P0-07을 Phase 6 독립 채널로 교정해 Selected B / Locked A / Scanning C 동시 표시, Selection Clear 후 Lock/Scan 유지, Lock Break/Scan Completion exact-once feedback과 Contact fail-closed를 검증.
+// - v1.40.0: transient Automation World Tick에 completion feedback 만료를 맡기지 않고 Presenter의 dev-only friend 상태를 직접 만료시켜 UI-P0-07을 결정적으로 검증. Contact Unknown에서는 남은 completion feedback도 즉시 숨는 fail-closed 회귀를 보존.
+// - v1.39.0: 제거된 Target HUD AnalysisProgress01 synthetic fixture를 삭제해 ScanAttemptProgress01이 유일한 Current Scan progress 입력임을 구조적으로 고정.
+// - v1.38.0: UI-P0-07을 Contact legacy progress가 아닌 ScanAttempt active/progress authority로 교정하고, completion transition은 0.75초만 `스캔 완료`/100%를 표시한 뒤 DetailedScan Knowledge를 유지하면서 Scan UI가 자동 종료되는 회귀를 추가.
+// - v1.37.0: [폐기] DetailedScan 완료 뒤 raw AnalysisProgress가 0.65로 decay돼도 `스캔 완료`와 100% Bar를 영구 유지하던 회귀.
 // - v1.36.1: v1.36.0 NoTurret Reticle 테스트가 protected ApplyFireResult를 직접 호출해 빌드 실패하던 문제를 제거. Product 공개 API/test friend를 늘리지 않고 TestMap의 AimProfile 내부/외부 Hidden과 실제 AimReticle Refresh RenderOpacity 0만 검증하도록 교정.
 // - v1.36.0: 무기 터렛 미장착 상태의 AimProfile 내부/외부와 NoWeapon FireFeedback까지 검증하려던 초기 Technical PIE 회귀. protected ApplyFireResult 직접 호출로 컴파일 불가하여 v1.36.1에서 공개 계약 범위로 축소 교정.
 // - v1.35.0: CF-FQ-039 modular Armor migration 단계에 맞춰 ArmorSectorProductionVisualContract를 common Plate + additive Image_DirectionIcon + Text fallback 계약으로 전환. DirectionIcon Texture가 아직 Source Binding되지 않은 현재 persisted 상태에서는 Icon Collapsed / Text HitTestInvisible을 검증하고 Ratio/Tint 회귀는 그대로 유지.
@@ -52,6 +57,11 @@
 // - v1.0.1: Provider Rebind Fixture의 UCFUISubsystem Outer를 실제 ClassWithin 계약인 ULocalPlayer로 교정.
 // - v1.0.0: ViewData Availability와 Provider Rebind Generation/Old Pawn 해제 계약 테스트를 최초 추가.
 // Migration:
+// - v1.41.0부터 FCFTargetHUDData는 Selection/Knowledge 전용이며 UI-P0-07은 FCFTargetLockHUDData와 FCFTargetScanHUDData를 별도 입력으로 적용합니다. Selection 일치 조건으로 Lock/Scan을 숨기지 않습니다.
+// - v1.39.0부터 FCFTargetHUDData에는 Contact 기반 AnalysisProgress01이 없습니다. Current Scan UI source는 독립 FCFTargetScanHUDData의 bScanAttemptActive + ScanAttemptProgress01만 사용합니다.
+// - v1.38.0 TargetPanel 진행 UI source는 bScanAttemptActive + ScanAttemptProgress01이며 Contact legacy progress 경로는 v1.39.0에서 제거됐습니다.
+// - v1.38.0 DetailedScan + AnalysisCompletionRevision은 영구 Knowledge source이고 ScanCompletionTransitionRevision만 짧은 완료 feedback source입니다. 동일 revision 재적용은 feedback 시간을 재시작하지 않습니다.
+// - v1.37.0의 DetailedScan 영구 100% latch 기대는 폐기됐습니다.
 // - v1.36.1부터 NoTurret Reticle PIE 검증은 protected Fire 경로를 호출하지 않으며 Production public API, friend 선언, Runtime 동작을 추가하지 않습니다.
 // - v1.36.0 NoTurret Reticle PIE 검증은 TestMap의 실제 Local Vehicle Pawn을 transient runtime에서만 조작하며 Content/Asset을 생성·수정·저장하지 않습니다.
 // - 테스트는 Transient ULocalPlayer/UObject와 Automation World만 사용하며 Unreal Asset을 생성하거나 저장하지 않습니다.
@@ -3355,14 +3365,20 @@ bool FCFHUDP007TargetKnowledgePanelTest::RunTest(const FString& Parameters)
 	UTextBlock* TargetIdentityText = Cast<UTextBlock>(TargetPanelWidget->GetWidgetFromName(FName(TEXT("Text_TargetIdentity"))));
 	// [v1.23.0] 아직 authoritative Target Armor source가 없어 숨김을 유지할 Mock Row입니다.
 	UTextBlock* TargetArmorText = Cast<UTextBlock>(TargetPanelWidget->GetWidgetFromName(FName(TEXT("Text_TargetArmor"))));
-	// [v1.23.0] Sensor Analysis 진행률의 Player-facing Text입니다.
+	// [v1.41.0] Vehicle Target Lock 상태를 Selection과 독립적으로 표시할 Player-facing Text입니다.
+	UTextBlock* TargetLockText = Cast<UTextBlock>(TargetPanelWidget->GetWidgetFromName(FName(TEXT("Text_TargetLock"))));
+	// [v1.41.0] Lock 획득 진행률 또는 Locked 품질을 표시할 0~1 Bar입니다.
+	UProgressBar* TargetLockProgressBar = Cast<UProgressBar>(TargetPanelWidget->GetWidgetFromName(FName(TEXT("ProgressBar_TargetLock"))));
+	// [v1.41.0] Target Scan Attempt/완료 전이를 Selection과 독립적으로 표시할 Player-facing Text입니다.
 	UTextBlock* TargetScanText = Cast<UTextBlock>(TargetPanelWidget->GetWidgetFromName(FName(TEXT("Text_TargetScan"))));
-	// [v1.23.0] Sensor Analysis 진행률의 0~1 Bar입니다.
+	// [v1.41.0] Target Scan Attempt 또는 짧은 완료 feedback을 표시할 0~1 Bar입니다.
 	UProgressBar* TargetScanProgressBar = Cast<UProgressBar>(TargetPanelWidget->GetWidgetFromName(FName(TEXT("ProgressBar_TargetScan"))));
 	if (!TestNotNull(TEXT("UI-P0-07 Target Title"), TargetTitleText)
 		|| !TestNotNull(TEXT("UI-P0-07 Target Distance"), TargetDistanceText)
 		|| !TestNotNull(TEXT("UI-P0-07 Target Identity"), TargetIdentityText)
 		|| !TestNotNull(TEXT("UI-P0-07 Target Armor"), TargetArmorText)
+		|| !TestNotNull(TEXT("UI-P0-07 Target Lock Text"), TargetLockText)
+		|| !TestNotNull(TEXT("UI-P0-07 Target Lock Progress"), TargetLockProgressBar)
 		|| !TestNotNull(TEXT("UI-P0-07 Target Scan Text"), TargetScanText)
 		|| !TestNotNull(TEXT("UI-P0-07 Target Scan Progress"), TargetScanProgressBar))
 	{
@@ -3391,76 +3407,144 @@ bool FCFHUDP007TargetKnowledgePanelTest::RunTest(const FString& Parameters)
 		FCFInGameUIViewData ViewData;
 	};
 
-	// [v1.23.0] Target 관련 ViewData를 Production Presenter에 정확히 한 번 적용하는 Helper입니다.
-	auto ApplyTargetViewDataOnce = [Presenter, HandleViewDataFunction](const FCFTargetHUDData& TargetViewData)
+	// [v1.41.0] Selection Knowledge, Target Lock, Target Scan ViewData를 한 프레임에 함께 적용하는 Helper입니다.
+	auto ApplyTargetOperationViewDataOnce = [Presenter, HandleViewDataFunction](
+		const FCFTargetHUDData& TargetViewData,
+		const FCFTargetLockHUDData& TargetLockViewData,
+		const FCFTargetScanHUDData& TargetScanViewData)
 	{
-		// [v1.23.0] 이번 한 번의 Presenter 적용에 사용할 전체 ViewData 파라미터입니다.
+		// [v1.41.0] 이번 한 번의 Presenter 적용에 사용할 전체 ViewData 파라미터입니다.
 		FHandleHUDViewDataChangedParams Params;
 		Params.ViewData.Target = TargetViewData;
+		Params.ViewData.TargetLock = TargetLockViewData;
+		Params.ViewData.TargetScan = TargetScanViewData;
 		Presenter->ProcessEvent(HandleViewDataFunction, &Params);
 	};
 
-	// [v1.23.0] 선택 Target이 없는 기본 상태입니다.
+	// [v1.41.0] Lock과 Scan이 모두 없는 기본 독립 채널 ViewData입니다.
+	const FCFTargetLockHUDData EmptyTargetLockViewData;
+	// [v1.41.0] Scan Attempt와 완료 feedback이 모두 없는 기본 독립 채널 ViewData입니다.
+	const FCFTargetScanHUDData EmptyTargetScanViewData;
+
+	// [v1.41.0] Selection, Lock, Scan이 모두 비활성인 기본 HUD 상태입니다.
 	FCFTargetHUDData NoTargetViewData;
 	NoTargetViewData.Availability = ECFUIViewAvailability::KnownZero;
-	ApplyTargetViewDataOnce(NoTargetViewData);
+	ApplyTargetOperationViewDataOnce(NoTargetViewData, EmptyTargetLockViewData, EmptyTargetScanViewData);
 	TestEqual(TEXT("UI-P0-07 no target title"), TargetTitleText->GetText().ToString(), FString(TEXT("NO TARGET")));
 	TestEqual(TEXT("UI-P0-07 no target distance collapsed"), TargetDistanceText->GetVisibility(), ESlateVisibility::Collapsed);
 	TestEqual(TEXT("UI-P0-07 no target identity collapsed"), TargetIdentityText->GetVisibility(), ESlateVisibility::Collapsed);
 	TestEqual(TEXT("UI-P0-07 no target armor collapsed"), TargetArmorText->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-07 no target lock text collapsed"), TargetLockText->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-07 no target lock bar collapsed"), TargetLockProgressBar->GetVisibility(), ESlateVisibility::Collapsed);
 	TestEqual(TEXT("UI-P0-07 no target scan text collapsed"), TargetScanText->GetVisibility(), ESlateVisibility::Collapsed);
 	TestEqual(TEXT("UI-P0-07 no target scan bar collapsed"), TargetScanProgressBar->GetVisibility(), ESlateVisibility::Collapsed);
 
-	// [v1.23.0] Sensor가 Contact와 거리/분석 진행률은 알고 있지만 Identity는 아직 공개하지 않은 Detected 상태입니다.
-	FCFTargetHUDData DetectedTargetViewData;
-	DetectedTargetViewData.Availability = ECFUIViewAvailability::Known;
-	DetectedTargetViewData.bHasSelectedTarget = true;
-	DetectedTargetViewData.bSelectedTargetValid = true;
-	DetectedTargetViewData.SensorContactAvailability = ECFUIViewAvailability::Known;
-	DetectedTargetViewData.IdentityAvailability = ECFUIViewAvailability::Unknown;
-	DetectedTargetViewData.InformationLevel = ECFTargetInfoLevel::Detected;
-	DetectedTargetViewData.DistanceAvailability = ECFUIViewAvailability::Known;
-	DetectedTargetViewData.DistanceMeters = 842.0f;
-	DetectedTargetViewData.AnalysisProgress01 = 0.35f;
-	ApplyTargetViewDataOnce(DetectedTargetViewData);
-	TestEqual(TEXT("UI-P0-07 detected unknown title"), TargetTitleText->GetText().ToString(), FString(TEXT("UNKNOWN CONTACT")));
-	TestEqual(TEXT("UI-P0-07 detected identity unknown"), TargetIdentityText->GetText().ToString(), FString(TEXT("식별  ???")));
-	TestEqual(TEXT("UI-P0-07 detected distance"), TargetDistanceText->GetText().ToString(), FString(TEXT("거리  842 m")));
-	TestEqual(TEXT("UI-P0-07 detected scan text"), TargetScanText->GetText().ToString(), FString(TEXT("스캔  35%")));
-	TestTrue(TEXT("UI-P0-07 detected scan progress 0.35"), FMath::IsNearlyEqual(TargetScanProgressBar->GetPercent(), 0.35f));
-	TestEqual(TEXT("UI-P0-07 detected distance visible"), TargetDistanceText->GetVisibility(), ESlateVisibility::HitTestInvisible);
-	TestEqual(TEXT("UI-P0-07 detected identity visible"), TargetIdentityText->GetVisibility(), ESlateVisibility::HitTestInvisible);
-	TestEqual(TEXT("UI-P0-07 detected scan visible"), TargetScanText->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	// [v1.41.0] 현재 Selection B가 Detected Knowledge와 실제 거리를 가진 상태입니다.
+	FCFTargetHUDData SelectedTargetBViewData;
+	SelectedTargetBViewData.Availability = ECFUIViewAvailability::Known;
+	SelectedTargetBViewData.bHasSelectedTarget = true;
+	SelectedTargetBViewData.bSelectedTargetValid = true;
+	SelectedTargetBViewData.ContactId = TEXT("HUDSelectedContact_B");
+	SelectedTargetBViewData.SensorContactAvailability = ECFUIViewAvailability::Known;
+	SelectedTargetBViewData.IdentityAvailability = ECFUIViewAvailability::Unknown;
+	SelectedTargetBViewData.InformationLevel = ECFTargetInfoLevel::Detected;
+	SelectedTargetBViewData.DistanceAvailability = ECFUIViewAvailability::Known;
+	SelectedTargetBViewData.DistanceMeters = 842.0f;
+
+	// [v1.41.0] Selection B와 무관하게 Contact C를 35% 분석 중인 독립 Target Scan 상태입니다.
+	FCFTargetScanHUDData ScanningTargetCViewData;
+	ScanningTargetCViewData.Availability = ECFUIViewAvailability::Known;
+	ScanningTargetCViewData.bScanAttemptActive = true;
+	ScanningTargetCViewData.ActiveTargetContactId = TEXT("HUDScanContact_C");
+	ScanningTargetCViewData.ActiveTargetContactAvailability = ECFUIViewAvailability::Known;
+	ScanningTargetCViewData.ActiveTargetIdentityAvailability = ECFUIViewAvailability::Unknown;
+	ScanningTargetCViewData.ScanAttemptProgress01 = 0.35f;
+	ApplyTargetOperationViewDataOnce(SelectedTargetBViewData, EmptyTargetLockViewData, ScanningTargetCViewData);
+	TestEqual(TEXT("UI-P0-07 selected B unknown title"), TargetTitleText->GetText().ToString(), FString(TEXT("UNKNOWN CONTACT")));
+	TestEqual(TEXT("UI-P0-07 selected B identity unknown"), TargetIdentityText->GetText().ToString(), FString(TEXT("식별  ???")));
+	TestEqual(TEXT("UI-P0-07 selected B distance"), TargetDistanceText->GetText().ToString(), FString(TEXT("거리  842 m")));
+	TestEqual(TEXT("UI-P0-07 independent scan C text"), TargetScanText->GetText().ToString(), FString(TEXT("스캔  미식별  35%")));
+	TestTrue(TEXT("UI-P0-07 independent scan C progress 0.35"), FMath::IsNearlyEqual(TargetScanProgressBar->GetPercent(), 0.35f));
 	TestEqual(TEXT("UI-P0-07 target armor remains collapsed"), TargetArmorText->GetVisibility(), ESlateVisibility::Collapsed);
 
-	// [v1.23.0] Sensor Knowledge가 Identified로 승격해 Player-facing DisplayName을 공개한 상태입니다.
-	FCFTargetHUDData IdentifiedTargetViewData = DetectedTargetViewData;
-	IdentifiedTargetViewData.IdentityAvailability = ECFUIViewAvailability::Known;
-	IdentifiedTargetViewData.DisplayName = FText::FromString(TEXT("적대 차량"));
-	IdentifiedTargetViewData.InformationLevel = ECFTargetInfoLevel::Identified;
-	IdentifiedTargetViewData.AnalysisProgress01 = 0.60f;
-	ApplyTargetViewDataOnce(IdentifiedTargetViewData);
-	TestEqual(TEXT("UI-P0-07 identified title"), TargetTitleText->GetText().ToString(), FString(TEXT("적대 차량")));
-	TestEqual(TEXT("UI-P0-07 identified identity"), TargetIdentityText->GetText().ToString(), FString(TEXT("식별  적대 차량")));
-	TestEqual(TEXT("UI-P0-07 identified scan text"), TargetScanText->GetText().ToString(), FString(TEXT("스캔  60%")));
-	TestTrue(TEXT("UI-P0-07 identified scan progress 0.60"), FMath::IsNearlyEqual(TargetScanProgressBar->GetPercent(), 0.60f));
+	// [v1.41.0] Selection B가 Identified로 승격해 Player-facing DisplayName을 공개한 상태입니다.
+	FCFTargetHUDData IdentifiedTargetBViewData = SelectedTargetBViewData;
+	IdentifiedTargetBViewData.IdentityAvailability = ECFUIViewAvailability::Known;
+	IdentifiedTargetBViewData.DisplayName = FText::FromString(TEXT("선택 차량 B"));
+	IdentifiedTargetBViewData.InformationLevel = ECFTargetInfoLevel::Identified;
 
-	// [v1.23.0] 선택 기록은 남아 있어도 현재 Sensor Contact가 Unknown이면 stale 거리/분석 숫자를 노출하지 않는 fail-closed 상태입니다.
-	FCFTargetHUDData UnknownContactViewData = DetectedTargetViewData;
-	UnknownContactViewData.SensorContactAvailability = ECFUIViewAvailability::Unknown;
-	UnknownContactViewData.DistanceMeters = 999.0f;
-	UnknownContactViewData.AnalysisProgress01 = 0.95f;
-	ApplyTargetViewDataOnce(UnknownContactViewData);
-	TestEqual(TEXT("UI-P0-07 unknown contact title"), TargetTitleText->GetText().ToString(), FString(TEXT("UNKNOWN CONTACT")));
-	TestEqual(TEXT("UI-P0-07 unknown contact distance collapsed"), TargetDistanceText->GetVisibility(), ESlateVisibility::Collapsed);
-	TestEqual(TEXT("UI-P0-07 unknown contact scan text collapsed"), TargetScanText->GetVisibility(), ESlateVisibility::Collapsed);
-	TestEqual(TEXT("UI-P0-07 unknown contact scan bar collapsed"), TargetScanProgressBar->GetVisibility(), ESlateVisibility::Collapsed);
+	// [v1.41.0] Selection B와 별개로 Contact A를 획득 중인 Vehicle Target Lock 상태입니다.
+	FCFTargetLockHUDData AcquiringTargetAViewData;
+	AcquiringTargetAViewData.Availability = ECFUIViewAvailability::Known;
+	AcquiringTargetAViewData.State = ECFTargetLockState::Acquiring;
+	AcquiringTargetAViewData.TargetContactId = TEXT("HUDLockContact_A");
+	AcquiringTargetAViewData.SensorContactAvailability = ECFUIViewAvailability::Known;
+	AcquiringTargetAViewData.IdentityAvailability = ECFUIViewAvailability::Known;
+	AcquiringTargetAViewData.DisplayName = FText::FromString(TEXT("락 차량 A"));
+	AcquiringTargetAViewData.LockProgress01 = 0.42f;
 
-		ApplyTargetViewDataOnce(NoTargetViewData);
-	TestEqual(TEXT("UI-P0-07 clear returns NO TARGET"), TargetTitleText->GetText().ToString(), FString(TEXT("NO TARGET")));
-	TestEqual(TEXT("UI-P0-07 clear distance collapsed"), TargetDistanceText->GetVisibility(), ESlateVisibility::Collapsed);
-	TestEqual(TEXT("UI-P0-07 clear identity collapsed"), TargetIdentityText->GetVisibility(), ESlateVisibility::Collapsed);
-	TestEqual(TEXT("UI-P0-07 clear scan collapsed"), TargetScanText->GetVisibility(), ESlateVisibility::Collapsed);
+	ScanningTargetCViewData.ActiveTargetIdentityAvailability = ECFUIViewAvailability::Known;
+	ScanningTargetCViewData.ActiveTargetDisplayName = FText::FromString(TEXT("스캔 차량 C"));
+	ScanningTargetCViewData.ScanAttemptProgress01 = 0.60f;
+	ApplyTargetOperationViewDataOnce(IdentifiedTargetBViewData, AcquiringTargetAViewData, ScanningTargetCViewData);
+	TestEqual(TEXT("UI-P0-07 selected B title independent"), TargetTitleText->GetText().ToString(), FString(TEXT("선택 차량 B")));
+	TestEqual(TEXT("UI-P0-07 lock A text independent"), TargetLockText->GetText().ToString(), FString(TEXT("락 획득  락 차량 A  42%")));
+	TestTrue(TEXT("UI-P0-07 lock A progress 0.42"), FMath::IsNearlyEqual(TargetLockProgressBar->GetPercent(), 0.42f));
+	TestEqual(TEXT("UI-P0-07 scan C text independent"), TargetScanText->GetText().ToString(), FString(TEXT("스캔  스캔 차량 C  60%")));
+	TestTrue(TEXT("UI-P0-07 scan C progress 0.60"), FMath::IsNearlyEqual(TargetScanProgressBar->GetPercent(), 0.60f));
+
+	// [v1.41.0] Selection만 Clear해도 기존 Lock A와 Scan C Presentation은 실제 Runtime 상태가 유지되는 동안 남아야 합니다.
+	ApplyTargetOperationViewDataOnce(NoTargetViewData, AcquiringTargetAViewData, ScanningTargetCViewData);
+	TestEqual(TEXT("UI-P0-07 selection clear returns NO TARGET"), TargetTitleText->GetText().ToString(), FString(TEXT("NO TARGET")));
+	TestEqual(TEXT("UI-P0-07 selection clear keeps lock A"), TargetLockText->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("UI-P0-07 selection clear keeps scan C"), TargetScanText->GetVisibility(), ESlateVisibility::HitTestInvisible);
+
+	// [v1.41.0] Selection B의 DetailedScan Knowledge는 현재 Scan C completion lifecycle과 독립적인 영구 정보입니다.
+	FCFTargetHUDData DetailedTargetBViewData = IdentifiedTargetBViewData;
+	DetailedTargetBViewData.InformationLevel = ECFTargetInfoLevel::DetailedScan;
+	DetailedTargetBViewData.AnalysisCompletionRevision = 7;
+	// [v1.41.0] Contact C의 새 Scan completion transition을 나타내는 독립 TargetScan ViewData입니다.
+	FCFTargetScanHUDData CompletedTargetCViewData;
+	CompletedTargetCViewData.Availability = ECFUIViewAvailability::KnownZero;
+	CompletedTargetCViewData.CompletionTransitionRevision = 7;
+	CompletedTargetCViewData.LastCompletedContactId = TEXT("HUDScanContact_C");
+	CompletedTargetCViewData.CompletedTargetContactAvailability = ECFUIViewAvailability::Known;
+	CompletedTargetCViewData.CompletedTargetIdentityAvailability = ECFUIViewAvailability::Known;
+	CompletedTargetCViewData.CompletedTargetDisplayName = FText::FromString(TEXT("스캔 차량 C"));
+	ApplyTargetOperationViewDataOnce(DetailedTargetBViewData, EmptyTargetLockViewData, CompletedTargetCViewData);
+	TestEqual(TEXT("UI-P0-07 completion transition text"), TargetScanText->GetText().ToString(), FString(TEXT("스캔 완료  스캔 차량 C")));
+	TestTrue(TEXT("UI-P0-07 completion transition bar 1.0"), FMath::IsNearlyEqual(TargetScanProgressBar->GetPercent(), 1.0f));
+	TestEqual(TEXT("UI-P0-07 completion transition text visible"), TargetScanText->GetVisibility(), ESlateVisibility::HitTestInvisible);
+
+	// [v1.41.0] transient Automation World 시간 진행에 의존하지 않고 Scan completion feedback 종료 시각을 과거로 보내 결정적으로 만료시킵니다.
+	Presenter->TargetScanCompletionFeedbackEndGameTimeSeconds = -1.0;
+	ApplyTargetOperationViewDataOnce(DetailedTargetBViewData, EmptyTargetLockViewData, CompletedTargetCViewData);
+	TestEqual(TEXT("UI-P0-07 detailed Knowledge remains but scan text expires"), TargetScanText->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-07 detailed Knowledge remains but scan bar expires"), TargetScanProgressBar->GetVisibility(), ESlateVisibility::Collapsed);
+
+	// [v1.41.0] 실제 Lock Break revision 3이 ContactLost로 발생한 Idle Snapshot 표시 상태입니다.
+	FCFTargetLockHUDData BrokenTargetLockViewData;
+	BrokenTargetLockViewData.Availability = ECFUIViewAvailability::KnownZero;
+	BrokenTargetLockViewData.State = ECFTargetLockState::Idle;
+	BrokenTargetLockViewData.BreakTransitionRevision = 3;
+	BrokenTargetLockViewData.LastBreakReason = ECFTargetLockBreakReason::ContactLost;
+	ApplyTargetOperationViewDataOnce(NoTargetViewData, BrokenTargetLockViewData, EmptyTargetScanViewData);
+	TestEqual(TEXT("UI-P0-07 lock break text"), TargetLockText->GetText().ToString(), FString(TEXT("락 상실  CONTACT 유실")));
+	TestEqual(TEXT("UI-P0-07 lock break text visible"), TargetLockText->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("UI-P0-07 lock break bar collapsed"), TargetLockProgressBar->GetVisibility(), ESlateVisibility::Collapsed);
+
+	// [v1.41.0] 같은 Break Revision은 만료 뒤 반복 적용해도 feedback 시간을 다시 시작하지 않아야 합니다.
+	Presenter->TargetLockBreakFeedbackEndGameTimeSeconds = -1.0;
+	ApplyTargetOperationViewDataOnce(NoTargetViewData, BrokenTargetLockViewData, EmptyTargetScanViewData);
+	TestEqual(TEXT("UI-P0-07 lock break feedback expires"), TargetLockText->GetVisibility(), ESlateVisibility::Collapsed);
+
+	// [v1.41.0] Scan Attempt가 살아 있어도 대상 Contact가 Snapshot에서 사라지면 stale 진행률은 fail-closed합니다.
+	FCFTargetScanHUDData UnknownScanContactViewData = ScanningTargetCViewData;
+	UnknownScanContactViewData.ActiveTargetContactAvailability = ECFUIViewAvailability::Unknown;
+	UnknownScanContactViewData.ScanAttemptProgress01 = 0.95f;
+	ApplyTargetOperationViewDataOnce(IdentifiedTargetBViewData, EmptyTargetLockViewData, UnknownScanContactViewData);
+	TestEqual(TEXT("UI-P0-07 unknown scan contact text collapsed"), TargetScanText->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("UI-P0-07 unknown scan contact bar collapsed"), TargetScanProgressBar->GetVisibility(), ESlateVisibility::Collapsed);
 	return true;
 }
 

@@ -1,12 +1,20 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-08-15
-// Description: CF-FQ-036 SEN-P0-01 Sensor Contact Data Contract Automation
-// Scope: Config, Actor-free Contact/Snapshot, ContactId allocator와 Pawn 기본 소유권을 asset-free로 검증합니다.
+// Version: 1.3.0
+// Date: 2026-09-17
+// Description: CF-FQ-036 Sensor Contact Data Contract Automation / Gameplay Entity Identity 회귀
+// Scope: Config, Actor-free Contact/Snapshot, TargetEntityId 독립 Identity, 제거된 Legacy progress Reflection 계약, ContactId allocator와 Pawn 기본 소유권을 asset-free로 검증합니다.
 // Changelog:
+// - v1.3.0: FCFSensorContact.TargetEntityId가 ContactId/KnownTargetId와 별도 FGuid이고 Invalid Guid도 호환상 유효한 공개 Contact 계약임을 고정.
+// - v1.2.0: Contact/Target HUD/Radar HUD에서 AnalysisProgress01 Reflection Property가 제거됐음을 고정하고 synthetic Contact fixture에서 legacy progress 주입을 제거.
+// - v1.1.1: 0보다 큰 극소 gain도 분석 활성로 취급해 단발 완료 예산 부족이면 무효가 되는 exact-zero 경계 회귀를 추가.
+// - v1.1.0: 3초 Scan + 0.2초 Update + Detailed 1.0에서 gain 0.25를 거부하고 gain 0.40을 허용하는 단발 완료 cross-field 회귀를 추가.
 // - v1.0.0: SEN-P0-01 DataContract, RuntimeContract, PawnOwnership 3개 Automation을 최초 추가.
 // Migration:
+// - v1.3.0은 test-only이며 TargetEntityId Invalid/valid 두 계약을 모두 검증합니다. 기존 ContactId/KnownTargetId 의미와 Content Asset은 변경하지 않습니다.
+// - v1.2.0부터 Contact/HUD public struct의 current Scan progress는 AnalysisProgress01이 아니라 Snapshot.ScanAttempt.Progress01 경로만 허용합니다.
+// - v1.1.1은 test-only이며 분석 비활성 의미를 exact gain0으로 고정한 계약을 보호합니다.
+// - v1.1.0은 test-only이며 Content Asset을 생성·수정·저장하지 않습니다.
 // - Transient UObject/CDO와 C++ Struct만 사용하며 Content Asset을 생성하거나 저장하지 않습니다.
 // - TargetSelect 후보·선택, HUD, Collision Config와 World 탐지 로직을 실행하지 않습니다.
 
@@ -17,6 +25,7 @@
 #include "CFVehiclePawn.h"
 #include "CFVehicleSensorComp.h"
 #include "CFVehicleSensorData.h"
+#include "UI/CFHUDViewData.h"
 #include "Misc/AutomationTest.h"
 #include "UObject/UnrealType.h"
 
@@ -82,7 +91,6 @@ namespace
 		Contact.LastKnownWorldLocation = FVector(100.0, 200.0, 50.0);
 		Contact.LastObservedWorldTimeSeconds = 1.0;
 		Contact.FreshnessSeconds = 0.0f;
-		Contact.AnalysisProgress01 = 0.5f;
 		Contact.bDestroyedConfirmed = false;
 		return Contact;
 	}
@@ -113,16 +121,43 @@ bool FCFSensorDataContractTest::RunTest(const FString& Parameters)
 	SensorData->SensorConfig.DetailedScanThreshold = 0.7f;
 	TestFalse(TEXT("DetailedScanThreshold가 Identified 이하이면 무효"), SensorData->IsSensorConfigValid());
 
+	SensorData->SensorConfig.PassiveDetectionRangeCm = 2000.0f;
+	SensorData->SensorConfig.ActiveScanRangeCm = 4000.0f;
+	SensorData->SensorConfig.UpdateIntervalSec = 0.2f;
+	SensorData->SensorConfig.ActiveScanDurationSec = 3.0f;
+	SensorData->SensorConfig.IdentifiedThreshold = 0.5f;
+	SensorData->SensorConfig.DetailedScanThreshold = 1.0f;
+	SensorData->SensorConfig.AnalysisGainPerSec = 0.25f;
+	TestFalse(TEXT("3초 Scan에서 gain 0.25는 단발 DetailedScan 완료 예산 부족"), SensorData->SensorConfig.IsSingleScanAnalysisBudgetValid());
+	TestFalse(TEXT("단발 완료 예산 부족 SensorConfig는 무효"), SensorData->IsSensorConfigValid());
+	SensorData->SensorConfig.AnalysisGainPerSec = KINDA_SMALL_NUMBER * 0.5f;
+	TestFalse(TEXT("0보다 큰 극소 gain도 분석 활성 상태이므로 단발 완료 예산을 우회하지 못함"), SensorData->SensorConfig.IsSingleScanAnalysisBudgetValid());
+	TestFalse(TEXT("극소 양수 gain SensorConfig도 완료 예산 부족이면 무효"), SensorData->IsSensorConfigValid());
+	SensorData->SensorConfig.AnalysisGainPerSec = 0.40f;
+	TestTrue(TEXT("3초 Scan에서 gain 0.40은 0.2초 Update 안전 여유 포함 단발 완료 가능"), SensorData->SensorConfig.IsSingleScanAnalysisBudgetValid());
+	TestTrue(TEXT("단발 완료 예산 충족 SensorConfig 복구"), SensorData->IsSensorConfigValid());
+
 	// [v1.0.0] ContactId와 TargetId 분리 계약을 검증할 첫 Contact입니다.
 	FCFSensorContact ContactB = MakeValidContact(TEXT("Contact_000002"), TEXT("Vehicle_B"));
 	// [v1.0.0] 결정 정렬에서 ContactB보다 앞에 와야 할 둘째 Contact입니다.
 	FCFSensorContact ContactA = MakeValidContact(TEXT("Contact_000001"), TEXT("Vehicle_A"));
 	TestTrue(TEXT("유효 Contact 계약"), ContactA.IsPublicContractValid());
 	TestNotEqual(TEXT("ContactId는 KnownTargetId와 별도 식별자"), ContactA.ContactId, ContactA.KnownTargetId);
+	TestFalse(TEXT("Identity 미지원 Contact는 Invalid TargetEntityId를 허용"), ContactA.TargetEntityId.IsValid());
+
+	// [v1.3.0] 명시 Entity Identity를 가진 Contact도 같은 공개 계약을 만족하는지 확인할 독립 FGuid입니다.
+	const FGuid ExplicitTargetEntityId = FGuid::NewGuid();
+	ContactB.TargetEntityId = ExplicitTargetEntityId;
+	TestTrue(TEXT("명시 TargetEntityId가 있는 Contact도 공개 계약 유효"), ContactB.IsPublicContractValid());
+	TestTrue(TEXT("TargetEntityId는 유효한 FGuid로 독립 전달 가능"), ContactB.TargetEntityId == ExplicitTargetEntityId);
 
 	TestFalse(TEXT("CF Sensor Contact는 UObject/Actor 참조 Property 없음"), ContainsObjectReferenceProperty(FCFSensorContact::StaticStruct()));
 	TestFalse(TEXT("CF Sensor Snapshot은 중첩 Contact 포함 UObject/Actor 참조 Property 없음"), ContainsObjectReferenceProperty(FCFSensorSnapshot::StaticStruct()));
+	TestNotNull(TEXT("Sensor Contact TargetEntityId Property 존재"), FCFSensorContact::StaticStruct()->FindPropertyByName(TEXT("TargetEntityId")));
 	TestNull(TEXT("Sensor Contact에는 TargetSelect TrackState Property 없음"), FCFSensorContact::StaticStruct()->FindPropertyByName(TEXT("TrackState")));
+	TestNull(TEXT("Sensor Contact에는 Legacy AnalysisProgress01 Property 없음"), FCFSensorContact::StaticStruct()->FindPropertyByName(TEXT("AnalysisProgress01")));
+	TestNull(TEXT("Target HUD Data에는 Legacy AnalysisProgress01 Property 없음"), FCFTargetHUDData::StaticStruct()->FindPropertyByName(TEXT("AnalysisProgress01")));
+	TestNull(TEXT("Radar HUD Data에는 Legacy AnalysisProgress01 Property 없음"), FCFRadarContactHUDData::StaticStruct()->FindPropertyByName(TEXT("AnalysisProgress01")));
 
 	// [v1.0.0] 입력 순서와 무관한 ContactId 결정 정렬을 검증할 Snapshot입니다.
 	FCFSensorSnapshot Snapshot;

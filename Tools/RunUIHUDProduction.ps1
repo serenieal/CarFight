@@ -1,10 +1,11 @@
 # Copyright (c) CarFight. All Rights Reserved.
 #
-# Version: 1.6.0
-# Date: 2026-08-21
+# Version: 1.7.0
+# Date: 2026-09-18
 # Description: ApplyUIHUDProduction.py의 신규 Scaffold / Designer Layout 보존 Targeted Apply 경로를 공식 UE 5.8에서 실행합니다.
-# Scope: 기존 Production Widget은 기본 Validate-only로 보존하며 -RadarOnly와 -ViewModeOnly만 명시적 additive Visual migration을 허용합니다.
+# Scope: 기존 Production Widget은 기본 Validate-only로 보존하며 Phase 6 Target Lock / Radar / ViewMode의 명시적 additive migration만 허용합니다.
 # Changelog:
+# - v1.7.0: -TargetPhase6Only를 추가해 기존 WBP_CFTargetPanel 정확히 1개에 Text_TargetLock / ProgressBar_TargetLock만 additive 적용하는 target_phase6_apply를 연결.
 # - v1.6.0: -ViewModeOnly를 추가해 기존 WBP_CFInGameHUD 정확히 1개만 저장하는 view_mode_visual_apply를 연결. Root 7-child/ReticleLayer 기존 Slot Layout 재적용과 다른 Production Asset 저장 금지.
 # - v1.5.0: -RadarOnly를 추가해 Radar Texture 7 + VisualData + RadarPanel 정확히 9개만 저장하는 radar_visual_apply를 연결. RadarPanel 기존 Slot Layout/Tree rebuild 금지.
 # - v1.4.0: Apply/WeaponPanelOnly/ArmorMapOnly에서 기존 Widget Tree 재구축을 중단하고 Validate-only로 전환. RpmGaugeOnly는 Texture+Material+VisualData 3개만 저장하고 SpeedGauge는 Layout 보존 검증 전용으로 변경.
@@ -14,6 +15,7 @@
 # - v1.1.0: -WeaponPanelOnly 스위치를 추가해 전체 Production 재작성을 우회하고 exact WBP_CFWeaponPanel 단일 Asset만 변경하는 targeted apply mode를 연결.
 # - v1.0.0: Production Root 1 + Panel 6 + Element 2 + Visual DataAsset 1의 Full Editor Wait와 UTF-8 Report 검증을 최초 추가.
 # Migration:
+# - v1.7.0 -TargetPhase6Only는 기존 TargetPanel의 Border/VerticalBox/Selection·Knowledge·Scan Widget을 보존하고 Lock Text/Progress 누락분만 추가합니다. 저장 대상은 WBP_CFTargetPanel exact1입니다.
 # - 기본 실행은 Probe입니다.
 # - -DryRun/-Readback은 읽기 전용입니다. -Apply는 기존 Widget을 Validate-only로 보호하고 누락돼 이번 실행에서 생성한 Widget만 최초 Scaffold/저장합니다.
 # - -WeaponPanelOnly는 기존 WBP_CFWeaponPanel의 의미 구조만 검증하며 Designer Layout을 저장하거나 재구축하지 않습니다.
@@ -65,7 +67,11 @@ param(
 
     # [v1.6.0] 기존 Production Root 한 개에 Vehicle Direction Track/Image additive migration만 수행합니다.
     [Parameter(Mandatory = $false)]
-    [switch]$ViewModeOnly
+    [switch]$ViewModeOnly,
+
+    # [v1.7.0] 기존 TargetPanel 한 개에 Phase 6 Lock Text/Progress additive migration만 수행합니다.
+    [Parameter(Mandatory = $false)]
+    [switch]$TargetPhase6Only
 )
 
 Set-StrictMode -Version Latest
@@ -87,14 +93,14 @@ $PythonScript = Join-Path $ToolsDirectory 'ApplyUIHUDProduction.py'
 $ReportPath = Join-Path $RepositoryRoot 'UE\Saved\UIHUDProduction\report.json'
 
 # [v1.1.0] 동시에 여러 실행 모드를 선택하지 않았는지 확인할 선택 개수입니다.
-$ModeCount = @(@($Probe, $DryRun, $Apply, $Readback, $WeaponPanelOnly, $ArmorMapOnly, $RpmGaugeOnly, $RadarOnly, $ViewModeOnly) | Where-Object { $_ }).Count
+$ModeCount = @(@($Probe, $DryRun, $Apply, $Readback, $WeaponPanelOnly, $ArmorMapOnly, $RpmGaugeOnly, $RadarOnly, $ViewModeOnly, $TargetPhase6Only) | Where-Object { $_ }).Count
 if ($ModeCount -gt 1)
 {
-        throw 'Choose only one of -Probe, -DryRun, -Apply, -Readback, -WeaponPanelOnly, -ArmorMapOnly, -RpmGaugeOnly, -RadarOnly or -ViewModeOnly.'
+        throw 'Choose only one of -Probe, -DryRun, -Apply, -Readback, -WeaponPanelOnly, -ArmorMapOnly, -RpmGaugeOnly, -RadarOnly, -ViewModeOnly or -TargetPhase6Only.'
 }
 
 # [v1.1.0] 아무 스위치도 없으면 가장 안전한 Probe를 사용하고 WeaponPanel-only는 별도 targeted mutation 모드로 분리합니다.
-$RunMode = if ($DryRun) { 'dry_run' } elseif ($Apply) { 'apply' } elseif ($Readback) { 'readback' } elseif ($WeaponPanelOnly) { 'weapon_panel_apply' } elseif ($ArmorMapOnly) { 'armor_map_apply' } elseif ($RpmGaugeOnly) { 'rpm_gauge_apply' } elseif ($RadarOnly) { 'radar_visual_apply' } elseif ($ViewModeOnly) { 'view_mode_visual_apply' } else { 'probe' }
+$RunMode = if ($DryRun) { 'dry_run' } elseif ($Apply) { 'apply' } elseif ($Readback) { 'readback' } elseif ($WeaponPanelOnly) { 'weapon_panel_apply' } elseif ($ArmorMapOnly) { 'armor_map_apply' } elseif ($RpmGaugeOnly) { 'rpm_gauge_apply' } elseif ($RadarOnly) { 'radar_visual_apply' } elseif ($ViewModeOnly) { 'view_mode_visual_apply' } elseif ($TargetPhase6Only) { 'target_phase6_apply' } else { 'probe' }
 
 foreach ($RequiredFile in @($EnvironmentGuard, $PythonScript))
 {
@@ -148,7 +154,7 @@ if (Test-Path -LiteralPath $ReportPath -PathType Leaf)
 $PreviousRunMode = $env:CARFIGHT_UI_HUD_PROD_MODE
 $env:CARFIGHT_UI_HUD_PROD_MODE = $RunMode
 
-if ($RunMode -eq 'apply' -or $RunMode -eq 'weapon_panel_apply' -or $RunMode -eq 'armor_map_apply' -or $RunMode -eq 'rpm_gauge_apply' -or $RunMode -eq 'radar_visual_apply' -or $RunMode -eq 'view_mode_visual_apply')
+if ($RunMode -eq 'apply' -or $RunMode -eq 'weapon_panel_apply' -or $RunMode -eq 'armor_map_apply' -or $RunMode -eq 'rpm_gauge_apply' -or $RunMode -eq 'radar_visual_apply' -or $RunMode -eq 'view_mode_visual_apply' -or $RunMode -eq 'target_phase6_apply')
 {
         # [v1.4.0] 신규 UMG Scaffold 또는 Material/Visual targeted mutation에 사용할 Full Editor 프로그램입니다.
 
@@ -186,7 +192,7 @@ Write-Host ("Mode: {0}" -f $RunMode)
 Push-Location $UnrealWorkingDirectory
 try
 {
-    if ($RunMode -eq 'apply' -or $RunMode -eq 'weapon_panel_apply' -or $RunMode -eq 'armor_map_apply' -or $RunMode -eq 'rpm_gauge_apply' -or $RunMode -eq 'radar_visual_apply' -or $RunMode -eq 'view_mode_visual_apply')
+    if ($RunMode -eq 'apply' -or $RunMode -eq 'weapon_panel_apply' -or $RunMode -eq 'armor_map_apply' -or $RunMode -eq 'rpm_gauge_apply' -or $RunMode -eq 'radar_visual_apply' -or $RunMode -eq 'view_mode_visual_apply' -or $RunMode -eq 'target_phase6_apply')
     {
         # [v1.3.0] Full Editor가 Production Python Apply와 종료를 모두 마칠 때까지 대기할 Process입니다.
         $EditorProcess = Start-Process -FilePath $EditorProgram -ArgumentList $EditorArguments -WorkingDirectory $UnrealWorkingDirectory -Wait -PassThru

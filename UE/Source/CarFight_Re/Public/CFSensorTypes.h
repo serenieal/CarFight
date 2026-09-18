@@ -1,18 +1,29 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.2.1
-// Date: 2026-08-15
-// Description: CF-FQ-036 Sensor Contact 공개 데이터 계약 / SEN-P0-04 Active Scan Analysis 의미 동기화
-// Scope: Sensor Contact 수명, Passive/Active 조정 설정, Sensor Knowledge와 Actor-free Snapshot 타입을 제공합니다.
+// Version: 1.8.0
+// Date: 2026-09-17
+// Description: CF-FQ-036 Sensor Contact 공개 데이터 계약 / Gameplay Entity Identity 추가
+// Scope: Sensor Contact 수명, Gameplay Entity Identity, Passive/Active 설정, 영구 Sensor Knowledge, broad Active Detection과 현재 Target Scan Attempt를 독립 Snapshot 상태로 제공합니다.
 // Changelog:
+// - v1.8.0: FCFSensorContact에 ContactId/표시 TargetId와 독립된 TargetEntityId(FGuid)를 추가. Identity 미지원 대상은 Invalid Guid를 허용해 기존 Detection/Selection 호환을 유지.
+// - v1.7.0: FCFSensorContact의 비-authority AnalysisProgress01을 제거해 현재 Scan 진행률 Authority를 FCFSensorSnapshot::ScanAttempt.Progress01 단일 경로로 고정.
+// - v1.6.0: Snapshot.bActiveScanRunning을 broad Active Detection Pulse 전용 의미로 고정하고 Target Scan 실행 상태는 ScanAttempt.bScanning으로 독립 확인하도록 계약 설명을 정렬.
+// - v1.5.0: Current Scan Attempt를 Contact Knowledge에서 분리한 FCFSensorScanAttempt를 추가하고 현재 진행률·완료 전이 Revision을 Snapshot 독립 채널로 공개.
+// - v1.4.0: DetailedScan 최초 획득을 raw AnalysisProgress와 분리하는 AnalysisCompletionRevision을 공개 Contact 계약에 추가.
+// - v1.3.0: AnalysisGainPerSec가 활성인 Sensor는 한 번의 정상 Active Scan에서 UpdateInterval 1회 안전 여유를 두고 DetailedScanThreshold에 도달해야 하는 cross-field 계약을 추가.
 // - v1.2.1: SEN-P0-04 의미 변경 없이 주석 들여쓰기만 정규화.
 // - v1.2.0: Active Scan Runtime, Tactical Analysis gain/decay, Identified/DetailedScan Knowledge와 Snapshot 실행 상태의 현재 의미를 ToolTip/Migration에 반영.
 // - v1.1.0: 한 Sensor update에서 검사할 Actor 슬롯 상한 MaxActorScansPerUpdate를 추가하고 ActiveScanRangeCm=0을 Active Scan 비활성 값으로 허용.
 // - v1.0.0: SEN-P0-01 ContactId, ContactState, Knowledge, Config와 Actor-free Snapshot 계약을 최초 추가.
 // Migration:
+// - v1.8.0부터 TargetEntityId는 ContactId 및 표시/데이터 TargetId와 별도인 선택적 Gameplay Entity Identity입니다. Identity 미지원 Target의 Invalid Guid는 정상 호환 상태이며 기존 Contact/TargetId 소비자는 변경하지 않습니다.
+// - v1.7.0부터 FCFSensorContact에는 Scan 진행률 필드가 없습니다. 현재 한 번의 Scan Attempt 진행률은 FCFSensorSnapshot::ScanAttempt.Progress01만 사용합니다.
+// - v1.6.0부터 FCFSensorSnapshot::bActiveScanRunning은 broad Active Detection Pulse만 의미합니다. 지정 Target Scan 실행 여부는 FCFSensorSnapshot::ScanAttempt.bScanning을 authority로 사용합니다.
+// - v1.5.0부터 AnalysisCompletionRevision은 Contact가 최초 DetailedScan Knowledge를 획득한 영구 이력이고, ScanAttempt.CompletionTransitionRevision은 완료 순간을 정확히 한 번 소비하기 위한 일시 전이 식별자입니다.
+// - v1.4.0부터 DetailedScan Contact는 AnalysisCompletionRevision > 0을 가져야 하며, Detected/Identified Contact는 0을 유지합니다.
+// - v1.3.0부터 AnalysisGainPerSec > 0인 SensorConfig는 AnalysisGainPerSec * max(ActiveScanDurationSec - UpdateIntervalSec, 0) >= DetailedScanThreshold를 만족해야 합니다. 의도적인 multi-pass 분석은 별도 명시 계약이 생기기 전까지 허용하지 않습니다.
 // - v1.2.1은 formatting-only이며 Sensor Config/Data Contract Migration이 없습니다.
 // - v1.2.0에서 ActiveScanRangeCm은 StartActiveScan으로 Runtime이 실행 중일 때만 장거리 전방향 Contact Detection에 사용합니다.
-// - Tactical Analysis progress는 Active range + 직접 ECC_Visibility가 유효할 때 증가하며 비유효 상태에서는 AnalysisDecayPerSec로 감소합니다.
 // - Identified/DetailedScan Knowledge는 Sensor Analysis threshold가 직접 승격하며 Source InformationLevel을 복사하지 않습니다.
 // - v1.1.0부터 ActiveScanRangeCm=0은 Passive Detection만 사용하는 유효 설정입니다. 0이 아니면 PassiveDetectionRangeCm 이상이어야 합니다.
 // - MaxActorScansPerUpdate는 탐지 성능 수치가 아니라 한 번의 bounded world scan 작업량 상한입니다.
@@ -70,7 +81,7 @@ struct CARFIGHT_RE_API FCFSensorConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|Sensor|Config", meta=(ClampMin="0.0", Units="cm", DisplayName="Visual 탐지 거리 (VisualDetectionRangeCm)", ToolTip="Passive 범위 밖에서 ECC_Visibility 직접 가시 대상의 최소 탐지 계약에 사용할 후보 거리입니다."))
 	float VisualDetectionRangeCm = 0.0f;
 
-				// [v1.0.0] Sensor Detection, Contact lifecycle과 Tactical Analysis 갱신을 수행할 시간 간격입니다.
+	// [v1.0.0] Sensor Detection, Contact lifecycle과 Tactical Analysis 갱신을 수행할 시간 간격입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|Sensor|Config", meta=(ClampMin="0.001", Units="s", DisplayName="센서 갱신 간격 (UpdateIntervalSec)", ToolTip="Sensor Detection, Contact lifecycle과 Tactical Analysis를 다시 계산할 기본 시간 간격입니다."))
 	float UpdateIntervalSec = 0.1f;
 
@@ -91,20 +102,23 @@ struct CARFIGHT_RE_API FCFSensorConfig
 	float ActiveScanDurationSec = 0.0f;
 
 	// [v1.0.0] 유효한 Tactical Analysis 동안 초당 증가할 정규화 진행률입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|Sensor|Config", meta=(ClampMin="0.0", DisplayName="분석 증가율 (AnalysisGainPerSec)", ToolTip="유효한 Active Scan/Tactical Analysis 동안 매초 증가할 0~1 진행률의 증가량입니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|Sensor|Config", meta=(ClampMin="0.0", DisplayName="분석 증가율 (AnalysisGainPerSec)", ToolTip="유효한 지정 타겟 Scan Attempt 동안 매초 증가할 0~1 진행률의 증가량입니다."))
 	float AnalysisGainPerSec = 0.0f;
 
 	// [v1.0.0] 분석 대상이 일시 가림 또는 범위 이탈했을 때 초당 감소할 정규화 진행률입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|Sensor|Config", meta=(ClampMin="0.0", DisplayName="분석 감소율 (AnalysisDecayPerSec)", ToolTip="Tactical Analysis가 일시 중단됐을 때 즉시 초기화하지 않고 매초 감소시킬 0~1 진행률의 감소량입니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|Sensor|Config", meta=(ClampMin="0.0", DisplayName="분석 감소율 (AnalysisDecayPerSec)", ToolTip="지정 타겟 Scan Attempt가 LOS 또는 거리 조건을 일시 상실했을 때 즉시 초기화하지 않고 매초 감소시킬 0~1 진행률의 감소량입니다."))
 	float AnalysisDecayPerSec = 0.0f;
 
 	// [v1.0.0] Detected에서 Identified로 승격할 정규화 분석 진행률입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|Sensor|Config", meta=(ClampMin="0.0", ClampMax="1.0", DisplayName="Identified 임계값 (IdentifiedThreshold)", ToolTip="Tactical Analysis 진행률이 이 값 이상이면 Identified 정보 단계로 승격할 수 있습니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|Sensor|Config", meta=(ClampMin="0.0", ClampMax="1.0", DisplayName="Identified 임계값 (IdentifiedThreshold)", ToolTip="현재 지정 타겟 Scan Attempt 진행률이 이 값 이상이면 Identified 정보 단계로 승격할 수 있습니다."))
 	float IdentifiedThreshold = 0.5f;
 
 	// [v1.0.0] Identified에서 DetailedScan으로 승격할 정규화 분석 진행률입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|Sensor|Config", meta=(ClampMin="0.0", ClampMax="1.0", DisplayName="Detailed Scan 임계값 (DetailedScanThreshold)", ToolTip="Tactical Analysis 진행률이 이 값 이상이면 DetailedScan 정보 단계로 승격할 수 있습니다."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|Sensor|Config", meta=(ClampMin="0.0", ClampMax="1.0", DisplayName="Detailed Scan 임계값 (DetailedScanThreshold)", ToolTip="현재 지정 타겟 Scan Attempt 진행률이 이 값 이상이면 DetailedScan 정보 단계로 승격할 수 있습니다."))
 	float DetailedScanThreshold = 1.0f;
+
+	// [v1.3.0] Tactical Analysis가 활성인 경우 한 번의 정상 Active Scan에서 DetailedScan까지 완료 가능한 시간 예산인지 반환합니다.
+	bool IsSingleScanAnalysisBudgetValid() const;
 
 	// [v1.0.0] Sensor 설정이 유한하고 P0 의미 범위를 만족하는지 반환합니다.
 	bool IsValid() const;
@@ -124,6 +138,10 @@ struct CARFIGHT_RE_API FCFSensorContact
 	// [v1.0.0] Sensor Runtime이 Contact 수명 동안 유지하는 독립 식별자입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Sensor|Contact", meta=(DisplayName="Contact ID", ToolTip="TargetId와 별개로 Sensor Runtime이 발급하며 Live→LastKnown→재획득 동안 같은 Contact를 식별합니다."))
 	FName ContactId = NAME_None;
+
+	// [v1.8.0] ContactId 및 표시용 TargetId와 독립된 Gameplay Entity Identity입니다. 대상이 명시 Identity를 제공하지 않으면 Invalid Guid일 수 있습니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Sensor|Contact", meta=(DisplayName="Target Entity ID", ToolTip="같은 Gameplay Entity를 재식별하기 위한 FGuid입니다. ContactId와 VehicleData 기반 TargetId를 대체하지 않으며 대상이 Identity를 제공하지 않으면 Invalid Guid일 수 있습니다."))
+	FGuid TargetEntityId;
 
 	// [v1.0.0] 플레이어가 식별 단계에 도달했을 때만 공개할 TargetId입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Sensor|Contact", meta=(DisplayName="확인된 Target ID (KnownTargetId)", ToolTip="대상이 Identified 이상으로 식별됐을 때 공개할 TargetId입니다. Detected 단계에서는 None일 수 있으며 ContactId와 같은 식별자가 아닙니다."))
@@ -161,9 +179,9 @@ struct CARFIGHT_RE_API FCFSensorContact
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Sensor|Contact", meta=(Units="s", DisplayName="정보 경과 시간", ToolTip="마지막 신뢰 관측 이후 경과한 시간입니다. LastKnown freshness 표시와 수명 판정에 사용합니다."))
 	float FreshnessSeconds = 0.0f;
 
-	// [v1.0.0] Tactical Analysis의 0~1 정규화 진행률입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Sensor|Contact", meta=(DisplayName="분석 진행률", ToolTip="Active Scan/Tactical Analysis의 0~1 진행률입니다. 유효 분석에서 증가하고 가림·범위 이탈·스캔 중단에서는 설정된 감소율로 서서히 감소하며 즉시 초기화하지 않습니다."))
-	float AnalysisProgress01 = 0.0f;
+	// [v1.5.0] DetailedScan Knowledge를 최초 획득한 영구 이력을 같은 Component 수명에서 단조 증가값으로 식별합니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Sensor|Contact", meta=(DisplayName="DetailedScan 획득 Revision", ToolTip="DetailedScan Knowledge를 최초 획득하기 전에는 0이며 최초 획득 시 양수 Revision이 한 번 할당되어 Scanner가 Idle로 복귀하거나 다른 Scan Attempt가 시작돼도 유지됩니다."))
+	int32 AnalysisCompletionRevision = 0;
 
 	// [v1.0.0] 대상 파괴가 Sensor Runtime에 의해 확인됐는지 여부입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Sensor|Contact", meta=(DisplayName="파괴 확인", ToolTip="True이면 대상 파괴가 확인되어 Contact가 DestroyedHold 수명으로 관리됩니다."))
@@ -174,9 +192,41 @@ struct CARFIGHT_RE_API FCFSensorContact
 };
 
 /**
+ * 현재 한 번의 지정 타겟 Scan Attempt 상태와 가장 최근 완료 전이를 Contact Knowledge와 분리해 전달합니다.
+ */
+USTRUCT(BlueprintType, meta=(DisplayName="센서 스캔 시도 (Sensor Scan Attempt)", ToolTip="현재 지정 타겟 스캔의 실행 여부와 진행률, 가장 최근 완료 전이를 Actor 포인터 없이 전달합니다. Contact Knowledge와 별도 상태입니다."))
+struct CARFIGHT_RE_API FCFSensorScanAttempt
+{
+	GENERATED_BODY()
+
+	// [v1.5.0] 현재 지정 타겟 Scan Attempt가 실제 실행 중인지 나타냅니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Sensor|ScanAttempt", meta=(DisplayName="스캔 진행 중", ToolTip="True일 때만 TargetContactId와 Progress01이 현재 Scan Attempt를 나타냅니다. 완료 후 즉시 False로 돌아갑니다."))
+	bool bScanning = false;
+
+	// [v1.5.0] 현재 Scan Attempt가 분석하는 단 하나의 Contact ID입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Sensor|ScanAttempt", meta=(DisplayName="현재 스캔 Contact ID", ToolTip="현재 지정 타겟 Scan Attempt의 ContactId입니다. Idle 상태에서는 None입니다."))
+	FName TargetContactId = NAME_None;
+
+	// [v1.5.0] 현재 Scan Attempt 자체의 0~1 진행률입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Sensor|ScanAttempt", meta=(DisplayName="현재 스캔 진행률", ToolTip="현재 한 번의 Scan Attempt 진행률입니다. LOS/거리 조건이 유효하면 증가하고 조건 상실 중에는 설정된 감소율로 감소합니다. 완료 또는 중단 뒤 0으로 비활성화됩니다."))
+	float Progress01 = 0.0f;
+
+	// [v1.5.0] 가장 최근 Scan Attempt 완료 전이를 Component 수명에서 단조 증가값으로 식별합니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Sensor|ScanAttempt", meta=(DisplayName="스캔 완료 전이 Revision", ToolTip="지정 타겟 Scan Attempt가 100%에서 DetailedScan Knowledge를 획득한 순간에만 한 번 증가합니다. HUD 완료 피드백 같은 전이 소비자가 사용하며 Contact Knowledge의 AnalysisCompletionRevision과 별개입니다."))
+	int32 CompletionTransitionRevision = 0;
+
+	// [v1.5.0] CompletionTransitionRevision이 가리키는 가장 최근 완료 Contact ID입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Sensor|ScanAttempt", meta=(DisplayName="최근 완료 Contact ID", ToolTip="가장 최근 스캔 완료 전이가 발생한 ContactId입니다. 완료 전이가 아직 없으면 None입니다."))
+	FName LastCompletedContactId = NAME_None;
+
+	// [v1.5.0] 현재 Scan Attempt 공개 상태와 완료 전이 식별자가 서로 일관적인지 반환합니다.
+	bool IsPublicContractValid() const;
+};
+
+/**
  * Sensor Runtime 한 시점의 읽기 전용 공개 Snapshot입니다.
  */
-USTRUCT(BlueprintType, meta=(DisplayName="센서 Snapshot (Sensor Snapshot)", ToolTip="Sensor Runtime 준비 상태, 관측 기준과 Actor-free Contact 목록을 한 번에 전달합니다."))
+USTRUCT(BlueprintType, meta=(DisplayName="센서 Snapshot (Sensor Snapshot)", ToolTip="Sensor Runtime 준비 상태, 관측 기준, 현재 Scan Attempt와 Actor-free Contact 목록을 한 번에 전달합니다."))
 struct CARFIGHT_RE_API FCFSensorSnapshot
 {
 	GENERATED_BODY()
@@ -201,9 +251,13 @@ struct CARFIGHT_RE_API FCFSensorSnapshot
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Sensor|Snapshot", meta=(DisplayName="Sensor Runtime 준비", ToolTip="현재 Sensor Component가 유효한 Config로 초기화되어 Snapshot을 게시할 준비가 됐는지 나타냅니다."))
 	bool bRuntimeReady = false;
 
-	// [v1.0.0] Active Scan이 현재 실행 중인지 여부입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Sensor|Snapshot", meta=(DisplayName="Active Scan 실행 중", ToolTip="현재 Sensor Runtime에서 Active Scan이 실행 중이면 True입니다. StartActiveScan/StopActiveScan과 같은 Runtime 상태를 게시합니다."))
+	// [v1.6.0] broad Active Detection Pulse가 현재 실행 중인지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Sensor|Snapshot", meta=(DisplayName="Active Scan 실행 중", ToolTip="주변 Contact를 장거리 탐지하는 broad Active Detection Pulse가 실행 중이면 True입니다. 지정 타겟 Scan Attempt는 독립 상태인 ScanAttempt.bScanning으로 확인합니다."))
 	bool bActiveScanRunning = false;
+
+	// [v1.5.0] 현재 지정 타겟 Scan Attempt와 가장 최근 완료 전이를 Contact 목록과 분리해 전달합니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Sensor|Snapshot", meta=(DisplayName="스캔 시도 상태", ToolTip="현재 지정 타겟 스캔 실행·진행률과 가장 최근 완료 전이를 전달합니다. Contact Knowledge와 별개입니다."))
+	FCFSensorScanAttempt ScanAttempt;
 
 	// [v1.0.0] 현재 Sensor가 공개하는 Actor-free Contact 목록입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Sensor|Snapshot", meta=(DisplayName="Contact 목록", ToolTip="ContactId 순으로 결정적으로 정렬되는 Actor-free 공개 Contact 목록입니다."))

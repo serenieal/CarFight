@@ -1,10 +1,19 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.7.0
-// Date: 2026-08-20
-// Description: CF-FQ-037 Scanner Runtime + CF-FQ-032 UI-P0-08 Radar Range Profile Applied Source 구현
-// Scope: Config fallback, non-destructive SensorData apply, 적용 Radar Range Profile 사본, Sensor Contact/Knowledge와 Actor-free Snapshot 게시를 구현합니다.
+// Version: 1.15.1
+// Date: 2026-09-18
+// Description: Phase 3B-1 Persistent Knowledge Store Runtime / Phase 5 Target Scan-only Cancel
+// Scope: 기존 Knowledge/Contact 계약을 유지하면서 Target Scan Attempt만 종료하는 explicit cancel command를 추가합니다.
 // Changelog:
+// - v1.15.1: CancelTargetScan을 추가해 현재 Scan Attempt actor/contact/progress만 정리하고 broad Active Detection Pulse state/remaining time은 보존.
+// - v1.15.0: UCFVehicleSensorComp private TargetEntityId keyed Persistent Knowledge Store, Identified/DetailedScan 즉시 upsert, exact AnalysisCompletionRevision 복원, Contact Removed 이후 reassociation, authoritative Terminal Record와 concrete stable identity conflict fail-closed를 구현. Dynamic Knowledge/Freshness/Rescan은 미구현 유지.
+// - v1.14.0: 기존 Sensor TargetSelectable resolver 패턴에 GetTargetEntityId를 추가. 실제 Blueprint override는 Execute 경로를 유지하고 Native C++ 구현은 _Implementation을 직접 호출해 기본 Invalid Guid로 잘못 떨어지는 dispatch를 방지.
+// - v1.13.0: TargetEntityId를 Contact 최초 생성 때만 캡처하고 같은 Contact 재관측 중 다른 유효 Entity ID가 관측되면 갱신하지 않고 fail-closed. Identity 미지원 Invalid Guid는 기존 Detection/Selection과 호환.
+// - v1.12.0: StartActiveDetectionPulse/StartTargetScan/CancelSensorOperations를 canonical command로 전환하고 기존 ActiveScan 계열 함수를 wrapper로 축소. 전체 Sensor update를 RunSensorUpdate로 명확화하고 Knowledge 승격 helper를 Scan progress 의미로 정리. Contact Legacy AnalysisProgress 제거와 동기화.
+// - v1.11.0: Target Scan이 bActiveScanRunning을 사용하지 않도록 독립 duration/state를 추가하고, broad Active Detection과 Target Scan의 동시 실행·독립 만료·단일 Target active-range 관측을 구현.
+// - v1.10.0: StartTargetedScan 단일 Target 분석, 독립 Scan Attempt progress/decay, exact-once 완료 전이와 완료 즉시 Scanner Idle 복귀를 구현.
+// - v1.9.0: DetailedScan 최초 도달 시 AnalysisCompletionRevision을 정확히 한 번 발급하고 raw progress decay와 독립적으로 보존.
+// - v1.8.0: Scanner override > VehicleBase > Fallback source resolver와 ApplyVehicleBaseSensorData를 추가하고 Scanner 제거 시 차량 기본 Sensor로 복귀하도록 수정.
 // - v1.7.0: 전체 SensorData 계약 검증을 Runtime Source 선택에 적용하고 RadarDisplayRangePresetsCm/Default index를 Applied copy로 고정·공개하는 read-only Getter를 추가.
 // - v1.6.0: ApplySensorData, 적용 Config 사본, 탐지 성능 감소 lifecycle reconcile과 Active Scan remaining clamp를 구현.
 // - v1.5.0: 외부 adapter가 선택 Actor를 Snapshot ContactId에만 연결할 수 있는 read-only Actor→ContactId bridge를 추가.
@@ -14,18 +23,32 @@
 // - v1.1.0: MaxActorScansPerUpdate 상한의 공정한 Level Actor cursor, self 제외, Passive range, ECC_Visibility visual fallback과 Actor 중복 방지를 구현.
 // - v1.0.0: SEN-P0-01 Sensor Component Foundation을 최초 구현.
 // Migration:
-// - Sensor는 InputAction을 직접 소유하지 않고 StartActiveScan/StopActiveScan 명령 API만 제공합니다. 실제 입력 owner 연결은 후속 공용 Pawn 통합 책임입니다.
-// - ActiveScanRangeCm은 실행 중에만 Contact Detection에 사용하며 Active Scan 자체는 전방향입니다. Tactical Analysis gain에는 Active range와 ECC_Visibility 직접 가시가 모두 필요합니다.
-// - Analysis가 비유효하면 진행률은 AnalysisDecayPerSec로 서서히 감소하며 즉시 reset하지 않습니다. 획득한 InformationLevel/Known Target Knowledge는 강등하지 않습니다.
+// - v1.15.1부터 Target Scan 전용 cancel은 CancelTargetScan을 사용하며 broad CancelSensorOperations와 의미를 분리합니다. CancelTargetScan은 bActiveScanRunning/ActiveScanRemainingSeconds를 변경하지 않습니다.
+// - v1.15.0부터 valid TargetEntityId의 Identified/DetailedScan/Terminal Knowledge는 Contact array와 독립된 private actor-free Store가 보존합니다. Contact Removed 뒤 동일 Entity 재발견 시 기존 Knowledge를 복원하되 Scan Attempt/CompletionTransition은 복원하지 않습니다.
+// - v1.15.0 ResetSensorRuntime/InitializeSensorRuntime 재호출/EndPlay은 Store를 clear하고 ApplySensorData/ApplyVehicleBaseSensorData hot reapply는 Store를 보존합니다. Identity 미지원 Invalid Guid 대상은 기존 Scan 동작을 유지하지만 Store에는 기록하지 않습니다.
+// - v1.15.0 same Entity의 양쪽 concrete Source TargetId/TargetCategory mismatch 또는 Terminal Entity 재등장은 새 Contact admission 전에 fail-closed합니다. Dynamic Knowledge/Freshness/Rescan은 Phase 3B-2 전까지 추가하지 않습니다.
+// - v1.14.0부터 Sensor의 TargetEntityId 조회는 기존 TargetSelectable 해석 정책과 동일하게 실제 Blueprint override를 우선하고, 그렇지 않은 Native C++ 구현은 virtual _Implementation을 직접 호출합니다. 기존 Blueprint 계약과 Identity 미지원 Invalid Guid 의미는 유지됩니다.
+// - v1.12.0부터 새 제품 코드는 StartActiveDetectionPulse / StartTargetScan / CancelSensorOperations를 사용합니다. StartActiveScan / StartTargetedScan / StopActiveScan은 기존 Blueprint/C++ caller 보존용 wrapper입니다.
+// - v1.12.0부터 전체 Sensor update canonical 이름은 RunSensorUpdate이며 RunPassiveDetectionUpdate는 기존 Automation/private caller 호환 wrapper입니다.
+// - v1.12.0부터 Contact에는 AnalysisProgress01이 없습니다. 현재 한 번의 Scan 진행률은 CurrentScanAttemptProgress01과 공개 Snapshot.ScanAttempt.Progress01만 소유합니다.
+// - v1.11.0부터 bActiveScanRunning/ActiveScanRemainingSeconds는 broad Active Detection Pulse 전용입니다. Target Scan은 bCurrentScanAttemptActive/CurrentScanAttemptRemainingSeconds를 독립 Authority로 사용합니다.
+// - v1.11.0 Target Scan은 주변 broad Active Detection을 암묵적으로 켜지 않고 지정 Target 하나만 ActiveScanRange 안에서 관측·분석합니다. 두 Operation은 동시에 실행 가능하며 한쪽 만료/완료가 다른 쪽을 종료하지 않습니다.
+// - v1.10.0 StartActiveScan은 전방향 장거리 Contact Detection pulse만 제공하고 Contact Knowledge를 자동 분석하지 않습니다. 지정 분석은 StartTargetedScan(TargetActor)만 수행합니다.
+// - v1.10.0 DetailedScan 도달 순간 Contact Knowledge와 최초 획득 Revision을 보존한 뒤 Scanner Runtime은 즉시 Idle, Current Scan Attempt는 0/inactive로 복귀합니다.
+// - v1.10.0 이미 DetailedScan인 같은 Contact는 기본적으로 StartTargetedScan을 거부하며 향후 동적 재분석은 별도 Rescan 계약으로 분리합니다.
+// - Sensor는 InputAction을 직접 소유하지 않고 명시 command API만 제공합니다. 실제 입력 owner가 선택 Target을 전달합니다.
+// - ActiveScanRangeCm은 실행 중 Contact Detection에 사용하며 지정 Scan Attempt gain에는 Active range와 ECC_Visibility 직접 가시가 모두 필요합니다.
+// - Scan Attempt 분석이 비유효하면 진행률은 AnalysisDecayPerSec로 서서히 감소하며 획득한 InformationLevel/Known Target Knowledge는 강등하지 않습니다.
 // - Identified 이상 승격 때만 private Source Metadata의 TargetId/DisplayName을 공개하고 Source InformationLevel은 Sensor Knowledge로 복사하지 않습니다.
 // - P0-03 ContactId/lifecycle/reacquire와 P0-04 Active Scan/Analysis 의미를 보존합니다.
 // - 파괴 확정은 VehicleHealthComp의 OnVehicleDestroyed 이벤트와 IsDestroyed 상태만 사용하며 Actor Destroy/weak invalid를 파괴로 추정하지 않습니다.
-// - DestroyedHold는 마지막 신뢰 위치, ContactId, Knowledge와 AnalysisProgress를 유지합니다.
+// - DestroyedHold는 마지막 신뢰 위치, ContactId와 획득 Knowledge를 유지합니다.
 // - v1.5.0의 Actor→ContactId bridge는 Snapshot의 Player-facing data를 우회하지 않으며 TargetSelect 선택 의미를 변경하지 않습니다.
 // - v1.6.0부터 Runtime Ready 상태는 AppliedSensorConfig 사본을 소비하며 Source UObject의 후속 값 변경만으로 Runtime 의미가 바뀌지 않습니다.
-// - ApplySensorData는 invalid explicit Source를 원자적으로 거부하고, null은 검증된 Fallback Source로 적용합니다.
+// - ApplySensorData는 invalid explicit Scanner Source를 원자적으로 거부하고, null은 VehicleBaseSensorData가 유효하면 차량 기본 Sensor로, 없으면 검증된 Fallback Source로 적용합니다.
 // - 탐지 능력 감소는 Contact를 삭제하지 않고 LastKnown으로 넘기며 Active Scan은 새 장비 적용으로 남은 시간이 늘어나지 않습니다.
 // - v1.7.0 Radar Range Profile은 탐지 성능을 변경하지 않는 UI 표시 Source이며 Runtime Ready 상태에서는 Applied copy만 공개합니다. 기존 Scanner-less Fallback은 빈 Profile을 유지합니다.
+// - v1.8.0 VehicleBaseSensorData는 VehicleData의 기본 Sensor Source이며 장착 Scanner SensorData가 항상 우선합니다. 둘 다 없을 때만 기존 zero-range Fallback을 사용합니다.
 
 #include "CFVehicleSensorComp.h"
 
@@ -43,6 +66,9 @@ namespace
 
 	// [v1.1.0] BlueprintNativeEvent의 실제 Blueprint 재정의를 구분할 GetTargetDisplayInfo 함수 이름입니다.
 	const FName SensorGetTargetDisplayInfoFunctionName(TEXT("GetTargetDisplayInfo"));
+
+	// [v1.14.0] BlueprintNativeEvent의 실제 Blueprint 재정의를 구분할 GetTargetEntityId 함수 이름입니다.
+	const FName SensorGetTargetEntityIdFunctionName(TEXT("GetTargetEntityId"));
 
 	// [v1.1.0] BlueprintNativeEvent의 실제 Blueprint 재정의를 구분할 GetTargetSelectionLocation 함수 이름입니다.
 	const FName SensorGetTargetLocationFunctionName(TEXT("GetTargetSelectionLocation"));
@@ -108,6 +134,29 @@ namespace
 		return ICFTargetSelectable::Execute_GetTargetDisplayInfo(TargetActor);
 	}
 
+	// [v1.14.0] Native C++과 실제 Blueprint override를 구분해 Gameplay Entity ID를 안전하게 호출합니다.
+	FGuid ResolveSensorTargetEntityId(const AActor* TargetActor)
+	{
+		if (!IsValid(TargetActor))
+		{
+			return FGuid();
+		}
+
+		if (HasSensorBlueprintOverride(TargetActor, SensorGetTargetEntityIdFunctionName))
+		{
+			return ICFTargetSelectable::Execute_GetTargetEntityId(TargetActor);
+		}
+
+		// [v1.14.0] Native C++ TargetSelectable 구현의 virtual _Implementation을 직접 호출해 개체별 ID를 보존합니다.
+		const ICFTargetSelectable* NativeTargetSelectable = Cast<ICFTargetSelectable>(TargetActor);
+		if (NativeTargetSelectable)
+		{
+			return NativeTargetSelectable->GetTargetEntityId_Implementation();
+		}
+
+		return ICFTargetSelectable::Execute_GetTargetEntityId(TargetActor);
+	}
+
 	// [v1.1.0] Native C++과 실제 Blueprint override를 구분해 대표 선택 위치를 안전하게 호출합니다.
 	FVector ResolveSensorSelectionLocation(const AActor* TargetActor)
 	{
@@ -151,7 +200,9 @@ void UCFVehicleSensorComp::TickComponent(
 	// [v1.3.0] 현재 Tick에서 사용할 유효 Sensor 설정 사본입니다.
 	const FCFSensorConfig SensorConfig = GetResolvedSensorConfig();
 	if (!SensorConfig.IsValid()
-		|| (!HasConfiguredDetectionWork(SensorConfig) && RuntimeContacts.IsEmpty()))
+		|| (!HasConfiguredDetectionWork(SensorConfig)
+			&& !bCurrentScanAttemptActive
+			&& RuntimeContacts.IsEmpty()))
 	{
 		return;
 	}
@@ -169,7 +220,7 @@ void UCFVehicleSensorComp::TickComponent(
 	// [v1.3.0] hitch catch-up burst는 만들지 않되 이번 한 번의 Sensor update가 실제로 대표할 누적 시간입니다.
 	const float SensorUpdateDeltaSeconds = PassiveUpdateElapsedSeconds;
 	PassiveUpdateElapsedSeconds = 0.0f;
-	RunPassiveDetectionUpdate(SensorUpdateDeltaSeconds);
+	RunSensorUpdate(SensorUpdateDeltaSeconds);
 }
 
 // [v1.0.0] Actor 수명이 종료될 때 Sensor Snapshot과 준비 상태를 안전하게 비웁니다.
@@ -179,16 +230,24 @@ void UCFVehicleSensorComp::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
-// [v1.3.0] 유효한 Config로 Runtime을 초기화하고 Passive/Visual 작업이 있으면 기본 Sensor update를 활성화합니다.
+// [v1.8.0] Scanner override > VehicleBase > Fallback 우선순위의 유효 Config로 Runtime을 초기화합니다.
 bool UCFVehicleSensorComp::InitializeSensorRuntime()
 {
-		// [v1.6.0] 현재 Source UObject 또는 Fallback에서 초기화 시점에 고정할 실제 Runtime 설정 사본입니다.
+	// [v1.8.0] 초기화 시점에 실제로 선택된 Scanner 또는 VehicleBase SensorData Source입니다. Fallback이면 nullptr입니다.
+	const UCFVehicleSensorData* EffectiveSensorData = ResolveConfiguredSensorData();
+
+	// [v1.8.0] 선택된 Source 또는 zero-range Fallback에서 초기화 시점에 고정할 실제 Runtime 설정 사본입니다.
 	const FCFSensorConfig ResolvedConfig = ResolveConfiguredSensorConfig();
 
 	UnbindAllContactDestroyedEvents();
 	RuntimeContacts.Reset();
-		bActiveScanRunning = false;
+	// [v1.15.0] InitializeSensorRuntime 재호출은 Hard Reinitialize이므로 Contact lifetime 독립 Store도 함께 비웁니다.
+	PersistentKnowledgeStore.Reset();
+	bActiveScanRunning = false;
 	ActiveScanRemainingSeconds = 0.0f;
+	ResetCurrentScanAttempt();
+	LastCompletedScanContactId = NAME_None;
+	LastScanCompletionTransitionRevision = 0;
 	PassiveUpdateElapsedSeconds = 0.0f;
 	ResetPassiveScanCursor();
 
@@ -201,18 +260,16 @@ bool UCFVehicleSensorComp::InitializeSensorRuntime()
 		bSensorRuntimeReady = false;
 		SetComponentTickEnabled(false);
 		RebuildFoundationSnapshot(false);
-				LastSensorRuntimeSummary = TEXT("SensorRuntime: InvalidConfig");
+		LastSensorRuntimeSummary = TEXT("SensorRuntime: InvalidConfig");
 		return false;
 	}
 
 	AppliedSensorConfig = ResolvedConfig;
-	// [v1.7.0] 전체 계약이 유효한 실제 SensorData에서만 Radar 표시 Profile을 Runtime 사본으로 고정합니다.
-	const bool bUsingValidSensorData = IsValid(SensorData) && SensorData->IsSensorDataContractValid();
-	AppliedRadarDisplayRangePresetsCm = bUsingValidSensorData
-		? SensorData->RadarDisplayRangePresetsCm
+	AppliedRadarDisplayRangePresetsCm = EffectiveSensorData
+		? EffectiveSensorData->RadarDisplayRangePresetsCm
 		: TArray<float>();
-	AppliedDefaultRadarDisplayRangePresetIndex = bUsingValidSensorData
-		? SensorData->DefaultRadarDisplayRangePresetIndex
+	AppliedDefaultRadarDisplayRangePresetIndex = EffectiveSensorData
+		? EffectiveSensorData->DefaultRadarDisplayRangePresetIndex
 		: INDEX_NONE;
 	bHasAppliedSensorConfig = true;
 	bSensorRuntimeReady = true;
@@ -222,10 +279,12 @@ bool UCFVehicleSensorComp::InitializeSensorRuntime()
 	const bool bPassiveUpdatesEnabled = HasConfiguredPassiveWork(ResolvedConfig);
 	SetComponentTickEnabled(bPassiveUpdatesEnabled);
 
-			// [v1.0.0] 실제 설정이 SensorData에서 왔는지 Fallback에서 왔는지 표시할 출처 문자열입니다.
+	// [v1.8.0] 실제 설정이 Scanner override, VehicleBase 또는 Fallback 중 어디에서 왔는지 표시할 출처 문자열입니다.
 	const TCHAR* ConfigSource = IsValid(SensorData) && SensorData->IsSensorDataContractValid()
-		? TEXT("SensorData")
-		: TEXT("Fallback");
+		? TEXT("ScannerOverride")
+		: (EffectiveSensorData != nullptr && EffectiveSensorData == VehicleBaseSensorData.Get()
+			? TEXT("VehicleBase")
+			: TEXT("Fallback"));
 	LastSensorRuntimeSummary = FString::Printf(
 		TEXT("SensorRuntime: Ready Source=%s PassiveUpdates=%s ActiveReady=%s Revision=%d | %s"),
 		ConfigSource,
@@ -233,10 +292,10 @@ bool UCFVehicleSensorComp::InitializeSensorRuntime()
 		(ResolvedConfig.ActiveScanRangeCm > KINDA_SMALL_NUMBER && ResolvedConfig.ActiveScanDurationSec > KINDA_SMALL_NUMBER) ? TEXT("True") : TEXT("False"),
 		CurrentSensorSnapshot.Revision,
 		*ResolvedConfig.BuildDebugSummary());
-		return true;
+	return true;
 }
 
-// [v1.6.0] 새 SensorData 또는 scanner-less Fallback Source를 기존 Contact/Knowledge를 지우지 않고 적용합니다.
+// [v1.8.0] 장착 Scanner SensorData를 적용하거나 None이면 VehicleBase/Fallback Source로 복귀합니다.
 bool UCFVehicleSensorComp::ApplySensorData(UCFVehicleSensorData* NewSensorData)
 {
 	if (NewSensorData != nullptr
@@ -245,24 +304,37 @@ bool UCFVehicleSensorComp::ApplySensorData(UCFVehicleSensorData* NewSensorData)
 		return false;
 	}
 
-	// [v1.6.0] 요청된 SensorData가 null이면 scanner-less Fallback을 사용하는 적용 후보 Config입니다.
-	const FCFSensorConfig RequestedSensorConfig = IsValid(NewSensorData)
-		? NewSensorData->SensorConfig
+	// [v1.8.0] Scanner가 없을 때 사용할 유효 VehicleBase SensorData입니다. 없거나 계약이 무효하면 nullptr입니다.
+	const UCFVehicleSensorData* ValidVehicleBaseSensorData = IsValid(VehicleBaseSensorData)
+		&& VehicleBaseSensorData->IsSensorDataContractValid()
+		? VehicleBaseSensorData.Get()
+		: nullptr;
+
+	// [v1.8.0] 이번 요청에서 실제로 적용될 Scanner override 또는 VehicleBase SensorData입니다. 둘 다 없으면 nullptr입니다.
+	const UCFVehicleSensorData* RequestedEffectiveSensorData = IsValid(NewSensorData)
+		? NewSensorData
+		: ValidVehicleBaseSensorData;
+
+	// [v1.8.0] 실제 선택 Source가 없을 때만 기존 zero-range Fallback을 사용하는 적용 후보 Config입니다.
+	const FCFSensorConfig RequestedSensorConfig = RequestedEffectiveSensorData
+		? RequestedEffectiveSensorData->SensorConfig
 		: FallbackSensorConfig;
-	// [v1.7.0] 요청된 Scanner가 명시한 Radar 표시 Range Preset 적용 후보 사본입니다.
-	const TArray<float> RequestedRadarDisplayRangePresetsCm = IsValid(NewSensorData)
-		? NewSensorData->RadarDisplayRangePresetsCm
+
+	// [v1.8.0] 실제 선택 Source가 명시한 Radar 표시 Range Preset 적용 후보 사본입니다.
+	const TArray<float> RequestedRadarDisplayRangePresetsCm = RequestedEffectiveSensorData
+		? RequestedEffectiveSensorData->RadarDisplayRangePresetsCm
 		: TArray<float>();
-	// [v1.7.0] 요청된 Scanner가 명시한 Radar 초기 표시 Range Preset 인덱스입니다.
-	const int32 RequestedDefaultRadarDisplayRangePresetIndex = IsValid(NewSensorData)
-		? NewSensorData->DefaultRadarDisplayRangePresetIndex
+
+	// [v1.8.0] 실제 선택 Source가 명시한 Radar 초기 표시 Range Preset 인덱스입니다.
+	const int32 RequestedDefaultRadarDisplayRangePresetIndex = RequestedEffectiveSensorData
+		? RequestedEffectiveSensorData->DefaultRadarDisplayRangePresetIndex
 		: INDEX_NONE;
 	if (!RequestedSensorConfig.IsValid())
 	{
 		return false;
 	}
 
-		// [v1.6.0] 초기화 전 Source 선택은 Runtime을 암묵적으로 시작하지 않고 다음 InitializeSensorRuntime의 입력만 교체합니다.
+	// [v1.8.0] 초기화 전 Source 선택은 Runtime을 암묵적으로 시작하지 않고 다음 InitializeSensorRuntime 입력만 교체합니다.
 	if (!bSensorRuntimeReady)
 	{
 		SensorData = NewSensorData;
@@ -271,8 +343,12 @@ bool UCFVehicleSensorComp::ApplySensorData(UCFVehicleSensorData* NewSensorData)
 		AppliedRadarDisplayRangePresetsCm.Reset();
 		AppliedDefaultRadarDisplayRangePresetIndex = INDEX_NONE;
 
-		// [v1.6.0] 초기화 전 적용 결과를 구분해 표시할 Config Source 문자열입니다.
-		const TCHAR* ConfigSource = IsValid(NewSensorData) ? TEXT("SensorData") : TEXT("Fallback");
+		// [v1.8.0] 초기화 전 실제 적용 후보 Source를 구분하는 진단 문자열입니다.
+		const TCHAR* ConfigSource = IsValid(NewSensorData)
+			? TEXT("ScannerOverride")
+			: (RequestedEffectiveSensorData == VehicleBaseSensorData.Get() && RequestedEffectiveSensorData != nullptr
+				? TEXT("VehicleBase")
+				: TEXT("Fallback"));
 		LastSensorRuntimeSummary = FString::Printf(
 			TEXT("SensorRuntime: Configured Source=%s RuntimeReady=False | %s"),
 			ConfigSource,
@@ -287,7 +363,7 @@ bool UCFVehicleSensorComp::ApplySensorData(UCFVehicleSensorData* NewSensorData)
 	const bool bBaselineDetectionReduced = RequestedSensorConfig.PassiveDetectionRangeCm + KINDA_SMALL_NUMBER < PreviousSensorConfig.PassiveDetectionRangeCm
 		|| RequestedSensorConfig.VisualDetectionRangeCm + KINDA_SMALL_NUMBER < PreviousSensorConfig.VisualDetectionRangeCm;
 
-		// [v1.6.0] 실행 중 Active-only Contact를 이전 범위 그대로 신뢰할 수 없게 만드는 Active 거리 감소 여부입니다.
+	// [v1.6.0] 실행 중 Active-only Contact를 이전 범위 그대로 신뢰할 수 없게 만드는 Active 거리 감소 여부입니다.
 	const bool bActiveDetectionReduced = RequestedSensorConfig.ActiveScanRangeCm + KINDA_SMALL_NUMBER < PreviousSensorConfig.ActiveScanRangeCm;
 
 	SensorData = NewSensorData;
@@ -306,11 +382,18 @@ bool UCFVehicleSensorComp::ApplySensorData(UCFVehicleSensorData* NewSensorData)
 		MarkActiveOnlyContactsLastKnown();
 	}
 
-	// [v1.6.0] 새 Config가 Active Scan을 계속 실행할 최소 거리와 지속 시간을 모두 제공하는지 여부입니다.
-	const bool bActiveScanSupported = RequestedSensorConfig.ActiveScanRangeCm > KINDA_SMALL_NUMBER
-		&& RequestedSensorConfig.ActiveScanDurationSec > KINDA_SMALL_NUMBER;
+	// [v1.11.0] Scanner/기본 Sensor Source가 바뀌는 동안 진행 중 Target Scan Attempt는 다른 장비 의미로 이어받지 않되 broad Active Detection state는 독립적으로 보존합니다.
+	if (bCurrentScanAttemptActive)
+	{
+		MarkCurrentScanTargetLastKnownIfNeeded();
+		ResetCurrentScanAttempt();
+	}
+
 	if (bActiveScanRunning)
 	{
+		// [v1.11.0] 새 Config가 broad Active Detection Pulse를 계속 실행할 최소 거리와 지속 시간을 모두 제공하는지 여부입니다.
+		const bool bActiveScanSupported = RequestedSensorConfig.ActiveScanRangeCm > KINDA_SMALL_NUMBER
+			&& RequestedSensorConfig.ActiveScanDurationSec > KINDA_SMALL_NUMBER;
 		if (!bActiveScanSupported)
 		{
 			bActiveScanRunning = false;
@@ -328,11 +411,16 @@ bool UCFVehicleSensorComp::ApplySensorData(UCFVehicleSensorData* NewSensorData)
 	SetComponentTickEnabled(
 		HasConfiguredPassiveWork(RequestedSensorConfig)
 		|| bActiveScanRunning
+		|| bCurrentScanAttemptActive
 		|| !RuntimeContacts.IsEmpty());
 	PublishRuntimeSnapshot();
 
-	// [v1.6.0] hot reapply 결과를 구분해 표시할 Config Source 문자열입니다.
-	const TCHAR* ConfigSource = IsValid(NewSensorData) ? TEXT("SensorData") : TEXT("Fallback");
+	// [v1.8.0] hot reapply 결과의 실제 Source를 구분하는 진단 문자열입니다.
+	const TCHAR* ConfigSource = IsValid(NewSensorData)
+		? TEXT("ScannerOverride")
+		: (RequestedEffectiveSensorData == VehicleBaseSensorData.Get() && RequestedEffectiveSensorData != nullptr
+			? TEXT("VehicleBase")
+			: TEXT("Fallback"));
 	LastSensorRuntimeSummary = FString::Printf(
 		TEXT("SensorRuntime: Applied Source=%s Contacts=%d Active=%s Remaining=%.3f Revision=%d | %s"),
 		ConfigSource,
@@ -342,6 +430,35 @@ bool UCFVehicleSensorComp::ApplySensorData(UCFVehicleSensorData* NewSensorData)
 		CurrentSensorSnapshot.Revision,
 		*RequestedSensorConfig.BuildDebugSummary());
 	return true;
+}
+
+// [v1.8.0] VehicleData 기본 Sensor Source를 교체하고 Scanner override가 없으면 같은 non-destructive 적용 경로를 실행합니다.
+bool UCFVehicleSensorComp::ApplyVehicleBaseSensorData(UCFVehicleSensorData* NewVehicleBaseSensorData)
+{
+	if (NewVehicleBaseSensorData != nullptr
+		&& (!IsValid(NewVehicleBaseSensorData) || !NewVehicleBaseSensorData->IsSensorDataContractValid()))
+	{
+		return false;
+	}
+
+	// [v1.8.0] 실패 시 원자적으로 되돌릴 기존 차량 기본 Sensor Source입니다.
+	UCFVehicleSensorData* PreviousVehicleBaseSensorData = VehicleBaseSensorData.Get();
+	VehicleBaseSensorData = NewVehicleBaseSensorData;
+
+	// [v1.8.0] 유효한 장착 Scanner override가 있으면 실제 Runtime Source가 변하지 않으므로 기본 Source만 저장합니다.
+	const bool bHasValidScannerOverride = IsValid(SensorData) && SensorData->IsSensorDataContractValid();
+	if (bHasValidScannerOverride)
+	{
+		return true;
+	}
+
+	if (ApplySensorData(nullptr))
+	{
+		return true;
+	}
+
+	VehicleBaseSensorData = PreviousVehicleBaseSensorData;
+	return false;
 }
 
 // [v1.3.0] Runtime Contact, Active Scan, scan cursor와 공개 Snapshot을 초기화하고 Tick을 비활성화합니다.
@@ -355,8 +472,13 @@ void UCFVehicleSensorComp::ResetSensorRuntime()
 	AppliedDefaultRadarDisplayRangePresetIndex = INDEX_NONE;
 	bActiveScanRunning = false;
 	ActiveScanRemainingSeconds = 0.0f;
+	ResetCurrentScanAttempt();
+	LastCompletedScanContactId = NAME_None;
+	LastScanCompletionTransitionRevision = 0;
 	UnbindAllContactDestroyedEvents();
 	RuntimeContacts.Reset();
+	// [v1.15.0] 명시 Runtime Reset은 같은 World라도 이전 Entity Knowledge를 유지하지 않는 Hard Reset입니다.
+	PersistentKnowledgeStore.Reset();
 	PassiveUpdateElapsedSeconds = 0.0f;
 	ResetPassiveScanCursor();
 	RebuildFoundationSnapshot(false);
@@ -365,15 +487,15 @@ void UCFVehicleSensorComp::ResetSensorRuntime()
 		CurrentSensorSnapshot.Revision);
 }
 
-// [v1.3.0] 현재 Config의 Active Scan을 한 번 시작하고 성공 여부를 반환합니다.
-bool UCFVehicleSensorComp::StartActiveScan()
+// [v1.12.0] 주변 Contact 탐지 강화를 위한 broad Active Detection Pulse를 시작하고 Target Scan 상태는 변경하지 않습니다.
+bool UCFVehicleSensorComp::StartActiveDetectionPulse()
 {
 	if (!bSensorRuntimeReady || bActiveScanRunning)
 	{
 		return false;
 	}
 
-	// [v1.3.0] Active Scan 시작 조건과 실행 시간을 제공할 현재 Sensor 설정입니다.
+	// [v1.10.0] Active Sensor pulse 시작 조건과 실행 시간을 제공할 현재 Sensor 설정입니다.
 	const FCFSensorConfig SensorConfig = GetResolvedSensorConfig();
 	if (!SensorConfig.IsValid()
 		|| SensorConfig.ActiveScanRangeCm <= KINDA_SMALL_NUMBER
@@ -392,10 +514,123 @@ bool UCFVehicleSensorComp::StartActiveScan()
 	return true;
 }
 
-// [v1.3.0] 실행 중인 Active Scan을 중단하고 실제 중단이 발생했는지 반환합니다.
-bool UCFVehicleSensorComp::StopActiveScan()
+// [v1.12.0] 기존 Active Scan 시작 caller를 canonical Active Detection Pulse로 전달하는 compatibility wrapper입니다.
+bool UCFVehicleSensorComp::StartActiveScan()
 {
-	if (!bActiveScanRunning)
+	return StartActiveDetectionPulse();
+}
+
+// [v1.12.0] 지정 Actor 하나를 broad Active Detection과 독립된 Target Scan Attempt 대상으로 시작하고 이미 DetailedScan 완료된 대상은 기본 정책상 거부합니다.
+bool UCFVehicleSensorComp::StartTargetScan(AActor* TargetActor)
+{
+	if (!bSensorRuntimeReady
+		|| bCurrentScanAttemptActive
+		|| !IsValid(TargetActor)
+		|| !GetWorld()
+		|| !IsValid(GetOwner())
+		|| !IsSensorCandidateEligible(TargetActor))
+	{
+		return false;
+	}
+
+	// [v1.10.0] 지정 Scan Attempt의 거리·시간·진행률 정책을 제공할 현재 적용 Sensor 설정입니다.
+	const FCFSensorConfig SensorConfig = GetResolvedSensorConfig();
+	if (!SensorConfig.IsValid()
+		|| SensorConfig.ActiveScanRangeCm <= KINDA_SMALL_NUMBER
+		|| SensorConfig.ActiveScanDurationSec <= KINDA_SMALL_NUMBER
+		|| SensorConfig.AnalysisGainPerSec <= 0.0f)
+	{
+		return false;
+	}
+
+	// [v1.10.0] 시작 시 Active Scan 범위 확인에 사용할 지정 Target의 현재 대표 위치입니다.
+	const FVector TargetWorldLocation = ResolveSensorTargetLocation(TargetActor);
+	if (!IsFiniteSensorVector(TargetWorldLocation))
+	{
+		return false;
+	}
+
+	// [v1.10.0] 시작 시점에 지정 Target이 현재 Scanner Active range 안에 있는지 확인할 실제 거리입니다.
+	const float DistanceToTargetCm = FVector::Distance(GetOwner()->GetActorLocation(), TargetWorldLocation);
+	if (!FMath::IsFinite(DistanceToTargetCm) || DistanceToTargetCm > SensorConfig.ActiveScanRangeCm)
+	{
+		return false;
+	}
+
+	// [v1.10.0] 이미 존재하는 Contact가 DetailedScan Knowledge를 획득했는지 확인할 현재 인덱스입니다.
+	const int32 ExistingContactIndex = FindRuntimeContactIndexByActor(TargetActor);
+	if (RuntimeContacts.IsValidIndex(ExistingContactIndex)
+		&& RuntimeContacts[ExistingContactIndex].PublicContact.InformationLevel == ECFTargetInfoLevel::DetailedScan)
+	{
+		return false;
+	}
+
+	// [v1.11.0] broad Active Detection을 켜지 않고 지정 Target 하나에만 ActiveScanRange 관측을 허용해 Contact를 확보합니다.
+	if (!ProcessPassiveScanActor(TargetActor, SensorConfig, true))
+	{
+		SetComponentTickEnabled(
+			HasConfiguredPassiveWork(SensorConfig)
+			|| bActiveScanRunning
+			|| !RuntimeContacts.IsEmpty());
+		PublishRuntimeSnapshot();
+		return false;
+	}
+
+	// [v1.11.0] 지정 Target 단일 Active-range 관측으로 확보한 Runtime Contact 인덱스입니다.
+	const int32 TargetContactIndex = FindRuntimeContactIndexByActor(TargetActor);
+	if (!RuntimeContacts.IsValidIndex(TargetContactIndex)
+		|| RuntimeContacts[TargetContactIndex].PublicContact.ContactState != ECFSensorContactState::Live
+		|| RuntimeContacts[TargetContactIndex].PublicContact.InformationLevel == ECFTargetInfoLevel::DetailedScan)
+	{
+		SetComponentTickEnabled(
+			HasConfiguredPassiveWork(SensorConfig)
+			|| bActiveScanRunning
+			|| !RuntimeContacts.IsEmpty());
+		PublishRuntimeSnapshot();
+		return false;
+	}
+
+	bCurrentScanAttemptActive = true;
+	CurrentScanAttemptRemainingSeconds = SensorConfig.ActiveScanDurationSec;
+	CurrentScanTargetActor = TargetActor;
+	CurrentScanTargetContactId = RuntimeContacts[TargetContactIndex].PublicContact.ContactId;
+	CurrentScanAttemptProgress01 = 0.0f;
+	PassiveUpdateElapsedSeconds = 0.0f;
+	SetComponentTickEnabled(true);
+	PublishRuntimeSnapshot();
+	return true;
+}
+
+// [v1.12.0] 기존 Targeted Scan 시작 caller를 canonical Target Scan command로 전달하는 compatibility wrapper입니다.
+bool UCFVehicleSensorComp::StartTargetedScan(AActor* TargetActor)
+{
+	return StartTargetScan(TargetActor);
+}
+
+// [v1.15.1] 현재 Target Scan Attempt만 명시 취소하고 broad Active Detection Pulse와 획득 Knowledge는 그대로 유지합니다.
+bool UCFVehicleSensorComp::CancelTargetScan()
+{
+	if (!bCurrentScanAttemptActive)
+	{
+		return false;
+	}
+
+	MarkCurrentScanTargetLastKnownIfNeeded();
+	ResetCurrentScanAttempt();
+
+	// [v1.15.1] Target Scan 취소 뒤 broad Detection 또는 Passive/Contact lifetime 작업이 필요하면 Tick을 계속 유지합니다.
+	const FCFSensorConfig SensorConfig = GetResolvedSensorConfig();
+	SetComponentTickEnabled(
+		SensorConfig.IsValid()
+		&& (HasConfiguredPassiveWork(SensorConfig) || bActiveScanRunning || !RuntimeContacts.IsEmpty()));
+	PublishRuntimeSnapshot();
+	return true;
+}
+
+// [v1.12.0] 실행 중인 broad Active Detection Pulse와 Target Scan Attempt를 모두 명시 취소하고 Contact Knowledge는 유지합니다.
+bool UCFVehicleSensorComp::CancelSensorOperations()
+{
+	if (!bActiveScanRunning && !bCurrentScanAttemptActive)
 	{
 		return false;
 	}
@@ -403,15 +638,22 @@ bool UCFVehicleSensorComp::StopActiveScan()
 	bActiveScanRunning = false;
 	ActiveScanRemainingSeconds = 0.0f;
 	PassiveUpdateElapsedSeconds = 0.0f;
+	ResetCurrentScanAttempt();
 	MarkActiveOnlyContactsLastKnown();
 
-	// [v1.3.0] Active Scan 종료 뒤에도 Passive/Visual Detection 또는 남은 Contact lifetime/decay 작업이 필요한지 여부입니다.
+	// [v1.11.0] 두 Operation 명시 취소 뒤에도 Passive/Visual Detection 또는 남은 Contact lifetime 작업이 필요한지 여부입니다.
 	const FCFSensorConfig SensorConfig = GetResolvedSensorConfig();
 	SetComponentTickEnabled(
 		SensorConfig.IsValid()
 		&& (HasConfiguredPassiveWork(SensorConfig) || !RuntimeContacts.IsEmpty()));
 	PublishRuntimeSnapshot();
 	return true;
+}
+
+// [v1.12.0] 기존 Active Scan 중단 caller를 canonical Sensor Operation cancel command로 전달하는 compatibility wrapper입니다.
+bool UCFVehicleSensorComp::StopActiveScan()
+{
+	return CancelSensorOperations();
 }
 
 // [v1.6.0] Runtime Ready이면 실제 적용된 Sensor Config를, 초기화 전이면 현재 Source 또는 Fallback 설정을 반환합니다.
@@ -422,7 +664,7 @@ FCFSensorConfig UCFVehicleSensorComp::GetResolvedSensorConfig() const
 		: ResolveConfiguredSensorConfig();
 }
 
-// [v1.7.0] Runtime에 실제 적용됐거나 초기화 전 유효 Source가 제공하는 Radar 표시 Range Preset 사본을 반환합니다.
+// [v1.8.0] Runtime에 실제 적용됐거나 초기화 전 유효 Scanner/VehicleBase Source가 제공하는 Radar 표시 Range Preset 사본을 반환합니다.
 TArray<float> UCFVehicleSensorComp::GetResolvedRadarDisplayRangePresetsCm() const
 {
 	if (bHasAppliedSensorConfig)
@@ -430,12 +672,14 @@ TArray<float> UCFVehicleSensorComp::GetResolvedRadarDisplayRangePresetsCm() cons
 		return AppliedRadarDisplayRangePresetsCm;
 	}
 
-	return IsValid(SensorData) && SensorData->IsSensorDataContractValid()
-		? SensorData->RadarDisplayRangePresetsCm
+	// [v1.8.0] 초기화 전 Scanner override > VehicleBase 우선순위로 선택된 유효 SensorData Source입니다.
+	const UCFVehicleSensorData* EffectiveSensorData = ResolveConfiguredSensorData();
+	return EffectiveSensorData
+		? EffectiveSensorData->RadarDisplayRangePresetsCm
 		: TArray<float>();
 }
 
-// [v1.7.0] Runtime에 실제 적용됐거나 초기화 전 유효 Source가 제공하는 Radar 기본 표시 Range Preset 인덱스를 반환합니다.
+// [v1.8.0] Runtime에 실제 적용됐거나 초기화 전 유효 Scanner/VehicleBase Source가 제공하는 Radar 기본 표시 Range Preset 인덱스를 반환합니다.
 int32 UCFVehicleSensorComp::GetResolvedDefaultRadarDisplayRangePresetIndex() const
 {
 	if (bHasAppliedSensorConfig)
@@ -443,20 +687,37 @@ int32 UCFVehicleSensorComp::GetResolvedDefaultRadarDisplayRangePresetIndex() con
 		return AppliedDefaultRadarDisplayRangePresetIndex;
 	}
 
-	return IsValid(SensorData) && SensorData->IsSensorDataContractValid()
-		? SensorData->DefaultRadarDisplayRangePresetIndex
+	// [v1.8.0] 초기화 전 Scanner override > VehicleBase 우선순위로 선택된 유효 SensorData Source입니다.
+	const UCFVehicleSensorData* EffectiveSensorData = ResolveConfiguredSensorData();
+	return EffectiveSensorData
+		? EffectiveSensorData->DefaultRadarDisplayRangePresetIndex
 		: INDEX_NONE;
 }
 
-// [v1.7.0] 현재 전체 SensorData 계약이 유효하면 해당 설정을, 아니면 FallbackSensorConfig를 반환하는 Source 해석 전용 함수입니다.
-FCFSensorConfig UCFVehicleSensorComp::ResolveConfiguredSensorConfig() const
+// [v1.8.0] Scanner override > VehicleBase 순서로 현재 유효한 SensorData Source를 반환합니다.
+const UCFVehicleSensorData* UCFVehicleSensorComp::ResolveConfiguredSensorData() const
 {
 	if (IsValid(SensorData) && SensorData->IsSensorDataContractValid())
 	{
-		return SensorData->SensorConfig;
+		return SensorData.Get();
 	}
 
-	return FallbackSensorConfig;
+	if (IsValid(VehicleBaseSensorData) && VehicleBaseSensorData->IsSensorDataContractValid())
+	{
+		return VehicleBaseSensorData.Get();
+	}
+
+	return nullptr;
+}
+
+// [v1.8.0] Scanner override > VehicleBase > Fallback 순서로 실제 Sensor Config를 반환합니다.
+FCFSensorConfig UCFVehicleSensorComp::ResolveConfiguredSensorConfig() const
+{
+	// [v1.8.0] 현재 우선순위에서 선택된 유효 Scanner 또는 VehicleBase SensorData Source입니다.
+	const UCFVehicleSensorData* EffectiveSensorData = ResolveConfiguredSensorData();
+	return EffectiveSensorData
+		? EffectiveSensorData->SensorConfig
+		: FallbackSensorConfig;
 }
 
 // [v1.0.0] 현재 Actor-free Sensor Snapshot 사본을 반환합니다.
@@ -508,15 +769,15 @@ bool UCFVehicleSensorComp::HasConfiguredPassiveWork(const FCFSensorConfig& Senso
 		|| SensorConfig.VisualDetectionRangeCm > KINDA_SMALL_NUMBER;
 }
 
-// [v1.3.0] 현재 Active Scan 실행 상태까지 포함해 이번 update에 bounded World Detection이 필요한지 반환합니다.
+// [v1.11.0] broad Active Detection Pulse 실행 상태까지 포함해 이번 update에 bounded World Detection이 필요한지 반환합니다.
 bool UCFVehicleSensorComp::HasConfiguredDetectionWork(const FCFSensorConfig& SensorConfig) const
 {
 	return HasConfiguredPassiveWork(SensorConfig)
 		|| (bActiveScanRunning && SensorConfig.ActiveScanRangeCm > KINDA_SMALL_NUMBER);
 }
 
-// [v1.3.0] 현재 cursor부터 bounded Actor 슬롯을 검사하고 Contact lifetime, Detection, Analysis와 Snapshot을 한 번 갱신합니다.
-void UCFVehicleSensorComp::RunPassiveDetectionUpdate(const float SensorUpdateDeltaSeconds)
+// [v1.12.0] Contact lifetime, bounded Detection, Target Scan progression, Operation duration과 Snapshot을 한 번 갱신합니다.
+void UCFVehicleSensorComp::RunSensorUpdate(const float SensorUpdateDeltaSeconds)
 {
 	LastPassiveScanActorCount = 0;
 	LastPassiveVisibilityTraceCount = 0;
@@ -547,9 +808,14 @@ void UCFVehicleSensorComp::RunPassiveDetectionUpdate(const float SensorUpdateDel
 		? SensorUpdateDeltaSeconds
 		: SensorConfig.UpdateIntervalSec;
 
-	// [v1.3.0] 이번 update 구간 중 Active Scan이 실제로 유효한 시간입니다. scan duration 끝을 넘겨 gain하지 않습니다.
+	// [v1.11.0] 이번 update 구간 중 broad Active Detection Pulse가 실제로 유효한 시간입니다.
 	const float ActiveScanTimeThisUpdate = bActiveScanRunning
 		? FMath::Min(FMath::Max(ActiveScanRemainingSeconds, 0.0f), ResolvedSensorUpdateDeltaSeconds)
+		: 0.0f;
+
+	// [v1.11.0] broad Active Detection과 독립된 현재 Target Scan Attempt가 이번 update에서 실제로 사용할 수 있는 시간입니다.
+	const float TargetScanTimeThisUpdate = bCurrentScanAttemptActive
+		? FMath::Min(FMath::Max(CurrentScanAttemptRemainingSeconds, 0.0f), ResolvedSensorUpdateDeltaSeconds)
 		: 0.0f;
 
 	// [v1.2.0] bounded Actor cursor와 독립적으로 모든 기존 Contact 수명을 진행할 현재 World 시간입니다.
@@ -609,21 +875,41 @@ void UCFVehicleSensorComp::RunPassiveDetectionUpdate(const float SensorUpdateDel
 		}
 	}
 
-	AdvanceContactAnalysis(
-		ResolvedSensorUpdateDeltaSeconds,
-		ActiveScanTimeThisUpdate,
-		SensorConfig);
+	// [v1.11.0] broad Pulse 만료를 먼저 반영해도 진행 중 Target Scan은 독립 상태로 남습니다.
 	AdvanceActiveScanDuration(ActiveScanTimeThisUpdate, SensorConfig);
+
+	if (bCurrentScanAttemptActive)
+	{
+		// [v1.11.0] bounded World cursor와 무관하게 지정 Target 하나를 매 update 직접 재관측해 Target Scan 자체가 broad Detection에 의존하지 않도록 합니다.
+		ProcessPassiveScanActor(CurrentScanTargetActor.Get(), SensorConfig, true);
+	}
+
+	AdvanceCurrentScanAttempt(
+		ResolvedSensorUpdateDeltaSeconds,
+		TargetScanTimeThisUpdate,
+		SensorConfig);
+	AdvanceCurrentScanDuration(TargetScanTimeThisUpdate, SensorConfig);
 	PublishRuntimeSnapshot();
 
-	if (!HasConfiguredDetectionWork(SensorConfig) && RuntimeContacts.IsEmpty())
+	if (!HasConfiguredDetectionWork(SensorConfig)
+		&& !bCurrentScanAttemptActive
+		&& RuntimeContacts.IsEmpty())
 	{
 		SetComponentTickEnabled(false);
 	}
 }
 
-// [v1.3.0] 하나의 Actor를 Sensor 자격·대표 위치·Passive/Visual/Active 거리 순서로 평가하고 Runtime Contact를 갱신합니다.
-bool UCFVehicleSensorComp::ProcessPassiveScanActor(AActor* CandidateActor, const FCFSensorConfig& SensorConfig)
+// [v1.12.0] 기존 Automation/private caller를 전체 Sensor update로 전달하는 compatibility wrapper입니다.
+void UCFVehicleSensorComp::RunPassiveDetectionUpdate(const float SensorUpdateDeltaSeconds)
+{
+	RunSensorUpdate(SensorUpdateDeltaSeconds);
+}
+
+// [v1.11.0] 하나의 Actor를 Sensor 자격·대표 위치·Passive/Visual/Active 거리 순서로 평가하고 지정 Target Scan 호출에는 그 Actor 하나만 Active-range 관측을 허용합니다.
+bool UCFVehicleSensorComp::ProcessPassiveScanActor(
+	AActor* CandidateActor,
+	const FCFSensorConfig& SensorConfig,
+	const bool bAllowTargetScanActiveRange)
 {
 	// [v1.4.0] 이미 알고 있는 Contact의 authoritative VehicleHealth 상태가 파괴라면 일반 탐지보다 먼저 DestroyedHold로 고정합니다.
 	UCFVehicleHealthComp* CandidateHealthComponent = IsValid(CandidateActor)
@@ -676,12 +962,12 @@ bool UCFVehicleSensorComp::ProcessPassiveScanActor(AActor* CandidateActor, const
 	// [v1.3.0] Active Scan이 없어도 유지될 수 있는 기존 Passive/Visual 탐지 계약입니다.
 	const bool bBaselineDetected = bInsidePassiveRange || bVisualDetected;
 
-	// [v1.3.0] Active Scan 실행 중에만 적용되는 장거리 전방향 Contact Detection 결과입니다. LOS는 Contact 생성 조건이 아닙니다.
-	const bool bActiveScanDetected = bActiveScanRunning
+	// [v1.11.0] broad Active Detection Pulse 또는 명시 Target Scan 단일 Actor 관측에서만 허용되는 Active range Detection 결과입니다. LOS는 Contact 생성 조건이 아닙니다.
+	const bool bActiveRangeDetected = (bActiveScanRunning || bAllowTargetScanActiveRange)
 		&& SensorConfig.ActiveScanRangeCm > KINDA_SMALL_NUMBER
 		&& DistanceToTargetCm <= SensorConfig.ActiveScanRangeCm;
 
-	if (!bBaselineDetected && !bActiveScanDetected)
+	if (!bBaselineDetected && !bActiveRangeDetected)
 	{
 		return MarkContactNotObservedForActor(CandidateActor);
 	}
@@ -802,7 +1088,7 @@ bool UCFVehicleSensorComp::HasDirectSensorVisibility(
 	return !bBlockingHit || VisibilityHit.GetActor() == CandidateActor;
 }
 
-// [v1.3.0] 같은 Actor Runtime Contact를 갱신하거나 새 ContactId를 한 번만 발급하고 마지막 관측이 baseline 탐지로 유지 가능한지도 기록합니다.
+// [v1.15.0] 같은 Actor Contact를 갱신하거나 새 Contact를 admit하기 전에 Persistent Entity identity/terminal 계약을 확인하고 동일 Entity Knowledge를 복원합니다.
 bool UCFVehicleSensorComp::UpsertLiveContact(
 	AActor* CandidateActor,
 	const FCFTargetDisplayInfo& SourceDisplayInfo,
@@ -814,22 +1100,62 @@ bool UCFVehicleSensorComp::UpsertLiveContact(
 		return false;
 	}
 
+	// [v1.14.0] ContactId·표시 TargetId와 독립적으로 Native/Blueprint provider를 안전하게 해석한 Gameplay Entity Identity입니다.
+	const FGuid ObservedTargetEntityId = CandidateActor->GetClass()->ImplementsInterface(UCFTargetSelectable::StaticClass())
+		? ResolveSensorTargetEntityId(CandidateActor)
+		: FGuid();
+
 	// [v1.1.0] 같은 Actor에 이미 존재하는 Runtime Contact 인덱스입니다.
 	int32 RuntimeContactIndex = FindRuntimeContactIndexByActor(CandidateActor);
+	if (RuntimeContacts.IsValidIndex(RuntimeContactIndex))
+	{
+		// [v1.15.0] 기존 Contact가 최초 캡처한 Entity ID를 같은 Contact lifetime 동안 바꾸지 않기 위한 현재 Identity입니다.
+		const FGuid ExistingContactEntityId = RuntimeContacts[RuntimeContactIndex].PublicContact.TargetEntityId;
+		if (ExistingContactEntityId.IsValid()
+			&& ObservedTargetEntityId.IsValid()
+			&& ExistingContactEntityId != ObservedTargetEntityId)
+		{
+			return false;
+		}
+	}
+
+	// [v1.15.0] 기존 Contact가 유효 Identity를 이미 소유하면 provider가 일시 Invalid를 반환해도 최초 캡처 Identity를 Knowledge lookup 기준으로 유지합니다.
+	const FGuid KnowledgeTargetEntityId = RuntimeContacts.IsValidIndex(RuntimeContactIndex)
+		&& RuntimeContacts[RuntimeContactIndex].PublicContact.TargetEntityId.IsValid()
+		? RuntimeContacts[RuntimeContactIndex].PublicContact.TargetEntityId
+		: ObservedTargetEntityId;
+
+	// [v1.15.0] 동일 Entity에 이미 Persistent Knowledge가 있으면 새 Contact admission 전에 consistency/terminal을 확인할 Record입니다.
+	FCFSensorKnowledgeRecord* ExistingKnowledgeRecord = KnowledgeTargetEntityId.IsValid()
+		? PersistentKnowledgeStore.Find(KnowledgeTargetEntityId)
+		: nullptr;
+	if (ExistingKnowledgeRecord)
+	{
+		if (!IsPersistentKnowledgeIdentityCompatible(*ExistingKnowledgeRecord, SourceDisplayInfo)
+			|| ExistingKnowledgeRecord->bTerminalDestroyed)
+		{
+			return false;
+		}
+
+		FillPersistentKnowledgeIdentity(*ExistingKnowledgeRecord, SourceDisplayInfo);
+	}
+
 	if (RuntimeContactIndex == INDEX_NONE)
 	{
-		// [v1.1.0] 동일 Actor에 최초 탐지 때만 추가하는 새 private Runtime Contact입니다.
+		// [v1.15.0] Store consistency/terminal 검사를 통과한 뒤에만 새 Runtime Contact를 admit합니다.
 		FCFSensorContactRuntime NewRuntimeContact;
 		NewRuntimeContact.TargetActor = CandidateActor;
 		NewRuntimeContact.SourceDisplayInfo = SourceDisplayInfo;
 		NewRuntimeContact.PublicContact.ContactId = AllocateContactId();
+		// [v1.13.0] Entity Identity는 Contact 최초 생성 때만 캡처하며 이후 재관측으로 같은 Contact의 ID를 바꾸지 않습니다.
+		NewRuntimeContact.PublicContact.TargetEntityId = ObservedTargetEntityId;
 		NewRuntimeContact.PublicContact.TargetCategory = SourceDisplayInfo.TargetCategory;
 		NewRuntimeContact.PublicContact.Relation = SourceDisplayInfo.Relation;
 		NewRuntimeContact.PublicContact.InformationLevel = ECFTargetInfoLevel::Detected;
 		RuntimeContactIndex = RuntimeContacts.Add(MoveTemp(NewRuntimeContact));
 	}
 
-		// [v1.3.0] 새로 생성했거나 기존 Actor에서 찾아낸 유일한 Runtime Contact입니다.
+	// [v1.15.0] 새로 생성했거나 기존 Actor에서 찾아낸 유일한 Runtime Contact입니다.
 	FCFSensorContactRuntime& RuntimeContact = RuntimeContacts[RuntimeContactIndex];
 	if (RuntimeContact.PublicContact.ContactState == ECFSensorContactState::DestroyedHold)
 	{
@@ -840,6 +1166,14 @@ bool UCFVehicleSensorComp::UpsertLiveContact(
 	RuntimeContact.SourceDisplayInfo = SourceDisplayInfo;
 	RuntimeContact.bLostSnapshotPublished = false;
 	RuntimeContact.bBaselineDetectionValidAtLastObservation = bBaselineDetectionValidAtObservation;
+
+	// [v1.15.0] Contact가 제거됐다가 같은 valid Entity로 새로 admit된 경우에만 Persistent Knowledge Projection을 복원합니다.
+	if (ExistingKnowledgeRecord
+		&& RuntimeContact.PublicContact.TargetEntityId == ExistingKnowledgeRecord->TargetEntityId)
+	{
+		RestorePersistentKnowledgeToContact(RuntimeContact, *ExistingKnowledgeRecord);
+	}
+
 	BindContactDestroyedEvent(RuntimeContact);
 
 	// [v1.4.0] event binding 직전 이미 파괴가 확정된 극단적 순서에서도 기존 Contact를 Live로 되돌리지 않는 상태 확인입니다.
@@ -851,7 +1185,12 @@ bool UCFVehicleSensorComp::UpsertLiveContact(
 
 	// [v1.1.0] 외부 Actor 포인터 없이 갱신할 공개 Contact 사본 참조입니다.
 	FCFSensorContact& PublicContact = RuntimeContact.PublicContact;
-	PublicContact.TargetCategory = SourceDisplayInfo.TargetCategory;
+	// [v1.15.0] 현재 Source가 concrete category를 제공하면 사용하고, Unknown이면 Store에서 복원한 안정 분류를 유지합니다.
+	if (SourceDisplayInfo.TargetCategory != ECFTargetCategory::Unknown
+		|| PublicContact.TargetCategory == ECFTargetCategory::Unknown)
+	{
+		PublicContact.TargetCategory = SourceDisplayInfo.TargetCategory;
+	}
 	PublicContact.Relation = SourceDisplayInfo.Relation;
 	if (PublicContact.InformationLevel == ECFTargetInfoLevel::None)
 	{
@@ -868,7 +1207,7 @@ bool UCFVehicleSensorComp::UpsertLiveContact(
 	PublicContact.FreshnessSeconds = 0.0f;
 	PublicContact.bDestroyedConfirmed = false;
 
-		// SourceDisplayInfo.InformationLevel은 Actor truth이므로 Sensor Player Knowledge로 복사하지 않습니다.
+	// SourceDisplayInfo.InformationLevel은 Actor truth이므로 Sensor Player Knowledge로 복사하지 않습니다.
 	return true;
 }
 
@@ -921,7 +1260,7 @@ void UCFVehicleSensorComp::UnbindAllContactDestroyedEvents()
 	}
 }
 
-// [v1.4.0] authoritative VehicleHealth가 파괴 상태인 기존 Contact만 DestroyedHold로 전환합니다.
+// [v1.15.0] authoritative VehicleHealth가 파괴 상태인 기존 Contact를 Terminal Store에 먼저 기록한 뒤 DestroyedHold로 전환합니다.
 bool UCFVehicleSensorComp::ConfirmDestroyedContactForActor(AActor* CandidateActor)
 {
 	if (!IsValid(CandidateActor))
@@ -936,7 +1275,7 @@ bool UCFVehicleSensorComp::ConfirmDestroyedContactForActor(AActor* CandidateActo
 		return false;
 	}
 
-	// [v1.4.0] 새 파괴 Contact를 생성하지 않고 이미 Sensor가 알고 있던 Contact만 찾습니다.
+	// [v1.15.0] 월드의 미관측 파괴 Actor로 ghost Knowledge를 만들지 않고 이미 Sensor가 알고 있던 Contact만 terminalize합니다.
 	const int32 RuntimeContactIndex = FindRuntimeContactIndexByActor(CandidateActor);
 	if (RuntimeContactIndex == INDEX_NONE)
 	{
@@ -947,6 +1286,16 @@ bool UCFVehicleSensorComp::ConfirmDestroyedContactForActor(AActor* CandidateActo
 	if (RuntimeContact.PublicContact.ContactState == ECFSensorContactState::DestroyedHold)
 	{
 		return true;
+	}
+
+	// [v1.15.0] Detected-only Contact라도 valid Entity이면 최소 Terminal Record를 만들며 identity conflict에서는 Contact 상태까지 변경하지 않습니다.
+	if (!UpsertPersistentKnowledgeRecord(
+		RuntimeContact.PublicContact.TargetEntityId,
+		RuntimeContact.SourceDisplayInfo,
+		&RuntimeContact.PublicContact,
+		true))
+	{
+		return false;
 	}
 
 	RuntimeContact.PublicContact.ContactState = ECFSensorContactState::DestroyedHold;
@@ -1109,123 +1458,116 @@ void UCFVehicleSensorComp::AdvanceContactLifetimes(
 		}
 }
 
-// [v1.3.0] 모든 Runtime Contact의 Tactical Analysis를 active-valid 시간에는 증가시키고 그 외 시간에는 설정된 감소율로 서서히 감소시킵니다.
-void UCFVehicleSensorComp::AdvanceContactAnalysis(
+// [v1.11.0] 현재 지정 Target Scan Attempt 하나만 독립 Target Scan 유효 시간에는 증가시키고 LOS/거리 조건 상실에서는 감소시킵니다.
+void UCFVehicleSensorComp::AdvanceCurrentScanAttempt(
 	const float SensorUpdateDeltaSeconds,
-	const float ActiveScanTimeThisUpdate,
+	const float TargetScanTimeThisUpdate,
 	const FCFSensorConfig& SensorConfig)
 {
-	if (!SensorConfig.IsValid()
+	if (!bCurrentScanAttemptActive
+		|| !SensorConfig.IsValid()
 		|| !FMath::IsFinite(SensorUpdateDeltaSeconds)
 		|| SensorUpdateDeltaSeconds < 0.0f
-		|| !FMath::IsFinite(ActiveScanTimeThisUpdate)
-		|| ActiveScanTimeThisUpdate < 0.0f)
+		|| !FMath::IsFinite(TargetScanTimeThisUpdate)
+		|| TargetScanTimeThisUpdate < 0.0f)
 	{
 		return;
 	}
 
-	// [v1.3.0] 이번 Sensor update가 실제로 대표하는 유한한 경과 시간입니다.
+	// [v1.10.0] 이번 Sensor update가 실제로 대표하는 유한한 경과 시간입니다.
 	const float SafeSensorUpdateDeltaSeconds = FMath::Max(SensorUpdateDeltaSeconds, 0.0f);
+	// [v1.11.0] update 시간보다 길게 gain하지 않도록 제한한 현재 Target Scan Attempt 유효 시간입니다.
+	const float SafeTargetScanTimeThisUpdate = FMath::Clamp(TargetScanTimeThisUpdate, 0.0f, SafeSensorUpdateDeltaSeconds);
+	// [v1.11.0] Target Scan duration이 update 도중 만료된 경우 후반 decay에 사용할 비활성 시간입니다.
+	const float InactiveTimeThisUpdate = FMath::Max(0.0f, SafeSensorUpdateDeltaSeconds - SafeTargetScanTimeThisUpdate);
 
-	// [v1.3.0] update 시간보다 길게 gain하지 않도록 제한한 실제 Active Scan 유효 시간입니다.
-	const float SafeActiveScanTimeThisUpdate = FMath::Clamp(
-		ActiveScanTimeThisUpdate,
-		0.0f,
-		SafeSensorUpdateDeltaSeconds);
-
-	// [v1.3.0] Active Scan이 update 도중 만료된 경우 같은 update 후반에 decay로 반영할 비활성 시간입니다.
-	const float InactiveTimeThisUpdate = FMath::Max(
-		0.0f,
-		SafeSensorUpdateDeltaSeconds - SafeActiveScanTimeThisUpdate);
-
-	for (FCFSensorContactRuntime& RuntimeContact : RuntimeContacts)
+	// [v1.10.0] 현재 Scan Attempt의 private Target Actor입니다.
+	AActor* TargetActor = CurrentScanTargetActor.Get();
+	// [v1.10.0] 현재 Target Actor와 연결된 Runtime Contact 인덱스입니다.
+	const int32 RuntimeContactIndex = FindRuntimeContactIndexByActor(TargetActor);
+	if (!IsValid(TargetActor)
+		|| !RuntimeContacts.IsValidIndex(RuntimeContactIndex)
+		|| RuntimeContacts[RuntimeContactIndex].PublicContact.ContactId != CurrentScanTargetContactId)
 	{
-		// [v1.3.0] 비정상 값이 유입돼도 공개 계약을 깨지 않도록 정규화한 기존 Analysis progress입니다.
-		const float CurrentAnalysisProgress = FMath::IsFinite(RuntimeContact.PublicContact.AnalysisProgress01)
-			? FMath::Clamp(RuntimeContact.PublicContact.AnalysisProgress01, 0.0f, 1.0f)
-			: 0.0f;
-		RuntimeContact.PublicContact.AnalysisProgress01 = CurrentAnalysisProgress;
+		// [v1.10.0] Target/Contact 연결을 일시 잃은 동안 적용할 현재 Attempt 진행률 감소량입니다.
+		const float AnalysisDecay = SensorConfig.AnalysisDecayPerSec * SafeSensorUpdateDeltaSeconds;
+		CurrentScanAttemptProgress01 = FMath::Clamp(CurrentScanAttemptProgress01 - AnalysisDecay, 0.0f, 1.0f);
+		return;
+	}
 
-		if (RuntimeContact.PublicContact.ContactState == ECFSensorContactState::DestroyedHold)
+	// [v1.10.0] 현재 Scan Attempt가 소유하는 유일한 Runtime Contact입니다.
+	FCFSensorContactRuntime& RuntimeContact = RuntimeContacts[RuntimeContactIndex];
+	// [v1.11.0] 이번 독립 Target Scan 구간에서 지정 Contact가 실제 Analysis gain 조건을 만족하는지 여부입니다.
+	const bool bAnalysisValid = SafeTargetScanTimeThisUpdate > KINDA_SMALL_NUMBER
+		&& IsCurrentScanAttemptValidForAnalysis(RuntimeContact, SensorConfig);
+
+	if (bAnalysisValid)
+	{
+		// [v1.11.0] 유효 분석 구간 동안 현재 Attempt에 누적할 progress 증가량입니다.
+		const float AnalysisGain = SensorConfig.AnalysisGainPerSec * SafeTargetScanTimeThisUpdate;
+		CurrentScanAttemptProgress01 = FMath::Clamp(CurrentScanAttemptProgress01 + AnalysisGain, 0.0f, 1.0f);
+		PromoteContactKnowledgeFromScanProgress(RuntimeContact, CurrentScanAttemptProgress01, SensorConfig);
+
+		if (RuntimeContact.PublicContact.InformationLevel == ECFTargetInfoLevel::DetailedScan)
 		{
-			continue;
+			CompleteCurrentScanAttempt(RuntimeContact, SensorConfig);
+			return;
 		}
 
-		// [v1.3.0] 이번 Active Scan 구간에서 해당 Contact가 실제 Tactical Analysis gain 조건을 만족하는지 여부입니다.
-		const bool bAnalysisValid = SafeActiveScanTimeThisUpdate > KINDA_SMALL_NUMBER
-			&& IsContactValidForActiveAnalysis(RuntimeContact, SensorConfig);
-
-		if (bAnalysisValid)
+		if (InactiveTimeThisUpdate > KINDA_SMALL_NUMBER)
 		{
-			// [v1.3.0] 유효 분석 구간 동안 누적할 progress 증가량입니다.
-			const float AnalysisGain = SensorConfig.AnalysisGainPerSec * SafeActiveScanTimeThisUpdate;
-			RuntimeContact.PublicContact.AnalysisProgress01 = FMath::Clamp(
-				RuntimeContact.PublicContact.AnalysisProgress01 + AnalysisGain,
-				0.0f,
-				1.0f);
-			PromoteContactKnowledgeFromAnalysis(RuntimeContact, SensorConfig);
-
-			if (InactiveTimeThisUpdate > KINDA_SMALL_NUMBER)
-			{
-				// [v1.3.0] scan이 update 도중 끝난 뒤 남은 시간에만 적용할 서서히 감소하는 progress 양입니다.
-				const float AnalysisDecay = SensorConfig.AnalysisDecayPerSec * InactiveTimeThisUpdate;
-				RuntimeContact.PublicContact.AnalysisProgress01 = FMath::Clamp(
-					RuntimeContact.PublicContact.AnalysisProgress01 - AnalysisDecay,
-					0.0f,
-					1.0f);
-			}
+			// [v1.10.0] Scanner duration이 update 도중 끝난 뒤 남은 구간에만 적용할 progress 감소량입니다.
+			const float AnalysisDecay = SensorConfig.AnalysisDecayPerSec * InactiveTimeThisUpdate;
+			CurrentScanAttemptProgress01 = FMath::Clamp(CurrentScanAttemptProgress01 - AnalysisDecay, 0.0f, 1.0f);
 		}
-		else if (SafeSensorUpdateDeltaSeconds > KINDA_SMALL_NUMBER)
-		{
-			// [v1.3.0] 가림·범위 이탈·LastKnown·Active Scan 중단 상태에서 즉시 reset하지 않고 적용할 전체 update decay 양입니다.
-			const float AnalysisDecay = SensorConfig.AnalysisDecayPerSec * SafeSensorUpdateDeltaSeconds;
-			RuntimeContact.PublicContact.AnalysisProgress01 = FMath::Clamp(
-				RuntimeContact.PublicContact.AnalysisProgress01 - AnalysisDecay,
-				0.0f,
-				1.0f);
-		}
+	}
+	else if (SafeSensorUpdateDeltaSeconds > KINDA_SMALL_NUMBER)
+	{
+		// [v1.10.0] LOS·거리·Live 조건 상실 동안 현재 Attempt에 적용할 전체 update progress 감소량입니다.
+		const float AnalysisDecay = SensorConfig.AnalysisDecayPerSec * SafeSensorUpdateDeltaSeconds;
+		CurrentScanAttemptProgress01 = FMath::Clamp(CurrentScanAttemptProgress01 - AnalysisDecay, 0.0f, 1.0f);
 	}
 }
 
-// [v1.3.0] 현재 Runtime Contact가 Active Tactical Analysis 증가 조건을 만족하는지 판정합니다.
-bool UCFVehicleSensorComp::IsContactValidForActiveAnalysis(
+// [v1.10.0] 현재 지정 Scan Attempt의 단 하나의 Runtime Contact가 Active Analysis 증가 조건을 만족하는지 판정합니다.
+bool UCFVehicleSensorComp::IsCurrentScanAttemptValidForAnalysis(
 	FCFSensorContactRuntime& RuntimeContact,
 	const FCFSensorConfig& SensorConfig)
 {
-	if (!bActiveScanRunning
+	if (!bCurrentScanAttemptActive
 		|| SensorConfig.ActiveScanRangeCm <= KINDA_SMALL_NUMBER
+		|| RuntimeContact.PublicContact.ContactId != CurrentScanTargetContactId
 		|| RuntimeContact.PublicContact.ContactState != ECFSensorContactState::Live)
 	{
 		return false;
 	}
 
-	// [v1.3.0] 분석 대상 자격·거리·가시성을 실제 Actor에서 확인할 private weak Actor입니다.
+	// [v1.10.0] 현재 Attempt target과 Runtime Contact가 같은 Actor인지 확인할 private Actor입니다.
 	AActor* TargetActor = RuntimeContact.TargetActor.Get();
-	if (!IsValid(TargetActor) || !IsSensorCandidateEligible(TargetActor))
+	if (!IsValid(TargetActor)
+		|| TargetActor != CurrentScanTargetActor.Get()
+		|| !IsSensorCandidateEligible(TargetActor))
 	{
 		return false;
 	}
 
-	// [v1.3.0] Active Analysis 거리와 LOS의 끝점으로 사용할 TargetSelectable 대표 위치입니다.
+	// [v1.10.0] Active Analysis 거리와 LOS 끝점으로 사용할 TargetSelectable 대표 위치입니다.
 	const FVector TargetWorldLocation = ResolveSensorTargetLocation(TargetActor);
 	if (!IsFiniteSensorVector(TargetWorldLocation))
 	{
 		return false;
 	}
 
-	// [v1.3.0] Active Analysis 기준 원점을 소유한 Sensor Owner입니다.
+	// [v1.10.0] Active Analysis 기준 원점을 소유한 Sensor Owner입니다.
 	const AActor* OwnerActor = GetOwner();
 	if (!IsValid(OwnerActor))
 	{
 		return false;
 	}
 
-	// [v1.3.0] 현재 실제 위치 기준 Active Scan 분석 거리입니다. LastKnown 위치를 현재 위치처럼 사용하지 않습니다.
-	const float DistanceToTargetCm = FVector::Distance(
-		OwnerActor->GetActorLocation(),
-		TargetWorldLocation);
-	if (!FMath::IsFinite(DistanceToTargetCm)
-		|| DistanceToTargetCm > SensorConfig.ActiveScanRangeCm)
+	// [v1.10.0] 현재 실제 위치 기준 지정 Target 분석 거리입니다.
+	const float DistanceToTargetCm = FVector::Distance(OwnerActor->GetActorLocation(), TargetWorldLocation);
+	if (!FMath::IsFinite(DistanceToTargetCm) || DistanceToTargetCm > SensorConfig.ActiveScanRangeCm)
 	{
 		return false;
 	}
@@ -1233,38 +1575,328 @@ bool UCFVehicleSensorComp::IsContactValidForActiveAnalysis(
 	return HasDirectSensorVisibility(TargetActor, TargetWorldLocation, true);
 }
 
-// [v1.3.0] 분석 임계값을 통과한 Contact의 Sensor Knowledge를 단방향으로 승격하고 Identified 이상에서만 TargetId/Name을 공개합니다.
-void UCFVehicleSensorComp::PromoteContactKnowledgeFromAnalysis(
+// [v1.15.0] Target Scan Attempt 진행률이 임계값을 통과하면 Contact와 Persistent Store Knowledge를 같은 전이에서 단방향 승격합니다.
+void UCFVehicleSensorComp::PromoteContactKnowledgeFromScanProgress(
 	FCFSensorContactRuntime& RuntimeContact,
+	const float ScanAttemptProgress01,
 	const FCFSensorConfig& SensorConfig)
 {
-	if (RuntimeContact.SourceDisplayInfo.TargetId.IsNone())
+	if (RuntimeContact.SourceDisplayInfo.TargetId.IsNone() || !FMath::IsFinite(ScanAttemptProgress01))
 	{
 		return;
 	}
 
-	// [v1.3.0] Sensor가 직접 획득한 현재 Tactical Analysis progress입니다.
-	const float AnalysisProgress = RuntimeContact.PublicContact.AnalysisProgress01;
-
-	if (AnalysisProgress >= SensorConfig.DetailedScanThreshold)
+	// [v1.12.0] Contact Knowledge 승격 판정에 사용할 0~1 현재 Target Scan Attempt 진행률입니다.
+	const float ScanProgress = FMath::Clamp(ScanAttemptProgress01, 0.0f, 1.0f);
+	if (ScanProgress >= SensorConfig.DetailedScanThreshold)
 	{
-		RuntimeContact.PublicContact.InformationLevel = ECFTargetInfoLevel::DetailedScan;
-		RuntimeContact.PublicContact.KnownTargetId = RuntimeContact.SourceDisplayInfo.TargetId;
-		RuntimeContact.PublicContact.KnownDisplayName = RuntimeContact.SourceDisplayInfo.DisplayName;
+		// [v1.15.0] Store upsert가 실패해도 기존 Contact/allocator를 부분 승격하지 않도록 준비하는 후보 Projection입니다.
+		FCFSensorContact PromotedContact = RuntimeContact.PublicContact;
+		// [v1.15.0] 기존 DetailedScan Revision이 없을 때만 Component 수명 단조 증가 allocator에서 예약할 후보 Revision입니다.
+		const bool bNeedsNewAnalysisRevision = PromotedContact.InformationLevel != ECFTargetInfoLevel::DetailedScan
+			|| PromotedContact.AnalysisCompletionRevision <= 0;
+		// [v1.15.0] 최초 DetailedScan Knowledge 획득에 사용할 양수 Revision이며 Store 성공 전에는 allocator를 진행하지 않습니다.
+		const int32 CompletionRevision = bNeedsNewAnalysisRevision
+			? FMath::Max(NextAnalysisCompletionRevision, 1)
+			: PromotedContact.AnalysisCompletionRevision;
+		PromotedContact.AnalysisCompletionRevision = CompletionRevision;
+		PromotedContact.InformationLevel = ECFTargetInfoLevel::DetailedScan;
+		PromotedContact.KnownTargetId = RuntimeContact.SourceDisplayInfo.TargetId;
+		PromotedContact.KnownDisplayName = RuntimeContact.SourceDisplayInfo.DisplayName;
+
+		if (!UpsertPersistentKnowledgeRecord(
+			PromotedContact.TargetEntityId,
+			RuntimeContact.SourceDisplayInfo,
+			&PromotedContact,
+			false))
+		{
+			return;
+		}
+
+		RuntimeContact.PublicContact = PromotedContact;
+		if (bNeedsNewAnalysisRevision)
+		{
+			NextAnalysisCompletionRevision = CompletionRevision + 1;
+		}
 		return;
 	}
 
-	if (AnalysisProgress >= SensorConfig.IdentifiedThreshold
+	if (ScanProgress >= SensorConfig.IdentifiedThreshold
 		&& (RuntimeContact.PublicContact.InformationLevel == ECFTargetInfoLevel::None
 			|| RuntimeContact.PublicContact.InformationLevel == ECFTargetInfoLevel::Detected))
 	{
-		RuntimeContact.PublicContact.InformationLevel = ECFTargetInfoLevel::Identified;
-		RuntimeContact.PublicContact.KnownTargetId = RuntimeContact.SourceDisplayInfo.TargetId;
-		RuntimeContact.PublicContact.KnownDisplayName = RuntimeContact.SourceDisplayInfo.DisplayName;
+		// [v1.15.0] Identified Store upsert와 Contact 승격을 원자적으로 맞추기 위한 후보 Projection입니다.
+		FCFSensorContact PromotedContact = RuntimeContact.PublicContact;
+		PromotedContact.InformationLevel = ECFTargetInfoLevel::Identified;
+		PromotedContact.KnownTargetId = RuntimeContact.SourceDisplayInfo.TargetId;
+		PromotedContact.KnownDisplayName = RuntimeContact.SourceDisplayInfo.DisplayName;
+		if (!UpsertPersistentKnowledgeRecord(
+			PromotedContact.TargetEntityId,
+			RuntimeContact.SourceDisplayInfo,
+			&PromotedContact,
+			false))
+		{
+			return;
+		}
+
+		RuntimeContact.PublicContact = PromotedContact;
 	}
 }
 
-// [v1.3.0] 이번 Sensor update가 소비한 Active Scan 시간을 반영하고 만료되면 Active-only Contact를 LastKnown으로 전환합니다.
+// [v1.15.0] 기존 Store의 concrete stable identity와 현재 Source Metadata가 모순되지 않는지 판정합니다.
+bool UCFVehicleSensorComp::IsPersistentKnowledgeIdentityCompatible(
+	const FCFSensorKnowledgeRecord& KnowledgeRecord,
+	const FCFTargetDisplayInfo& SourceDisplayInfo) const
+{
+	// [v1.15.0] None은 아직 확정되지 않은 Source TargetId이므로 concrete mismatch에만 충돌을 선언합니다.
+	const bool bTargetIdConflict = !KnowledgeRecord.StableTargetId.IsNone()
+		&& !SourceDisplayInfo.TargetId.IsNone()
+		&& KnowledgeRecord.StableTargetId != SourceDisplayInfo.TargetId;
+	// [v1.15.0] Unknown은 아직 확정되지 않은 분류이므로 양쪽 concrete category mismatch에만 충돌을 선언합니다.
+	const bool bTargetCategoryConflict = KnowledgeRecord.StableTargetCategory != ECFTargetCategory::Unknown
+		&& SourceDisplayInfo.TargetCategory != ECFTargetCategory::Unknown
+		&& KnowledgeRecord.StableTargetCategory != SourceDisplayInfo.TargetCategory;
+	return !bTargetIdConflict && !bTargetCategoryConflict;
+}
+
+// [v1.15.0] Store의 미확정 Stable Identity만 현재 concrete Source Metadata로 최초 보강합니다.
+void UCFVehicleSensorComp::FillPersistentKnowledgeIdentity(
+	FCFSensorKnowledgeRecord& KnowledgeRecord,
+	const FCFTargetDisplayInfo& SourceDisplayInfo)
+{
+	if (KnowledgeRecord.StableTargetId.IsNone() && !SourceDisplayInfo.TargetId.IsNone())
+	{
+		KnowledgeRecord.StableTargetId = SourceDisplayInfo.TargetId;
+	}
+
+	if (KnowledgeRecord.StableTargetCategory == ECFTargetCategory::Unknown
+		&& SourceDisplayInfo.TargetCategory != ECFTargetCategory::Unknown)
+	{
+		KnowledgeRecord.StableTargetCategory = SourceDisplayInfo.TargetCategory;
+	}
+}
+
+// [v1.15.0] 동일 Entity Store Knowledge를 새 Contact Projection에 복원하되 Scan Operation state와 allocator는 건드리지 않습니다.
+void UCFVehicleSensorComp::RestorePersistentKnowledgeToContact(
+	FCFSensorContactRuntime& RuntimeContact,
+	const FCFSensorKnowledgeRecord& KnowledgeRecord)
+{
+	if (!RuntimeContact.PublicContact.TargetEntityId.IsValid()
+		|| RuntimeContact.PublicContact.TargetEntityId != KnowledgeRecord.TargetEntityId
+		|| KnowledgeRecord.bTerminalDestroyed)
+	{
+		return;
+	}
+
+	if (KnowledgeRecord.StableTargetCategory != ECFTargetCategory::Unknown)
+	{
+		RuntimeContact.PublicContact.TargetCategory = KnowledgeRecord.StableTargetCategory;
+	}
+
+	if (KnowledgeRecord.HighestKnowledgeTier == ECFTargetInfoLevel::DetailedScan)
+	{
+		// [v1.15.0] 손상된 Store가 공개 Contact의 DetailedScan↔positive revision 계약을 깨뜨리지 않도록 양수 Revision이 있을 때만 DetailedScan을 복원합니다.
+		if (KnowledgeRecord.DetailedScanAnalysisRevision <= 0)
+		{
+			return;
+		}
+
+		RuntimeContact.PublicContact.InformationLevel = ECFTargetInfoLevel::DetailedScan;
+		RuntimeContact.PublicContact.KnownTargetId = KnowledgeRecord.KnownTargetId;
+		RuntimeContact.PublicContact.KnownDisplayName = KnowledgeRecord.KnownDisplayName;
+		// [v1.15.0] 과거 획득 Revision을 exact 복원하며 NextAnalysisCompletionRevision은 증가시키거나 재계산하지 않습니다.
+		RuntimeContact.PublicContact.AnalysisCompletionRevision = KnowledgeRecord.DetailedScanAnalysisRevision;
+		return;
+	}
+
+	if (KnowledgeRecord.HighestKnowledgeTier == ECFTargetInfoLevel::Identified)
+	{
+		RuntimeContact.PublicContact.InformationLevel = ECFTargetInfoLevel::Identified;
+		RuntimeContact.PublicContact.KnownTargetId = KnowledgeRecord.KnownTargetId;
+		RuntimeContact.PublicContact.KnownDisplayName = KnowledgeRecord.KnownDisplayName;
+	}
+}
+
+// [v1.15.0] valid Entity의 Identified/DetailedScan 또는 Terminal Knowledge를 private Store에 즉시 반영합니다.
+bool UCFVehicleSensorComp::UpsertPersistentKnowledgeRecord(
+	const FGuid& TargetEntityId,
+	const FCFTargetDisplayInfo& SourceDisplayInfo,
+	const FCFSensorContact* PublicContact,
+	const bool bTerminalDestroyed)
+{
+	// [v1.15.0] Identity 미지원 대상은 기존 Contact/Scan 호환을 유지하되 Persistent Store에는 추측 key를 만들지 않습니다.
+	if (!TargetEntityId.IsValid())
+	{
+		return true;
+	}
+
+	// [v1.15.0] DetailedScan Record는 기존 공개 계약과 동일하게 양수 AnalysisCompletionRevision을 반드시 가져야 합니다.
+	if (PublicContact
+		&& PublicContact->InformationLevel == ECFTargetInfoLevel::DetailedScan
+		&& PublicContact->AnalysisCompletionRevision <= 0)
+	{
+		return false;
+	}
+
+	// [v1.15.0] 같은 Gameplay Entity에 이미 축적된 Persistent Knowledge Record입니다.
+	FCFSensorKnowledgeRecord* KnowledgeRecord = PersistentKnowledgeStore.Find(TargetEntityId);
+	if (KnowledgeRecord)
+	{
+		if (!IsPersistentKnowledgeIdentityCompatible(*KnowledgeRecord, SourceDisplayInfo)
+			|| (KnowledgeRecord->bTerminalDestroyed && !bTerminalDestroyed))
+		{
+			return false;
+		}
+	}
+	else
+	{
+		// [v1.15.0] non-terminal Detected-only 상태는 장기 Record를 만들지 않습니다.
+		const bool bHasPersistentKnowledge = PublicContact
+			&& (PublicContact->InformationLevel == ECFTargetInfoLevel::Identified
+				|| PublicContact->InformationLevel == ECFTargetInfoLevel::DetailedScan);
+		if (!bTerminalDestroyed && !bHasPersistentKnowledge)
+		{
+			return true;
+		}
+
+		// [v1.15.0] actor-free value만 가진 새 Entity Knowledge Record입니다.
+		FCFSensorKnowledgeRecord NewKnowledgeRecord;
+		NewKnowledgeRecord.TargetEntityId = TargetEntityId;
+		PersistentKnowledgeStore.Add(TargetEntityId, MoveTemp(NewKnowledgeRecord));
+		KnowledgeRecord = PersistentKnowledgeStore.Find(TargetEntityId);
+	}
+
+	if (!KnowledgeRecord)
+	{
+		return false;
+	}
+
+	FillPersistentKnowledgeIdentity(*KnowledgeRecord, SourceDisplayInfo);
+
+	if (PublicContact
+		&& (PublicContact->InformationLevel == ECFTargetInfoLevel::Identified
+			|| PublicContact->InformationLevel == ECFTargetInfoLevel::DetailedScan))
+	{
+		if (PublicContact->InformationLevel == ECFTargetInfoLevel::DetailedScan)
+		{
+			KnowledgeRecord->HighestKnowledgeTier = ECFTargetInfoLevel::DetailedScan;
+			KnowledgeRecord->DetailedScanAnalysisRevision = PublicContact->AnalysisCompletionRevision;
+		}
+		else if (KnowledgeRecord->HighestKnowledgeTier != ECFTargetInfoLevel::DetailedScan)
+		{
+			KnowledgeRecord->HighestKnowledgeTier = ECFTargetInfoLevel::Identified;
+		}
+
+		if (!PublicContact->KnownTargetId.IsNone())
+		{
+			KnowledgeRecord->KnownTargetId = PublicContact->KnownTargetId;
+		}
+		if (!PublicContact->KnownDisplayName.IsEmpty())
+		{
+			KnowledgeRecord->KnownDisplayName = PublicContact->KnownDisplayName;
+		}
+	}
+
+	if (bTerminalDestroyed)
+	{
+		KnowledgeRecord->bTerminalDestroyed = true;
+	}
+	return true;
+}
+
+// [v1.11.0] Target Scan만 유지하던 현재 Contact가 다른 Detection으로 유지되지 않는 경우 LastKnown으로 전환합니다.
+void UCFVehicleSensorComp::MarkCurrentScanTargetLastKnownIfNeeded()
+{
+	if (!bCurrentScanAttemptActive || bActiveScanRunning)
+	{
+		return;
+	}
+
+	// [v1.11.0] Target Scan 종료 직전 현재 Attempt Actor와 연결된 Runtime Contact 인덱스입니다.
+	const int32 RuntimeContactIndex = FindRuntimeContactIndexByActor(CurrentScanTargetActor.Get());
+	if (!RuntimeContacts.IsValidIndex(RuntimeContactIndex))
+	{
+		return;
+	}
+
+	// [v1.11.0] Passive/Visual 관측이 아니라 Target Scan 단일 Active-range 관측만으로 Live였던 Contact입니다.
+	FCFSensorContactRuntime& RuntimeContact = RuntimeContacts[RuntimeContactIndex];
+	if (RuntimeContact.PublicContact.ContactState == ECFSensorContactState::Live
+		&& !RuntimeContact.bBaselineDetectionValidAtLastObservation)
+	{
+		RuntimeContact.PublicContact.ContactState = ECFSensorContactState::LastKnown;
+		RuntimeContact.bLostSnapshotPublished = false;
+	}
+}
+
+// [v1.11.0] 현재 지정 Scan Attempt를 Idle/0 상태로 되돌리되 Contact Knowledge와 완료 전이 이력은 유지합니다.
+void UCFVehicleSensorComp::ResetCurrentScanAttempt()
+{
+	bCurrentScanAttemptActive = false;
+	CurrentScanAttemptRemainingSeconds = 0.0f;
+	CurrentScanTargetActor.Reset();
+	CurrentScanTargetContactId = NAME_None;
+	CurrentScanAttemptProgress01 = 0.0f;
+}
+
+// [v1.11.0] DetailedScan 완료 전이를 정확히 한 번 기록하고 Target Scan Attempt만 즉시 Idle로 복귀시킵니다.
+void UCFVehicleSensorComp::CompleteCurrentScanAttempt(
+	FCFSensorContactRuntime& RuntimeContact,
+	const FCFSensorConfig& SensorConfig)
+{
+	if (!bCurrentScanAttemptActive
+		|| RuntimeContact.PublicContact.ContactId != CurrentScanTargetContactId
+		|| RuntimeContact.PublicContact.InformationLevel != ECFTargetInfoLevel::DetailedScan)
+	{
+		return;
+	}
+
+	// [v1.10.0] HUD 등 전이 소비자가 정확히 한 번 관측할 Component 수명 단조 증가 완료 Revision입니다.
+	const int32 CompletionTransitionRevision = FMath::Max(NextScanCompletionTransitionRevision, 1);
+	LastScanCompletionTransitionRevision = CompletionTransitionRevision;
+	NextScanCompletionTransitionRevision = CompletionTransitionRevision + 1;
+	LastCompletedScanContactId = RuntimeContact.PublicContact.ContactId;
+
+	MarkCurrentScanTargetLastKnownIfNeeded();
+	ResetCurrentScanAttempt();
+	SetComponentTickEnabled(
+		HasConfiguredPassiveWork(SensorConfig)
+		|| bActiveScanRunning
+		|| !RuntimeContacts.IsEmpty());
+}
+
+// [v1.11.0] 이번 Sensor update가 소비한 Target Scan 시간을 반영하고 만료되면 Target Scan Attempt만 종료합니다.
+void UCFVehicleSensorComp::AdvanceCurrentScanDuration(
+	const float TargetScanTimeThisUpdate,
+	const FCFSensorConfig& SensorConfig)
+{
+	if (!bCurrentScanAttemptActive)
+	{
+		return;
+	}
+
+	// [v1.11.0] 잘못된 외부 호출에서도 남은 시간을 역으로 늘리지 않을 안전한 Target Scan 소비 시간입니다.
+	const float SafeTargetScanTimeThisUpdate = FMath::IsFinite(TargetScanTimeThisUpdate)
+		? FMath::Max(TargetScanTimeThisUpdate, 0.0f)
+		: 0.0f;
+	CurrentScanAttemptRemainingSeconds = FMath::Max(
+		0.0f,
+		CurrentScanAttemptRemainingSeconds - SafeTargetScanTimeThisUpdate);
+
+	if (CurrentScanAttemptRemainingSeconds > KINDA_SMALL_NUMBER)
+	{
+		return;
+	}
+
+	MarkCurrentScanTargetLastKnownIfNeeded();
+	ResetCurrentScanAttempt();
+	SetComponentTickEnabled(
+		HasConfiguredPassiveWork(SensorConfig)
+		|| bActiveScanRunning
+		|| !RuntimeContacts.IsEmpty());
+}
+
+// [v1.11.0] 이번 Sensor update가 소비한 broad Active Detection 시간을 반영하고 만료되면 Active-only Contact를 LastKnown으로 전환합니다.
 void UCFVehicleSensorComp::AdvanceActiveScanDuration(
 	const float ActiveScanTimeThisUpdate,
 	const FCFSensorConfig& SensorConfig)
@@ -1292,6 +1924,7 @@ void UCFVehicleSensorComp::AdvanceActiveScanDuration(
 	MarkActiveOnlyContactsLastKnown();
 	SetComponentTickEnabled(
 		HasConfiguredPassiveWork(SensorConfig)
+		|| bCurrentScanAttemptActive
 		|| !RuntimeContacts.IsEmpty());
 }
 
@@ -1323,6 +1956,11 @@ void UCFVehicleSensorComp::PublishRuntimeSnapshot()
 	CurrentSensorSnapshot.Revision = NextSnapshotRevision++;
 	CurrentSensorSnapshot.bRuntimeReady = bSensorRuntimeReady;
 	CurrentSensorSnapshot.bActiveScanRunning = bActiveScanRunning;
+	CurrentSensorSnapshot.ScanAttempt.bScanning = bCurrentScanAttemptActive;
+	CurrentSensorSnapshot.ScanAttempt.TargetContactId = bCurrentScanAttemptActive ? CurrentScanTargetContactId : NAME_None;
+	CurrentSensorSnapshot.ScanAttempt.Progress01 = bCurrentScanAttemptActive ? FMath::Clamp(CurrentScanAttemptProgress01, 0.0f, 1.0f) : 0.0f;
+	CurrentSensorSnapshot.ScanAttempt.CompletionTransitionRevision = LastScanCompletionTransitionRevision;
+	CurrentSensorSnapshot.ScanAttempt.LastCompletedContactId = LastCompletedScanContactId;
 
 	// [v1.1.0] Snapshot 생성 시각을 제공할 현재 World입니다.
 	const UWorld* CurrentWorld = GetWorld();
@@ -1386,6 +2024,11 @@ void UCFVehicleSensorComp::RebuildFoundationSnapshot(const bool bRuntimeReady)
 	CurrentSensorSnapshot.Revision = NextSnapshotRevision++;
 	CurrentSensorSnapshot.bRuntimeReady = bRuntimeReady;
 	CurrentSensorSnapshot.bActiveScanRunning = bActiveScanRunning;
+	CurrentSensorSnapshot.ScanAttempt.bScanning = bCurrentScanAttemptActive;
+	CurrentSensorSnapshot.ScanAttempt.TargetContactId = bCurrentScanAttemptActive ? CurrentScanTargetContactId : NAME_None;
+	CurrentSensorSnapshot.ScanAttempt.Progress01 = bCurrentScanAttemptActive ? FMath::Clamp(CurrentScanAttemptProgress01, 0.0f, 1.0f) : 0.0f;
+	CurrentSensorSnapshot.ScanAttempt.CompletionTransitionRevision = LastScanCompletionTransitionRevision;
+	CurrentSensorSnapshot.ScanAttempt.LastCompletedContactId = LastCompletedScanContactId;
 
 	// [v1.0.0] Snapshot 생성 시점에 사용할 현재 World입니다.
 	const UWorld* CurrentWorld = GetWorld();

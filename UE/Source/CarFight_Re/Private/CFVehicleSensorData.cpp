@@ -1,14 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.2.0
-// Date: 2026-08-20
+// Version: 1.3.1
+// Date: 2026-09-16
 // Description: CF-FQ-036 Sensor 설정 + CF-FQ-032 UI-P0-08 Radar 표시 Range Profile 검증 구현
 // Scope: SensorConfig와 Scanner 소유 Radar Range Preset의 전체 DataAsset 계약, 오류 보고와 디버그 요약을 구현합니다.
 // Changelog:
+// - v1.3.1: AnalysisGainPerSec의 분석 활성 경계를 exact 0으로 고정해 극소 양수 gain도 단발 완료 예산 검증을 우회하지 못하게 정렬.
+// - v1.3.0: AnalysisGainPerSec가 활성인 SensorData에 단발 Active Scan DetailedScan 완료 cross-field 검증과 명시 오류를 추가.
 // - v1.2.0: RadarDisplayRangePresetsCm의 finite/positive/strict-ascending/ActiveScanRange 상한과 명시 Default index 검증을 추가. 빈 Profile은 기존 동작 호환으로 허용.
 // - v1.1.0: Active Scan 0=비활성 계약과 MaxActorScansPerUpdate 1~4096 검증을 추가.
 // - v1.0.0: SEN-P0-01 DataValidation과 설정 요약을 최초 구현.
 // Migration:
+// - v1.3.1부터 AnalysisGainPerSec의 비활성 의미는 exact 0이며, 모든 유한 양수 gain은 단발 완료 예산 검증 대상입니다.
+// - v1.3.0부터 AnalysisGainPerSec > 0인데 한 번의 정상 Active Scan으로 DetailedScanThreshold에 도달하지 못하는 설정은 invalid입니다.
 // - 기존 Content의 빈 Radar Range Profile은 유효하며 Radar Range/Zoom을 활성화하지 않습니다.
 // - 이 구현은 Content Asset을 생성하거나 변경하지 않습니다.
 
@@ -86,6 +90,15 @@ bool UCFVehicleSensorData::ValidateSensorDataContract(TArray<FText>& OutValidati
 	if (!FMath::IsFinite(SensorConfig.AnalysisDecayPerSec) || SensorConfig.AnalysisDecayPerSec < 0.0f)
 	{
 		OutValidationErrors.Add(LOCTEXT("InvalidAnalysisDecay", "AnalysisDecayPerSec은 유한한 0 이상의 값이어야 합니다."));
+	}
+
+	if (FMath::IsFinite(SensorConfig.AnalysisGainPerSec)
+		&& SensorConfig.AnalysisGainPerSec > 0.0f
+		&& !SensorConfig.IsSingleScanAnalysisBudgetValid())
+	{
+		OutValidationErrors.Add(LOCTEXT(
+			"InvalidSingleScanAnalysisBudget",
+			"AnalysisGainPerSec가 0보다 크면 정상 Active Scan 1회에서 DetailedScanThreshold에 도달해야 합니다. AnalysisGainPerSec * max(ActiveScanDurationSec - UpdateIntervalSec, 0) >= DetailedScanThreshold를 만족하도록 설정하세요."));
 	}
 
 			if (!FMath::IsFinite(SensorConfig.IdentifiedThreshold)

@@ -1,16 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.3.0
-// Date: 2026-08-02
-// Description: CarFight 모듈형 런처 발사 패턴 공용 타입
+// Version: 1.3.1
+// Date: 2026-09-18
+// Description: CarFight 모듈형 런처 발사 패턴 공용 타입 / Phase 7 Guidance snapshot 의미 정렬
 // Scope: SingleCycle·Ripple·Salvo 발사 패턴, Volley 명령 목표 Snapshot, Direct·Angled·Vertical Release 설정, 차량 속도 상속과 결정적 시퀀스 상태를 제공합니다.
 // Changelog:
+// - v1.3.1: GuidanceTargetActor 설명을 Selected Target 고정 의미에서 첫 승인 발사 순간 VehicleFireComp가 확정한 Guidance source snapshot 의미로 교정. TargetActor Guided Weapon은 Phase 7부터 Vehicle Locked Target을 사용.
 // - v1.3.0: 한 Volley의 CommandTargetLocation과 GuidanceTargetActor를 같은 첫 발사 순간에 보존하는 FCFLauncherCommandTargetSnapshot을 추가.
 // - v1.2.0: Direct·AngledEjection·VerticalEjection 방향·속도·차량 속도 상속·안전 검사 거리 설정을 추가.
 // - v1.1.0: 발사 시퀀스 상태·취소 사유와 결정적 Dispatch·결과 기록 Runtime을 추가.
 // - v1.0.0: 발사 패턴, 실패 정책, 쿨다운 시작 정책과 FCFLauncherFirePatternConfig 최초 추가.
 // Migration:
-// - GuidanceTargetActor는 약한 참조로 보존하므로 목표 Actor가 파괴되면 후속 발사는 None을 전달하고 미사일의 목표 소실 정책을 사용합니다.
+// - Phase 7부터 TargetActor Guided Weapon의 GuidanceTargetActor는 VehicleFireComp가 첫 승인 발사에서 확정한 Vehicle Locked Target snapshot입니다. Selection 또는 후속 Lock 변경으로 같은 Volley를 자동 retarget하지 않습니다.
+// - GuidanceTargetActor는 약한 참조로 보존하므로 목표 Actor가 실제 무효가 되면 후속 TargetActor-guided shot은 VehicleFireComp의 fail-closed validation에서 거부될 수 있습니다.
 // - 기존 WeaponData는 LauncherReleaseConfig 기본값 Direct / CarrierVelocityRatio 0을 사용해 기존 발사 방향·속도를 유지합니다.
 // - AngledEjection은 Muzzle Transform 기준 LocalEjectionDirection을 사용하고 VerticalEjection은 Muzzle X축을 사용합니다.
 // - 기존 WeaponData는 LauncherFirePatternConfig 기본값 SingleCycle / 1발을 사용하므로 시퀀스 Runtime이 즉시 Completed가 되고 기존 단발 발사 결과를 유지합니다.
@@ -94,8 +96,8 @@ struct CARFIGHT_RE_API FCFLauncherCommandTargetSnapshot
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Launcher|CommandTarget", meta=(DisplayName="명령 목표 위치 (CommandTargetLocation)", ToolTip="Ripple·Salvo의 첫 발과 모든 후속 발사가 공통으로 사용하는 첫 발사 순간 Command Target 월드 위치입니다."))
 	FVector CommandTargetLocation = FVector::ZeroVector;
 
-	// [v1.3.0] 첫 발사 순간 선택되어 같은 Volley의 모든 미사일이 공유할 약한 유도 목표 Actor 참조입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Launcher|CommandTarget", meta=(DisplayName="유도 목표 Actor (GuidanceTargetActor)", ToolTip="Ripple·Salvo 첫 발사 순간 선택된 유도 목표 Actor입니다. 이후 차량 선택 대상이 바뀌어도 같은 Volley는 이 Actor를 유지하며, Actor가 파괴되면 None이 됩니다."))
+	// [v1.3.1] 첫 승인 발사 순간 VehicleFireComp가 확정해 같은 Volley의 모든 미사일이 공유할 약한 유도 목표 Actor 참조입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Launcher|CommandTarget", meta=(DisplayName="유도 목표 Actor (GuidanceTargetActor)", ToolTip="Ripple·Salvo 첫 승인 발사 순간 VehicleFireComp가 확정한 유도 목표 Actor Snapshot입니다. TargetActor Guided Weapon은 Vehicle Locked Target을 사용하며 이후 Selection 또는 새 Lock으로 같은 Volley를 자동 retarget하지 않습니다."))
 	TWeakObjectPtr<AActor> GuidanceTargetActor;
 
 	// [v1.3.0] 첫 발사 순간의 명령 목표 위치와 유도 목표 Actor를 하나의 Snapshot으로 함께 저장합니다.

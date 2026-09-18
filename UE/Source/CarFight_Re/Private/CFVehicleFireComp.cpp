@@ -1,12 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.1
-// Date: 2026-09-06
-// Description: CF-FQ-048 VPS-P0-02 차량 발사 행동 전용 내부 coordinator 구현
+// Version: 1.1.0
+// Date: 2026-09-18
+// Description: Phase 7 Guided Weapon Locked Target source migration + 차량 발사 행동 전용 내부 coordinator 구현
 // Changelog:
+// - v1.1.0: TargetActor Guidance 활성 Projectile의 Guidance source를 Selected Target에서 Vehicle Locked Target으로 전환하고, initial/scheduled/compatibility 실행에서 invalid guidance snapshot을 Ammo reserve/Projectile acquire 전에 fail-closed하도록 보강. Direct Fire/비유도 Projectile은 기존 의미 유지.
 // - v1.0.1: FireRequest ID/시간 할당과 입력 시 LastFireRequest commit을 Pawn Authority로 복귀시키고 FireComp는 전달받은 요청의 계산·검증·실행만 수행.
 // - v1.0.0: Fire Command/검증/Muzzle-Aim/HitScan/Projectile/Launcher 후속 발사와 Fire side effect를 Pawn에서 분리하고 기존 Pawn observable state authority를 유지.
 // Migration:
+// - v1.1.0부터 TargetActor Guided Projectile은 발사 순간 VehicleTargetingComp의 Locked Target만 GuidanceTargetActor로 캡처합니다. TargetSelect는 Guidance source가 아니며 Direct Fire/비유도 Projectile의 Aim/Selection 의미는 변경하지 않습니다.
 // - v1.0.1부터 FireComp는 NextFireRequestId/LastFireRequest를 직접 변경하지 않습니다. 기존 compatibility facade와 Product Asset에는 변경이 필요 없습니다.
 // - ACFVehiclePawn의 기존 함수 시그니처는 compatibility wrapper로 유지합니다. Launcher/Automation/Blueprint 호출자는 새 컴포넌트를 직접 알 필요가 없습니다.
 
@@ -28,6 +30,7 @@
 #include "CFVehicleDefenseComp.h"
 #include "CFVehicleHealthComp.h"
 #include "CFVehiclePawn.h"
+#include "CFVehicleTargetingComp.h"
 #include "CFVehicleWeaponComp.h"
 #include "CFWeaponData.h"
 
@@ -1169,10 +1172,82 @@ bool UCFVehicleFireComp::BuildDirectProjectileLaunchContext(const FCFVehicleFire
 	return true;
 }
 
-// 현재 선택 목표 Snapshot을 사용하는 기존 단발 Projectile 호환 실행 경로를 수행합니다.
+// Phase 7 기준 현재 활성 Projectile이 Vehicle Locked Target을 Guidance source로 요구하는지 반환합니다.
+bool UCFVehicleFireComp::DoesActiveProjectileRequireLockedGuidanceTarget() const
+{
+	// 실제 Projectile Actor 실행 경로가 아닌 HitScan/기타 FireMode에는 Vehicle Lock 요구를 추가하지 않습니다.
+	if (!ShouldUseProjectileActorFire())
+	{
+		return false;
+	}
+
+	// 현재 활성 ProjectileData와 GuideMode를 소유하는 Weapon Runtime입니다.
+	const ACFVehiclePawn* VehiclePawn = ResolveVehiclePawnConst();
+	const UCFProjectileData* ActiveProjectileData = VehiclePawn && VehiclePawn->VehicleWeaponComp
+		? VehiclePawn->VehicleWeaponComp->GetActiveProjectileData()
+		: nullptr;
+	if (!ActiveProjectileData)
+	{
+		return false;
+	}
+
+	// TargetActor Guidance일 때만 Vehicle Target Lock을 발사 전 source authority로 요구합니다.
+	const FCFMissileGuideConfig GuideConfig = ActiveProjectileData->GetEffectiveMissileGuideConfig();
+	return GuideConfig.IsGuidanceEnabled()
+		&& GuideConfig.GuideMode == ECFMissileGuideMode::TargetActor;
+}
+
+// 첫 발사 순간 TargetActor Guidance용 Vehicle Locked Target을 exact-once로 해석합니다. Lock이 필요 없는 무기는 nullptr 성공을 허용합니다.
+bool UCFVehicleFireComp::ResolveInitialGuidanceTargetActor(AActor*& OutGuidanceTargetActor) const
+{
+	OutGuidanceTargetActor = nullptr;
+	if (!DoesActiveProjectileRequireLockedGuidanceTarget())
+	{
+		return true;
+	}
+
+	// Phase 7 Guided Weapon source authority를 소유하는 차량 Targeting Component입니다.
+	const ACFVehiclePawn* VehiclePawn = ResolveVehiclePawnConst();
+	const UCFVehicleTargetingComp* VehicleTargetingComp = VehiclePawn
+		? VehiclePawn->GetVehicleTargetingComp()
+		: nullptr;
+	if (!VehicleTargetingComp || !VehicleTargetingComp->IsTargetingRuntimeReady())
+	{
+		return false;
+	}
+
+	// Runtime Ready + Locked + valid snapshot + valid Actor를 모두 통과한 내부 Gameplay bridge입니다.
+	AActor* LockedTargetActor = VehicleTargetingComp->GetLockedTargetActor();
+	if (!IsValid(LockedTargetActor) || LockedTargetActor->IsActorBeingDestroyed())
+	{
+		return false;
+	}
+
+	OutGuidanceTargetActor = LockedTargetActor;
+	return true;
+}
+
+// 명시 전달된 Guidance Actor Snapshot이 현재 Projectile의 TargetActor Guidance 요구를 만족하는지 검사합니다.
+bool UCFVehicleFireComp::ValidateGuidanceTargetActorSnapshot(
+	const UCFProjectileData& ProjectileData,
+	AActor* GuidanceTargetActorSnapshot) const
+{
+	const FCFMissileGuideConfig GuideConfig = ProjectileData.GetEffectiveMissileGuideConfig();
+	const bool bRequiresTargetActor = GuideConfig.IsGuidanceEnabled()
+		&& GuideConfig.GuideMode == ECFMissileGuideMode::TargetActor;
+	if (!bRequiresTargetActor)
+	{
+		return true;
+	}
+
+	return IsValid(GuidanceTargetActorSnapshot)
+		&& !GuidanceTargetActorSnapshot->IsActorBeingDestroyed();
+}
+
+// Phase 7 Guidance source 계약을 사용하는 기존 단발 Projectile 호환 실행 경로를 수행합니다.
 bool UCFVehicleFireComp::TrySpawnProjectileActorFromFireCommand(const FCFVehicleFireRequest& FireCommand)
 {
-	// Projectile/TargetSelect runtime을 소유한 차량 Pawn입니다.
+	// Projectile/Weapon runtime과 Phase 7 Guidance source bridge를 소유한 차량 Pawn입니다.
 	ACFVehiclePawn* VehiclePawn = ResolveVehiclePawn();
 	if (!VehiclePawn || !VehiclePawn->VehicleWeaponComp || !VehiclePawn->ProjectilePoolComp)
 	{
@@ -1186,8 +1261,12 @@ bool UCFVehicleFireComp::TrySpawnProjectileActorFromFireCommand(const FCFVehicle
 		return false;
 	}
 
-	// 이 호환 단발 호출이 Launch Context에 전달할 현재 선택 목표 Actor Snapshot입니다.
-	AActor* GuidanceTargetActorSnapshot = VehiclePawn->TargetSelectComp ? VehiclePawn->TargetSelectComp->GetSelectedTargetActor() : nullptr;
+	// 이 호환 단발 호출이 Phase 7 Guidance source 계약으로 사용할 발사 순간 Vehicle Locked Target Snapshot입니다.
+	AActor* GuidanceTargetActorSnapshot = nullptr;
+	if (!ResolveInitialGuidanceTargetActor(GuidanceTargetActorSnapshot))
+	{
+		return false;
+	}
 
 	// 현재 Release 설정과 목표 Actor Snapshot을 보존하는 Launch Context입니다.
 	FCFProjectileLaunchContext LaunchContext;
@@ -1208,6 +1287,19 @@ bool UCFVehicleFireComp::ExecuteAcceptedFireCommand(const FCFVehicleFireRequest&
 	ACFVehiclePawn* VehiclePawn = ResolveVehiclePawn();
 	if (!VehiclePawn || !InOutFireResult.bAccepted)
 	{
+		return false;
+	}
+
+	// Projectile 실행에서 TargetActor Guidance가 활성일 때 Ammo reserve/Projectile acquire 전에 검증할 현재 ProjectileData입니다.
+	const UCFProjectileData* GuidanceValidationProjectileData = ShouldUseProjectileActorFire()
+		&& VehiclePawn->VehicleWeaponComp
+		? VehiclePawn->VehicleWeaponComp->GetActiveProjectileData()
+		: nullptr;
+	if (GuidanceValidationProjectileData
+		&& !ValidateGuidanceTargetActorSnapshot(*GuidanceValidationProjectileData, GuidanceTargetActorSnapshot))
+	{
+		InOutFireResult.bAccepted = false;
+		InOutFireResult.RejectReason = ECFVehicleFireRejectReason::GuidanceTargetUnavailable;
 		return false;
 	}
 
@@ -1421,8 +1513,8 @@ void UCFVehicleFireComp::HandleFireStarted(const FCFVehicleFireRequest& FireRequ
 		return;
 	}
 
-	// 첫 Projectile과 같은 Volley의 모든 후속 Projectile이 공유할 발사 순간 선택 목표 Actor Snapshot입니다.
-	AActor* GuidanceTargetActorSnapshot = VehiclePawn->TargetSelectComp ? VehiclePawn->TargetSelectComp->GetSelectedTargetActor() : nullptr;
+	// 첫 Projectile과 같은 Volley의 모든 후속 Projectile이 공유할 Phase 7 발사 순간 Vehicle Locked Target Snapshot입니다.
+	AActor* GuidanceTargetActorSnapshot = nullptr;
 
 	// 첫 발 실행 전에 유한탄 예약 수량에 맞게 축소될 수 있는 현재 Launcher 발사 패턴 설정입니다.
 	FCFLauncherFirePatternConfig FirePatternConfig = VehiclePawn->VehicleWeaponComp
@@ -1445,7 +1537,14 @@ void UCFVehicleFireComp::HandleFireStarted(const FCFVehicleFireRequest& FireRequ
 
 	// 첫 Projectile은 기존 쿨다운을 포함한 전체 조준/Muzzle/장비 검증을 먼저 수행합니다.
 	const bool bFireCommandAccepted = ValidateFireCommand(FireRequest, FireResult);
-	if (bFireCommandAccepted && bUseLauncherAmmoReservation)
+	if (bFireCommandAccepted && !ResolveInitialGuidanceTargetActor(GuidanceTargetActorSnapshot))
+	{
+		FireResult.bAccepted = false;
+		FireResult.RejectReason = ECFVehicleFireRejectReason::GuidanceTargetUnavailable;
+	}
+
+	// TargetActor Guided Weapon은 Locked Target admission을 통과한 뒤에만 Launcher 전체 탄약 예약을 허용합니다.
+	if (FireResult.bAccepted && bUseLauncherAmmoReservation)
 	{
 		if (!VehiclePawn->LauncherComp || !VehiclePawn->VehicleAmmoComp)
 		{
@@ -1509,7 +1608,7 @@ void UCFVehicleFireComp::HandleFireStarted(const FCFVehicleFireRequest& FireRequ
 
 	if (FireResult.bAccepted && VehiclePawn->LauncherComp)
 	{
-		// 첫 발사 순간 목표 Snapshot과 남은 발사 및 선택적 유한탄 예약을 LauncherComp에 인계한 결과입니다.
+		// 첫 승인 발사 순간 Command Target + Locked Guidance Target Snapshot과 남은 발사 및 선택적 유한탄 예약을 LauncherComp에 인계한 결과입니다.
 		const bool bSequenceStarted = VehiclePawn->LauncherComp->StartFireSequenceAfterFirstAcceptedShot(
 			FirePatternConfig,
 			FVector(FireRequest.PredictedAimTargetLocation),

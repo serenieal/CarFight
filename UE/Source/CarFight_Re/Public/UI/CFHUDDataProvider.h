@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.10.0
-// Date: 2026-08-22
-// Description: CF-FQ-032 HUD Provider + post-closure hot-path copy/snapshot 교정
-// Scope: Current Pawn Gameplay Runtime과 actor-free Sensor Snapshot을 ViewData로 변환하며 기존 Camera/Aim Runtime을 읽기 전용 ViewMode 데이터로 투영합니다.
+// Version: 1.11.0
+// Date: 2026-09-18
+// Description: Phase 6 HUD Provider Selection / Target Lock / Target Scan 채널 분리
+// Scope: Current Pawn Gameplay Runtime과 actor-free Sensor/Targeting Snapshot을 Selection Knowledge, Target Lock, Target Scan 등 독립 ViewData로 변환합니다.
 // Changelog:
+// - v1.11.0: Phase 6에서 TargetSelect Knowledge, FCFTargetingSnapshot Lock, FCFSensorSnapshot.ScanAttempt를 각각 독립 ViewData filler로 분리해 Selection 변경이 Lock/Scan Presentation source를 숨기지 않도록 교정.
 // - v1.10.0: C++ hot-path용 const ViewData 참조 getter를 추가하고 한 Refresh 안에서 Sensor Snapshot/Radar Range Profile을 한 번만 해석해 Target/Radar filler가 공유할 수 있도록 내부 계약을 확장.
 // - v1.9.0: VehicleCameraComp/AimComp의 기존 public Runtime을 재계산 없이 읽어 Camera Mode, 차량 Heading, 카메라·터렛 상대 Yaw/Pitch를 FCFViewModeHUDData로 전달.
 // - v1.8.0: 적용 Scanner Radar Range Preset을 읽어 Provider-local RangePresetIndex, Zoom In/Out command와 Heading-Up normalized Contact/selected edge 방향 ViewData를 추가. Sensor 탐지 성능 mutation 0.
@@ -17,6 +18,7 @@
 // - v1.1.0: Launcher Sequence 상태 변경 이벤트를 Rebind 수명에 연결해 Alert/진행 상태를 10Hz Polling 대기 없이 즉시 Refresh.
 // - v1.0.0: Pawn Rebind, Defense/Health/Target 이벤트 구독, 10Hz 연속값 갱신과 전체 HUD ViewData Broadcast를 최초 추가.
 // Migration:
+// - v1.11.0부터 FCFTargetHUDData는 Selection/선택 Contact Knowledge만 채우며 TargetLock은 FCFTargetingSnapshot, TargetScan은 FCFSensorSnapshot.ScanAttempt에서 Selection과 독립적으로 채웁니다.
 // - Widget은 Pawn/Component를 직접 Cast하지 않고 이 Provider의 ViewData만 소비합니다.
 // - Launcher 계산을 UI에서 재구현하지 않고 UCFLauncherComp의 public 상태 변경 이벤트를 읽기 전용으로 소비합니다.
 // - v1.5.0부터 Target Knowledge와 Radar는 FCFSensorSnapshot만 읽으며 TargetSelectable 원본 InformationLevel/이름을 Player Knowledge로 사용하지 않습니다.
@@ -180,8 +182,14 @@ private:
 	// [v1.0.0] 현재 활성 Weapon과 Launcher ViewData를 채웁니다.
 	void FillWeaponViewData(FCFWeaponHUDData& OutWeaponViewData) const;
 
-				// [v1.10.0] TargetSelect의 선택/TrackState와 이번 Refresh에서 한 번 캡처한 Sensor Snapshot의 Player Knowledge를 중복 판정 없이 합성합니다.
+	// [v1.11.0] TargetSelect의 선택/TrackState와 같은 Refresh의 Sensor Snapshot에서 선택 Contact Knowledge만 합성합니다.
 	void FillTargetViewData(FCFTargetHUDData& OutTargetViewData, const FCFSensorSnapshot* SensorSnapshot) const;
+
+	// [v1.11.0] Vehicle Targeting의 actor-free Snapshot을 현재 Selection과 독립된 Lock ViewData로 변환합니다.
+	void FillTargetLockViewData(FCFTargetLockHUDData& OutTargetLockViewData, const FCFSensorSnapshot* SensorSnapshot) const;
+
+	// [v1.11.0] Sensor Snapshot의 Target Scan Attempt와 완료 전이를 현재 Selection과 독립된 Scan ViewData로 변환합니다.
+	void FillTargetScanViewData(FCFTargetScanHUDData& OutTargetScanViewData, const FCFSensorSnapshot* SensorSnapshot) const;
 
 	// [v1.10.0] 이번 Refresh에서 한 번 캡처한 Sensor Snapshot과 Radar Range Profile을 Radar ViewData로 읽기 전용 변환합니다.
 	void FillRadarViewData(FCFRadarHUDData& OutRadarViewData, const FCFSensorSnapshot* SensorSnapshot, const TArray<float>& RadarRangePresetsMeters) const;

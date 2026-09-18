@@ -1,8 +1,8 @@
 # Missile Guidance
 
-- Version: 1.0.2
-- Date: 2026-09-11
-- Status: Current System / CF-FQ-030 P0 Complete / CF-TC-027 PASS / Final Audit Correction PASS
+- Version: 1.1.0
+- Date: 2026-09-18
+- Status: Current System / CF-FQ-030 P0 Complete / CF-TC-027 PASS / Phase 7 Locked Guidance Source Integration PASS
 - Feature: `CF-FQ-030 물리 제한형 미사일 비행·유도`
 - Validation: Technical PASS + USER Guidance Feel ACCEPTED
 - Scope: Direct Release 기반 TargetActor 미사일의 발사 순간 목표 Snapshot, 비행 상태, 물리 제한형 Guidance, Seeker/관측/재포착, Guidance Law, 독립 Guidance Activation과 Pool 재사용 안전성의 현재 구현 기준
@@ -31,7 +31,8 @@ Document/Plan/MissileGuidance/GuidancePerformanceDesign.md
 ```text
 - Direct Release 미사일의 Released → Ejection → Clearance → GuidedFlight 비행 상태
 - 발사 순간 GuidanceTargetActor Snapshot
-- 발사 후 차량의 현재 선택 Target 변경과 독립된 기존 미사일 Target 유지
+- TargetActor Guided Projectile은 Phase 7부터 Vehicle Locked Target을 발사 전 source로 사용
+- 발사 후 차량의 Selection 또는 새 Lock 변경과 독립된 기존 미사일 Target 유지
 - TargetActor Guidance
 - 물리 제한형 선회율·횡가속도·응답시간 적용
 - PurePursuit / LeadPursuit / ProportionalNavigation Guidance Law
@@ -101,7 +102,9 @@ FireRequestId
 WeaponGroupId
 ```
 
-`GuidanceTargetActor`는 발사 순간 Snapshot이다. 발사 후 차량이 다른 Target을 선택해도 이미 발사된 미사일은 자동으로 새 Target으로 바뀌지 않는다.
+`GuidanceTargetActor`는 발사 순간 Snapshot이다. Phase 7부터 TargetActor Guided Projectile의 Snapshot source는 `VehicleFireComp`가 fail-closed로 확정한 Vehicle Locked Target이다. 발사 후 차량의 Selection 또는 Vehicle Lock이 다른 대상으로 바뀌어도 이미 발사된 미사일은 자동으로 새 Target으로 바뀌지 않는다.
+
+MissileGuideComp 자체는 VehicleTargetingComp를 직접 참조하지 않는다. 발사 전 source admission은 VehicleFireComp가 소유하고, MissileGuideComp는 기존 LaunchContext snapshot만 소비한다. 따라서 Seeker/LostTarget/Reacquisition/Guidance Law 의미는 Phase 7에서 변경되지 않았다.
 
 ---
 
@@ -448,7 +451,8 @@ Missile Guidance 관련 Source/Asset 변경 시 최소 보호 기준:
 ```text
 - bUseMissileFlight=false / bUseGuidance=false 기존 Projectile·Rocket 행동 유지
 - Direct TargetActor launch snapshot 유지
-- 발사 후 차량 Target 변경이 기존 미사일 Target을 바꾸지 않음
+- TargetActor Guided launch는 Vehicle Locked Target source admission을 통과한 Snapshot만 사용
+- 발사 후 차량 Selection/Lock 변경이 기존 미사일 Target을 바꾸지 않음
 - 물리 제한 선회율·횡가속·응답시간 유지
 - Guidance Law별 Sensor Truth 의미 유지
 - SampledPositionEstimate가 Actor Velocity 정답을 소비하지 않음
@@ -481,6 +485,17 @@ Missile Guidance 관련 Source/Asset 변경 시 최소 보호 기준:
 ---
 
 ## 17. Changelog
+
+### v1.1.0 - 2026-09-18
+
+```text
+- Phase 7 Guided Weapon target source migration을 Current 문서에 반영했다.
+- TargetActor Guided Projectile의 GuidanceTargetActor는 발사 전 VehicleFireComp가 Vehicle Locked Target에서 확정한 Snapshot을 사용한다.
+- MissileGuideComp는 VehicleTargetingComp를 직접 참조하지 않으며 기존 LaunchContext Snapshot, Seeker, LostTargetPolicy, Reacquisition, Guidance Law를 그대로 유지한다.
+- 발사 후 Selection 또는 새 Lock 변경으로 기존 미사일을 자동 retarget하지 않는다.
+- Final Direct Missile Runtime process fe4e25d60dcb4bfaa752325555bbd362 1/1 PASS로 기존 Missile Runtime 회귀를 확인했다.
+- MissileGuideComp / MissileFlightComp Product Source와 Product Asset mutation은 0이다.
+```
 
 ### v1.0.2 - 2026-09-11
 

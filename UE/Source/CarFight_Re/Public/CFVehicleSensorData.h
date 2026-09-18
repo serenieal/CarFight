@@ -1,14 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.2.0
-// Date: 2026-08-20
+// Version: 1.3.0
+// Date: 2026-09-16
 // Description: CF-FQ-036 Sensor 설정 + CF-FQ-032 UI-P0-08 Radar 표시 Range Profile 계약
 // Scope: FCFSensorConfig와 Scanner 소유 Radar 표시 Range Preset, 계약 검증과 디버그 요약을 제공합니다.
 // Changelog:
+// - v1.3.0: Tactical Analysis 활성 SensorData가 한 번의 정상 Active Scan으로 DetailedScan까지 완료 가능한 cross-field 시간 예산을 전체 DataAsset 계약에 포함.
 // - v1.2.0: Radar Zoom을 탐지 성능과 분리하기 위해 Scanner Data가 소유하는 오름차순 RadarDisplayRangePresetsCm과 명시 Default index를 추가. 기본 배열은 비어 있어 기존 Content 동작 0변경.
 // - v1.1.0: Active Scan 0=비활성 계약과 MaxActorScansPerUpdate bounded budget 검증을 반영.
 // - v1.0.0: SEN-P0-01 UCFVehicleSensorData와 DataValidation 계약을 최초 추가.
 // Migration:
+// - v1.3.0부터 AnalysisGainPerSec > 0인 SensorData는 단발 Active Scan 완료 시간 예산 계약을 만족해야 하며, 기존 의도하지 않은 multi-pass 설정은 DataValidation에서 거부됩니다.
 // - 기존 SensorData는 RadarDisplayRangePresetsCm 기본 빈 배열로 직렬화 호환되며 Radar Range/Zoom은 Unavailable을 유지합니다.
 // - Radar Preset을 작성할 때는 모든 값이 0 초과·엄격 오름차순이고 ActiveScanRangeCm 이하이어야 하며 DefaultRadarDisplayRangePresetIndex를 명시해야 합니다.
 // - 이 변경은 Content .uasset을 생성하거나 저장하지 않습니다.
@@ -31,7 +33,7 @@ class CARFIGHT_RE_API UCFVehicleSensorData : public UPrimaryDataAsset
 
 public:
 	// [v1.0.0] 현재 SensorConfig가 유한하고 허용 범위 안에 있는지 반환합니다.
-	UFUNCTION(BlueprintPure, Category="CarFight|Sensor|Data", meta=(DisplayName="센서 설정 유효 여부", ToolTip="탐지 거리, 갱신 간격, Contact 수명, 분석율과 정보 단계 임계값이 유효한지 검사합니다. Radar 표시 Range Profile은 전체 센서 데이터 유효 여부에서 별도로 검사합니다."))
+	UFUNCTION(BlueprintPure, Category="CarFight|Sensor|Data", meta=(DisplayName="센서 설정 유효 여부", ToolTip="탐지 거리, 갱신 간격, Contact 수명, 분석율·정보 단계 임계값과 단발 Active Scan의 DetailedScan 완료 시간 예산이 유효한지 검사합니다. Radar 표시 Range Profile은 전체 센서 데이터 유효 여부에서 별도로 검사합니다."))
 	bool IsSensorConfigValid() const;
 
 	// [v1.2.0] SensorConfig와 Radar 표시 Range Profile을 합친 전체 DataAsset 계약이 유효한지 반환합니다.

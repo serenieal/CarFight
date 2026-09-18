@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-08-02
-// Description: CF-FQ-030 Direct 미사일 PIE 전용 선택 가능 테스트 타겟 구현
-// Scope: 경량 시각·충돌, 측면 왕복 Velocity, TargetSelectable과 자동 파괴를 구현합니다.
+// Version: 1.1.0
+// Date: 2026-09-17
+// Description: CF-FQ-030 Direct 미사일 PIE 전용 선택 가능 테스트 타겟 구현 / Entity Identity 지원
+// Scope: 경량 시각·충돌, 측면 왕복 Velocity, TargetSelectable, TargetEntityId와 자동 파괴를 구현합니다.
 // Changelog:
+// - v1.1.0: ContactId/표시 TargetId와 독립된 per-instance TargetEntityId provider를 추가.
 // - v1.0.0: 미사일 전용 테스트 타겟 Actor 최초 추가.
 // Migration:
 // - MissileDirectTest 맵 외에는 자동 배치하거나 게임플레이 스폰 목록에 등록하지 않습니다.
@@ -139,6 +140,16 @@ bool ACFMissileTestTarget::IsTargetSelectable_Implementation(const FCFTargetSele
 {
 	(void)SelectionContext;
 	return IsValid(this) && !IsActorBeingDestroyed();
+}
+
+// [v1.1.0] 이 테스트 타겟의 Gameplay Entity lifetime에 고정된 개체별 Entity ID를 반환합니다.
+FGuid ACFMissileTestTarget::GetTargetEntityId_Implementation() const
+{
+	if (!TargetEntityId.IsValid())
+	{
+		TargetEntityId = FGuid::NewGuid();
+	}
+	return TargetEntityId;
 }
 
 // [v1.0.0] HUD와 TargetSelect가 사용할 테스트 타겟 표시 정보를 반환합니다.

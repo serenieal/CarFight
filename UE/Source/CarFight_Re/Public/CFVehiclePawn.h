@@ -1,9 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.171.0
-// Date: 2026-09-14
-// Description: CarFight 싱글플레이 차량 Pawn 기준 클래스 / VPS-P0-04 Input·Debug reflected type owner split
+// Version: 2.176.0
+// Date: 2026-09-18
+// Description: CarFight 싱글플레이 차량 Pawn 기준 클래스 / Phase 5 Selection-Lock-Scan Gameplay Command Boundary
 // Changelog:
+// - v2.176.0: Selected Target을 명령 시점에만 소비하는 RequestLockSelectedTarget, Lock-only RequestClearTargetLock, Scan-only RequestCancelTargetScan facade를 추가. Selection/Lock/Scan/Active Detection 자동 결합은 추가하지 않고 기존 IA_ActiveScan ToolTip을 현재 Target Scan 의미로 교정.
+// - v2.175.0: TargetSelect/Sensor와 독립된 UCFVehicleTargetingComp 기본 서브오브젝트와 Blueprint getter를 추가. Phase 4에서는 Lock Runtime/Snapshot foundation만 연결하며 Fire/HUD/Input 의미는 변경하지 않음.
+// - v2.174.0: VehicleData 기반 표시 TargetId와 독립된 per-instance TargetEntityId(FGuid) provider/storage를 추가. 같은 Pawn lifetime에서는 안정적으로 유지하며 기존 TargetSelect/Sensor API 의미는 변경하지 않음. Migration은 기존 TargetId 소비자를 변경하지 않고 Entity 재식별이 필요한 신규 경로만 TargetEntityId를 사용.
+// - v2.173.0: Pawn Sensor command canonical facade를 RequestStartTargetScan / RequestCancelSensorOperations로 명확화하고 기존 RequestStartActiveScan / RequestStopActiveScan은 Blueprint/C++ 호환 wrapper로 유지. 저장된 IA_ActiveScan/InputAction 필드 이름은 자산 호환을 위해 유지.
+// - v2.172.0: Active Scan 입력 facade를 현재 TargetSelect의 선택 Actor 단일 Targeted Scan 의미로 교정. 선택 대상이 없으면 fail-closed하며 broad Sensor pulse를 입력에서 직접 시작하지 않음.
 // - v2.171.0: CF-FQ-048 VPS-P0-04로 Input/VehicleDebug reflected declaration을 CFVehicleInputTypes.h / CFVehicleDebugTypes.h 단일 owner로 분리. Pawn Public/BP facade, lifecycle, observable state와 Debug aggregation behavior는 유지.
 // - v2.170.0: CF-FQ-048 VPS-P0-03로 Runtime 초기화·피팅 refresh·Initial Mass prepare/verify·VehicleData 적용 orchestration을 UCFVehicleRuntimeComp로 추출. Pawn lifecycle, Public/BP/Automation facade와 Runtime observable/serialized Authority는 유지.
 // - v2.169.1: VPS-P0-02 Authority 교정으로 FireRequest ID/시간 할당과 입력 순간 LastFireRequest commit을 Pawn에 명시적으로 복귀. FireComp는 계산·검증·실행만 수행.
@@ -93,6 +98,7 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth 적용 전 기준선 정리를 위해 차량 NetDebug/OwnerVisual/OwnerBodyVisual 실험 플래그 기본값을 False로 통일.
 // Migration:
+// - v2.176.0 Phase 5 command facade는 현재 Selection을 요청 시점에 한 번만 소비합니다. Selection 변경/해제는 기존 Lock/Scan을 자동 변경하지 않으며 새 Lock InputAction/키, HUD, Guided Weapon source는 추가하지 않습니다.
 // - v2.171.0 reflected type 이름·필드·Blueprint 노출과 Pawn 함수 signature는 변경되지 않습니다. Product Blueprint/SCS/Asset resave는 필요하지 않으며, Debug/Input type만 필요한 C++ consumer는 새 전용 Public header를 직접 include할 수 있습니다.
 // - v2.170.0 기존 BP_CFVehiclePawn 계열은 VehicleRuntimeComp 기본 서브오브젝트를 자동 상속합니다. Product Asset 수동 추가/저장은 필요하지 않으며 기존 InitializeVehicleRuntime/RefreshFittingDependentRuntime/readiness/summary 계약은 Pawn에 그대로 유지됩니다.
 // - v2.169.1 FireRequest ID/시간과 LastFireRequest 입력 commit은 다시 Pawn Authority가 직접 수행합니다. Blueprint/Product Asset과 기존 Public/BP/Automation 호출 계약에는 변경이 없습니다.
@@ -106,9 +112,9 @@
 // - v2.150.0 추가 friend는 WITH_DEV_AUTOMATION_TESTS에서 Heat accepted-fire 통합을 검증하기 위한 C++ 테스트 경계이며 Blueprint/런타임 공개 API를 변경하지 않는다.
 // - v2.149.0부터 BeginPlay/SetupPlayerInputComponent는 TargetSelect Marker를 직접 생성하지 않는다. bShowTargetSelectHud/ShouldShowTargetSelectHud은 UISubsystem이 현재 Pawn 표시 정책으로 계속 사용하며 Legacy Class/ZOrder 필드는 자동 생성 소유권으로 사용하지 않는다.
 // - v2.148.0부터 BeginPlay/SetupPlayerInputComponent는 AimReticle을 직접 생성하지 않는다. bShowAimReticle/ShouldShowAimReticle은 UISubsystem이 현재 Pawn 표시 정책으로 계속 사용하며 Legacy Class/ZOrder 필드는 자동 생성 소유권으로 사용하지 않는다.
-// - v2.147.0부터 InputAction_StartActiveScan은 `/Game/CarFight/Input/IA_ActiveScan`을 기본 로드한다. P0 기본 매핑은 `V` 1개이며 Boolean + Pressed 의미다. 누르면 장비의 ActiveScanDurationSec 동안 실행되고 Sensor Runtime이 자동 종료한다.
-// - InputAction_StopActiveScan은 기본 null로 유지하며 P0에서 별도 Stop 키를 만들지 않는다. RequestStopActiveScan은 장비 교체·상태 전환·향후 명시적 취소 경로에서 사용할 Gameplay command로 유지한다.
-// - v2.146.0의 RequestStartActiveScan / RequestStopActiveScan은 VehicleSensorComp의 기존 StartActiveScan / StopActiveScan에만 위임하며 SensorData 적용, Runtime 초기화, Contact/Knowledge Reset을 수행하지 않는다.
+// - v2.173.0부터 새 Pawn Sensor command는 RequestStartTargetScan / RequestCancelSensorOperations를 사용합니다. 기존 RequestStartActiveScan / RequestStopActiveScan은 저장된 Blueprint와 기존 C++ caller 호환 wrapper입니다.
+// - 저장된 InputAction_StartActiveScan과 `/Game/CarFight/Input/IA_ActiveScan` 이름은 Content Asset 호환을 위해 유지하지만 현재 V 입력 의미는 선택 Target 하나의 Target Scan 시작입니다. broad Active Detection Pulse를 시작하지 않습니다.
+// - InputAction_StopActiveScan은 기본 null로 유지하며 P0에서 별도 Stop 키를 만들지 않습니다. 명시 취소가 필요하면 RequestCancelSensorOperations를 사용합니다.
 // - v2.145.0부터 기존 BP_CFVehiclePawn 계열은 VehicleSensorComp를 기본 서브오브젝트로 자동 상속하며 Blueprint/Content Asset 수정이 필요하지 않다. Sensor Foundation 초기화 실패도 기존 차량 CoreReady/CombatReady 의미를 변경하지 않는다.
 // - v2.144.0 추가 friend는 WITH_DEV_AUTOMATION_TESTS의 VD-P0-03 테스트 접근만 위한 C++ 경계이며 VehicleData 적용 순서, Blueprint 노출, 런타임 동작을 변경하지 않는다.
 // - 선택 대상 VehicleDebug는 TargetSelectComp와 대상 Actor의 방어·내구도 상태를 읽기만 하며 선택, 추적, 피해와 재생 계산을 변경하지 않는다. 기존 Blueprint와 WBP에는 추가 작업이 필요하지 않다.
@@ -186,6 +192,7 @@
 #include "CFVehicleWeaponTypes.h"
 #include "CFTargetPointComp.h"
 #include "CFTargetSelectable.h"
+#include "CFTargetingTypes.h"
 #include "Components/SlateWrapperTypes.h"
 #include "Engine/EngineTypes.h"
 #include "WheeledVehiclePawn.h"
@@ -208,6 +215,7 @@ class UCFVehicleFittingComp;
 class UCFVehicleFittingData;
 class UCFTargetSelectComp;
 class UCFVehicleSensorComp;
+class UCFVehicleTargetingComp;
 class UCFEquipmentPresetData;
 class UCFProjectileData;
 class UCFDamageData;
@@ -330,8 +338,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input|UI", meta=(DisplayName="레이더 줌 입력 액션 (InputAction_RadarZoom)", ToolTip="Mouse Scroll Up은 Radar 표시 범위를 한 단계 줄이고, Mouse Scroll Down은 한 단계 늘립니다. 실제 Sensor 탐지 범위는 변경하지 않습니다."))
 	TObjectPtr<UInputAction> InputAction_RadarZoom = nullptr;
 
-		// [v2.147.0] P0 단발 Active Scan을 시작할 기본 Input Action입니다.
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input|Sensor", meta=(DisplayName="Active Scan 입력 액션 (InputAction_StartActiveScan)", ToolTip="P0 기본 IA_ActiveScan Boolean + Pressed 입력입니다. 한 번 누르면 VehicleSensorComp가 ActiveScanDurationSec 동안 Active Scan을 실행하고 자동 종료합니다. 기본 키는 V입니다."))
+	// [v2.176.0] 저장된 IA_ActiveScan 이름을 유지하면서 현재 선택 Target Scan command를 시작할 기본 Input Action입니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input|Sensor", meta=(DisplayName="타겟 스캔 입력 액션 (InputAction_StartActiveScan)", ToolTip="기존 IA_ActiveScan 자산 이름은 호환성을 위해 유지합니다. V 입력 시 현재 선택된 Target Actor 하나의 Target Scan Attempt를 시작하며 broad Active Detection Pulse는 자동 시작하지 않습니다."))
 	TObjectPtr<UInputAction> InputAction_StartActiveScan = nullptr;
 
 	// [v2.147.0] P0에서는 키에 연결하지 않는 시스템용 Active Scan 중단 의미 슬롯입니다.
@@ -499,6 +507,10 @@ public:
 	// [v2.145.0] TargetSelect와 독립적으로 Sensor Contact와 Player Knowledge Snapshot을 소유할 런타임 컴포넌트입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="차량 센서 컴포넌트 (VehicleSensorComp)", ToolTip="TargetSelect 선택 상태와 독립적으로 Sensor Contact, 플레이어가 획득한 지식과 Actor-free Snapshot을 소유합니다."))
 	TObjectPtr<UCFVehicleSensorComp> VehicleSensorComp = nullptr;
+
+	// [v2.175.0] Selection/Sensor와 독립적으로 단일 Vehicle Target Lock 상태를 소유할 런타임 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components", meta=(AllowPrivateAccess="true", DisplayName="차량 타겟팅 컴포넌트 (VehicleTargetingComp)", ToolTip="TargetSelect와 독립적으로 단일 Vehicle Target Lock Runtime과 Actor-free Targeting Snapshot을 소유합니다."))
+	TObjectPtr<UCFVehicleTargetingComp> VehicleTargetingComp = nullptr;
 
 	// [v2.86.0] P0 터렛 시각 장착 위치를 잡는 루트 컴포넌트입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Components|Turret", meta=(AllowPrivateAccess="true", DisplayName="터렛 장착 루트 (TurretMountRootComp)", ToolTip="현재 활성 하드포인트 위치에 배치되는 터렛 시각 장착 루트입니다."))
@@ -764,12 +776,36 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Sensor", meta=(DisplayName="차량 센서 컴포넌트 반환", ToolTip="TargetSelect와 독립적으로 Sensor Contact, Player Knowledge와 Actor-free Snapshot을 소유하는 VehicleSensorComp를 반환합니다."))
 	UCFVehicleSensorComp* GetVehicleSensorComp() const { return VehicleSensorComp; }
 
-	// [v2.146.0] Pawn 입력 계층에서 VehicleSensorComp의 Active Scan 시작 명령을 요청합니다.
-	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Sensor|Input", meta=(DisplayName="Active Scan 시작 요청", ToolTip="현재 VehicleSensorComp에 Active Scan 시작을 요청합니다. Sensor Runtime이 준비되지 않았거나 Active Scan을 지원하지 않거나 이미 실행 중이면 False를 반환합니다. SensorData 적용이나 Runtime 초기화는 수행하지 않습니다."))
+	// [v2.175.0] 차량의 독립 Vehicle Target Lock Runtime 컴포넌트를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|VehiclePawn|Targeting", meta=(DisplayName="차량 타겟팅 컴포넌트 반환", ToolTip="TargetSelect와 독립적인 단일 Vehicle Target Lock Runtime과 Actor-free Targeting Snapshot을 소유하는 VehicleTargetingComp를 반환합니다."))
+	UCFVehicleTargetingComp* GetVehicleTargetingComp() const { return VehicleTargetingComp; }
+
+	// [v2.176.0] 현재 Selected Target을 명령 시점에 한 번 읽어 VehicleTargetingComp에 Lock을 요청합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Targeting", meta=(DisplayName="선택 타겟 락 요청", ToolTip="현재 TargetSelect의 Selected Target을 명령 시점에 한 번 읽어 Vehicle Target Lock을 요청합니다. 이후 Selection 변경은 이미 시작된 Acquire/Lock 대상을 자동 변경하지 않습니다. 선택 대상이 없거나 무효하면 대상 무효 결과를 반환합니다."))
+	ECFTargetLockRequestResult RequestLockSelectedTarget();
+
+	// [v2.176.0] 현재 Vehicle Target Lock만 수동 해제하고 Selection/Scan/Detection은 유지합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Targeting", meta=(DisplayName="타겟 락 해제 요청", ToolTip="현재 Vehicle Target Lock만 수동 해제합니다. Selection, Target Scan과 Active Detection Pulse는 변경하지 않으며 수동 해제는 Lock Break 이벤트가 아닙니다."))
+	bool RequestClearTargetLock();
+
+	// [v2.173.0] 현재 TargetSelect의 선택 Actor 하나를 VehicleSensorComp Target Scan 대상으로 요청합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Sensor|Input", meta=(DisplayName="타겟 스캔 시작 요청", ToolTip="현재 선택된 Target Actor 하나만 VehicleSensorComp의 Target Scan 대상으로 시작합니다. 선택 대상이 없거나 이미 DetailedScan 완료된 대상이거나 Sensor Runtime이 사용할 수 없으면 False를 반환합니다. 시작 뒤 Selection 변경은 진행 중 Scan 대상에 영향을 주지 않습니다."))
+	bool RequestStartTargetScan();
+
+	// [v2.176.0] 현재 Target Scan Attempt만 취소하고 broad Active Detection Pulse를 유지합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Sensor", meta=(DisplayName="타겟 스캔 취소 요청", ToolTip="현재 Target Scan Attempt만 취소합니다. Active Detection Pulse, Selection과 Vehicle Target Lock은 그대로 유지됩니다."))
+	bool RequestCancelTargetScan();
+
+	// [v2.173.0] Pawn 입력/Gameplay 계층에서 현재 Sensor Operation 전체 취소를 요청합니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Sensor|Input", meta=(DisplayName="센서 작업 취소 요청", ToolTip="현재 VehicleSensorComp에서 실행 중인 Active Detection Pulse와 Target Scan Attempt를 취소합니다. Contact와 획득 Knowledge는 유지됩니다."))
+	bool RequestCancelSensorOperations();
+
+	// [v2.173.0] 기존 Blueprint/C++ caller 호환용 Target Scan 시작 wrapper입니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Sensor|Legacy", meta=(DisplayName="Legacy Active Scan 시작 요청", ToolTip="호환용 API입니다. 새 코드에서는 타겟 스캔 시작 요청(RequestStartTargetScan)을 사용합니다.", DeprecatedFunction, DeprecationMessage="RequestStartTargetScan을 사용하세요."))
 	bool RequestStartActiveScan();
 
-	// [v2.146.0] Pawn 입력 계층에서 VehicleSensorComp의 Active Scan 중단 명령을 요청합니다.
-	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Sensor|Input", meta=(DisplayName="Active Scan 중단 요청", ToolTip="현재 VehicleSensorComp에 실행 중 Active Scan 중단을 요청합니다. 실행 중인 Scan이 없으면 False를 반환하며 SensorData, Contact와 획득 Knowledge를 초기화하지 않습니다."))
+	// [v2.173.0] 기존 Blueprint/C++ caller 호환용 Sensor Operation 취소 wrapper입니다.
+	UFUNCTION(BlueprintCallable, Category="CarFight|VehiclePawn|Sensor|Legacy", meta=(DisplayName="Legacy Active Scan 중단 요청", ToolTip="호환용 API입니다. 새 코드에서는 센서 작업 취소 요청(RequestCancelSensorOperations)을 사용합니다.", DeprecatedFunction, DeprecationMessage="RequestCancelSensorOperations를 사용하세요."))
 	bool RequestStopActiveScan();
 
 	// 현재 유효 후보를 지속 선택 대상으로 확정합니다.
@@ -782,6 +818,9 @@ public:
 
 	// [v2.118.0] 현재 차량이 주어진 컨텍스트에서 선택 가능한지 반환합니다.
 	virtual bool IsTargetSelectable_Implementation(const FCFTargetSelectionContext& SelectionContext) const override;
+
+	// [v2.174.0] VehicleData TargetId와 독립된 현재 차량 인스턴스의 Gameplay Entity ID를 반환합니다.
+	virtual FGuid GetTargetEntityId_Implementation() const override;
 
 	// [v2.118.0] 타겟 HUD와 장비가 사용할 차량 기본 표시 정보를 반환합니다.
 	virtual FCFTargetDisplayInfo GetTargetDisplayInfo_Implementation() const override;
@@ -1126,6 +1165,9 @@ protected:
 	void HandleHandbrakeCompleted(const FInputActionValue& InputActionValue);
 
 private:
+	// [v2.174.0] 같은 VehiclePawn Gameplay Entity lifetime 동안 한 번 발급되어 유지되는 개체별 Entity ID입니다.
+	mutable FGuid TargetEntityId;
+
 	// [v2.168.0] 차체·휠·레이아웃·터렛·Owner 표시 행동과 순수 시각 캐시를 소유하며 Blueprint/Details에는 새 surface를 만들지 않는 내부 coordinator입니다.
 	UPROPERTY()
 	TObjectPtr<UCFVehicleVisualComp> VehicleVisualComp = nullptr;

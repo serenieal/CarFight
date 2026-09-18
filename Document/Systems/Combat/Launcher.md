@@ -1,8 +1,8 @@
 # Launcher
 
-- Version: 1.0.1
-- Date: 2026-09-11
-- Status: Current System / CF-FQ-029 P0 Complete / LM-P0-06 Final Technical Integration PASS
+- Version: 1.1.0
+- Date: 2026-09-18
+- Status: Current System / CF-FQ-029 P0 Complete / LM-P0-06 PASS / Phase 7 Guidance Snapshot Integration PASS
 - Feature: `CF-FQ-029 모듈형 런처 및 발사 인계`
 - Validation: Historical USER PIE + Current UE 5.8 Build/Automation Technical PASS
 - Scope: 차량 런처의 Launch Context, 가변 Muzzle, SingleCycle/Ripple/Salvo, Direct/Angled/Vertical Release, Carrier Velocity, MuzzleBlocked, Sequence Failure/Cancel과 Projectile 인계의 현재 구현 기준
@@ -123,7 +123,20 @@ FireRequestId
 WeaponGroupId
 ```
 
-발사 뒤 차량 속도, 터렛 방향과 현재 선택 Target이 기존 Projectile의 초기 상태를 다시 덮어쓰지 않는다.
+발사 뒤 차량 속도, 터렛 방향과 현재 Selection/새 Lock이 기존 Projectile의 초기 상태를 다시 덮어쓰지 않는다.
+
+Phase 7부터 `GuidanceTargetActor`의 source 의미는 Launcher가 결정하지 않는다. 실제 TargetActor Guided Projectile의 경우 `VehicleFireComp`가 첫 승인 발사 전에 Vehicle Locked Target을 fail-closed로 확정하고, Launcher는 전달받은 Actor Snapshot을 Volley 전체에 보존한다.
+
+```text
+CommandTargetLocation
+= 기존 Aim/Launcher command point
+
+GuidanceTargetActor
+= VehicleFireComp가 첫 승인 발사에서 확정한 guidance source snapshot
+= TargetActor Guided Projectile이면 Vehicle Locked Target
+```
+
+Ripple/Salvo 진행 중 Selection 또는 Vehicle Lock이 바뀌어도 이미 시작된 Volley는 자동 retarget하지 않는다. 저장된 weak Guidance Actor가 실제 invalid가 된 후속 guided shot은 `VehicleFireComp`에서 fail-closed되며 Scheduler의 기존 failure policy를 따른다.
 
 ### 3.4 ProjectilePool / ProjectileActor
 
@@ -169,7 +182,7 @@ SequenceFailurePolicy = ContinueRemaining
 CooldownStartPolicy = SequenceCompleted
 ```
 
-첫 입력 순간 Command Target을 Sequence 전체에 고정하고, 진행 중 추가 입력은 두 번째 Sequence를 중복 시작하지 않는다.
+첫 입력 순간 Command Target을 Sequence 전체에 고정하고, 첫 승인 발사의 Guidance Target Snapshot도 같은 Volley에 고정한다. 진행 중 Selection/새 Lock 변경은 이를 retarget하지 않으며 추가 입력은 두 번째 Sequence를 중복 시작하지 않는다.
 
 ### 4.3 Salvo
 
@@ -428,6 +441,14 @@ Document/Systems/Combat/MissileGuidance.md
 ---
 
 ## 13. Changelog
+
+### v1.1.0 - 2026-09-18
+
+- Phase 7 Guided Weapon source migration을 반영해 `GuidanceTargetActor`를 "선택 대상"이 아니라 상위 `VehicleFireComp`가 첫 승인 발사에서 확정한 Guidance source snapshot으로 정렬했다.
+- TargetActor Guided Projectile에서는 Vehicle Locked Target이 snapshot source이며 `CommandTargetLocation`은 기존 Aim/Launcher command point로 그대로 유지한다.
+- Ripple/Salvo는 첫 승인 발사의 Guidance Actor를 Volley 전체에 유지하고 이후 Selection/새 Lock 변경으로 자동 retarget하지 않는다.
+- `CarFight.Launcher.LM_P0_03B.SchedulerContract` process `1e0ad2dafbee477e83e8bbd07583c951` 1/1 PASS로 snapshot/Reset 계약을 재검증했다.
+- Launcher 실행 알고리즘, Release, MuzzleBlocked, Scheduler failure policy와 Product Asset은 변경하지 않았다.
 
 ### v1.0.1 - 2026-09-11
 

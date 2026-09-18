@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.15.1
-// Date: 2026-08-25
-// Description: CF-FQ-039 Armor modular visual + Production HUD layout-preserving migration 구현
-// Scope: 저장된 Production UMG의 기존 Slot Layout을 보존하면서 Armor Direction Icon, Radar Visual과 Root ReticleLayer 의미 Widget만 누락 시 추가합니다.
+// Version: 1.16.0
+// Date: 2026-09-18
+// Description: Phase 6 Target Lock HUD + Production HUD layout-preserving migration 구현
+// Scope: 저장된 Production UMG의 기존 Slot Layout을 보존하면서 Target Lock, Armor Direction Icon, Radar Visual과 Root ReticleLayer 의미 Widget만 누락 시 추가합니다.
 // Changelog:
+// - v1.16.0: WBP_CFTargetPanel 기존 Tree를 보존하고 Text_TargetLock / ProgressBar_TargetLock만 누락 시 additive 추가하는 Phase 6 Target Presentation migration과 TargetPanel semantic validator를 추가.
 // - v1.15.1: UE 5.8 WidgetBlueprintCompiler의 변수 GUID invariant를 만족하도록 새 Image_DirectionIcon을 MarkBlueprintAsStructurallyModified 전에 WidgetVariableNameToGuidMap에 deterministic 등록. 기존 persisted Icon에 GUID가 없으면 metadata만 repair하고 Slot은 보존.
 // - v1.15.0: BuildArmorSector 신규 Scaffold에 Image_DirectionIcon을 additive 포함하고, 저장 WBP_CFArmorSector는 ApplyArmorVisualMigrationResult가 Overlay_Plate에 해당 Image만 누락 시 추가하도록 구현. BuildArmorBodyMap은 modular Armor Art가 준비된 경우 공통 Plate만 구성하고 icon family/rotation과 6개 Sector 위치는 Designer 소유로 남김.
 // - v1.14.0: 기존 WBP_CFInGameHUD Root 7-child 구조와 ReticleLayer Slot을 보존하고 ReticleLayer 내부에 `CanvasPanel_ViewDirection` + `Image_ViewVehicleDirection`만 additive 추가하는 ApplyViewModeVisualMigrationResult를 구현. Vehicle Semantic Icon·TextSecondary·Style IconLarge를 재사용.
@@ -26,6 +27,7 @@
 // - v1.1.0: SpeedGauge를 실제 RPM 의미의 정적 21 Tick/85% Red Zone Preview로 교정하고 가짜 Speed/RPM Fallback과 D Gear를 제거했으며 Armor 숫자를 6방향 세로 Bar로 교체하고 회귀 검증을 추가.
 // - v1.0.0: 8개 의미 Child Widget과 6개 Panel을 조립하는 Root Tree, Semantic Icon Brush, Border 제한, Graph 0 검증을 최초 구현.
 // Migration:
+// - v1.16.0 TargetPanel migration은 기존 Border_Surface / VerticalBox_Content / TargetDistance·Identity·Armor·Scan Widget과 그 Slot을 수정하지 않습니다. Lock Text/Progress만 additive 추가하고 새 source Widget의 deterministic variable GUID를 구조 compile 전에 등록합니다.
 // - Border는 Panel Surface 한 장에만 허용하며 차체·장갑·원호·아이콘·장식선을 작은 Border 조각으로 그리지 않습니다.
 // - SpeedGauge, ArmorBodyMap과 Radar의 공간 배치에는 의미 좌표가 필요한 내부 CanvasPanel만 사용합니다.
 // - SpeedArcTrack Texture는 RPM UI Material의 데이터/형상 입력으로 사용합니다. WBP_CFSpeedGauge는 Texture를 직접 그리지 않고 HUDVisualData.SpeedArcMaterial을 `Image_RPMGauge` Brush로 사용합니다.
@@ -669,7 +671,7 @@ namespace CFUIHUDProdEditorBridge
 		return true;
 	}
 
-	// [v1.0.0] Target Panel을 실제 Target Image, 정보 Row와 Scan ProgressBar로 생성합니다.
+	// [v1.16.0] Target Panel을 Selection/Knowledge와 독립 Target Lock/Scan 의미 슬롯으로 생성합니다.
 	bool BuildTargetPanel(UWidgetTree* WidgetTree, const UCFUIStyleData* StyleData, const UCFHUDLayoutData* LayoutData)
 	{
 		UVerticalBox* Content = BuildPanelSurface(WidgetTree, StyleData);
@@ -681,6 +683,20 @@ namespace CFUIHUDProdEditorBridge
 		Content->AddChild(CreateText(WidgetTree, TEXT("Text_TargetDistance"), TEXT("거리  842 m"), StyleData, LayoutData, ECFUIFontFamilyRole::Numeric, ECFUITypographyRole::ValueM, ECFUIColorToken::TextPrimary));
 		Content->AddChild(CreateText(WidgetTree, TEXT("Text_TargetIdentity"), TEXT("식별  ???"), StyleData, LayoutData, ECFUIFontFamilyRole::UI, ECFUITypographyRole::Label, ECFUIColorToken::Unknown));
 		Content->AddChild(CreateText(WidgetTree, TEXT("Text_TargetArmor"), TEXT("장갑  ???"), StyleData, LayoutData, ECFUIFontFamilyRole::UI, ECFUITypographyRole::Label, ECFUIColorToken::Unknown));
+
+		// [v1.16.0] Vehicle Target Lock은 현재 Selection과 독립된 전용 Text/Progress sink를 소유합니다.
+		UTextBlock* TargetLockText = CreateText(WidgetTree, TEXT("Text_TargetLock"), TEXT("락 획득  미식별  0%"), StyleData, LayoutData, ECFUIFontFamilyRole::Numeric, ECFUITypographyRole::ValueS, ECFUIColorToken::AccentTactical);
+		// [v1.16.0] Lock 획득 진행률 또는 Locked 품질을 표시할 전용 ProgressBar입니다.
+		UProgressBar* TargetLockProgress = CreateProgress(WidgetTree, TEXT("ProgressBar_TargetLock"), 0.0f, StyleData, ECFUIColorToken::AccentTactical);
+		if (!TargetLockText || !TargetLockProgress)
+		{
+			return false;
+		}
+		TargetLockText->SetVisibility(ESlateVisibility::Collapsed);
+		TargetLockProgress->SetVisibility(ESlateVisibility::Collapsed);
+		Content->AddChild(TargetLockText);
+		Content->AddChild(TargetLockProgress);
+
 		Content->AddChild(CreateText(WidgetTree, TEXT("Text_TargetScan"), TEXT("스캔  35%"), StyleData, LayoutData, ECFUIFontFamilyRole::Numeric, ECFUITypographyRole::ValueS, ECFUIColorToken::TextPrimary));
 		Content->AddChild(CreateProgress(WidgetTree, TEXT("ProgressBar_TargetScan"), 0.35f, StyleData, ECFUIColorToken::AccentTactical));
 		return true;
@@ -1133,6 +1149,20 @@ namespace CFUIHUDProdEditorBridge
 		{
 			OutFailureReason = FString::Printf(TEXT("Production Image slot contract failed: role=%s actual=%d required=%d"), *WidgetRole.ToString(), ImageCount, RequiredImageCount);
 			return false;
+		}
+
+		// [v1.16.0] Phase 6 TargetPanel은 Selection/Knowledge 기존 슬롯과 별개로 Lock/Scan 전용 의미 sink를 모두 소유해야 합니다.
+		if (WidgetRole == FName(TEXT("TargetPanel")))
+		{
+			const UTextBlock* TargetLockText = Cast<UTextBlock>(WidgetTree->FindWidget(FName(TEXT("Text_TargetLock"))));
+			const UProgressBar* TargetLockProgress = Cast<UProgressBar>(WidgetTree->FindWidget(FName(TEXT("ProgressBar_TargetLock"))));
+			const UTextBlock* TargetScanText = Cast<UTextBlock>(WidgetTree->FindWidget(FName(TEXT("Text_TargetScan"))));
+			const UProgressBar* TargetScanProgress = Cast<UProgressBar>(WidgetTree->FindWidget(FName(TEXT("ProgressBar_TargetScan"))));
+			if (!TargetLockText || !TargetLockProgress || !TargetScanText || !TargetScanProgress)
+			{
+				OutFailureReason = TEXT("TargetPanel Phase 6 Lock/Scan semantic slot contract failed");
+				return false;
+			}
 		}
 
 						if (WidgetRole == FName(TEXT("WeaponPanel")))
@@ -1588,6 +1618,122 @@ bool UCFUIHUDProdEditorBridge::ValidateProductionWidgetResult(
 		return CFUIHUDProdEditorBridge::Fail(FailureReason);
 	}
 		return true;
+#else
+	return false;
+#endif
+}
+
+// [v1.16.0] 저장 TargetPanel의 기존 Designer Tree를 보존하면서 Phase 6 Lock Text/Progress 의미 슬롯만 additive 추가합니다.
+bool UCFUIHUDProdEditorBridge::ApplyTargetPresentationMigrationResult(
+	UObject* TargetPanelBlueprintObject,
+	UCFHUDLayoutData* LayoutData,
+	UCFUIStyleData* StyleData)
+{
+#if WITH_EDITOR
+	// [v1.16.0] 기존 persisted Designer Tree를 직접 보존 갱신할 정확한 TargetPanel Widget Blueprint입니다.
+	UWidgetBlueprint* TargetPanelBlueprint = Cast<UWidgetBlueprint>(TargetPanelBlueprintObject);
+	if (!TargetPanelBlueprint || TargetPanelBlueprint->ParentClass != UCFStyledWidgetBase::StaticClass()
+		|| !TargetPanelBlueprint->WidgetTree || !TargetPanelBlueprint->WidgetTree->RootWidget
+		|| !LayoutData || !StyleData)
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("Target presentation migration requires existing TargetPanel Designer Tree + Layout/Style Data"));
+	}
+
+	// [v1.16.0] 기존 Selection/Knowledge/Scan Widget을 그대로 소유하는 저장 TargetPanel WidgetTree입니다.
+	UWidgetTree* WidgetTree = TargetPanelBlueprint->WidgetTree;
+	// [v1.16.0] 기존 정보 Row와 Scan Row가 배치된 Designer-owned VerticalBox입니다.
+	UVerticalBox* Content = Cast<UVerticalBox>(WidgetTree->FindWidget(FName(TEXT("VerticalBox_Content"))));
+	// [v1.16.0] migration이 절대 대체·재사용하지 않아야 하는 기존 Armor placeholder Text입니다.
+	UTextBlock* TargetArmorText = Cast<UTextBlock>(WidgetTree->FindWidget(FName(TEXT("Text_TargetArmor"))));
+	// [v1.16.0] 기존 Target Scan 전용 Text sink입니다.
+	UTextBlock* TargetScanText = Cast<UTextBlock>(WidgetTree->FindWidget(FName(TEXT("Text_TargetScan"))));
+	// [v1.16.0] 기존 Target Scan 전용 Progress sink입니다.
+	UProgressBar* TargetScanProgress = Cast<UProgressBar>(WidgetTree->FindWidget(FName(TEXT("ProgressBar_TargetScan"))));
+	if (!Content || !TargetArmorText || !TargetScanText || !TargetScanProgress)
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("Target presentation migration requires existing VerticalBox_Content/Armor/Scan widgets"));
+	}
+
+	// [v1.16.0] 이미 저장된 Lock Text가 있으면 타입을 검증하고 누락 GUID만 repair합니다.
+	UTextBlock* TargetLockText = Cast<UTextBlock>(WidgetTree->FindWidget(FName(TEXT("Text_TargetLock"))));
+	// [v1.16.0] 이미 저장된 Lock Progress가 있으면 타입을 검증하고 누락 GUID만 repair합니다.
+	UProgressBar* TargetLockProgress = Cast<UProgressBar>(WidgetTree->FindWidget(FName(TEXT("ProgressBar_TargetLock"))));
+	if ((WidgetTree->FindWidget(FName(TEXT("Text_TargetLock"))) && !TargetLockText)
+		|| (WidgetTree->FindWidget(FName(TEXT("ProgressBar_TargetLock"))) && !TargetLockProgress))
+	{
+		return CFUIHUDProdEditorBridge::Fail(TEXT("Target presentation migration found wrong widget type for Phase 6 Lock sink"));
+	}
+
+	// [v1.16.0] 실제 Widget 생성 또는 variable GUID repair가 발생했는지 추적합니다.
+	bool bStructureChanged = false;
+	// [v1.16.0] 새 Text 생성 없이 metadata만 보정됐는지 포함하는 Blueprint 수정 여부입니다.
+	bool bBlueprintModified = false;
+	if (!TargetLockText)
+	{
+		TargetPanelBlueprint->Modify();
+		WidgetTree->Modify();
+		Content->Modify();
+		TargetLockText = CFUIHUDProdEditorBridge::CreateText(
+			WidgetTree,
+			TEXT("Text_TargetLock"),
+			TEXT("락 획득  미식별  0%"),
+			StyleData,
+			LayoutData,
+			ECFUIFontFamilyRole::Numeric,
+			ECFUITypographyRole::ValueS,
+			ECFUIColorToken::AccentTactical);
+		if (!TargetLockText || !Content->AddChild(TargetLockText))
+		{
+			return CFUIHUDProdEditorBridge::Fail(TEXT("Target Lock Text additive Widget creation failed"));
+		}
+		TargetLockText->SetVisibility(ESlateVisibility::Collapsed);
+		bStructureChanged = true;
+		bBlueprintModified = true;
+	}
+	if (!TargetLockProgress)
+	{
+		TargetPanelBlueprint->Modify();
+		WidgetTree->Modify();
+		Content->Modify();
+		TargetLockProgress = CFUIHUDProdEditorBridge::CreateProgress(
+			WidgetTree,
+			TEXT("ProgressBar_TargetLock"),
+			0.0f,
+			StyleData,
+			ECFUIColorToken::AccentTactical);
+		if (!TargetLockProgress || !Content->AddChild(TargetLockProgress))
+		{
+			return CFUIHUDProdEditorBridge::Fail(TEXT("Target Lock Progress additive Widget creation failed"));
+		}
+		TargetLockProgress->SetVisibility(ESlateVisibility::Collapsed);
+		bStructureChanged = true;
+		bBlueprintModified = true;
+	}
+
+	// [v1.16.0] UE 5.8 Widget compiler가 요구하는 source Widget variable GUID를 deterministic하게 보장할 helper입니다.
+	auto EnsureWidgetVariableGuid = [TargetPanelBlueprint, &bBlueprintModified](UWidget* Widget)
+	{
+		if (!Widget || TargetPanelBlueprint->WidgetVariableNameToGuidMap.Contains(Widget->GetFName()))
+		{
+			return;
+		}
+		TargetPanelBlueprint->Modify();
+		const FGuid WidgetGuid = FGuid::NewDeterministicGuid(Widget->GetPathName());
+		TargetPanelBlueprint->WidgetVariableNameToGuidMap.Emplace(Widget->GetFName(), WidgetGuid);
+		bBlueprintModified = true;
+	};
+	EnsureWidgetVariableGuid(TargetLockText);
+	EnsureWidgetVariableGuid(TargetLockProgress);
+
+	if (bStructureChanged)
+	{
+		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(TargetPanelBlueprint);
+	}
+	else if (bBlueprintModified)
+	{
+		FBlueprintEditorUtils::MarkBlueprintAsModified(TargetPanelBlueprint);
+	}
+	return true;
 #else
 	return false;
 #endif

@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.14.0
-// Date: 2026-08-19
-// Description: CarFight 싱글플레이 차량 Aim 시스템의 공용 타입 정의
+// Version: 1.15.0
+// Date: 2026-09-18
+// Description: CarFight 싱글플레이 차량 Aim 시스템의 공용 타입 정의 / Phase 7 Guided Weapon fail-closed reject
 // Changelog:
+// - v1.15.0: TargetActor Guidance가 Vehicle Locked Target을 확보하지 못한 경우 발사를 차단할 GuidanceTargetUnavailable을 enum 끝에 추가.
 // - v1.14.0: UI-P0-06 실제 무기 Charge Runtime의 충전 부족 발사 거부를 구분하도록 WeaponChargeInsufficient를 enum 끝에 추가.
 // - v1.13.0: UI-P0-06 실제 무기 Heat Runtime의 과열 발사 거부를 구분하도록 WeaponOverheated를 enum 끝에 추가.
 // - v1.12.0: CF-FQ-031 Ammo Runtime 발사 거부를 정확히 구분하도록 Reloading과 WeaponActionLocked를 enum 끝에 추가.
@@ -20,6 +21,7 @@
 // - v1.2.0: 발사 검증/시각 상태 타입과 필드명을 싱글플레이 용어로 리네이밍.
 // - v1.1.0: 싱글플레이 전환에 맞춰 표시명과 툴팁을 로컬 Fire Command / Fire Result 의미로 정리.
 // Migration:
+// - v1.15.0 GuidanceTargetUnavailable은 enum 끝에 append되어 기존 직렬화 숫자 의미를 보존합니다. TargetActor Guidance가 실제 활성인 Projectile의 발사 전 Vehicle Locked Target snapshot이 없거나 무효할 때만 사용하며 Direct Fire/비유도 Projectile에는 적용하지 않습니다.
 // - v1.14.0 WeaponChargeInsufficient는 enum 끝에 append되어 기존 직렬화 숫자 의미를 보존하며 explicit Charge Runtime이 활성·부족한 경우에만 사용한다.
 // - v1.13.0 WeaponOverheated는 enum 끝에 append되어 기존 직렬화 숫자 의미를 보존하며 explicit Heat Runtime이 활성·과열된 경우에만 사용한다.
 // - Image_WeaponReticle은 bHasValidTurretReticlePoint와 TurretReticleWorldLocation을 사용하며 기존 Weapon Preview 필드는 Legacy Debug로만 해석한다.
@@ -87,7 +89,8 @@ enum class ECFVehicleFireRejectReason : uint8
 		Reloading UMETA(DisplayName="Reloading"),
 	WeaponActionLocked UMETA(DisplayName="WeaponActionLocked"),
 	WeaponOverheated UMETA(DisplayName="WeaponOverheated"),
-	WeaponChargeInsufficient UMETA(DisplayName="WeaponChargeInsufficient")
+	WeaponChargeInsufficient UMETA(DisplayName="WeaponChargeInsufficient"),
+	GuidanceTargetUnavailable UMETA(DisplayName="GuidanceTargetUnavailable")
 };
 
 /**

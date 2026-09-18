@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.3.0
-// Date: 2026-09-07
-// Description: CF-FQ-030 MG-P0-01~04 Direct 미사일 Runtime 자동화 테스트
-// Scope: 정지·측면 이동·Target Snapshot·목표 파괴·오버슈트·동일 Actor Pool 재사용과 저장 DirectTest의 Accepted Fire→Pool→실제 ActorClass, production ProjectileMovement Blocking 접촉, Automation bridge 기반 Supplemental Sweep→Damage를 검증합니다.
+// Version: 1.4.0
+// Date: 2026-09-18
+// Description: Phase 7 Guided Weapon Locked Target source + CF-FQ-030 Direct 미사일 Runtime 자동화 테스트
+// Scope: 기존 Missile Runtime 회귀와 함께 TargetActor Guidance의 Vehicle Locked Target source, Acquiring/No Lock fail-closed, Selected!=Locked 독립성, HitScan/비유도 Projectile 무Lock 호환을 focused 검증합니다.
 // Changelog:
-// - v1.3.0: 저장 DA_Missile_DirectTest를 실제 VehicleFireComp Accepted 실행 경계에 연결해 FireComp → ProjectilePool → 저장 ProjectileActorClass를 검증하고, CreateNewMap Automation에서 production ProjectileMovement가 실제 Blocking 접촉까지 이동함을 확인한 뒤 누락되는 swept Hit dispatch만 테스트 전용 bridge로 보완해 production Supplemental Sweep → Impact → VehicleHealth 피해를 검증.
+// - v1.4.0: Phase7.GuidedWeaponLockedTargetSource를 추가해 Selected B / Locked A에서 실제 FireComp compatibility launch가 A를 Guidance snapshot으로 전달하고, Acquiring은 발사 차단, HitScan/Guidance disabled Projectile은 Lock 없이 기존 경로를 유지함을 검증.
+// - v1.3.0: 저장 DA_Missile_DirectTest를 실제 VehicleFireComp Accepted 실행 경계에 연결해 FireComp → ProjectilePool → 저장 ProjectileActorClass를 검증하고, CreateNewMap Automation에서 production ProjectileMovement Blocking 접촉을 확인한 뒤 누락되는 swept Hit dispatch만 테스트 전용 bridge로 보완.
 // - v1.2.0: 저장 DA_Missile_DirectTest를 읽어 보조 연속 Sweep → 실제 Impact → VehicleHealth 피해 연결을 검증하는 Content Integration 시나리오를 추가.
 // - v1.1.0: 정지 목표, 측면 이동, 오버슈트와 동일 Projectile Actor 재활성화 Pool 계약 검증을 추가.
 // - v1.0.0: Direct Missile Runtime Contract 최초 추가.
@@ -25,10 +26,12 @@
 #include "CFProjectileData.h"
 #include "CFProjectileMotorComp.h"
 #include "CFProjectilePoolComp.h"
+#include "CFTargetSelectComp.h"
 #include "CFVehicleData.h"
 #include "CFVehicleFireComp.h"
 #include "CFVehicleHealthComp.h"
 #include "CFVehiclePawn.h"
+#include "CFVehicleTargetingComp.h"
 #include "CFVehicleWeaponComp.h"
 #include "CFWeaponData.h"
 
@@ -41,6 +44,11 @@
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCFMissileRuntimeContractTest,
 	"CarFight.Missile.MG_P0_01_04.DirectRuntimeContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFPhase7GuidedWeaponTargetSourceTest,
+	"CarFight.Targeting.Phase7.GuidedWeaponLockedTargetSource",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 namespace
@@ -585,6 +593,306 @@ bool FCFMissileRuntimeContractTest::RunTest(const FString& Parameters)
 	ReplacementTargetActor->Destroy();
 	OvershootTargetActor->Destroy();
 	MissileActor->Destroy();
+	return true;
+}
+
+// [v1.4.0] Phase 7 Guided Weapon이 Selection이 아니라 Vehicle Locked Target만 발사 순간 Guidance source로 소비하고 fail-closed하는지 검증합니다.
+bool FCFPhase7GuidedWeaponTargetSourceTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// [v1.4.0] Phase 7 FireComp/Targeting/ProjectilePool 통합 경계를 실행할 transient Automation 월드입니다.
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("Phase 7 Guided Weapon 테스트 월드 생성"), TestWorld))
+	{
+		return false;
+	}
+
+	// [v1.4.0] 실제 TargetActor Guidance와 ProjectileActorClass가 저장된 기존 DirectTest ProjectileData입니다.
+	UCFProjectileData* GuidedProjectileData = LoadObject<UCFProjectileData>(
+		nullptr,
+		TEXT("/Game/CarFight/Tests/Missile/DA_Missile_DirectTest.DA_Missile_DirectTest"));
+	if (!TestNotNull(TEXT("Phase 7 저장 Guided ProjectileData 로드"), GuidedProjectileData))
+	{
+		return false;
+	}
+	TestTrue(
+		TEXT("Phase 7 대상 Projectile은 TargetActor Guidance"),
+		GuidedProjectileData->GetEffectiveMissileGuideConfig().IsGuidanceEnabled()
+			&& GuidedProjectileData->GetEffectiveMissileGuideConfig().GuideMode == ECFMissileGuideMode::TargetActor);
+
+	// [v1.4.0] Selected B / Locked A를 동시에 소유할 Phase 7 발사 차량입니다.
+	ACFVehiclePawn* GuidedVehiclePawn = TestWorld->SpawnActor<ACFVehiclePawn>(
+		ACFVehiclePawn::StaticClass(),
+		FVector(0.0f, 0.0f, 2000.0f),
+		FRotator::ZeroRotator);
+	if (!TestNotNull(TEXT("Phase 7 Guided Vehicle Pawn 생성"), GuidedVehiclePawn))
+	{
+		return false;
+	}
+
+	// [v1.4.0] Phase 7 Guidance source migration을 실행할 실제 Fire coordinator입니다.
+	UCFVehicleFireComp* GuidedFireComp = GuidedVehiclePawn->FindComponentByClass<UCFVehicleFireComp>();
+
+	// [v1.4.0] 저장 Guided Projectile을 활성 무기로 해석할 실제 Weapon Runtime입니다.
+	UCFVehicleWeaponComp* GuidedWeaponComp = GuidedVehiclePawn->GetVehicleWeaponComp();
+
+	// [v1.4.0] Selected B 상태를 실제로 보관할 TargetSelect Runtime입니다.
+	UCFTargetSelectComp* GuidedTargetSelectComp = GuidedVehiclePawn->GetTargetSelectComp();
+
+	// [v1.4.0] Locked A Actor bridge authority를 제공할 Vehicle Targeting Runtime입니다.
+	UCFVehicleTargetingComp* GuidedTargetingComp = GuidedVehiclePawn->GetVehicleTargetingComp();
+
+	// [v1.4.0] 실제 LaunchContext가 전달된 Projectile을 관측할 Pool Runtime입니다.
+	UCFProjectilePoolComp* GuidedProjectilePoolComp = GuidedVehiclePawn->FindComponentByClass<UCFProjectilePoolComp>();
+	if (!TestNotNull(TEXT("Phase 7 VehicleFireComp 존재"), GuidedFireComp)
+		|| !TestNotNull(TEXT("Phase 7 VehicleWeaponComp 존재"), GuidedWeaponComp)
+		|| !TestNotNull(TEXT("Phase 7 TargetSelectComp 존재"), GuidedTargetSelectComp)
+		|| !TestNotNull(TEXT("Phase 7 VehicleTargetingComp 존재"), GuidedTargetingComp)
+		|| !TestNotNull(TEXT("Phase 7 ProjectilePoolComp 존재"), GuidedProjectilePoolComp))
+	{
+		GuidedVehiclePawn->Destroy();
+		return false;
+	}
+
+	// [v1.4.0] 저장 Guided ProjectileData를 실제 Weapon Runtime에 연결할 transient VehicleData입니다.
+	UCFVehicleData* GuidedVehicleData = CreateMissileFireIntegrationVehicleData(GuidedVehiclePawn, GuidedProjectileData);
+	if (!TestNotNull(TEXT("Phase 7 Guided VehicleData 생성"), GuidedVehicleData)
+		|| !TestTrue(TEXT("Phase 7 Guided Weapon Runtime 초기화"), GuidedWeaponComp->InitializeWeaponRuntime(GuidedVehiclePawn, GuidedVehicleData)))
+	{
+		GuidedVehiclePawn->Destroy();
+		return false;
+	}
+
+	// [v1.4.0] Vehicle Lock을 보유할 실제 Target A입니다.
+	ACFMissileTestTarget* LockedTargetActor = TestWorld->SpawnActor<ACFMissileTestTarget>(
+		ACFMissileTestTarget::StaticClass(),
+		FVector(10000.0f, 0.0f, 2000.0f),
+		FRotator::ZeroRotator);
+
+	// [v1.4.0] 현재 Selection만 소유하고 Guidance source가 되어서는 안 되는 Target B입니다.
+	ACFMissileTestTarget* SelectedTargetActor = TestWorld->SpawnActor<ACFMissileTestTarget>(
+		ACFMissileTestTarget::StaticClass(),
+		FVector(12000.0f, 2000.0f, 2000.0f),
+		FRotator::ZeroRotator);
+	if (!TestNotNull(TEXT("Phase 7 Locked Target A 생성"), LockedTargetActor)
+		|| !TestNotNull(TEXT("Phase 7 Selected Target B 생성"), SelectedTargetActor))
+	{
+		GuidedVehiclePawn->Destroy();
+		return false;
+	}
+	LockedTargetActor->TargetId = TEXT("Phase7LockedA");
+	SelectedTargetActor->TargetId = TEXT("Phase7SelectedB");
+
+	// [v1.4.0] Selection Authority에는 B를 실제 선택 상태로 설정합니다.
+	const FCFTargetSelectionContext SelectionContext = GuidedTargetSelectComp->GetDefaultSelectionContext();
+	TestTrue(
+		TEXT("Phase 7 Selected Target B 설정"),
+		GuidedTargetSelectComp->SetSelectedTarget(SelectedTargetActor, SelectionContext));
+	TestEqual(
+		TEXT("Phase 7 Selection Authority는 B 유지"),
+		GuidedTargetSelectComp->GetSelectedTargetActor(),
+		static_cast<AActor*>(SelectedTargetActor));
+
+	// [v1.4.0] Phase 4 state machine을 재구현하지 않고 Phase 7 consumer 경계만 검증할 Acquiring A snapshot입니다.
+	GuidedTargetingComp->bTargetingRuntimeReady = true;
+	GuidedTargetingComp->CurrentTargetActor = LockedTargetActor;
+	GuidedTargetingComp->CurrentTargetingSnapshot = FCFTargetingSnapshot();
+	GuidedTargetingComp->CurrentTargetingSnapshot.State = ECFTargetLockState::Acquiring;
+	GuidedTargetingComp->CurrentTargetingSnapshot.TargetContactId = TEXT("Contact_Phase7_A");
+	GuidedTargetingComp->CurrentTargetingSnapshot.LockProgress01 = 0.5f;
+	GuidedTargetingComp->CurrentTargetingSnapshot.LockQuality01 = 0.0f;
+	TestTrue(TEXT("Phase 7 Acquiring Snapshot public contract"), GuidedTargetingComp->CurrentTargetingSnapshot.IsPublicContractValid());
+
+	// [v1.4.0] Lock 미완료 상태에서 helper가 반환할 출력 Actor입니다.
+	AActor* ResolvedGuidanceTargetActor = nullptr;
+	TestFalse(
+		TEXT("Acquiring 상태는 TargetActor Guided Weapon source 거부"),
+		GuidedFireComp->ResolveInitialGuidanceTargetActor(ResolvedGuidanceTargetActor));
+	TestNull(TEXT("Acquiring 거부 시 Guidance Actor 없음"), ResolvedGuidanceTargetActor);
+
+	// [v1.4.0] 같은 Guided ProjectileData가 연결돼 있어도 FireMode가 HitScan이면 Lock을 새 발사 전제조건으로 만들지 않는지 확인할 transient WeaponData입니다.
+	UCFWeaponData* GuidedActiveWeaponData = GuidedWeaponComp->GetActiveWeaponData();
+	if (TestNotNull(TEXT("Phase 7 활성 WeaponData 존재"), GuidedActiveWeaponData))
+	{
+		// [v1.4.0] 테스트 후 복원할 원래 Projectile FireMode입니다.
+		const ECFWeaponFireMode OriginalFireMode = GuidedActiveWeaponData->FireMode;
+		GuidedActiveWeaponData->FireMode = ECFWeaponFireMode::HitScan;
+		TestTrue(
+			TEXT("HitScan FireMode를 VehicleWeapon Runtime cache에 재적용"),
+			GuidedWeaponComp->InitializeWeaponRuntime(GuidedVehiclePawn, GuidedVehicleData));
+		TestFalse(TEXT("HitScan Runtime은 Projectile Actor 실행 준비 아님"), GuidedWeaponComp->IsActiveProjectileSpawnReady());
+		ResolvedGuidanceTargetActor = LockedTargetActor;
+		TestFalse(TEXT("HitScan은 Locked Guidance Target requirement 비대상"), GuidedFireComp->DoesActiveProjectileRequireLockedGuidanceTarget());
+		TestTrue(TEXT("HitScan은 Acquiring 상태에서도 Guidance source resolution 성공"), GuidedFireComp->ResolveInitialGuidanceTargetActor(ResolvedGuidanceTargetActor));
+		TestNull(TEXT("HitScan은 Guidance Actor를 요구하지 않음"), ResolvedGuidanceTargetActor);
+
+		GuidedActiveWeaponData->FireMode = OriginalFireMode;
+		TestTrue(
+			TEXT("Phase 7 Guided Projectile FireMode를 Runtime cache에 복원"),
+			GuidedWeaponComp->InitializeWeaponRuntime(GuidedVehiclePawn, GuidedVehicleData));
+		TestTrue(TEXT("Guided Projectile Runtime은 Projectile Actor 실행 준비 복원"), GuidedWeaponComp->IsActiveProjectileSpawnReady());
+	}
+
+	// [v1.4.0] 중앙 실행 경계에서도 null Guidance snapshot이 Projectile acquire 전에 거부되는지 확인할 발사 요청입니다.
+	FCFVehicleFireRequest GuidedFireRequest;
+	GuidedFireRequest.FireRequestId = 710;
+	GuidedFireRequest.AimOrigin = GuidedVehiclePawn->GetActorLocation();
+	GuidedFireRequest.AimDirection = FVector::ForwardVector;
+	GuidedFireRequest.PredictedAimTargetLocation = LockedTargetActor->GetActorLocation();
+	GuidedFireRequest.ClientFireTimeSeconds = 7.1f;
+	GuidedFireRequest.WeaponGroupId = TEXT("RoofTurret_MediumOrLarge");
+
+	// [v1.4.0] Validate 완료 직후와 같은 상태에서 Phase 7 Guidance admission만 독립 검증할 실행 결과입니다.
+	FCFVehicleFireResult MissingLockFireResult;
+	MissingLockFireResult.FireRequestId = GuidedFireRequest.FireRequestId;
+	MissingLockFireResult.bAccepted = true;
+	MissingLockFireResult.RejectReason = ECFVehicleFireRejectReason::None;
+	TestFalse(
+		TEXT("TargetActor Guided Weapon은 Guidance snapshot 없음 시 실행 fail-closed"),
+		GuidedFireComp->ExecuteAcceptedFireCommand(GuidedFireRequest, MissingLockFireResult, nullptr, false));
+	TestFalse(TEXT("Guidance snapshot 거부 뒤 FireResult 미승인"), MissingLockFireResult.bAccepted);
+	TestEqual(
+		TEXT("Guidance snapshot 거부 사유"),
+		MissingLockFireResult.RejectReason,
+		ECFVehicleFireRejectReason::GuidanceTargetUnavailable);
+	TestEqual(TEXT("Guidance 거부 시 Projectile acquire 0"), GuidedProjectilePoolComp->GetActivePooledProjectileCount(), 0);
+
+	// [v1.4.0] Phase 7 consumer가 읽어야 할 완성 Locked A snapshot입니다.
+	GuidedTargetingComp->CurrentTargetingSnapshot.State = ECFTargetLockState::Locked;
+	GuidedTargetingComp->CurrentTargetingSnapshot.LockProgress01 = 1.0f;
+	GuidedTargetingComp->CurrentTargetingSnapshot.LockQuality01 = 1.0f;
+	TestTrue(TEXT("Phase 7 Locked Snapshot public contract"), GuidedTargetingComp->CurrentTargetingSnapshot.IsPublicContractValid());
+	TestEqual(
+		TEXT("Vehicle Targeting 내부 bridge는 Locked A"),
+		GuidedTargetingComp->GetLockedTargetActor(),
+		static_cast<AActor*>(LockedTargetActor));
+
+	ResolvedGuidanceTargetActor = nullptr;
+	TestTrue(
+		TEXT("Locked 상태는 TargetActor Guidance source 승인"),
+		GuidedFireComp->ResolveInitialGuidanceTargetActor(ResolvedGuidanceTargetActor));
+	TestEqual(
+		TEXT("Selected B와 무관하게 Guidance source는 Locked A"),
+		ResolvedGuidanceTargetActor,
+		static_cast<AActor*>(LockedTargetActor));
+	TestTrue(
+		TEXT("Guided Projectile은 Locked A snapshot 유효"),
+		GuidedFireComp->ValidateGuidanceTargetActorSnapshot(*GuidedProjectileData, ResolvedGuidanceTargetActor));
+
+	// [v1.4.0] compatibility single-shot 경로 자체가 Selected B를 다시 읽지 않고 Locked A를 LaunchContext에 넣는지 실행합니다.
+	TestTrue(
+		TEXT("Phase 7 compatibility Guided launch는 Locked A로 발사"),
+		GuidedFireComp->TrySpawnProjectileActorFromFireCommand(GuidedFireRequest));
+	TestEqual(TEXT("Phase 7 Guided launch 뒤 Pool 활성 수 1"), GuidedProjectilePoolComp->GetActivePooledProjectileCount(), 1);
+
+	// [v1.4.0] 이번 Guided Vehicle이 실제로 활성화한 Projectile에서 LaunchContext Guidance Actor를 확인합니다.
+	ACFProjectileActor* GuidedLaunchedProjectileActor = nullptr;
+	for (TActorIterator<ACFProjectileActor> ProjectileActorIterator(TestWorld); ProjectileActorIterator; ++ProjectileActorIterator)
+	{
+		ACFProjectileActor* CandidateProjectileActor = *ProjectileActorIterator;
+		if (IsValid(CandidateProjectileActor)
+			&& CandidateProjectileActor->IsProjectileActive()
+			&& CandidateProjectileActor->GetActiveInstigatorActor() == GuidedVehiclePawn)
+		{
+			GuidedLaunchedProjectileActor = CandidateProjectileActor;
+			break;
+		}
+	}
+	if (TestNotNull(TEXT("Phase 7 실제 Guided Projectile 생성"), GuidedLaunchedProjectileActor))
+	{
+		UCFMissileGuideComp* LaunchedGuideComp = GuidedLaunchedProjectileActor->FindComponentByClass<UCFMissileGuideComp>();
+		if (TestNotNull(TEXT("Phase 7 발사 Projectile MissileGuideComp"), LaunchedGuideComp))
+		{
+			TestEqual(
+				TEXT("실제 Missile LaunchContext GuidanceTarget은 Locked A"),
+				LaunchedGuideComp->GetGuidanceTargetActor(),
+				static_cast<AActor*>(LockedTargetActor));
+		}
+	}
+
+	TestEqual(
+		TEXT("Guided launch 뒤에도 Selection은 B"),
+		GuidedTargetSelectComp->GetSelectedTargetActor(),
+		static_cast<AActor*>(SelectedTargetActor));
+
+	// [v1.4.0] 비유도 Projectile의 기존 무Lock 발사 계약을 검증하기 위한 독립 ProjectileData 복사본입니다.
+	UCFProjectileData* NonGuidedProjectileData = DuplicateObject<UCFProjectileData>(GuidedProjectileData, TestWorld);
+	if (!TestNotNull(TEXT("Phase 7 비유도 ProjectileData 복사"), NonGuidedProjectileData))
+	{
+		GuidedVehiclePawn->Destroy();
+		LockedTargetActor->Destroy();
+		SelectedTargetActor->Destroy();
+		return false;
+	}
+	NonGuidedProjectileData->MissileGuideConfig.bUseGuidance = false;
+	NonGuidedProjectileData->MissileGuideConfig.GuideMode = ECFMissileGuideMode::None;
+
+	// [v1.4.0] Vehicle Lock을 전혀 구성하지 않은 비유도 호환 발사 차량입니다.
+	ACFVehiclePawn* NonGuidedVehiclePawn = TestWorld->SpawnActor<ACFVehiclePawn>(
+		ACFVehiclePawn::StaticClass(),
+		FVector(0.0f, 5000.0f, 2000.0f),
+		FRotator::ZeroRotator);
+	UCFVehicleFireComp* NonGuidedFireComp = NonGuidedVehiclePawn
+		? NonGuidedVehiclePawn->FindComponentByClass<UCFVehicleFireComp>()
+		: nullptr;
+	UCFVehicleWeaponComp* NonGuidedWeaponComp = NonGuidedVehiclePawn
+		? NonGuidedVehiclePawn->GetVehicleWeaponComp()
+		: nullptr;
+	UCFProjectilePoolComp* NonGuidedProjectilePoolComp = NonGuidedVehiclePawn
+		? NonGuidedVehiclePawn->FindComponentByClass<UCFProjectilePoolComp>()
+		: nullptr;
+	if (!TestNotNull(TEXT("Phase 7 비유도 Vehicle Pawn"), NonGuidedVehiclePawn)
+		|| !TestNotNull(TEXT("Phase 7 비유도 FireComp"), NonGuidedFireComp)
+		|| !TestNotNull(TEXT("Phase 7 비유도 WeaponComp"), NonGuidedWeaponComp)
+		|| !TestNotNull(TEXT("Phase 7 비유도 ProjectilePoolComp"), NonGuidedProjectilePoolComp))
+	{
+		GuidedVehiclePawn->Destroy();
+		LockedTargetActor->Destroy();
+		SelectedTargetActor->Destroy();
+		return false;
+	}
+
+	// [v1.4.0] 비유도 Projectile을 실제 활성 무기로 구성할 transient VehicleData입니다.
+	UCFVehicleData* NonGuidedVehicleData = CreateMissileFireIntegrationVehicleData(NonGuidedVehiclePawn, NonGuidedProjectileData);
+	TestNotNull(TEXT("Phase 7 비유도 VehicleData 생성"), NonGuidedVehicleData);
+	TestTrue(
+		TEXT("Phase 7 비유도 Weapon Runtime 초기화"),
+		NonGuidedVehicleData && NonGuidedWeaponComp->InitializeWeaponRuntime(NonGuidedVehiclePawn, NonGuidedVehicleData));
+
+	// [v1.4.0] Lock 없이 비유도 Projectile을 발사할 일반 FireRequest입니다.
+	FCFVehicleFireRequest NonGuidedFireRequest;
+	NonGuidedFireRequest.FireRequestId = 711;
+	NonGuidedFireRequest.AimOrigin = NonGuidedVehiclePawn->GetActorLocation();
+	NonGuidedFireRequest.AimDirection = FVector::ForwardVector;
+	NonGuidedFireRequest.PredictedAimTargetLocation = NonGuidedVehiclePawn->GetActorLocation() + FVector(10000.0f, 0.0f, 0.0f);
+	NonGuidedFireRequest.ClientFireTimeSeconds = 7.2f;
+	NonGuidedFireRequest.WeaponGroupId = TEXT("RoofTurret_MediumOrLarge");
+
+	AActor* NonGuidedResolvedTargetActor = LockedTargetActor;
+	TestTrue(
+		TEXT("비유도 Projectile은 Vehicle Lock 없이 Guidance source resolution 성공"),
+		NonGuidedFireComp->ResolveInitialGuidanceTargetActor(NonGuidedResolvedTargetActor));
+	TestNull(TEXT("비유도 Projectile은 Guidance Actor를 요구하지 않음"), NonGuidedResolvedTargetActor);
+	TestTrue(
+		TEXT("비유도 Projectile은 Lock 없이 기존 호환 발사 유지"),
+		NonGuidedFireComp->TrySpawnProjectileActorFromFireCommand(NonGuidedFireRequest));
+	TestEqual(TEXT("비유도 무Lock 발사 Pool 활성 수 1"), NonGuidedProjectilePoolComp->GetActivePooledProjectileCount(), 1);
+
+	// [v1.4.0] 테스트 월드 종료 전 생성한 발사체를 명시적으로 비활성화해 Pool callback 잔여를 제거합니다.
+	for (TActorIterator<ACFProjectileActor> ProjectileActorIterator(TestWorld); ProjectileActorIterator; ++ProjectileActorIterator)
+	{
+		ACFProjectileActor* CandidateProjectileActor = *ProjectileActorIterator;
+		if (IsValid(CandidateProjectileActor) && CandidateProjectileActor->IsProjectileActive())
+		{
+			CandidateProjectileActor->DeactivateProjectile();
+		}
+	}
+
+	NonGuidedVehiclePawn->Destroy();
+	GuidedVehiclePawn->Destroy();
+	LockedTargetActor->Destroy();
+	SelectedTargetActor->Destroy();
 	return true;
 }
 

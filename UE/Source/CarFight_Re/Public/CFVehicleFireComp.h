@@ -1,12 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.1
-// Date: 2026-09-06
-// Description: CF-FQ-048 VPS-P0-02 차량 발사 행동 전용 내부 coordinator
+// Version: 1.1.0
+// Date: 2026-09-18
+// Description: Phase 7 Guided Weapon Locked Target source migration + 차량 발사 행동 전용 내부 coordinator
 // Changelog:
+// - v1.1.0: TargetActor Guidance가 실제 활성인 Projectile만 Vehicle Locked Target을 발사 전 exact-once Guidance snapshot으로 요구하고, Direct Fire/비유도 Projectile은 기존 Aim/Fire 계약을 유지하도록 Guidance source/validation helper를 추가.
 // - v1.0.1: FireRequest ID/시간과 입력 시 LastFireRequest 갱신을 Pawn Authority로 복귀. FireComp는 Pawn이 전달한 요청을 계산·검증·실행만 수행.
 // - v1.0.0: Fire Command 생성/검증, Muzzle/Aim glue, HitScan/Projectile 실행, Launcher 후속 발사와 Fire side effect를 Pawn에서 분리. Pawn observable state와 기존 facade는 유지.
 // Migration:
+// - v1.1.0부터 TargetActor Guided Projectile의 GuidanceTargetActor source는 TargetSelect가 아니라 VehicleTargetingComp의 Locked Target입니다. HitScan/비유도 Projectile/TargetActor 이외 GuideMode에는 새 Lock 요구를 추가하지 않습니다.
 // - v1.0.1부터 FireComp는 NextFireRequestId/LastFireRequest를 직접 변경하지 않습니다. 기존 Blueprint/Product Asset 수정은 필요하지 않습니다.
 // - 기존 BP_CFVehiclePawn 계열은 VehicleFireComp 기본 서브오브젝트를 자동 상속합니다. Blueprint/Product Asset 수정은 필요하지 않으며 Launcher는 계속 Pawn compatibility callback만 호출합니다.
 
@@ -31,6 +33,8 @@ UCLASS()
 class CARFIGHT_RE_API UCFVehicleFireComp : public UActorComponent
 {
 	GENERATED_BODY()
+
+	friend class FCFPhase7GuidedWeaponTargetSourceTest;
 
 public:
 	// 내부 Fire coordinator의 기본 tick 비활성 설정을 초기화합니다.
@@ -72,7 +76,7 @@ public:
 	// 현재 Release 설정과 고정 Guidance Actor Snapshot으로 Projectile Launch Context를 생성합니다.
 	bool BuildDirectProjectileLaunchContext(const FCFVehicleFireRequest& FireCommand, const UCFProjectileData& InProjectileData, AActor* GuidanceTargetActorSnapshot, FCFProjectileLaunchContext& OutLaunchContext) const;
 
-	// 현재 선택 목표 Snapshot을 사용하는 기존 단발 Projectile 호환 실행 경로를 수행합니다.
+	// Phase 7 Guidance source 계약을 사용하는 기존 단발 Projectile 호환 실행 경로를 수행합니다.
 	bool TrySpawnProjectileActorFromFireCommand(const FCFVehicleFireRequest& FireCommand);
 
 	// 검증 승인된 명령을 Ammo Transaction과 함께 Projectile 또는 HitScan 경로로 실행합니다.
@@ -93,4 +97,13 @@ private:
 
 	// 이 컴포넌트를 소유한 차량 Pawn을 const 형태로 매 호출 확인합니다.
 	const ACFVehiclePawn* ResolveVehiclePawnConst() const;
+
+	// Phase 7 기준 실제 Projectile Actor 실행 + TargetActor Guidance인 현재 무기만 Vehicle Locked Target을 요구하는지 반환합니다.
+	bool DoesActiveProjectileRequireLockedGuidanceTarget() const;
+
+	// 첫 발사 순간 TargetActor Guidance용 Vehicle Locked Target을 exact-once로 해석합니다. Lock이 필요 없는 무기는 nullptr 성공을 허용합니다.
+	bool ResolveInitialGuidanceTargetActor(AActor*& OutGuidanceTargetActor) const;
+
+	// 명시 전달된 Guidance Actor Snapshot이 현재 Projectile의 TargetActor Guidance 요구를 만족하는지 검사합니다.
+	bool ValidateGuidanceTargetActorSnapshot(const UCFProjectileData& ProjectileData, AActor* GuidanceTargetActorSnapshot) const;
 };

@@ -1,10 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.17.0
-// Date: 2026-08-25
-// Description: CF-FQ-039 차량별 HUD silhouette identity + 기존 HUD Provider
-// Scope: Current Pawn Runtime과 VehicleData visual identity, actor-free Sensor Snapshot을 ViewData로 변환합니다.
+// Version: 1.21.0
+// Date: 2026-09-18
+// Description: Phase 6 HUD Provider Selection / Target Lock / Target Scan 채널 분리
+// Scope: Current Pawn Runtime과 actor-free Sensor/Targeting Snapshot을 Selection Knowledge, Target Lock, Target Scan, Radar ViewData로 독립 변환합니다.
 // Changelog:
+// - v1.21.0: Phase 6에서 Target ViewData의 selection-matched Scan fields를 제거하고 FCFTargetingSnapshot→TargetLock, FCFSensorSnapshot.ScanAttempt→TargetScan 독립 변환을 추가.
+// - v1.20.0: Target/Radar ViewData로 전달하던 Contact AnalysisProgress01 passthrough를 제거해 ScanAttemptProgress01 단일 Current Scan progress 경로로 정리.
+// - v1.19.0: 선택 Contact와 일치하는 Sensor ScanAttempt active/progress와 completion transition만 Target ViewData에 전달해 영구 DetailedScan Knowledge와 Current Scan UI를 분리.
+// - v1.18.0: 선택 Sensor Contact의 AnalysisCompletionRevision을 Target ViewData에 손실 없이 전달.
 // - v1.17.0: 현재 Pawn의 VehicleData를 HUD Visual 선택용 Soft identity로 Vehicle ViewData에 전달. Presenter가 차종별 silhouette를 선택할 수 있게 하되 VehicleData Gameplay 값/Texture는 Provider가 해석하지 않음.
 // - v1.16.0: 한 Refresh에서 Sensor Snapshot과 Radar Range Profile을 각각 1회만 캡처해 Target/Radar filler가 같은 immutable 입력을 공유. Radar Zoom command도 Profile 1회 해석 결과로 reconcile하여 중복 복사를 제거.
 // - v1.15.0: VehicleCameraComp의 Camera Mode/현재 시선과 VehicleAimComp의 CurrentMuzzleDirection을 기존 Pawn Forward 기준 Heading·상대 Yaw/Pitch로 변환해 FCFViewModeHUDData에 전달. Gameplay Camera/Aim mutation 0.
@@ -24,6 +28,11 @@
 // - v1.1.0: Launcher Sequence 상태 이벤트를 Pawn Rebind 수명에 구독해 Weapon/Alert ViewData를 즉시 갱신.
 // - v1.0.0: Vehicle/Weapon/Defense/Target/Alert 실제 Runtime 변환과 Radar/Ammo/Heat/RPM/Gear Unavailable 계약을 구현.
 // Migration:
+// - v1.21.0부터 현재 Scan progress/completion은 FCFTargetScanHUDData로 이동하며 Selection 일치 조건을 사용하지 않습니다. FCFTargetHUDData는 Selection + 선택 Contact Knowledge만 유지합니다.
+// - v1.21.0 Vehicle Lock은 GetLockedTargetActor가 아니라 FCFTargetingSnapshot만 읽고, 표시 identity 보강도 TargetContactId→같은 Sensor Snapshot Contact 경로만 사용합니다.
+// - v1.20.0부터 Provider는 Contact 기반 AnalysisProgress를 Target/Radar ViewData에 전달하지 않습니다. 현재 Scan progress는 ScanAttempt.Progress01 단일 경로를 사용합니다.
+// - v1.19.0의 Selection-matched Scan ViewData 경로는 v1.21.0에서 폐기됐습니다.
+// - v1.19.0 AnalysisCompletionRevision은 Contact Knowledge 획득 이력으로만 전달하며 Scan Progress/완료 UI를 재계산하지 않습니다.
 // - v1.13.0 WeaponCharge는 UCFVehicleWeaponComp의 실제 per-weapon Runtime만 읽으며 WeaponData 정적 설정, VehicleBattery, Cooldown에서 현재 Charge를 계산하지 않습니다. VehicleBattery는 계속 Unavailable입니다.
 // - v1.12.0 Weapon Selection 목록 순서는 Applied Fitting ResolvedMounts에서 WeaponComp가 보존한 고정 순서를 그대로 사용합니다. Provider는 표시 순번과 DisplayName/Selected만 공개하고 내부 mount identity를 ViewData에 넣지 않습니다.
 // - v1.11.0 Heat는 UCFVehicleWeaponComp의 실제 per-weapon Runtime만 읽으며 HeatPerShot/MaxHeat 정적 설정으로 현재 Heat를 계산하지 않습니다.
@@ -51,6 +60,7 @@
 #include "CFVehicleHealthComp.h"
 #include "CFVehiclePawn.h"
 #include "CFVehicleSensorComp.h"
+#include "CFVehicleTargetingComp.h"
 #include "CFVehicleWeaponComp.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
 #include "Engine/World.h"
@@ -82,6 +92,33 @@ namespace
 			}
 		}
 		return nullptr;
+	}
+
+	// [v1.21.0] Sensor Contact의 공개 Knowledge에서 HUD에 노출 가능한 이름 상태와 텍스트만 추출합니다.
+	void ResolveHUDContactIdentity(
+		const FCFSensorContact* SensorContact,
+		ECFUIViewAvailability& OutIdentityAvailability,
+		FText& OutDisplayName)
+	{
+		OutIdentityAvailability = ECFUIViewAvailability::Unknown;
+		OutDisplayName = FText::GetEmpty();
+		if (!SensorContact)
+		{
+			return;
+		}
+
+		// [v1.21.0] 내부 ID가 아닌 공개 KnownTargetId + KnownDisplayName + Knowledge 단계가 모두 충족됐는지 여부입니다.
+		const bool bIdentityKnown = !SensorContact->KnownTargetId.IsNone()
+			&& !SensorContact->KnownDisplayName.IsEmpty()
+			&& (SensorContact->InformationLevel == ECFTargetInfoLevel::Identified
+				|| SensorContact->InformationLevel == ECFTargetInfoLevel::DetailedScan);
+		if (!bIdentityKnown)
+		{
+			return;
+		}
+
+		OutIdentityAvailability = ECFUIViewAvailability::Known;
+		OutDisplayName = SensorContact->KnownDisplayName;
 	}
 
 	// [v1.6.0] Snapshot origin/forward와 Contact 마지막 신뢰 위치만 사용해 전방(+X)·우측(+Y) 실제 상대 위치 m를 계산합니다.
@@ -240,6 +277,8 @@ void UCFHUDDataProvider::RefreshViewData()
 	FillDefenseViewData(NewViewData.Defense);
 	FillWeaponViewData(NewViewData.Weapon);
 	FillTargetViewData(NewViewData.Target, SensorSnapshotPtr);
+	FillTargetLockViewData(NewViewData.TargetLock, SensorSnapshotPtr);
+	FillTargetScanViewData(NewViewData.TargetScan, SensorSnapshotPtr);
 	FillRadarViewData(NewViewData.Radar, SensorSnapshotPtr, RadarRangePresetsMeters);
 	FillAlertViewData(NewViewData.Alerts);
 	CurrentViewData = NewViewData;
@@ -920,23 +959,11 @@ void UCFHUDDataProvider::FillTargetViewData(FCFTargetHUDData& OutTargetViewData,
 	OutTargetViewData.InformationLevel = SelectedSensorContact->InformationLevel;
 	OutTargetViewData.ContactState = SelectedSensorContact->ContactState;
 	OutTargetViewData.FreshnessSeconds = SelectedSensorContact->FreshnessSeconds;
-	OutTargetViewData.AnalysisProgress01 = SelectedSensorContact->AnalysisProgress01;
+	OutTargetViewData.AnalysisCompletionRevision = SelectedSensorContact->AnalysisCompletionRevision;
 	OutTargetViewData.bDestroyedConfirmed = SelectedSensorContact->bDestroyedConfirmed;
 
-	// [v1.6.0] Identity는 Sensor Knowledge가 KnownTargetId와 KnownDisplayName을 공개한 경우에만 HUD Known으로 승격합니다.
-	const bool bIdentityKnown = !SelectedSensorContact->KnownTargetId.IsNone()
-		&& !SelectedSensorContact->KnownDisplayName.IsEmpty()
-		&& (SelectedSensorContact->InformationLevel == ECFTargetInfoLevel::Identified
-			|| SelectedSensorContact->InformationLevel == ECFTargetInfoLevel::DetailedScan);
-	if (bIdentityKnown)
-	{
-		OutTargetViewData.IdentityAvailability = ECFUIViewAvailability::Known;
-		OutTargetViewData.DisplayName = SelectedSensorContact->KnownDisplayName;
-	}
-	else
-	{
-		OutTargetViewData.IdentityAvailability = ECFUIViewAvailability::Unknown;
-	}
+	// [v1.21.0] Selection Target의 공개 Identity는 Scan/Lock 상태와 무관하게 선택 Contact Knowledge에서만 해석합니다.
+	ResolveHUDContactIdentity(SelectedSensorContact, OutTargetViewData.IdentityAvailability, OutTargetViewData.DisplayName);
 
 	// [v1.6.0] Target 거리 역시 Actor 현재 위치가 아니라 Snapshot origin과 마지막 신뢰 위치만으로 계산합니다.
 	FVector2D RelativePositionMeters;
@@ -945,6 +972,121 @@ void UCFHUDDataProvider::FillTargetViewData(FCFTargetHUDData& OutTargetViewData,
 	{
 		OutTargetViewData.DistanceMeters = DistanceMeters;
 		OutTargetViewData.DistanceAvailability = ResolveKnownNumericAvailability(true, DistanceMeters);
+	}
+}
+
+// [v1.21.0] Vehicle Targeting의 actor-free Snapshot을 현재 Selection과 독립된 Lock ViewData로 변환합니다.
+void UCFHUDDataProvider::FillTargetLockViewData(FCFTargetLockHUDData& OutTargetLockViewData, const FCFSensorSnapshot* SensorSnapshot) const
+{
+	// [v1.21.0] 현재 HUD가 연결된 차량 Pawn입니다.
+	ACFVehiclePawn* VehiclePawn = BoundVehiclePawn.Get();
+	if (!VehiclePawn)
+	{
+		return;
+	}
+
+	// [v1.21.0] Vehicle Target Lock 상태의 유일한 Gameplay Authority입니다.
+	const UCFVehicleTargetingComp* TargetingComponent = VehiclePawn->GetVehicleTargetingComp();
+	if (!TargetingComponent)
+	{
+		return;
+	}
+
+	// [v1.21.0] Actor 포인터 없이 HUD가 소비할 현재 Vehicle Targeting 공개 Snapshot입니다.
+	const FCFTargetingSnapshot TargetingSnapshot = TargetingComponent->GetTargetingSnapshot();
+	if (!TargetingSnapshot.IsPublicContractValid())
+	{
+		return;
+	}
+
+	OutTargetLockViewData.Availability = TargetingSnapshot.State == ECFTargetLockState::Idle
+		? ECFUIViewAvailability::KnownZero
+		: ECFUIViewAvailability::Known;
+	OutTargetLockViewData.State = TargetingSnapshot.State;
+	OutTargetLockViewData.TargetContactId = TargetingSnapshot.TargetContactId;
+	OutTargetLockViewData.LockProgress01 = FMath::Clamp(TargetingSnapshot.LockProgress01, 0.0f, 1.0f);
+	OutTargetLockViewData.LockQuality01 = FMath::Clamp(TargetingSnapshot.LockQuality01, 0.0f, 1.0f);
+	OutTargetLockViewData.BreakTransitionRevision = FMath::Max(TargetingSnapshot.BreakTransitionRevision, 0);
+	OutTargetLockViewData.LastBreakReason = TargetingSnapshot.LastBreakReason;
+
+	if (TargetingSnapshot.TargetContactId.IsNone())
+	{
+		return;
+	}
+
+	if (!SensorSnapshot || !SensorSnapshot->bRuntimeReady || !SensorSnapshot->IsPublicContractValid())
+	{
+		OutTargetLockViewData.SensorContactAvailability = ECFUIViewAvailability::Unavailable;
+		return;
+	}
+
+	// [v1.21.0] Lock target identity를 Actor truth 없이 보강하기 위한 exact Snapshot Contact입니다.
+	const FCFSensorContact* LockedSensorContact = FindHUDSensorContactById(*SensorSnapshot, TargetingSnapshot.TargetContactId);
+	if (!LockedSensorContact)
+	{
+		OutTargetLockViewData.SensorContactAvailability = ECFUIViewAvailability::Unknown;
+		return;
+	}
+
+	OutTargetLockViewData.SensorContactAvailability = ECFUIViewAvailability::Known;
+	ResolveHUDContactIdentity(LockedSensorContact, OutTargetLockViewData.IdentityAvailability, OutTargetLockViewData.DisplayName);
+}
+
+// [v1.21.0] Sensor Snapshot의 Target Scan Attempt와 완료 전이를 현재 Selection과 독립된 Scan ViewData로 변환합니다.
+void UCFHUDDataProvider::FillTargetScanViewData(FCFTargetScanHUDData& OutTargetScanViewData, const FCFSensorSnapshot* SensorSnapshot) const
+{
+	// [v1.21.0] Sensor Snapshot 자체가 HUD source로 사용할 수 있는지 여부입니다.
+	const bool bSensorSnapshotAvailable = SensorSnapshot
+		&& SensorSnapshot->bRuntimeReady
+		&& SensorSnapshot->IsPublicContractValid();
+	if (!bSensorSnapshotAvailable)
+	{
+		return;
+	}
+
+	// [v1.21.0] 현재 Selection과 독립적으로 Sensor가 소유하는 단일 Target Scan Attempt 공개 상태입니다.
+	const FCFSensorScanAttempt& CurrentScanAttempt = SensorSnapshot->ScanAttempt;
+	OutTargetScanViewData.Availability = CurrentScanAttempt.bScanning
+		? ECFUIViewAvailability::Known
+		: ECFUIViewAvailability::KnownZero;
+	OutTargetScanViewData.bScanAttemptActive = CurrentScanAttempt.bScanning;
+	OutTargetScanViewData.ActiveTargetContactId = CurrentScanAttempt.bScanning
+		? CurrentScanAttempt.TargetContactId
+		: NAME_None;
+	OutTargetScanViewData.ScanAttemptProgress01 = CurrentScanAttempt.bScanning
+		? FMath::Clamp(CurrentScanAttempt.Progress01, 0.0f, 1.0f)
+		: 0.0f;
+	OutTargetScanViewData.CompletionTransitionRevision = FMath::Max(CurrentScanAttempt.CompletionTransitionRevision, 0);
+	OutTargetScanViewData.LastCompletedContactId = CurrentScanAttempt.LastCompletedContactId;
+
+	if (OutTargetScanViewData.bScanAttemptActive && !OutTargetScanViewData.ActiveTargetContactId.IsNone())
+	{
+		// [v1.21.0] 진행 중 Scan 대상의 이름을 Actor 없이 보강할 Snapshot Contact입니다.
+		const FCFSensorContact* ActiveScanContact = FindHUDSensorContactById(*SensorSnapshot, OutTargetScanViewData.ActiveTargetContactId);
+		if (ActiveScanContact)
+		{
+			OutTargetScanViewData.ActiveTargetContactAvailability = ECFUIViewAvailability::Known;
+			ResolveHUDContactIdentity(ActiveScanContact, OutTargetScanViewData.ActiveTargetIdentityAvailability, OutTargetScanViewData.ActiveTargetDisplayName);
+		}
+		else
+		{
+			OutTargetScanViewData.ActiveTargetContactAvailability = ECFUIViewAvailability::Unknown;
+		}
+	}
+
+	if (OutTargetScanViewData.CompletionTransitionRevision > 0 && !OutTargetScanViewData.LastCompletedContactId.IsNone())
+	{
+		// [v1.21.0] 가장 최근 Scan 완료 피드백 대상의 이름을 Actor 없이 보강할 Snapshot Contact입니다.
+		const FCFSensorContact* CompletedScanContact = FindHUDSensorContactById(*SensorSnapshot, OutTargetScanViewData.LastCompletedContactId);
+		if (CompletedScanContact)
+		{
+			OutTargetScanViewData.CompletedTargetContactAvailability = ECFUIViewAvailability::Known;
+			ResolveHUDContactIdentity(CompletedScanContact, OutTargetScanViewData.CompletedTargetIdentityAvailability, OutTargetScanViewData.CompletedTargetDisplayName);
+		}
+		else
+		{
+			OutTargetScanViewData.CompletedTargetContactAvailability = ECFUIViewAvailability::Unknown;
+		}
 	}
 }
 
@@ -1089,7 +1231,6 @@ void UCFHUDDataProvider::FillRadarViewData(
 		RadarContact.InformationLevel = SensorContact.InformationLevel;
 		RadarContact.ContactState = SensorContact.ContactState;
 				RadarContact.FreshnessSeconds = SensorContact.FreshnessSeconds;
-		RadarContact.AnalysisProgress01 = SensorContact.AnalysisProgress01;
 		RadarContact.bDestroyedConfirmed = SensorContact.bDestroyedConfirmed;
 		RadarContact.bSelected = !SelectedContactId.IsNone() && SensorContact.ContactId == SelectedContactId;
 		RadarContact.NormalizedPositionAvailability = ECFUIViewAvailability::Unavailable;

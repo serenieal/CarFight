@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.1
-// Date: 2026-08-02
-// Description: CF-FQ-030 Direct 미사일 PIE 전용 선택 가능 테스트 타겟
-// Scope: 정지, 측면 왕복, 자동 파괴와 오버슈트 관찰용 경량 TargetSelectable Actor를 제공합니다.
+// Version: 1.1.0
+// Date: 2026-09-17
+// Description: CF-FQ-030 Direct 미사일 PIE 전용 선택 가능 테스트 타겟 / Entity Identity 지원
+// Scope: 정지, 측면 왕복, 자동 파괴, 오버슈트 관찰과 per-instance TargetEntityId를 제공하는 경량 TargetSelectable Actor입니다.
 // Changelog:
+// - v1.1.0: 같은 Actor lifetime 동안 안정적인 FGuid TargetEntityId storage/provider를 추가.
 // - v1.0.1: 수동 PIE 준비 시간을 확보하도록 기본 자동 파괴 지연을 20초로 조정.
 // - v1.0.0: 미사일 전용 테스트 타겟 Actor 최초 추가.
 // Migration:
@@ -53,6 +54,9 @@ public:
 
 	// [v1.0.0] 테스트 타겟의 선택 가능 상태를 반환합니다.
 	virtual bool IsTargetSelectable_Implementation(const FCFTargetSelectionContext& SelectionContext) const override;
+
+	// [v1.1.0] 같은 테스트 타겟 Actor lifetime 동안 유지되는 개체별 Entity ID를 반환합니다.
+	virtual FGuid GetTargetEntityId_Implementation() const override;
 
 	// [v1.0.0] HUD와 TargetSelect가 사용할 테스트 타겟 표시 정보를 반환합니다.
 	virtual FCFTargetDisplayInfo GetTargetDisplayInfo_Implementation() const override;
@@ -144,4 +148,7 @@ private:
 
 	// [v1.0.0] 자동 파괴 호출을 관리할 타이머 핸들입니다.
 	FTimerHandle AutoDestroyTimerHandle;
+
+	// [v1.1.0] 이 Actor의 Gameplay Entity lifetime 동안 한 번 발급되어 유지되는 개체별 Entity ID입니다.
+	mutable FGuid TargetEntityId;
 };

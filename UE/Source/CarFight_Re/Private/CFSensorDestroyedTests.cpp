@@ -1,12 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-08-15
-// Description: CF-FQ-036 SEN-P0-05 Destroyed Contact asset-free Automation
-// Scope: VehicleHealth authoritative 파괴 확정, DestroyedHold 보존·만료와 weak Actor invalid 비파괴 계약을 검증합니다.
+// Version: 1.2.0
+// Date: 2026-09-18
+// Description: Destroyed Contact + Phase 3B-1 Terminal Knowledge Automation
+// Scope: VehicleHealth authoritative 파괴 확정, DestroyedHold lifecycle과 valid TargetEntityId Terminal Record 생성/보존, 미관측 파괴 대상의 ghost Store 금지를 검증합니다.
 // Changelog:
+// - v1.2.0: 기존 Store Record가 없어도 authoritative Destroyed 기존 Contact의 valid TargetEntityId에 Terminal Record를 즉시 upsert하고 DestroyedHold 제거 뒤 Store가 유지되는지 검증. 미관측 pre-destroyed 대상은 Contact뿐 아니라 Store도 만들지 않는 회귀를 추가.
+// - v1.1.0: 제거된 Contact AnalysisProgress fixture/assertion을 삭제하고 DestroyedHold 보존 의미를 InformationLevel/Identity/AnalysisCompletionRevision 기준으로 정리.
 // - v1.0.0: DestroyedHold와 InvalidActor 2개 Automation을 최초 추가.
 // Migration:
+// - v1.2.0은 test-only이며 Phase 3B-1 Terminal Knowledge Store와 ghost Store 금지 계약만 추가 검증합니다. Product Asset migration은 없습니다.
+// - v1.1.0부터 DestroyedHold는 Contact Scan progress를 보존하지 않습니다. Contact가 소유하는 Knowledge와 완료 이력만 lifecycle과 함께 보존합니다.
 // - transient Editor World, C++ ACFMissileTestTarget, transient VehicleHealthComp/DamageData만 사용하며 Content Asset을 생성·수정·저장하지 않습니다.
 // - 파괴 확정은 실제 UCFVehicleHealthComp::ApplyIntegrityDamageFromHitContext → OnVehicleDestroyed 경로로 발생시킵니다.
 // - Actor Destroy/weak invalid는 Sensor 파괴 확정으로 사용하지 않고 기존 LastKnown/Lost 의미를 유지하는지 별도로 검증합니다.
@@ -227,7 +231,7 @@ bool FCFSensorDestroyedHoldTest::RunTest(const FString& Parameters)
 	SensorComponent->RuntimeContacts[0].PublicContact.InformationLevel = ECFTargetInfoLevel::Identified;
 	SensorComponent->RuntimeContacts[0].PublicContact.KnownTargetId = TEXT("DestroyedHoldTarget");
 	SensorComponent->RuntimeContacts[0].PublicContact.KnownDisplayName = FText::FromString(TEXT("파괴 보존 대상"));
-	SensorComponent->RuntimeContacts[0].PublicContact.AnalysisProgress01 = 0.65f;
+	SensorComponent->RuntimeContacts[0].PublicContact.AnalysisCompletionRevision = 0;
 
 	// [v1.0.0] 파괴 뒤에도 유지돼야 할 획득 정보 단계입니다.
 	const ECFTargetInfoLevel OriginalInformationLevel = SensorComponent->RuntimeContacts[0].PublicContact.InformationLevel;
@@ -235,8 +239,11 @@ bool FCFSensorDestroyedHoldTest::RunTest(const FString& Parameters)
 	// [v1.0.0] 파괴 뒤에도 유지돼야 할 획득 Target ID입니다.
 	const FName OriginalKnownTargetId = SensorComponent->RuntimeContacts[0].PublicContact.KnownTargetId;
 
-	// [v1.0.0] 파괴 뒤에도 유지돼야 할 분석 진행률입니다.
-	const float OriginalAnalysisProgress = SensorComponent->RuntimeContacts[0].PublicContact.AnalysisProgress01;
+	// [v1.1.0] Identified Knowledge에서는 DetailedScan 완료 Revision이 없어야 합니다.
+	const int32 OriginalAnalysisCompletionRevision = SensorComponent->RuntimeContacts[0].PublicContact.AnalysisCompletionRevision;
+
+	// [v1.2.0] 직접 주입한 Contact Knowledge는 Store API를 거치지 않았으므로 파괴 전에는 Persistent Record가 아직 없어야 합니다.
+	TestTrue(TEXT("파괴 전 기존 Persistent Record 없음"), SensorComponent->PersistentKnowledgeStore.IsEmpty());
 
 	// [v1.0.0] 마지막 Sensor 관측 이후 실제 Actor가 이동해도 파괴 확정 위치로 사용하지 않도록 만드는 미관측 이동입니다.
 	TargetActor->SetActorLocation(FVector(3000.0f, 500.0f, 0.0f));
@@ -265,9 +272,20 @@ bool FCFSensorDestroyedHoldTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("DestroyedHold에서 같은 ContactId 보존"), DestroyedRuntimeContact.PublicContact.ContactId, OriginalContactId);
 	TestEqual(TEXT("DestroyedHold에서 InformationLevel 보존"), DestroyedRuntimeContact.PublicContact.InformationLevel, OriginalInformationLevel);
 	TestEqual(TEXT("DestroyedHold에서 KnownTargetId 보존"), DestroyedRuntimeContact.PublicContact.KnownTargetId, OriginalKnownTargetId);
-	TestTrue(
-		TEXT("DestroyedHold에서 AnalysisProgress 보존"),
-		FMath::IsNearlyEqual(DestroyedRuntimeContact.PublicContact.AnalysisProgress01, OriginalAnalysisProgress, KINDA_SMALL_NUMBER));
+	TestEqual(TEXT("DestroyedHold에서 Identified 완료 Revision 0 보존"), DestroyedRuntimeContact.PublicContact.AnalysisCompletionRevision, OriginalAnalysisCompletionRevision);
+
+	// [v1.2.0] authoritative destruction이 기존 Store 유무와 무관하게 만든 TargetEntityId keyed Terminal Record입니다.
+	const FGuid DestroyedTargetEntityId = DestroyedRuntimeContact.PublicContact.TargetEntityId;
+	// [v1.2.0] 파괴 확정과 같은 전이에서 생성·갱신된 최소 Persistent Terminal Record입니다.
+	const UCFVehicleSensorComp::FCFSensorKnowledgeRecord* TerminalRecord = SensorComponent->PersistentKnowledgeStore.Find(DestroyedTargetEntityId);
+	if (!TestNotNull(TEXT("authoritative Destroyed가 최소 Terminal Record 생성"), TerminalRecord))
+	{
+		return false;
+	}
+	TestTrue(TEXT("Terminal Record TargetEntityId 유효"), DestroyedTargetEntityId.IsValid());
+	TestTrue(TEXT("Terminal Record bTerminalDestroyed true"), TerminalRecord->bTerminalDestroyed);
+	TestEqual(TEXT("Terminal Record StableTargetId 보존"), TerminalRecord->StableTargetId, TargetActor->TargetId);
+	TestEqual(TEXT("Terminal Record 기존 Identified Knowledge 보존"), TerminalRecord->HighestKnowledgeTier, ECFTargetInfoLevel::Identified);
 	TestTrue(
 		TEXT("DestroyedHold 위치는 파괴 시 실제 위치가 아니라 마지막 신뢰 위치 보존"),
 		DestroyedRuntimeContact.PublicContact.LastKnownWorldLocation.Equals(OriginalLastKnownWorldLocation, KINDA_SMALL_NUMBER));
@@ -324,6 +342,7 @@ bool FCFSensorDestroyedHoldTest::RunTest(const FString& Parameters)
 		ExpiredHoldWorldTimeSeconds,
 		SensorComponent->FallbackSensorConfig);
 	TestTrue(TEXT("DestroyedHoldTimeSec 만료 뒤 Runtime Contact 제거"), SensorComponent->RuntimeContacts.IsEmpty());
+	TestTrue(TEXT("DestroyedHold Contact 제거 뒤 Terminal Store 유지"), SensorComponent->PersistentKnowledgeStore.Contains(DestroyedTargetEntityId));
 
 	SensorComponent->PublishRuntimeSnapshot();
 	TestTrue(TEXT("DestroyedHold 만료 뒤 공개 Snapshot Contact 없음"), SensorComponent->GetSensorSnapshot().Contacts.IsEmpty());
@@ -443,6 +462,7 @@ bool FCFSensorDestroyedInvalidActorTest::RunTest(const FString& Parameters)
 		SensorComponent->FallbackSensorConfig);
 	TestTrue(TEXT("이미 파괴된 미관측 Target은 새 Contact로 수락하지 않음"), !bPreDestroyedCandidateAccepted);
 	TestEqual(TEXT("미관측 파괴 Target 평가 뒤 기존 Contact 수 유지"), SensorComponent->RuntimeContacts.Num(), 1);
+	TestTrue(TEXT("미관측 pre-destroyed 대상은 ghost Persistent Record를 만들지 않음"), !SensorComponent->PersistentKnowledgeStore.Contains(PreDestroyedTargetActor->GetTargetEntityId_Implementation()));
 	if (SensorComponent->RuntimeContacts.Num() == 1)
 	{
 		TestEqual(TEXT("기존 weak-invalid Contact는 계속 LastKnown"), SensorComponent->RuntimeContacts[0].PublicContact.ContactState, ECFSensorContactState::LastKnown);
