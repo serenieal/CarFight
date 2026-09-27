@@ -1,0 +1,30 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_1688f833905941ba8cf87a43cb5945a0",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_2f84c1a6d9e74b0a93f5c8126e4d7ab1",
+  "parent_version_ids": [
+    "ver_c1a402e57b8f4d5ab3e9067f21c8d463"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-055",
+    "title": "Weapon Equipment Authoring Guide",
+    "phase": "WEA-P0-05",
+    "next_action": "Run Final Technical + USER Acceptance for representative Cannon / Rocket / Guided Missile / HitScan workflows; keep CF-FQ-054 paused until explicit USER resume",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-055"
+    ],
+    "legacy_refs": [
+      "Document/Plan/WeaponEquipmentAuthoring/WeaponEquipmentAuthoringPlan.md v0.2.4",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-18",
+    "resolution_basis": "WEA-P0-04 Technical PASS. P0-03 durable exact5 graph and DeterministicBundleFingerprint are preserved. Completion integrity revalidates bComplete, rebuilds the fresh bundle fingerprint, and rereads the persisted exact reference graph before summary or handoff. USER completion summary implemented. FCFWeaponGuideEquipmentHandoff is navigation-only with TargetTabId CarFight.EquipmentBuilder, bNavigationOnly true, bInjectContext false, and source bundle fingerprint exact. Weapon Guide has no EquipmentAuthoring/CFEquipmentBuilder include or business-state coupling; the UI action invokes only the registered Nomad Tab. Final Official UE 5.8 Build d393cb0ec5d246d288deb99594b2b328 PASS; final exact8 same-process Automation 68bdfbb06d5c46dfb04a5c60ec78ff28 success8 failure0 missing0 unexpected0 duplicate0 including P004.CompletionHandoff with registered spawner, pre-completion fail-closed, fingerprint preservation, stale Draft rejection and restored handoff. Fresh Product AssetDump /Game/CarFight/Weapons/Data exact11 failed0 dataset adset_v1_2e6238cc95d32f4d9f024c020d2503bf.590deeae22bf3548b3496fad fingerprint 3133996c4b106a120ddf576ff70d2b88b8ca206e9b7f7f892c26d15cccbcf714; /Game/CarFight/Tests/WeaponGuide exact0 failed0; Product and fixture Git mutation0. P0 0 / blocking P1 0. CF-FQ-054 remains Paused at canonical head ver_6059f52cab81416a97557b33671ecdc1."
+  }
+}

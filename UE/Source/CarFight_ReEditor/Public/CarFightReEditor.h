@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.6.0
-// Date: 2026-09-11
+// Version: 1.8.0
+// Date: 2026-09-18
 // Description: CarFight Editor 전용 도구 모듈 진입점입니다.
-// Scope: Guided Vehicle Builder, Vehicle Authoring과 Data Asset Manager 탭/메뉴를 담당합니다.
+// Scope: Guided Vehicle Builder, Guided Equipment Builder, Weapon Equipment Authoring Guide, Vehicle Authoring과 Data Asset Manager 탭/메뉴를 담당합니다.
 // Changelog:
+// - v1.8.0: CF-FQ-055 WEA-P0-02 Weapon Equipment Authoring Guide Native Slate Nomad Tab/Window 메뉴 진입점을 추가. CF-FQ-054 Equipment Builder 상태/책임은 변경하지 않습니다.
+// - v1.7.0: CF-FQ-054 EBA-P0-01 Guided Equipment Builder Nomad Tab/Window 메뉴 진입점을 추가.
 // - v1.6.0: CF-FQ-038 DEL6 compatibility retirement로 Deprecated Vehicle DA Wizard hidden tab/spawner/open entry를 제거.
 // - v1.5.0: CF-FQ-045 DAM-P0-03 Data Asset Manager Nomad Tab/Window 메뉴 진입점을 추가.
 // - v1.4.0: CF-FQ-040 Guided Vehicle Builder Nomad Tab/Window 메뉴 진입점을 추가.
@@ -13,6 +15,8 @@
 // - v1.1.0: DAUTH-P0-09 Vehicle Authoring Workspace Nomad Tab/Window 메뉴 진입점을 추가하고 기존 Wizard를 병행 유지.
 // - v1.0.0: Vehicle DA Wizard Nomad Tab과 Window 메뉴 진입점을 추가.
 // Migration:
+// - v1.8.0부터 Weapon Equipment Authoring Guide는 Editor-only 독립 Nomad Tab으로 등록되며 Equipment Builder business state를 공유하거나 자동 재개하지 않습니다.
+// - v1.7.0부터 Guided Equipment Builder는 Editor-only 독립 Nomad Tab으로 등록되며 Vehicle Builder business state를 공유하지 않습니다.
 // - v1.6.0부터 Legacy Vehicle DA Wizard는 제거됐습니다. 정상 제작은 Guided Builder, 전문 수동 편집/복구는 Vehicle Authoring Workspace를 사용합니다.
 // - 런타임 모듈의 게임 로직 경로는 변경하지 않는다.
 // - 에디터 도구는 CarFight_ReEditor 모듈 로드 시에만 활성화된다.
@@ -27,7 +31,7 @@ class SDockTab;
 class FCarFightReEditorModule : public IModuleInterface
 {
 public:
-	// Editor 모듈 로드 시 Guided Builder, Current Workspace와 Data Asset Manager 탭/메뉴를 등록합니다.
+	// Editor 모듈 로드 시 Guided Vehicle/Equipment Builder, Current Workspace와 Data Asset Manager 탭/메뉴를 등록합니다.
 	virtual void StartupModule() override;
 
 	// Editor 모듈 언로드 시 등록한 탭과 메뉴 소유권을 정리합니다.
@@ -37,6 +41,12 @@ private:
 	// Guided Vehicle Builder 탭 인스턴스를 생성합니다.
 	TSharedRef<SDockTab> HandleSpawnBuilderTab(const FSpawnTabArgs& InSpawnTabArgs);
 
+	// Guided Equipment Builder 탭 인스턴스를 생성합니다.
+	TSharedRef<SDockTab> HandleSpawnEquipmentBuilderTab(const FSpawnTabArgs& InSpawnTabArgs);
+
+	// Weapon Equipment Authoring Guide 탭 인스턴스를 생성합니다.
+	TSharedRef<SDockTab> HandleSpawnWeaponGuideTab(const FSpawnTabArgs& InSpawnTabArgs);
+
 	// Vehicle Authoring Workspace 탭 인스턴스를 생성합니다.
 	TSharedRef<SDockTab> HandleSpawnAuthoringTab(const FSpawnTabArgs& InSpawnTabArgs);
 
@@ -44,11 +54,17 @@ private:
 	TSharedRef<SDockTab> HandleSpawnDataAssetManagerTab(const FSpawnTabArgs& InSpawnTabArgs);
 
 
-	// Level Editor Window 메뉴에 Guided Builder, Vehicle Authoring, Data Asset Manager 진입을 추가합니다.
+	// Level Editor Window 메뉴에 Guided Vehicle/Equipment Builder, Weapon Guide, Vehicle Authoring, Data Asset Manager 진입을 추가합니다.
 	void RegisterMenus();
 
 	// 등록된 Guided Vehicle Builder 탭을 엽니다.
 	void OpenBuilderTab();
+
+	// 등록된 Guided Equipment Builder 탭을 엽니다.
+	void OpenEquipmentBuilderTab();
+
+	// 등록된 Weapon Equipment Authoring Guide 탭을 엽니다.
+	void OpenWeaponGuideTab();
 
 	// 등록된 Vehicle Authoring Workspace 탭을 엽니다.
 	void OpenAuthoringTab();

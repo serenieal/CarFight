@@ -1,0 +1,30 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_1688f833905941ba8cf87a43cb5945a0",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_5e9c8a12d4f7481ba73c260fd5e61490",
+  "parent_version_ids": [
+    "ver_2f84c1a6d9e74b0a93f5c8126e4d7ab1"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-055",
+    "title": "Weapon Equipment Authoring Guide",
+    "phase": "WEA-P0-05",
+    "next_action": "Run Final Technical + USER Acceptance for representative Cannon / Rocket / Guided Missile / HitScan workflows; keep CF-FQ-054 paused until explicit USER resume",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-055"
+    ],
+    "legacy_refs": [
+      "Document/Plan/WeaponEquipmentAuthoring/WeaponEquipmentAuthoringPlan.md v0.2.5",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-19",
+    "resolution_basis": "WEA-P0-04 Mid-review Correction Re-review PASS / RE-ACCEPTED. Mid-review found P0 0 / blocking P1 1 / P2 2: P0-03 DeterministicBundleFingerprint did not cover all USER completion summary semantics, button IsEnabled could repeat authoritative asset validation, and stale technical detail remained visible after integrity failure. Correction preserved the P0-03 DeterministicBundleFingerprint contract and added a separate session-local CompletionSemanticFingerprint over the P0-03 bundle fingerprint, persisted exact5 typed semantic fingerprints, child create/reuse modes, FireMode, finite ammo, Launcher, Propulsion, MissileFlight, Guidance, Heat and Charge semantics. CreateNew children require current Draft desired typed fingerprint to match persisted typed fingerprint; summary/handoff fresh-recompute the completion semantic fingerprint. Complete Page caches one authoritative page-entry validation for lightweight button enablement while click-time BuildEquipmentBuilderHandoff remains authoritative; technical path/fingerprint details are hidden when integrity fails. Final Official UE 5.8 Build d424ec35a246459f92133f72f3b9e7f8 PASS; final exact8 same-process Automation db8df53581d4469c9e04377bc2d356f7 success8 failure0 missing0 unexpected0 duplicate0 including stale FireMode/Launcher/Guidance handoff rejection and P0-03 Bundle fingerprint invariance. Fresh Product AssetDump /Game/CarFight/Weapons/Data exact11 failed0 dataset adset_v1_7c8efa5e133f7770fffad2f3e5943d20.5fd25c0b93b01d55ba212ad6 fingerprint 7c01478f9bf2a6830409dcf9a26a4ffa4992046f9a8a82c9102bb73cac8c03db; /Game/CarFight/Tests/WeaponGuide exact0 failed0; Product and fixture Git mutation0. Correction Re-review P0 0 / blocking P1 0 / P2 0. CF-FQ-054 remains Paused at canonical head ver_6059f52cab81416a97557b33671ecdc1."
+  }
+}

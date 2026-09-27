@@ -1,0 +1,26 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_1688f833905941ba8cf87a43cb5945a0",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_26065667df3a466ea8c595897884b9e2",
+  "parent_version_ids": [],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-055",
+    "title": "Weapon Equipment Authoring Guide",
+    "phase": "WEA-P0-01",
+    "next_action": "Implement Editor Shell / Wizard State / Naming from the accepted WEA-P0-00 contract",
+    "blockers": [],
+    "owner_scope": ["carfight:feature:CF-FQ-055"],
+    "legacy_refs": [
+      "Document/Plan/WeaponEquipmentAuthoring/WeaponEquipmentAuthoringPlan.md v0.1.0",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-17",
+    "resolution_basis": "Fresh Source and persisted AssetDump rebaseline plus Pre-Implementation Contract Review PASS: P0 0 / blocking P1 0. USER requested a separate Weapon Equipment Authoring Guide instead of expanding CF-FQ-054 Equipment Builder."
+  }
+}

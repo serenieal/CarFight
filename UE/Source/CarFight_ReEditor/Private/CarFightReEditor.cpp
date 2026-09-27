@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.6.0
-// Date: 2026-09-11
+// Version: 1.8.0
+// Date: 2026-09-18
 // Description: CarFight Editor 전용 도구 모듈 구현입니다.
-// Scope: Guided Vehicle Builder, Vehicle Authoring과 Data Asset Manager 탭/메뉴 등록을 담당합니다.
+// Scope: Guided Vehicle Builder, Guided Equipment Builder, Weapon Equipment Authoring Guide, Vehicle Authoring과 Data Asset Manager 탭/메뉴 등록을 담당합니다.
 // Changelog:
+// - v1.8.0: CF-FQ-055 WEA-P0-02 CarFight.WeaponGuide Native Slate Nomad Tab과 Window 메뉴 진입을 추가. CF-FQ-054 Equipment Builder lifecycle은 변경하지 않습니다.
+// - v1.7.0: CF-FQ-054 EBA-P0-01 CarFight.EquipmentBuilder Native Slate Nomad Tab과 Window 메뉴 진입을 추가.
 // - v1.6.0: CF-FQ-038 DEL6 compatibility retirement로 Deprecated Vehicle DA Wizard hidden tab/spawner/open entry를 제거.
 // - v1.5.0: CF-FQ-045 DAM-P0-03 CarFight.DataAssetManager Nomad Tab과 Window 메뉴 진입을 추가.
 // - v1.4.0: CF-FQ-040 VB-P0-09 준비를 위해 별도 CarFight.VehicleBuilder Guided Shell 탭과 Window 메뉴 진입을 추가.
@@ -13,6 +15,8 @@
 // - v1.1.0: DAUTH-P0-09 Vehicle Authoring Workspace Nomad Tab과 메뉴를 추가하고 기존 Wizard tab/menu를 유지.
 // - v1.0.0: Window 메뉴에서 열 수 있는 Vehicle DA Wizard 탭을 추가.
 // Migration:
+// - v1.8.0부터 Weapon Guide는 Equipment Builder와 분리된 Editor-only Nomad Tab이며 CF-FQ-054의 Paused lifecycle을 자동 변경하지 않습니다.
+// - v1.7.0부터 Equipment Builder는 독립 Editor-only Nomad Tab으로 등록되며 Vehicle Builder business state를 공유하지 않습니다.
 // - v1.6.0부터 Legacy Vehicle DA Wizard tab identity는 더 이상 등록되지 않습니다. 차량 제작은 Guided Builder, 전문 수동 편집/복구는 Vehicle Authoring Workspace를 사용합니다.
 // - 사용자 기본 진입은 `CarFight 차량 데이터 제작` Workspace 하나로 통일한다.
 
@@ -21,6 +25,8 @@
 #include "DataAuthoring/CFVehicleAuthoringTab.h"
 #include "DataAuthoring/CFVehicleBuilderTab.h"
 #include "DataManagement/CFDAManagementTab.h"
+#include "EquipmentAuthoring/CFEquipmentBuilderTab.h"
+#include "WeaponAuthoring/CFWeaponGuideTab.h"
 
 #include "Framework/Docking/TabManager.h"
 #include "ToolMenus.h"
@@ -33,6 +39,12 @@ namespace
 	// Guided Vehicle Builder 탭 등록에 사용할 고정 탭 식별자입니다.
 	static const FName VehicleBuilderTabName(TEXT("CarFight.VehicleBuilder"));
 
+	// Guided Equipment Builder 탭 등록에 사용할 고정 탭 식별자입니다.
+	static const FName EquipmentBuilderTabName(TEXT("CarFight.EquipmentBuilder"));
+
+	// Weapon Equipment Authoring Guide 탭 등록에 사용할 고정 탭 식별자입니다.
+	static const FName WeaponGuideTabName(TEXT("CarFight.WeaponGuide"));
+
 	// Vehicle Authoring Workspace 탭 등록에 사용할 고정 탭 식별자입니다.
 	static const FName VehicleAuthoringTabName(TEXT("CarFight.VehicleAuthoring"));
 
@@ -41,13 +53,25 @@ namespace
 
 }
 
-// Editor 모듈 로드 시 Guided Builder, Vehicle Authoring Workspace와 Data Asset Manager 탭/메뉴를 등록합니다.
+// Editor 모듈 로드 시 Guided Vehicle/Equipment Builder, Vehicle Authoring Workspace와 Data Asset Manager 탭/메뉴를 등록합니다.
 void FCarFightReEditorModule::StartupModule()
 {
 	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(
 		VehicleBuilderTabName,
 		FOnSpawnTab::CreateRaw(this, &FCarFightReEditorModule::HandleSpawnBuilderTab))
 		.SetDisplayName(LOCTEXT("VehicleBuilderTabTitle", "차량 제작 가이드"))
+		.SetMenuType(ETabSpawnerMenuType::Hidden);
+
+	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(
+		EquipmentBuilderTabName,
+		FOnSpawnTab::CreateRaw(this, &FCarFightReEditorModule::HandleSpawnEquipmentBuilderTab))
+		.SetDisplayName(LOCTEXT("EquipmentBuilderTabTitle", "장비 제작 가이드"))
+		.SetMenuType(ETabSpawnerMenuType::Hidden);
+
+	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(
+		WeaponGuideTabName,
+		FOnSpawnTab::CreateRaw(this, &FCarFightReEditorModule::HandleSpawnWeaponGuideTab))
+		.SetDisplayName(LOCTEXT("WeaponGuideTabTitle", "무장 제작 가이드"))
 		.SetMenuType(ETabSpawnerMenuType::Hidden);
 
 	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(
@@ -77,6 +101,8 @@ void FCarFightReEditorModule::ShutdownModule()
 	}
 
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(VehicleBuilderTabName);
+	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(EquipmentBuilderTabName);
+	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(WeaponGuideTabName);
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(VehicleAuthoringTabName);
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(DataAssetManagerTabName);
 }
@@ -88,6 +114,26 @@ TSharedRef<SDockTab> FCarFightReEditorModule::HandleSpawnBuilderTab(const FSpawn
 		.TabRole(ETabRole::NomadTab)
 		[
 			SNew(SCFVehicleBuilderTab)
+		];
+}
+
+// Guided Equipment Builder 탭 인스턴스를 생성합니다.
+TSharedRef<SDockTab> FCarFightReEditorModule::HandleSpawnEquipmentBuilderTab(const FSpawnTabArgs& InSpawnTabArgs)
+{
+	return SNew(SDockTab)
+		.TabRole(ETabRole::NomadTab)
+		[
+			SNew(SCFEquipmentBuilderTab)
+		];
+}
+
+// Weapon Equipment Authoring Guide 탭 인스턴스를 생성합니다.
+TSharedRef<SDockTab> FCarFightReEditorModule::HandleSpawnWeaponGuideTab(const FSpawnTabArgs& InSpawnTabArgs)
+{
+	return SNew(SDockTab)
+		.TabRole(ETabRole::NomadTab)
+		[
+			SNew(SCFWeaponGuideTab)
 		];
 }
 
@@ -112,7 +158,7 @@ TSharedRef<SDockTab> FCarFightReEditorModule::HandleSpawnDataAssetManagerTab(con
 }
 
 
-// Level Editor Window 메뉴에는 Guided Builder와 Current Vehicle Authoring Workspace를 기본 진입으로 등록합니다.
+// Level Editor Window 메뉴에는 Guided Vehicle/Equipment Builder와 Current Vehicle Authoring Workspace를 기본 진입으로 등록합니다.
 void FCarFightReEditorModule::RegisterMenus()
 {
 	// 현재 모듈을 ToolMenus 소유자로 등록하기 위한 스코프 객체입니다.
@@ -135,6 +181,20 @@ void FCarFightReEditorModule::RegisterMenus()
 		FUIAction(FExecuteAction::CreateRaw(this, &FCarFightReEditorModule::OpenBuilderTab)));
 
 	CarFightSection.AddMenuEntry(
+		TEXT("OpenEquipmentBuilderTab"),
+		LOCTEXT("OpenEquipmentBuilderTabLabel", "CarFight 장비 제작 가이드"),
+		LOCTEXT("OpenEquipmentBuilderTabTooltip", "EquipmentPreset을 선택하거나 새 transient 초안을 시작하는 Guided Equipment Builder를 엽니다."),
+		FSlateIcon(),
+		FUIAction(FExecuteAction::CreateRaw(this, &FCarFightReEditorModule::OpenEquipmentBuilderTab)));
+
+	CarFightSection.AddMenuEntry(
+		TEXT("OpenWeaponGuideTab"),
+		LOCTEXT("OpenWeaponGuideTabLabel", "CarFight 무장 제작 가이드"),
+		LOCTEXT("OpenWeaponGuideTabTooltip", "TurretMountData, WeaponData, ProjectileData, DamageData, AmmoData를 Guided Draft 단계로 제작하고 검토하는 Weapon Equipment Authoring Guide를 엽니다."),
+		FSlateIcon(),
+		FUIAction(FExecuteAction::CreateRaw(this, &FCarFightReEditorModule::OpenWeaponGuideTab)));
+
+	CarFightSection.AddMenuEntry(
 		TEXT("OpenVehicleAuthoringTab"),
 		LOCTEXT("OpenVehicleAuthoringTabLabel", "CarFight 차량 데이터 제작"),
 		LOCTEXT("OpenVehicleAuthoringTabTooltip", "CarFight 단일 차량 데이터 제작 작업창을 엽니다."),
@@ -154,6 +214,18 @@ void FCarFightReEditorModule::RegisterMenus()
 void FCarFightReEditorModule::OpenBuilderTab()
 {
 	FGlobalTabmanager::Get()->TryInvokeTab(VehicleBuilderTabName);
+}
+
+// 등록된 Guided Equipment Builder 탭을 엽니다.
+void FCarFightReEditorModule::OpenEquipmentBuilderTab()
+{
+	FGlobalTabmanager::Get()->TryInvokeTab(EquipmentBuilderTabName);
+}
+
+// 등록된 Weapon Equipment Authoring Guide 탭을 엽니다.
+void FCarFightReEditorModule::OpenWeaponGuideTab()
+{
+	FGlobalTabmanager::Get()->TryInvokeTab(WeaponGuideTabName);
 }
 
 // 등록된 Vehicle Authoring Workspace 탭을 엽니다.

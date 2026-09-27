@@ -1,0 +1,30 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_1688f833905941ba8cf87a43cb5945a0",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_b2a6d4e17c3f4b0ba2f02df807239c1e",
+  "parent_version_ids": [
+    "ver_5e9c8a12d4f7481ba73c260fd5e61490"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-055",
+    "title": "Weapon Equipment Authoring Guide",
+    "phase": "WEA-P0-05",
+    "next_action": "Run USER Acceptance in Editor for representative Direct Cannon / Unguided Rocket Launcher / TargetActor Guided Missile Launcher / HitScan or virtual ProjectileData workflows; do not Complete until USER confirms UX; keep CF-FQ-054 paused until explicit USER resume",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-055"
+    ],
+    "legacy_refs": [
+      "Document/Plan/WeaponEquipmentAuthoring/WeaponEquipmentAuthoringPlan.md v0.2.6",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-19",
+    "resolution_basis": "WEA-P0-05 Final Technical PASS. Fresh restore recomputed CF-FQ-055 canonical DAG unique maximal head exact1 as ver_5e9c8a12d4f7481ba73c260fd5e61490 before mutation and independently confirmed CF-FQ-054 unique head ver_6059f52cab81416a97557b33671ecdc1 state paused phase EBA-P0-05. Official UE 5.8 Build job 8599723f22c243af9ff0a29c0430163e succeeded with exit code 0. WeaponGuide focused process 1d3581a0911b4ffca51a3fd73a6d8dac passed exact8/8 with failure0 missing0 unexpected0 duplicate0. Bounded affected regression used current dependencies only: Ammo process 6f6fd8f79c8345c3a35442f76630d288 exact17/17 PASS and Damage process 290442c973684084ac05dcc01257ff1a exact14/14 PASS, total exact39/39. Fresh Product AssetDump /Game/CarFight/Weapons/Data exact11 failed0 dataset adset_v1_71742f0133da8471dcf7da92b79cc766.d22d9e6d5da1c28e0f076b24 fingerprint a56ad7944e284558d0a605f0f206e7e2c86927f31a46251b95f5db0204203748. Fresh fixture AssetDump /Game/CarFight/Tests/WeaponGuide exact0 failed0. Product + fixture Git diff exact0. Final implementation re-review confirmed CompletionSemanticFingerprint persisted exact5 + child mode + FireMode/finite ammo/Launcher/Propulsion/MissileFlight/Guidance/Heat/Charge protection, fresh summary/handoff revalidation, page-entry bCompletionHandoffReady cache-only IsEnabled, click-time authoritative BuildEquipmentBuilderHandoff validation, TargetTabId CarFight.EquipmentBuilder navigation-only bInjectContext false, direct EquipmentBuilder VM/Draft/context API coupling0. Final review P0 0 / blocking P1 0. Technical Verdict PASS. USER Acceptance remains Pending because visual/UX workflow judgment cannot be declared by Automation. CF-FQ-054 remains Paused; no context injection, Draft autofill or EquipmentPreset Apply/Save was performed."
+  }
+}

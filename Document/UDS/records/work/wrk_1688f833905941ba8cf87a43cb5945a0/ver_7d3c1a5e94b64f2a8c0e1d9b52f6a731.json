@@ -1,0 +1,30 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_1688f833905941ba8cf87a43cb5945a0",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_7d3c1a5e94b64f2a8c0e1d9b52f6a731",
+  "parent_version_ids": [
+    "ver_89fae988268f4ec9a221caedf5e57539"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-055",
+    "title": "Weapon Equipment Authoring Guide",
+    "phase": "WEA-P0-03",
+    "next_action": "Implement Multi-Asset Durable Create / Recovery using existing Damage/Ammo provider durable authority plus Turret/Projectile/Weapon exact3 create seam; keep CF-FQ-054 paused",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-055"
+    ],
+    "legacy_refs": [
+      "Document/Plan/WeaponEquipmentAuthoring/WeaponEquipmentAuthoringPlan.md v0.2.2",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-18",
+    "resolution_basis": "WEA-P0-02 Technical PASS. Final Official UE 5.8 Build b5d8649e8c5448df9d76371bfb2955c8 PASS; final exact5 same-process Automation process 102ed9a51f1e4b1383f90dad59fd3bb1 success5 failure0 missing0 unexpected0 duplicate0 including ProviderDraftMapping with non-null Ammo Texture2D Icon and Damage radial non-default fields; fresh Product AssetDump /Game/CarFight/Weapons/Data exact11 failed0 dataset adset_v1_0fb4b4d61649489a8cecf347bedc517a.f7d5b3266202b69b7ca79fbb fingerprint e98e3f9acf76b7d5dfa1d68e19d5cca4fa3435bd1d46a31a1a318876003e76e4; /Game/CarFight/Tests/WeaponGuide exact0 failed0; Git Product Weapons/Data mutation0. P0 0 / blocking P1 0. CF-FQ-054 remains Paused at canonical head ver_6059f52cab81416a97557b33671ecdc1."
+  }
+}

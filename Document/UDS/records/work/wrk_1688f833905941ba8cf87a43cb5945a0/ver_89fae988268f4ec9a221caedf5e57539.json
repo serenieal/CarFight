@@ -1,0 +1,30 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_1688f833905941ba8cf87a43cb5945a0",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_89fae988268f4ec9a221caedf5e57539",
+  "parent_version_ids": [
+    "ver_26065667df3a466ea8c595897884b9e2"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-055",
+    "title": "Weapon Equipment Authoring Guide",
+    "phase": "WEA-P0-02",
+    "next_action": "Implement Guided Draft UX / Child Authoring with Damage/Ammo existing provider orchestration; keep CF-FQ-054 paused",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-055"
+    ],
+    "legacy_refs": [
+      "Document/Plan/WeaponEquipmentAuthoring/WeaponEquipmentAuthoringPlan.md v0.2.1",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-18",
+    "resolution_basis": "WEA-P0-01 Technical PASS. Official UE 5.8 Build b735382d4dd140be937d1f0cc722b307 PASS; test compile build 25dad746a4334e739ce06fc3d5c759de PASS; exact5 same-process Automation 5/5 PASS with process 62a7eb4246e54d4d82543526beb8396c; fresh Product AssetDump /Game/CarFight/Weapons/Data exact11 failed0; WeaponGuide fixture root exact0; Product Weapons/Data Git mutation0. CF-FQ-054 remains Paused."
+  }
+}

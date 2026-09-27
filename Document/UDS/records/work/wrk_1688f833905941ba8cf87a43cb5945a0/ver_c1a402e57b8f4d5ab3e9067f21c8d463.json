@@ -1,0 +1,30 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_1688f833905941ba8cf87a43cb5945a0",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_c1a402e57b8f4d5ab3e9067f21c8d463",
+  "parent_version_ids": [
+    "ver_7d3c1a5e94b64f2a8c0e1d9b52f6a731"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-055",
+    "title": "Weapon Equipment Authoring Guide",
+    "phase": "WEA-P0-04",
+    "next_action": "Implement Completion Bundle / Equipment Builder Integration Contract as navigation-only handoff; keep CF-FQ-054 paused until explicit USER resume",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-055"
+    ],
+    "legacy_refs": [
+      "Document/Plan/WeaponEquipmentAuthoring/WeaponEquipmentAuthoringPlan.md v0.2.3",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-18",
+    "resolution_basis": "WEA-P0-03 Technical PASS. Damage/Ammo existing provider operation-table durable Create and Turret/Projectile/Weapon exact3 shared-durable sequencing implemented with fresh preflight, no automatic rollback/delete, same-session semantic fingerprint recovery and final exact reference graph readback. Post-Implementation Review found and corrected stale exact3 Draft reuse risk. Final Official UE 5.8 Build 28196840a5214813a82d54931f69866d PASS; final exact7 same-process Automation 895e656c48164d639ac326d8e6f50c75 success7 failure0 missing0 unexpected0 duplicate0 including P003.DurableCreateGraph and strengthened P003.PartialRecovery; fresh Product AssetDump /Game/CarFight/Weapons/Data exact11 failed0 dataset adset_v1_4e033c724c92dc98c229182b4a83a51a.1da953f3e0e3854c11743cf1 fingerprint 35fb3c7a1d9edf177cd911eae671ed0f9ae8b93b94e6beff78bc7d3dbb7a39bf; /Game/CarFight/Tests/WeaponGuide exact0 failed0; Product and fixture Git mutation0. P0 0 / blocking P1 0. CF-FQ-054 remains Paused at canonical head ver_6059f52cab81416a97557b33671ecdc1."
+  }
+}
