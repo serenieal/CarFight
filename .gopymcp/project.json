@@ -25,6 +25,24 @@
         "toolchain_id": "unreal_engine",
         "version": "5.8"
       },
+      "validation": {
+        "automation_safe_tests": [
+          "CarFight.DataAuthoring.CF_FQ_040.VB_P0_05.BuilderEvidenceRefresh",
+          "CarFight.DataAuthoring.CF_FQ_040.VB_P0_05.BuilderTransmissionContract",
+          "CarFight.DataAuthoring.CF_FQ_040.VB_P0_05.BuilderProfileCommit",
+          "CarFight.DataAuthoring.CF_FQ_040.VB_P0_09.BuilderShell",
+          "CarFight.DataAuthoring.CF_FQ_040.VB_P0_09.BuilderStep1Reference",
+          "CarFight.DataAuthoring.CF_FQ_040.VB_P0_09.BuilderEvidenceRefreshVM",
+          "CarFight.DataAuthoring.CF_FQ_040.VB_P0_09.BuilderStep5Physics",
+          "CarFight.DataAuthoring.CF_FQ_040.VB_P0_09.BuilderStep7FinalReview",
+          "CarFight.DataAuthoring.CF_FQ_040.VB_P0_09.BuilderStep8Driving",
+          "CarFight.CCAS.CF_FQ_058.P0_05.LiveDualConsumerCatalog",
+          "CarFight.CCAS.CF_FQ_058.P0_05.FilterFamilyVariant",
+          "CarFight.CCAS.CF_FQ_058.P0_05.SelectedCompareSources",
+          "CarFight.CCAS.CF_FQ_058.P0_05.CanonicalWorkbookPreview",
+          "CarFight.CCAS.CF_FQ_058.P0_05.ReadOnlyAuthorityGuard"
+        ]
+      },
       "operations": [
         {
           "operation_id": "editor.build",
