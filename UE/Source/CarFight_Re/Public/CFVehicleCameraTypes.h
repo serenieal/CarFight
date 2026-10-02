@@ -1,9 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 0.1.4
-// Date: 2026-07-20
-// Description: CarFight 차량 카메라 공용 타입 정의 (Aim Trace 목표 Actor 추가)
+// Version: 0.3.0
+// Date: 2026-09-29
+// Description: VCFX-P0-03 자유조준 대응 Lateral Presentation modulation runtime diagnostics 계약 추가
 // Changelog:
+// - v0.3.0: 실제 차체 Roll/RollRate/YawRate, body-motion intensity와 signed ViewAlignment runtime diagnostics 추가.
+// - v0.2.0: bAimPresentation, FCFVehicleCameraGameplayView, normalized Driving FX 런타임 진단 필드를 additive 추가.
 // - v0.1.4: Camera Aim Trace가 선택한 Actor를 런타임 상태에 추가.
 // - v0.1.3: Camera Aim Trace 표면 선택 Hit을 AimBlocked와 분리하기 위해 bAimTraceHasBlockingHit을 추가.
 // Migration:
@@ -49,6 +51,10 @@ struct FCFVehicleCameraModeFlags
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|Vehicle Camera", meta=(DisplayName="전투 Modifier 사용 (bCombat)", ToolTip="True이면 전투 집중용 카메라 Modifier를 적용합니다."))
 	bool bCombat = false;
+
+	// [v0.2.0] 외부 시스템이 명시적으로 전달하는 정밀 조준 Presentation 감쇠 상태입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|Vehicle Camera", meta=(DisplayName="조준 카메라 연출 감쇠 (bAimPresentation)", ToolTip="명시적인 조준/정밀 시점에서 Driving Camera FX를 감쇠합니다. AimProfileOverride나 무기 장착 여부에서 자동 추정하지 않습니다."))
+	bool bAimPresentation = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|Vehicle Camera", meta=(DisplayName="후진 Modifier 사용 (bReverse)", ToolTip="True이면 후진 보조용 카메라 Modifier를 적용합니다."))
 	bool bReverse = false;
@@ -111,6 +117,33 @@ struct FCFVehicleCameraAimProfile
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CarFight|Vehicle Camera", meta=(DisplayName="추가 좌우 오프셋 (SideOffset)", ToolTip="현재 Aim Profile이 요구하는 카메라 좌우 프레이밍 보정값입니다. 양수는 오른쪽입니다."))
 	float SideOffset = 0.0f;
+};
+
+/** 신규 Presentation FX에 오염되지 않은 Gameplay용 카메라 관측값입니다. */
+USTRUCT(BlueprintType)
+struct FCFVehicleCameraGameplayView
+{
+	GENERATED_BODY()
+
+	// 현재 Gameplay View가 유효하게 계산되었는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Gameplay View", meta=(DisplayName="Gameplay View 유효 여부 (bValid)"))
+	bool bValid = false;
+
+	// SpringArm Collision까지 반영된 실제 Camera 월드 위치입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Gameplay View", meta=(DisplayName="Gameplay 시점 원점 (ViewOrigin)"))
+	FVector ViewOrigin = FVector::ZeroVector;
+
+	// 신규 Driving Roll 적용 직전 실제 Camera Forward 방향입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Gameplay View", meta=(DisplayName="Gameplay 시점 방향 (ViewDirection)"))
+	FVector ViewDirection = FVector::ForwardVector;
+
+	// 신규 Driving Roll 적용 직전 실제 Camera Up 방향입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Gameplay View", meta=(DisplayName="Gameplay 시점 위 방향 (ViewUpDirection)"))
+	FVector ViewUpDirection = FVector::UpVector;
+
+	// 신규 Speed FOV를 제외한 현재 Gameplay 수직 FOV입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Gameplay View", meta=(DisplayName="Gameplay 수직 FOV (VerticalFOVDeg)"))
+	float VerticalFOVDeg = 0.0f;
 };
 
 /**
@@ -201,8 +234,84 @@ struct FCFVehicleCameraRuntimeState
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime", meta=(DisplayName="목표 FOV (DesiredFOV)", ToolTip="현재 모드와 속도, Aim Profile을 반영한 목표 FOV입니다."))
 	float DesiredFOV = 0.0f;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime", meta=(DisplayName="현재 FOV (CurrentFOV)", ToolTip="보간 적용 후 실제 카메라에 반영된 현재 FOV입니다."))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime", meta=(DisplayName="현재 FOV (CurrentFOV)", ToolTip="보간 적용 후 실제 Presentation Camera에 반영된 현재 FOV입니다."))
 	float CurrentFOV = 0.0f;
+
+	// [v0.2.0] 신규 Speed FOV를 제외한 Gameplay 소비용 현재 FOV입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime", meta=(DisplayName="현재 Gameplay FOV (CurrentGameplayFOV)"))
+	float CurrentGameplayFOV = 0.0f;
+
+	// [v0.2.0] 현재 차량 기준속도 대비 평면 속도 비율입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime|Driving FX", meta=(DisplayName="속도 비율 (SpeedRatio)"))
+	float SpeedRatio = 0.0f;
+
+	// [v0.2.0] 필터 적용 후 정규화 가속률입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime|Driving FX", meta=(DisplayName="가속률 (AccelerationRate)"))
+	float AccelerationRate = 0.0f;
+
+	// [v0.2.0] 필터 적용 후 정규화 제동률입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime|Driving FX", meta=(DisplayName="제동률 (BrakingRate)"))
+	float BrakingRate = 0.0f;
+
+	// [v0.2.0] 필터 적용 후 signed 정규화 횡가속률입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime|Driving FX", meta=(DisplayName="횡가속률 (LateralRate)"))
+	float LateralRate = 0.0f;
+
+	// [v0.2.0] 현재 Speed 계열 Driving FX 감쇠 배율입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime|Driving FX", meta=(DisplayName="속도 FX 배율 (ResolvedSpeedFXScale)"))
+	float ResolvedSpeedFXScale = 1.0f;
+
+	// [v0.2.0] 현재 Motion 계열 Driving FX 감쇠 배율입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime|Driving FX", meta=(DisplayName="운동 FX 배율 (ResolvedMotionFXScale)"))
+	float ResolvedMotionFXScale = 1.0f;
+
+	// [v0.3.0] 실제 Vehicle Mesh에서 읽은 현재 차체 Roll 각도입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime|Driving FX", meta=(DisplayName="차체 Roll 각도 (VehicleBodyRollDeg)"))
+	float VehicleBodyRollDeg = 0.0f;
+
+	// [v0.3.0] 실제 Vehicle Mesh local X축 기준 현재 차체 Roll 각속도입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime|Driving FX", meta=(DisplayName="차체 Roll 각속도 (VehicleBodyRollRateDegPerSec)"))
+	float VehicleBodyRollRateDegPerSec = 0.0f;
+
+	// [v0.3.0] 실제 Vehicle Mesh local Z축 기준 현재 차체 Yaw 각속도입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime|Driving FX", meta=(DisplayName="차체 Yaw 각속도 (VehicleBodyYawRateDegPerSec)"))
+	float VehicleBodyYawRateDegPerSec = 0.0f;
+
+	// [v0.3.0] 차체 Roll/각속도 중 가장 강한 값을 보간한 0~1 Lateral Motion 강도입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime|Driving FX", meta=(DisplayName="횡방향 차체 Motion 강도 (LateralBodyMotionIntensity)"))
+	float LateralBodyMotionIntensity = 0.0f;
+
+	// [v0.3.0] 차량 수평 전방과 현재 자유시점 수평 전방의 signed 정렬값입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime|Driving FX", meta=(DisplayName="횡방향 시점 정렬 (LateralViewAlignment)", ToolTip="정면 +1, 측면 0, 후면 -1입니다. 자유 조준 시 화면 기준 Lateral Roll 강도와 방향을 조절합니다."))
+	float LateralViewAlignment = 0.0f;
+
+	// [v0.2.0] 최종 적용된 Speed FOV 오프셋입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime|Driving FX", meta=(DisplayName="속도 FOV 오프셋 (SpeedFOVOffsetDeg)"))
+	float SpeedFOVOffsetDeg = 0.0f;
+
+	// [v0.2.0] 최종 적용된 Speed Arm 오프셋입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime|Driving FX", meta=(DisplayName="속도 Arm 오프셋 (SpeedArmOffsetCm)"))
+	float SpeedArmOffsetCm = 0.0f;
+
+	// [v0.2.0] 최종 적용된 가속 Rear Kick입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime|Driving FX", meta=(DisplayName="가속 Arm 킥 (AccelerationArmKickCm)"))
+	float AccelerationArmKickCm = 0.0f;
+
+	// [v0.2.0] 최종 적용된 제동 Forward Kick입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime|Driving FX", meta=(DisplayName="제동 Arm 킥 (BrakingArmKickCm)"))
+	float BrakingArmKickCm = 0.0f;
+
+	// [v0.2.0] 최종 적용된 횡가속 Presentation Roll입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime|Driving FX", meta=(DisplayName="횡가속 Roll (LateralRollDeg)"))
+	float LateralRollDeg = 0.0f;
+
+	// [v0.2.0] normalized Driving FX 경로가 현재 활성인지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime|Driving FX", meta=(DisplayName="정규화 주행 FX 활성 (bNormalizedDrivingFXActive)"))
+	bool bNormalizedDrivingFXActive = false;
+
+	// [v0.2.0] 첫 프레임/비정상 DeltaTime/Teleport로 Motion history를 초기화했는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime|Driving FX", meta=(DisplayName="운동 History Reset 여부 (bMotionHistoryResetThisFrame)"))
+	bool bMotionHistoryResetThisFrame = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Camera|Runtime", meta=(DisplayName="Aim Trace 적중 위치 (AimHitLocation)", ToolTip="현재 카메라 기준 Aim Trace가 충돌한 월드 위치입니다. 미적중 시 최대 거리 끝점을 사용합니다."))
 	FVector AimHitLocation = FVector::ZeroVector;

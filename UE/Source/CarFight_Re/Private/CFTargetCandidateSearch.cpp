@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.6.0
-// Date: 2026-08-31
-// Description: TS-P0-03 후보 탐색·TS-P0-04 선택 수명과 TS-P0-08 Target Registry·LOS 사전필터·검색 진단 구현
+// Version: 1.7.0
+// Date: 2026-09-28
+// Description: TargetSelect가 VehicleCamera Gameplay View를 소비하도록 Camera Presentation FX와 분리
 // Changelog:
+// - v1.7.0: Candidate Search View의 Origin/Direction/Up/FOV를 UCFVehicleCameraComp::GetGameplayView()에서 읽어 Driving Roll/Speed FOV가 Target 우선순위를 오염시키지 않게 함.
 // - v1.6.0: 20Hz 후보 갱신의 TActorIterator 전체 월드 순회를 UCFTargetRegistrySubsystem snapshot으로 교체하고 direct-hit fallback을 추가.
 // - v1.5.0: 기존 Evaluate가 반드시 거부할 비-Direct 거리·반각 밖 Targetable Actor의 LOS Trace를 사전 생략하고 생략 수를 진단.
 // - v1.4.0: 실제 런타임 후보 갱신의 월드 Actor 스캔 수, Visibility/전체 Trace 수와 View·수집·평가 전체 경과시간을 진단 결과에 기록.
@@ -391,18 +392,30 @@ bool UCFTargetSelectComp::BuildRuntimeSearchView(
 		return false;
 	}
 
-	OutSearchView.ViewOrigin = CameraComponent->GetCurrentAimTraceStartLocation();
-	OutSearchView.ViewDirection = CameraComponent->GetCurrentAimDirection().GetSafeNormal();
-	OutSearchView.ViewUpDirection = CameraComponent->FollowCamera
-		? CameraComponent->FollowCamera->GetUpVector()
-		: FVector::UpVector;
+	// [v1.7.0] 신규 Camera Presentation Roll/FOV가 Target selection geometry에 섞이지 않도록 안정된 Gameplay View를 우선 사용합니다.
+	const FCFVehicleCameraGameplayView GameplayView = CameraComponent->GetGameplayView();
+	OutSearchView.ViewOrigin = GameplayView.bValid
+		? GameplayView.ViewOrigin
+		: CameraComponent->GetCurrentAimTraceStartLocation();
+	OutSearchView.ViewDirection = GameplayView.bValid
+		? GameplayView.ViewDirection.GetSafeNormal()
+		: CameraComponent->GetCurrentAimDirection().GetSafeNormal();
+	OutSearchView.ViewUpDirection = GameplayView.bValid
+		? GameplayView.ViewUpDirection
+		: CameraComponent->FollowCamera
+			? CameraComponent->FollowCamera->GetUpVector()
+			: FVector::UpVector;
 
 	const FCFVehicleCameraRuntimeState CameraState = CameraComponent->GetCameraRuntimeState();
-	OutSearchView.VerticalFOVDeg = CameraState.CurrentFOV > KINDA_SMALL_NUMBER
-		? CameraState.CurrentFOV
-		: CameraComponent->FollowCamera
-			? CameraComponent->FollowCamera->FieldOfView
-			: 60.0f;
+	OutSearchView.VerticalFOVDeg = GameplayView.bValid && GameplayView.VerticalFOVDeg > KINDA_SMALL_NUMBER
+		? GameplayView.VerticalFOVDeg
+		: CameraState.CurrentGameplayFOV > KINDA_SMALL_NUMBER
+			? CameraState.CurrentGameplayFOV
+			: CameraState.CurrentFOV > KINDA_SMALL_NUMBER
+				? CameraState.CurrentFOV
+				: CameraComponent->FollowCamera
+					? CameraComponent->FollowCamera->FieldOfView
+					: 60.0f;
 
 	OutSearchView.ViewportAspectRatio = 1.7777778f;
 	if (GEngine && GEngine->GameViewport && GEngine->GameViewport->Viewport)

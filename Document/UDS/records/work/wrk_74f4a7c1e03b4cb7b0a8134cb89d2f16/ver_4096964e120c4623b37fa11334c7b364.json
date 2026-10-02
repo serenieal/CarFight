@@ -1,0 +1,35 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_74f4a7c1e03b4cb7b0a8134cb89d2f16",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_4096964e120c4623b37fa11334c7b364",
+  "parent_version_ids": [
+    "ver_9d73b4d68c214c8d81fd8bb4a6e91f20"
+  ],
+  "state": "closed",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-057",
+    "title": "Vehicle Camera Driving FX (주행 카메라 연출 고도화)",
+    "phase": "VCFX-P0-04",
+    "closure_reason": "completed",
+    "next_action": null,
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-057"
+    ],
+    "user_technical_boundary": "USER PASS is limited to Lateral Roll, Overspeed Speed FOV/Arm, Camera Pop/Collision and Aim/Targeting Interference. Acceleration Rear Kick and Braking Forward Kick functionality were confirmed, but additional feel tuning is Deferred until higher-performance / stronger-braking vehicles and is not claimed as feel PASS. Motion-sickness/fatigue review is explicitly Deferred by USER and is not claimed as PASS. Combat/Aim/Airborne attenuation math/API is implemented, but fresh C++ Product caller search and current AssetDump Blueprint exact6 graph scan found no authoritative producer, so runtime feel validation is unavailable and remains a non-blocking wiring debt. Current implementation owner is Document/Systems/Vehicles/VehicleCamera.md v1.3.0.",
+    "legacy_refs": [
+      "Document/Plan/VehicleCameraFX/VehicleCameraFXPlan.md v0.3.0",
+      "Document/Systems/Vehicles/VehicleCamera.md v1.3.0",
+      "Document/Systems/SystemIndex.md v1.53.0",
+      "Document/ProjectSSOT/03_FeatureQueue.md v1.57.144",
+      "Tools/RunVCFXP002Tests.ps1"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-02",
+    "resolution_basis": "USER explicitly requested progression to closure after the remaining P0-03 executable review scope was exhausted. Technical baseline is preserved: official UE 5.8 build success and focused Automation exact8/8 PASS after the camera collision correction; normalized Product path active; Gameplay/Presentation View split and TargetSelect protection retained. USER confirmed Lateral Roll, overspeed continuation, collision chatter removal and no aim/targeting interference. Comfort was explicitly deferred. Fresh producer audit found SetCameraModeFlags Product caller exact0 and current /Game/CarFight Blueprint exact6 graph usage exact0 for the relevant mode flags, so attenuation remains wiring debt rather than a false USER PASS. P0-04 performs document/lifecycle promotion only; Source/DataAsset mutation 0, physical Plan move 0, commit/push/reset/stash/rebase/clean 0, unrelated dirty preserved."
+  }
+}

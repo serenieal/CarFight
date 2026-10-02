@@ -1,0 +1,32 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_74f4a7c1e03b4cb7b0a8134cb89d2f16",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_83a1d7f3e62c4c63a8d961bd2f0f5c47",
+  "parent_version_ids": [
+    "ver_1b2cd7e490f84fa5a8e431b6c92d7f03"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-057",
+    "title": "Vehicle Camera Driving FX (주행 카메라 연출 고도화)",
+    "phase": "VCFX-P0-01",
+    "next_action": "Freeze the Camera FX contract and data ownership before implementation: define the exact VehicleData authored ReferenceMaxSpeed field/validation/migration; normalized planar speed and longitudinal/lateral rate math with spawn/teleport/delta-time fail-safe; Gameplay View versus Presentation View runtime API and TargetSelect/Aim consumers; optional per-VehicleData CameraData/profile override with component fallback; effect curves, absolute output clamps, interpolation, Combat/Aim/Airborne/Reverse attenuation and composition order. Start implementation only after P0 and blocking P1 are exact0.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-057"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleCameraFX/VehicleCameraFXPlan.md v0.1.2",
+      "Document/Systems/Vehicles/VehicleCamera.md",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-28",
+    "resolution_basis": "VCFX-P0-00 fresh rebaseline and pre-implementation design review completed with P0 0 / blocking P1 0 / P2 1 non-blocking / TECHNICAL DESIGN PASS. Current camera speed uses 3D velocity magnitude normalized by a global SpeedForMaxBonusKmh; VehicleData owns physical cause parameters but no authored runtime top-speed reference; Vehicle Builder benchmark provides PeakSpeedKmh and related performance evidence. The accepted design direction is per-VehicleData authored ReferenceMaxSpeed exact1 as the common normalization denominator for planar speed and longitudinal/lateral velocity-change rates, with no silent global fallback. TargetSelect consumes actual camera origin/direction/up/FOV, so Gameplay View and Presentation View must be separated before driving FOV/roll/shake implementation. Fresh persisted AssetDump dataset: adset_v1_5acb83e891e1f4b9ef2d733afbb71be4.bdd1b15768494d24cc66139c. Source/Product Asset mutation 0; Build/Automation/PIE not run for this design-only gate."
+  }
+}

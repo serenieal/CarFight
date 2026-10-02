@@ -1,0 +1,29 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_74f4a7c1e03b4cb7b0a8134cb89d2f16",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_1b2cd7e490f84fa5a8e431b6c92d7f03",
+  "parent_version_ids": [],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-057",
+    "title": "Vehicle Camera Driving FX (주행 카메라 연출 고도화)",
+    "phase": "VCFX-P0-00",
+    "next_action": "Fresh Rebaseline + Pre-Implementation Review: inspect the current VehicleCameraComp/VehicleCameraData speed-based SpringArm/FOV path and every gameplay consumer of camera FOV; freeze presentation-vs-gameplay FOV semantics and the layered driving-camera FX contract before implementation. Preserve existing camera aim/targeting behavior and vehicle physics.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-057"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleCameraFX/VehicleCameraFXPlan.md v0.1.0",
+      "Document/Systems/Vehicles/VehicleCamera.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-27",
+    "resolution_basis": "USER explicitly approved formal promotion after discussing speed-dependent FOV and layered driving camera effects. Fresh read-only inspection confirms UCFVehicleCameraComp already applies speed-aware SpringArm/FOV and CFTargetCandidateSearch consumes FollowCamera FOV, so the first gate must rebaseline current behavior and separate presentation/gameplay semantics before implementation. No Source, Product Asset, Build, Automation, PIE, Git stage/commit/push mutation was performed; existing Work states are preserved."
+  }
+}

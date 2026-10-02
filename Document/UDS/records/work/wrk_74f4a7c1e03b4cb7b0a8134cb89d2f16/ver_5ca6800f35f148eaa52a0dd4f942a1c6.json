@@ -1,0 +1,37 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_74f4a7c1e03b4cb7b0a8134cb89d2f16",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_5ca6800f35f148eaa52a0dd4f942a1c6",
+  "parent_version_ids": [
+    "ver_83a1d7f3e62c4c63a8d961bd2f0f5c47"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-057",
+    "title": "Vehicle Camera Driving FX (주행 카메라 연출 고도화)",
+    "phase": "VCFX-P0-02",
+    "next_action": "Implement and technically validate the frozen VehicleCameraFXPlan v0.2.2 contract with exact additive merges only: add VehicleData ReferenceMaxSpeedKmh and CameraPresentationDataOverride through the existing typed Vehicle Builder authoring surface; add the nested normalized DrivingFX config, planar motion sampling/fail-safe, Speed FOV/Arm, acceleration rear kick, braking forward kick, lateral roll, and Gameplay View versus Presentation View separation while preserving legacy behavior when normalized FX is disabled. Protect pre-existing dirty, confirm the actual CameraModeFlags/Aim/Airborne producer before claiming runtime attenuation PASS, migrate per-vehicle references from accepted same-target DefinitionHash benchmark evidence before enabling shared DA_Cam_Default normalized FX, then run official UE 5.8 build, focused automation, fresh persisted AssetDump and bounded PIE/runtime technical validation. USER feel acceptance remains a later gate.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-057"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleCameraFX/VehicleCameraFXPlan.md v0.2.2",
+      "Document/Systems/Vehicles/VehicleCamera.md",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "UE/Source/CarFight_Re/Public/CFVehicleData.h",
+      "UE/Source/CarFight_Re/Public/CFVehicleCameraData.h",
+      "UE/Source/CarFight_Re/Public/CFVehicleCameraTypes.h",
+      "UE/Source/CarFight_Re/Public/CFVehicleCameraComp.h",
+      "UE/Source/CarFight_Re/Private/CFVehicleCameraComp.cpp",
+      "UE/Source/CarFight_Re/Private/CFTargetCandidateSearch.cpp"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-28",
+    "resolution_basis": "VCFX-P0-01 Camera FX Contract + Data Freeze completed. Candidate v0.2.0 reverse review found blocking P1 candidates exact4 and v0.2.1 corrected all four before final re-review: presentation CameraData no longer changes DefaultAimProfile; previous forward-speed magnitude is cached per valid sample instead of reprojecting previous velocity on the current axis; invalid reference/input is separated from motion-history reset; Gameplay Direction/Up is captured from the actual pre-Driving-Roll FollowCamera rotation to preserve legacy relative orientation. Final v0.2.2 Design Re-review: P0 0 / blocking P1 0 / P2 3 non-blocking / CONTRACT FROZEN / TECHNICAL DESIGN PASS. P2: stale VehicleCamera Systems path/current semantics, runtime CameraModeFlags/Aim producer evidence not yet confirmed, and pre-existing CFVehicleData/Vehicle Authoring dirty requiring fresh additive merge. Source implementation NOT STARTED; Product Asset mutation 0; Build/Automation/PIE not run because P0-01 was design-only."
+  }
+}

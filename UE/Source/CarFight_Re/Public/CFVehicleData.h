@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.31.0
-// Date: 2026-09-01
-// Description: CF-FQ-040 ESH-01 vehicle-specific Engine TorqueCurve typed payload를 VehicleMovement Runtime authority에 추가
-// Scope: 차량 시각 자산, Wheel Class 참조, VehicleMovement/WheelVisual/Layout, 피팅 질량, 최대 체력과 선택적 방어 설정을 함께 다룹니다.
+// Version: 1.33.0
+// Date: 2026-09-28
+// Description: VCFX-P0-02 차량별 Camera Driving FX 성능 기준과 Presentation Profile authority 추가
+// Scope: 차량 시각 자산, VehicleMovement/WheelVisual/Layout, 피팅 질량, 내구도, 기본 방어·Sensor와 Camera Presentation 기준을 함께 다룹니다.
 // Changelog:
+// - v1.33.0: ReferenceMaxSpeedKmh와 CameraPresentationDataOverride를 additive 추가. Camera override는 Presentation tuning 전용이며 Aim Profile authority를 바꾸지 않음.
+// - v1.32.0: P0 차량 자체의 기본 Sensor Runtime source를 제공하는 DefaultSensorData 선택 참조를 additive 추가.
 // - v1.31.0: bUseEngineTorqueCurve + RPM/normalized torque point 기반 EngineTorqueCurve typed payload를 additive 추가. 기본 false/empty로 기존 BP/Chaos TorqueCurve를 보존.
 // - v1.30.0: WheelMeshFR/RL/RR이 비어 있으면 런타임에서 WheelMeshFL을 재사용하는 실제 fallback 계약을 Tooltip에 명시.
 // - v1.29.0: FCFWheelAnchorPose.RelativeScale과 WheelVisualConfig.bUseWheelSocketScale을 additive 추가. 기존 자산은 OneVector/false 기본값으로 기존 시각·물리 동작을 유지.
@@ -38,6 +40,8 @@
 // - 피팅에 연결할 VehicleData만 실제 기준 질량과 최대 허용 총중량을 명시하며 값을 자동 추정하지 않는다.
 // - 기존 VehicleData는 DefaultDefenseData=None 기본값으로 기존 BaseDamage 직접 Health 적용 경로를 유지한다.
 // - 방어 런타임을 사용할 차량만 DefaultDefenseData에 UCFVehicleDefenseData를 명시적으로 연결한다.
+// - v1.32.0 이전 VehicleData는 DefaultSensorData=None 기본값으로 기존 scanner-less zero-range 안전 Fallback 동작을 유지한다.
+// - 기본 Sensor/Active Scan을 사용할 차량은 DefaultSensorData에 UCFVehicleSensorData를 명시하며, 장착 Scanner가 있으면 해당 Scanner SensorData가 우선한다.
 // - 기존 VehicleData는 DestroyedFxSocketName 기본값 FX_Destroyed를 사용하며 소켓이 없으면 SM_Body Bounds 중심으로 fallback한다.
 // - 기존 VehicleData는 bAutoScaleWheelMeshToRadius=false 기본값으로 이전 외형 스케일을 유지한다.
 // - 자동 휠 메시 스케일을 쓸 차량만 DA의 WheelVisualConfig에서 옵션을 명시적으로 켠다.
@@ -64,7 +68,9 @@
 
 class UChaosVehicleWheel;
 class UCFCombatFxData;
+class UCFVehicleCameraData;
 class UCFVehicleDefenseData;
+class UCFVehicleSensorData;
 class UStaticMesh;
 
 UENUM(BlueprintType)
@@ -526,6 +532,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Fitting", meta=(ClampMin="0.0", Units="kg", DisplayName="최대 허용 총중량 kg (MaximumGrossMassKg)", ToolTip="피팅 적용을 허용하는 최대 차량 총중량입니다. 0은 미설정이며 BaseVehicleMassKg보다 크거나 같아야 합니다."))
 	float MaximumGrossMassKg = 0.0f;
 
+	// [v1.33.0] Camera Driving FX 등 차량 성능 비율 계산에 사용하는 authored 기준 최고속도입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Performance", meta=(ClampMin="0.0", Units="km/h", DisplayName="기준 최고속도 km/h (ReferenceMaxSpeedKmh)", ToolTip="Camera Driving FX 등 차량 성능 비율 계산에 사용하는 차량별 기준 최고속도입니다. 물리 최고속도 제한값이 아니며 0은 미설정입니다. Vehicle Builder의 동일 saved Target/DefinitionHash에 결합된 accepted PeakSpeedKmh를 우선 근거로 작성합니다."))
+	float ReferenceMaxSpeedKmh = 0.0f;
+
+	// [v1.33.0] 이 차량의 Camera Presentation tuning만 덮어쓸 선택적 CameraData입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Camera", meta=(DisplayName="카메라 표현 데이터 덮어쓰기 (CameraPresentationDataOverride)", ToolTip="이 차량의 카메라 표현 튜닝만 덮어쓸 VehicleCameraData입니다. CameraTuningConfig만 사용하며 DefaultAimProfile은 변경하지 않습니다. 비어 있으면 VehicleCameraComp의 기존 VehicleCameraData 표현 튜닝을 사용합니다."))
+	TObjectPtr<UCFVehicleCameraData> CameraPresentationDataOverride = nullptr;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data", meta=(DisplayName="차량 이동 설정 (VehicleMovementConfig)", ToolTip="VehicleMovement 계열 데이터를 나중에 확장하기 위한 최소 슬롯입니다."))
 	FCFVehicleMovementConfig VehicleMovementConfig;
 
@@ -542,6 +556,10 @@ public:
 	// [v1.24.0] 이 차량이 사용할 쉴드·방향별 장갑 정적 설정입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Defense", meta=(DisplayName="기본 차량 방어 데이터 (DefaultDefenseData)", ToolTip="쉴드, 재생, 장갑 저항과 6방향 장갑 설정을 제공하는 VehicleDefenseData입니다. 비어 있으면 기존 BaseDamage 직접 Health 적용 경로를 유지합니다."))
 	TObjectPtr<UCFVehicleDefenseData> DefaultDefenseData = nullptr;
+
+	// [v1.32.0] 장착 Scanner와 별개로 차량 자체가 기본적으로 사용할 Sensor Runtime Source입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|Sensor", meta=(DisplayName="기본 차량 센서 데이터 (DefaultSensorData)", ToolTip="차량 자체의 기본 Sensor/Active Scan 설정을 제공하는 VehicleSensorData입니다. 장착 Scanner가 있으면 Scanner SensorData가 우선하고, 비어 있으면 기존 zero-range 안전 Fallback을 유지합니다."))
+	TObjectPtr<UCFVehicleSensorData> DefaultSensorData = nullptr;
 
 	// 최초 차량 파괴 전환에서 재생할 기본 Destroyed FX 데이터입니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|Vehicle Data|FX", meta=(DisplayName="기본 파괴 FX 데이터", ToolTip="차량이 최초 파괴 상태로 전환될 때 재생할 CombatFxData입니다. 비어 있어도 파괴 판정은 유지합니다."))

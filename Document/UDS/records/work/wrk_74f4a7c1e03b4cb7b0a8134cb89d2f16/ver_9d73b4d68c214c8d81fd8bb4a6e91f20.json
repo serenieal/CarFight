@@ -1,0 +1,37 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_74f4a7c1e03b4cb7b0a8134cb89d2f16",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_9d73b4d68c214c8d81fd8bb4a6e91f20",
+  "parent_version_ids": [
+    "ver_21f8ab32c5fe4c388949750036c192e4"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-057",
+    "title": "Vehicle Camera Driving FX (주행 카메라 연출 고도화)",
+    "phase": "VCFX-P0-03",
+    "next_action": "Perform direct USER Driving / Combat Feel Review on the now-active normalized Product path. Review low-speed stability, high-speed Speed FOV/Arm sensation, acceleration rear kick, braking forward kick, left/right lateral roll, wall/collision camera pop, aiming/targeting disruption, motion-sickness or fatigue, and Combat/Aim/Airborne attenuation only where those gameplay states are actually available. GoPyMCP managed PIE/RuntimeRead is optional deferred evidence and is not a blocker under the current operating constraint. If USER corrections are needed, tune CameraData curves/scales/clamps without redesigning the frozen normalized ratio or Gameplay/Presentation View contracts. After USER Acceptance, proceed to VCFX-P0-04 Current System Promotion + Closure.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-057"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleCameraFX/VehicleCameraFXPlan.md v0.2.5",
+      "Document/Systems/Vehicles/VehicleCamera.md v1.2.2",
+      "UE/Saved/CarFight/VCFXP002BenchSummary.json",
+      "Tools/RunVCFXP002Tests.ps1",
+      "Tools/RunVCFXP002Bench.ps1",
+      "Tools/RunVCFXRefApply.ps1",
+      "Tools/RunVCFXCamActivate.ps1",
+      "UE/Source/CarFight_ReEditor/Private/CFVCFXRefCmdlet.cpp",
+      "UE/Source/CarFight_ReEditor/Private/CFVCFXCamCmdlet.cpp"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-29",
+    "resolution_basis": "VCFX-P0-02 Technical PASS. The frozen P0-01 contracts remain intact. Stable fixed-60Hz Vehicle Builder benchmark evidence was obtained for the in-scope exact3: TestSedan PeakSpeedKmh=97.830399 bound to TargetHash 6149f7f557970105eae7417525e20377 and RunId 2bedfc6c-9a16-48a3-a70a-e52fa54d2868; TestSUV 92.759979 / 463b4f2f5053ef7a6c995912eb0a640f / f2c5ceee-097b-4dc8-ad5d-f944909663bd; DefenseSUV 89.953880 / afd7d9a89aa43034bdf676193b56f675 / 96188aaf-994c-48b4-bc4f-c43e2049ef60. ReferenceMaxSpeedKmh was persisted through typed Recipe authoring plus a dirty-preserving reviewed exact-one-field Target migration; the TestSUV pre-existing EQ_PFP_RocketReview Target drift was preserved and fresh AssetDump confirmed it remained unchanged. Persisted exact3 references are Sedan 97.8303986, TestSUV 92.7599792, DefenseSUV 89.9538803 km/h. Fresh Blueprint evidence confirmed BP_CFVehiclePawn.VehicleCameraComp.VehicleCameraData hard-references /Game/CarFight/Vehicles/Data/Definitions/DA_Cam_Default. Shared DA_Cam_Default normalized activation used full CameraTuningConfig/AimProfile pre-state review, exact-one-flag bUseNormalizedDrivingFX false-to-true Apply, package-byte rollback protection, and a separate disk reload Verify; process 5cda072c442242f6877157cd5e0664fd ended VCFX_CAM_ACTIVATION=PASS. Current official UE 5.8 Build job 556bcd7e5b704253a78dcdd1b11d1ce9 PASS and post-activation focused Automation process 8ec5c2a8fc5c4d5482895aeed7d2eea0 exact6/6 PASS. Fresh persisted datasets are camera adset_v1_1359b125c5ea74f8f5eb151e4d1dcb8d.3badfb69844be1ee7e008aec and vehicle exact3 adset_v1_9d16ff0177681371138c203d43019413.4d00b5e31d236084cc22ed14. GoPyMCP managed PIE/RuntimeRead remains deferred and non-blocking by USER operating decision. USER visual/feel Acceptance has not yet been performed or claimed. Existing unrelated dirty was preserved. No commit, push, reset, stash, rebase, merge, clean, or user-owned Editor force-stop was performed for this closure."
+  }
+}

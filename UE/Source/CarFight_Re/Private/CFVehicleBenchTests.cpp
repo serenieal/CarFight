@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleBenchTests.cpp
-// Version: v1.18.1
-// Date: 2026-09-04
+// Version: v1.19.0
+// Date: 2026-09-28
 // Description: CF-FQ-040 VB-P0-08 saved VehicleData Technical Driving Benchmark와 ESH-04 dedicated high-speed benchmark authority를 제공합니다.
 // Scope: M_VehicleBenchmark production no-fitting Legacy Mass straight-line authority와 선택적 transient ChangeUpRPM A/B/C를 제공하며 Product Asset/Map 저장 mutation은 수행하지 않습니다.
 // Changelog:
+// - v1.19.0: VCFX-P0-02 reference benchmark를 위해 optional `CFBuilderBenchmarkPreserveLegacyMass`를 추가. no-fitting VehicleData의 BaseVehicleMassKg가 0인 legacy 차량에서만 fresh BeginPlay가 확정한 유효 Chaos configured/actual mass를 보존해 기존 deterministic mass-reset benchmark를 계속할 수 있게 합니다. 기본 호출은 기존 hard-fail 계약을 그대로 유지합니다.
 // - v1.18.1: P0-07E 중간검수 교정. command-line progress write target을 ProjectSaved/CarFight canonical sidecar exact path로 제한하고 temp write 실패 시 잔여 임시 파일을 best-effort 정리합니다.
 // - v1.18.0: VBHAI-P0-07E에서 optional exact RunId + absolute progress sidecar path를 받아 VB-P0-08 내부 16 phase를 USER-facing 7단계 coarse progress로 투영합니다. 각 coarse 단계는 run당 최대 1회만 temp→replace write를 시도하고 write 실패는 warning만 남겨 benchmark terminal PASS/FAIL authority와 분리합니다.
 // - v1.17.0: fixed ChangeUpRPM A/B 판정용 0→100/150/200 km/h first-reach time telemetry를 추가. 최고속/사용 gear만으로 shift 후보를 오판하지 않고 WOT acceleration evidence를 함께 비교합니다.
@@ -31,6 +32,7 @@
 // - v1.1.0: Fitting 미지정 시 invalid transient Fitting Snapshot을 만들지 않고 VehicleData.BaseVehicleMassKg를 explicit runtime mass target으로 사용하며, 50/100km/h 미도달은 차량 성능 관측 결과(-1)로 남기고 기술 실패로 오판하지 않도록 교정.
 // - v1.0.0: arbitrary saved VehicleData + optional FittingData command-line target을 deferred-spawn하는 Builder benchmark Automation 최초 구현.
 // Migration:
+// - v1.19.0의 legacy mass 보존은 명시적 command-line opt-in일 때만 활성화됩니다. 기존 VB-P0-08 caller는 BaseVehicleMassKg <= 0에서 계속 fail-closed하며 Product VehicleData/Fitting/Map은 수정하지 않습니다.
 // - v1.18.1부터 progress path 인자가 canonical ProjectSaved/CarFight sidecar와 exact 일치하지 않으면 progress 표시만 비활성화하고 benchmark 본체는 계속합니다.
 // - v1.18.0 progress writer는 `CFBuilderBenchmarkRunId`와 `CFBuilderBenchmarkProgressPath`가 둘 다 유효할 때만 활성화됩니다. 기존 direct Automation 호출은 두 인자를 생략하면 progress write 없이 이전 동작을 유지합니다.
 // - Reference fact와의 PASS/FAIL threshold를 이 테스트가 임의 생성하지 않습니다. 이 테스트는 기술적으로 유효한 runtime metric만 기록합니다.
@@ -157,13 +159,15 @@ namespace
 			const FString& InFittingDataPath,
 			const FString& InLabel,
 			const FString& InRunId,
-			const FString& InProgressFilePath)
+			const FString& InProgressFilePath,
+			const bool bInPreserveLegacyRuntimeMass)
 			: Test(InTest)
 			, VehicleDataPath(InVehicleDataPath)
 			, FittingDataPath(InFittingDataPath)
 			, Label(InLabel)
 			, RunId(InRunId)
 			, ProgressFilePath(InProgressFilePath)
+			, bPreserveLegacyRuntimeMass(bInPreserveLegacyRuntimeMass)
 			, CommandStartTimeSeconds(FPlatformTime::Seconds())
 		{
 		}
@@ -536,8 +540,13 @@ namespace
 				BenchmarkTargetMassKg = VehicleDataAsset->BaseVehicleMassKg;
 				if (!FMath::IsFinite(BenchmarkTargetMassKg) || BenchmarkTargetMassKg <= 0.0f)
 				{
-					OutError = TEXT("VB-P0-08 Fitting 미지정 benchmark에는 유효한 VehicleData.BaseVehicleMassKg가 필요합니다.");
-					return false;
+					if (!bPreserveLegacyRuntimeMass)
+					{
+						OutError = TEXT("VB-P0-08 Fitting 미지정 benchmark에는 유효한 VehicleData.BaseVehicleMassKg가 필요합니다.");
+						return false;
+					}
+					// Opt-in legacy 경로는 BeginPlay 이후 실제 Chaos configured mass를 authority로 확정합니다.
+					BenchmarkTargetMassKg = 0.0f;
 				}
 			}
 
@@ -653,6 +662,32 @@ namespace
 			TargetVehiclePawn->SetActorTickEnabled(false);
 
 			MassRuntime = MakeUnique<FCFChaosVehicleMassRuntime>(TargetVehiclePawn);
+			if (BenchmarkTargetMassKg <= 0.0f)
+			{
+				// Fresh BeginPlay가 확정한 legacy Chaos configured mass입니다.
+				const float LegacyConfiguredMassKg = VehicleMovementComponent->Mass;
+				// Fresh BeginPlay가 확정한 legacy chassis actual physics mass입니다.
+				const float LegacyActualMassKg = VehicleMeshComponent->GetMass();
+				if (!bPreserveLegacyRuntimeMass
+					|| !FMath::IsFinite(LegacyConfiguredMassKg)
+					|| LegacyConfiguredMassKg <= 0.0f
+					|| !FMath::IsFinite(LegacyActualMassKg)
+					|| LegacyActualMassKg <= 0.0f)
+				{
+					FailBenchmark(TEXT("VB-P0-08 legacy mass 보존 경로에서 유효한 fresh Chaos configured/actual mass를 확보하지 못했습니다."));
+					return;
+				}
+				BenchmarkTargetMassKg = LegacyConfiguredMassKg;
+				if (Test)
+				{
+					Test->AddInfo(FString::Printf(
+						TEXT("VB-P0-08 LegacyMassPreserved | VehicleData=%s | ConfiguredMassKg=%.3f | ActualMassKg=%.3f"),
+						*VehicleDataPath,
+						LegacyConfiguredMassKg,
+						LegacyActualMassKg));
+				}
+			}
+
 			// production mass apply 실패 diagnostic입니다.
 			FString MassError;
 			if (!MassRuntime->ReapplyVehicleMassKg(BenchmarkTargetMassKg, MassError))
@@ -1219,6 +1254,8 @@ namespace
 		FString RunId;
 		// Guided Step 8이 polling할 canonical absolute progress sidecar path입니다. 비어 있으면 progress writer를 사용하지 않습니다.
 		FString ProgressFilePath;
+		// BaseVehicleMassKg=0 legacy no-fitting 차량에서 fresh BeginPlay Chaos mass를 보존하도록 허용하는 명시적 opt-in입니다.
+		bool bPreserveLegacyRuntimeMass = false;
 		// 동일 coarse group에서 write failure가 나도 per-frame retry하지 않기 위한 마지막 attempted group입니다.
 		ECFBuilderBenchmarkProgressGroup LastAttemptedProgressGroup = ECFBuilderBenchmarkProgressGroup::None;
 		// 한 benchmark run에서 실제 sidecar write를 시도한 coarse group 수입니다.
@@ -2468,6 +2505,9 @@ bool FCFVehicleBuilderDrivingBenchmarkTest::RunTest(const FString& Parameters)
 		}
 	}
 
+	// BaseVehicleMassKg=0 legacy no-fitting 차량에서 현재 Chaos 질량 보존을 허용하는 명시적 opt-in입니다.
+	const bool bPreserveLegacyRuntimeMass = FParse::Param(FCommandLine::Get(), TEXT("CFBuilderBenchmarkPreserveLegacyMass"));
+
 	// 기존 production test map을 읽기 전용 technical road/physics fixture로 재사용합니다.
 	const FString BenchmarkMapPath = TEXT("/Game/Maps/M_VehicleDefensePIE");
 	ADD_LATENT_AUTOMATION_COMMAND(FEditorLoadMap(BenchmarkMapPath));
@@ -2478,7 +2518,8 @@ bool FCFVehicleBuilderDrivingBenchmarkTest::RunTest(const FString& Parameters)
 		FittingDataPath,
 		Label,
 		RunId,
-		ProgressFilePath));
+		ProgressFilePath,
+		bPreserveLegacyRuntimeMass));
 	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
 	return true;
 }

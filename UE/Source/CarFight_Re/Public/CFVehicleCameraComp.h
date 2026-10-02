@@ -1,9 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 0.1.4
-// Date: 2026-06-15
-// Description: CarFight 차량 카메라 컴포넌트 초안 (카메라 Yaw 완충 옵션 추가)
-// Scope: 차량 중심 피벗 기반 자유 조준, 제한각 Clamp, SpringArm 연동, Aim Trace 계산 골격을 제공합니다.
+// Version: 0.3.1
+// Date: 2026-10-02
+// Description: VCFX-P0-03 SpringArm collision boundary chatter 억제를 위한 독립 Collision Recovery 상태 추가
+// Scope: 기존 자유 조준/Clamp/SpringArm/Aim Trace 계약을 유지하며 차량별 주행 Camera FX와 안정된 Gameplay View를 제공합니다.
+// Changelog:
+// - v0.3.1: Presentation Arm과 SpringArm collision solved distance를 분리하고 Clear hold/hysteresis 기반 Collision Recovery 상태를 추가.
+// - v0.3.0: 실제 Vehicle Mesh body-motion intensity 필터 상태를 추가하고 자유시점 ViewAlignment 기반 Lateral Roll 합성을 준비.
+// - v0.2.1: invalid Reference/Velocity/Axis frame의 Curve 평가를 완전히 차단하는 Driving input-valid state를 추가.
+// - v0.2.0: Presentation CameraData resolve, normalized motion sampling, Gameplay View, 별도 Gameplay FOV와 Roll baseline 상태를 additive 추가.
+// Migration:
+// - DrivingFXConfig.bUseNormalizedDrivingFX=false에서는 기존 legacy Camera 경로를 유지합니다.
 
 #pragma once
 
@@ -147,6 +154,10 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|Vehicle Camera", meta=(ToolTip="현재 카메라 모드, 조준 각도, Arm 길이, FOV, Aim Trace 상태를 묶은 런타임 스냅샷을 반환합니다."))
 	FCFVehicleCameraRuntimeState GetCameraRuntimeState() const;
 
+	// [v0.2.0] Presentation Roll/Speed FOV에 오염되지 않은 Gameplay View를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Vehicle Camera", meta=(DisplayName="Gameplay Camera View 반환", ToolTip="Aim/TargetSelect가 사용할 안정된 Camera 원점, 방향, Up, Gameplay FOV를 반환합니다. 실제 SpringArm Collision 위치는 유지하고 신규 Driving Roll/Speed FOV는 제외합니다."))
+	FCFVehicleCameraGameplayView GetGameplayView() const;
+
 	// [v0.1.0] 현재 해석된 Aim Profile을 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|Vehicle Camera|Aim", meta=(ToolTip="현재 적용 중인 Aim Profile을 반환합니다. 임시 Override가 있으면 이를 우선 사용합니다."))
 	FCFVehicleCameraAimProfile GetResolvedAimProfile() const;
@@ -182,6 +193,12 @@ protected:
 	// [v0.1.0] 현재 사용할 Aim Profile을 조합해 반환합니다.
 	FCFVehicleCameraAimProfile BuildResolvedAimProfile() const;
 
+	// [v0.2.0] VehicleData의 Presentation 전용 override와 Component fallback 순서로 CameraData를 해석합니다.
+	const UCFVehicleCameraData* ResolveCameraPresentationData() const;
+
+	// [v0.2.0] 차량의 평면 운동을 normalized Speed/Accel/Brake/Lateral 입력으로 갱신합니다.
+	void UpdateDrivingMotionState(float DeltaTime, const FCFVehicleCameraTuningConfig& CameraTuningConfig);
+
 	// [v0.1.0] 현재 차량 속도(km/h)를 읽어옵니다.
 	float GetVehicleSpeedKmh() const;
 
@@ -200,6 +217,16 @@ protected:
 	// [v0.1.0] 목표 카메라 위치와 FOV를 계산해 SpringArm / Camera에 반영합니다.
 	void UpdateCameraTransform(float DeltaTime, const FCFVehicleCameraTuningConfig& CameraTuningConfig, const FCFVehicleCameraAimProfile& AimProfile);
 
+	// [v0.3.1] 전체 Presentation Arm 경로의 충돌을 독립 Sweep으로 확인하고 경계 chatter 없는 안정된 Boom Arm 길이를 반환합니다.
+	float ResolveCollisionStableArmLength(
+		float DeltaTime,
+		const FCFVehicleCameraTuningConfig& CameraTuningConfig,
+		const FVector& PivotWorldLocation,
+		const FRotator& WorldAimRotation,
+		float DesiredArmLength,
+		float ResolvedSideOffset,
+		float ResolvedHeightOffset);
+
 	// [v0.1.0] 현재 카메라 기준 Aim Trace를 계산합니다.
 	void UpdateAimTrace(const FCFVehicleCameraTuningConfig& CameraTuningConfig);
 
@@ -213,11 +240,62 @@ private:
 	// 현재 누적 Aim Pitch를 저장합니다.
 	float AccumulatedAimPitch = 0.0f;
 
-	// 현재 Arm 길이 보간 상태를 저장합니다.
+	// 현재 Presentation Arm 길이 보간 상태를 저장합니다. SpringArm collision solved distance는 이 값에 역주입하지 않습니다.
 	float CurrentArmLength = 0.0f;
 
-	// 현재 FOV 보간 상태를 저장합니다.
+	// [v0.3.1] 충돌 중이거나 충돌 해제 복귀 중 SpringArm에 적용할 안정화된 Arm 길이입니다.
+	float CollisionRecoveryArmLength = 0.0f;
+
+	// [v0.3.1] 마지막 충돌 이후 연속 Clear 상태가 유지된 시간을 저장합니다.
+	float CollisionClearElapsedSec = 0.0f;
+
+	// [v0.3.1] 충돌 압축 또는 해제 복귀 상태가 활성인지 여부입니다.
+	bool bCollisionRecoveryActive = false;
+
+	// 현재 Presentation FOV 보간 상태를 저장합니다.
 	float CurrentFOV = 0.0f;
+
+	// [v0.2.0] 신규 Speed FOV를 제외한 Gameplay FOV 보간 상태입니다.
+	float CurrentGameplayFOV = 0.0f;
+
+	// [v0.2.0] 이전 valid frame의 XY 평면 Velocity입니다.
+	FVector PreviousPlanarVelocity = FVector::ZeroVector;
+
+	// [v0.2.0] 이전 valid frame의 XY 평면 위치입니다.
+	FVector PreviousPlanarLocation = FVector::ZeroVector;
+
+	// [v0.2.0] 이전 valid frame에서 당시 ForwardXY로 계산한 진행축 속도 절댓값입니다.
+	float PreviousForwardSpeedAbs = 0.0f;
+
+	// [v0.2.1] 현재 frame의 Reference/Velocity/Axis 입력이 normalized Driving FX 계산에 유효한지 여부입니다.
+	bool bDrivingMotionInputValid = false;
+
+	// [v0.2.0] Motion history를 다음 frame 차분에 사용할 수 있는지 여부입니다.
+	bool bHasValidDrivingMotionHistory = false;
+
+	// [v0.2.0] 필터 적용된 normalized 가속률입니다.
+	float FilteredAccelerationRate = 0.0f;
+
+	// [v0.2.0] 필터 적용된 normalized 제동률입니다.
+	float FilteredBrakingRate = 0.0f;
+
+	// [v0.2.0] 필터 적용된 signed normalized 횡가속률입니다.
+	float FilteredLateralRate = 0.0f;
+
+	// [v0.3.0] 실제 차체 Roll/Yaw motion에서 계산해 보간한 0~1 Lateral Presentation 강도입니다.
+	float FilteredLateralBodyMotionIntensity = 0.0f;
+
+	// [v0.2.0] 신규 Presentation 효과를 제외한 현재 Gameplay View입니다.
+	FCFVehicleCameraGameplayView CurrentGameplayView;
+
+	// [v0.2.0] Driving Roll 합성 기준으로 사용할 초기 FollowCamera 상대 회전입니다.
+	FRotator BaseFollowCameraRelativeRotation = FRotator::ZeroRotator;
+
+	// [v0.2.0] FollowCamera 상대 회전 baseline을 캡처했는지 여부입니다.
+	bool bHasBaseFollowCameraRelativeRotation = false;
+
+	// [v0.2.0] 이전 frame에 normalized Driving Roll을 실제 적용했는지 여부입니다.
+	bool bPresentationRollAppliedLastFrame = false;
 
 	// 카메라 표시용으로 보간된 기본 Yaw 값을 저장합니다.
 	float SmoothedCameraBaseYawDeg = 0.0f;

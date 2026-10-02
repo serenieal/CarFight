@@ -1,0 +1,40 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_74f4a7c1e03b4cb7b0a8134cb89d2f16",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_21f8ab32c5fe4c388949750036c192e4",
+  "parent_version_ids": [
+    "ver_fdfc2702b89f4a49a1045a8320c23535"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-057",
+    "title": "Vehicle Camera Driving FX (주행 카메라 연출 고도화)",
+    "phase": "VCFX-P0-02",
+    "next_action": "Continue VCFX-P0-02 without treating GoPyMCP managed PIE/RuntimeRead as a blocking prerequisite while GoPyMCP is unavailable. Obtain accepted Vehicle Builder PeakSpeedKmh evidence tied to the same persisted Target path + DefinitionHash for every in-scope VehicleData, then use the existing typed Vehicle Builder Preview/Review/Apply path to persist ReferenceMaxSpeedKmh and confirm the values with fresh persisted AssetDump. Only after all in-scope references are valid, enable shared DA_Cam_Default normalized Driving FX. Then perform direct USER driving/combat feel review for Speed FOV/Arm, acceleration/braking kick, lateral roll, camera collision pop, aiming/targeting disruption, and state attenuation where the corresponding gameplay state is actually available. GoPyMCP RuntimeRead/managed PIE re-validation is optional deferred evidence and is not a completion blocker under the current operating constraint.",
+    "blockers": [
+      "VCFX-P0-02 Product migration blocker: fresh CFVehicleData AssetDump exact3 shows DA_TestSedan, DA_TestSUV, and DA_VehicleDefense_TestSUV all ReferenceMaxSpeedKmh=0, and accepted same-Target + DefinitionHash Vehicle Builder PeakSpeedKmh evidence was not found. Shared DA_Cam_Default normalized activation remains intentionally disabled until valid references are persisted for all in-scope vehicles."
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-057"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleCameraFX/VehicleCameraFXPlan.md v0.2.4",
+      "Document/Systems/Vehicles/VehicleCamera.md v1.2.1",
+      "UE/Source/CarFight_Re/Public/CFVehicleData.h",
+      "UE/Source/CarFight_Re/Public/CFVehicleCameraData.h",
+      "UE/Source/CarFight_Re/Public/CFVehicleCameraTypes.h",
+      "UE/Source/CarFight_Re/Public/CFVehicleCameraComp.h",
+      "UE/Source/CarFight_Re/Private/CFVehicleCameraComp.cpp",
+      "UE/Source/CarFight_Re/Private/CFVehicleCameraFXTests.cpp",
+      "UE/Source/CarFight_Re/Private/CFTargetCandidateSearch.cpp",
+      "Tools/RunVCFXP002Tests.ps1"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-28",
+    "resolution_basis": "User operating decision: GoPyMCP is currently not in a workable state, so CarFight work must not be blocked by GoPyMCP repair or by managed PIE/RuntimeRead evidence when the remaining result can be directly confirmed by the user. Prior Source minimum implementation, final UE 5.8 exact-source Build PASS job 77dc3a851a374ef3a9aca8f4f91f5ab5, focused Automation exact6/6 PASS process 0d094404223140bc9978cce33b416607, and fresh persisted AssetDump evidence remain accepted and are not replayed. The prior managed PIE interpreter identity mismatch and missing automatic CameraModeFlags producer evidence are reclassified as non-blocking deferred technical evidence / USER-review items. The Product migration prerequisite remains blocking because normalized Driving FX cannot actually activate while all in-scope ReferenceMaxSpeedKmh values are 0 and no accepted same-Target + DefinitionHash PeakSpeedKmh evidence is available. No Source or Product Asset mutation was performed for this policy/state adjustment."
+  }
+}

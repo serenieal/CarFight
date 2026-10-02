@@ -1,0 +1,42 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_74f4a7c1e03b4cb7b0a8134cb89d2f16",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_fdfc2702b89f4a49a1045a8320c23535",
+  "parent_version_ids": [
+    "ver_5ca6800f35f148eaa52a0dd4f942a1c6"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-057",
+    "title": "Vehicle Camera Driving FX (주행 카메라 연출 고도화)",
+    "phase": "VCFX-P0-02",
+    "next_action": "Resume VCFX-P0-02 from the preserved Source/Build/Automation/Persisted-Asset checkpoint only. First resolve the GoPyMCP managed PIE lifecycle interpreter identity mismatch outside the CarFight repository and obtain accepted Vehicle Builder PeakSpeedKmh evidence tied to the same persisted Target path + DefinitionHash for every in-scope VehicleData. Then use the existing typed Vehicle Builder Preview/Review/Apply path to persist ReferenceMaxSpeedKmh (and optional CameraPresentationDataOverride), confirm all references by fresh AssetDump, enable shared DA_Cam_Default normalized Driving FX only after that atomic prerequisite is satisfied, and rerun bounded PIE RuntimeRead validation. Do not replay P0-00~01 or the already-PASS Source/Build/focused Automation unless a concrete correction changes them. Do not claim Combat/Aim/Airborne attenuation runtime PASS until an actual CameraModeFlags/Aim/Airborne producer is evidenced.",
+    "blockers": [
+      "VCFX-P0-02 Product migration blocker: fresh CFVehicleData AssetDump exact3 shows DA_TestSedan, DA_TestSUV, and DA_VehicleDefense_TestSUV all ReferenceMaxSpeedKmh=0, and accepted same-Target + DefinitionHash Vehicle Builder PeakSpeedKmh evidence was not found. Shared DA_Cam_Default normalized activation remains intentionally disabled.",
+      "VCFX-P0-02 PIE lifecycle infrastructure blocker: canonical managed Editor Runtime runtime_55dc7fe189294f03a4df3bd910ad9122 reached Ready, but managed carfight.pie.start failed before PIE with 'Managed UE Bridge interpreter identity mismatch; PIE lifecycle not started.'",
+      "VCFX-P0-02 attenuation evidence blocker: fresh C++ search found no Product caller for SetCameraModeFlags and no confirmed Combat/Aim/Airborne producer; Blueprint producer evidence remains unconfirmed because the bounded BP_CFVehiclePawn AssetDump preparation failed closed."
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-057"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleCameraFX/VehicleCameraFXPlan.md v0.2.3",
+      "Document/Systems/Vehicles/VehicleCamera.md v1.2.0",
+      "UE/Source/CarFight_Re/Public/CFVehicleData.h",
+      "UE/Source/CarFight_Re/Public/CFVehicleCameraData.h",
+      "UE/Source/CarFight_Re/Public/CFVehicleCameraTypes.h",
+      "UE/Source/CarFight_Re/Public/CFVehicleCameraComp.h",
+      "UE/Source/CarFight_Re/Private/CFVehicleCameraComp.cpp",
+      "UE/Source/CarFight_Re/Private/CFVehicleCameraFXTests.cpp",
+      "UE/Source/CarFight_Re/Private/CFTargetCandidateSearch.cpp",
+      "Tools/RunVCFXP002Tests.ps1"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-28",
+    "resolution_basis": "VCFX-P0-02 minimum Source implementation is complete against the frozen v0.2.2 contract without redesigning P0-00~01. Typed Vehicle Builder authoring now covers ReferenceMaxSpeedKmh + CameraPresentationDataOverride through Registry 137 / Resolver revision 7. Runtime source implements FCFVehicleDrivingFXConfig, normalized planar motion/fail-safe, Speed FOV/Arm, Accel/Brake Kick, Lateral Roll, Gameplay View separation, and legacy-disabled parity. Official UE 5.8 CarFight_ReEditor Win64 Development final build job 2c793e6cd80e4800940ce26c24f68d3b PASS. Focused Automation process 0d094404223140bc9978cce33b416607 exact6/6 PASS. Fresh AssetDump adset_v1_10e5afc7236839148edaef9f408f10b4.48ee093a94f563196d5396a7 confirms DA_Cam_Default retains legacy FOV +6 / Arm +45 and normalized=false; fresh CFVehicleData dataset adset_v1_f6ea3a9d8ea246b03707781ce5e5a91c.9239b52fa2f0a7d2238a86df confirms in-scope exact3 ReferenceMaxSpeedKmh=0 and CameraPresentationDataOverride=None. Product normalized activation was therefore not performed. Canonical Editor Runtime reached Ready but managed PIE start failed pre-PIE from interpreter identity mismatch, so PIE RuntimeRead Technical PASS and USER feel acceptance are NOT claimed. Existing unrelated dirty was preserved; no commit/push/reset/stash/rebase/clean was performed."
+  }
+}
