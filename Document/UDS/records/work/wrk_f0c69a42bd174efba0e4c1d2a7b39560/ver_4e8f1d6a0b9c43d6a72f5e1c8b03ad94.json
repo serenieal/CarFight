@@ -1,0 +1,30 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_f0c69a42bd174efba0e4c1d2a7b39560",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_4e8f1d6a0b9c43d6a72f5e1c8b03ad94",
+  "parent_version_ids": [
+    "ver_8d2b06e1ec4f4acda6acbba120a9dd37"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-056",
+    "title": "Projectile Flight Physics (발사체 공통 비행 물리)",
+    "phase": "PFP-P0-03",
+    "next_action": "PFP-P0-03 USER trajectory / reticle review: preserve PFP-P0-02 Technical PASS, verify representative gravity-on Cannon / Rocket / Guided Missile / BurnedOut trajectories in PIE, and review the existing bAffectedByGravity -> LaunchDirection / DirectImpact reticle meaning. Do not redesign or replay PFP-P0-00~02 unless a concrete blocker is found.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-056"
+    ],
+    "legacy_refs": [
+      "Document/Plan/ProjectileFlightPhysics/ProjectileFlightPhysicsPlan.md v0.1.4",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-27",
+    "resolution_basis": "PFP-P0-02 frozen-contract implementation completed without reopening P0-00/P0-01. Added UCFProjectileDynamicsComp as sole CarFight runtime non-gravity AddForce authority; MotorComp is impulse-preserving propulsion-step producer; MissileGuideComp is guidance-request producer; ProjectileMovement keeps full gravity, integration, sub-step, sweep/collision. Final official UE 5.8 Editor Build d18d4a6ee4574192bb87acf7b4819ff3 PASS/Exit0. Final gravity-on focused validation 047aa290d0cb4cbcbd2e60aa5cf9b1c9 exact12/12 PASS/Exit0, including Cannon ballistic, Rocket stabilization/saturation/axial governor/ignition/burnout, Missile level-climb-descent/shared saturation/post-burn/min-speed, frame-substep consistency and Pool residue0. Direct affected Projectile/Missile regressions also have clean targeted Exit0 evidence, including Direct Missile runner 74478513abf7460691f227a77c08ece0. Post-Implementation Mid-review P0 0 / blocking P1 0 / P2 1 non-blocking; remaining P2 is Reticle bAffectedByGravity -> LaunchDirection/DirectImpact USER semantics review. Product DataAsset/Blueprint/Engine Source mutation0; DA_Missile_DirectTest preserved; stage/commit/push0."
+  }
+}

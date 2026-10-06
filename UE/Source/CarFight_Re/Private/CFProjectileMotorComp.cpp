@@ -1,16 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.0
-// Date: 2026-08-02
+// Version: 1.2.0
+// Date: 2026-09-27
 // Description: CarFight 추진 발사체 모터 컴포넌트 구현
-// Scope: 점화 지연, Rocket 고정 방향·Missile 현재 방향 추진, 최대 속도와 연소 종료 후 관성 비행 상태를 구현합니다.
+// Scope: 점화 지연·연소 상태를 진행하고 Dynamics가 소비할 impulse 보존형 propulsion step을 생산합니다.
 // Changelog:
+// - v1.2.0: PFP-P0-02 직접 Velocity write와 world-speed clamp 제거, outer-frame MotorStep producer 및 consume handoff 추가.
 // - v1.1.0: 현재 ProjectileMovement Velocity 방향을 따라가는 미사일 추진 모드와 기존 StartMotor 호환 Adapter 추가.
 // - v1.0.0: CF-FQ-028 비유도 로켓 P0 추진 모터 최초 구현.
 // Migration:
 // - bUsePropulsion=false인 기존 ProjectileData는 Disabled 상태로 유지하며 Velocity를 변경하지 않습니다.
 // - 기존 StartMotor는 FixedLaunchDirection으로 동작하고 미사일만 CurrentVelocityDirection을 명시적으로 선택합니다.
-// - BurnedOut 전환은 Projectile을 제거하거나 정지하지 않고 추가 가속만 종료합니다.
+// - BurnedOut 전환은 Projectile을 제거하거나 정지하지 않고 propulsion step 생산만 종료합니다.
+// - 실제 추진 방향, TVC, MaximumPropelledSpeed axial governor와 AddForce 적용은 ProjectileDynamicsComp가 소유합니다.
 
 #include "CFProjectileMotorComp.h"
 
@@ -91,6 +93,7 @@ void UCFProjectileMotorComp::ResetMotor()
 	ElapsedFlightTimeSeconds = 0.0f;
 	ElapsedIgnitionDelaySeconds = 0.0f;
 	ElapsedBurnTimeSeconds = 0.0f;
+	LatestMotorStep = FCFProjectileMotorStep();
 	SetMotorState(ECFProjectileMotorState::Inactive);
 	RefreshMotorSnapshot();
 }
@@ -100,6 +103,15 @@ bool UCFProjectileMotorComp::IsProducingThrust() const
 {
 	return CurrentMotorState == ECFProjectileMotorState::Burning
 		&& IsValid(ActiveProjectileMovementComponent.Get());
+}
+
+// [v1.2.0] 같은 outer frame의 Dynamics가 최신 propulsion step을 정확히 한 번 소비하고 pending step을 비웁니다.
+FCFProjectileMotorStep UCFProjectileMotorComp::ConsumeLatestMotorStep()
+{
+	// [v1.2.0] Dynamics에 값 복사로 전달할 이번 frame의 생산 결과입니다.
+	const FCFProjectileMotorStep ConsumedMotorStep = LatestMotorStep;
+	LatestMotorStep = FCFProjectileMotorStep();
+	return ConsumedMotorStep;
 }
 
 // [v1.0.0] Debug 패널과 Automation에서 사용할 모터 요약 문자열을 생성합니다.
@@ -137,12 +149,21 @@ FString UCFProjectileMotorComp::BuildMotorSummary() const
 		CurrentMotorSnapshot.MotorActivationCount);
 }
 
-// [v1.0.0] Automation과 결정적 진단에서 월드 프레임 진행 없이 모터 시간 구간을 한 단계 진행합니다.
+// [v1.2.0] Automation과 결정적 진단에서 월드 프레임 진행 없이 모터 시간 구간을 한 단계 진행합니다.
 void UCFProjectileMotorComp::AdvanceMotorForAutomation(const float DeltaTime)
 {
 	if (CurrentMotorState != ECFProjectileMotorState::IgnitionDelay
 		&& CurrentMotorState != ECFProjectileMotorState::Burning)
 	{
+		LatestMotorStep = FCFProjectileMotorStep();
+
+		// [v1.2.0] 비연소 상태에서도 같은 outer frame 길이를 진단할 안전한 Step Delta입니다.
+		const float SafeStepDeltaSeconds = FMath::IsFinite(DeltaTime)
+			? FMath::Max(DeltaTime, 0.0f)
+			: 0.0f;
+		LatestMotorStep.StepDeltaSeconds = SafeStepDeltaSeconds;
+		LatestMotorStep.MotorStateBeforeStep = CurrentMotorState;
+		LatestMotorStep.MotorStateAfterStep = CurrentMotorState;
 		RefreshMotorSnapshot();
 		return;
 	}
@@ -151,7 +172,7 @@ void UCFProjectileMotorComp::AdvanceMotorForAutomation(const float DeltaTime)
 	RefreshMotorSnapshot();
 }
 
-// [v1.0.0] 점화 지연과 연소 시간 진행 후 ProjectileMovement Velocity에 추진 가속을 적용합니다.
+// [v1.2.0] 점화 지연과 연소 시간을 진행하고 이번 outer frame의 propulsion step을 생산합니다.
 void UCFProjectileMotorComp::TickComponent(
 	const float DeltaTime,
 	const ELevelTick TickType,
@@ -169,7 +190,16 @@ void UCFProjectileMotorComp::TickComponent(
 
 	if (!IsValid(ActiveProjectileMovementComponent.Get()))
 	{
+		LatestMotorStep = FCFProjectileMotorStep();
+
+		// [v1.2.0] Movement 참조 상실 frame을 진단할 안전한 Step Delta입니다.
+		const float SafeStepDeltaSeconds = FMath::IsFinite(DeltaTime)
+			? FMath::Max(DeltaTime, 0.0f)
+			: 0.0f;
+		LatestMotorStep.StepDeltaSeconds = SafeStepDeltaSeconds;
+		LatestMotorStep.MotorStateBeforeStep = CurrentMotorState;
 		SetMotorState(ECFProjectileMotorState::Disabled);
+		LatestMotorStep.MotorStateAfterStep = CurrentMotorState;
 		SetComponentTickEnabled(false);
 		RefreshMotorSnapshot();
 		return;
@@ -215,23 +245,42 @@ void UCFProjectileMotorComp::CompleteBurn()
 	SetComponentTickEnabled(false);
 }
 
-// [v1.0.0] 한 Tick의 시간 구간을 점화 지연과 연소 구간으로 나눠 처리합니다.
+// [v1.2.0] 한 Tick의 시간 구간을 점화 지연과 연소 구간으로 나눠 impulse 보존형 MotorStep을 생산합니다.
 void UCFProjectileMotorComp::AdvanceMotorSimulation(const float DeltaTime)
 {
-	// [v1.0.0] 점화와 연소 구간에 분배할 남은 프레임 시간입니다.
-	float RemainingFrameTime = FMath::Max(DeltaTime, 0.0f);
-	ElapsedFlightTimeSeconds += RemainingFrameTime;
+	// [v1.2.0] NaN과 음수를 제거한 이번 outer frame 전체 시간입니다.
+	const float SafeStepDeltaSeconds = FMath::IsFinite(DeltaTime)
+		? FMath::Max(DeltaTime, 0.0f)
+		: 0.0f;
+
+	LatestMotorStep = FCFProjectileMotorStep();
+	LatestMotorStep.StepDeltaSeconds = SafeStepDeltaSeconds;
+	LatestMotorStep.MotorStateBeforeStep = CurrentMotorState;
+	LatestMotorStep.ThrustAccelerationCmPerSecSq =
+		FMath::Max(ActivePropulsionConfig.ThrustAccelerationCmPerSecSq, 0.0f);
+	LatestMotorStep.MaximumPropelledSpeedCmPerSec =
+		FMath::Max(ActivePropulsionConfig.MaximumPropelledSpeed, 1.0f);
+
+	// [v1.2.0] 점화와 연소 구간에 분배할 남은 outer frame 시간입니다.
+	float RemainingFrameTime = SafeStepDeltaSeconds;
+	ElapsedFlightTimeSeconds += SafeStepDeltaSeconds;
 
 	if (CurrentMotorState == ECFProjectileMotorState::IgnitionDelay)
 	{
-		// [v1.0.0] 음수 입력을 제거한 총 점화 지연 시간입니다.
-		const float SafeIgnitionDelaySeconds = FMath::Max(ActivePropulsionConfig.IgnitionDelaySeconds, 0.0f);
+		// [v1.2.0] 음수 입력을 제거한 총 점화 지연 시간입니다.
+		const float SafeIgnitionDelaySeconds = FMath::Max(
+			ActivePropulsionConfig.IgnitionDelaySeconds,
+			0.0f);
 
-		// [v1.0.0] 현재 시점에 남아 있는 점화 지연 시간입니다.
-		const float RemainingIgnitionDelaySeconds = FMath::Max(SafeIgnitionDelaySeconds - ElapsedIgnitionDelaySeconds, 0.0f);
+		// [v1.2.0] 현재 시점에 남아 있는 점화 지연 시간입니다.
+		const float RemainingIgnitionDelaySeconds = FMath::Max(
+			SafeIgnitionDelaySeconds - ElapsedIgnitionDelaySeconds,
+			0.0f);
 
-		// [v1.0.0] 이번 프레임에서 실제 소비할 점화 지연 시간입니다.
-		const float ConsumedIgnitionDelaySeconds = FMath::Min(RemainingFrameTime, RemainingIgnitionDelaySeconds);
+		// [v1.2.0] 이번 frame에서 실제 소비할 점화 지연 시간입니다.
+		const float ConsumedIgnitionDelaySeconds = FMath::Min(
+			RemainingFrameTime,
+			RemainingIgnitionDelaySeconds);
 
 		ElapsedIgnitionDelaySeconds += ConsumedIgnitionDelaySeconds;
 		RemainingFrameTime -= ConsumedIgnitionDelaySeconds;
@@ -243,56 +292,47 @@ void UCFProjectileMotorComp::AdvanceMotorSimulation(const float DeltaTime)
 		}
 	}
 
-	if (CurrentMotorState != ECFProjectileMotorState::Burning || RemainingFrameTime <= KINDA_SMALL_NUMBER)
+	if (CurrentMotorState == ECFProjectileMotorState::Burning
+		&& RemainingFrameTime > KINDA_SMALL_NUMBER)
 	{
-		return;
+		// [v1.2.0] 음수 입력을 제거한 총 연소 시간입니다.
+		const float SafeBurnDurationSeconds = FMath::Max(
+			ActivePropulsionConfig.BurnDurationSeconds,
+			0.0f);
+
+		// [v1.2.0] 현재 시점에 남아 있는 연소 시간입니다.
+		const float RemainingBurnDurationSeconds = FMath::Max(
+			SafeBurnDurationSeconds - ElapsedBurnTimeSeconds,
+			0.0f);
+
+		// [v1.2.0] 이번 outer frame에서 실제 Burning 상태였던 시간입니다.
+		const float AppliedBurnDurationSeconds = FMath::Min(
+			RemainingFrameTime,
+			RemainingBurnDurationSeconds);
+
+		LatestMotorStep.AppliedBurnDurationSeconds = AppliedBurnDurationSeconds;
+		ElapsedBurnTimeSeconds += AppliedBurnDurationSeconds;
+
+		if (ElapsedBurnTimeSeconds + KINDA_SMALL_NUMBER >= SafeBurnDurationSeconds)
+		{
+			CompleteBurn();
+		}
 	}
 
-	// [v1.0.0] 음수 입력을 제거한 총 연소 시간입니다.
-	const float SafeBurnDurationSeconds = FMath::Max(ActivePropulsionConfig.BurnDurationSeconds, 0.0f);
-
-	// [v1.0.0] 현재 시점에 남아 있는 연소 시간입니다.
-	const float RemainingBurnDurationSeconds = FMath::Max(SafeBurnDurationSeconds - ElapsedBurnTimeSeconds, 0.0f);
-
-	// [v1.0.0] 이번 프레임에서 실제 가속에 사용할 연소 시간입니다.
-	const float AppliedBurnDurationSeconds = FMath::Min(RemainingFrameTime, RemainingBurnDurationSeconds);
-
-	ApplyThrustForDuration(AppliedBurnDurationSeconds);
-	ElapsedBurnTimeSeconds += AppliedBurnDurationSeconds;
-
-	if (ElapsedBurnTimeSeconds + KINDA_SMALL_NUMBER >= SafeBurnDurationSeconds)
-	{
-		CompleteBurn();
-	}
+	LatestMotorStep.AppliedBurnFraction =
+		SafeStepDeltaSeconds > KINDA_SMALL_NUMBER
+		? FMath::Clamp(
+			LatestMotorStep.AppliedBurnDurationSeconds / SafeStepDeltaSeconds,
+			0.0f,
+			1.0f)
+		: 0.0f;
+	LatestMotorStep.bHasPropulsionImpulse =
+		LatestMotorStep.AppliedBurnDurationSeconds > KINDA_SMALL_NUMBER
+		&& LatestMotorStep.ThrustAccelerationCmPerSecSq > KINDA_SMALL_NUMBER;
+	LatestMotorStep.MotorStateAfterStep = CurrentMotorState;
 }
 
-// [v1.1.0] 실제 연소 시간 구간만큼 현재 방향 모드의 추진 가속과 최대 속도 제한을 적용합니다.
-void UCFProjectileMotorComp::ApplyThrustForDuration(const float ThrustDurationSeconds)
-{
-	UProjectileMovementComponent* ProjectileMovement = ActiveProjectileMovementComponent.Get();
-	if (!ProjectileMovement || ThrustDurationSeconds <= KINDA_SMALL_NUMBER)
-	{
-		return;
-	}
-
-	// [v1.0.0] 음수 입력을 제거한 실제 추진 가속도입니다.
-	const float SafeThrustAcceleration = FMath::Max(ActivePropulsionConfig.ThrustAccelerationCmPerSecSq, 0.0f);
-
-	// [v1.0.0] 잘못 설정된 최대 추진 속도가 발사 직후의 InitialSpeed를 강제로 낮추지 않도록 현재 속도를 최소 상한으로 보존합니다.
-	const float CurrentSpeedBeforeThrust = ProjectileMovement->Velocity.Size();
-
-	// [v1.0.0] 현재 속력보다 작아지지 않는 실제 추진 속도 상한입니다.
-	const float SafeMaximumPropelledSpeed = FMath::Max(
-		FMath::Max(ActivePropulsionConfig.MaximumPropelledSpeed, 1.0f),
-		CurrentSpeedBeforeThrust);
-
-	// [v1.1.0] 현재 모드와 Velocity에서 해석한 실제 월드 추진 방향입니다.
-	const FVector CurrentThrustDirection = ResolveCurrentThrustDirection();
-	ProjectileMovement->Velocity += CurrentThrustDirection * SafeThrustAcceleration * ThrustDurationSeconds;
-	ProjectileMovement->Velocity = ProjectileMovement->Velocity.GetClampedToMaxSize(SafeMaximumPropelledSpeed);
-}
-
-// [v1.1.0] 현재 추진 방향 모드와 ProjectileMovement Velocity에서 실제 월드 추진 방향을 해석합니다.
+// [v1.2.0] 현재 추진 방향 모드와 ProjectileMovement Velocity에서 Debug용 source-intent 방향을 해석합니다.
 FVector UCFProjectileMotorComp::ResolveCurrentThrustDirection() const
 {
 	if (ThrustDirectionMode == ECFProjectileThrustDirectionMode::CurrentVelocityDirection

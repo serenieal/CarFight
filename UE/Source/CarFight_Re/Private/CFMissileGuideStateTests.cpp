@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.4.1
-// Date: 2026-09-07
-// Description: CF-FQ-030 MG-P0-09~12D Stateful Seeker, Sampled Target Observation, Guidance Law·Activation과 Rear Aspect 자동화 테스트
-// Scope: Stateful 상태 전이, Sampled 관측/추정, Guidance Variant/Law, Independent Activation, free Seeker geometry, law-independent rear tie-break, approach-armed Overshoot와 Reset 계약을 검증합니다.
+// Version: 1.5.1
+// Date: 2026-09-27
+// Description: CF-FQ-030 + CF-FQ-056 MG-P0-09~12D Stateful Seeker, Guidance Law·Activation과 PFP Dynamics handoff 자동화 테스트
+// Scope: Stateful 상태 전이, Sampled 관측/추정, Guidance Variant/Law, Independent Activation, rear-aspect와 Guide→Dynamics 실제 선회/응답 계약을 검증합니다.
 // Changelog:
+// - v1.5.1: MG-P0-11 성능 Variant의 GuidanceResponseTime 차이를 Guide legacy Applied 진단이 아니라 Dynamics의 실제 filtered/applied lateral control에서 검증하도록 PFP handoff에 맞춤.
+// - v1.5.0: PFP-P0-02에서 GuideComp의 직접 Velocity write가 제거됨에 따라 Course Capture→PN 전환 시 transient ProjectileDynamicsComp + 실제 ProjectileMovement 적분으로 선회 결과를 소비하도록 교정.
 // - v1.4.1: MG-P0-12D 최종검수 P1 교정으로 PurePursuit/LeadPursuit exact 180deg rear에서도 Launch Right tie-break가 실제 횡가속을 생성하고 방향오차·물리 상한을 보존하는 회귀를 추가.
 // - v1.4.0: MG-P0-12D GuidanceActivationRearAspectContract를 추가해 Independent AND+latch, 독립 Stateful 반각, exact rear Launch Right tie-break, approach-armed Overshoot와 Reset을 검증.
 // - v1.3.1: MG-P0-12C 동일 activation에서 rear Course Capture가 실제 Guidance 결과 Velocity를 유지해 접근 기하를 형성한 뒤 PN으로 복귀하는 전환 검증 추가.
@@ -29,6 +31,7 @@
 #include "CFMissileTestTarget.h"
 #include "CFProjectileActor.h"
 #include "CFProjectileData.h"
+#include "CFProjectileDynamicsComp.h"
 
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
@@ -90,6 +93,12 @@ namespace
 		// [v1.0.0] MG-P0-09 상태 전이를 실제로 실행할 transient GuideComp입니다.
 		UCFMissileGuideComp* MissileGuideComponent = nullptr;
 
+		// [v1.5.0] Guide request를 실제 ProjectileMovement AddForce로 합성할 transient DynamicsComp입니다.
+		UCFProjectileDynamicsComp* ProjectileDynamicsComponent = nullptr;
+
+		// [v1.5.0] Dynamics가 현재 Flight/Guide config를 읽도록 사용할 transient ProjectileData입니다.
+		UCFProjectileData* ProjectileData = nullptr;
+
 		// [v1.0.0] World 안에 Missile/Target과 필요한 Component를 생성하고 연결합니다.
 		bool Initialize(UWorld* InTestWorld)
 		{
@@ -132,10 +141,18 @@ namespace
 			MissileActor->AddInstanceComponent(MissileGuideComponent);
 			MissileGuideComponent->RegisterComponent();
 
+			ProjectileDynamicsComponent = NewObject<UCFProjectileDynamicsComp>(MissileActor, TEXT("StatefulProjectileDynamics"));
+			MissileActor->AddInstanceComponent(ProjectileDynamicsComponent);
+			ProjectileDynamicsComponent->RegisterComponent();
+
+			ProjectileData = NewObject<UCFProjectileData>(MissileActor, TEXT("StatefulProjectileData"));
+
 			return MissileRootComponent
 				&& ProjectileMovementComponent
 				&& MissileFlightComponent
-				&& MissileGuideComponent;
+				&& MissileGuideComponent
+				&& ProjectileDynamicsComponent
+				&& ProjectileData;
 		}
 
 		// [v1.0.0] Target을 Missile의 현재 위치에서 지정 반각과 거리로 배치합니다.
@@ -192,6 +209,21 @@ namespace
 				LaunchContext,
 				ProjectileMovementComponent,
 				MissileFlightComponent);
+
+			// [v1.5.0] PFP handoff test가 같은 Flight/Guide config를 Dynamics에서 사용하도록 transient data에 복사합니다.
+			ProjectileData->PropulsionConfig = FCFProjectilePropulsionConfig();
+			ProjectileData->MissileFlightConfig = FlightConfig;
+			ProjectileData->MissileGuideConfig = GuideConfig;
+			ProjectileData->bAffectedByGravity = false;
+			ProjectileData->GravityScale = 0.0f;
+
+			ProjectileDynamicsComponent->StartProjectileDynamics(
+				ProjectileData,
+				LaunchContext,
+				ProjectileMovementComponent,
+				nullptr,
+				MissileFlightComponent,
+				MissileGuideComponent);
 		}
 
 		// [v1.4.0] Flight Guidance Window를 의도적으로 닫은 상태에서 Guidance Activation 계약을 검증하도록 발사를 시작합니다.
@@ -246,10 +278,15 @@ namespace
 			MissileGuideComponent->AdvanceGuidanceForAutomation(DeltaTime);
 		}
 
-		// [v1.3.1] 같은 activation의 실제 Guidance 결과 Velocity를 유지한 채 다음 Guidance 단계를 진행합니다.
+		// [v1.5.0] 같은 activation에서 Guide request를 Dynamics와 실제 ProjectileMovement까지 진행해 다음 Guidance step이 실제 선회 결과를 관측하게 합니다.
 		void AdvanceGuidanceKeepingVelocity(const float DeltaTime) const
 		{
 			MissileGuideComponent->AdvanceGuidanceForAutomation(DeltaTime);
+			ProjectileDynamicsComponent->AdvanceDynamicsForAutomation(DeltaTime);
+			ProjectileMovementComponent->TickComponent(
+				DeltaTime,
+				LEVELTICK_All,
+				nullptr);
 		}
 	};
 
@@ -314,6 +351,12 @@ namespace
 		// [v1.1.0] MG-P0-10 observer와 estimator를 실제로 실행할 transient GuideComp입니다.
 		UCFMissileGuideComp* MissileGuideComponent = nullptr;
 
+		// [v1.5.1] MG-P0-11 response 비교에서 Guide request를 실제 PFP lateral control로 합성할 transient DynamicsComp입니다.
+		UCFProjectileDynamicsComp* ProjectileDynamicsComponent = nullptr;
+
+		// [v1.5.1] Sampled rig의 현재 Flight/Guide config를 Dynamics에 전달할 transient ProjectileData입니다.
+		UCFProjectileData* ProjectileData = nullptr;
+
 		// [v1.1.0] World 안에 Sampled observer 검증용 Missile/Target과 Component를 생성합니다.
 		bool Initialize(UWorld* InTestWorld)
 		{
@@ -350,10 +393,18 @@ namespace
 			MissileActor->AddInstanceComponent(MissileGuideComponent);
 			MissileGuideComponent->RegisterComponent();
 
+			ProjectileDynamicsComponent = NewObject<UCFProjectileDynamicsComp>(MissileActor, TEXT("SampledProjectileDynamics"));
+			MissileActor->AddInstanceComponent(ProjectileDynamicsComponent);
+			ProjectileDynamicsComponent->RegisterComponent();
+
+			ProjectileData = NewObject<UCFProjectileData>(MissileActor, TEXT("SampledProjectileData"));
+
 			return MissileRootComponent
 				&& ProjectileMovementComponent
 				&& MissileFlightComponent
-				&& MissileGuideComponent;
+				&& MissileGuideComponent
+				&& ProjectileDynamicsComponent
+				&& ProjectileData;
 		}
 
 		// [v1.1.0] Seeker 각도 검증이 이전 PN 조향에 영향받지 않도록 Missile 진행 방향을 +X로 복원합니다.
@@ -404,6 +455,21 @@ namespace
 				LaunchContext,
 				ProjectileMovementComponent,
 				MissileFlightComponent);
+
+			// [v1.5.1] Sampled rig에서도 Dynamics가 같은 Flight/Guide config를 사용하도록 transient data를 구성합니다.
+			ProjectileData->PropulsionConfig = FCFProjectilePropulsionConfig();
+			ProjectileData->MissileFlightConfig = FlightConfig;
+			ProjectileData->MissileGuideConfig = GuideConfig;
+			ProjectileData->bAffectedByGravity = false;
+			ProjectileData->GravityScale = 0.0f;
+
+			ProjectileDynamicsComponent->StartProjectileDynamics(
+				ProjectileData,
+				LaunchContext,
+				ProjectileMovementComponent,
+				nullptr,
+				MissileFlightComponent,
+				MissileGuideComponent);
 		}
 
 		// [v1.1.0] 실제 월드 Tick 없이 Guide observer와 Guidance를 한 단계 진행합니다.
@@ -411,6 +477,14 @@ namespace
 		{
 			ResetForwardVelocity();
 			MissileGuideComponent->AdvanceGuidanceForAutomation(DeltaTime);
+		}
+
+		// [v1.5.1] 동일 +X 시작 속도에서 Guide request와 Dynamics response filter를 한 outer frame 진행합니다.
+		void AdvanceGuidanceWithDynamics(const float DeltaTime)
+		{
+			ResetForwardVelocity();
+			MissileGuideComponent->AdvanceGuidanceForAutomation(DeltaTime);
+			ProjectileDynamicsComponent->AdvanceDynamicsForAutomation(DeltaTime);
 		}
 
 		// [v1.1.0] 현재 Flight 상태만 진행해 닫혀 있던 Guidance Window를 엽니다.
@@ -989,11 +1063,11 @@ bool FCFMissileGuidanceVariantMatrixTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("기준형 Variant 최초 20도 Target 획득 Tracking"), NormalPerformanceRig.MissileGuideComponent->GetGuideSnapshot().SeekerState, ECFMissileSeekerState::Tracking);
 	TestEqual(TEXT("고성능 Variant 최초 20도 Target 획득 Tracking"), HighPerformanceRig.MissileGuideComponent->GetGuideSnapshot().SeekerState, ECFMissileSeekerState::Tracking);
 
-	// [v1.2.0] 위치 변화에 따른 추정 속도 상쇄 없이 같은 오프축 정지 engagement에서 물리/Guidance response 차이를 누적할 시간입니다.
+	// [v1.5.1] 위치 변화에 따른 추정 속도 상쇄 없이 같은 오프축 정지 engagement에서 Dynamics response 차이를 누적할 시간입니다.
 	constexpr float SharedVariantResponseStepSeconds = 0.16f;
-	LowPerformanceRig.AdvanceGuidance(SharedVariantResponseStepSeconds);
-	NormalPerformanceRig.AdvanceGuidance(SharedVariantResponseStepSeconds);
-	HighPerformanceRig.AdvanceGuidance(SharedVariantResponseStepSeconds);
+	LowPerformanceRig.AdvanceGuidanceWithDynamics(SharedVariantResponseStepSeconds);
+	NormalPerformanceRig.AdvanceGuidanceWithDynamics(SharedVariantResponseStepSeconds);
+	HighPerformanceRig.AdvanceGuidanceWithDynamics(SharedVariantResponseStepSeconds);
 
 	// [v1.2.0] 동일 engagement에서 저성능 config가 실제 적용한 Guidance Command입니다.
 	const FCFMissileGuidanceCommand LowPerformanceCommand = LowPerformanceRig.MissileGuideComponent->GetGuidanceCommand();
@@ -1001,28 +1075,43 @@ bool FCFMissileGuidanceVariantMatrixTest::RunTest(const FString& Parameters)
 	// [v1.2.0] 동일 engagement에서 기준형 config가 실제 적용한 Guidance Command입니다.
 	const FCFMissileGuidanceCommand NormalPerformanceCommand = NormalPerformanceRig.MissileGuideComponent->GetGuidanceCommand();
 
-	// [v1.2.0] 동일 engagement에서 고성능 config가 실제 적용한 Guidance Command입니다.
+	// [v1.2.0] 동일 engagement에서 고성능 config가 생성한 pure-guidance 진단 Command입니다.
 	const FCFMissileGuidanceCommand HighPerformanceCommand = HighPerformanceRig.MissileGuideComponent->GetGuidanceCommand();
+
+	// [v1.5.1] 저성능 config의 GuidanceResponseTime을 실제로 소비한 Dynamics 결과입니다.
+	const FCFProjectileDynamicsSnapshot LowPerformanceDynamics =
+		LowPerformanceRig.ProjectileDynamicsComponent->GetProjectileDynamicsSnapshot();
+
+	// [v1.5.1] 기준형 config의 GuidanceResponseTime을 실제로 소비한 Dynamics 결과입니다.
+	const FCFProjectileDynamicsSnapshot NormalPerformanceDynamics =
+		NormalPerformanceRig.ProjectileDynamicsComponent->GetProjectileDynamicsSnapshot();
+
+	// [v1.5.1] 고성능 config의 GuidanceResponseTime을 실제로 소비한 Dynamics 결과입니다.
+	const FCFProjectileDynamicsSnapshot HighPerformanceDynamics =
+		HighPerformanceRig.ProjectileDynamicsComponent->GetProjectileDynamicsSnapshot();
 
 	TestTrue(TEXT("저성능 동일 engagement Guidance Command 유효"), LowPerformanceCommand.bCommandValid);
 	TestTrue(TEXT("기준형 동일 engagement Guidance Command 유효"), NormalPerformanceCommand.bCommandValid);
 	TestTrue(TEXT("고성능 동일 engagement Guidance Command 유효"), HighPerformanceCommand.bCommandValid);
-	TestTrue(TEXT("저성능 적용 Guidance가 기준형보다 약함"), LowPerformanceCommand.AppliedLateralAccelerationCmPerSecSq.Size() < NormalPerformanceCommand.AppliedLateralAccelerationCmPerSecSq.Size());
-	TestTrue(TEXT("기준형 적용 Guidance가 고성능보다 약함"), NormalPerformanceCommand.AppliedLateralAccelerationCmPerSecSq.Size() < HighPerformanceCommand.AppliedLateralAccelerationCmPerSecSq.Size());
-	TestTrue(TEXT("저성능 선회 반응이 기준형보다 작음"), LowPerformanceCommand.AppliedTurnRateDegPerSec < NormalPerformanceCommand.AppliedTurnRateDegPerSec);
-	TestTrue(TEXT("기준형 선회 반응이 고성능보다 작음"), NormalPerformanceCommand.AppliedTurnRateDegPerSec < HighPerformanceCommand.AppliedTurnRateDegPerSec);
-	TestTrue(TEXT("저성능 Guidance가 자체 물리 상한 준수"), IsGuidanceCommandInsidePhysicalLimits(LowPerformanceCommand, LowPerformanceConfig));
-	TestTrue(TEXT("기준형 Guidance가 자체 물리 상한 준수"), IsGuidanceCommandInsidePhysicalLimits(NormalPerformanceCommand, NormalPerformanceConfig));
-	TestTrue(TEXT("고성능 Guidance가 자체 물리 상한 준수"), IsGuidanceCommandInsidePhysicalLimits(HighPerformanceCommand, HighPerformanceConfig));
+	TestTrue(TEXT("저성능 Dynamics 적용 Guidance가 기준형보다 약함"), LowPerformanceDynamics.AppliedLateralControlAcceleration.Size() < NormalPerformanceDynamics.AppliedLateralControlAcceleration.Size());
+	TestTrue(TEXT("기준형 Dynamics 적용 Guidance가 고성능보다 약함"), NormalPerformanceDynamics.AppliedLateralControlAcceleration.Size() < HighPerformanceDynamics.AppliedLateralControlAcceleration.Size());
+	TestTrue(TEXT("저성능 Dynamics filtered Guidance가 기준형보다 작음"), LowPerformanceDynamics.GuidanceLateralRequest.Size() < NormalPerformanceDynamics.GuidanceLateralRequest.Size());
+	TestTrue(TEXT("기준형 Dynamics filtered Guidance가 고성능보다 작음"), NormalPerformanceDynamics.GuidanceLateralRequest.Size() < HighPerformanceDynamics.GuidanceLateralRequest.Size());
+	TestTrue(TEXT("저성능 Guidance가 자체 pure-guidance 물리 상한 준수"), IsGuidanceCommandInsidePhysicalLimits(LowPerformanceCommand, LowPerformanceConfig));
+	TestTrue(TEXT("기준형 Guidance가 자체 pure-guidance 물리 상한 준수"), IsGuidanceCommandInsidePhysicalLimits(NormalPerformanceCommand, NormalPerformanceConfig));
+	TestTrue(TEXT("고성능 Guidance가 자체 pure-guidance 물리 상한 준수"), IsGuidanceCommandInsidePhysicalLimits(HighPerformanceCommand, HighPerformanceConfig));
+	TestTrue(TEXT("저성능 Dynamics lateral이 config 최대 횡가속 이하"), LowPerformanceDynamics.AppliedLateralControlAcceleration.Size() <= LowPerformanceConfig.GetEffectiveMaximumLateralAccelerationCmPerSecSq() + 0.01f);
+	TestTrue(TEXT("기준형 Dynamics lateral이 config 최대 횡가속 이하"), NormalPerformanceDynamics.AppliedLateralControlAcceleration.Size() <= NormalPerformanceConfig.GetEffectiveMaximumLateralAccelerationCmPerSecSq() + 0.01f);
+	TestTrue(TEXT("고성능 Dynamics lateral이 config 최대 횡가속 이하"), HighPerformanceDynamics.AppliedLateralControlAcceleration.Size() <= HighPerformanceConfig.GetEffectiveMaximumLateralAccelerationCmPerSecSq() + 0.01f);
 
 	AddInfo(FString::Printf(
-		TEXT("MG-P0-11 Same Engagement Response: Low Accel=%.1f Turn=%.2f, Normal Accel=%.1f Turn=%.2f, High Accel=%.1f Turn=%.2f"),
-		LowPerformanceCommand.AppliedLateralAccelerationCmPerSecSq.Size(),
-		LowPerformanceCommand.AppliedTurnRateDegPerSec,
-		NormalPerformanceCommand.AppliedLateralAccelerationCmPerSecSq.Size(),
-		NormalPerformanceCommand.AppliedTurnRateDegPerSec,
-		HighPerformanceCommand.AppliedLateralAccelerationCmPerSecSq.Size(),
-		HighPerformanceCommand.AppliedTurnRateDegPerSec));
+		TEXT("MG-P0-11 Same Engagement Dynamics Response: Low Applied=%.1f Filtered=%.1f, Normal Applied=%.1f Filtered=%.1f, High Applied=%.1f Filtered=%.1f"),
+		LowPerformanceDynamics.AppliedLateralControlAcceleration.Size(),
+		LowPerformanceDynamics.GuidanceLateralRequest.Size(),
+		NormalPerformanceDynamics.AppliedLateralControlAcceleration.Size(),
+		NormalPerformanceDynamics.GuidanceLateralRequest.Size(),
+		HighPerformanceDynamics.AppliedLateralControlAcceleration.Size(),
+		HighPerformanceDynamics.GuidanceLateralRequest.Size()));
 
 	// [v1.2.1] 동일 이동·반전 Target에서 관측 주기와 속도 추정 응답 차이를 직접 비교할 저성능 장치입니다.
 	FCFSampledMissileTestRig LowMovingTargetRig;

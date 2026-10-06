@@ -1,16 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.0
-// Date: 2026-08-02
+// Version: 1.2.0
+// Date: 2026-09-27
 // Description: CarFight 추진 발사체 모터 컴포넌트
-// Scope: 점화 지연, Rocket 고정 방향·Missile 현재 방향 추진, 최대 속도와 연소 종료 후 관성 비행 상태를 관리합니다.
+// Scope: 점화 지연·연소 상태와 outer-frame propulsion step을 생산하고 기존 방향 API/Debug 호환을 유지합니다.
 // Changelog:
+// - v1.2.0: PFP-P0-02에서 직접 Projectile Velocity write와 최종 world-speed clamp를 제거하고 impulse 보존형 MotorStep producer로 전환.
 // - v1.1.0: 현재 ProjectileMovement Velocity 방향을 따라가는 미사일 추진 모드와 호환 Start API 추가.
 // - v1.0.0: CF-FQ-028 비유도 로켓 P0 추진 모터 최초 구현.
 // Migration:
 // - 기존 StartMotor는 FixedLaunchDirection을 선택해 Rocket 결과를 그대로 유지합니다.
 // - 미사일은 StartMotorWithDirectionMode에서 CurrentVelocityDirection을 명시적으로 선택합니다.
 // - ResetMotor는 Projectile 이동·충돌·피해를 종료하지 않고 모터 상태만 초기화합니다.
+// - PFP 이후 실제 추진 방향·가속도·MaximumPropelledSpeed governor 적용은 ProjectileDynamicsComp가 소유합니다.
 
 #pragma once
 
@@ -29,7 +31,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 	NewMotorState);
 
 /**
- * ProjectileMovement에 비유도 로켓 추진 가속을 적용하는 재사용 가능 컴포넌트입니다.
+ * 점화·연소 상태와 propulsion step을 생산하는 재사용 가능 컴포넌트입니다.
  */
 UCLASS(ClassGroup=(CarFight), BlueprintType, Blueprintable, meta=(BlueprintSpawnableComponent))
 class CARFIGHT_RE_API UCFProjectileMotorComp : public UActorComponent
@@ -67,9 +69,12 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|ProjectileMotor", meta=(DisplayName="현재 발사체 모터 상태 반환 (Get Projectile Motor State)", ToolTip="Inactive, Disabled, IgnitionDelay, Burning 또는 BurnedOut 중 현재 상태를 반환합니다."))
 	ECFProjectileMotorState GetMotorState() const { return CurrentMotorState; }
 
-	// [v1.0.0] 현재 Burning 상태에서 실제 추진 가속을 생산 중인지 반환합니다.
-	UFUNCTION(BlueprintPure, Category="CarFight|ProjectileMotor", meta=(DisplayName="발사체 추진 발생 여부 (Is Producing Projectile Thrust)", ToolTip="현재 모터가 Burning 상태이고 유효한 ProjectileMovement가 연결되어 있으면 True입니다."))
+	// [v1.2.0] 현재 Burning 상태에서 Dynamics가 소비할 propulsion step을 생산 중인지 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|ProjectileMotor", meta=(DisplayName="발사체 추진 발생 여부 (Is Producing Projectile Thrust)", ToolTip="현재 모터가 Burning 상태이고 유효한 ProjectileMovement가 연결되어 Dynamics에 propulsion step을 생산할 수 있으면 True입니다. MotorComp는 Velocity를 직접 변경하지 않습니다."))
 	bool IsProducingThrust() const;
+
+	// [v1.2.0] 같은 outer frame의 Dynamics가 정확히 한 번 소비할 최신 MotorStep을 반환하고 pending step을 비웁니다.
+	FCFProjectileMotorStep ConsumeLatestMotorStep();
 
 	// [v1.0.0] Debug 패널과 Automation에서 사용할 모터 요약 문자열을 생성합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|ProjectileMotor", meta=(DisplayName="발사체 모터 요약 생성 (Build Projectile Motor Summary)", ToolTip="현재 모터 상태, 점화·연소 시간, 속도, 추진 방향과 활성화 횟수를 문자열로 반환합니다."))
@@ -83,7 +88,7 @@ public:
 	void AdvanceMotorForAutomation(float DeltaTime);
 
 protected:
-	// [v1.0.0] 점화 지연과 연소 시간 진행 후 ProjectileMovement Velocity에 추진 가속을 적용합니다.
+	// [v1.2.0] 점화 지연과 연소 시간을 진행하고 이번 outer frame의 propulsion step을 생산합니다.
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 private:
@@ -96,13 +101,10 @@ private:
 	// [v1.0.0] 남은 연소 시간이 끝난 뒤 관성 비행 상태로 전환합니다.
 	void CompleteBurn();
 
-	// [v1.0.0] 한 Tick의 시간 구간을 점화 지연과 연소 구간으로 나눠 처리합니다.
+	// [v1.2.0] 한 Tick의 시간 구간을 점화 지연과 연소 구간으로 나눠 impulse 보존형 MotorStep을 생산합니다.
 	void AdvanceMotorSimulation(float DeltaTime);
 
-		// [v1.1.0] 실제 연소 시간 구간만큼 현재 방향 모드의 추진 가속과 최대 속도 제한을 적용합니다.
-	void ApplyThrustForDuration(float ThrustDurationSeconds);
-
-	// [v1.1.0] 현재 추진 방향 모드와 ProjectileMovement Velocity에서 실제 월드 추진 방향을 해석합니다.
+	// [v1.1.0] 현재 추진 방향 모드와 ProjectileMovement Velocity에서 Debug용 source-intent 방향을 해석합니다.
 	FVector ResolveCurrentThrustDirection() const;
 
 	// [v1.0.0] 현재 내부 상태를 Blueprint 읽기용 스냅샷에 반영합니다.
@@ -112,7 +114,7 @@ private:
 	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|ProjectileMotor|Debug", meta=(AllowPrivateAccess="true", DisplayName="활성 추진 설정 (ActivePropulsionConfig)", ToolTip="현재 활성화에 적용된 ProjectileData 추진 설정의 복사본입니다."))
 	FCFProjectilePropulsionConfig ActivePropulsionConfig;
 
-	// [v1.0.0] 현재 가속을 적용할 ProjectileMovement입니다.
+	// [v1.2.0] 현재 속도 Debug와 source-intent 방향 fallback을 읽을 ProjectileMovement입니다.
 	UPROPERTY(Transient)
 	TObjectPtr<UProjectileMovementComponent> ActiveProjectileMovementComponent = nullptr;
 
@@ -144,7 +146,11 @@ private:
 	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|ProjectileMotor|Debug", meta=(AllowPrivateAccess="true", DisplayName="모터 활성화 횟수 (MotorActivationCount)", ToolTip="StartMotor가 호출된 누적 횟수입니다. ResetMotor에서는 초기화하지 않습니다."))
 	int32 MotorActivationCount = 0;
 
+	// [v1.2.0] 같은 outer frame의 Dynamics가 한 번 소비할 최신 propulsion step입니다.
+	UPROPERTY(Transient)
+	FCFProjectileMotorStep LatestMotorStep;
+
 	// [v1.0.0] Blueprint와 Debug가 한 번에 읽을 현재 모터 스냅샷입니다.
-	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|ProjectileMotor|Debug", meta=(AllowPrivateAccess="true", DisplayName="현재 모터 스냅샷 (CurrentMotorSnapshot)", ToolTip="현재 상태와 시간, 속도, 방향, 추진 FX 요청을 모은 런타임 스냅샷입니다."))
+	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|ProjectileMotor|Debug", meta=(AllowPrivateAccess="true", DisplayName="현재 모터 스냅샷 (CurrentMotorSnapshot)", ToolTip="현재 상태와 시간, 속도, source-intent 방향, 추진 FX 요청을 모은 런타임 스냅샷입니다."))
 	FCFProjectileMotorSnapshot CurrentMotorSnapshot;
 };

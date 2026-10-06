@@ -1,8 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-07-24
-// Description: TS-P0-05 Enhanced Input 에셋, Pawn 후보 선택 확정과 Manual 해제 자동화 테스트
+// Version: 1.1.0
+// Date: 2026-10-02
+// Description: TS-P0-05 Enhanced Input 에셋, Pawn 후보 선택/해제와 Vehicle Target Lock 입력 배선 자동화 테스트
+// Changelog:
+// - v1.1.0: IA_TargetLock Boolean 자산과 T 키 매핑을 추가하고 Pawn InputAction_TargetLock 기본 연결 계약을 검증.
 
 #include "CFVehiclePawn.h"
 #include "CFTargetSelectComp.h"
@@ -26,6 +28,8 @@ namespace
 {
 	const TCHAR* SelectTargetPackageName = TEXT("/Game/CarFight/Input/IA_SelectTarget");
 	const TCHAR* SelectTargetAssetName = TEXT("IA_SelectTarget");
+	const TCHAR* TargetLockPackageName = TEXT("/Game/CarFight/Input/IA_TargetLock");
+	const TCHAR* TargetLockAssetName = TEXT("IA_TargetLock");
 	const TCHAR* ClearTargetPackageName = TEXT("/Game/CarFight/Input/IA_ClearTarget");
 	const TCHAR* ClearTargetAssetName = TEXT("IA_ClearTarget");
 	const TCHAR* DefaultMappingContextPath = TEXT("/Game/CarFight/Input/IMC_Vehicle_Default.IMC_Vehicle_Default");
@@ -140,9 +144,10 @@ namespace
 	bool EnsureTargetInputMappings(
 		UInputMappingContext* MappingContext,
 		UInputAction* SelectTargetAction,
+		UInputAction* TargetLockAction,
 		UInputAction* ClearTargetAction)
 	{
-		if (!MappingContext || !SelectTargetAction || !ClearTargetAction)
+		if (!MappingContext || !SelectTargetAction || !TargetLockAction || !ClearTargetAction)
 		{
 			return false;
 		}
@@ -157,6 +162,7 @@ namespace
 		{
 			{SelectTargetAction, EKeys::MiddleMouseButton},
 			{SelectTargetAction, EKeys::Gamepad_RightThumbstick},
+			{TargetLockAction, EKeys::T},
 			{ClearTargetAction, EKeys::RightMouseButton},
 			{ClearTargetAction, EKeys::Gamepad_FaceButton_Right}
 		};
@@ -225,22 +231,26 @@ bool FCFTargetInputIntegrationTest::RunTest(const FString& Parameters)
 	(void)Parameters;
 
 	UInputAction* SelectTargetAction = EnsureBooleanInputAction(SelectTargetPackageName, SelectTargetAssetName);
+	UInputAction* TargetLockAction = EnsureBooleanInputAction(TargetLockPackageName, TargetLockAssetName);
 	UInputAction* ClearTargetAction = EnsureBooleanInputAction(ClearTargetPackageName, ClearTargetAssetName);
 	UInputMappingContext* DefaultMappingContext = LoadObject<UInputMappingContext>(nullptr, DefaultMappingContextPath);
 
 	TestNotNull(TEXT("IA_SelectTarget 생성 또는 로드"), SelectTargetAction);
+	TestNotNull(TEXT("IA_TargetLock 생성 또는 로드"), TargetLockAction);
 	TestNotNull(TEXT("IA_ClearTarget 생성 또는 로드"), ClearTargetAction);
 	TestNotNull(TEXT("IMC_Vehicle_Default 로드"), DefaultMappingContext);
-	if (!SelectTargetAction || !ClearTargetAction || !DefaultMappingContext)
+	if (!SelectTargetAction || !TargetLockAction || !ClearTargetAction || !DefaultMappingContext)
 	{
 		return false;
 	}
 
 	TestEqual(TEXT("IA_SelectTarget 값 타입 Boolean"), SelectTargetAction->ValueType, EInputActionValueType::Boolean);
+	TestEqual(TEXT("IA_TargetLock 값 타입 Boolean"), TargetLockAction->ValueType, EInputActionValueType::Boolean);
 	TestEqual(TEXT("IA_ClearTarget 값 타입 Boolean"), ClearTargetAction->ValueType, EInputActionValueType::Boolean);
-	TestTrue(TEXT("TargetSelect 입력 매핑 저장"), EnsureTargetInputMappings(DefaultMappingContext, SelectTargetAction, ClearTargetAction));
+	TestTrue(TEXT("TargetSelect/Lock 입력 매핑 저장"), EnsureTargetInputMappings(DefaultMappingContext, SelectTargetAction, TargetLockAction, ClearTargetAction));
 	TestTrue(TEXT("선택 키 MiddleMouseButton"), HasInputMapping(DefaultMappingContext, SelectTargetAction, EKeys::MiddleMouseButton));
 	TestTrue(TEXT("선택 키 Gamepad RightThumbstick"), HasInputMapping(DefaultMappingContext, SelectTargetAction, EKeys::Gamepad_RightThumbstick));
+	TestTrue(TEXT("락 키 T"), HasInputMapping(DefaultMappingContext, TargetLockAction, EKeys::T));
 	TestTrue(TEXT("해제 키 RightMouseButton"), HasInputMapping(DefaultMappingContext, ClearTargetAction, EKeys::RightMouseButton));
 	TestTrue(TEXT("해제 키 Gamepad FaceButton Right"), HasInputMapping(DefaultMappingContext, ClearTargetAction, EKeys::Gamepad_FaceButton_Right));
 
@@ -274,8 +284,10 @@ bool FCFTargetInputIntegrationTest::RunTest(const FString& Parameters)
 	}
 
 	VehiclePawn->InputAction_SelectTarget = SelectTargetAction;
+	VehiclePawn->InputAction_TargetLock = TargetLockAction;
 	VehiclePawn->InputAction_ClearTarget = ClearTargetAction;
 	TestEqual(TEXT("Pawn 선택 Input Action 연결"), VehiclePawn->InputAction_SelectTarget.Get(), SelectTargetAction);
+	TestEqual(TEXT("Pawn 락 Input Action 연결"), VehiclePawn->InputAction_TargetLock.Get(), TargetLockAction);
 	TestEqual(TEXT("Pawn 해제 Input Action 연결"), VehiclePawn->InputAction_ClearTarget.Get(), ClearTargetAction);
 
 	UCFTargetSelectComp* TargetSelectComp = VehiclePawn->GetTargetSelectComp();

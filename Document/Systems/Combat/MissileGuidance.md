@@ -1,11 +1,11 @@
 # Missile Guidance
 
-- Version: 1.1.0
-- Date: 2026-09-18
-- Status: Current System / CF-FQ-030 P0 Complete / CF-TC-027 PASS / Phase 7 Locked Guidance Source Integration PASS
-- Feature: `CF-FQ-030 물리 제한형 미사일 비행·유도`
-- Validation: Technical PASS + USER Guidance Feel ACCEPTED
-- Scope: Direct Release 기반 TargetActor 미사일의 발사 순간 목표 Snapshot, 비행 상태, 물리 제한형 Guidance, Seeker/관측/재포착, Guidance Law, 독립 Guidance Activation과 Pool 재사용 안전성의 현재 구현 기준
+- Version: 1.2.0
+- Date: 2026-09-27
+- Status: Current System / CF-FQ-030 P0 Complete / CF-TC-027 PASS / CF-FQ-056 PFP-P0-02 TECHNICAL IMPLEMENTATION PASS / Phase 7 Locked Guidance Source Integration PASS
+- Feature: `CF-FQ-030 물리 제한형 미사일 비행·유도`, `CF-FQ-056 발사체 공통 비행 물리`
+- Validation: 기존 USER Guidance Feel ACCEPTED + PFP gravity-on Technical PASS / PFP-P0-03 trajectory·reticle USER review pending
+- Scope: Direct Release TargetActor 미사일의 목표 Snapshot·Flight·Seeker/관측/Guidance Law와 authoritative lateral request 생산, ProjectileDynamics의 gravity-aware shared lateral-control handoff, Pool 재사용 안전성의 현재 구현 기준
 
 ---
 
@@ -50,6 +50,9 @@ Document/Plan/MissileGuidance/GuidancePerformanceDesign.md
 - exact rear 방향의 결정적 Launch Right tie-break
 - Impact/LifeExpired/Pool 재사용 시 Flight·Guidance Runtime Reset
 - Low / Normal / High USER Guidance Feel acceptance
+- PFP 이후 GuideComp는 Projectile Velocity를 직접 쓰지 않고 `RequestedLateralAccelerationCmPerSecSq`를 authoritative request로 생산
+- ProjectileDynamics가 Guidance request와 GravityLateral 대응을 같은 lateral-control budget에서 한 번만 제한
+- BurnedOut에서도 충분한 속도면 bounded lateral control 가능, MinimumGuidanceSpeed 아래면 lateral authority 0
 ```
 
 현재 USER 판정은 Low / Normal / High를 실제 `MissileDirectTest` PIE에서 확인한 **P0 체감 승인**이다. 사용자 표현은 `얼추 PASS`이며, 이는 유도 수치가 영구 동결됐다는 의미가 아니다.
@@ -77,13 +80,18 @@ MissileGuideConfig
 
 ```text
 ProjectileMotorComp ─┐
-                     ├→ MissileGuideComp → ProjectileMovementComponent
-MissileFlightComp ───┘
+MissileFlightComp ───┼→ MissileGuideComp
+                     │
+ProjectileMotorComp ─┐
+MissileFlightComp ───┼→ ProjectileDynamicsComp → ProjectileMovementComponent
+MissileGuideComp ────┘
 ```
 
-`MissileGuideComp`는 Motor와 Flight를 모두 Tick prerequisite로 두고 두 컴포넌트 이후에 Guidance를 계산한다. `ProjectileMovementComponent`는 `MissileGuideComp`를 Tick prerequisite로 둬 Guidance 결과 Velocity로 실제 이동한다. 현재 Source는 Motor와 Flight 사이의 상대 실행 순서를 별도 prerequisite로 고정하지 않는다.
+`MissileGuideComp`는 Motor와 Flight 이후 Target observation / Seeker / Guidance Law를 계산해 authoritative lateral acceleration request를 만든다. Guide 자체는 ProjectileMovement Velocity를 직접 변경하지 않는다.
 
-공통 Actor는 활성화·충돌·Impact·Lifetime·Pool 반환을 계속 소유한다. Guidance 알고리즘 세부 책임은 `UCFMissileGuideComp`가 소유한다.
+`ProjectileDynamicsComp`는 Motor/Flight/Guide 모두를 prerequisite로 두고 현재 Velocity·실제 중력을 읽어 axial propulsion과 lateral flight control을 합성한다. `ProjectileMovementComponent`는 Dynamics 이후 pending `AddForce()`와 full gravity를 함께 적분한다. Motor와 Flight 사이의 상대 실행 순서는 별도 prerequisite로 고정하지 않는다.
+
+공통 Actor는 활성화·충돌·Impact·Lifetime·Pool 반환을 계속 소유한다. Seeker/관측/Guidance Law는 `UCFMissileGuideComp`, 최종 gravity-aware 물리 적용은 `UCFProjectileDynamicsComp`가 소유한다.
 
 ### 3.3 Launch Context
 
@@ -201,7 +209,7 @@ AimPoint = LastObservedTargetLocation + LeadOffset
 
 rear/non-closing 기하에서는 즉시 비정상 PN 명령을 만들지 않고 물리 제한형 Course Capture로 접근 기하를 먼저 만든 뒤 PN으로 복귀한다.
 
-세 Law는 모두 같은 물리 제한 계약을 사용한다.
+세 Law는 모두 같은 Guidance 성능 계약을 사용한다.
 
 ```text
 MaximumTurnRateDegPerSec
@@ -210,7 +218,18 @@ GuidanceResponseTimeSeconds
 MinimumGuidanceSpeedCmPerSec
 ```
 
-미사일 위치 순간이동, Target 방향으로 Velocity 강제 덮어쓰기, 강제 명중은 사용하지 않는다.
+GuideComp의 `AppliedLateralAccelerationCmPerSecSq`와 `AppliedTurnRateDegPerSec`는 기존 Blueprint/API 호환을 위한 pure-guidance diagnostic이다. 실제 PFP 최종 적용은 Dynamics가 수행한다.
+
+```text
+GuidanceLateral = GuidanceRequest projected perpendicular to FlightTangent
+GravityLateral = Gravity projected perpendicular to FlightTangent
+CombinedLateralRequest = FilteredGuidanceRequest - GravityLateral
+EffectiveMaxLateral = min(MaximumLateralAcceleration, Speed * MaximumTurnRateRadians)
+```
+
+Dynamics는 `CombinedLateralRequest`를 위 shared budget으로 한 번만 제한한다. Guidance와 횡중력 대응이 서로 독립적인 무료 가속도 채널을 갖지 않는다. 상승/하강 방향의 `GravityParallel`은 제거하지 않는다.
+
+미사일 위치 순간이동, Target 방향으로 Velocity 강제 덮어쓰기, 중력 OFF, 강제 명중은 사용하지 않는다.
 
 ---
 
@@ -325,9 +344,11 @@ Course Capture
 Guidance Activation latch
 Overshoot armed state
 Current Guidance Command / Snapshot
+Dynamics filtered guidance request / Dynamics Snapshot
+ProjectileMovement pending force
 ```
 
-누적 activation count처럼 진단 목적 누적값은 해당 컴포넌트 계약에 따라 유지할 수 있으나, 다음 활성화의 동작 입력으로 이전 Target/Guidance 상태를 재사용하지 않는다.
+Pool Deactivation 순서는 Dynamics Reset / `ClearPendingForce(true)`를 먼저 수행한 뒤 Guide / Flight / Motor를 Reset하고 Movement를 정지·비활성화한다. 누적 activation count처럼 진단 목적 누적값은 해당 컴포넌트 계약에 따라 유지할 수 있으나, 다음 활성화의 동작 입력으로 이전 Target/Guidance/Dynamics force 상태를 재사용하지 않는다.
 
 ---
 
@@ -363,17 +384,34 @@ Low/Normal/High 신규 seed가 필요한 시험 저작은 `CarFight_ReEditor` au
 
 ## 12. 현재 검증 상태
 
-`CF-TC-027`은 현재 범위에서 Complete / PASS다.
+`CF-TC-027`의 기존 Guidance P0는 Complete / PASS이며, CF-FQ-056 PFP-P0-02 gravity-aware handoff도 Technical PASS다.
 
 ```text
-Technical Validation = PASS
-USER Guidance Feel = ACCEPTED
+CF-FQ-030 Technical Validation = PASS
+CF-FQ-030 USER Guidance Feel = ACCEPTED
+CF-FQ-056 PFP-P0-02 Technical Implementation = PASS
+CF-FQ-056 PFP-P0-03 trajectory / reticle USER review = PENDING
 ```
 
 최신 완료 evidence:
 
 ```text
-Official UE 5.8 Editor Build
+PFP-P0-02 Official UE 5.8 Editor Build
+- Job d18d4a6ee4574192bb87acf7b4819ff3
+- PASS / Exit Code 0
+
+PFP gravity-on focused
+- Job 047aa290d0cb4cbcbd2e60aa5cf9b1c9
+- exact12 / 12 PASS / Engine Exit 0
+
+PFP Missile direct-impact regressions
+- Direct Runtime dedicated runner 74478513abf7460691f227a77c08ece0 PASS / Editor Exit 0
+- ObservationEstimator bfbbcaf5c51f419ca5248ae7cd0536e6 PASS
+- GuidanceVariantMatrix 8a64453dae574681b1929709910a6d37 PASS
+- GuidanceLawContract c4ad36a1c8d44feab2f7cb7b5a1fe177 PASS
+- GuidanceActivationRearAspect ce766cf76b264cc8bfc73d1aad879f19 PASS
+
+CF-FQ-030 Historical Official UE 5.8 Editor Build
 - Job 823b88eda5fc42b4b83f41135aa2df0f
 - PASS / Exit Code 0
 
@@ -460,7 +498,10 @@ Missile Guidance 관련 Source/Asset 변경 시 최소 보호 기준:
 - 재포착은 동일 Launch Target만 허용
 - Independent Delay+Distance AND 및 latch 유지
 - rear-aspect / Overshoot 결정성 유지
-- Impact/LifeExpired/Pool Reset 뒤 이전 Target/Guide state 오염 없음
+- Impact/LifeExpired/Pool Reset 뒤 이전 Target/Guide/Dynamics force state 오염 없음
+- GuideComp가 ProjectileMovement Velocity를 직접 변경하지 않음
+- Dynamics만 non-gravity AddForce authority이며 Guidance + GravityLateral이 shared budget을 사용
+- MinimumGuidanceSpeed 아래 lateral authority 0
 - Guidance Preset load-time user tuning overwrite 없음
 ```
 
@@ -485,6 +526,18 @@ Missile Guidance 관련 Source/Asset 변경 시 최소 보호 기준:
 ---
 
 ## 17. Changelog
+
+### v1.2.0 - 2026-09-27
+
+```text
+- CF-FQ-056 PFP-P0-02 결과를 반영해 MissileGuideComp를 direct Velocity writer에서 authoritative guidance-request producer로 갱신했다.
+- UCFProjectileDynamicsComp가 Guide request와 GravityLateral compensation을 하나의 최대 횡가속/선회율 budget에서 합성하고 ProjectileMovement AddForce로 전달하는 현재 책임을 기록했다.
+- 기존 AppliedLateralAcceleration / AppliedTurnRate는 pure-guidance diagnostic 호환값이며 실제 최종 적용 authority는 Dynamics Snapshot임을 명시했다.
+- BurnedOut 이후 axial thrust 0 + 충분한 속도에서 bounded lateral control 가능, MinimumGuidanceSpeed 아래 lateral authority 0 계약을 기록했다.
+- Pool Reset에 Dynamics filter/snapshot 및 pending force clear를 추가했다.
+- Official Build d18d4a6ee4574192bb87acf7b4819ff3 PASS, PFP gravity-on exact12 12/12 PASS와 Missile targeted regressions PASS를 반영했다.
+- 기존 CF-FQ-030 USER Guidance Feel ACCEPTED는 유지하며 PFP-P0-03 trajectory/reticle USER review는 별도 Pending으로 구분했다.
+```
 
 ### v1.1.0 - 2026-09-18
 

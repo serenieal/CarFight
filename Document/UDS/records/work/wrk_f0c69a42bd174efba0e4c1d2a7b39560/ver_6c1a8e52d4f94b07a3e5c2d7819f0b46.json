@@ -1,0 +1,35 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_f0c69a42bd174efba0e4c1d2a7b39560",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_6c1a8e52d4f94b07a3e5c2d7819f0b46",
+  "parent_version_ids": [
+    "ver_4e8f1d6a0b9c43d6a72f5e1c8b03ad94"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-056",
+    "title": "Projectile Flight Physics (발사체 공통 비행 물리)",
+    "phase": "PFP-P0-03",
+    "next_action": "Resume PFP-P0-03 only. Reticle technical semantics are resolved: current Image_WeaponReticle is a CurrentMuzzleDirection-based turret reticle and legacy bAffectedByGravity -> LaunchDirection/DirectImpact is debug-only. Recover an approved PFP review-fixture authoring path plus managed PIE start, then run USER trajectory review for gravity-on Cannon, stabilized Rocket, Guided Missile, and BurnedOut flight. Do not replay PFP-P0-00~02 unless USER trajectory reveals a concrete runtime defect.",
+    "blockers": [
+      "PFP-P0-03 USER trajectory validation fixture blocker: persisted DA_Rocket_PropTest has Launch-Axis Stabilization disabled and persisted DA_Missile_DirectTest has gravity disabled. Existing legacy/product fixtures are intentionally protected; current approved UE DataAsset property-write surface could not complete a separate configured review fixture and rolled back all attempted property writes.",
+      "PFP-P0-03 PIE lifecycle infrastructure blocker: managed carfight.pie.start failed before PIE with 'Managed UE Bridge interpreter identity mismatch; PIE lifecycle not started.' Direct StartPIE write is server-policy blocked. No USER trajectory run occurred."
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-056"
+    ],
+    "legacy_refs": [
+      "Document/Plan/ProjectileFlightPhysics/ProjectileFlightPhysicsPlan.md v0.1.5",
+      "Document/Systems/UI/AimReticle.md",
+      "Document/Systems/Vehicles/VehicleAim.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-27",
+    "resolution_basis": "PFP-P0-03 started from preserved PFP-P0-02 TECHNICAL IMPLEMENTATION PASS without replay. Fresh Source, Current Systems, and persisted WidgetBlueprint evidence show Image_WeaponReticle consumes CurrentMuzzleDirection-derived TurretReticleWorldLocation and does not consume ECFWeaponReticleMode/WeaponPreviewWorldLocation; legacy bAffectedByGravity -> LaunchDirection/DirectImpact is debug-only, so the prior non-blocking Reticle P2 is RESOLVED with product code/Blueprint mutation0. Fresh WidgetBlueprint dataset adset_v1_5fe6aa9daf8ba8cc99537ba3bdf6cc44.89b243181cfc24fdc49872f2 exact22/succeeded22/failed0. Fresh ProjectileData dataset adset_v1_bbad965c172cd7c373559038bfa24dd3.9d859db04589625eab327c74 exact5/succeeded5/failed0 confirms DA_HeavyShell gravity-on readiness, DA_Rocket_PropTest stabilization false/TVC0, and DA_Missile_DirectTest gravity false. Live referencer inspection confirms originals feed existing product/regression chains, so they were not modified. Approved /Game/Test DataAsset creation was explored; property writes failed complete forward/inverse contract and rolled back, the unsaved empty review asset was discarded with AI-owned Editor stop (save_requested=false), Git residue0. Managed PIE start job 2d02e1f8ceee4ff9803e293131da2726 failed pre-PIE from UE Bridge interpreter identity mismatch. USER trajectory acceptance remains NOT RUN; PFP-P0-02 Technical PASS remains preserved."
+  }
+}

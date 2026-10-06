@@ -1,13 +1,15 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-07-28
-// Description: CF-FQ-029 Projectile Launch Handoff 자동화 테스트
-// Scope: Launch Context 기본값, Actor·Pool 전달, 초기 월드 Velocity, Legacy Direct 호환과 비활성화 Reset을 검증합니다.
+// Version: 1.1.0
+// Date: 2026-09-27
+// Description: CF-FQ-029 + CF-FQ-056 Projectile Launch Handoff 자동화 테스트
+// Scope: Launch Context 기본값, Actor·Pool 전달, 초기 월드 Velocity, PFP world-speed unclamped 계약, Legacy Direct 호환과 비활성화 Reset을 검증합니다.
 // Changelog:
+// - v1.1.0: PFP-P0-02에서 ProjectileMovement MaxSpeed hard clamp를 비활성화한 계약에 맞춰 비추진 Context 기대값을 0으로 교정.
 // - v1.0.0: LM-P0-01 RuntimeContract 자동화 테스트 최초 추가.
 // Migration:
 // - 외부 Blueprint 또는 DataAsset 없이 C++ Launch Context와 기존 Direct Projectile 회귀를 검증합니다.
+// - MaxSpeed=0은 무제한/비활성 hard clamp 의미이며 중력·하강·플랫폼 상속 속도를 자르지 않습니다.
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -98,7 +100,7 @@ bool FCFProjectileLaunchContractTest::RunTest(const FString& Parameters)
 	{
 		TestTrue(TEXT("Context InitialLaunchVelocity가 그대로 적용"), DirectMovementComp->Velocity.Equals(ContextInitialVelocity, KINDA_SMALL_NUMBER));
 		TestEqual(TEXT("Context 초기 속력으로 InitialSpeed 갱신"), DirectMovementComp->InitialSpeed, 450.0f);
-		TestEqual(TEXT("비추진 Context 초기 속력으로 MaxSpeed 갱신"), DirectMovementComp->MaxSpeed, 450.0f);
+		TestEqual(TEXT("PFP 비추진 Context는 world-speed hard clamp 비활성"), DirectMovementComp->MaxSpeed, 0.0f);
 	}
 
 	// [v1.0.0] Actor가 복사해 보유하는 현재 활성 Launch Context입니다.

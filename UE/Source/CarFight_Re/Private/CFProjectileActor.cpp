@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.13.0
-// Date: 2026-08-02
+// Version: 1.14.0
+// Date: 2026-09-27
 // Description: CarFight 공통 발사체 Actor 구현
-// Scope: ProjectileData 기반 추진 / 미사일 비행·유도 / 표시 / 지속형 비행 FX / 이동 / 풀링 / 동일 발사 차량 격리, Projectile 요격과 정식 차량 방어 결과를 제공합니다.
+// Scope: ProjectileData 기반 Dynamics / 추진 / 미사일 비행·유도 / 표시 / 비행 FX / ProjectileMovement / 풀링 / 충돌·요격·차량 방어 결과를 제공합니다.
 // Changelog:
+// - v1.14.0: PFP-P0-02 ProjectileDynamicsComp 생성, producer→Dynamics→ProjectileMovement Tick 순서, single AddForce 시작과 Pool pending-force reset 연결.
 // - v1.13.0: MissileFlightComp·MissileGuideComp 생성, Target Snapshot Guidance, 현재 방향 추진과 비활성화 Reset을 연결.
 // - v1.12.0: 첫 유효 Impact를 VehicleDefenseComp 진입점으로 전환하고 전체 방어 결과와 기존 Integrity 결과를 함께 보존.
 // - v1.11.0: Projectile 기본 Block, 동일 발사 차량 양방향 Ignore·정리, 다른 차량 Projectile·Hitscan Intercepted 처리를 구현.
@@ -29,7 +30,8 @@
 // - Trail과 추진 화염이 비활성 또는 미연결이어도 기존 Projectile 활성화, 이동, 충돌과 피해는 유지한다.
 // - Hit, LifeExpired, Manual, InvalidActivation 비활성화는 Pool 반환 전에 두 Niagara를 Reset하고 Asset 참조를 비운다.
 // - 비행 FX RelativeTransform의 Scale은 소켓 경로에서도 적용하고 위치·회전만 소켓 Transform을 우선한다.
-// - PropulsionConfig가 비활성이면 기존 InitialSpeed 고정 비행을 유지하고, 활성화되면 MotorComp가 ProjectileMovement보다 먼저 추진 가속을 적용한다.
+// - PropulsionConfig 활성 여부와 무관하게 ProjectileMovement의 world-speed hard clamp는 사용하지 않는다. MaximumPropelledSpeed는 Dynamics axial governor에서만 사용한다.
+// - MotorComp와 MissileGuideComp는 요청 producer이며 ProjectileMovement Velocity를 직접 변경하지 않는다.
 // - Thruster Niagara는 모터 Burning 상태에서만 재생하고 IgnitionDelay·BurnedOut·Disabled에서는 정지한다.
 // - 기존 ActivateProjectile 호출은 Direct Launch Context로 변환되며 기존 InitialSpeed 결과를 유지한다.
 // - Context 초기 Velocity가 유효하면 월드 Velocity로 적용하고, 무효하면 InitialLaunchDirection * InitialSpeed로 안전하게 복구한다.
@@ -45,6 +47,7 @@
 #include "CFMissileFlightComp.h"
 #include "CFMissileGuideComp.h"
 #include "CFProjectileData.h"
+#include "CFProjectileDynamicsComp.h"
 #include "CFProjectileMotorComp.h"
 #include "CFProjectilePoolComp.h"
 #include "CFVehicleHealthComp.h"
@@ -115,20 +118,25 @@ ACFProjectileActor::ACFProjectileActor()
 	ProjectileMovementComponent->bRotationFollowsVelocity = true;
 	ProjectileMovementComponent->ProjectileGravityScale = 1.0f;
 	ProjectileMovementComponent->InitialSpeed = 6000.0f;
-	ProjectileMovementComponent->MaxSpeed = 6000.0f;
+	ProjectileMovementComponent->MaxSpeed = 0.0f;
 
-		// [v1.8.0] ProjectileMovement Velocity에 점화·연소 추진을 적용할 독립 모터 컴포넌트입니다.
+	// [v1.14.0] 점화·연소 상태와 propulsion step을 ProjectileMovement보다 앞선 PrePhysics에서 생산할 모터 컴포넌트입니다.
 	ProjectileMotorComponent = CreateDefaultSubobject<UCFProjectileMotorComp>(TEXT("ProjectileMotorComponent"));
-	ProjectileMovementComponent->AddTickPrerequisiteComponent(ProjectileMotorComponent);
 
-	// [v1.13.0] 미사일의 Released·Clearance·GuidedFlight 상태를 ProjectileMovement 이전에 진행할 컴포넌트입니다.
+	// [v1.13.0] 미사일의 Released·Clearance·GuidedFlight 상태를 Guidance보다 앞서 진행할 컴포넌트입니다.
 	MissileFlightComponent = CreateDefaultSubobject<UCFMissileFlightComp>(TEXT("MissileFlightComponent"));
 
-	// [v1.13.0] Motor와 Flight 이후 제한형 Guidance로 Velocity 방향을 갱신할 컴포넌트입니다.
+	// [v1.14.0] Motor와 Flight 이후 Target/Seeker/Guidance law를 계산해 request를 생산할 컴포넌트입니다.
 	MissileGuideComponent = CreateDefaultSubobject<UCFMissileGuideComp>(TEXT("MissileGuideComponent"));
 	MissileGuideComponent->AddTickPrerequisiteComponent(ProjectileMotorComponent);
 	MissileGuideComponent->AddTickPrerequisiteComponent(MissileFlightComponent);
-	ProjectileMovementComponent->AddTickPrerequisiteComponent(MissileGuideComponent);
+
+	// [v1.14.0] Motor/Flight/Guide 결과를 합성해 ProjectileMovement에 single AddForce를 전달할 Dynamics 컴포넌트입니다.
+	ProjectileDynamicsComponent = CreateDefaultSubobject<UCFProjectileDynamicsComp>(TEXT("ProjectileDynamicsComponent"));
+	ProjectileDynamicsComponent->AddTickPrerequisiteComponent(ProjectileMotorComponent);
+	ProjectileDynamicsComponent->AddTickPrerequisiteComponent(MissileFlightComponent);
+	ProjectileDynamicsComponent->AddTickPrerequisiteComponent(MissileGuideComponent);
+	ProjectileMovementComponent->AddTickPrerequisiteComponent(ProjectileDynamicsComponent);
 
 	SetActorHiddenInGame(true);
 	SetActorEnableCollision(false);
@@ -357,6 +365,18 @@ void ACFProjectileActor::ActivateProjectileWithContext(
 			ProjectileMovementComponent,
 			MissileFlightComponent);
 	}
+
+	if (ProjectileDynamicsComponent)
+	{
+		ProjectileDynamicsComponent->StartProjectileDynamics(
+			ActiveProjectileData,
+			ActiveLaunchContext,
+			ProjectileMovementComponent,
+			ProjectileMotorComponent,
+			MissileFlightComponent,
+			MissileGuideComponent);
+	}
+
 	RefreshThrusterFxFromMotorState();
 	ScheduleProjectileLifeTimer(*ActiveProjectileData);
 
@@ -412,6 +432,11 @@ void ACFProjectileActor::DeactivateProjectileWithReason(const ECFProjectileDeact
 
 				SetActorTickEnabled(false);
 	ClearSameSourceProjectileIgnores();
+
+	if (ProjectileDynamicsComponent)
+	{
+		ProjectileDynamicsComponent->ResetProjectileDynamics();
+	}
 
 	if (MissileGuideComponent)
 	{
@@ -1304,13 +1329,10 @@ void ACFProjectileActor::ApplyProjectileMovement(
 	ProjectileMovementComponent->MaxSimulationTimeStep = SafeMaxSimulationTimeStep;
 	ProjectileMovementComponent->MaxSimulationIterations = SafeMaxSimulationIterations;
 
-	// [v1.9.0] 추진 발사체는 설정 상한과 실제 초기 월드 속력 중 큰 값을 사용해 발사 직후 강제 감속을 막습니다.
-	const float SafeMaximumSpeed = InProjectileData.PropulsionConfig.bUsePropulsion
-		? FMath::Max(InProjectileData.PropulsionConfig.MaximumPropelledSpeed, SafeInitialLaunchSpeed)
-		: SafeInitialLaunchSpeed;
-
 	ProjectileMovementComponent->InitialSpeed = SafeInitialLaunchSpeed;
-	ProjectileMovementComponent->MaxSpeed = SafeMaximumSpeed;
+
+	// [v1.14.0] PFP는 중력·하강·플랫폼 상속 속도를 보존하므로 ProjectileMovement의 world-speed hard clamp를 사용하지 않습니다.
+	ProjectileMovementComponent->MaxSpeed = 0.0f;
 	ProjectileMovementComponent->ProjectileGravityScale = ProjectileGravityScale;
 	ProjectileMovementComponent->Velocity = SafeInitialLaunchVelocity;
 	ProjectileMovementComponent->Activate(true);

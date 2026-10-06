@@ -1,8 +1,8 @@
 # Vehicle Targeting Current System
 
-- Version: 1.3.0
-- Date: 2026-09-18
-- Status: Current / Phase 5 Gameplay Command + Phase 6 HUD Presentation + Phase 7 Guided Weapon Source Technical PASS
+- Version: 1.5.0
+- Date: 2026-10-06
+- Status: Current / Phase 5 Gameplay Command + Phase 6 HUD Presentation + Phase 7 Guided Weapon Source + Production Lock Input/Retarget Technical PASS
 - Design Baseline: `Document/ProjectSSOT/CombatPlan/09A_TargetingSensorArch.md v0.1.16`
 
 ---
@@ -39,7 +39,13 @@ HUD
 
 Input
 = Phase 5 VehiclePawn command facade 구현 완료
-= 새 Lock InputAction/물리 key는 아직 추가하지 않음
+= `/Game/CarFight/Input/IA_TargetLock` Boolean Input Action을 Production 입력으로 연결
+= 기본 `IMC_Vehicle_Default`에서 T 키 사용
+= T 입력은 현재 Selected Target에 먼저 Lock 요청
+= 같은 Target이 이미 Acquiring/Locked면 해당 Lock만 토글 해제
+= 다른 유효 Selected Target이면 기존 Lock에서 새 Target Acquiring으로 즉시 교체
+= 새 Target이 Live Contact가 아니어 Lock 요청이 거부되면 기존 Lock은 보존
+= Selection / Scan과 자동 결합하지 않음
 ```
 
 핵심 불변식은 다음과 같다.
@@ -66,6 +72,7 @@ UE/Source/CarFight_Re/Private/CFTargetingTypes.cpp
 UE/Source/CarFight_Re/Public/CFVehicleTargetingComp.h
 UE/Source/CarFight_Re/Private/CFVehicleTargetingComp.cpp
 UE/Source/CarFight_Re/Private/CFTargetingTests.cpp
+UE/Source/CarFight_Re/Private/CFTargetInputTests.cpp
 UE/Source/CarFight_Re/Public/CFVehiclePawn.h
 UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp
 ```
@@ -615,11 +622,28 @@ VehiclePawn::RequestCancelTargetScan()
 
 Selection 변경 또는 수동 해제는 이미 시작된 Acquire/Lock과 Scan Attempt를 자동 교체·취소하지 않는다. 새 Manager/Subsystem은 추가하지 않았고 Pawn은 얇은 Gameplay facade만 담당한다.
 
-Phase 7 Guided Weapon source migration까지 Technical PASS로 완료됐다. TargetActor Guided Projectile은 발사 전 Vehicle Locked Target을 요구하며, Direct Fire/HitScan/비유도 Projectile은 기존 계약을 유지한다. 새 Lock InputAction/물리 키는 아직 추가하지 않았다.
+Phase 7 Guided Weapon source migration까지 Technical PASS로 완료됐다. TargetActor Guided Projectile은 발사 전 Vehicle Locked Target을 요구하며, Direct Fire/HitScan/비유도 Projectile은 기존 계약을 유지한다. `IA_TargetLock`의 T 입력은 현재 Selected Target에 먼저 `RequestLockSelectedTarget()`을 시도한다. 같은 대상의 `AlreadyAcquiring/AlreadyLocked`만 `RequestClearTargetLock()`으로 토글 해제하고, 다른 유효 대상의 `Accepted`는 `VehicleTargetingComp::RequestLock()`의 기존 replacement 계약으로 즉시 새 Acquiring을 시작한다. 새 대상 요청이 `NoSensorContact/ContactNotLive` 등으로 실패하면 기존 Lock을 지우지 않는다. Selection / Lock / Scan 독립 계약은 유지한다. Lock admission과 유지가 Sensor Live Contact를 요구하므로 현재 Basic Sensor 운용거리는 `SensorContact.md`의 600/800/1200m baseline을 따른다.
 
 ---
 
 ## 15. Changelog
+
+### v1.5.0 - 2026-10-06
+
+- USER 검수에서 첫 Lock 후 다른 Target을 선택해도 T 입력이 기존 Lock을 무조건 clear하여 즉시 재타겟할 수 없던 입력 의미 결함을 확인했다.
+- T 입력을 `현재 Selected Target RequestLock 우선`으로 교정했다. 같은 대상 중복 결과(`AlreadyAcquiring/AlreadyLocked`)만 Lock-only clear로 토글하고, 다른 유효 Selected Target은 기존 `RequestLock()` replacement 계약으로 즉시 Acquiring을 전환한다. 새 대상 Lock 거부 시 기존 Lock은 보존한다.
+- 동시에 Vehicle Lock이 의존하는 Basic Sensor Live Contact의 기존 20/30/40m 운용거리 불일치를 `SensorContact.md v1.16.0`의 600/800/1200m baseline으로 교정했다.
+- Official UE 5.8 Editor Build `5b2e29e0f60842a8a9746a4f7ede9cf4` PASS, `CarFight.Targeting.TGT_P0_05.GameplayCommandBoundary` 1/1 PASS, `CarFight.Sensor.SEN_P0_04.BasicSensorSingleScanCompletion` 1/1 PASS, `CarFight.Missile.MG_P0_01_04.DirectRuntimeContract` PASS를 확보했다. Sensor 수치 이관용 일회성 migration Automation은 persisted 반영 확인 후 제거했다.
+
+Migration: T는 같은 대상 Lock 토글과 다른 대상 retarget을 구분한다. Selection 변경 자체는 여전히 Lock을 자동 변경하지 않으며, 사용자가 T를 눌렀을 때만 현재 Selected Target을 새 Lock 대상으로 소비한다.
+
+### v1.4.0 - 2026-10-02
+
+- Phase 7 Guided Weapon이 Vehicle Locked Target을 필수로 소비하지만 실제 Production Lock 입력이 없던 integration gap을 교정했다.
+- `/Game/CarFight/Input/IA_TargetLock` Boolean Input Action을 추가하고 `IMC_Vehicle_Default`의 T 키에 매핑했다.
+- `ACFVehiclePawn`은 `InputAction_TargetLock`을 별도로 로드·바인딩하며, Idle에서는 `RequestLockSelectedTarget()`, Acquiring/Locked에서는 `RequestClearTargetLock()`을 호출한다. Selection과 Scan은 변경하지 않는다.
+- Official UE 5.8 Editor Build job `b7a9530ca06940109becfabefbd45392` PASS, `CarFight.TargetSelect.TS_P0_05.InputIntegration` 1/1 PASS, `CarFight.Targeting.TGT_P0_05.GameplayCommandBoundary` 1/1 PASS, `CarFight.Missile.MG_P0_01_04.DirectRuntimeContract` PASS를 확보했다.
+- fresh AssetDump `adset_v1_c531d0a394f4edbf36b1f0a3c5fc04db.7982219f5326cff56114dd64`에서 `IA_TargetLock` Boolean/Pressed Trigger와 `IMC_Vehicle_Default`의 `IA_TargetLock <- T` persisted mapping을 확인했다.
 
 ### v1.3.0 - 2026-09-18
 

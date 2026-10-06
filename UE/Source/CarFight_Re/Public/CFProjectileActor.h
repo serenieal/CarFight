@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.13.0
-// Date: 2026-08-02
+// Version: 1.14.0
+// Date: 2026-09-27
 // Description: CarFight 공통 발사체 Actor
-// Scope: ProjectileData 기반 추진·미사일 비행·유도·이동·풀링·지속형 비행 FX·고속 연속 충돌, 동일 발사 차량 격리, Projectile 요격과 정식 차량 방어 결과를 보존합니다.
+// Scope: ProjectileData 기반 공통 Dynamics·추진·미사일 비행·유도·ProjectileMovement·풀링·비행 FX·고속 연속 충돌·요격·차량 방어 결과를 보존합니다.
 // Changelog:
+// - v1.14.0: PFP-P0-02 ProjectileDynamicsComp 단일 AddForce authority, producer→Dynamics→ProjectileMovement Tick 의존성과 Pool force reset 연결 추가.
 // - v1.13.0: MissileFlightComp·MissileGuideComp, Direct Target Snapshot Guidance, 현재 방향 추진과 Pool Reset 연결을 추가.
 // - v1.12.0: 첫 유효 Impact를 VehicleDefenseComp 정식 진입점으로 전환하고 전체 방어 결과와 기존 Integrity 결과를 함께 보존.
 // - v1.11.0: Projectile 채널 Block을 복구하고 동일 발사 차량의 모든 탄종·Volley만 양방향 Ignore하며 다른 차량 Projectile 요격과 Intercepted 생명주기를 추가.
@@ -31,7 +32,7 @@
 // - Pool 반환 전에 두 NiagaraComponent를 즉시 정지·Reset하고 Asset 참조를 비워 다음 활성화의 상태 오염을 막는다.
 // - 비행 FX RelativeTransform의 Scale은 소켓 위치를 사용할 때도 독립 FX Scale로 적용되며 위치·회전만 소켓이 우선한다.
 // - 추진 화염은 Projectile 활성 시간 전체가 아니라 ProjectileMotorComp의 Burning 상태에서만 재생한다.
-// - 추진이 비활성인 기존 ProjectileData는 InitialSpeed와 기존 MaxSpeed 동작을 그대로 유지한다.
+// - ProjectileMovement의 world-speed hard clamp는 사용하지 않으며 MaximumPropelledSpeed는 Dynamics의 axial propulsion governor로만 해석한다.
 // - 기존 ActivateProjectile API는 Direct Launch Context를 생성하는 호환 Adapter로 유지한다.
 // - Context 기반 활성화는 발사 위치·초기 방향·초기 월드 Velocity를 복사하며 비활성화 시 Context를 초기화한다.
 // - Projectile 채널은 기본 Block이며 서로 다른 발사 차량의 Projectile은 실제 Sweep·Hit으로 충돌할 수 있다.
@@ -53,6 +54,7 @@
 class UCFMissileFlightComp;
 class UCFMissileGuideComp;
 class UCFProjectileData;
+class UCFProjectileDynamicsComp;
 class UCFProjectileMotorComp;
 class UCFProjectilePoolComp;
 class UNiagaraComponent;
@@ -141,16 +143,20 @@ public:
 	UFUNCTION(BlueprintPure, Category="CarFight|Projectile|Propulsion", meta=(DisplayName="추진 모터 요약 생성 (Build Projectile Motor Summary)", ToolTip="현재 발사체의 모터 상태, 점화·연소 시간, 속도, 추진 방향과 활성화 횟수를 표시합니다."))
 	FString BuildProjectileMotorSummary() const;
 
-		// [v1.8.0] 이 발사체가 소유하는 추진 모터 컴포넌트를 반환합니다.
-	UFUNCTION(BlueprintPure, Category="CarFight|Projectile|Propulsion", meta=(DisplayName="추진 모터 컴포넌트 반환 (Get Projectile Motor Component)", ToolTip="점화 지연과 실제 추진 가속을 소유하는 ProjectileMotorComp입니다."))
+	// [v1.14.0] 이 발사체가 소유하는 추진 상태/step producer 컴포넌트를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Projectile|Propulsion", meta=(DisplayName="추진 모터 컴포넌트 반환 (Get Projectile Motor Component)", ToolTip="점화 지연, Burning/BurnedOut 상태와 propulsion step을 생산하는 ProjectileMotorComp입니다. 실제 AddForce 적용은 ProjectileDynamicsComp가 담당합니다."))
 	UCFProjectileMotorComp* GetProjectileMotorComponent() const { return ProjectileMotorComponent; }
+
+	// [v1.14.0] 이 발사체가 소유하는 공통 비행 물리 합성 컴포넌트를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Projectile|Dynamics", meta=(DisplayName="발사체 Dynamics 컴포넌트 반환 (Get Projectile Dynamics Component)", ToolTip="중력을 제거하지 않고 Motor/Guidance request를 합성해 ProjectileMovement에 non-gravity AddForce를 한 번 전달하는 컴포넌트입니다."))
+	UCFProjectileDynamicsComp* GetProjectileDynamicsComponent() const { return ProjectileDynamicsComponent; }
 
 	// [v1.13.0] 이 발사체가 소유하는 미사일 비행 상태 컴포넌트를 반환합니다.
 	UFUNCTION(BlueprintPure, Category="CarFight|Projectile|Missile", meta=(DisplayName="미사일 비행 컴포넌트 반환 (Get Missile Flight Component)", ToolTip="Released, Clearance와 GuidedFlight 상태를 소유하는 MissileFlightComp입니다. 기존 Projectile에서도 컴포넌트는 존재하지만 설정 기본값은 비활성입니다."))
 	UCFMissileFlightComp* GetMissileFlightComponent() const { return MissileFlightComponent; }
 
-	// [v1.13.0] 이 발사체가 소유하는 물리 제한형 유도 컴포넌트를 반환합니다.
-	UFUNCTION(BlueprintPure, Category="CarFight|Projectile|Missile", meta=(DisplayName="미사일 유도 컴포넌트 반환 (Get Missile Guide Component)", ToolTip="발사 순간 Target Snapshot과 제한형 Guidance Command를 소유하는 MissileGuideComp입니다. 기존 Projectile에서는 설정 기본값이 비활성입니다."))
+	// [v1.14.0] 이 발사체가 소유하는 물리 제한형 유도 요청 컴포넌트를 반환합니다.
+	UFUNCTION(BlueprintPure, Category="CarFight|Projectile|Missile", meta=(DisplayName="미사일 유도 컴포넌트 반환 (Get Missile Guide Component)", ToolTip="발사 순간 Target Snapshot과 authoritative Guidance request를 소유하는 MissileGuideComp입니다. 실제 최종 횡제어 적용은 ProjectileDynamicsComp가 담당합니다."))
 	UCFMissileGuideComp* GetMissileGuideComponent() const { return MissileGuideComponent; }
 
 
@@ -323,20 +329,24 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Projectile|FlightFx", meta=(AllowPrivateAccess="true", DisplayName="추진 Niagara 컴포넌트 (ThrusterNiagaraComponent)", ToolTip="ProjectileData의 추진 화염 FX를 모터 Burning 상태에서 재생합니다. 발사마다 생성하지 않고 Projectile Actor와 함께 Pool에서 재사용합니다."))
 	TObjectPtr<UNiagaraComponent> ThrusterNiagaraComponent = nullptr;
 
-	// [v1.0.0] 발사체 이동을 처리하는 ProjectileMovementComponent입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Projectile", meta=(AllowPrivateAccess="true", DisplayName="Projectile 이동 컴포넌트 (ProjectileMovementComponent)", ToolTip="ProjectileData의 초기 속도, 최대 속도와 중력 설정을 적용받아 발사체 이동을 처리합니다."))
+	// [v1.14.0] 실제 중력, Velocity integration, Sub-step, Sweep/Collision을 소유하는 ProjectileMovementComponent입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Projectile", meta=(AllowPrivateAccess="true", DisplayName="Projectile 이동 컴포넌트 (ProjectileMovementComponent)", ToolTip="InitialLaunchVelocity와 실제 GravityScale을 적분하고 Sub-step·Sweep·Collision을 처리합니다. PFP에서는 world-speed hard clamp를 사용하지 않습니다."))
 	TObjectPtr<UProjectileMovementComponent> ProjectileMovementComponent = nullptr;
 
-		// [v1.8.0] 점화 지연, 실제 추진 가속과 연소 종료 상태를 관리하는 모터 컴포넌트입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Projectile|Propulsion", meta=(AllowPrivateAccess="true", DisplayName="Projectile 모터 컴포넌트 (ProjectileMotorComponent)", ToolTip="ProjectileData.PropulsionConfig를 읽어 Rocket 고정 방향 또는 Missile 현재 방향 추진과 BurnedOut 관성 비행을 관리합니다."))
+	// [v1.14.0] 점화 지연과 연소 상태를 진행해 Dynamics가 소비할 propulsion step을 생산하는 모터 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Projectile|Propulsion", meta=(AllowPrivateAccess="true", DisplayName="Projectile 모터 컴포넌트 (ProjectileMotorComponent)", ToolTip="IgnitionDelay, Burning, BurnedOut 상태와 frame별 propulsion step을 생산합니다. ProjectileMovement Velocity를 직접 변경하지 않습니다."))
 	TObjectPtr<UCFProjectileMotorComp> ProjectileMotorComponent = nullptr;
+
+	// [v1.14.0] Motor/Flight/Guide 결과와 실제 중력을 합성해 non-gravity AddForce를 단일 경로로 전달하는 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Projectile|Dynamics", meta=(AllowPrivateAccess="true", DisplayName="Projectile Dynamics 컴포넌트 (ProjectileDynamicsComponent)", ToolTip="Rocket TVC, Missile shared lateral control과 axial propulsion governor를 합성해 ProjectileMovement AddForce를 outer frame당 한 번 전달합니다. 중력은 ProjectileMovement에 남습니다."))
+	TObjectPtr<UCFProjectileDynamicsComp> ProjectileDynamicsComponent = nullptr;
 
 	// [v1.13.0] MissileFlightConfig의 상태 진행과 Guidance 활성 시점을 관리하는 컴포넌트입니다.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Projectile|Missile", meta=(AllowPrivateAccess="true", DisplayName="미사일 비행 컴포넌트 (MissileFlightComponent)", ToolTip="발사 순간 Context를 복사하고 Released, Clearance, GuidedFlight 상태를 관리합니다. bUseMissileFlight=false이면 Inactive 상태입니다."))
 	TObjectPtr<UCFMissileFlightComp> MissileFlightComponent = nullptr;
 
-	// [v1.13.0] MissileGuideConfig와 발사 순간 Target Snapshot으로 물리 제한형 유도를 적용하는 컴포넌트입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Projectile|Missile", meta=(AllowPrivateAccess="true", DisplayName="미사일 유도 컴포넌트 (MissileGuideComponent)", ToolTip="FlightComp의 유도 구간에서 제한형 비례항법을 계산하고 ProjectileMovement Velocity 방향을 갱신합니다. bUseGuidance=false이면 비활성입니다."))
+	// [v1.14.0] MissileGuideConfig와 발사 순간 Target Snapshot으로 제한형 Guidance request를 생산하는 컴포넌트입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|Projectile|Missile", meta=(AllowPrivateAccess="true", DisplayName="미사일 유도 컴포넌트 (MissileGuideComponent)", ToolTip="FlightComp의 유도 구간에서 Seeker/Guidance Law를 계산해 RequestedLateralAcceleration을 생산합니다. ProjectileMovement Velocity를 직접 변경하지 않습니다."))
 	TObjectPtr<UCFMissileGuideComp> MissileGuideComponent = nullptr;
 
 		// [v1.0.0] 현재 활성 발사체에 적용된 ProjectileData입니다.

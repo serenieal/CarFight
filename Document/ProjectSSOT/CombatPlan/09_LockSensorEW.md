@@ -1,8 +1,8 @@
 # 09. 락온 / 센서 / 전자전
 
-- 문서 버전: v0.4.5
+- 문서 버전: v0.4.6
 - 작성일: 2026-06-08
-- 최근 갱신일: 2026-09-18
+- 최근 갱신일: 2026-10-06
 - 프로젝트: CarFight
 - 저장 위치: Document/Plan/CombatPlan/09_락온_센서_전자전.md
 - 상세 구조 설계: `Document/ProjectSSOT/CombatPlan/09A_TargetingSensorArch.md`
@@ -496,7 +496,7 @@ P0에서는 EMP / 재밍 직접 구현을 제외하고, 락온 안정도와 연�
 |---|---|---|
 | 기본 센서 | 균형형 | 특화 없음 |
 
-> **P0 Basic Sensor 초기 운용값** — Vehicle Builder가 정상 신규 차량에 공통 기본 센서를 자동 연결하기 위해 `DA_VehicleSensor_Basic`을 사용한다. 현재 운용값은 Passive 20m / Visual 30m / Active 40m, Active Scan 3초, Update 0.2초, Contact Memory 2초, Destroyed Hold 1초, Analysis Gain **0.40/s**, Decay 0.15/s, Radar 10/20/40m(기본 20m)로 둔다. 이 값은 **최종 밸런스 확정값이 아니라 P0 기술·플레이테스트 baseline**이지만, Tactical Analysis가 활성인 Sensor는 정상 범위·직접 가시·유효 Target 조건을 Scan 전체에 유지하면 **Active Scan 1회 안에 DetailedScan까지 완료 가능해야 한다.** 최소 설정 관계는 `AnalysisGainPerSec * max(ActiveScanDurationSec - UpdateIntervalSec, 0) >= DetailedScanThreshold`이며 마지막 만료 update에 의존하지 않도록 Update 1회 안전 여유를 둔다. 의도적인 다회 스캔 장비는 별도 명시 계약이 생기기 전까지 만들지 않는다. Actor 검사 상한과 Identified/Detailed 임계값처럼 Native Sensor 계약 기본값과 동일한 항목은 이 P0 밸런스 baseline에서 중복 소유하지 않는다. 구조 계약은 `Scanner override > Vehicle Basic > zero-range fallback`이고, 의도적인 Sensorless 차량은 별도 명시한다.
+> **P0 Basic Sensor 현재 운용값** — Vehicle Builder가 정상 신규 차량에 공통 기본 센서를 자동 연결하기 위해 `DA_VehicleSensor_Basic`을 사용한다. 현재 운용값은 Passive **600m** / Visual **800m** / Active **1200m**, Active Scan 3초, Update 0.2초, Contact Memory 2초, Destroyed Hold 1초, Analysis Gain **0.40/s**, Decay 0.15/s, Radar **300/600/1200m(기본 600m)**로 둔다. 기존 20/30/40m 및 Radar 10/20/40m는 2026-09-16 당시 기능 성립용 P0 기술 baseline이었으나, 600m Guided Missile의 Lock source인 Live Contact가 수십 m에서 끊겨 전투 사거리와 맞지 않는 것이 USER 검수에서 확인되어 폐기했다. 현재 Passive 600m는 기본 Guided Missile 사거리의 Lock 유지 envelope를 커버하고, 600~800m는 직접 가시 Visual Detection, 최대 1200m는 Active Detection/Target Scan 조건의 확장 탐지를 제공한다. 이 값 역시 최종 밸런스 확정값은 아니지만 **무기 사거리보다 Sensor Lock 자격이 터무니없이 짧아 기본 기능을 차단해서는 안 된다**는 최소 운용 invariant를 만족해야 한다. Tactical Analysis의 1회 완료 계약과 `Scanner override > Vehicle Basic > zero-range fallback` source priority는 기존대로 유지한다.
 | 장거리 센서 | 먼 거리 탐지 / 락온 | 근거리 난전 대응 낮음 |
 | 고속 추적 센서 | 빠른 목표 락온 안정 | 탐지 거리 짧음 |
 | 장갑 약점 스캐너 | 장갑 방향 / 모듈 정보 표시 | 배터리 소모 큼 |
@@ -690,6 +690,13 @@ P1 이후:
 ---
 
 ## 20. Changelog
+
+### v0.4.6 - 2026-10-06
+
+- Guided Missile USER 검수에서 Basic Sensor의 기존 Passive 20m / Visual 30m / Active 40m가 600m 무기 사거리와 심각하게 불일치해 조금만 멀어져도 Vehicle Lock이 Break되고 재락이 불가능해지는 문제를 확인했다.
+- 기존 20/30/40m를 Historical P0 기술 baseline으로 내리고 Current Basic Sensor 운용값을 Passive 600m / Visual 800m / Active 1200m, Radar 300/600/1200m(기본 600m)로 갱신했다. Scan duration/update/contact memory/analysis tuning은 유지한다.
+- Lock 입력은 같은 Selected Target에서는 토글 해제하고, 다른 유효 Selected Target에서는 기존 단일 Lock replacement 계약으로 즉시 재획득하도록 Production 입력 의미를 완성했다. 새 Target Lock 요청이 거부될 경우 기존 Lock은 보존한다.
+- Official UE 5.8 Build 및 Targeting/Sensor/Missile focused regression이 PASS했으며, 실제 Guided Missile 궤적 USER Acceptance는 이 기반 교정 후 별도로 재검수한다.
 
 ### v0.4.5 - 2026-09-18
 

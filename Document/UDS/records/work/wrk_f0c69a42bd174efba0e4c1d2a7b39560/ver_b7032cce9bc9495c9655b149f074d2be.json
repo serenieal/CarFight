@@ -1,0 +1,34 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_f0c69a42bd174efba0e4c1d2a7b39560",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_b7032cce9bc9495c9655b149f074d2be",
+  "parent_version_ids": [
+    "ver_2dd376a7c4e64be98b13ff504ad2c761"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-056",
+    "title": "Projectile Flight Physics (발사체 공통 비행 물리)",
+    "phase": "PFP-P0-00",
+    "next_action": "PFP-P0-00 Contract Correction + Design Re-review: close blocking P1-1 realistic rocket control force budget, P1-2 single missile gravity/thrust/guidance control and simulation budget incl burnout, P1-3 gravity-on persisted missile asset and focused-test migration matrix; implement nothing until design re-review PASS",
+    "blockers": [
+      "PFP-P0-00 Pre-Implementation Review blocking P1-1: Rocket gravity compensation must have physically bounded, explicit control authority",
+      "PFP-P0-00 Pre-Implementation Review blocking P1-2: Missile single force/control budget, tick/substep and burnout semantics unresolved",
+      "PFP-P0-00 Pre-Implementation Review blocking P1-3: Existing gravity-disabled missile data and tests lack migration/acceptance matrix"
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-056"
+    ],
+    "legacy_refs": [
+      "Document/Plan/ProjectileFlightPhysics/ProjectileFlightPhysicsPlan.md v0.1.1",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-20",
+    "resolution_basis": "Fresh exact Checkout/UDS lineage and pre-implementation Source/Systems/test/persisted DataAsset rebaseline completed. AssetDump exact5 succeeded5 failed0, dataset adset_v1_95c4e75fe4bea91c3a01bee8c6107d36.9c23bfc12f75fc8cdd7a6f7b. Review P0 0 / blocking P1 3 / P2 2 / HOLD. Representative Plan v0.1.1 records technical findings and correction criteria. This Ready Work is available for design correction only, not implementation. Existing CF-FQ-039/041/054/055 states, dirty, Source/Asset, Git and prior acceptance unchanged; no build/test/PIE executed."
+  }
+}

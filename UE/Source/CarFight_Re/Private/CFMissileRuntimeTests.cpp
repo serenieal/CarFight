@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.4.0
-// Date: 2026-09-18
-// Description: Phase 7 Guided Weapon Locked Target source + CF-FQ-030 Direct 미사일 Runtime 자동화 테스트
-// Scope: 기존 Missile Runtime 회귀와 함께 TargetActor Guidance의 Vehicle Locked Target source, Acquiring/No Lock fail-closed, Selected!=Locked 독립성, HitScan/비유도 Projectile 무Lock 호환을 focused 검증합니다.
+// Version: 1.5.0
+// Date: 2026-09-27
+// Description: Phase 7 Guided Weapon Locked Target source + CF-FQ-030/056 Direct 미사일 Runtime 자동화 테스트
+// Scope: 기존 Missile Runtime 회귀, Guidance request, ProjectileDynamics handoff와 Vehicle Locked Target source 계약을 focused 검증합니다.
 // Changelog:
+// - v1.5.0: PFP-P0-02에서 Guide/Motor 직접 Velocity 변경 기대를 제거하고 Dynamics Snapshot의 lateral/axial handoff를 검증.
 // - v1.4.0: Phase7.GuidedWeaponLockedTargetSource를 추가해 Selected B / Locked A에서 실제 FireComp compatibility launch가 A를 Guidance snapshot으로 전달하고, Acquiring은 발사 차단, HitScan/Guidance disabled Projectile은 Lock 없이 기존 경로를 유지함을 검증.
 // - v1.3.0: 저장 DA_Missile_DirectTest를 실제 VehicleFireComp Accepted 실행 경계에 연결해 FireComp → ProjectilePool → 저장 ProjectileActorClass를 검증하고, CreateNewMap Automation에서 production ProjectileMovement Blocking 접촉을 확인한 뒤 누락되는 swept Hit dispatch만 테스트 전용 bridge로 보완.
 // - v1.2.0: 저장 DA_Missile_DirectTest를 읽어 보조 연속 Sweep → 실제 Impact → VehicleHealth 피해 연결을 검증하는 Content Integration 시나리오를 추가.
@@ -24,6 +25,7 @@
 #include "CFMissileTestTarget.h"
 #include "CFProjectileActor.h"
 #include "CFProjectileData.h"
+#include "CFProjectileDynamicsComp.h"
 #include "CFProjectileMotorComp.h"
 #include "CFProjectilePoolComp.h"
 #include "CFTargetSelectComp.h"
@@ -214,14 +216,18 @@ bool FCFMissileRuntimeContractTest::RunTest(const FString& Parameters)
 	// [v1.0.0] Actor 기본 서브오브젝트로 생성돼야 하는 Missile Guide 컴포넌트입니다.
 	UCFMissileGuideComp* MissileGuideComp = MissileActor->FindComponentByClass<UCFMissileGuideComp>();
 
-	// [v1.0.0] 미사일 현재 방향 추진을 검증할 Projectile Motor 컴포넌트입니다.
+	// [v1.0.0] 미사일 propulsion step 생산을 검증할 Projectile Motor 컴포넌트입니다.
 	UCFProjectileMotorComp* ProjectileMotorComp = MissileActor->FindComponentByClass<UCFProjectileMotorComp>();
 
-	// [v1.0.0] Guidance와 추진이 실제 Velocity를 공유할 ProjectileMovement입니다.
+	// [v1.5.0] Guide/Motor request를 실제 ProjectileMovement AddForce로 합성할 Dynamics 컴포넌트입니다.
+	UCFProjectileDynamicsComp* ProjectileDynamicsComp = MissileActor->FindComponentByClass<UCFProjectileDynamicsComp>();
+
+	// [v1.5.0] Guidance와 추진의 실제 적분 대상 ProjectileMovement입니다.
 	UProjectileMovementComponent* ProjectileMovementComp = MissileActor->FindComponentByClass<UProjectileMovementComponent>();
 	if (!TestNotNull(TEXT("MissileFlightComp 기본 서브오브젝트 존재"), MissileFlightComp)
 		|| !TestNotNull(TEXT("MissileGuideComp 기본 서브오브젝트 존재"), MissileGuideComp)
 		|| !TestNotNull(TEXT("ProjectileMotorComp 기본 서브오브젝트 존재"), ProjectileMotorComp)
+		|| !TestNotNull(TEXT("ProjectileDynamicsComp 기본 서브오브젝트 존재"), ProjectileDynamicsComp)
 		|| !TestNotNull(TEXT("ProjectileMovementComponent 기본 서브오브젝트 존재"), ProjectileMovementComp))
 	{
 		MissileActor->Destroy();
@@ -249,28 +255,47 @@ bool FCFMissileRuntimeContractTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Direct 미사일은 Clearance 만족 뒤 GuidedFlight 진입"), MissileFlightComp->GetCurrentFlightState(), ECFMissileFlightState::GuidedFlight);
 	TestTrue(TEXT("GuidedFlight에서 Guidance Window Open"), MissileFlightComp->IsGuidanceWindowOpen());
 
-	// [v1.1.0] 시나리오 1 정지 정면 목표 Guidance 전 초기 Velocity입니다.
-	const FVector StaticTargetVelocityBeforeGuidance = ProjectileMovementComp->Velocity;
+	// [v1.5.0] 시나리오 1 정지 정면 목표의 pure Guidance request를 한 Dynamics frame으로 합성합니다.
 	MissileGuideComp->AdvanceGuidanceForAutomation(0.05f);
-	TestTrue(TEXT("정지 정면 목표는 불필요한 측면 조향을 만들지 않음"), FMath::Abs(ProjectileMovementComp->Velocity.Y) <= 0.1f);
-	TestTrue(TEXT("정지 목표 Guidance는 기존 속력을 보존"), FMath::IsNearlyEqual(
-		StaticTargetVelocityBeforeGuidance.Size(),
-		ProjectileMovementComp->Velocity.Size(),
-		0.1f));
+	ProjectileDynamicsComp->AdvanceDynamicsForAutomation(0.05f);
 
-	// [v1.1.0] 시나리오 2 Target이 측면으로 이동한 새 위치와 Velocity 추정값입니다.
+	// [v1.5.0] 정면 목표에서 불필요한 횡제어가 없는지 확인할 Dynamics 결과입니다.
+	const FCFProjectileDynamicsSnapshot StaticTargetDynamicsSnapshot =
+		ProjectileDynamicsComp->GetProjectileDynamicsSnapshot();
+	TestTrue(TEXT("정지 정면 목표는 불필요한 측면 Guidance request를 만들지 않음"),
+		StaticTargetDynamicsSnapshot.GuidanceLateralRequest.Size() <= 0.1f);
+	TestTrue(TEXT("gravity-off 호환 fixture의 정면 목표는 lateral AddForce가 없음"),
+		StaticTargetDynamicsSnapshot.AppliedLateralControlAcceleration.Size() <= 0.1f);
+
+	// [v1.5.0] 시나리오 2 Target이 측면으로 이동한 새 위치와 Velocity 추정값입니다.
 	InitialTargetActor->SetActorLocation(FVector(10000.0f, 2200.0f, 0.0f));
 	InitialTargetActor->SetTestVelocityForAutomation(FVector(0.0f, 1200.0f, 0.0f));
 	MissileGuideComp->AdvanceGuidanceForAutomation(0.05f);
-	TestTrue(TEXT("측면 이동 TargetActor Guidance가 Y Velocity 성분을 생성"), ProjectileMovementComp->Velocity.Y > KINDA_SMALL_NUMBER);
-	TestTrue(TEXT("측면 이동 Guidance 선회율이 설정 상한 이하"), MissileGuideComp->GetGuidanceCommand().AppliedTurnRateDegPerSec <= 45.0f + KINDA_SMALL_NUMBER);
+	ProjectileDynamicsComp->AdvanceDynamicsForAutomation(0.05f);
 
-	// [v1.0.0] 현재 방향 추진을 검증하기 위해 Guidance 후 Velocity를 Y축으로 고정한 값입니다.
+	// [v1.5.0] 측면 목표 request가 Dynamics shared lateral control로 인계됐는지 확인할 결과입니다.
+	const FCFProjectileDynamicsSnapshot SideTargetDynamicsSnapshot =
+		ProjectileDynamicsComp->GetProjectileDynamicsSnapshot();
+	TestTrue(TEXT("측면 이동 TargetActor Guidance request가 +Y 횡제어를 요구"),
+		SideTargetDynamicsSnapshot.GuidanceLateralRequest.Y > KINDA_SMALL_NUMBER);
+	TestTrue(TEXT("측면 이동 Guidance가 Dynamics에서 +Y lateral control로 적용"),
+		SideTargetDynamicsSnapshot.AppliedLateralControlAcceleration.Y > KINDA_SMALL_NUMBER);
+	TestTrue(TEXT("pure Guidance 진단 선회율은 설정 상한 이하"),
+		MissileGuideComp->GetGuidanceCommand().AppliedTurnRateDegPerSec <= 45.0f + KINDA_SMALL_NUMBER);
+
+	// [v1.5.0] current FlightTangent 축방향 추진을 검증하기 위해 Movement Velocity를 Y축으로 설정합니다.
 	const float SpeedBeforeDynamicThrust = 1000.0f;
 	ProjectileMovementComp->Velocity = FVector(0.0f, SpeedBeforeDynamicThrust, 0.0f);
 	ProjectileMotorComp->AdvanceMotorForAutomation(0.10f);
-	TestTrue(TEXT("미사일 모터는 현재 Velocity 방향으로 추진"), ProjectileMovementComp->Velocity.Y > SpeedBeforeDynamicThrust);
-	TestTrue(TEXT("미사일 현재 방향 추진은 고정 X축 가속을 추가하지 않음"), FMath::Abs(ProjectileMovementComp->Velocity.X) <= KINDA_SMALL_NUMBER);
+	ProjectileDynamicsComp->AdvanceDynamicsForAutomation(0.10f);
+
+	// [v1.5.0] MotorStep이 현재 FlightTangent 축방향 추진으로 합성됐는지 확인할 결과입니다.
+	const FCFProjectileDynamicsSnapshot DynamicThrustSnapshot =
+		ProjectileDynamicsComp->GetProjectileDynamicsSnapshot();
+	TestTrue(TEXT("미사일 propulsion step은 current FlightTangent에 양의 axial thrust를 생산"),
+		DynamicThrustSnapshot.AppliedAxialAcceleration > KINDA_SMALL_NUMBER);
+	TestTrue(TEXT("미사일 axial thrust는 현재 +Y FlightTangent 방향으로 queue"),
+		DynamicThrustSnapshot.QueuedNonGravityAcceleration.Y > KINDA_SMALL_NUMBER);
 
 	// [v1.1.0] 시나리오 4 발사 후 목표 파괴를 모사합니다.
 	InitialTargetActor->DestroyTestTargetNow();

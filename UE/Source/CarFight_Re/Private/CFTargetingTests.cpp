@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.2.0
-// Date: 2026-09-18
+// Version: 1.3.0
+// Date: 2026-10-06
 // Description: Phase 4 Vehicle Target Lock Runtime + Phase 5 Selection/Lock/Scan Gameplay Command Boundary focused Automation
-// Scope: 기존 Targeting Runtime 계약과 public RequestLock 경로를 보존하면서 Pawn command facade의 Selection/Lock/Scan 독립성과 Target Scan-only cancel을 검증합니다.
+// Scope: 기존 Targeting Runtime 계약과 public RequestLock 경로를 보존하면서 Pawn command facade의 Selection/Lock/Scan 독립성, Lock Input same-target toggle과 cross-target replacement를 검증합니다.
 // Changelog:
+// - v1.3.0: 실제 HandleTargetLockStarted 입력 경로에서 Locked A + Selected B가 A를 clear하지 않고 B Acquiring으로 replacement되는지, 같은 Selected B 재입력은 Lock-only clear로 토글되는지 회귀 검증 추가.
 // - v1.2.0: TGT-P0-05 GameplayCommandBoundary를 추가해 Selected Target→Lock, Selection 변경/해제 뒤 Lock/Scan 비자동 추종, Lock-only clear, Scan-only cancel과 broad Active Detection 보존을 실제 public API로 검증.
 // - v1.1.0: TGT-P0-04 RequestLockPublicPath를 추가해 Live 수락, 동일 대상 중복, Locked 중복, A→B 교체, LastKnown/NoContact/Invalid 거부와 replacement non-break를 실제 public RequestLock 경로로 검증.
 // - v1.0.0: TGT-P0-01~03 Phase 4 focused regression을 최초 추가.
@@ -23,6 +24,7 @@
 
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "InputActionValue.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/AutomationEditorCommon.h"
 
@@ -559,6 +561,34 @@ bool FCFTargetingGameplayCommandBoundaryTest::RunTest(const FString& Parameters)
 
 	TestTrue(TEXT("Phase 5 broad Sensor Operation 정리 승인"), VehiclePawn->RequestCancelSensorOperations());
 	TestFalse(TEXT("broad 취소 뒤 Active Detection 비활성"), SensorComponent->IsActiveDetectionPulseRunning());
+
+	// [v1.3.0] Lock 입력이 같은 대상 토글과 다른 대상 replacement를 구분하는지 실제 handler로 검증합니다.
+	TestTrue(
+		TEXT("Lock input retarget 준비 Target A 재선택"),
+		TargetSelectComponent->SetSelectedTarget(TargetActorA, TargetSelectComponent->GetDefaultSelectionContext()));
+	TestTrue(TEXT("Lock input retarget 준비 Target A Scan 시작"), VehiclePawn->RequestStartTargetScan());
+	TestEqual(
+		TEXT("Lock input retarget 준비 Target A Lock Accepted"),
+		VehiclePawn->RequestLockSelectedTarget(),
+		ECFTargetLockRequestResult::Accepted);
+	TestEqual(TEXT("Lock input retarget 준비 Target A Acquiring"), TargetingComponent->GetTargetingSnapshot().State, ECFTargetLockState::Acquiring);
+	TestTrue(TEXT("Lock input retarget 준비 Target A Scan 취소"), VehiclePawn->RequestCancelTargetScan());
+
+	TestTrue(
+		TEXT("Lock input retarget Target B 선택"),
+		TargetSelectComponent->SetSelectedTarget(TargetActorB, TargetSelectComponent->GetDefaultSelectionContext()));
+	TestTrue(TEXT("Lock input retarget Target B Scan 시작"), VehiclePawn->RequestStartTargetScan());
+	// Target B Target Scan이 확보한 실제 Sensor ContactId입니다.
+	const FName TargetBContactId = SensorComponent->GetSensorSnapshot().ScanAttempt.TargetContactId;
+	TestFalse(TEXT("Lock input retarget Target B ContactId 유효"), TargetBContactId.IsNone());
+
+	VehiclePawn->HandleTargetLockStarted(FInputActionValue());
+	TestEqual(TEXT("다른 Selected Target Lock 입력은 B Acquiring"), TargetingComponent->GetTargetingSnapshot().State, ECFTargetLockState::Acquiring);
+	TestEqual(TEXT("다른 Selected Target Lock 입력은 B Contact로 replacement"), TargetingComponent->GetTargetingSnapshot().TargetContactId, TargetBContactId);
+
+	VehiclePawn->HandleTargetLockStarted(FInputActionValue());
+	TestEqual(TEXT("같은 Selected Target 재입력은 Lock-only clear"), TargetingComponent->GetTargetingSnapshot().State, ECFTargetLockState::Idle);
+	TestTrue(TEXT("Lock input retarget Target B Scan 정리"), VehiclePawn->RequestCancelTargetScan());
 
 	TargetActorB->Destroy();
 	TargetActorA->Destroy();

@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.4.1
-// Date: 2026-09-07
-// Description: CarFight 물리 제한형 미사일 유도 컴포넌트 구현
-// Scope: Target Actor Snapshot, Guidance Activation, Legacy/Stateful Seeker, Direct/Sampled 관측·속도 추정, Guidance Law, rear-aspect·오버슈트와 Velocity 방향 적용을 구현합니다.
+// Version: 1.5.0
+// Date: 2026-09-27
+// Description: CarFight 물리 제한형 미사일 유도 요청 컴포넌트 구현
+// Scope: Target observation, Guidance Activation, Seeker, Guidance Law와 Lost policy를 계산하고 authoritative RequestedLateralAcceleration을 생산합니다.
 // Changelog:
+// - v1.5.0: PFP-P0-02 직접 Velocity write, Guide-side 응답 필터와 최종 shared lateral clamp 제거. Dynamics handoff용 request producer로 전환.
 // - v1.4.1: MG-P0-12D 최종검수 P1 교정으로 exact rear Launch Right tie-break를 모든 bounded Pursuit 계열(Pure/Lead/PN Course Capture)의 공통 helper로 통합.
 // - v1.4.0: MG-P0-12D Independent Guidance Activation latch, free Stateful Seeker geometry, approach-armed Overshoot와 Launch Right 기반 exact rear tie-break를 추가.
 // - v1.3.0: MG-P0-12C PurePursuit/LeadPursuit/ProportionalNavigation 전략, bounded lead aim point와 rear/non-closing PN Course Capture를 추가.
@@ -17,7 +18,8 @@
 // - Stateful Overshoot만 approach-armed 의미를 사용하고 LegacySingleGate는 기존 즉시 Overshoot 의미를 유지합니다.
 // - PurePursuit와 LeadPursuit도 기존 GuidanceResponseTime, MaximumTurnRate, MaximumLateralAcceleration 제한을 동일하게 거칩니다.
 // - SampledPositionEstimate는 Target Actor 위치만 설정 주기로 읽고 Actor GetVelocity를 Guidance 정답으로 소비하지 않습니다.
-// - 기존 ProjectileData는 bUseGuidance=false 기본값으로 컴포넌트 Tick과 Velocity 변경을 사용하지 않습니다.
+// - 기존 ProjectileData는 bUseGuidance=false 기본값으로 컴포넌트 Tick과 Guidance request 생산을 사용하지 않습니다.
+// - AppliedLateralAcceleration/AppliedTurnRate는 pure guidance diagnostic으로 보존되며 실제 최종 제어·중력 대응·AddForce는 ProjectileDynamicsComp가 소유합니다.
 
 #include "CFMissileGuideComp.h"
 
@@ -187,7 +189,7 @@ void UCFMissileGuideComp::AdvanceGuidanceForAutomation(const float DeltaTime)
 	AdvanceGuidanceSimulation(DeltaTime);
 }
 
-// [v1.0.0] Flight State와 Target Snapshot을 읽어 제한형 Guidance Velocity를 갱신합니다.
+// [v1.5.0] Flight State와 Target Snapshot을 읽어 authoritative Guidance request를 갱신합니다.
 void UCFMissileGuideComp::TickComponent(
 	const float DeltaTime,
 	const ELevelTick TickType,
@@ -332,7 +334,7 @@ void UCFMissileGuideComp::AdvanceGuidanceSimulation(const float DeltaTime)
 		return;
 	}
 
-	ApplyGuidanceCommand(GuidanceCommand, SafeDeltaTime);
+	UpdateGuidanceRequestState(GuidanceCommand);
 	RefreshGuideSnapshot();
 }
 
@@ -1204,68 +1206,33 @@ FCFMissileGuidanceCommand UCFMissileGuideComp::BuildBoundedPursuitCommandWithRea
 	return RearTieBreakCommand;
 }
 
-// [v1.0.0] 순수 Guidance Command를 응답 시간으로 보간하고 현재 속력 안에서 Velocity 방향에 적용합니다.
-void UCFMissileGuideComp::ApplyGuidanceCommand(
-	const FCFMissileGuidanceCommand& InGuidanceCommand,
-	const float DeltaTime)
+// [v1.5.0] 순수 Guidance Command를 물리 적용 없이 authoritative request/legacy diagnostic 상태로 저장합니다.
+void UCFMissileGuideComp::UpdateGuidanceRequestState(
+	const FCFMissileGuidanceCommand& InGuidanceCommand)
 {
 	UProjectileMovementComponent* ProjectileMovement = ActiveProjectileMovementComponent.Get();
-	if (!ProjectileMovement || !InGuidanceCommand.bCommandValid)
+	if (!IsValid(ProjectileMovement) || !InGuidanceCommand.bCommandValid)
 	{
 		InvalidateCurrentGuidance(ECFMissileMissReason::InvalidInput);
 		return;
 	}
 
-	// [v1.0.0] Guidance 적용 전 보존할 현재 미사일 속력입니다.
+	// [v1.5.0] Guidance law가 의미 있는 request를 낼 수 있는 현재 실제 미사일 속력입니다.
 	const float CurrentSpeedCmPerSec = ProjectileMovement->Velocity.Size();
 	if (!FMath::IsFinite(CurrentSpeedCmPerSec)
-		|| CurrentSpeedCmPerSec + KINDA_SMALL_NUMBER < ActiveGuideConfig.GetEffectiveMinimumGuidanceSpeedCmPerSec())
+		|| CurrentSpeedCmPerSec + KINDA_SMALL_NUMBER
+			< ActiveGuideConfig.GetEffectiveMinimumGuidanceSpeedCmPerSec())
 	{
 		InvalidateCurrentGuidance(ECFMissileMissReason::BelowMinimumGuidanceSpeed);
 		return;
 	}
 
-	// [v1.0.0] 목표 Command를 현재 필터 상태에 반영할 선형 응답 비율입니다.
-	const float ResponseAlpha = FMath::Clamp(
-		DeltaTime / ActiveGuideConfig.GetEffectiveGuidanceResponseTimeSeconds(),
-		0.0f,
-		1.0f);
-	FilteredLateralAcceleration = FMath::Lerp(
-		FilteredLateralAcceleration,
-		InGuidanceCommand.AppliedLateralAccelerationCmPerSecSq,
-		ResponseAlpha);
-
-	// [v1.0.0] 현재 속력에서 최대 선회율이 허용하는 횡가속도 상한입니다.
-	const float MaximumAccelerationByTurnRate = CFMissileGuideMath::CalculateTurnRateAccelerationLimitCmPerSecSq(
-		CurrentSpeedCmPerSec,
-		ActiveGuideConfig.GetEffectiveMaximumTurnRateDegPerSec());
-
-	// [v1.0.0] 횡가속도와 선회율 제한을 모두 만족하는 최종 가속도 상한입니다.
-	const float EffectiveMaximumAcceleration = FMath::Min(
-		ActiveGuideConfig.GetEffectiveMaximumLateralAccelerationCmPerSecSq(),
-		MaximumAccelerationByTurnRate);
-	FilteredLateralAcceleration = FilteredLateralAcceleration.GetClampedToMaxSize(
-		FMath::Max(EffectiveMaximumAcceleration, 0.0f));
-
-	// [v1.0.0] 횡가속도를 한 시간 구간 적용한 뒤의 제한 전 방향 후보 Velocity입니다.
-	const FVector DirectionCandidateVelocity = ProjectileMovement->Velocity
-		+ FilteredLateralAcceleration * DeltaTime;
-
-	// [v1.0.0] 기존 속력을 유지하면서 횡기동만 적용할 새 진행 방향입니다.
-	const FVector NewVelocityDirection = DirectionCandidateVelocity.GetSafeNormal();
-	if (NewVelocityDirection.IsNearlyZero() || NewVelocityDirection.ContainsNaN())
-	{
-		InvalidateCurrentGuidance(ECFMissileMissReason::InvalidInput);
-		return;
-	}
-
-	ProjectileMovement->Velocity = NewVelocityDirection * CurrentSpeedCmPerSec;
 	CurrentGuidanceCommand = InGuidanceCommand;
-	CurrentGuidanceCommand.AppliedLateralAccelerationCmPerSecSq = FilteredLateralAcceleration;
-	CurrentGuidanceCommand.AppliedTurnRateDegPerSec = CurrentSpeedCmPerSec > KINDA_SMALL_NUMBER
-		? FMath::RadiansToDegrees(FilteredLateralAcceleration.Size() / CurrentSpeedCmPerSec)
-		: 0.0f;
 	CurrentGuidanceCommand.InvalidReason = ECFMissileMissReason::None;
+
+	// [v1.5.0] 기존 Debug surface 호환용 pure-guidance 적용 진단값입니다. 실제 response filter는 Dynamics가 별도로 소유합니다.
+	FilteredLateralAcceleration =
+		InGuidanceCommand.AppliedLateralAccelerationCmPerSecSq;
 }
 
 // [v1.0.0] 이번 프레임 Guidance를 적용하지 않고 지정 Miss 사유를 기록합니다.

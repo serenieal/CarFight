@@ -1,0 +1,30 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_f0c69a42bd174efba0e4c1d2a7b39560",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_8d2b06e1ec4f4acda6acbba120a9dd37",
+  "parent_version_ids": [
+    "ver_56c7b6e2a3ff4b1ca4e7280d6fd3c941"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-056",
+    "title": "Projectile Flight Physics (발사체 공통 비행 물리)",
+    "phase": "PFP-P0-02",
+    "next_action": "Implement the frozen v0.1.3 contract only: add UCFProjectileDynamicsComp as sole CarFight non-gravity AddForce authority; convert MotorComp to propulsion-step producer and MissileGuideComp to guidance-request producer; add exact3 rocket stabilization fields; preserve ProjectileMovement gravity/sub-step/collision and run focused gravity-on validation. Hold if implementation requires redesign.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-056"
+    ],
+    "legacy_refs": [
+      "Document/Plan/ProjectileFlightPhysics/ProjectileFlightPhysicsPlan.md v0.1.3",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-27",
+    "resolution_basis": "PFP-P0-01 Common Flight Physics Contract/C++ Responsibility/Minimal Data API Freeze completed. Technical Review P0 0 / blocking P1 0 / P2 1 non-blocking / TECHNICAL CONTRACT PASS. UE 5.8 UProjectileMovementComponent remains gravity, integration, sub-step, sweep/collision authority; new UCFProjectileDynamicsComp is frozen as the sole CarFight non-gravity acceleration aggregator using AddForce. MotorComp becomes propulsion-step producer; MissileGuideComp becomes guidance-request producer; rocket stabilization adds exact3 fields. No Source/Blueprint/DataAsset implementation, build, automation, PIE, stage, commit or push performed."
+  }
+}

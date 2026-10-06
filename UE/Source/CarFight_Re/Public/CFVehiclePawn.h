@@ -1,9 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.176.0
-// Date: 2026-09-18
-// Description: CarFight 싱글플레이 차량 Pawn 기준 클래스 / Phase 5 Selection-Lock-Scan Gameplay Command Boundary
+// Version: 2.178.0
+// Date: 2026-10-06
+// Description: CarFight 싱글플레이 차량 Pawn 기준 클래스 / Vehicle Target Lock Retarget Input Correction
 // Changelog:
+// - v2.178.0: Target Lock 입력이 같은 Selected Target에서는 토글 해제되고, 다른 Selected Target에서는 기존 VehicleTargetingComp replacement 계약으로 즉시 재획득을 시작하도록 의미를 교정. 새 대상 Lock 요청 거부 시 기존 Lock은 유지.
+// - v2.177.0: 기존 VehicleTargetingComp/RequestLockSelectedTarget 계약에 별도 IA_TargetLock 입력 슬롯을 연결. Selection과 Lock은 계속 독립 유지하고, 입력 시 Idle이면 선택 Target Lock 요청, Acquiring/Locked이면 Lock만 해제하는 토글 동작을 추가.
 // - v2.176.0: Selected Target을 명령 시점에만 소비하는 RequestLockSelectedTarget, Lock-only RequestClearTargetLock, Scan-only RequestCancelTargetScan facade를 추가. Selection/Lock/Scan/Active Detection 자동 결합은 추가하지 않고 기존 IA_ActiveScan ToolTip을 현재 Target Scan 의미로 교정.
 // - v2.175.0: TargetSelect/Sensor와 독립된 UCFVehicleTargetingComp 기본 서브오브젝트와 Blueprint getter를 추가. Phase 4에서는 Lock Runtime/Snapshot foundation만 연결하며 Fire/HUD/Input 의미는 변경하지 않음.
 // - v2.174.0: VehicleData 기반 표시 TargetId와 독립된 per-instance TargetEntityId(FGuid) provider/storage를 추가. 같은 Pawn lifetime에서는 안정적으로 유지하며 기존 TargetSelect/Sensor API 의미는 변경하지 않음. Migration은 기존 TargetId 소비자를 변경하지 않고 Entity 재식별이 필요한 신규 경로만 TargetEntityId를 사용.
@@ -98,6 +100,8 @@
 // - v2.60.0: 싱글플레이 전환에 맞춰 상단 기준 설명에서 CFNetSmooth 적용 전 문구를 제거.
 // - v2.59.0: CFNetSmooth 적용 전 기준선 정리를 위해 차량 NetDebug/OwnerVisual/OwnerBodyVisual 실험 플래그 기본값을 False로 통일.
 // Migration:
+// - v2.178.0부터 T Lock 입력은 현재 Selected Target에 먼저 RequestLock을 시도합니다. 같은 대상이면 AlreadyAcquiring/AlreadyLocked 결과로 기존 Lock을 토글 해제하고, 다른 유효 Selected Target이면 Accepted replacement로 즉시 재획득합니다. 새 대상이 Lock 불가라면 기존 Lock을 보존합니다.
+// - v2.177.0부터 `/Game/CarFight/Input/IA_TargetLock` Boolean Input Action을 기본 로드합니다. 기본 IMC에서는 T 키를 사용하며, Selection 입력과 자동 결합하지 않습니다.
 // - v2.176.0 Phase 5 command facade는 현재 Selection을 요청 시점에 한 번만 소비합니다. Selection 변경/해제는 기존 Lock/Scan을 자동 변경하지 않으며 새 Lock InputAction/키, HUD, Guided Weapon source는 추가하지 않습니다.
 // - v2.171.0 reflected type 이름·필드·Blueprint 노출과 Pawn 함수 signature는 변경되지 않습니다. Product Blueprint/SCS/Asset resave는 필요하지 않으며, Debug/Input type만 필요한 C++ consumer는 새 전용 Public header를 직접 include할 수 있습니다.
 // - v2.170.0 기존 BP_CFVehiclePawn 계열은 VehicleRuntimeComp 기본 서브오브젝트를 자동 상속합니다. Product Asset 수동 추가/저장은 필요하지 않으며 기존 InitializeVehicleRuntime/RefreshFittingDependentRuntime/readiness/summary 계약은 Pawn에 그대로 유지됩니다.
@@ -255,6 +259,8 @@ class CARFIGHT_RE_API ACFVehiclePawn : public AWheeledVehiclePawn, public ICFTar
 	// [v2.170.0] 내부 Runtime coordinator가 Pawn 상태 Authority와 기존 lifecycle/Public/Automation wrapper를 유지한 채 orchestration 행동만 수행하도록 허용합니다.
 	friend class UCFVehicleRuntimeComp;
 	friend class UCFLauncherComp;
+	// [v2.178.0] Targeting Gameplay Command Automation이 실제 Target Lock 입력 handler의 same-target toggle / cross-target replacement 의미를 검증합니다.
+	friend class FCFTargetingGameplayCommandBoundaryTest;
 	friend class FCFAmmoFireTransactionTest;
 	// [v2.150.0] UI-P0-06 Heat Automation이 기존 private accepted-fire/apply 경계를 public API로 열지 않고 실제 호출하도록 허용합니다.
 	friend class FCFHUDP006HeatResourceTest;
@@ -325,6 +331,10 @@ public:
 		// 현재 후보를 지속 선택 대상으로 확정할 입력 액션입니다.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="타겟 선택 입력 액션 (InputAction_SelectTarget)", ToolTip="현재 TargetSelectComp 후보를 지속 선택 대상으로 확정하는 Boolean Input Action입니다. 후보가 없으면 기존 선택을 유지합니다."))
 	TObjectPtr<UInputAction> InputAction_SelectTarget = nullptr;
+
+	// [v2.177.0] 현재 Selection과 독립적으로 Vehicle Target Lock을 요청/해제할 입력 액션입니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input|Targeting", meta=(DisplayName="타겟 락 입력 액션 (InputAction_TargetLock)", ToolTip="현재 선택 Target에 Vehicle Target Lock을 요청합니다. 같은 대상을 다시 누르면 Lock을 해제하고, 다른 유효 선택 대상이면 즉시 그 대상으로 Lock 획득을 전환합니다. 새 대상이 Lock 불가하면 기존 Lock을 유지하며 Selection과 Scan 상태는 변경하지 않습니다."))
+	TObjectPtr<UInputAction> InputAction_TargetLock = nullptr;
 
 				// 현재 지속 선택 대상만 수동 해제할 입력 액션입니다.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="CarFight|VehiclePawn|Input", meta=(DisplayName="타겟 해제 입력 액션 (InputAction_ClearTarget)", ToolTip="현재 선택 대상을 Manual 사유로 해제하는 Boolean Input Action입니다. 현재 후보는 유지하며 자동 다음 타겟을 선택하지 않습니다."))
@@ -1065,6 +1075,9 @@ protected:
 
 	// 현재 후보 선택 입력을 처리합니다.
 	void HandleSelectTargetStarted(const FInputActionValue& InputActionValue);
+
+	// [v2.178.0] 현재 Selected Target에 Lock을 먼저 요청하고 같은 대상 중복 요청만 Lock-only 토글 해제로 처리합니다.
+	void HandleTargetLockStarted(const FInputActionValue& InputActionValue);
 
 				// 현재 선택 대상 수동 해제 입력을 처리합니다.
 	void HandleClearTargetStarted(const FInputActionValue& InputActionValue);

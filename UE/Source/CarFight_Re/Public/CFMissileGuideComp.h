@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.4.1
-// Date: 2026-09-07
-// Description: CarFight 물리 제한형 미사일 유도 컴포넌트
-// Scope: 발사 순간 Target Actor Snapshot, Guidance Activation, Legacy/Stateful Seeker, Direct/Sampled 관측·속도 추정, Guidance Law 전략, rear-aspect·오버슈트와 Pool Reset을 관리합니다.
+// Version: 1.5.0
+// Date: 2026-09-27
+// Description: CarFight 물리 제한형 미사일 유도 요청 컴포넌트
+// Scope: Target observation, Seeker, Guidance activation/law, Lost policy와 authoritative guidance request를 관리합니다. 실제 비행 가속도 적용은 ProjectileDynamicsComp가 소유합니다.
 // Changelog:
+// - v1.5.0: PFP-P0-02에서 Projectile Velocity 직접 변경·응답 필터·최종 shared lateral limit 적용을 제거하고 RequestedLateralAcceleration handoff producer로 전환.
 // - v1.4.1: MG-P0-12D 최종검수 P1 교정으로 exact rear Launch Right tie-break를 PN Course Capture뿐 아니라 PurePursuit/LeadPursuit의 공통 bounded Pursuit 경로에도 적용.
 // - v1.4.0: MG-P0-12D Independent Guidance Activation latch, free Stateful Seeker geometry, approach-armed Overshoot와 Launch Right 기반 exact rear tie-break를 추가.
 // - v1.3.0: MG-P0-12C PurePursuit/LeadPursuit/ProportionalNavigation 전략 선택, bounded lead aim point와 rear/non-closing PN Course Capture를 추가.
@@ -19,6 +20,7 @@
 // - SampledPositionEstimate는 Target Actor 위치만 설정된 주기로 관측하며 Actor GetVelocity 정답을 Guidance 입력으로 소비하지 않습니다.
 // - MissileGuideConfig.bUseGuidance=false인 기존 Projectile·Rocket은 Velocity를 변경하지 않습니다.
 // - P0 Runtime은 TargetActor와 ContinueStraight를 우선 지원하며 LaserPoint·DataLink와 실제 Expire 요청은 후속 단계입니다.
+// - AppliedLateralAcceleration/AppliedTurnRate는 기존 Blueprint/API 호환을 위한 pure guidance diagnostic이며 실제 최종 적용값은 ProjectileDynamicsSnapshot이 authority입니다.
 
 #pragma once
 
@@ -76,7 +78,7 @@ public:
 	void AdvanceGuidanceForAutomation(float DeltaTime);
 
 protected:
-	// [v1.0.0] Flight State와 Target Snapshot을 읽어 제한형 Guidance Velocity를 갱신합니다.
+	// [v1.5.0] Flight State와 Target Snapshot을 읽어 authoritative Guidance request를 갱신합니다.
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 private:
@@ -172,8 +174,8 @@ private:
 	FCFMissileGuidanceCommand BuildBoundedPursuitCommandWithRearTieBreak(
 		const FCFMissileGuidanceInput& GuidanceInput) const;
 
-	// [v1.0.0] 순수 Guidance Command를 응답 시간으로 보간하고 현재 속력 안에서 Velocity 방향에 적용합니다.
-	void ApplyGuidanceCommand(const FCFMissileGuidanceCommand& InGuidanceCommand, float DeltaTime);
+	// [v1.5.0] 순수 Guidance Command를 물리 적용 없이 authoritative request/legacy diagnostic 상태로 저장합니다.
+	void UpdateGuidanceRequestState(const FCFMissileGuidanceCommand& InGuidanceCommand);
 
 	// [v1.0.0] 이번 프레임 Guidance를 적용하지 않고 지정 Miss 사유를 기록합니다.
 	void InvalidateCurrentGuidance(ECFMissileMissReason MissReason);
@@ -185,7 +187,7 @@ private:
 	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|MissileGuidance|Debug", meta=(AllowPrivateAccess="true", DisplayName="활성 미사일 유도 설정 (ActiveGuideConfig)", ToolTip="현재 활성화에 값으로 복사된 안전 보정 MissileGuideConfig입니다."))
 	FCFMissileGuideConfig ActiveGuideConfig;
 
-	// [v1.0.0] Guidance가 방향을 변경할 실제 ProjectileMovement입니다.
+	// [v1.5.0] Guidance law 입력용 현재 위치·Velocity를 읽는 ProjectileMovement입니다. GuideComp는 이를 직접 변경하지 않습니다.
 	UPROPERTY(Transient)
 	TObjectPtr<UProjectileMovementComponent> ActiveProjectileMovementComponent = nullptr;
 
@@ -249,8 +251,8 @@ private:
 	UPROPERTY(Transient)
 	bool bOvershootArmed = false;
 
-	// [v1.0.0] 응답 시간 필터가 유지하는 현재 횡가속도입니다.
-	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|MissileGuidance|Debug", meta=(AllowPrivateAccess="true", DisplayName="필터된 횡가속도 (FilteredLateralAcceleration)", ToolTip="GuidanceResponseTimeSeconds에 따라 보간되어 현재 Velocity 방향 변경에 적용되는 횡가속도입니다."))
+	// [v1.5.0] 기존 Debug surface 호환을 위해 마지막 pure-guidance Applied 값을 보존하는 legacy 진단 필드입니다.
+	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, Category="CarFight|MissileGuidance|Debug", meta=(AllowPrivateAccess="true", DisplayName="필터된 횡가속도 (FilteredLateralAcceleration)", ToolTip="기존 Debug 호환용 pure-guidance 진단 값입니다. 실제 응답 필터와 최종 횡제어 적용은 ProjectileDynamicsComp가 소유합니다."))
 	FVector FilteredLateralAcceleration = FVector::ZeroVector;
 
 	// [v1.0.0] 마지막으로 계산한 Target까지의 거리입니다.

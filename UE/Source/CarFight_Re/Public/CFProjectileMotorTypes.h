@@ -1,16 +1,19 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.0
-// Date: 2026-08-02
+// Version: 1.2.0
+// Date: 2026-09-27
 // Description: CarFight 추진 발사체 모터 공용 타입
-// Scope: 비유도 로켓과 미사일의 추진 설정, 방향 모드, 모터 상태와 런타임 스냅샷을 제공합니다.
+// Scope: Rocket/Missile 추진 설정, Launch-Axis 안정화, 방향 source-intent, 모터 상태, frame MotorStep과 런타임 스냅샷을 제공합니다.
 // Changelog:
+// - v1.2.0: PFP-P0-02 Rocket Launch-Axis Stabilization exact3 필드와 impulse 보존용 FCFProjectileMotorStep 추가. MaximumPropelledSpeed를 axial governor 의미로 전환.
 // - v1.1.0: 기존 Rocket 고정 방향과 Missile 현재 Velocity 방향을 분리하는 ThrustDirectionMode 추가.
 // - v1.0.0: 점화 지연, 연소 시간, 추진 가속도와 최대 추진 속도를 포함한 P0 추진 계약 추가.
 // Migration:
 // - 기존 ProjectileData는 bUsePropulsion=false 기본값으로 기존 초기 속도 비행을 유지합니다.
 // - 기존 StartMotor 호출은 FixedLaunchDirection을 사용해 비유도 Rocket 결과를 유지합니다.
 // - 미사일 Flight Runtime만 CurrentVelocityDirection을 명시적으로 선택합니다.
+// - PFP 이후 ThrustDirectionMode는 source-intent/debug 호환값이며 실제 물리 방향 최종 authority는 ProjectileDynamicsComp입니다.
+// - 신규 Launch-Axis Stabilization 기본값은 False라 기존 저장 ProjectileData의 행동을 자동 변경하지 않습니다.
 
 #pragma once
 
@@ -64,9 +67,62 @@ struct CARFIGHT_RE_API FCFProjectilePropulsionConfig
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileData|Propulsion", meta=(ClampMin="0.0", EditCondition="bUsePropulsion", DisplayName="추진 가속도 cm/s² (ThrustAccelerationCmPerSecSq)", ToolTip="로켓 모터가 Burning 상태일 때 발사 방향으로 적용할 가속도입니다. 단위는 cm/s²입니다."))
 	float ThrustAccelerationCmPerSecSq = 9000.0f;
 
-	// [v1.0.0] 추진 가속으로 도달할 수 있는 최대 발사체 속도입니다.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileData|Propulsion", meta=(ClampMin="1.0", EditCondition="bUsePropulsion", DisplayName="최대 추진 속도 cm/s (MaximumPropelledSpeed)", ToolTip="Burning 상태에서 추진 가속을 적용한 뒤 제한할 최대 속도입니다. InitialSpeed보다 작게 설정해도 발사 직후 속도를 강제로 낮추지는 않으며, 추진 가속 적용 시점부터 상한으로 사용합니다."))
+	// [v1.2.0] 추가 axial thrust를 중단할 추진축 방향 속도 governor 기준입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileData|Propulsion", meta=(ClampMin="1.0", EditCondition="bUsePropulsion", DisplayName="최대 추진 속도 cm/s (MaximumPropelledSpeed)", ToolTip="현재 추진축 방향 속도가 이 값 이상이면 추가 axial thrust를 중단합니다. 중력, 하강 또는 플랫폼 상속으로 생긴 월드 속도를 clamp하지 않습니다."))
 	float MaximumPropelledSpeed = 10000.0f;
+
+	// [v1.2.0] 비유도 Rocket이 Burning 중 Launch Axis를 물리적으로 안정화할지 여부입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileData|Propulsion", meta=(EditCondition="bUsePropulsion", DisplayName="발사축 안정화 사용 (bUseLaunchAxisStabilization)", ToolTip="True이면 비유도 Rocket이 InitialLaunchDirection을 기준축으로 유지하도록 기존 엔진 총 추력 안에서 TVC를 사용합니다. Target, Reticle, Guidance는 기준축을 바꾸지 않습니다."))
+	bool bUseLaunchAxisStabilization = false;
+
+	// [v1.2.0] Launch Axis에서 엔진 총 추력 벡터가 벗어날 수 있는 최대 TVC 각도입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileData|Propulsion", meta=(ClampMin="0.0", ClampMax="45.0", EditCondition="bUsePropulsion && bUseLaunchAxisStabilization", DisplayName="최대 추력 벡터 각도 deg (MaximumThrustVectorAngleDeg)", ToolTip="Rocket 안정화가 기존 총 추력 벡터를 발사축에서 기울일 수 있는 최대 각도입니다. 0이면 횡방향 안정화 가속도를 만들 수 없습니다."))
+	float MaximumThrustVectorAngleDeg = 0.0f;
+
+	// [v1.2.0] Launch Axis 수직 속도 오차를 회복할 응답 시간입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileData|Propulsion", meta=(ClampMin="0.01", ClampMax="10.0", EditCondition="bUsePropulsion && bUseLaunchAxisStabilization", DisplayName="발사축 안정화 응답 시간 초 (LaunchAxisStabilizationResponseTimeSeconds)", ToolTip="Launch Axis에 수직인 속도 오차를 줄이는 목표 응답 시간입니다. 짧을수록 강한 TVC를 요구하지만 최대 추력 벡터 각도에서 포화될 수 있습니다."))
+	float LaunchAxisStabilizationResponseTimeSeconds = 0.25f;
+};
+
+/**
+ * MotorComp가 한 outer frame에서 Dynamics에 전달하는 점화·연소 impulse 정보입니다.
+ */
+USTRUCT(BlueprintType)
+struct CARFIGHT_RE_API FCFProjectileMotorStep
+{
+	GENERATED_BODY()
+
+	// [v1.2.0] 이 MotorStep이 대표하는 outer frame DeltaTime입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileMotor")
+	float StepDeltaSeconds = 0.0f;
+
+	// [v1.2.0] 이 outer frame 안에서 실제 Burning이었던 시간입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileMotor")
+	float AppliedBurnDurationSeconds = 0.0f;
+
+	// [v1.2.0] AppliedBurnDurationSeconds를 StepDeltaSeconds로 나눈 impulse 보존 비율입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileMotor")
+	float AppliedBurnFraction = 0.0f;
+
+	// [v1.2.0] 현재 propulsion config의 총 엔진 가속도입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileMotor")
+	float ThrustAccelerationCmPerSecSq = 0.0f;
+
+	// [v1.2.0] Dynamics axial governor가 사용할 추진축 방향 속도 상한입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileMotor")
+	float MaximumPropelledSpeedCmPerSec = 0.0f;
+
+	// [v1.2.0] 이 outer frame을 시작할 때의 모터 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileMotor")
+	ECFProjectileMotorState MotorStateBeforeStep = ECFProjectileMotorState::Inactive;
+
+	// [v1.2.0] 이 outer frame의 점화·연소 시간 소비가 끝난 뒤 모터 상태입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileMotor")
+	ECFProjectileMotorState MotorStateAfterStep = ECFProjectileMotorState::Inactive;
+
+	// [v1.2.0] 이 outer frame에 실제 propulsion impulse가 존재하는지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileMotor")
+	bool bHasPropulsionImpulse = false;
 };
 
 /**
@@ -101,8 +157,8 @@ struct CARFIGHT_RE_API FCFProjectileMotorSnapshot
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileMotor", meta=(DisplayName="현재 추진 방향 (CurrentThrustDirection)", ToolTip="P0 비유도 로켓이 발사 시 저장해 연소 동안 고정 사용하는 월드 추진 방향입니다."))
 	FVector CurrentThrustDirection = FVector::ForwardVector;
 
-	// [v1.0.0] 현재 프레임에 추진 가속을 생산할 수 있는 상태인지 여부입니다.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileMotor", meta=(DisplayName="추진 발생 여부 (bIsProducingThrust)", ToolTip="현재 모터 상태가 Burning이고 유효한 ProjectileMovement가 연결되어 실제 추진 가속을 적용할 수 있으면 True입니다."))
+	// [v1.2.0] 현재 프레임에 propulsion step을 생산할 수 있는 상태인지 여부입니다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="CarFight|ProjectileMotor", meta=(DisplayName="추진 발생 여부 (bIsProducingThrust)", ToolTip="현재 모터 상태가 Burning이고 유효한 ProjectileMovement가 연결되어 Dynamics에 propulsion step을 생산할 수 있으면 True입니다. MotorComp가 Velocity를 직접 변경하지는 않습니다."))
 	bool bIsProducingThrust = false;
 
 	// [v1.0.0] 추진 화염 FX가 활성 상태여야 하는지 여부입니다.

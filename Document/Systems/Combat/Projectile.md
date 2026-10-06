@@ -1,11 +1,11 @@
 # Projectile
 
-- Version: 1.9.0
-- Date: 2026-09-08
-- Status: Current System / CF-FQ-030 Missile Integration Boundary Promoted / Same-Source Salvo Isolation User PIE PASS / Different-Source Interception Deferred
-- Features: `CF-FQ-023 고속 Projectile 연속 충돌`, `CF-FQ-027 투사체 비행 FX`, `CF-FQ-028 발사체 추진 시스템`, `CF-FQ-030 물리 제한형 미사일 비행·유도`
-- Tests: `CF-TC-020 PASS`, `CF-TC-023 PASS`, `CF-TC-024 PASS`, `CF-TC-027 PASS`
-- Scope: ProjectileData 기반 공통 발사체 Actor, 비유도 Rocket 추진, Missile Flight/Guidance 컴포넌트 통합, 지속형 Trail·Thruster FX, 연속 충돌, 첫 Impact 피해와 Pool 생명주기의 현재 구현 기준
+- Version: 1.10.0
+- Date: 2026-09-27
+- Status: Current System / CF-FQ-056 PFP-P0-02 TECHNICAL IMPLEMENTATION PASS / PFP-P0-03 USER trajectory·reticle review pending / Same-Source Salvo Isolation User PIE PASS / Different-Source Interception Deferred
+- Features: `CF-FQ-023 고속 Projectile 연속 충돌`, `CF-FQ-027 투사체 비행 FX`, `CF-FQ-028 발사체 추진 시스템`, `CF-FQ-030 물리 제한형 미사일 비행·유도`, `CF-FQ-056 발사체 공통 비행 물리`
+- Tests: `CF-TC-020 PASS`, `CF-TC-023 PASS`, `CF-TC-024 PASS`, `CF-TC-027 PASS`, `PFP-P0-02 gravity-on exact12 PASS`
+- Scope: ProjectileData 기반 공통 발사체 Actor, ProjectileMovement full-gravity 적분, 단일 ProjectileDynamics 비중력 가속도 합성, Rocket bounded TVC, Missile Dynamics handoff, 지속형 Trail·Thruster FX, 연속 충돌, 첫 Impact 피해와 Pool 생명주기의 현재 구현 기준
 
 ---
 
@@ -18,7 +18,7 @@
 
 현재 Projectile 시스템의 핵심 목적은 다음과 같다.
 
-> `ProjectileData`를 읽어 공통 Projectile Actor를 활성화하고, 필요하면 비유도 Rocket 추진과 지속형 비행 FX를 적용하며, 첫 유효 Impact에서 피해를 한 번 처리한 뒤 모든 런타임 상태를 초기화해 Pool로 안전하게 재사용한다.
+> `ProjectileData`를 읽어 공통 Projectile Actor를 활성화하고, `ProjectileMovement`가 실제 중력·이동·Sub-step·충돌을 적분하며, `ProjectileDynamicsComp`가 Motor/Guidance의 제한된 비중력 가속도를 한 번 합성한다. 첫 유효 Impact에서 피해를 한 번 처리한 뒤 Dynamics pending force를 포함한 모든 런타임 상태를 초기화해 Pool로 안전하게 재사용한다.
 
 현재 문서의 범위에서 제외하거나 별도 Current owner가 소유하는 항목:
 
@@ -27,7 +27,7 @@
 - Laser Guided Missile 실제 Runtime
 - Angled/Vertical/Loft/TopAttack 공격 프로파일 완성
 - 다단 추진과 추진 출력 Curve
-- 공기저항·항력·추력 편향
+- 공기저항·항력과 다단/가변 추력 곡선
 - 폭발 범위 피해
 - 장갑 관통과 모듈 손상
 - 근접신관
@@ -55,6 +55,12 @@
 - Test: CF-TC-023 PASS
 - C++ 런타임, Trail·Thruster 자산 연결과 사용자 PIE 전체 행렬을 이 Current System에 반영
 - Trail-only, Thruster-only, 두 FX 동시, 소켓·Fallback, 종료 Reset, Pool 재사용, Ribbon History와 30 FPS 고속 Bounds 검증 PASS
+
+발사체 공통 비행 물리
+- Feature: CF-FQ-056 PFP-P0-02 Technical Implementation PASS
+- Official UE 5.8 Build: `d18d4a6ee4574192bb87acf7b4819ff3` PASS / Exit 0
+- gravity-on Focused: `047aa290d0cb4cbcbd2e60aa5cf9b1c9` exact12 / 12 PASS
+- USER trajectory / reticle review: PFP-P0-03 Pending
 ```
 
 `CF-FQ-028` 완료 Historical Plan:
@@ -80,13 +86,16 @@ Document/Plan/Archive/ProjectileFlightFx/ProjectileFlightFxPlan.md
 | 타입 | 현재 역할 |
 | --- | --- |
 | `UCFProjectileData` | 발사체의 Actor, 이동, 충돌, 추진, 요격, 메시, Trail·Thruster, Impact와 DamageData 설정을 제공한다. |
-| `ACFProjectileActor` | ProjectileData를 적용하고 이동·추진·Missile Flight/Guidance 통합·지속형 FX·차량별 충돌 격리·요격·피해·비활성화 생명주기를 소유한다. |
-| `UCFProjectileMotorComp` | 비유도 Rocket의 점화 지연, Burning 가속, 속도 상한과 BurnedOut 상태를 관리한다. |
+| `ACFProjectileActor` | ProjectileData를 적용하고 Movement·Motor·Missile Flight/Guide·Dynamics의 활성화/Reset 순서, 지속형 FX·차량별 충돌 격리·요격·피해·비활성화 생명주기를 소유한다. |
+| `UCFProjectileMotorComp` | 점화 지연/Burning/BurnedOut 상태와 frame별 `FCFProjectileMotorStep`을 생산한다. Projectile Velocity를 직접 변경하지 않는다. |
+| `UCFProjectileDynamicsComp` | Ballistic/Rocket/GuidedMissile 모드에서 추진·Rocket TVC·Missile shared lateral control을 합성해 ProjectileMovement에 non-gravity `AddForce()`를 outer frame당 한 번 전달한다. |
 | `UCFMissileFlightComp` | 미사일 Released·Clearance·GuidedFlight 상태와 발사 후 시간·분리거리를 소유한다. 세부 Current 계약은 `MissileGuidance.md`가 소유한다. |
-| `UCFMissileGuideComp` | Launch Target Snapshot을 물리 제한 안에서 추적하고 Guidance Command를 ProjectileMovement에 적용한다. 세부 Current 계약은 `MissileGuidance.md`가 소유한다. |
+| `UCFMissileGuideComp` | Launch Target Snapshot·Seeker·Guidance Law를 계산하고 authoritative lateral acceleration request를 생산한다. 실제 물리 적용은 Dynamics가 소유한다. |
 | `UCFProjectilePoolComp` | Projectile Actor Class별 Actor를 재사용하고 모든 버킷을 가로질러 동일 발사 차량 Projectile의 양방향 Ignore 관계를 관리한다. |
-| `FCFProjectilePropulsionConfig` | 자체 추진 사용 여부, 점화 지연, 연소 시간, 추진 가속도와 최대 추진 속도를 제공한다. |
-| `FCFProjectileMotorSnapshot` | 현재 모터 상태, 경과 시간, 속도, 추진 방향과 FX 활성 요청을 Debug와 Blueprint에 제공한다. |
+| `FCFProjectilePropulsionConfig` | 자체 추진, 점화/연소, 총 추진 가속도, axial governor 상한과 Rocket Launch-Axis Stabilization exact3 설정을 제공한다. |
+| `FCFProjectileMotorStep` | 한 outer frame의 실제 burn duration/fraction, thrust acceleration, axial governor 상한과 상태 전이를 Dynamics에 전달한다. |
+| `FCFProjectileDynamicsSnapshot` | 실제 중력, axial/lateral request·적용값, queue된 non-gravity acceleration과 governor/saturation을 Debug·Automation에 제공한다. |
+| `FCFProjectileMotorSnapshot` | 현재 모터 상태, 경과 시간, 속도, source-intent 방향과 FX 활성 요청을 Debug와 Blueprint에 제공한다. |
 | `FCFProjectileAttachedFxSettings` | Trail 또는 Thruster의 사용 여부, Niagara, 부착 방식, 소켓과 Transform을 제공한다. |
 | `ECFProjectileFxAttachMode` | `ProjectileRelative` 또는 `MeshSocketWithFallback` 부착 방식을 구분한다. |
 | `ECFProjectileMotorState` | `Inactive`, `Disabled`, `IgnitionDelay`, `Burning`, `BurnedOut` 상태를 구분한다. |
@@ -98,6 +107,10 @@ Document/Plan/Archive/ProjectileFlightFx/ProjectileFlightFxPlan.md
 UE/Source/CarFight_Re/Public/CFProjectileMotorTypes.h
 UE/Source/CarFight_Re/Public/CFProjectileMotorComp.h
 UE/Source/CarFight_Re/Private/CFProjectileMotorComp.cpp
+UE/Source/CarFight_Re/Public/CFProjectileDynamicsTypes.h
+UE/Source/CarFight_Re/Public/CFProjectileDynamicsComp.h
+UE/Source/CarFight_Re/Private/CFProjectileDynamicsComp.cpp
+UE/Source/CarFight_Re/Private/CFProjectileDynamicsTests.cpp
 UE/Source/CarFight_Re/Public/CFProjectileData.h
 UE/Source/CarFight_Re/Private/CFProjectileData.cpp
 UE/Source/CarFight_Re/Public/CFProjectileActor.h
@@ -142,7 +155,7 @@ LifeTimeSeconds
 
 추진 Rocket
 → 발사대에서 분리되는 순간의 초기 속도
-→ 이후 ProjectileMotorComp가 추가 추진 가속 적용
+→ 이후 MotorComp가 연소 step을 생산하고 Dynamics가 bounded propulsion/TVC를 AddForce로 적용
 ```
 
 ### 4.3 연속 충돌
@@ -191,10 +204,15 @@ PropulsionConfig.IgnitionDelaySeconds
 PropulsionConfig.BurnDurationSeconds
 PropulsionConfig.ThrustAccelerationCmPerSecSq
 PropulsionConfig.MaximumPropelledSpeed
+PropulsionConfig.bUseLaunchAxisStabilization
+PropulsionConfig.MaximumThrustVectorAngleDeg
+PropulsionConfig.LaunchAxisStabilizationResponseTimeSeconds
 ```
 
-기본값은 `bUsePropulsion=false`다.
-따라서 기존 ProjectileData를 재저장하지 않아도 기존 포탄은 InitialSpeed 기반 비추진 비행을 유지한다.
+기본값은 `bUsePropulsion=false`이며 Launch-Axis Stabilization도 `false / 0deg / 0.25s`다.
+따라서 기존 ProjectileData를 재저장하지 않아도 기존 포탄·Rocket 저장값의 행동을 자동 변경하지 않는다.
+
+`MaximumPropelledSpeed`는 더 이상 ProjectileMovement world-speed hard clamp가 아니다. 현재 추진축 방향 속도가 상한 이상이면 추가 engine thrust를 중단하는 **axial propulsion governor**다. 중력·하강·플랫폼 상속으로 생긴 world velocity는 이 값으로 잘라내지 않는다.
 
 ### 4.5 시각 메시
 
@@ -263,6 +281,9 @@ ACFProjectileActor
 
 ProjectileMovementComponent: UProjectileMovementComponent
 ProjectileMotorComponent: UCFProjectileMotorComp
+MissileFlightComponent: UCFMissileFlightComp
+MissileGuideComponent: UCFMissileGuideComp
+ProjectileDynamicsComponent: UCFProjectileDynamicsComp
 ```
 
 ### 5.1 CollisionComponent
@@ -296,21 +317,35 @@ ProjectileMotorComponent: UCFProjectileMotorComp
 ### 5.3 ProjectileMovementComponent
 
 ```text
-- 초기 속도와 Velocity 적용
-- 중력 적용
+- InitialLaunchVelocity 적용
+- 실제 GravityScale 중력 적분
+- pending AddForce와 Velocity integration
 - Sweep과 Sub-step 처리
-- 추진 발사체의 MaximumPropelledSpeed를 MaxSpeed로 적용
+- MaxSpeed = 0으로 world-speed hard clamp 미사용
 ```
 
 ### 5.4 ProjectileMotorComponent
 
 ```text
-- ProjectileMovement보다 먼저 Tick
-- 발사 시 PropulsionConfig와 LaunchDirection 수신
+- PrePhysics producer Tick
+- 발사 시 PropulsionConfig와 source-intent 방향 수신
 - IgnitionDelay와 Burning 시간 진행
-- Velocity에 추진 가속 적용
+- outer frame의 AppliedBurnDuration / AppliedBurnFraction MotorStep 생산
+- ProjectileMovement Velocity 직접 변경 없음
 - BurnedOut 전환
 - Pool 반환 전 Reset
+```
+
+### 5.4A ProjectileDynamicsComponent
+
+```text
+- Motor / MissileFlight / MissileGuide 이후, ProjectileMovement 이전 PrePhysics Tick
+- Ballistic / Rocket / GuidedMissile mode 판정
+- 실제 ProjectileMovement gravity와 current Velocity 읽기
+- Rocket: Launch-Axis TVC + axial governor를 기존 total thrust 안에서 합성
+- Missile: Guidance request - GravityLateral을 하나의 lateral budget에서 clamp
+- ProjectileMovement AddForce를 outer frame당 정확히 한 번 queue
+- Pool Reset 시 ClearPendingForce(true) + filter/snapshot reset
 ```
 
 ### 5.5 Trail·Thruster 컴포넌트
@@ -341,11 +376,12 @@ ProjectileMotorComponent: UCFProjectileMotorComp
 8. 이전 Trail·Thruster 상태 Reset
 9. 이번 ProjectileData의 Trail·Thruster 부착과 자산 준비
 10. 충돌 반경·채널·CCD 적용
-11. InitialSpeed·중력·Sweep·Sub-step과 MaxSpeed 적용
-12. ProjectileMotorComp에 추진 설정과 고정 LaunchDirection 전달
-13. 현재 Motor 상태에 맞춰 Thruster FX 동기화
-14. LifeTimeSeconds 타이머 예약
-15. Actor 표시·충돌·Tick 활성
+11. InitialSpeed·실제 중력·Sweep·Sub-step 적용, ProjectileMovement world MaxSpeed clamp 비활성
+12. ProjectileMotorComp / MissileFlightComp / MissileGuideComp 시작
+13. ProjectileDynamicsComp 시작 및 producer → Dynamics → ProjectileMovement Tick dependency 확립
+14. 현재 Motor 상태에 맞춰 Thruster FX 동기화
+15. LifeTimeSeconds 타이머 예약
+16. Actor 표시·충돌·Tick 활성
 ```
 
 FX 또는 추진 자산 누락은 전체 Projectile 활성화 실패로 전환하지 않는다.
@@ -374,7 +410,7 @@ Inactive
 | `Inactive` | 발사 전 또는 Pool 반환 후 모터 Reset 상태 |
 | `Disabled` | `bUsePropulsion=false`인 기존 비추진 Projectile 상태 |
 | `IgnitionDelay` | InitialSpeed로 분리됐지만 추진 가속이 아직 시작되지 않은 상태 |
-| `Burning` | 발사 시 저장한 고정 방향으로 실제 추진 가속을 적용하는 상태 |
+| `Burning` | Motor가 실제 연소 시간 비율을 생산하고 Dynamics가 제한된 추진/TVC 가속도를 적용할 수 있는 상태 |
 | `BurnedOut` | 연소 종료 후 추가 가속 없이 기존 Velocity와 중력으로 관성 비행하는 상태 |
 
 핵심 계약:
@@ -385,49 +421,37 @@ BurnedOut != Projectile Deactivate
 
 연소가 끝나도 Projectile Actor는 충돌하거나 수명이 종료될 때까지 계속 비행한다.
 
-### 7.2 고정 추진 방향
+### 7.2 Launch-Axis Stabilization
 
-P0 비유도 Rocket의 추진 방향은 발사 시 전달된 `LaunchDirection`을 정규화해 고정한다.
-
-```text
-FixedThrustDirection = SafeNormal(LaunchDirection)
-```
-
-P0에서는 다음 요소가 추진 방향을 변경하지 않는다.
+비유도 Rocket의 기준축은 발사 순간 `LaunchContext.InitialLaunchDirection`으로 고정한다.
 
 ```text
-- TargetSelect
-- Lock-on 대상
-- Actor의 후속 회전
-- 현재 Velocity 방향 변화
-- Reticle 이동
-- 유도 목표점
+LaunchAxis = SafeNormal(InitialLaunchDirection)
 ```
 
-유도는 후속 `UCFProjectileGuidanceComp` 후보가 별도로 소유한다.
+TargetSelect, Lock-on 대상, Reticle 이동, 후속 차량 조준 또는 Guidance는 이 기준축을 바꾸지 않는다. `bUseLaunchAxisStabilization=true`인 경우에만 Burning 중 기존 total thrust vector를 `MaximumThrustVectorAngleDeg` 안에서 기울여 Launch Axis 수직 속도 오차와 횡중력에 대응한다. 별도 무료 lateral acceleration channel은 없다.
 
-### 7.3 Burning 가속
+### 7.3 Burning 가속과 impulse 보존
 
-Burning 동안 개념적으로 다음 가속을 적용한다.
+Motor는 Velocity를 직접 수정하지 않고 한 outer frame의 실제 Burning 시간만 `FCFProjectileMotorStep`으로 생산한다.
 
 ```text
-Velocity += FixedThrustDirection
-          * ThrustAccelerationCmPerSecSq
-          * AppliedBurnDurationSeconds
+AppliedBurnFraction = AppliedBurnDurationSeconds / StepDeltaSeconds
+RequestedEngineAcceleration = ThrustAcceleration * AppliedBurnFraction
 ```
 
-한 프레임이 IgnitionDelay 종료와 Burning 시작을 함께 포함하면, 점화 지연에 사용하고 남은 프레임 시간만 추진 가속에 사용한다.
+Dynamics는 이 engine acceleration을 axial propulsion과 필요 시 bounded TVC로 분배해 `AddForce()`로 한 번 queue한다. 한 프레임이 IgnitionDelay 종료나 Burnout을 함께 포함해도 총 impulse가 실제 Burning duration과 일치한다.
 
-### 7.4 최대 추진 속도
+### 7.4 MaximumPropelledSpeed axial governor
 
-추진 적용 후 Velocity 크기를 `MaximumPropelledSpeed`로 제한한다.
-단, 잘못된 설정 때문에 `MaximumPropelledSpeed < InitialSpeed`가 되어도 발사 직후 기존 속도를 강제로 낮추지 않는다.
-
-현재 안전 상한은 다음 값을 사용한다.
+`MaximumPropelledSpeed`는 현재 추진축 방향 속도에만 적용되는 governor다.
 
 ```text
-max(MaximumPropelledSpeed, CurrentSpeedBeforeThrust)
+Dot(CurrentVelocity, PropulsionAxis) >= MaximumPropelledSpeed
+→ additional engine thrust = 0
 ```
+
+Rocket에서 governor가 활성인 frame에는 같은 엔진 thrust vector에서 나오는 TVC도 0이다. 이를 우회하는 별도 lateral force를 만들지 않는다. 월드 Velocity 전체는 clamp하지 않으므로 중력·하강·플랫폼 상속 속도 성분은 그대로 보존된다.
 
 ### 7.5 중력
 
@@ -1167,10 +1191,21 @@ Document/Systems/UI/VehicleDebugPanel.md
 
 ## 22. 문서 버전 관리
 
-- 현재 문서 버전: `1.9.0`
-- 문서 상태: `Current System / CF-FQ-030 Missile Integration Boundary Promoted / Same-Source Salvo Isolation User PIE PASS / Different-Source Interception Deferred`
+- 현재 문서 버전: `1.10.0`
+- 문서 상태: `Current System / CF-FQ-056 PFP-P0-02 TECHNICAL IMPLEMENTATION PASS / PFP-P0-03 USER trajectory·reticle review pending / Same-Source Salvo Isolation User PIE PASS / Different-Source Interception Deferred`
 
 ### Changelog
+
+#### v1.10.0 - 2026-09-27
+
+```text
+- CF-FQ-056 PFP-P0-02 Technical Implementation PASS를 Current System에 반영했다.
+- UCFProjectileDynamicsComp를 sole runtime non-gravity AddForce authority로 기록하고 ProjectileMovement full gravity/sub-step/sweep/collision 책임을 유지했다.
+- MotorComp는 impulse-preserving MotorStep producer, MissileGuideComp는 guidance request producer로 갱신해 비행 중 직접 Velocity writer 설명을 제거했다.
+- Rocket Launch-Axis Stabilization exact3 설정, bounded TVC, MaximumPropelledSpeed axial governor와 governor 활성 시 engine thrust/TVC 0 의미를 기록했다.
+- Official UE 5.8 Build d18d4a6ee4574192bb87acf7b4819ff3 PASS 및 gravity-on focused 047aa290d0cb4cbcbd2e60aa5cf9b1c9 exact12/12 PASS를 반영했다.
+- Product DataAsset/Blueprint/Engine Source mutation은 없으며 PFP-P0-03 USER trajectory/reticle review는 Pending으로 유지한다.
+```
 
 #### v1.9.0 - 2026-09-08
 

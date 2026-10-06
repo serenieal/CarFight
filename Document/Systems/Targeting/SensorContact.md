@@ -1,11 +1,11 @@
 # SensorContact
 
-- Version: 1.15.0
-- Date: 2026-09-18
+- Version: 1.16.0
+- Date: 2026-10-06
 - Status: Current System / Phase 3B-1 Persistent Knowledge Store + Phase 5 Target Scan Command + Phase 6 HUD Presentation integration / Fresh Technical Validation PASS
 - Feature: `CF-FQ-036 차량 센서·Contact Intelligence Runtime` + `CF-FQ-037 차량 스캐너 입력·장비 통합`
 - Acceptance: Historical `SEN-P0-00~07 PASS` + `SCAN-P0-00~07 PASS`와 Phase 1~3A Technical PASS를 보존한다. Phase 3B-1에서 valid `TargetEntityId(FGuid)` exact key의 `UCFVehicleSensorComp` private actor-free Persistent Knowledge Store를 추가하고 Identified/DetailedScan 즉시 upsert, Contact Removed 뒤 동일 Entity reassociation, exact `AnalysisCompletionRevision` 복원, authoritative Terminal Record와 stable identity conflict fail-closed를 구현했다. Dynamic Knowledge Domain/Freshness/Rescan은 아직 구현하지 않았다.
-- Verification: Phase 3B-1과 Phase 5 Final evidence를 보존한다. Phase 6 latest Source Official UE 5.8 Build `f899ebafdb8d43a88e6788561b4c7a8f` PASS / Exit0, persisted TargetPanel 반영 후 final Build `608d40838ff1410680a0140d630f1e50` PASS다. `CarFight.Targeting.Phase6.HUDPresentationChannels` process `de7c638087374154b8649f22b1175885` 1/1 PASS가 Selection B / Lock A / Scan A 및 Selection Clear 후 Lock/Scan 유지의 실제 Provider 투영을 검증했고, `CarFight.UI.UI_P0_07.TargetKnowledgePanelContract` process `d852293d8eba43b49e12cd20f722a07b` 1/1 PASS가 저장 Production TargetPanel 소비를 검증했다.
+- Verification: Phase 3B-1과 Phase 5~7 기존 evidence를 보존한다. 2026-10-06 Basic Sensor 운용거리 교정 후 Official UE 5.8 Editor Build `5b2e29e0f60842a8a9746a4f7ede9cf4` PASS, `CarFight.Sensor.SEN_P0_04.BasicSensorSingleScanCompletion` 1/1 PASS, `CarFight.Targeting.TGT_P0_05.GameplayCommandBoundary` 1/1 PASS, `CarFight.Missile.MG_P0_01_04.DirectRuntimeContract` PASS다. Fresh persisted AssetDump `adset_v1_ddb28ee118ede1e31547cf03d6b8333f.6c9285d5faf716d8c82e5a5f`에서 Basic Sensor 600/800/1200m 및 Radar 300/600/1200m 저장 상태를 확인했다. 수치 이관에 사용한 일회성 migration Automation은 저장 완료 후 제거해 지속적인 tuning gate로 남기지 않았다.
 
 
 ---
@@ -137,7 +137,7 @@ Debug Summary
 
 `CF-FQ-036` 완료 당시에는 새 SensorData Content `.uasset`을 생성하거나 저장하지 않았다.
 
-2026-09-16 correction에서 정상 신규 차량이 공통 Basic Sensor를 사용할 수 있도록 `UCFVehicleData.DefaultSensorData`와 Runtime source priority를 추가했고, Production 공통 자산 `/Game/CarFight/Vehicles/Data/Sensor/DA_VehicleSensor_Basic`을 exact1 materialize했다. Fresh persisted AssetDump에서 `UCFVehicleSensorData` exact1과 Passive 20m / Visual 30m / Active 40m / Active Scan 3초 / Update 0.2초 / **Analysis Gain 0.40/s** / Decay 0.15/s / Radar 10·20·40m(기본 20m)를 확인했다. 이 수치는 `09_LockSensorEW.md v0.3.2`의 **P0 기술·플레이테스트 baseline**이며 최종 Scanner/맵 밸런스는 DataAsset 값으로 후속 조정할 수 있다. 이전 `Analysis Gain 0.25/s`는 3초 Scan에서 DetailedScan 1.0에 도달할 수 없어 폐기된 설정이다.
+2026-09-16 correction에서 정상 신규 차량이 공통 Basic Sensor를 사용할 수 있도록 `UCFVehicleData.DefaultSensorData`와 Runtime source priority를 추가했고, Production 공통 자산 `/Game/CarFight/Vehicles/Data/Sensor/DA_VehicleSensor_Basic`을 exact1 materialize했다. 당시 Passive 20m / Visual 30m / Active 40m / Radar 10·20·40m 값은 기능 성립만 확인하기 위한 P0 기술 baseline이었으며, 2026-10-06 USER 플레이 검수에서 600m Guided Missile의 Lock source인 Live Contact가 수십 m에서 끊겨 실전 발사 범위를 사실상 사용할 수 없다는 운용 스케일 불일치가 확인되어 폐기했다. 현재 persisted baseline은 **Passive 600m / Visual 800m / Active 1200m / Radar 300·600·1200m(기본 600m)**다. Active Scan 3초 / Update 0.2초 / Contact Memory 2초 / Destroyed Hold 1초 / **Analysis Gain 0.40/s** / Decay 0.15/s와 정보 임계값은 유지한다. Passive 600m는 현재 Guided Missile 600m 사거리의 기본 Live Contact envelope를 커버하며, 600~800m는 직접 가시 Visual Detection, 그 밖의 1200m까지는 Active Detection/Target Scan 조건에서 Contact를 만들 수 있다.
 
 ### 3.3 `UCFVehicleSensorComp`
 
@@ -1234,6 +1234,15 @@ Scanner test fixture에서 `V` 단발 입력, 5초 timed Active Scan 자동 종�
 ---
 
 ## 27. Changelog
+
+### v1.16.0 - 2026-10-06
+
+- USER 플레이 검수에서 `DA_VehicleSensor_Basic`의 기존 Passive 20m / Visual 30m / Active 40m가 600m Guided Missile 사거리와 맞지 않아 조금만 멀어져도 Live Contact가 LastKnown/Lost로 전환되고 Vehicle Lock이 Break되며 새 Lock도 거부되는 운용거리 결함을 확인했다.
+- 기존 수치는 기능 성립용 P0 기술 baseline으로 역사 보존하고 Current Production baseline을 Passive 600m / Visual 800m / Active 1200m, Radar 300/600/1200m(기본 600m)로 교정했다. Scan duration/update/contact memory/analysis tuning은 변경하지 않았다.
+- 수치 변경은 exact old baseline을 대상으로 한 일회성 migration으로 적용하고 fresh AssetDump로 persisted 결과를 확인했다. 해당 migration Automation은 역할 완료 후 제거해 향후 Sensor tuning을 막는 상시 gate로 남기지 않았다.
+- Official UE 5.8 Editor Build `5b2e29e0f60842a8a9746a4f7ede9cf4` PASS와 `BasicSensorSingleScanCompletion` 1/1 PASS를 확보했다. Fresh AssetDump `adset_v1_ddb28ee118ede1e31547cf03d6b8333f.6c9285d5faf716d8c82e5a5f`로 persisted 수치를 재확인했다.
+
+Migration: Basic Sensor를 소비하는 기존 VehicleData/Scanner source priority는 변경하지 않는다. 600m 이내는 Passive Live Contact가 기본 전투 envelope를 제공하고, Visual/Active 상위 범위는 기존 탐지 의미를 그대로 따른다. 이전 20/30/40m 값은 Historical evidence로만 해석한다.
 
 ### v1.15.0 - 2026-09-18
 

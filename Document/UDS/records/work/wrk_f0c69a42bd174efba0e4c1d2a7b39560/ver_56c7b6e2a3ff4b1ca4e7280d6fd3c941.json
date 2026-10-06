@@ -1,0 +1,30 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_f0c69a42bd174efba0e4c1d2a7b39560",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_56c7b6e2a3ff4b1ca4e7280d6fd3c941",
+  "parent_version_ids": [
+    "ver_b7032cce9bc9495c9655b149f074d2be"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-056",
+    "title": "Projectile Flight Physics (발사체 공통 비행 물리)",
+    "phase": "PFP-P0-01",
+    "next_action": "Freeze the v0.1.2 Design PASS into exact C++ responsibility and minimal data/API contract: single bounded flight-dynamics authority, rocket launch-axis thrust-vector stabilization, missile shared lateral control budget, gravity-on admission and validation fixtures. Do not implement until this freeze is reviewed.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-056"
+    ],
+    "legacy_refs": [
+      "Document/Plan/ProjectileFlightPhysics/ProjectileFlightPhysicsPlan.md v0.1.2",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-27",
+    "resolution_basis": "PFP-P0-00 Contract Correction + Design Re-review completed. Blocking P1-1 rocket physical control authority resolved as bounded thrust-vector Launch-Axis Stabilization; P1-2 missile gravity/thrust/guidance composition resolved as one bounded lateral-control budget with axial propulsion separated and post-burn aerodynamic control compatibility; P1-3 gravity-off data/tests resolved by legacy-isolation versus gameplay gravity-on admission and a new focused validation matrix. Fresh persisted CFProjectileData AssetDump exact5/succeeded5/failed0 dataset adset_v1_090db68b0bf6ff963882e923d36f8ff1.9236a1fd9e871dd72e2fa31f confirmed stored state. Re-review P0 0 / blocking P1 0 / P2 2 non-blocking / Technical Design PASS. No C++/Blueprint/DataAsset implementation, build, automation, PIE or Git mutation performed."
+  }
+}

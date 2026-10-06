@@ -1,9 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 2.176.0
-// Date: 2026-09-18
-// Description: CarFight 싱글플레이 차량 Pawn 구현 / Phase 5 Selection-Lock-Scan Gameplay Command Boundary
+// Version: 2.178.0
+// Date: 2026-10-06
+// Description: CarFight 싱글플레이 차량 Pawn 구현 / Vehicle Target Lock Retarget Input Correction
 // Changelog:
+// - v2.178.0: Target Lock 입력이 기존 Lock 상태를 이유로 무조건 clear하지 않도록 교정. 같은 Selected Target의 AlreadyAcquiring/AlreadyLocked는 토글 해제하고, 다른 Selected Target의 Accepted 요청은 기존 VehicleTargetingComp replacement 계약으로 즉시 재획득을 시작하며, 새 대상 Lock 거부 시 기존 Lock을 보존.
+// - v2.177.0: IA_TargetLock을 기본 로드·바인딩하고 Idle에서는 현재 Selected Target Lock 요청, Acquiring/Locked에서는 Lock-only clear를 수행하는 명시적 Gameplay 입력 루트를 추가. Selection/Scan과 자동 결합하지 않음.
 // - v2.176.0: 현재 Selected Target을 요청 시점에만 소비하는 Lock facade와 Lock-only clear, Scan-only cancel facade를 추가. Selection 변경으로 Lock/Scan을 자동 동기화하지 않고 Input/HUD/Guided Weapon 경로는 유지.
 // - v2.175.0: UCFVehicleTargetingComp 기본 서브오브젝트를 추가해 TargetSelect/Sensor와 독립된 Vehicle Target Lock Runtime Foundation을 Pawn에 연결. Fire/HUD/Input 경로는 Phase 5~7 전까지 기존 의미 유지.
 // - v2.174.0: VehiclePawn이 같은 Gameplay Entity lifetime 동안 한 번 발급한 TargetEntityId(FGuid)를 반환하도록 구현. VehicleData PrimaryAssetId 기반 표시 TargetId와 독립 유지하며 기존 caller migration은 필요 없음.
@@ -1153,6 +1155,12 @@ ACFVehiclePawn::ACFVehiclePawn()
 		InputAction_SelectTarget = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_SelectTarget.IA_SelectTarget"));
 	}
 
+	// [v2.177.0] Selection과 분리된 Vehicle Target Lock Gameplay 입력의 기본 Boolean Input Action입니다.
+	if (!InputAction_TargetLock)
+	{
+		InputAction_TargetLock = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_TargetLock.IA_TargetLock"));
+	}
+
 												if (!InputAction_ClearTarget)
 	{
 		InputAction_ClearTarget = LoadObject<UInputAction>(nullptr, TEXT("/Game/CarFight/Input/IA_ClearTarget.IA_ClearTarget"));
@@ -1478,6 +1486,11 @@ void ACFVehiclePawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 		if (InputAction_SelectTarget)
 	{
 		EnhancedInputComponent->BindAction(InputAction_SelectTarget, ETriggerEvent::Started, this, &ACFVehiclePawn::HandleSelectTargetStarted);
+	}
+	// [v2.177.0] Target Select와 독립된 Vehicle Target Lock 입력을 별도 Gameplay handler에 연결합니다.
+	if (InputAction_TargetLock)
+	{
+		EnhancedInputComponent->BindAction(InputAction_TargetLock, ETriggerEvent::Started, this, &ACFVehiclePawn::HandleTargetLockStarted);
 	}
 				if (InputAction_ClearTarget)
 	{
@@ -3784,6 +3797,23 @@ bool ACFVehiclePawn::ExecuteScheduledLauncherShot(
 void ACFVehiclePawn::HandleSelectTargetStarted(const FInputActionValue&)
 {
 	ConfirmCurrentTargetCandidate();
+}
+
+// [v2.178.0] 같은 Selected Target은 Lock 토글 해제하고 다른 Selected Target은 기존 replacement 계약으로 즉시 재획득합니다.
+void ACFVehiclePawn::HandleTargetLockStarted(const FInputActionValue&)
+{
+	if (!IsValid(VehicleTargetingComp))
+	{
+		return;
+	}
+
+	// 현재 Selected Target에 대해 기존 Targeting Runtime이 반환한 명시적 Lock 요청 결과입니다.
+	const ECFTargetLockRequestResult LockRequestResult = RequestLockSelectedTarget();
+	if (LockRequestResult == ECFTargetLockRequestResult::AlreadyAcquiring
+		|| LockRequestResult == ECFTargetLockRequestResult::AlreadyLocked)
+	{
+		RequestClearTargetLock();
+	}
 }
 
 // [v2.120.0] 현재 선택 대상을 Manual 사유로 해제합니다.

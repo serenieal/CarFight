@@ -1,0 +1,28 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_f0c69a42bd174efba0e4c1d2a7b39560",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_2dd376a7c4e64be98b13ff504ad2c761",
+  "parent_version_ids": [],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-056",
+    "title": "Projectile Flight Physics (발사체 공통 비행 물리)",
+    "phase": "PFP-P0-00",
+    "next_action": "Fresh Rebaseline + Pre-Implementation Review: verify current cannon/rocket/guided missile gravity, initial velocity, thrust and flight-control composition; approve safe contract before implementing, without disabling gravity or changing existing Active Work",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-056"
+    ],
+    "legacy_refs": [
+      "Document/Plan/ProjectileFlightPhysics/ProjectileFlightPhysicsPlan.md v0.1.0",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-19",
+    "resolution_basis": "USER explicitly approved formal promotion after discussing common gravity-aware flight physics across Cannon, Unguided Rocket and Guided Missile. Read-only inspection of current Projectile Actor/Motor source and persisted Rocket/Missile ProjectileData identified gravity/thrust/control composition gap; no runtime fix or acceptance has been performed. Preserve existing CF-FQ-039 Active and other Work states."
+  }
+}

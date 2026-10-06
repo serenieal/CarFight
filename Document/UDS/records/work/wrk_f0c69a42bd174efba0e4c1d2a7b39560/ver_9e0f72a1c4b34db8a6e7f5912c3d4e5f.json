@@ -1,0 +1,35 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_f0c69a42bd174efba0e4c1d2a7b39560",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_9e0f72a1c4b34db8a6e7f5912c3d4e5f",
+  "parent_version_ids": [
+    "ver_6c1a8e52d4f94b07a3e5c2d7819f0b46"
+  ],
+  "state": "closed",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-056",
+    "title": "Projectile Flight Physics (발사체 공통 비행 물리)",
+    "phase": "PFP-P0-03",
+    "closure_reason": "completed",
+    "next_action": null,
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-056"
+    ],
+    "user_technical_boundary": "PFP-P0-02 Technical PASS is preserved. PFP-P0-03 Reticle semantics are RESOLVED. USER directly confirmed Cannon gravity-on trajectory, Guided Missile locked-target guidance, and BurnedOut natural gravity-drop behavior. Rocket gravity-on / launch-axis-stabilization was not visually re-observed; USER explicitly waived that observation as low priority, so it is not recorded as USER observed PASS and instead relies on the preserved PFP-P0-02 Technical PASS. Vehicle Selection HUD lock-target presentation improvement is deferred as a separate non-blocking HUD task.",
+    "legacy_refs": [
+      "Document/Plan/ProjectileFlightPhysics/ProjectileFlightPhysicsPlan.md v0.1.7",
+      "Document/Systems/Targeting/SensorContact.md v1.16.0",
+      "Document/Systems/Targeting/VehicleTargeting.md v1.5.0",
+      "Document/Systems/Combat/Projectile.md",
+      "Document/Systems/Combat/MissileGuidance.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-06",
+    "resolution_basis": "USER confirmed stable Vehicle Target Lock behavior after Production input retarget correction and Basic Sensor operational-range correction, then confirmed the Guided Missile actually steers toward the locked vehicle. Cannon gravity-on and BurnedOut natural drop were already USER PASS. Rocket visual trajectory review was explicitly waived by USER rather than falsely promoted to observed PASS. PFP-P0-03 is therefore USER ACCEPTED and CF-FQ-056 closes completed. Cleanup removed the one-time BasicSensorOperationalRangeMigration Automation after persisted Sensor values were confirmed, leaving no permanent tuning gate; CFSensorActiveScanTests.cpp returned to worktree diff0. Post-cleanup official UE 5.8 Editor build d62bf762ca1d4130a1f8761a94418f5b PASS, BasicSensorSingleScanCompletion process 2af1be0218df463e876cd921c141f063 PASS, Targeting GameplayCommandBoundary process 1bf217ba419f45e8994cd2670a06a744 PASS, and Direct Missile Runtime process f612c96b0c324d709d4e77b25ad4dec0 PASS. Stage/commit/push/reset/clean/stash/rebase were not performed and unrelated dirty was preserved."
+  }
+}
