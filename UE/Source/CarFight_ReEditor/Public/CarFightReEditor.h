@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.8.0
-// Date: 2026-09-18
+// Version: 1.9.0
+// Date: 2026-09-29
 // Description: CarFight Editor 전용 도구 모듈 진입점입니다.
-// Scope: Guided Vehicle Builder, Guided Equipment Builder, Weapon Equipment Authoring Guide, Vehicle Authoring과 Data Asset Manager 탭/메뉴를 담당합니다.
+// Scope: Content Manager, Guided Vehicle Builder, Guided Equipment Builder, Weapon Equipment Authoring Guide, Vehicle Authoring과 Data Asset Manager 탭/메뉴를 담당합니다.
 // Changelog:
+// - v1.9.0: CF-FQ-058 CCAS-P0-05 CarFight Content Manager read-only Catalog / Compare Nomad Tab과 Window 메뉴 진입점을 추가.
 // - v1.8.0: CF-FQ-055 WEA-P0-02 Weapon Equipment Authoring Guide Native Slate Nomad Tab/Window 메뉴 진입점을 추가. CF-FQ-054 Equipment Builder 상태/책임은 변경하지 않습니다.
 // - v1.7.0: CF-FQ-054 EBA-P0-01 Guided Equipment Builder Nomad Tab/Window 메뉴 진입점을 추가.
 // - v1.6.0: CF-FQ-038 DEL6 compatibility retirement로 Deprecated Vehicle DA Wizard hidden tab/spawner/open entry를 제거.
@@ -38,6 +39,9 @@ public:
 	virtual void ShutdownModule() override;
 
 private:
+	// CarFight Content Manager 탭 인스턴스를 생성합니다.
+	TSharedRef<SDockTab> HandleSpawnContentCatalogTab(const FSpawnTabArgs& InSpawnTabArgs);
+
 	// Guided Vehicle Builder 탭 인스턴스를 생성합니다.
 	TSharedRef<SDockTab> HandleSpawnBuilderTab(const FSpawnTabArgs& InSpawnTabArgs);
 
@@ -54,8 +58,11 @@ private:
 	TSharedRef<SDockTab> HandleSpawnDataAssetManagerTab(const FSpawnTabArgs& InSpawnTabArgs);
 
 
-	// Level Editor Window 메뉴에 Guided Vehicle/Equipment Builder, Weapon Guide, Vehicle Authoring, Data Asset Manager 진입을 추가합니다.
+	// Level Editor Window 메뉴에 Content Manager, Guided Vehicle/Equipment Builder, Weapon Guide, Vehicle Authoring, Data Asset Manager 진입을 추가합니다.
 	void RegisterMenus();
+
+	// 등록된 CarFight Content Manager 탭을 엽니다.
+	void OpenContentCatalogTab();
 
 	// 등록된 Guided Vehicle Builder 탭을 엽니다.
 	void OpenBuilderTab();

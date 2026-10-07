@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.8.0
-// Date: 2026-09-18
+// Version: 1.9.0
+// Date: 2026-09-29
 // Description: CarFight Editor 전용 도구 모듈 구현입니다.
-// Scope: Guided Vehicle Builder, Guided Equipment Builder, Weapon Equipment Authoring Guide, Vehicle Authoring과 Data Asset Manager 탭/메뉴 등록을 담당합니다.
+// Scope: Content Manager, Guided Vehicle Builder, Guided Equipment Builder, Weapon Equipment Authoring Guide, Vehicle Authoring과 Data Asset Manager 탭/메뉴 등록을 담당합니다.
 // Changelog:
+// - v1.9.0: CF-FQ-058 CCAS-P0-05 CarFight.ContentManager read-only Catalog / Compare Nomad Tab과 Window 메뉴 진입을 추가.
 // - v1.8.0: CF-FQ-055 WEA-P0-02 CarFight.WeaponGuide Native Slate Nomad Tab과 Window 메뉴 진입을 추가. CF-FQ-054 Equipment Builder lifecycle은 변경하지 않습니다.
 // - v1.7.0: CF-FQ-054 EBA-P0-01 CarFight.EquipmentBuilder Native Slate Nomad Tab과 Window 메뉴 진입을 추가.
 // - v1.6.0: CF-FQ-038 DEL6 compatibility retirement로 Deprecated Vehicle DA Wizard hidden tab/spawner/open entry를 제거.
@@ -22,6 +23,7 @@
 
 #include "CarFightReEditor.h"
 
+#include "DataAuthoring/CFContentCatalogTab.h"
 #include "DataAuthoring/CFVehicleAuthoringTab.h"
 #include "DataAuthoring/CFVehicleBuilderTab.h"
 #include "DataManagement/CFDAManagementTab.h"
@@ -36,6 +38,9 @@
 
 namespace
 {
+	// CarFight Content Manager 탭 등록에 사용할 고정 탭 식별자입니다.
+	static const FName ContentCatalogTabName(TEXT("CarFight.ContentManager"));
+
 	// Guided Vehicle Builder 탭 등록에 사용할 고정 탭 식별자입니다.
 	static const FName VehicleBuilderTabName(TEXT("CarFight.VehicleBuilder"));
 
@@ -56,6 +61,12 @@ namespace
 // Editor 모듈 로드 시 Guided Vehicle/Equipment Builder, Vehicle Authoring Workspace와 Data Asset Manager 탭/메뉴를 등록합니다.
 void FCarFightReEditorModule::StartupModule()
 {
+	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(
+		ContentCatalogTabName,
+		FOnSpawnTab::CreateRaw(this, &FCarFightReEditorModule::HandleSpawnContentCatalogTab))
+		.SetDisplayName(LOCTEXT("ContentCatalogTabTitle", "CarFight 콘텐츠 관리"))
+		.SetMenuType(ETabSpawnerMenuType::Hidden);
+
 	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(
 		VehicleBuilderTabName,
 		FOnSpawnTab::CreateRaw(this, &FCarFightReEditorModule::HandleSpawnBuilderTab))
@@ -100,11 +111,23 @@ void FCarFightReEditorModule::ShutdownModule()
 		UToolMenus::UnregisterOwner(this);
 	}
 
+	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(ContentCatalogTabName);
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(VehicleBuilderTabName);
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(EquipmentBuilderTabName);
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(WeaponGuideTabName);
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(VehicleAuthoringTabName);
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(DataAssetManagerTabName);
+}
+
+// CarFight Content Manager 탭 인스턴스를 생성합니다.
+TSharedRef<SDockTab> FCarFightReEditorModule::HandleSpawnContentCatalogTab(const FSpawnTabArgs& InSpawnTabArgs)
+{
+	(void)InSpawnTabArgs;
+	return SNew(SDockTab)
+		.TabRole(ETabRole::NomadTab)
+		[
+			SNew(SCFContentCatalogTab)
+		];
 }
 
 // Guided Vehicle Builder 탭 인스턴스를 생성합니다.
@@ -174,6 +197,13 @@ void FCarFightReEditorModule::RegisterMenus()
 	// CarFight 에디터 도구 메뉴 섹션입니다.
 	FToolMenuSection& CarFightSection = WindowMenu->FindOrAddSection(TEXT("CarFight"));
 	CarFightSection.AddMenuEntry(
+		TEXT("OpenContentCatalogTab"),
+		LOCTEXT("OpenContentCatalogTabLabel", "CarFight 콘텐츠 관리"),
+		LOCTEXT("OpenContentCatalogTabTooltip", "차량과 무장을 한 화면에서 검색·Family/Variant 탐색·비교하고 값 출처, 의존성, Resource/Socket, Diff Preview를 확인합니다."),
+		FSlateIcon(),
+		FUIAction(FExecuteAction::CreateRaw(this, &FCarFightReEditorModule::OpenContentCatalogTab)));
+
+	CarFightSection.AddMenuEntry(
 		TEXT("OpenVehicleBuilderTab"),
 		LOCTEXT("OpenVehicleBuilderTabLabel", "CarFight 차량 제작 가이드"),
 		LOCTEXT("OpenVehicleBuilderTabTooltip", "실존 차량 Reference부터 Driving까지 한 단계씩 진행하는 Guided Vehicle Builder를 엽니다."),
@@ -208,6 +238,12 @@ void FCarFightReEditorModule::RegisterMenus()
 		FSlateIcon(),
 		FUIAction(FExecuteAction::CreateRaw(this, &FCarFightReEditorModule::OpenDataAssetManagerTab)));
 
+}
+
+// 등록된 CarFight Content Manager 탭을 엽니다.
+void FCarFightReEditorModule::OpenContentCatalogTab()
+{
+	FGlobalTabmanager::Get()->TryInvokeTab(ContentCatalogTabName);
 }
 
 // 등록된 Guided Vehicle Builder 탭을 엽니다.
