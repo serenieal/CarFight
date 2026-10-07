@@ -1,0 +1,720 @@
+{
+	"SchemaId": "carfight-content-snapshot/v1",
+	"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+	"Records": [
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Ammo",
+				"ContentId": "Ammo_Cannon_Heavy"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:fc774ab599fd4bf07dad46fa78ab5dd9d67f4b5582474097cb44fe18395f9122",
+			"PreApplyProductFingerprint": "sha256:eabffb61db51de0a6bf3555efb51abd9aaa689cd06b7c3be5a380073b5e5da5d",
+			"PostApplyReadbackFingerprint": "sha256:5bba11e61d4507d717265405e90e8c4383db85f01df588e17fa1d98f94ba2c21",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Ammo",
+				"ContentId": "Ammo_Cannon_Rapid"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:89185294f0462a0e1b176ed287a234274a96ec8c2aa4dc9c5ee830fe1839876d",
+			"PreApplyProductFingerprint": "sha256:5f063d9663b6c319b5bc1bc3b9050acbc8a99fe54a85706803cbf49e759b2a4a",
+			"PostApplyReadbackFingerprint": "sha256:98b44345c92470633f08546b813ca5c0d5bba2052bb2386f0912b76c9f54c4cb",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Ammo",
+				"ContentId": "Ammo_Cannon_Standard"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:194ba6204301663f11d022b5545d7d092d936aee014b0f588bc74d3bf8d318bc",
+			"PreApplyProductFingerprint": "sha256:f0f95b251f5cbb30e2f099267775e15b25b2d64d7994ca46d74bdc505babee76",
+			"PostApplyReadbackFingerprint": "sha256:3b32b0132c782e48f3a10f0e29a9763653951b3031fccc37c7e482af86d1b826",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Ammo",
+				"ContentId": "Ammo_GuidedMissile_Standard"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:1f7ee6744b7aff2ebbf5f68f2e9b63e48d0186a6f2288f50cfa531a41fefe4c2",
+			"PreApplyProductFingerprint": "sha256:8bf6ef150e7eb60fc35e991e45a4a658688af2163a16238c65b5524e392878d8",
+			"PostApplyReadbackFingerprint": "sha256:c77981640b9d357dbbdeedad77cf21e6b75c175382530fa97d87906fd07d74b4",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Ammo",
+				"ContentId": "Ammo_Rocket"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:2eea1e422c03e841dfab24925acdee3acf114759640dd0a2ad16d5b4df3e4b2c",
+			"PreApplyProductFingerprint": "sha256:578bc576f0777038e4f070340def7c4accf60130ff4fb430e7c8458c8dab163d",
+			"PostApplyReadbackFingerprint": "sha256:e5153e13ec76e850bbe41137820731403936f0aa063cf5dd30fb271f0381e965",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Damage",
+				"ContentId": "Damage_Cannon_Heavy"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:6a9547f5dbe7bd1e1ab1bb7cd858cbda5d739a8f71f0e202f99529af61e081e6",
+			"PreApplyProductFingerprint": "sha256:49c1b754bdb56087ee204ccbec0753f12e3ca345ff756ad52674e3dec808f8d4",
+			"PostApplyReadbackFingerprint": "sha256:32e6428365d861872ff90c326f8ab61445ad885712205248f604e8c772222863",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Damage",
+				"ContentId": "Damage_Cannon_Rapid"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:804077e0e2749f9e7e0879867940e279870d7b2f355ddad4723f5813584fc15f",
+			"PreApplyProductFingerprint": "sha256:6d399a43b533dd5cef989690b5311940745b437d4b3b887a58b3c48b9f0f05c1",
+			"PostApplyReadbackFingerprint": "sha256:40659b3e85414cd6753b3f8ef9153a5c5839118e2400afec9ef814d6a3201051",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Damage",
+				"ContentId": "Damage_Cannon_Standard"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:2ab2cbb24a7317af3bd0f5dc37057d48dc05842c18cc2c9171510b96d1de7804",
+			"PreApplyProductFingerprint": "sha256:94a98c6fa052efabf7c062125943ddc90dfd768ef7d477425f752b01f241a1f3",
+			"PostApplyReadbackFingerprint": "sha256:7e135e691f085505c8c28048effe7f470f51968f569d2350c14a180998c6e837",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Damage",
+				"ContentId": "Damage_GuidedMissile_Standard"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:a568988a533f1024bd11fb07782c53534c935f1353c942bd63c04e5b58801c85",
+			"PreApplyProductFingerprint": "sha256:1b682c0bd080a5e457ca8a1b915392c196973dc9abca52f925ac948583d92f39",
+			"PostApplyReadbackFingerprint": "sha256:dd0f792f679aaef3e1c0abb350dce2abf38b80c925cabdcce0f262263e5c1a51",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Damage",
+				"ContentId": "Damage_Rocket"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:50d518b9de6ad8bc2076e320bdee214f50bb29bba36a148f9f8599e94e9f16d7",
+			"PreApplyProductFingerprint": "sha256:52801bd29dfc7afe0d41eaec6eedf39f7e691cac14e5d936b48f6d791f1f52f9",
+			"PostApplyReadbackFingerprint": "sha256:088e7a7b0e95a04e2f55d00cc4c3eb92614d9c23bbf96966b6bc1fa6810d0eba",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "EquipmentPreset",
+				"ContentId": "Cannon_Heavy"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:ceacef53d4373bcdd39897c8004d506cca4a48498a2b9adefcf3c336f606dd2b",
+			"PreApplyProductFingerprint": "sha256:2de28e5e51626a650025a9b2fef30ddc31bc912b3690849651b2541613b68e9c",
+			"PostApplyReadbackFingerprint": "sha256:77769825a9982fc157af1e5c4a9bcf105b6215c1b4f1866122da26f2942776f1",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "EquipmentPreset",
+				"ContentId": "Cannon_LongRange"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:ec1da9dea8ba7f6e0fc9ad957dd369b40cd390adc30f6a55aae68c7201f94537",
+			"PreApplyProductFingerprint": "sha256:6b5529cb8d44605769aa0eaec720d809a0386474bccc5a08b5c6660f181fb3ec",
+			"PostApplyReadbackFingerprint": "sha256:b9825e916a74dcfb4ca0ce1e30638af7903194fbbf9522e2041e251e49bad3ba",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "EquipmentPreset",
+				"ContentId": "Cannon_Rapid"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:f2eb92376ce93884d461b1a63005dfa3fa08685c72a2034ba217fb6b3fa1178a",
+			"PreApplyProductFingerprint": "sha256:577f80964d8a453298100c6bc089e4eb101fff874747e56ff9f2489961516958",
+			"PostApplyReadbackFingerprint": "sha256:b555576a6b6902c724de9125650bbf642aa9172107513c72a0eb08bf0f94cae2",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "EquipmentPreset",
+				"ContentId": "Cannon_Standard"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:b0a86ff7a74bfb4bf3c372a7db51881b32fed576a62ea071de363fbf7849993f",
+			"PreApplyProductFingerprint": "sha256:673ca562a94238deb93181cd36a263ec824962720b13bff1275b699e72f7ef32",
+			"PostApplyReadbackFingerprint": "sha256:b7564a218a8b0e8212e67d7cd0b56626352cb4baede17be5869f1efc7d9393b9",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "EquipmentPreset",
+				"ContentId": "GuidedMissile_Standard"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:8ce6ded9d33143ac467044fe53913883e6e97bd164aad1bd84b6e1a619c9dc6d",
+			"PreApplyProductFingerprint": "sha256:e609f9fd57441ef879826beb463f015abdc015db395db74b86090b878973220f",
+			"PostApplyReadbackFingerprint": "sha256:aa00fa3613e435b51cb11b9ae1f401de8ce544744620a6ecb5199fe27c3c8246",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "EquipmentPreset",
+				"ContentId": "Rocket_Ripple"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:f8309980a4b164817d1e027798279e5fbeab11c9129ef9bfd9b945ed24361650",
+			"PreApplyProductFingerprint": "sha256:75323770229b2a5352c85f220d1e26b62094ac6d873ef9440964599ccc632e4f",
+			"PostApplyReadbackFingerprint": "sha256:7c0e7f4d70d71c7ffe3791f3480e645ca14f6c135f8290b6f7f37bd812ed5107",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "EquipmentPreset",
+				"ContentId": "Rocket_Salvo"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:8745f8015a8b5c00870f1b0777ccf5621ab38295130302f568b645f2105c00d7",
+			"PreApplyProductFingerprint": "sha256:4c33a155d1be9edb0157f63f387ab120b33aa4e60266015dbb2b524ba1649dea",
+			"PostApplyReadbackFingerprint": "sha256:ef07ca4e73251c85310f8c688d8f6ff68fc485437838dcd41437298e1f63ed7b",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "EquipmentPreset",
+				"ContentId": "Rocket_Standard"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:5307da9123950d1168a28dc0ba507bb2769f65d2a0b736c9030f0d1982c2474f",
+			"PreApplyProductFingerprint": "sha256:65304776e269f34fb905fe0d78d9c13f51b15a59491892f3e3548555087c5289",
+			"PostApplyReadbackFingerprint": "sha256:1a085c64f810d6490e3224e3bde9f965b25260d99be1a3b845cc543a059135f6",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Projectile",
+				"ContentId": "Projectile_Cannon_Heavy"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:bc7750ff17b72f4f3a140a8f4c35a4763d28ddc31d0e94003fc830e1e531c068",
+			"PreApplyProductFingerprint": "sha256:e0d988fb6f580b094b7d7afb0b3e8b0afc56775024cf318b19d0b869485f410c",
+			"PostApplyReadbackFingerprint": "sha256:1635f31306ab43b76d0a5bcc9cafa52d67c94e065a0c0331e7d58f15b31dc4a4",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Projectile",
+				"ContentId": "Projectile_Cannon_LongRange"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:2edee283ddf3e03caa730c9cde2c0161f71eeaca7a65e791cce898bd67a11785",
+			"PreApplyProductFingerprint": "sha256:6d08e8eb849e7815f5b82363463554042b3b9fd44808ceebb5b1def26cc31d5b",
+			"PostApplyReadbackFingerprint": "sha256:fef568775d59228516901fc50f4f889379a915de7b6176de9cf833de7e524ff5",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Projectile",
+				"ContentId": "Projectile_Cannon_Rapid"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:730150f063caca6fae53c57dded33135b8e29380f9720c232e9181f9cf363838",
+			"PreApplyProductFingerprint": "sha256:49bf36f3af9ff0aa1bf8ec22d269f3ec2b513a7d78b4a7b3236a7a968097fecc",
+			"PostApplyReadbackFingerprint": "sha256:6ac52d0c6530f5ba36f5933c4c2a431ce07af7ca277aa6e080ba7fb44cd9327f",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Projectile",
+				"ContentId": "Projectile_Cannon_Standard"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:36be78cb20a9e82c31ec086ecbc2dd5c1e9e633185bb6b193f303598965f1550",
+			"PreApplyProductFingerprint": "sha256:b7cc6773b7e9b3046477b0abdf8e6e101340a5147d621f370c3affe042465b00",
+			"PostApplyReadbackFingerprint": "sha256:e6b90346c92ab8ef5855242f7521c7fd079cd227eadacf818e8e22579741d6c4",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Projectile",
+				"ContentId": "Projectile_GuidedMissile_Standard"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:c1a5295613da03757a3a1bce663ce750a6798c9000bfdffefce06db3c635d3be",
+			"PreApplyProductFingerprint": "sha256:eb7b85617556c1a94e241a495433b42d12367c46165ae4cfec4c66f65571cfe4",
+			"PostApplyReadbackFingerprint": "sha256:69f226f566f1b2d76a2b12e2293731ba7d8145b1834b08ad801e154c9b28ae83",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Projectile",
+				"ContentId": "Projectile_Rocket"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:96398e76edd46df567e50c2ac0b07b84848707bae97e6f6d3dcf2fe8d1e2e39e",
+			"PreApplyProductFingerprint": "sha256:b7721143a25c848bb01ad8da01fef0d1287398e533cb0af44fe5c82decb02a79",
+			"PostApplyReadbackFingerprint": "sha256:771046cb2c088d04b92b5ea1f865bb9e538a739663933ccbaf17621bc7ece774",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "TurretMount",
+				"ContentId": "Mount_Cannon"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:799fbc1dc64ebb3614fd56036136fd9241c88d86441e06a8ac9216eb0539f45d",
+			"PreApplyProductFingerprint": "sha256:85118a612bc0cdaf5f132df21a2e6b7506552309cd92c5f09b57f1c78bb9a07a",
+			"PostApplyReadbackFingerprint": "sha256:92146ecdadc6b8e8b20ee46085f66f519efd45deaae0c3d9fc3df5f163f5f7b8",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "TurretMount",
+				"ContentId": "Mount_RocketPod"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:148158cd07a84c18a1eff68315d3dab98e761306b9bc65f831e2ce253f76ed92",
+			"PreApplyProductFingerprint": "sha256:0acf2fb02b60206e309d5bdaa7f07870b648662bef8f4d00fbb54c053fed69e8",
+			"PostApplyReadbackFingerprint": "sha256:11487ed1386f73eb404caf2d955911f322089ccd1791f3d263990b9e31617d5a",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Weapon",
+				"ContentId": "Cannon_Heavy"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:2ed559e5da924b0e6944635fc335c0cfa411c3db1d5f80c0bc0b249cc185d6c9",
+			"PreApplyProductFingerprint": "sha256:eda28a49a528bb878daea00f5ce8f1834ea0fa680c9dce7407a752216cff3975",
+			"PostApplyReadbackFingerprint": "sha256:e1d99eeaf92f79fc9351af0d6ec1b206752964833c0ba689e9696a9d920ca8fd",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Weapon",
+				"ContentId": "Cannon_LongRange"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:839edac8ebe1ca2bc327e2779af6718bf03866fed1cd71ee39041b1d0a5e2e88",
+			"PreApplyProductFingerprint": "sha256:feceb5871023e4c1dbc9c096a95bff05fdf5f08ccf51265d40f32e1cac865e5b",
+			"PostApplyReadbackFingerprint": "sha256:72e47883db413baf6cd792408373656129b0a7a4103947af7d879649d27aac66",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Weapon",
+				"ContentId": "Cannon_Rapid"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:7f265589d5f4cee926cadf2f1a5f44a99b163138cbe420fc73e4053bde32fb22",
+			"PreApplyProductFingerprint": "sha256:f74fbec24fcffdfe689352a3953ac03114361dad37757bc76dbfc2235c5b3fd5",
+			"PostApplyReadbackFingerprint": "sha256:a28fc4b8362f60bb22ad5d78a9f16fad343be03e9308dc97456a985c8bbd25a4",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Weapon",
+				"ContentId": "Cannon_Standard"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:f0dd90f3f8f4c70fad7e6f06e1924b2dbac008964fc1375363923d39618c2fef",
+			"PreApplyProductFingerprint": "sha256:211cdd072b75bef0b685cbe29b04c551bb59ca538c7edbe15674d4bb8c440c82",
+			"PostApplyReadbackFingerprint": "sha256:67f4477033b05ce609cbdb11f40c4fe5ea4cae7bf9866fea9987dc7343ae420e",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Weapon",
+				"ContentId": "GuidedMissile_Standard"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:1079c9e159d24ddf04565c554962206b213b6fd94769e4f6159d7385665c1d02",
+			"PreApplyProductFingerprint": "sha256:ae054dfe3e7c3f1b05444842d7ed3747f88ffab2eb90227d68237d723a4e3b26",
+			"PostApplyReadbackFingerprint": "sha256:40691d0c964e2e1c6e86ad5191e83227cc23a92b77ea09e8694b69950d034987",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Weapon",
+				"ContentId": "Rocket_Ripple"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:86aacdeaa564a3c2b77055878b86e7e7b043748fb74ddd43add4fd57ba5fc793",
+			"PreApplyProductFingerprint": "sha256:48f6075d8fb94555dc7dcfbc2707eacf9aa3633741fdaae68be5b61cd78d6718",
+			"PostApplyReadbackFingerprint": "sha256:c8901e5ab27be69386107b4c69d30abb571f1b6155d8a64f1680d8527cd66790",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Weapon",
+				"ContentId": "Rocket_Salvo"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:7e48bbac241e4c892d7be1f8c38539de2f6018803bab6fa1d47a13359825734a",
+			"PreApplyProductFingerprint": "sha256:201da87a08b868cf7352b3d6a8af40827290a001abb0591596ff232a8b4b5fa5",
+			"PostApplyReadbackFingerprint": "sha256:caa1989428722a7493d2f0304f969695e58483fb6ab18cdd2bdb23feb5b8e0b8",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "Weapon",
+				"ContentId": "Rocket_Standard"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:6187cfc93650c8b3c8791605858c182c2ff16cf4dee8792ab6d42df768b6e8ac",
+			"PreApplyProductFingerprint": "sha256:b7464cbdbdc3b578cad8e0039deaba6d3baa187d565e8396d2de6aabf575b887",
+			"PostApplyReadbackFingerprint": "sha256:2b0934803d146512b1b33fa83fb1f3e25e38bbb9de569d721152f889f3187c61",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "WeaponDefinition",
+				"ContentId": "Cannon_Heavy"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:152d335d62dfdca1beebfbe8d5ec2c54752c505852f21651629509dcc0747383",
+			"PreApplyProductFingerprint": "sha256:9001b47bcc2ccec09a69da365d2ad1675c971d43d2bbcd762f1990af10126f59",
+			"PostApplyReadbackFingerprint": "sha256:ac61cb53c9b85b171bc9c5371f54b015acb3a9daf6a474e8fa30179cc04a6794",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "WeaponDefinition",
+				"ContentId": "Cannon_LongRange"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:033b4e4d737784cdb79f9213d7685b898a666ba1e162f1ab5a98a555af208cde",
+			"PreApplyProductFingerprint": "sha256:290141882f0c87efe93e5c9a22b9512540ea6f274edf2af7360eb4463865f80a",
+			"PostApplyReadbackFingerprint": "sha256:76ba98a965343cb8f92fe7872066617fa61d5cc1bbcba41089633cee2c09d705",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "WeaponDefinition",
+				"ContentId": "Cannon_Rapid"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:4584bb98c6f2eb3441e3efb4123d9c28513a7c9719b8279a6c36d2c6eef9f33a",
+			"PreApplyProductFingerprint": "sha256:3a385670117471ae73d7b1665a199c9787b01e1358e9ddc3e0f02695ed40a785",
+			"PostApplyReadbackFingerprint": "sha256:3c1fa27e6cedd4f20d4fa3d99fac5b9fa980d847c36c6206cf90f7b07d1d2c7c",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "WeaponDefinition",
+				"ContentId": "Cannon_Standard"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:361581e099d2ecd9d99a2488cf05c9bc7b5565a410c4da276c75eefde2beaac1",
+			"PreApplyProductFingerprint": "sha256:f0474bc60ddc91c76d03ff9c6d57dffb948017a4d00d0eb730fd565a70eae831",
+			"PostApplyReadbackFingerprint": "sha256:98be7ff2574886eebd290c7323e95fa2cfdf77549da12458e78007913eb456f9",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "WeaponDefinition",
+				"ContentId": "GuidedMissile_Standard"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:3c60ffbf9cba7044d81c27ed05a84568fabe5b92b1b06fcc87eafc24090bc7df",
+			"PreApplyProductFingerprint": "sha256:cf97533f365ecbdf26cfb0b541845d775985b7ba4673c20a8f0f3a45073bd7e4",
+			"PostApplyReadbackFingerprint": "sha256:e99fe8c060b49cbb858243737748c8a319478354e635916ef9650c01292f1eb6",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "WeaponDefinition",
+				"ContentId": "Rocket_Ripple"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:568c1c5fae84d0c0361e0107d9ec569bc04206aa533b3fb765f604c9ab747d8d",
+			"PreApplyProductFingerprint": "sha256:836282c53a708166354d906d5faabf931ec05feb4185b3c302f30caea0f237eb",
+			"PostApplyReadbackFingerprint": "sha256:36ce22cee37c7c783f6cd127b3e1d85f5f70ff7b72bff64f3a71cbd116e82678",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "WeaponDefinition",
+				"ContentId": "Rocket_Salvo"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:805efd2f518b8e5bc5391fcb34a2d7b94e7f519b6ce016a1522fd561c724ada9",
+			"PreApplyProductFingerprint": "sha256:6c8eae8066fc27067f16dbc2f70140b73054a539f3c67eec1e7e0d872a009ccb",
+			"PostApplyReadbackFingerprint": "sha256:d3aa70bbba13a186d7a35912039192c361fdd813e7951a1b2b4fbc250eafc41c",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		},
+		{
+			"ContentKey":
+			{
+				"ContentTypeId": "WeaponDefinition",
+				"ContentId": "Rocket_Standard"
+			},
+			"CutoverTransactionId": "CF058ProdWave1Cutover20261007",
+			"SourceWorkbookSemanticHash": "sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3",
+			"CatalogSnapshotFingerprint": "sha256:9120c65cf4c010471a81ab905c577adb3b333635b6d0a5d8562e8beea725440f",
+			"ReviewPackageFingerprint": "sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940",
+			"ProviderSchemaFingerprint": "sha256:eead35d58e1e05738d13436a6dcd62c6c12b308c372c947d3df08636e27cd54b",
+			"DesiredCanonicalFingerprint": "sha256:76f1cee09da5f552ebd18f9ab74a2648fcbec4ac9dd0612f9c0925f9d30989b7",
+			"PreApplyProductFingerprint": "sha256:13aae4b0ebf831529508458d02ee00d567bc0d49de7b1525d8599ae9ce68b842",
+			"PostApplyReadbackFingerprint": "sha256:f6840e0021158223a19f868ba40751ef0371b176154c2d6eed99421db245a0c9",
+			"ManagementState": 0,
+			"LifecycleState": 0
+		}
+	]
+}
