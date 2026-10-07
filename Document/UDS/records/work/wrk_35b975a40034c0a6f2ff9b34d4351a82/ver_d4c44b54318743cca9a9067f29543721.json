@@ -1,0 +1,37 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_d4c44b54318743cca9a9067f29543721",
+  "parent_version_ids": [
+    "ver_a7c4e91b2d6f4a10b8c53e7092fd6413"
+  ],
+  "state": "closed",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-08",
+    "closure_reason": "completed",
+    "next_action": null,
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "user_technical_boundary": "CCAS-P0-08 USER FINAL WORKFLOW ACCEPTANCE PASS. USER accepted the final workflow in which canonical CarFight_Content.xlsx is the sole Current authoring authority for CCAS-managed exact42, generated Production DataAssets materialize Runtime/Product data, DA_ProdEquipCatalog publishes Product exact8, normal RuntimeApply discovers and authorizes Production equipment from that publication catalog, and the existing FCFRuntimeEquipApplyService remains the single Fitting Runtime application authority. Compatibility and GrossMass failures remain fail-closed with mutation0. Final technical evidence remains Official UE 5.8 Build 97030b7aba1348d4b1688c34afc19954 PASS, focused Production Catalog 2/2 PASS, full RuntimeApply 18/18 PASS, and ProductionCutoverVerification 1/1 PASS. P0 exact0 / blocking P1 exact0. Feature lifecycle is complete; Git stage/commit/push remains separate and requires explicit USER approval.",
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.35",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md v1.7.0",
+      "Document/Systems/DataManagement/DataAssetManagement.md v1.1.0",
+      "Document/Systems/Vehicles/RuntimeApply.md v1.2.0",
+      "Document/Systems/Vehicles/VehicleBuilder.md v1.9.1",
+      "Document/Systems/SystemIndex.md v1.55.0",
+      "UE/Source/CarFight_Re/Private/UI/CFRuntimeApplyPIETests.cpp v1.6.0"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-07",
+    "resolution_basis": "USER explicitly approved the simplified final workflow acceptance after the preserved P0-08 technical baseline was freshly restored with unique UDS head exact1 and no newer CF-FQ-058 source change detected. The accepted workflow is canonical Workbook -> compile/validation -> generated Production DataAssets -> Publication Catalog exact8 -> normal RuntimeApply discovery/authorization -> existing Fitting Runtime Apply -> vehicle runtime result, with fail-closed compatibility/GrossMass validation. No cutover replay, Product regeneration, code change, or new infrastructure was performed during closure."
+  }
+}

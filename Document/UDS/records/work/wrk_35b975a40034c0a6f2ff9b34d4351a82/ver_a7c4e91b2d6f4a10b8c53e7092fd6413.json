@@ -1,0 +1,35 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a7c4e91b2d6f4a10b8c53e7092fd6413",
+  "parent_version_ids": [
+    "ver_5b2d8f41c7e64a3f9d10b6c827ae4051"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-08",
+    "next_action": "Present the completed P0-08 technical result for USER final workflow acceptance. The managed cutover is complete, Production Publication Catalog exact8 is now the normal RuntimeApply Equipment discovery/authorization source with legacy RuntimeTestCatalog fallback only when Production is absent/invalid, full RuntimeApply regression is 18/18 PASS, and fresh ProductionCutoverVerification is 1/1 PASS. Do not reopen cutover or P0-01~07. If USER accepts the final workflow, update lifecycle/FeatureQueue closure and then handle Git only with separate approval.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "user_technical_boundary": "P0-08 post-promotion blocking P1 exact1 is corrected and technically validated. UCFProdEquipCatalogData loads CFProdEquipCatalog:Production and resolves exact published EquipmentPreset membership; RuntimeApply equipment discovery/authorization uses Production Publication Catalog first and legacy RuntimeTestCatalog only as absent/invalid fallback; FCFRuntimeEquipApplyService remains the single Fitting Runtime application authority. Current Wagon Mount compatibility remains true for Cannon_Standard/Rocket_Standard but current Production mass+sortie ammo exceeds Wagon MaximumGrossMassKg, so ValidationFailed + mutation0 is correct without changing Product or Vehicle balance. Final official build 97030b7aba1348d4b1688c34afc19954 PASS. Focused Production catalog tests 50b94943fd6546c798b7c09ae0a9b0bc 2/2 PASS. Full RuntimeApply regression 12eb4517709249cd9d5a8b0e5a4d25a6 18/18 PASS with result SHA-256 f54303f90e1491a216324439322102a73484b46dde2467760e58ac5ff28ecb8a. ProductionCutoverVerification d719964509e14441b7160972c56694bd 1/1 PASS with result SHA-256 dc69447b01b44563e0c295590fa73e6a3d6484821a9e2d58db864715c861e6fb. Canonical Workbook/provenance exact42/transaction exact8 VehicleReady/target exact34/Publication exact8 remain intact. USER final workflow acceptance is the only next gate.",
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.34",
+      "Document/Plan/ContentAuthoringSystem/WeaponContentRosterPlan.md v0.1.11",
+      "Document/Systems/Vehicles/RuntimeApply.md v1.2.0",
+      "Document/Systems/Vehicles/VehicleBuilder.md v1.9.1",
+      "Document/Systems/SystemIndex.md v1.55.0",
+      "UE/Source/CarFight_Re/Private/UI/CFRuntimeApplyPIETests.cpp v1.6.0"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-07",
+    "resolution_basis": "After the user confirmed the Editor was closed, the official build was retried and succeeded. Focused Production Catalog authorization/discovery tests passed 2/2. The first full RuntimeApply run exposed two stale regression expectations rather than Product/runtime defects: Wagon Production weapons correctly failed GrossMass under current canonical balance, and P0-05 retained a historical fixed 1400kg expectation. Tests were corrected without changing Product/Vehicle data. Final official build passed, full RuntimeApply passed 18/18, and fresh post-cutover verification passed 1/1. Source re-review confirmed Production-first Equipment discovery with legacy fallback and no duplicate Runtime application subsystem."
+  }
+}

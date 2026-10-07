@@ -1,0 +1,40 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a83f0d29b7c14e2a91d65f3084bc7e52",
+  "parent_version_ids": [
+    "ver_73e1f4b6c8d94a2fb517e3069c2d8a41"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-07",
+    "next_action": "Correct the pre-cutover mid-review blocking P1 exact3 without widening scope: bind the approved fresh Review Package to the exact typed Production execution requests/manifests and freshness fingerprints; fail-closed fresh CreateNew/CreateNewShared target collisions before mutation; update GuidedMissile_Standard readiness/dependency because CF-FQ-056 PFP-P0-03 is USER ACCEPTED / COMPLETE. Then run fresh official UE 5.8 build + affected/focused Automation + implementation re-review and regenerate a new Production Review Package. Do not reuse the v0.1.27 ReviewPackageFingerprint for USER acceptance. Keep actual Production DataAsset mutation, canonical Workbook promotion, Publication Catalog mutation, authority cutover, stage, commit, and push at exact0.",
+    "blockers": [
+      "P1-1 Approved Review Package to typed Production execution binding is incomplete.",
+      "P1-2 Fresh CreateNew/CreateNewShared unexpected-existing target collision is not fail-closed.",
+      "P1-3 GuidedMissile_Standard still carries stale PFP.P0.03.UserTrajectory Pending metadata after CF-FQ-056 closure."
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "user_technical_boundary": "Pre-cutover mid-review verdict is P0 exact0 / blocking P1 exact3 / P2 exact1. v0.1.27 exact34 candidate preparation/build/Automation evidence remains historical technical evidence, but its ReviewPackageFingerprint sha256:573b9ce39663d8731bd411a6186dde3ffa99e1b47f581b73cf25732f4fffabaa is withdrawn from USER Cutover Acceptance because P1-3 changes the reviewed semantic payload and P1-1/P1-2 leave the approval-to-execution boundary incomplete. No Product code correction or production mutation was performed during this review.",
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.28",
+      "Document/Plan/ContentAuthoringSystem/WeaponContentRosterPlan.md v0.1.8",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFProdBatchPrep.h v1.2.0",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFProdBatchPrep.cpp v1.2.0",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFProdProvisioning.h v1.1.0",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFProdProvisioning.cpp v1.1.0",
+      "Tools/RunCCASP007Tests.ps1 v1.9.0"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-07",
+    "resolution_basis": "Fresh pre-cutover mid-review cross-checked ContentAuthoringSystemPlan v0.1.27, canonical UDS, CFProdBatchPrep, CFContentPlanning and CFProdProvisioning. The approved review fingerprint is cryptographically bound to BaseCatalogSnapshotFingerprint, which includes ResourceCatalogFingerprint and mesh capability snapshot, but current Production Provisioning requests do not carry ReviewPackage/BaseSnapshot/ResourceCatalog approval identity and no production builder exists from FCFProdBatchPrepResult/FCFContentReviewPackage to exact typed FCFProdProvisionRequest. Candidate review provider fingerprints are read-only semantic record fingerprints, while concrete typed backend fingerprints are built separately, so no end-to-end reviewed-payload equals executed-payload proof exists. ExecuteProductTransaction also allows a fresh CreateNew/CreateNewShared target that unexpectedly exists with a different fingerprint to proceed to typed mutation rather than stale-blocking. Separately, CF-FQ-056 canonical UDS head is closed USER ACCEPTED / COMPLETE and records Guided Missile guidance USER PASS, while CFProdBatchPrep still emits GuidedMissile_Standard Conditional with PFP.P0.03.UserTrajectory Pending; that changes the Review Package semantic payload. Therefore USER Cutover Acceptance is HOLD pending exact3 correction and fresh package regeneration."
+  }
+}

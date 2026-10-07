@@ -1,0 +1,36 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_0c58a41f7d9b4e3a8f5c2b61d74e9032",
+  "parent_version_ids": [
+    "ver_d159b50d0af24996bd67abae754be9c8"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-08",
+    "next_action": "Continue CCAS-P0-08 End-to-End Acceptance + Current System Promotion from the completed managed cutover. Fresh-audit whether the generated Production Publication Catalog exact8 has a normal Production equipment discovery/runtime consumer or remains Editor-only publication evidence. Reuse existing RuntimeApply/Fitting ownership; do not create a second runtime apply subsystem or restore RuntimeTestCatalog as Production publication authority. After the technical discovery boundary is resolved, run affected regression/restart-durable readback and prepare USER final workflow acceptance. Stage/commit/push remain prohibited without separate approval.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "user_technical_boundary": "USER Cutover Acceptance is complete. Managed authority cutover is applied for ReviewPackage sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940. Canonical Workbook Authoring/Content/CarFight_Content.xlsx is active as the sole Current authoring authority for the CCAS-managed exact42 manifest. CarFight_Content.cfsnapshot.json contains provenance exact42. Durable Product transactions CF058_W1_* exact8 are VehicleReady with Diagnostic exact0. Unique Production target union is exact34 with persisted fingerprints equal to approved desired fingerprints. Generated Production Publication Catalog membership is exact8. The one-shot cutover writer has been retired into read-only ProductionCutoverVerification. Fresh official UE 5.8 Build 379684343e3243efb5973eaa10a396cb PASS and post-cutover verification process 83b1b02effa242799b737a1e020efa20 is 1/1 PASS with failure/missing/unexpected/duplicate exact0; result JSON sha256 dc69447b01b44563e0c295590fa73e6a3d6484821a9e2d58db864715c861e6fb. Current next gate is CCAS-P0-08 technical end-to-end discovery/current-system audit, not another cutover. Git stage/commit/push were not performed.",
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.31",
+      "Document/Plan/ContentAuthoringSystem/WeaponContentRosterPlan.md v0.1.11",
+      "Document/Systems/DataManagement/DataAssetManagement.md v1.1.0",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md v1.7.0",
+      "Document/Systems/SystemIndex.md v1.54.0",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFProdCutoverApplyTests.cpp v2.0.0",
+      "UE/Source/CarFight_ReEditor/Private/WeaponAuthoring/CFWeaponGuideVM.cpp v1.6.2"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-07",
+    "resolution_basis": "The user accepted the corrected Production Review Package by instructing progress at the exact USER Cutover Acceptance gate. The managed cutover was executed and recovered without reset/delete semantics. Provider-owned staging path guards were preserved, Product transaction identity was retained, canonical Workbook/provenance and generated Production publication were activated, and exact8 transactions reached VehicleReady. A post-cutover read-only verification freshly re-read the canonical Workbook semantic hash, provenance exact42, exact8 VehicleReady transactions, exact34 target union and publication exact8 after the one-shot writer had been retired. P0-08 is now opened to finish normal Production discovery/current-system acceptance."
+  }
+}

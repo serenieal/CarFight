@@ -1,0 +1,38 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_73e1f4b6c8d94a2fb517e3069c2d8a41",
+  "parent_version_ids": [
+    "ver_61c7b94e2a0f4d5c8e13a7b962f340ed"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-07",
+    "next_action": "Review the exact fresh Production Review Package bound to ReviewPackageFingerprint sha256:573b9ce39663d8731bd411a6186dde3ffa99e1b47f581b73cf25732f4fffabaa for USER Cutover Acceptance. Only after separate explicit USER Acceptance may managed authority cutover and durable exact34 Production provisioning begin. Until then keep canonical Workbook promotion, actual Production DataAsset mutation, Production Publication Catalog mutation, authority activation, physical Product rename/move/delete, stage, commit, and push at exact0. GuidedMissile_Standard remains Wave1B Conditional with PFP.P0.03.UserTrajectory Pending. P0-08 remains unopened.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "user_technical_boundary": "CCAS-P0-06 USER PASS / COMPLETE and CCAS-P0-07 Production Provisioning Bridge Technical PASS remain preserved. exact34 candidate batch authoring preparation is now TECHNICAL PASS and the fresh Production Review Package is ReviewReady: Product exact8, Role Binding exact48, unique Production target exact34, explicit sortie ammo row exact8, persisted reusable Resource exact12, required socket capability proof exact8, missing required Resource exact0. ReviewPackageFingerprint=sha256:573b9ce39663d8731bd411a6186dde3ffa99e1b47f581b73cf25732f4fffabaa, ExpectedPostSemanticHash=sha256:f9642cd78d9acc5d073b586b647e83b74e786b69e3141e24a0828dfe4b49b172, ResourceCatalogFingerprint=sha256:0cd477e385e663b2914928f523b698a15efe6da516747405a20721e2418530f7. Final official UE 5.8 Build d43ec790d823441f85d9aff962e2486f PASS. Focused exact25 process 8d0aa91f6acf43a4aaebb9abe67c135d is 25/25 PASS with failure/missing/unexpected/duplicate exact0; result JSON sha256 d51bdceb4422ff7f0f41a8d1101662cb2fd0132858e47686f88216b62ac6e689. No canonical CarFight_Content.xlsx promotion, actual Production exact34 DataAsset generation, Publication Catalog mutation, managed authority cutover, stage, commit, or push was performed.",
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.27",
+      "Document/Plan/ContentAuthoringSystem/WeaponContentRosterPlan.md v0.1.8",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFProdBatchPrep.h v1.2.0",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFProdBatchPrep.cpp v1.2.0",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFProdProvisioning.h",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFProdTargetBindings.h",
+      "Tools/RunCCASP007Tests.ps1 v1.9.0",
+      "Document/Systems/DataManagement/DataAssetManagement.md v1.0.0",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-06",
+    "resolution_basis": "Continued from ContentAuthoringSystemPlan.md v0.1.26 Production Provisioning Bridge Technical PASS. Implemented read-only CFProdBatchPrep candidate preparation over existing Generic Compiler/Planning/Resource contracts; no new durable writer or authority caller was activated. Fresh persisted AssetDump evidence reused binary resources only, never legacy Product identity: stable Resource exact12 and turret socket capability exact8 were validated; current turret values and Rocket muzzle order were rebound into the transient candidate. Current sortie ammo baseline 40/20/40/120/32/32/32/10 was fixed in focused Automation. The first resource-ready build exposed one direct Editor-module link dependency omission for UNiagaraSystem and was corrected only by adding the Niagara private module dependency. Final official UE 5.8 Build d43ec790d823441f85d9aff962e2486f PASS. Focused exact25 process 8d0aa91f6acf43a4aaebb9abe67c135d passed 25/25 with all failure/missing/unexpected/duplicate counts zero. Fresh Review Package is ReviewReady and exact-bound to ReviewPackageFingerprint sha256:573b9ce39663d8731bd411a6186dde3ffa99e1b47f581b73cf25732f4fffabaa, ExpectedPostSemanticHash sha256:f9642cd78d9acc5d073b586b647e83b74e786b69e3141e24a0828dfe4b49b172, ResourceCatalogFingerprint sha256:0cd477e385e663b2914928f523b698a15efe6da516747405a20721e2418530f7. Actual Production DA generation, canonical Workbook promotion, Publication Catalog mutation and authority cutover remain exact0 pending separate USER Cutover Acceptance."
+  }
+}

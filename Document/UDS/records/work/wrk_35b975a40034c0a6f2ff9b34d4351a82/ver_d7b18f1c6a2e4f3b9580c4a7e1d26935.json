@@ -1,0 +1,34 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_d7b18f1c6a2e4f3b9580c4a7e1d26935",
+  "parent_version_ids": [
+    "ver_5a62e1d93f8b4c0e91a7462d7f35bc84"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-05",
+    "next_action": "Run USER information-hierarchy and sight-flow review in the CarFight.ContentManager tab. Review the top authority/status summary, Family/Variant tree, searchable catalog, selected compare absolute/relative values and sources, dependency/resource view, Resource/Socket edit entry, and Diff Preview unavailable/preview states. Preserve the CCAS-P0-05 Technical Implementation PASS. Do not open CCAS-P0-06 until USER workflow review passes. Keep Product Apply, Product writer activation, Workbook persistent write, and P0-07 authority cutover closed. Keep OpenXLSX actual roundtrip/presentation/protection evidence and persisted USkeletalMesh positive active Socket fixture evidence as non-blocking P2.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.8",
+      "Document/Systems/DataManagement/DataAssetManagement.md v1.0.0",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md v1.6.0",
+      "Document/Systems/DataManagement/BuilderAuthoringStandard.md v1.0.0",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-29",
+    "resolution_basis": "CCAS-P0-05 Catalog / Compare + USER Workflow technical implementation completed without changing the accepted P0-01~04 Generic Core. CFContentCatalog v1.0.1 and CFContentCatalogTab v1.0.1 provide a read-only Weapon + Vehicle catalog using the existing P0-04 shared typed Resource/Semantic resolution, search/type filters, Family/Variant grouping, selected compare, absolute/relative values, value source, dependency/resource views, specialized authoring navigation, Resource/Socket asset-edit entry, and canonical Compile Preview projection for Workbook revision/validation/Diff. Fresh review corrected two USER-workflow P1 issues: ambiguous live Workbook/Diff 'not loaded' wording was replaced with explicit xlsx adapter P2 unavailable state, and filtered-out stale selection/detail was cleared. The current repository has no concrete xlsx adapter or canonical CarFight_Content.xlsx, consistent with the existing non-blocking OpenXLSX P2 boundary; no fake Workbook state was introduced. Generic Core CFContentTypes/CFContentCore/CFContentCompiler/CFContentResource/CFContentPilot diff = 0 and no Weapon/Vehicle branches were added to Generic Core. Product Apply/Save, Product writer activation, Workbook persistent write, generic reflection mutation, and P0-07 cutover remain closed/0. Final Official UE 5.8 Source Build dfe409d0cb034fa2be5b235e6c67d48d PASS. Final focused Automation 648fb1e8f53144849138cdd0de30b8d0 exact5/5 PASS with failure0/missing0/unexpected0/duplicate0. P0=0, blocking P1=0, P2 exact2 non-blocking. Technical verdict is PASS; USER visual/information-hierarchy review remains the exact next gate and P0-06 is not opened."
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_6f2c9d81a4e74350b7c12f968e3a5d04",
+  "parent_version_ids": [
+    "ver_e9a6c4b73d2f4810a5c9e7f16b304d82"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-06",
+    "next_action": "Review the exact P0-06 USER Acceptance Review Package fingerprint sha256:45cc3e77c7bd5b7e7e676ee09668eb82c3e834e212c6336104c7b4d8b3db4ec2. Representative Weapon Roster exact8 review is ready: existing Product identities HeavyCannon and RocketLauncher retain their payload and receive planning metadata only; exact6 new weapon candidates are ReadyToReview; GuidedMissile_Standard remains Wave1B Conditional with PFP.P0.03.UserTrajectory pending. Await explicit USER accept/revise decision. Do not claim USER PASS/COMPLETE or open Workbook/DataAsset Product authoring, Provider.ApplyReviewed Product mutation, Product Apply/Save, physical rename/move/delete, or P0-07 authority cutover before that decision.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "user_technical_boundary": "P0-06 Technical Implementation PASS and Fresh Implementation Review PASS are preserved. A representative USER Acceptance Review Package has been generated and technically validated, but USER Acceptance itself is still pending. Synthetic approval-binding validation is not USER approval. P0-07 remains closed.",
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.14",
+      "Document/Plan/ContentAuthoringSystem/WeaponContentRosterPlan.md v0.1.1",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFContentPlanningTests.cpp v1.2.2",
+      "Tools/RunCCASP006UserReview.ps1 v1.0.0",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-30",
+    "resolution_basis": "USER requested CCAS-P0-06 USER Acceptance review without opening Product authoring/apply/save or P0-07. A disposable representative Weapon Roster exact8 Change Proposal was run through the actual BuildReviewPackage path. Fixture review corrected two fidelity errors before final evidence: existing Heavy/Salvo anchors were first represented as Added, then with synthetic renamed IDs; final fixture preserves exact existing Product identities HeavyCannon and RocketLauncher and applies planning metadata only. Final package: ChangeSetId P006.UserReview.WeaponWave1; ReviewPackageFingerprint sha256:45cc3e77c7bd5b7e7e676ee09668eb82c3e834e212c6336104c7b4d8b3db4ec2; operations exact38; rationales exact8; ReadyToReview exact6; AlreadyCurrent exact2; ExternalReadOnly exact1; Retire exact0; Blocked exact0. GuidedMissile_Standard remains Wave1B Conditional with PFP.P0.03.UserTrajectory pending. Final UE 5.8 build 08bea65054cc493baf2f6c4623eda1a8 PASS; representative USER review automation 1a3aa4287a1946e6a3febcc2c82b99ae exact1/1 PASS; P0-06 technical regression d4a6ad6964d941fdb97db581d494c98d exact7/7 PASS. Persistent Workbook write/reopen, direct DataAsset write, Provider.ApplyReviewed, Product Apply/Save, SavePackage/MarkPackageDirty, asset rename/move/delete remain exact0. USER decision is not yet recorded and P0-07 remains closed."
+  }
+}

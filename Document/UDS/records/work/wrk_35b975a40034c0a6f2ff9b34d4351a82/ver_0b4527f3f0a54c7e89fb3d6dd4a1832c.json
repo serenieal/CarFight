@@ -1,0 +1,34 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_0b4527f3f0a54c7e89fb3d6dd4a1832c",
+  "parent_version_ids": [
+    "ver_6f2c9d81a4e74350b7c12f968e3a5d04"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-06",
+    "next_action": "CCAS-P0-06 USER PASS / COMPLETE is recorded against ReviewPackageFingerprint sha256:45cc3e77c7bd5b7e7e676ee09668eb82c3e834e212c6336104c7b4d8b3db4ec2. Do not automatically open P0-07. Await separate explicit USER approval before CCAS-P0-07 Authority Cutover / Migration. Until then keep Workbook/DataAsset Product authoring, Provider.ApplyReviewed Product mutation, Product Apply/Save, physical asset rename/move/delete, and authority cutover closed. GuidedMissile_Standard remains Wave1B Conditional with PFP.P0.03.UserTrajectory pending.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "user_technical_boundary": "P0-06 Technical Implementation PASS, Fresh Implementation Review PASS, and USER Acceptance PASS / COMPLETE are preserved. USER acceptance applies to the exact representative Review Package only; it does not authorize Workbook/DataAsset Product authoring, Product Apply/Save, Provider.ApplyReviewed Product mutation, physical asset rename/move/delete, or P0-07 Authority Cutover / Migration. GuidedMissile_Standard remains conditional on PFP.P0.03.UserTrajectory.",
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.15",
+      "Document/Plan/ContentAuthoringSystem/WeaponContentRosterPlan.md v0.1.1",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFContentPlanningTests.cpp v1.2.2",
+      "Tools/RunCCASP006UserReview.ps1 v1.0.0",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-02",
+    "resolution_basis": "USER explicitly adopted the exact P0-06 representative Review Package. Accepted evidence is ChangeSetId P006.UserReview.WeaponWave1 with ReviewPackageFingerprint sha256:45cc3e77c7bd5b7e7e676ee09668eb82c3e834e212c6336104c7b4d8b3db4ec2; operations exact38; rationales exact8; ReadyToReview exact6; AlreadyCurrent exact2; ExternalReadOnly exact1; Retire exact0; Blocked exact0. Existing Product identities HeavyCannon and RocketLauncher remain the Cannon Heavy and Unguided Rocket Salvo anchors with Product gameplay payload AlreadyCurrent and planning metadata review only. New candidates remain Cannon_Standard, Cannon_LongRange, Cannon_Rapid, Rocket_Standard, Rocket_Ripple, and GuidedMissile_Standard. GuidedMissile_Standard remains Wave1B Conditional with PFP.P0.03.UserTrajectory pending. Prior technical evidence remains Final UE 5.8 build 08bea65054cc493baf2f6c4623eda1a8 PASS, representative USER review automation 1a3aa4287a1946e6a3febcc2c82b99ae exact1/1 PASS, and P0-06 technical regression d4a6ad6964d941fdb97db581d494c98d exact7/7 PASS. USER acceptance closes P0-06 only. Persistent Workbook write/reopen, direct DataAsset write, Provider.ApplyReviewed, Product Apply/Save, SavePackage/MarkPackageDirty, asset rename/move/delete remain unopened, and P0-07 remains a separate explicit USER approval gate."
+  }
+}

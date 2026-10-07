@@ -1,0 +1,36 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_61c7b94e2a0f4d5c8e13a7b962f340ed",
+  "parent_version_ids": [
+    "ver_f2a91c6d307b4e4ba58c19e64d73a821"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-07",
+    "next_action": "Preserve CCAS-P0-07 Technical Implementation PASS + Mid-review Correction PASS and await a separate explicit USER Cutover Acceptance. Until that acceptance, do not execute production managed Cutover Manifest, Product batch mutation, canonical Workbook promotion, Workbook Current authority activation, Current Systems authority promotion, or physical Product rename/move/delete. GuidedMissile_Standard remains Wave1B Conditional with PFP.P0.03.UserTrajectory Pending. P0-08 remains unopened.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "user_technical_boundary": "CCAS-P0-06 USER PASS / COMPLETE remains preserved. P0-07 fresh mid-review found blocking P1 exact5 plus an adjacent ReviewPackage payload-integrity gap. Corrections now fresh-rehash the approved Manifest and ReviewPackage payloads, bind frozen execution paths, revalidate pre-promotion Workbook freshness/lock state, use temp-readback-replace durable writes, make journal evidence loss fail-visible, and provide a fail-closed ResumeRecovery path that never auto-reapplies Product. Final official UE 5.8 Build efef4d82be0e4e989d1fad789faa8333 PASS. P0-06 regression 3898d7ea945644a2aedaa7f55074a200 exact7/7 PASS. P0-07 focused Automation fab5fe3c03c8476285ab8d60ee42a1b4 exact16/16 PASS. Fresh correction re-review is P0 exact0 / blocking P1 exact0 / correction-local P2 exact0; the prior design P2 exact2 remains non-blocking. No production Product mutation, canonical Workbook promotion, Workbook Current authority activation, Current Systems authority promotion, physical Product rename/move/delete, stage, commit, or push was performed.",
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.18",
+      "Document/Plan/ContentAuthoringSystem/WeaponContentRosterPlan.md v0.1.1",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFContentCutover.h v1.2.0",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFContentPlanning.h v1.0.1",
+      "Tools/RunCCASP007Tests.ps1 v1.4.0",
+      "Document/Systems/DataManagement/DataAssetManagement.md v1.0.0",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-03",
+    "resolution_basis": "Fresh P0-07 mid-review identified P0 exact0 / blocking P1 exact5 / correction-local P2 exact2. The exact gaps were approved Manifest payload not freshly rehashed at Execute, missing RecoveryRequired resume/finalize path, non-robust transaction/provenance journal writes with silent failure-evidence save loss, direct canonical Workbook overwrite promotion without final freshness/lock recheck, and unbound execution paths. During correction, P0-06 ValidateApproval was also found to compare only the stored ReviewPackageFingerprint string and was minimally hardened by reusing the existing deterministic fingerprint builder for fresh payload verification. Corrections preserve the existing architecture: actual Manifest and ReviewPackage payload fresh rehash, frozen exact3 execution paths, fresh management/lifecycle/mutation-intent checks, temp-readback-replace durable writes, CRITICAL fail-visible journal evidence loss, enum and TransactionId deserialize guards, pre-promotion staged/canonical semantic rechecks, Office lock checks, and ResumeRecovery that performs Product reapply exact0 and only finalizes the exact staged candidate when all Products already match reviewed desired state. Final official UE 5.8 Build efef4d82be0e4e989d1fad789faa8333 PASS. P0-06 final regression 3898d7ea945644a2aedaa7f55074a200 exact7/7 PASS including ReviewPackage payload tamper fail-closed. P0-07 final focused fab5fe3c03c8476285ab8d60ee42a1b4 exact16/16 PASS with failure/missing/unexpected/duplicate exact0. Test residue exact0 and temporary .gopymcp CCAS operation entries exact0. Fresh correction re-review: P0 exact0 / blocking P1 exact0 / correction-local P2 exact0; remaining design P2 exact2 non-blocking. No production cutover or authority activation was applied."
+  }
+}

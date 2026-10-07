@@ -1,0 +1,32 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_24bcdae7b73c4da1ab5383f614fff372",
+  "parent_version_ids": [],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-00",
+    "next_action": "Fresh rebaseline current DataAssetManagement/DataAssetAuthoring/Vehicle Builder/Weapon Guide/Equipment Builder, then freeze xlsx authority migration boundary, Generic Core vs Provider contract, Vehicle+Weapon dual-consumer pilot, Resource Catalog and semantic socket-role binding before Product implementation",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.0",
+      "Document/Systems/DataManagement/DataAssetManagement.md v1.0.0",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md v1.6.0",
+      "Document/Systems/DataManagement/BuilderAuthoringStandard.md v1.0.0",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-29",
+    "resolution_basis": "USER approved formal promotion after rebaselining the weapon-authoring UX around solo-developer convenience and bulk content operations. Target direction: direct .xlsx authoring source, generic content compiler/provider architecture, catalog/compare, Family/Variant/DesignIntent, Resource Catalog/Profile/Override, semantic socket-role binding, AI reviewable change sets, and Weapon+Vehicle exact2 representative consumers. Current persisted-DataAsset authority remains unchanged until explicit CCAS-P0-07 cutover; existing CF-FQ-055 Technical PASS backend and typed durable/DACE infrastructure are preserved for reuse."
+  }
+}

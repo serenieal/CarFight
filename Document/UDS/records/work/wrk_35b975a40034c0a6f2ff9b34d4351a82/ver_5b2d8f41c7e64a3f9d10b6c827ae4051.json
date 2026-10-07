@@ -1,0 +1,37 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_5b2d8f41c7e64a3f9d10b6c827ae4051",
+  "parent_version_ids": [
+    "ver_0c58a41f7d9b4e3a8f5c2b61d74e9032"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-08",
+    "next_action": "Resume the P0-08 post-promotion correction after the currently running UnrealEditor releases UnrealEditor-CarFight_Re.dll and UnrealEditor-CarFight_ReEditor.dll. Run the official UE 5.8 build, then focused CarFight.RuntimeApply.CF_FQ_058 Automation, affected RuntimeApply regression, fresh ProductionCutoverVerification, and implementation re-review. If all pass, advance to USER final workflow acceptance. Do not repeat cutover or mutate the canonical Workbook/Product batch. Stage/commit/push remain prohibited without separate approval.",
+    "blockers": [
+      "Official build validation is operationally blocked by an active UnrealEditor process holding the CarFight runtime/editor DLLs. Build f5a3d7934318429884dc763ef7ea2f33 reached link and failed with LNK1104 exact2; the Editor was not terminated."
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "user_technical_boundary": "Managed cutover remains accepted and durable: canonical Workbook active, provenance exact42, Production target exact34, Product transactions exact8 VehicleReady, Publication exact8. A fresh P0-08 normal-consumer audit found blocking P1 exact1: Production Publication Catalog exact8 was not consumed by normal RuntimeApply equipment discovery/authorization. Correction is implemented without creating a new RuntimeApply subsystem or publication authority: Production Catalog runtime load/lookup, published membership authorization, existing Fitting runtime application, Production-first RuntimeApply equipment options with RuntimeTestCatalog fallback, and focused authorization/discovery tests. Validation is pending solely because active UnrealEditor holds the output DLLs. USER final workflow acceptance remains on hold until the correction validates.",
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.33",
+      "Document/Plan/ContentAuthoringSystem/WeaponContentRosterPlan.md v0.1.11",
+      "UE/Source/CarFight_Re/Public/CFProdEquipCatalogData.h v1.1.0",
+      "UE/Source/CarFight_Re/Private/CFRuntimeEquipApply.cpp v1.5.0",
+      "UE/Source/CarFight_Re/Public/UI/CFRuntimeApplyWidget.h v1.2.0",
+      "UE/Source/CarFight_Re/Private/UI/CFRuntimeApplyUITests.cpp v1.2.0"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-07",
+    "resolution_basis": "The post-cutover P0-08 audit followed the UDS next action and compared the generated Production Publication Catalog against normal RuntimeApply consumers. Source search showed RuntimeApply equipment selection and catalog authorization still depended on RuntimeTestCatalog AllowedEquipmentPresetData while UCFProdEquipCatalogData had no normal runtime consumer. This violated the accepted end-to-end path requiring the published Product to be rediscoverable through Production equipment discovery. The directly affected runtime consumer and tests were corrected; official validation is pending because the running UnrealEditor owns the target DLLs."
+  }
+}

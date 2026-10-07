@@ -1,0 +1,36 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_f2a91c6d307b4e4ba58c19e64d73a821",
+  "parent_version_ids": [
+    "ver_9f260a784315cb7c83627a7a1545d745"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-07",
+    "next_action": "Preserve CCAS-P0-07 Technical Implementation PASS and await a separate explicit USER Cutover Acceptance. Until that acceptance, do not execute a production managed Cutover Manifest, Product batch mutation, canonical Workbook promotion, Workbook Current authority activation, Current Systems authority promotion, or physical Product rename/move/delete. GuidedMissile_Standard remains Wave1B Conditional with PFP.P0.03.UserTrajectory Pending. P0-08 remains unopened.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "user_technical_boundary": "CCAS-P0-06 remains USER PASS / COMPLETE. CCAS-P0-07 frozen implementation is now TECHNICAL IMPLEMENTATION PASS: concrete Editor-only .xlsx persistence, approval-bound cutover transaction/provenance, stale/drift fail-closed guards, existing-provider reviewed apply bridge, partial-failure recovery state and no-auto-delete contracts are implemented and validated. USER Cutover Acceptance remains pending. No production Product mutation, canonical Workbook promotion, Workbook Current authority activation, Current Systems authority promotion, physical asset rename/move/delete, stage, commit or push was performed.",
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.17",
+      "Document/Plan/ContentAuthoringSystem/WeaponContentRosterPlan.md v0.1.1",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFContentCutover.h v1.1.1",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFNativeXlsxAdapter.h v1.0.0",
+      "Tools/RunCCASP007Tests.ps1 v1.3.0",
+      "Document/Systems/DataManagement/DataAssetManagement.md v1.0.0",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-02",
+    "resolution_basis": "CCAS-P0-07 implementation completed against ContentAuthoringSystemPlan v0.1.16 and was documented in v0.1.17. Implemented explicit managed onboarding manifest and exact approval bindings; fresh Workbook/Catalog/Provider/Product stale guards; Prepared→ProductApplied→WorkbookCommitted→Verified transaction with BlockedBeforeMutation/RecoveryRequired; generated provenance; direct Product drift detection; no-auto-delete Retire separation; existing ICFContentProvider reviewed apply bridge; and concrete Editor-only persistent .xlsx I/O using repository-vendored OpenXLSX 0.5.1 + miniz 3.0.2 + pugixml 1.15 with Runtime dependency exact0 and build-time network fetch exact0. Final official UE 5.8 build 3eb7fc914828419e98ace8ee3fbbd503 PASS. P0-07 focused Automation 8aa7f4126a3e441f95a38d0e70243447 exact10/10 PASS. Affected P0-01 through P0-06 regressions PASS: 8/8, 12/12, 8/8, 5/5, 5/5, 7/7 respectively. Final review: P0 exact0, blocking P1 exact0, inherited P2 exact2 non-blocking. Disposable Workbook/FileStore test residue exact0 and temporary .gopymcp test operations exact0. No production Product mutation, canonical Workbook promotion, authority switch, Systems authority update, physical asset rename/move/delete, stage, commit, or push was performed."
+  }
+}

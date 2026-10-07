@@ -1,0 +1,34 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_b7d3e2f9416a4c09a85f7b6d21ce3084",
+  "parent_version_ids": [
+    "ver_4c8d2b1f6a7047d59e3f1a8c2b6d940e"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-06",
+    "next_action": "CCAS-P0-06 Pre-Implementation Design Review is PASS on ContentAuthoringSystemPlan.md v0.1.12. Implementation is READY but remains NOT OPENED until the USER explicitly instructs implementation. When opened, implement only the frozen P0-06 planning/review layer: whole-Catalog SnapshotFingerprint, typed PlanningMetadata, Active/Deprecated/Retired lifecycle, snapshot-aware semantic Change Set preflight, per-record rationale + immutable ReviewPackageFingerprint, two-layer stale guard, and exact no-direct-DataAsset-write tests. Preserve P0-01~05 accepted Core/Compiler/Provider behavior. Do not open Workbook/DataAsset Product authoring, Provider.ApplyReviewed Product mutation, Product Apply/Save, physical rename/move/delete, or P0-07 authority cutover.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.12",
+      "Document/Plan/ContentAuthoringSystem/WeaponContentRosterPlan.md v0.1.1",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFContentTypes.h v1.1.0",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFContentCompiler.h",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFContentProvider.h",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-30",
+    "resolution_basis": "CCAS-P0-06 blocking P1 exact6 from the prior design HOLD were corrected with minimal contracts in ContentAuthoringSystemPlan.md v0.1.12 and freshly re-reviewed. P1-1 freezes whole registered Catalog SnapshotFingerprint as the immutable planning authority without a separate random snapshot identity. P1-2 preserves the USER Accepted Weapon Roster planning fields through typed PlanningMetadata while separating planning readiness from Product Apply authority. P1-3 adds explicit Active/Deprecated/Retired lifecycle semantics and keeps physical row removal separate from Retire and Product delete. P1-4 keeps existing ChangeSet shape validation and adds snapshot-aware semantic preflight/conflict rejection without a per-operation revision framework. P1-5 freezes per-record rationale and Change Set exact1 approval bound to immutable ReviewPackageFingerprint, with partial approval out of P0 scope. P1-6 freezes BaseWorkbookSemanticHash plus BaseCatalogSnapshotFingerprint as a two-layer stale guard and requires fresh replan rather than automatic rebase/retry. Fresh re-review result: P0 exact0, blocking P1 exact0, P2 exact3 non-blocking, Design PASS. Existing P0-01~05 implementation remains preserved. Implementation, Workbook/DataAsset authoring, Product Apply/Save and P0-07 cutover remain unopened."
+  }
+}

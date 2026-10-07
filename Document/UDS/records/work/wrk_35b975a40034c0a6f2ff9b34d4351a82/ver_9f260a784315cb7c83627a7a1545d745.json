@@ -1,0 +1,35 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_9f260a784315cb7c83627a7a1545d745",
+  "parent_version_ids": [
+    "ver_0b4527f3f0a54c7e89fb3d6dd4a1832c"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-07",
+    "next_action": "Implement the frozen CCAS-P0-07 Authority Cutover / Migration contract from ContentAuthoringSystemPlan.md v0.1.16. Reuse P0-01~06 Core/Compiler/Catalog/Planning and existing typed durable provider/apply backends. Implement explicit managed onboarding, approval-bound Product apply, fresh stale/drift guards, concrete persistent Workbook adapter, cutover transaction/provenance/recovery, no-auto-delete, and JSON Staging coexistence boundaries. Do not claim Workbook authority or update Current Systems authority until concrete Workbook roundtrip, reviewed Product apply/readback, transaction recovery, provenance, drift tests, and separate USER cutover acceptance all PASS.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "user_technical_boundary": "CCAS-P0-06 remains USER PASS / COMPLETE. USER explicitly opened P0-07. P0-07 Fresh Design Review found direction P0 exact0 and blocking P1 exact10, all corrected/frozen in Plan v0.1.16; Fresh Design Re-review is PASS with blocking P1 exact0 and P2 exact2 non-blocking. P0-07 implementation is READY, but actual authority cutover, Workbook Current authority, Product batch mutation, physical asset rename/move/delete, and Systems authority promotion are not yet applied.",
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.16",
+      "Document/Plan/ContentAuthoringSystem/WeaponContentRosterPlan.md v0.1.1",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFContentProvider.h v1.1.0",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFWorkbookAdapter.h v1.0.0",
+      "Document/Systems/DataManagement/DataAssetManagement.md v1.0.0",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-02",
+    "resolution_basis": "USER explicitly instructed progress after CCAS-P0-06 Mid-review PASS, opening the separate P0-07 gate. Fresh source rebaseline confirmed existing CCAS ApplyReviewed seam, readback fingerprints, GeneratedFingerprint, Catalog Snapshot and ReviewPackage fingerprint logic, plus existing typed durable apply backend. It also confirmed persistent .xlsx concrete adapter implementations exact0: only test/memory ICFContentWorkbookAdapter implementations exist. Design review identified blocking P1 exact10: explicit managed onboarding; USER approval to Product apply fingerprint binding; fresh pre-apply stale guard; concrete persistent Workbook adapter; cutover transaction/recovery state machine; generated provenance snapshot; direct Product edit drift policy; no-auto-delete/retire separation; legacy JSON Staging coexistence boundary; Current Systems promotion timing. Plan v0.1.16 corrects/freezes all exact10. Re-review verdict is P0 exact0, blocking P1 exact0, P2 exact2 non-blocking, CCAS-P0-07 DESIGN PASS / IMPLEMENTATION READY. No Product mutation, canonical Workbook promotion, authority switch, Systems authority update, physical asset rename/move/delete, stage, commit, or push was performed."
+  }
+}

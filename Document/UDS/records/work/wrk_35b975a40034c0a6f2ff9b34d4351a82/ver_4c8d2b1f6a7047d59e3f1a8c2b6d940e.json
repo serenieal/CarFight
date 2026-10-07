@@ -1,0 +1,41 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_4c8d2b1f6a7047d59e3f1a8c2b6d940e",
+  "parent_version_ids": [
+    "ver_2e6b0c7f9a134c15b8d4e1f6a7c3b902"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-06",
+    "next_action": "Correct CCAS-P0-06 blocking P1 exact6 in ContentAuthoringSystemPlan.md v0.1.11, then run a fresh Design Re-review before any implementation. Freeze: immutable Catalog Snapshot + fingerprint; Weapon Roster planning metadata fidelity; explicit Active/Deprecated/Retired lifecycle; Change Set semantic legality and bulk-conflict rules; per-record rationale + immutable Review Package/approval binding; planning stale guard across Workbook/Product/Resource/Provider state. Preserve the existing no-direct-DataAsset-write boundary and require Product Provider.ApplyReviewed/SavePackage/Product mutation/rename-move-delete exact0 in P0-06. Do not start Workbook/DataAsset authoring, CCAS mutation implementation, Product Apply/Save, or P0-07 authority cutover.",
+    "blockers": [
+      "P1-1 Immutable Catalog Snapshot contract missing",
+      "P1-2 Weapon Roster planning metadata fidelity incomplete",
+      "P1-3 Canonical Retire lifecycle storage contract missing",
+      "P1-4 Change Set semantic legality and bulk-conflict rules incomplete",
+      "P1-5 Rationale/Review Package/approval binding incomplete",
+      "P1-6 Planning stale guard does not yet bind non-Workbook truth"
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.11",
+      "Document/Plan/ContentAuthoringSystem/WeaponContentRosterPlan.md v0.1.1",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFContentTypes.h v1.1.0",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFContentCompiler.h",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFContentProvider.h",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-30",
+    "resolution_basis": "Fresh CCAS-P0-06 Pre-Implementation Design Review against ContentAuthoringSystemPlan.md v0.1.10, USER Accepted WeaponContentRosterPlan.md v0.1.1, and current CFContentTypes/Compiler/Provider contracts found P0 exact0, blocking P1 exact6, and P2 exact3. Existing P0-01~05 accepted foundations remain reusable: typed Change Set shape, WorkbookSemanticHash, read-only CompilePreview, dependency/impact analysis, retire candidate preview and no-Apply compiler guard. Blocking gaps are limited to the P0-06 planning/review layer: immutable Catalog Snapshot identity, exact preservation of roster planning metadata, explicit canonical retire lifecycle, semantic validation/conflict rules for bulk operations, per-record rationale plus immutable review/approval binding, and stale planning checks covering Product/Resource/Provider truth beyond Workbook hash. No-direct-DA-write structure is accepted and must remain exact0 for Product mutation in P0-06. Implementation and Product authoring remain unopened."
+  }
+}

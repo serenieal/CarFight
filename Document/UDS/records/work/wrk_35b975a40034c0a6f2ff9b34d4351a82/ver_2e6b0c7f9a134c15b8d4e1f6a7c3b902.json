@@ -1,0 +1,35 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_2e6b0c7f9a134c15b8d4e1f6a7c3b902",
+  "parent_version_ids": [
+    "ver_d7b18f1c6a2e4f3b9580c4a7e1d26935"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-06",
+    "next_action": "Run CCAS-P0-06 AI Change Set + Batch Planning Pre-Implementation Design Review only, using ContentAuthoringSystemPlan.md v0.1.10 and USER Accepted WeaponContentRosterPlan.md v0.1.1 as the baseline. Freeze the catalog snapshot contract, typed AI change proposal contract, stale revision guard, bulk add/update/retire semantics, rationale/design intent representation, preview/review flow, and no-direct-DataAsset-write guard. Use the accepted Weapon roster exact3 Families and exact8 First Production Wave as the representative planning input. Do not implement Workbook/DataAsset authoring, CCAS mutation execution, Product Apply/Save, Product writer activation, or P0-07 authority cutover without separate USER approval.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.10",
+      "Document/Plan/ContentAuthoringSystem/WeaponContentRosterPlan.md v0.1.1",
+      "Document/Systems/DataManagement/DataAssetManagement.md v1.0.0",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md v1.6.0",
+      "Document/Systems/DataManagement/BuilderAuthoringStandard.md v1.0.0",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-30",
+    "resolution_basis": "CCAS-P0-05 Technical Implementation PASS remains preserved. The USER had already reviewed the actual CarFight.ContentManager workflow and provided feedback on Family/Variant tree versus catalog-list duplication and limited Wagon/Sedan comparison information, then explicitly accepted the current form as the initial baseline and chose to move forward. On 2026-09-30 the USER reaffirmed that this review had already occurred and instructed progression. ContentAuthoringSystemPlan.md v0.1.10 records CCAS-P0-05 USER Workflow Review PASS and COMPLETE, with additional UI polish retained as non-blocking follow-up. WeaponContentRosterPlan.md v0.1.1 is already USER Accepted and supplies Core Family exact3 and First Production Wave exact8. Therefore the lifecycle advances to CCAS-P0-06 Design Review Ready. This transition authorizes design/review only and does not authorize Workbook/DataAsset authoring, CCAS mutation implementation, Product Apply/Save, Product writer activation, or P0-07 authority cutover."
+  }
+}

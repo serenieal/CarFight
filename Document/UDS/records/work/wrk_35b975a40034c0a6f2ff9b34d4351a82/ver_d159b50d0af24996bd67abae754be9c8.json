@@ -1,0 +1,38 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_d159b50d0af24996bd67abae754be9c8",
+  "parent_version_ids": [
+    "ver_c5f8a614d2974b73b109e0c36f84a25e"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-07",
+    "next_action": "Review the corrected fresh Production Review Package for USER Cutover Acceptance. The exact package is ReviewPackageFingerprint sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940, ExpectedPostSemanticHash sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3, ResourceCatalogFingerprint sha256:0cd477e385e663b2914928f523b698a15efe6da516747405a20721e2418530f7, ExecutionBindingFingerprint sha256:1e87904bfe4e65f5614c8744af50dc0cbf533f14c64b13748178e08e6cb6243a. Only after separate explicit USER acceptance may managed authority cutover and durable exact34 Production provisioning begin. Until then keep actual Production DataAsset generation, canonical Workbook promotion, Production Publication Catalog mutation, authority activation, physical rename/move/delete, stage, commit and push at exact0. P0-08 remains unopened.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "user_technical_boundary": "Pre-cutover P1 exact3 correction and fresh implementation re-review are PASS: P0 exact0 / blocking P1 exact0 / correction-local P2 exact0. Approved Review Package cryptographically binds the exact typed execution manifest via ExecutionBindingFingerprint; exact8 prepared requests carry ReviewPackage/BaseSnapshot/ResourceCatalog/ExecutionBinding/Workbook identities and ValidatePreparedBatchApproval fresh-rehashes them before mutation. Prepared exact8 drafts bind to existing concrete typed backends over unique exact34 targets. Review-time absent CreateNew/CreateNewShared targets fail-closed on unexpected-existing drift and TOCTOU. CF-FQ-056 PFP-P0-03 is USER ACCEPTED / COMPLETE, so GuidedMissile_Standard remains Wave1B identity but is AuthoringReady with stale PFP dependency exact0. CFProdBatchPrep is pre-cutover bootstrap/review-only and canonical Workbook becomes sole Current authoring authority after cutover. A directly affected Weapon Guide regression exposed disabled Trail/Thruster FX slot subordinate-field normalization mismatch; CFWeaponGuideVM v1.6.1 now hashes subordinate FX semantics only when the slot is enabled. Final official UE 5.8 Build b0186d42dc374c6abc881f82e5434faa PASS. Weapon Guide affected regression 6bf7fcc859194b17aa07fd517a02b715 is 8/8 PASS. CCAS-P0-06 affected regression 00c73e876c874820a00867a17335cbf3 is 7/7 PASS. Final CCAS-P0-07/Production focused process 0b7fb435440e4657bb87f194b06269ef is 25/25 PASS with failure/missing/unexpected/duplicate exact0. No canonical Workbook promotion, actual Production exact34 DataAsset generation, Publication Catalog mutation, managed authority cutover, stage, commit or push was performed.",
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.30",
+      "Document/Plan/ContentAuthoringSystem/WeaponContentRosterPlan.md v0.1.10",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFProdBatchPrep.h v1.3.0",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFProdBatchPrep.cpp v1.3.0",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFProdProvisioning.h v1.2.0",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFProdProvisioning.cpp v1.2.0",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFContentPlanning.h v1.1.0",
+      "UE/Source/CarFight_ReEditor/Private/WeaponAuthoring/CFWeaponGuideVM.cpp v1.6.1",
+      "Tools/RunCCASP007Tests.ps1 v1.9.0"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-07",
+    "resolution_basis": "Corrected only the pre-cutover mid-review P1 exact3 and directly coupled semantic gaps. Production ReviewPackageFingerprint includes ExecutionBindingFingerprint. The First Wave bootstrap creates the transient reviewed Workbook and exact8 typed FCFProdPreparedProduct requests/drafts from the same Product specs and Resource Catalog; the execution manifest hashes actual existing durable backend desired fingerprints over unique exact34 targets and shared single-writer equality. ValidatePreparedBatchApproval fresh-rehashes ReviewPackage and execution manifest and verifies exact8 request approval identities before durable mutation. FCFProdProvisioning transaction schema v3 persists ReviewPackage/BaseSnapshot/ResourceCatalog/ExecutionBinding identity and bRequireAbsentAtReview evidence; fresh and TOCTOU unexpected-existing CreateNew collisions are fail-closed. Weapon Guide durable payload coverage was aligned to reviewed Turret/Weapon/Projectile semantics. The affected regression identified that disabled Trail/Thruster subordinate FX fields were being hashed despite persisted normalization; v1.6.1 canonicalizes disabled slots by excluding subordinate fields. CF-FQ-056 canonical closure supersedes the old Guided PFP pending state; current Guided candidate is AuthoringReady. CFProdBatchPrep is explicitly pre-cutover bootstrap/review-only to prevent dual authoring authority after canonical Workbook activation. Final official UE 5.8 Build b0186d42dc374c6abc881f82e5434faa PASS; Weapon Guide 8/8, CCAS-P0-06 7/7, and final CCAS-P0-07/Production exact25 25/25 all PASS. Corrected fresh package identities are ReviewPackage sha256:9af9a9256802244e7598ca6c92c916d1f9e11335599204cd518a094b552b5940, ExpectedPost sha256:049752116ea69850ffe245ce26365756bd15cfb1e332fc202339720c0ced42e3, ResourceCatalog sha256:0cd477e385e663b2914928f523b698a15efe6da516747405a20721e2418530f7, ExecutionBinding sha256:1e87904bfe4e65f5614c8744af50dc0cbf533f14c64b13748178e08e6cb6243a. Authority cutover remains unopened pending separate USER acceptance."
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_6e132fb59f2d4b7a8c4e31d067ab9250",
+  "parent_version_ids": [
+    "ver_d4c44b54318743cca9a9067f29543721"
+  ],
+  "state": "closed",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-08",
+    "closure_reason": "completed",
+    "next_action": null,
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "user_technical_boundary": "CCAS-P0-08 USER FINAL WORKFLOW ACCEPTANCE PASS / COMPLETE is preserved. Post-closure final review corrected representative Plan repository metadata only: Document/Plan is the separate plan_repo Git repository, while canonical UDS lifecycle, Systems, Source, build/test evidence, managed Workbook authority, Production exact34, Publication exact8, RuntimeApply Production-first discovery/authorization, existing FCFRuntimeEquipApplyService application authority, and fail-closed compatibility/GrossMass contract are unchanged. Final technical evidence remains Official UE 5.8 Build 97030b7aba1348d4b1688c34afc19954 PASS, focused Production Catalog 2/2 PASS, full RuntimeApply 18/18 PASS, and ProductionCutoverVerification 1/1 PASS. P0 exact0 / blocking P1 exact0 after metadata correction. Git stage/commit/push remains separate and requires explicit USER approval.",
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.36",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md v1.7.0",
+      "Document/Systems/DataManagement/DataAssetManagement.md v1.1.0",
+      "Document/Systems/Vehicles/RuntimeApply.md v1.2.0",
+      "Document/Systems/Vehicles/VehicleBuilder.md v1.9.1",
+      "Document/Systems/SystemIndex.md v1.55.0",
+      "UE/Source/CarFight_Re/Private/UI/CFRuntimeApplyPIETests.cpp v1.6.0"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-07",
+    "resolution_basis": "Post-closure final review found one directly coupled documentation authority mismatch: the representative Plan physically and operationally belongs to the separate plan_repo Git repository, but its top metadata still said repository role main_game. The Plan metadata and current pointers were corrected without reopening implementation, cutover, Product assets, RuntimeApply, build, or tests. The USER acceptance and closed lifecycle are preserved."
+  }
+}

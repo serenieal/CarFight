@@ -1,0 +1,45 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_3b7e0d8f9a9f4f78a167e6b01f2c4a91",
+  "parent_version_ids": [
+    "ver_24bcdae7b73c4da1ab5383f614fff372"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-00",
+    "next_action": "Correct the CCAS-P0-00 design contract for blocking P1 exact10, then run fresh Design Re-review. Do not start Product implementation or CCAS-P0-01 until P0=0 and blocking P1=0.",
+    "blockers": [
+      "Workbook binary/Git/file-lock and single-writer contract not frozen",
+      "AI typed Change Set to deterministic Workbook Applier contract not frozen",
+      "ContentId to existing runtime/domain ID and PrimaryAsset identity mapping not frozen",
+      "Field-level mixed authority and drift scope not frozen",
+      "Complex collection/order/type/locale canonicalization not frozen",
+      "Legacy import/default/inheritance preservation contract not frozen",
+      "Unreal rename/redirector/hard-reference/cook contract not frozen",
+      "XLSX parser/dependency/security contract not frozen",
+      "Batch journal/idempotency/partial recovery contract not frozen",
+      "FText/machine schema/USER workbook UX boundary not frozen"
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.1",
+      "Document/Systems/DataManagement/DataAssetManagement.md v1.0.0",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md v1.6.0",
+      "Document/Systems/DataManagement/BuilderAuthoringStandard.md v1.0.0",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-29",
+    "resolution_basis": "CCAS-P0-00 fresh Pre-Implementation Design Review found P0 0 / blocking P1 exact10 / P2 exact4. Core direction remains accepted, but implementation is held until contracts are frozen for workbook binary/source-control safety, AI change application, identity interoperability, field-level ownership, complex collections/canonical typing, migration fidelity, Unreal asset lifecycle/cook, parser/security, batch idempotency/recovery, and FText/machine-schema/user-workbook UX."
+  }
+}

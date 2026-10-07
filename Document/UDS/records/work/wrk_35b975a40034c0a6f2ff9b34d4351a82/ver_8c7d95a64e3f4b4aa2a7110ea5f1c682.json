@@ -1,0 +1,34 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_8c7d95a64e3f4b4aa2a7110ea5f1c682",
+  "parent_version_ids": [
+    "ver_3b7e0d8f9a9f4f78a167e6b01f2c4a91"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-01",
+    "next_action": "Implement the frozen Workbook Schema + Canonical Content Model contract only: stable SheetId/ColumnId/ContentKey, semantic hash, VALUE/NONE/INHERIT canonical cells, child collection semantics, provider descriptors, ExternalReadOnly catalog nodes, and schema migration prototype. Keep Product authority unchanged and do not start Product DA cutover.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.2",
+      "Document/Systems/DataManagement/DataAssetManagement.md v1.0.0",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md v1.6.0",
+      "Document/Systems/DataManagement/BuilderAuthoringStandard.md v1.0.0",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-29",
+    "resolution_basis": "CCAS-P0-00 Contract Correction C1-C12 completed and fresh Design Re-review passed with P0 0 / blocking P1 0 / P2 exact2 non-blocking implementation evidence. The two deferred evidence items are OpenXLSX 0.5.1 UE 5.8/MSVC roundtrip validation and 10k content + 100k child synthetic performance benchmark. Current Product DA authority remains unchanged until CCAS-P0-07 explicit cutover."
+  }
+}

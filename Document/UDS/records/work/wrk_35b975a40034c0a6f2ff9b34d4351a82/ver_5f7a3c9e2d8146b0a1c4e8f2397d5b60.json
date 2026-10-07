@@ -1,0 +1,34 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_35b975a40034c0a6f2ff9b34d4351a82",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_5f7a3c9e2d8146b0a1c4e8f2397d5b60",
+  "parent_version_ids": [
+    "ver_8c7d95a64e3f4b4aa2a7110ea5f1c682"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-058",
+    "title": "CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템",
+    "phase": "CCAS-P0-02",
+    "next_action": "Proceed with CCAS-P0-02 Generic Compiler Core from the accepted P0-01 typed contracts: concrete Workbook reader through ICFContentWorkbookAdapter, provider-backed validation/diff/reference graph/impact analysis/generated fingerprint/batch result model, and disposable fixtures only. Reuse the existing P0-01 Canonical Model and Provider Registry; do not reopen Product Apply or P0-07 authority cutover.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-058"
+    ],
+    "legacy_refs": [
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.3",
+      "Document/Systems/DataManagement/DataAssetManagement.md v1.0.0",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md v1.6.0",
+      "Document/Systems/DataManagement/BuilderAuthoringStandard.md v1.0.0",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-29",
+    "resolution_basis": "CCAS-P0-01 Workbook Schema + Canonical Content Model implementation completed with Official UE 5.8 Source Build c98d528a7e12483888b770b40323dc9c PASS and focused Automation a61a62ecc6024e67820d60591eb882f2 exact8/8 PASS. Post-Implementation Review converged to P0 0 / blocking P1 0 / P2 exact2 non-blocking implementation evidence. Product DataAsset mutation/cutover/writer activation remains 0. P2 remains OpenXLSX 0.5.1 roundtrip/presentation evidence and 10k content + 100k child synthetic parse/hash/diff benchmark."
+  }
+}
