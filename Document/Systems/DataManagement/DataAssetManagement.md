@@ -1,8 +1,8 @@
 # Data Asset Management
 
-- Version: 1.0.0
-- Date: 2026-09-04
-- Status: Current Implementation / CF-FQ-045 Done
+- Version: 1.1.0
+- Date: 2026-10-07
+- Status: Current Implementation / CF-FQ-045 Done / CF-FQ-058 Managed Content Authority Cutover Applied
 - Scope: CarFight Editor 전용 DataAsset 탐색, 의미 분류, 검사, 참조 조회와 관리 화면
 - 완료 기반: `DAM-P0-04E USER Acceptance PASS` + official UE 5.8 Editor build PASS + affected Automation 6/6 PASS
 
@@ -23,12 +23,25 @@
 Data Asset Management는 `CarFight_ReEditor`가 소유하는 **Editor-only read-first 관리층**이다.
 
 ```text
-Unreal .uasset
-= 데이터의 Single Source of Truth
+Unmanaged / ExternalReadOnly / legacy content
+→ persisted Unreal .uasset
+= current content truth
+
+CF-FQ-058 CCAS-managed exact42 manifest
+→ Authoring/Content/CarFight_Content.xlsx
+= sole Current authoring authority
+→ generated persisted .uasset exact34
+= Runtime / Product materialization
+→ DA_ProdEquipCatalog
+= published Production Product membership
+→ CarFight_Content.cfsnapshot.json
+= generated provenance / drift evidence
 
 Data Asset Manager
 = 발견 / 분류 / 설명 / 검사 / 참조 조회 / 탐색 UI
 ```
+
+`CF-FQ-058` cutover는 Data Asset Manager 자체에 write 권한을 추가한 것이 아니다. Manager는 계속 read-first 관리층이며, CCAS-managed manifest의 authoring authority만 canonical Workbook으로 분리됐다. `.uasset`은 Runtime이 소비하는 generated Product artifact이고, unmanaged/legacy 범위에서는 기존 current truth 역할을 그대로 유지한다.
 
 현재 Manager는 다음을 소유하지 않는다.
 
@@ -278,6 +291,16 @@ CF-FQ-045 완료를 막지 않는 P2 UI polish 2건은 향후 필요 시 별도 
 ---
 
 ## 14. Changelog
+
+### v1.1.0 - 2026-10-07
+
+- `CF-FQ-058` managed authority cutover 뒤 DataAsset의 역할을 authoring authority와 Runtime/Product materialization으로 분리했다.
+- CCAS-managed exact42 manifest는 canonical `Authoring/Content/CarFight_Content.xlsx`가 sole Current authoring authority이며 generated Production `.uasset` exact34는 Runtime/Product materialization이다.
+- `/Game/CarFight/Weapons/Data/Production/DA_ProdEquipCatalog`은 published Product exact8 membership을, `CarFight_Content.cfsnapshot.json`은 provenance/drift evidence를 소유한다.
+- unmanaged / ExternalReadOnly / legacy content는 기존 persisted `.uasset` current truth 계약을 유지한다.
+- Data Asset Manager 자체는 read-first/no-auto-mutation/no-auto-save 경계를 유지하며 CCAS write authority를 흡수하지 않는다.
+
+Migration: 이 변경은 모든 DataAsset을 Workbook authority로 일괄 전환하지 않는다. `CF-FQ-058` managed manifest만 scoped cutover 대상이며 나머지 content는 기존 owner를 유지한다.
 
 ### Maintenance - 2026-09-06
 

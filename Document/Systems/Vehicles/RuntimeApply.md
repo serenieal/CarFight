@@ -1,7 +1,7 @@
 # RuntimeApply
 
-- 문서 버전: v1.1.0
-- 최근 갱신일: 2026-09-14
+- 문서 버전: v1.2.0
+- 최근 갱신일: 2026-10-07
 - 문서 상태: Current
 - 기능 소유: `CF-FQ-041 런타임 콘텐츠 적용 메뉴`
 - 대표 구현: `FCFRuntimeVehicleApplyService`, `FCFRuntimeEquipApplyService`, `CFRuntimeApplyWidget`
@@ -42,7 +42,8 @@ Weapon / Ammo / Launcher / Defense / Sensor / Mass Runtime
 현재 `CFRuntimeApplyWidget`은 다음 역할을 맡는다.
 
 ```text
-- Runtime Test Catalog에서 Vehicle / Equipment 후보 표시
+- Vehicle 후보는 Runtime Test Catalog에서 표시
+- Equipment 후보는 valid Production Publication Catalog를 우선 사용하고, Production Catalog가 없거나 invalid할 때만 Runtime Test Catalog를 fallback으로 사용
 - Mount 선택
 - 현재 선택과 적용 대상 표시
 - 명시적 Apply 요청
@@ -191,7 +192,9 @@ RuntimeApply의 검증은 한 단계가 아니다.
 
 ```text
 1. Candidate authorization
-   - 현재 RuntimeApply UI에서는 Runtime Test Catalog exact membership
+   - Vehicle: Runtime Test Catalog exact membership
+   - Equipment: Production Publication Catalog exact published membership 우선
+   - Production Catalog absent/invalid 시에만 legacy Runtime Test Catalog Equipment membership fallback
 
 2. Mount 구조 호환성
    - MountType / SizeLimit / Equipment 요구 조건
@@ -243,19 +246,23 @@ Mount_Front_01 → ExplicitEmpty
 Missing policy → TreatAsError
 ```
 
-2026-09-14 Prototype Weapon Provisional Gameplay Balance 적용 이후 현재 Product Large 무기 2종은 Wagon Top Mount에 정상 적용된다.
+2026-10-07 CCAS Production exact8 cutover 이후 Wagon Top Mount는 `Cannon_Standard`와 `Rocket_Standard`의 MountType/SizeLimit 구조 호환성 자체는 통과한다. 그러나 canonical Workbook이 소유하는 current Production 질량과 explicit sortie ammo를 모두 포함하면 현재 Wagon `MaximumGrossMassKg=2350`을 초과한다.
 
 ```text
-Prototype Roof Cannon Kit
-- Mount 200kg + Weapon 100kg = 300kg
+Cannon_Standard on Wagon
+- candidate total = 3216kg
+- Wagon max gross = 2350kg
+- result = ValidationFailed / mutation0
 
-Prototype Rocket Launcher Kit
-- Mount 150kg + Weapon 80kg = 230kg
+Rocket_Standard on Wagon
+- candidate total = 3112kg
+- Wagon max gross = 2350kg
+- result = ValidationFailed / mutation0
 ```
 
-첫 HeavyCannon Legacy→Snapshot 적용과 이후 RocketLauncher 교체 모두 `Mount_Top_01`에 성공하고, 비대상 `Mount_Front_01`은 계속 `ExplicitEmpty`로 보존된다.
+따라서 현재 Current truth는 "Mount 구조 호환 = 장착 성공"이 아니다. RuntimeApply는 published Product를 정상 discovery/authorization한 뒤 Full Fitting Snapshot의 GrossMass에서 fail-closed하며, 기존 Legacy Runtime/Fitting source/active Mount를 보존한다. Product balance나 Wagon gross limit을 테스트 통과 목적으로 낮추거나 올리지 않는다.
 
-이 변경은 Product 질량 입력값 조정일 뿐 GrossMass 검증을 우회하지 않는다. `BuildFittingSnapshot()`의 `MaximumGrossMassKg` 초과 fail-closed와 독립 Fitting Snapshot over-gross 회귀는 그대로 유지된다. 2026-09-14 이전 350+120kg placeholder에서 Wagon이 6kg 초과로 거부된 결과는 Historical evidence로만 읽는다.
+2026-09-14 Prototype HeavyCannon/RocketLauncher가 Provisional Gameplay Balance에서 Wagon Top Mount에 성공했던 결과는 Historical evidence로 보존한다. 현재 Production exact8에서는 canonical Workbook의 Product/Ammo 질량과 strict GrossMass validator가 우선한다.
 
 ---
 
@@ -335,12 +342,14 @@ Official UE 5.8 Editor Build
 
 RuntimeApply Automation
 - PASS
-- Process Job: 54dbac4be35b45ce914e915002867561
+- Process Job: 12eb4517709249cd9d5a8b0e5a4d25a6
 - EngineExitCode=0
-- Success=16 / Failure=0
-- Result SHA-256: 29eef74aaa1617b313829fbc9a14f82b64d4e560a129175649ff9f35d5cd1732
-- `CF_FQ_047.WagonMountEquipmentPIE`: Product HeavyCannon 첫 Apply + Product RocketLauncher 교체 성공, Front Mount ExplicitEmpty 보존
-- `RTA_P0_05.PIEE2E`: Product HeavyCannon/RocketLauncher 반복 교체와 현재 Snapshot 질량 readback PASS
+- Success=18 / Failure=0
+- Result SHA-256: f54303f90e1491a216324439322102a73484b46dde2467760e58ac5ff28ecb8a
+- `CF_FQ_058.ProductionCatalogAuthorization`: published Product exact8 authorization + unpublished fail-closed PASS
+- `CF_FQ_058.ProductionCatalogDiscovery`: RuntimeApply Equipment option exact8이 Production Publication Catalog를 우선 source로 사용함을 PASS
+- `CF_FQ_047.WagonMountEquipmentPIE`: Production Cannon_Standard/Rocket_Standard는 Mount 호환이지만 current Wagon GrossMass 초과로 ValidationFailed + mutation0 PASS
+- `RTA_P0_05.PIEE2E`: Production Cannon_Standard/Rocket_Standard 반복 apply와 Applied Snapshot TotalVehicleMassKg↔Chaos configured mass readback PASS
 
 Fitting Mobility Fixture 파생 검증
 - Process Job: 4d34130bf6c749b19ae294c879ab3ac9
@@ -349,11 +358,20 @@ Fitting Mobility Fixture 파생 검증
 - 격리 Heavy Fixture = Equipment 470kg / Ammo 30kg / Defense 100kg / Total 1600kg 유지
 ```
 
-Historical RuntimeApply regression과 현재 validation을 구분한다. Multi-Mount Empty-State correction 자체의 이전 16/16 PASS는 보존하며, 350+120kg placeholder에서 확인했던 Wagon GrossMass 거부와 transient lightweight 성공 경로는 당시의 Historical regression evidence다. 현재 Product 기준은 위 fresh 16/16 PASS가 우선한다.
+Historical RuntimeApply regression과 현재 validation을 구분한다. Multi-Mount Empty-State correction의 과거 16/16 PASS와 Prototype Provisional Balance 시절 Wagon 장착 성공은 Historical evidence로 보존한다. 현재 Product 기준은 canonical Workbook/Production Publication Catalog exact8을 사용한 위 fresh 18/18 PASS가 우선한다.
 
 ---
 
 ## 12. Changelog
+
+### v1.2.0 - 2026-10-07
+
+- CF-FQ-058 managed cutover 이후 RuntimeApply Equipment discovery/authorization의 normal source를 generated Production Publication Catalog exact8로 승격했다. Vehicle 후보 authority는 기존 Runtime Test Catalog를 유지한다.
+- `UCFProdEquipCatalogData` runtime load + published Equipment exact lookup, `FCFRuntimeEquipApplyService::ApplyPublishedEquipment`, `CFRuntimeApplyWidget` Production-first/fallback 경계를 Current 계약으로 기록했다.
+- legacy RuntimeTestCatalog Equipment membership은 Production Catalog absent/invalid일 때만 fallback하며 기존 `ApplyCatalogEquipment` 계약은 제거하지 않는다.
+- current Wagon은 Production `Cannon_Standard`/`Rocket_Standard`와 Mount 구조상 호환되지만 explicit sortie ammo 포함 3216kg/3112kg로 2350kg gross limit을 초과하므로 ValidationFailed + mutation0가 정상 Current behavior다. Product/Vehicle balance는 테스트를 위해 수정하지 않았다.
+- RTA-P0-05의 고정 1400kg 기대값을 제거하고 Applied Snapshot `TotalVehicleMassKg`와 Chaos configured mass exact 동기화를 검증하도록 갱신했다.
+- Official UE 5.8 Build `97030b7aba1348d4b1688c34afc19954` PASS, RuntimeApply `12eb4517709249cd9d5a8b0e5a4d25a6` 18/18 PASS, Result SHA-256 `f54303f90e1491a216324439322102a73484b46dde2467760e58ac5ff28ecb8a`.
 
 ### v1.1.0 - 2026-09-14
 

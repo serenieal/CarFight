@@ -1,10 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.4.1
+// Version: 1.6.1
 // Date: 2026-09-14
 // Description: CF-FQ-041 Runtime Apply + CF-FQ-047 actual Wagon Multi-Mount PIE E2E 자동화 테스트
-// Scope: 기존 Vehicle/Equipment 반복 Apply와 persisted Wagon 2-Mount의 정상 빈 장착, 현재 Prototype Cannon/Rocket의 Product 질량 기준 Legacy→Snapshot 장착 성공과 교체를 실제 PIE World에서 검증합니다.
+// Scope: 기존 Vehicle/Equipment 반복 Apply와 persisted Wagon 2-Mount의 정상 빈 장착, Current Production Cannon/Rocket의 실제 GrossMass fail-closed 및 정상 Production apply/readback을 실제 PIE World에서 검증합니다.
 // Changelog:
+// - v1.6.1: Current Production identity 기반 PIE fail-closed/readback 교정을 fresh binary에 확실히 반영하기 위한 검증 checkpoint 갱신.
+// - v1.6.0: CCAS Production exact8 cutover 후 Wagon의 current 2350kg GrossMass 계약에 Cannon_Standard/Rocket_Standard가 각각 3216kg/3112kg으로 초과함을 정상 ValidationFailed + mutation0로 검증. RTA-P0-05의 stale 1400kg 상수는 Applied Snapshot TotalVehicleMassKg exact readback 비교로 교정.
+// - v1.5.0: CF-FQ-058 P0-08 cutover 이후 Equipment UI source를 Production Publication Catalog exact8로 전환하고 legacy HeavyCannon/RocketLauncher fixture를 published Cannon_Standard/Rocket_Standard current Product로 정렬.
 // - v1.4.1: Product HeavyCannon 질량 200+100kg 적용에 맞춰 RTA-P0-05 DefenseSUV Snapshot 기대 총질량을 1570kg에서 1400kg으로 동기화합니다.
 // - v1.4.0: USER-approved Provisional Gameplay Balance에 맞춰 Wagon Product HeavyCannon/RocketLauncher가 모두 Top Mount에 정상 적용되고 Front Mount는 ExplicitEmpty로 보존되는 회귀로 갱신. GrossMass fail-closed 자체는 독립 Fitting Snapshot 회귀가 계속 소유합니다.
 // - v1.3.0: USER-approved Wagon 2/2 Mount baseline으로 갱신하고, 빈 Mount가 MissingEquipmentPreset으로 오인되지 않으며 실제 GrossMass 초과만 거부한 뒤 경량 transient 후보는 Top Mount에 성공 적용되고 Front Mount는 ExplicitEmpty로 보존되는 회귀를 추가.
@@ -14,7 +17,7 @@
 // Migration:
 // - 테스트는 /Game/Maps/M_VehicleDefensePIE를 읽기 전용으로 로드하고 PIE 복제 World에 테스트 Pawn만 생성합니다.
 // - 실제 RuntimeApply Widget public API와 Product Vehicle/Equipment Apply service만 사용하며 Map/DataAsset/Blueprint를 저장하지 않습니다.
-// - Wagon의 현재 Prototype HeavyCannon/RocketLauncher는 개발 단계 Provisional Gameplay Balance 질량으로 Product 장착 성공을 검증하며, GrossMass 검증 로직은 완화하지 않습니다.
+// - cutover 이후 Equipment selection은 Production Publication Catalog를 authority로 사용하고, vehicle selection은 기존 RuntimeTestCatalog를 유지합니다. GrossMass 검증 로직은 완화하지 않습니다.
 // - P0 RuntimeApply UI에는 별도 Equipment clear/default action이 없으므로 존재하지 않는 UX를 테스트 전용으로 만들지 않습니다.
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -22,6 +25,7 @@
 #include "UI/CFRuntimeApplyWidget.h"
 
 #include "CFEquipmentPresetData.h"
+#include "CFProdEquipCatalogData.h"
 #include "CFRuntimeEquipApply.h"
 #include "CFRuntimeTestCatalogData.h"
 #include "CFRuntimeTestSettings.h"
@@ -152,6 +156,20 @@ namespace
 		return nullptr;
 	}
 
+	// [v1.5.0] Production Publication Catalog에서 canonical ContentId의 exact EquipmentPresetData를 찾습니다.
+	UCFEquipmentPresetData* FindPublishedEquipmentByContentId(
+		const UCFProdEquipCatalogData* ProductionCatalog,
+		const FString& ContentId)
+	{
+		if (!IsValid(ProductionCatalog) || ContentId.IsEmpty())
+		{
+			return nullptr;
+		}
+		const FCFProdEquipCatalogEntry* Entry =
+			ProductionCatalog->FindEntryByContentId(ContentId);
+		return Entry ? Entry->EquipmentPresetData.Get() : nullptr;
+	}
+
 	// [v1.0.0] 현재 Applied Snapshot에서 exact MountProfileId에 적용된 EquipmentPresetData를 반환합니다.
 	UCFEquipmentPresetData* FindAppliedEquipmentAtMount(
 		const UCFVehicleFittingComp* VehicleFittingComp,
@@ -260,6 +278,17 @@ namespace
 				return true;
 			}
 
+			UCFProdEquipCatalogData* ProductionCatalog =
+				UCFProdEquipCatalogData::LoadProductionCatalog();
+			TArray<FText> ProductionCatalogErrors;
+			if (!Test->TestNotNull(TEXT("RTA-P0-05 Production Catalog"), ProductionCatalog)
+				|| !Test->TestTrue(
+					TEXT("RTA-P0-05 Production Catalog valid"),
+					ProductionCatalog->ValidateProductionCatalog(ProductionCatalogErrors)))
+			{
+				return true;
+			}
+
 			// [v1.0.0] A→B→A의 A이자 Equipment Snapshot 전환 기준으로 사용할 fitting-ready Catalog VehicleData입니다.
 			UCFVehicleData* FittingReadyVehicleData = FindCatalogVehicleByAssetName(
 				RuntimeCatalog,
@@ -268,19 +297,16 @@ namespace
 			UCFVehicleData* AlternateVehicleData = FindCatalogVehicleByAssetName(
 				RuntimeCatalog,
 				TEXT("DA_TestSUV"));
-			// [v1.0.0] 첫 Snapshot Equipment 적용 후보입니다.
-			UCFEquipmentPresetData* HeavyCannonEquipment = FindCatalogEquipmentByAssetName(
-				RuntimeCatalog,
-				TEXT("HeavyCannon"));
-			// [v1.0.0] 두 번째 Snapshot Equipment 적용 후보입니다.
-			UCFEquipmentPresetData* RocketLauncherEquipment = FindCatalogEquipmentByAssetName(
-				RuntimeCatalog,
-				TEXT("RocketLauncher"));
+			// [v1.5.0] current Production publication의 대표 Cannon/Rocket Product입니다.
+			UCFEquipmentPresetData* HeavyCannonEquipment =
+				FindPublishedEquipmentByContentId(ProductionCatalog, TEXT("Cannon_Standard"));
+			UCFEquipmentPresetData* RocketLauncherEquipment =
+				FindPublishedEquipmentByContentId(ProductionCatalog, TEXT("Rocket_Standard"));
 
 			if (!Test->TestNotNull(TEXT("RTA-P0-05 fitting-ready Catalog Vehicle"), FittingReadyVehicleData)
 				|| !Test->TestNotNull(TEXT("RTA-P0-05 alternate Catalog Vehicle"), AlternateVehicleData)
-				|| !Test->TestNotNull(TEXT("RTA-P0-05 HeavyCannon Catalog Equipment"), HeavyCannonEquipment)
-				|| !Test->TestNotNull(TEXT("RTA-P0-05 RocketLauncher Catalog Equipment"), RocketLauncherEquipment))
+				|| !Test->TestNotNull(TEXT("RTA-P0-05 Cannon_Standard Production Equipment"), HeavyCannonEquipment)
+				|| !Test->TestNotNull(TEXT("RTA-P0-05 Rocket_Standard Production Equipment"), RocketLauncherEquipment))
 			{
 				return true;
 			}
@@ -458,13 +484,14 @@ namespace
 					VehiclePawn->GetVehicleMovementComponent());
 			if (Test->TestNotNull(TEXT("RTA-P0-05 Chaos VehicleMovement"), VehicleMovementComponent))
 			{
-				// [v1.4.1] Vehicle 1000 + Provisional HeavyCannon Mount 200 + Weapon 100 + Defense 100의 현재 P0-05 Snapshot 총질량입니다.
-				constexpr float ExpectedSnapshotMassKg = 1400.0f;
+				// [v1.6.0] Production balance는 Workbook authority가 소유하므로 테스트에 고정 질량을 중복하지 않고 실제 Applied Snapshot 총질량과 Chaos configured mass의 exact 동기화만 검증합니다.
+				const FCFVehicleFittingSnapshot HeavyCannonSnapshot =
+					VehicleFittingComp->GetAppliedFittingSnapshot();
 				Test->TestTrue(
-					TEXT("RTA-P0-05 HeavyCannon Snapshot configured mass = 1400kg"),
+					TEXT("RTA-P0-05 Cannon_Standard configured mass matches Applied Snapshot total"),
 					FMath::IsNearlyEqual(
 						VehicleMovementComponent->Mass,
-						ExpectedSnapshotMassKg,
+						HeavyCannonSnapshot.TotalVehicleMassKg,
 						0.01f));
 			}
 
@@ -514,11 +541,11 @@ namespace
 			UCFEquipmentPresetData* UnauthorizedEquipment =
 				NewObject<UCFEquipmentPresetData>(GetTransientPackage());
 
-			// [v1.0.0] Catalog authorization fail-closed 결과입니다.
+			// [v1.5.0] Production publication authorization fail-closed 결과입니다.
 			const FCFRuntimeEquipApplyResult InvalidApplyResult =
-				FCFRuntimeEquipApplyService::ApplyCatalogEquipment(
+				FCFRuntimeEquipApplyService::ApplyPublishedEquipment(
 					VehiclePawn,
-					RuntimeCatalog,
+					ProductionCatalog,
 					TargetMountProfileId,
 					UnauthorizedEquipment);
 			Test->TestEqual(
@@ -549,10 +576,10 @@ namespace
 			Test->TestTrue(
 				TEXT("RTA-P0-05 UI remains usable after invalid service request"),
 				RuntimeApplyWidget->GetMountOptionCount() > 0
-					&& RuntimeApplyWidget->GetEquipmentOptionCount() == 2);
+					&& RuntimeApplyWidget->GetEquipmentOptionCount() == 8);
 
 			Test->AddInfo(
-				TEXT("RTA-P0-05 PIEE2E PASS path executed: Vehicle DefenseSUV→TestSUV→DefenseSUV, Legacy→Snapshot, HeavyCannon→RocketLauncher→HeavyCannon, invalid Catalog Equipment fail-closed."));
+				TEXT("RTA-P0-05 PIEE2E PASS path executed: Vehicle DefenseSUV→TestSUV→DefenseSUV, Legacy→Snapshot, Production Cannon_Standard→Rocket_Standard→Cannon_Standard, unpublished Equipment fail-closed."));
 			VehiclePawn->Destroy();
 			return true;
 		}
@@ -602,14 +629,15 @@ namespace
 
 			const UCFRuntimeTestSettings* RuntimeTestSettings = GetDefault<UCFRuntimeTestSettings>();
 			UCFRuntimeTestCatalogData* RuntimeCatalog = RuntimeTestSettings ? RuntimeTestSettings->LoadDefaultCatalog() : nullptr;
+			UCFProdEquipCatalogData* ProductionCatalog = UCFProdEquipCatalogData::LoadProductionCatalog();
 			UCFVehicleData* Wagon = FindCatalogVehicleByAssetName(RuntimeCatalog, TEXT("DA_Vehicle_Wagon"));
-			UCFEquipmentPresetData* HeavyCannon = FindCatalogEquipmentByAssetName(RuntimeCatalog, TEXT("HeavyCannon"));
-			// [v1.4.0] 현재 두 번째 Product Large 무기 장착 성공을 검증할 RocketLauncher입니다.
-			UCFEquipmentPresetData* RocketLauncher = FindCatalogEquipmentByAssetName(RuntimeCatalog, TEXT("RocketLauncher"));
+			UCFEquipmentPresetData* HeavyCannon = FindPublishedEquipmentByContentId(ProductionCatalog, TEXT("Cannon_Standard"));
+			UCFEquipmentPresetData* RocketLauncher = FindPublishedEquipmentByContentId(ProductionCatalog, TEXT("Rocket_Standard"));
 			if (!Test->TestNotNull(TEXT("CF-FQ-047 default Runtime Catalog"), RuntimeCatalog)
+				|| !Test->TestNotNull(TEXT("CF-FQ-047 Production Catalog"), ProductionCatalog)
 				|| !Test->TestNotNull(TEXT("CF-FQ-047 catalog Wagon"), Wagon)
-				|| !Test->TestNotNull(TEXT("CF-FQ-047 catalog HeavyCannon"), HeavyCannon)
-				|| !Test->TestNotNull(TEXT("CF-FQ-047 catalog RocketLauncher"), RocketLauncher))
+				|| !Test->TestNotNull(TEXT("CF-FQ-047 Production Cannon_Standard"), HeavyCannon)
+				|| !Test->TestNotNull(TEXT("CF-FQ-047 Production Rocket_Standard"), RocketLauncher))
 			{
 				return true;
 			}
@@ -644,10 +672,10 @@ namespace
 				TEXT("CF-FQ-047 Front Mount는 기본 장비 없는 정상 빈 장착"),
 				EmptyFrontMountProfile->DefaultEquipmentPresetData.Get());
 			Test->TestTrue(
-				TEXT("CF-FQ-047 HeavyCannon compatible with Wagon Top Mount"),
+				TEXT("CF-FQ-047 Cannon_Standard compatible with Wagon Top Mount"),
 				HeavyCannon->CanUseOnMount(TargetMountProfile->MountType, TargetMountProfile->SizeLimit));
 			Test->TestTrue(
-				TEXT("CF-FQ-047 RocketLauncher compatible with Wagon Top Mount"),
+				TEXT("CF-FQ-047 Rocket_Standard compatible with Wagon Top Mount"),
 				RocketLauncher->CanUseOnMount(TargetMountProfile->MountType, TargetMountProfile->SizeLimit));
 
 			UClass* VehiclePawnClass = LoadClass<ACFVehiclePawn>(
@@ -714,70 +742,66 @@ namespace
 			Test->TestTrue(TEXT("CF-FQ-047 Mount_Top_01 selectable"), bMountSelected);
 			Test->TestTrue(TEXT("CF-FQ-047 HeavyCannon selectable"), bEquipmentSelected);
 
-			// [v1.4.0] 개발용 임시 질량이 적용된 Product HeavyCannon의 첫 Legacy→Snapshot Apply 결과입니다.
+			// [v1.6.0] Current Production Cannon_Standard은 Wagon Mount 타입/크기와는 호환되지만 explicit sortie ammo를 포함한 총중량이 Wagon GrossMass 상한을 초과하므로 fail-closed가 정상입니다.
 			const ECFRuntimeEquipApplyStatus HeavyCannonApplyStatus =
 				bMountSelected && bEquipmentSelected
 					? RuntimeApplyWidget->ApplySelectedEquipment()
 					: ECFRuntimeEquipApplyStatus::NotAttempted;
 			Test->AddInfo(FString::Printf(
-				TEXT("CF-FQ-047 Wagon HeavyCannon diagnostic: Status=%d | UI=%s | Fitting=%s | ActiveMount=%s"),
+				TEXT("CF-FQ-047 Wagon Cannon_Standard diagnostic: Status=%d | UI=%s | Fitting=%s | ActiveMount=%s"),
 				static_cast<int32>(HeavyCannonApplyStatus),
 				*RuntimeApplyWidget->GetLastResultText(),
 				*VehicleFittingComp->GetLastFittingRuntimeSummary(),
 				*VehicleWeaponComp->GetActiveMountProfileId().ToString()));
 			Test->TestEqual(
-				TEXT("CF-FQ-047 Wagon Product HeavyCannon Apply succeeds"),
+				TEXT("CF-FQ-047 Wagon Cannon_Standard is rejected by current GrossMass contract"),
 				HeavyCannonApplyStatus,
-				ECFRuntimeEquipApplyStatus::Succeeded);
-			Test->TestTrue(
-				TEXT("CF-FQ-041 Product HeavyCannon first Apply promotes Legacy to Applied Snapshot"),
-				VehicleFittingComp->HasAppliedFittingSnapshot());
-			Test->TestTrue(
-				TEXT("CF-FQ-041 Top Mount receives Product HeavyCannon"),
-				FindAppliedEquipmentAtMount(VehicleFittingComp, TargetMountProfileId) == HeavyCannon);
-			Test->TestTrue(
-				TEXT("CF-FQ-041 HeavyCannon Apply keeps non-target Front Mount ExplicitEmpty"),
-				IsAppliedMountExplicitlyEmpty(VehicleFittingComp, EmptyFrontMountProfileId));
-			Test->TestEqual(
-				TEXT("CF-FQ-041 HeavyCannon Apply selects target active Mount"),
-				VehicleWeaponComp->GetActiveMountProfileId(),
-				TargetMountProfileId);
+				ECFRuntimeEquipApplyStatus::ValidationFailed);
 			Test->TestFalse(
-				TEXT("CF-FQ-041 정상 빈 Front Mount는 MissingEquipmentPreset으로 오인하지 않음"),
+				TEXT("CF-FQ-047 rejected Cannon_Standard does not promote Legacy to Snapshot"),
+				VehicleFittingComp->HasAppliedFittingSnapshot());
+			Test->TestEqual(
+				TEXT("CF-FQ-047 rejected Cannon_Standard preserves previous active Mount"),
+				VehicleWeaponComp->GetActiveMountProfileId(),
+				ActiveMountBeforeEquipmentApply);
+			Test->TestTrue(
+				TEXT("CF-FQ-047 Cannon_Standard rejection reports maximum gross mass"),
+				RuntimeApplyWidget->GetLastResultText().Contains(TEXT("최대 허용 총중량")));
+			Test->TestFalse(
+				TEXT("CF-FQ-047 정상 빈 Front Mount는 MissingEquipmentPreset으로 오인하지 않음"),
 				RuntimeApplyWidget->GetLastResultText().Contains(TEXT("EquipmentPresetData가 없습니다")));
 
 			RuntimeApplyWidget->RefreshRuntimeApplyState();
-			// [v1.4.0] 동일 Wagon Top Mount에서 두 번째 Product Large 무기로 교체할 RocketLauncher 선택 결과입니다.
 			const bool bRocketLauncherSelected = SelectExactPIEEquipment(RuntimeApplyWidget, RocketLauncher);
-			Test->TestTrue(TEXT("CF-FQ-047 RocketLauncher selectable"), bRocketLauncherSelected);
+			Test->TestTrue(TEXT("CF-FQ-047 Rocket_Standard selectable"), bRocketLauncherSelected);
 
-			// [v1.4.0] Applied Snapshot 상태에서 Product RocketLauncher로 교체한 결과입니다.
+			// [v1.6.0] Rocket_Standard도 동일하게 Mount compatibility는 통과하지만 current GrossMass 상한에서 fail-closed해야 합니다.
 			const ECFRuntimeEquipApplyStatus RocketLauncherApplyStatus =
 				bRocketLauncherSelected
 					? RuntimeApplyWidget->ApplySelectedEquipment()
 					: ECFRuntimeEquipApplyStatus::NotAttempted;
 			Test->AddInfo(FString::Printf(
-				TEXT("CF-FQ-047 Wagon RocketLauncher diagnostic: Status=%d | UI=%s | Fitting=%s | ActiveMount=%s"),
+				TEXT("CF-FQ-047 Wagon Rocket_Standard diagnostic: Status=%d | UI=%s | Fitting=%s | ActiveMount=%s"),
 				static_cast<int32>(RocketLauncherApplyStatus),
 				*RuntimeApplyWidget->GetLastResultText(),
 				*VehicleFittingComp->GetLastFittingRuntimeSummary(),
 				*VehicleWeaponComp->GetActiveMountProfileId().ToString()));
 			Test->TestEqual(
-				TEXT("CF-FQ-047 Wagon Product RocketLauncher Apply succeeds"),
+				TEXT("CF-FQ-047 Wagon Rocket_Standard is rejected by current GrossMass contract"),
 				RocketLauncherApplyStatus,
-				ECFRuntimeEquipApplyStatus::Succeeded);
-			Test->TestTrue(
-				TEXT("CF-FQ-041 Top Mount receives Product RocketLauncher"),
-				FindAppliedEquipmentAtMount(VehicleFittingComp, TargetMountProfileId) == RocketLauncher);
-			Test->TestTrue(
-				TEXT("CF-FQ-041 RocketLauncher Apply keeps non-target Front Mount ExplicitEmpty"),
-				IsAppliedMountExplicitlyEmpty(VehicleFittingComp, EmptyFrontMountProfileId));
+				ECFRuntimeEquipApplyStatus::ValidationFailed);
+			Test->TestFalse(
+				TEXT("CF-FQ-047 rejected Rocket_Standard keeps Legacy runtime without Snapshot"),
+				VehicleFittingComp->HasAppliedFittingSnapshot());
 			Test->TestEqual(
-				TEXT("CF-FQ-041 RocketLauncher Apply keeps target active Mount"),
+				TEXT("CF-FQ-047 rejected Rocket_Standard preserves previous active Mount"),
 				VehicleWeaponComp->GetActiveMountProfileId(),
-				TargetMountProfileId);
+				ActiveMountBeforeEquipmentApply);
+			Test->TestTrue(
+				TEXT("CF-FQ-047 Rocket_Standard rejection reports maximum gross mass"),
+				RuntimeApplyWidget->GetLastResultText().Contains(TEXT("최대 허용 총중량")));
 
-			Test->AddInfo(TEXT("CF-FQ-041 Wagon Multi-Mount RuntimeApply PIE PASS: empty Front Mount is valid and both Product HeavyCannon/RocketLauncher succeed on Top under the current Provisional Gameplay Balance while the strict GrossMass validator remains independently covered."));
+			Test->AddInfo(TEXT("CF-FQ-047 Wagon Multi-Mount RuntimeApply PIE PASS: Production Cannon_Standard/Rocket_Standard remain mount-compatible but are correctly rejected by the current Wagon GrossMass contract without mutating Product or Vehicle balance."));
 			VehiclePawn->Destroy();
 			return true;
 		}

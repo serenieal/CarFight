@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.1
+// Version: 1.2.0
 // Date: 2026-09-03
 // Description: CF-FQ-041 Runtime Apply UI + CF-FQ-044 Catalog option synchronization 자동화 테스트
 // Scope: RuntimeApply Navigation/Apply 회귀와 isolated Catalog exact-sequence change-aware cache synchronization을 검증합니다.
 // Changelog:
+// - v1.2.0: CF-FQ-058 P0-08 Production Publication Catalog exact8 우선 Equipment discovery와 RuntimeTestCatalog fallback cache 회귀 추가.
 // - v1.1.1: Mid-review P1/P2. CatalogOptionSync가 Product Default Catalog 개수에 의존하지 않도록 test-owned transient Vehicle/Equipment fixture를 사용하고, raw null entry가 filtered cache를 반복 invalidation하지 않는 상태를 추가 검증.
 // - v1.1.0: VRCP-P0-03 isolated transient Catalog에서 Vehicle/Equipment add 및 same-count reorder를 refresh가 감지하고, rebuild 뒤 exact 선택 identity를 보존하는 회귀를 추가. Product Default Catalog mutation/save 0.
 // - v1.0.6: Applied Snapshot이 없는 Legacy Runtime에서 VehicleWeaponComp의 실제 활성 Equipment가 Current Equipment UI에 표시되는 회귀를 추가.
@@ -22,6 +23,7 @@
 #include "UI/CFVehicleDebugPanelWidget.h"
 
 #include "CFEquipmentPresetData.h"
+#include "CFProdEquipCatalogData.h"
 #include "CFRuntimeEquipApply.h"
 #include "CFRuntimeTestCatalogData.h"
 #include "CFRuntimeTestSettings.h"
@@ -483,7 +485,10 @@ bool FCFRuntimeApplyUiEquipmentTest::RunTest(const FString& Parameters)
 	// [v1.0.4] UI exact Equipment authorization에 사용할 실제 persisted Runtime Catalog입니다.
 	UCFRuntimeTestCatalogData* RuntimeCatalog =
 		LoadRuntimeApplyUiCatalog(*this);
-	if (!RuntimeCatalog)
+	UCFProdEquipCatalogData* ProductionCatalog =
+		UCFProdEquipCatalogData::LoadProductionCatalog();
+	if (!RuntimeCatalog
+		|| !TestNotNull(TEXT("RTA-P0-04 Production Equipment Catalog"), ProductionCatalog))
 	{
 		return false;
 	}
@@ -574,16 +579,18 @@ bool FCFRuntimeApplyUiEquipmentTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
-	// [v1.0.4] Catalog authorization과 현재 Mount 호환성을 모두 만족하는 UI 선택 후보입니다.
+	// [v1.2.0] Production publication authorization과 현재 Mount 호환성을 모두 만족하는 UI 선택 후보입니다.
 	UCFEquipmentPresetData* CatalogEquipmentCandidate = nullptr;
-	for (UCFEquipmentPresetData* CatalogEquipmentPresetData : RuntimeCatalog->AllowedEquipmentPresetData)
+	for (const FCFProdEquipCatalogEntry& PublishedEntry : ProductionCatalog->PublishedEquipment)
 	{
-		if (IsValid(CatalogEquipmentPresetData)
-			&& CatalogEquipmentPresetData->CanUseOnMount(
+		UCFEquipmentPresetData* PublishedEquipmentPresetData =
+			PublishedEntry.EquipmentPresetData.Get();
+		if (IsValid(PublishedEquipmentPresetData)
+			&& PublishedEquipmentPresetData->CanUseOnMount(
 				AppliedMountProfile->MountType,
 				AppliedMountProfile->SizeLimit))
 		{
-			CatalogEquipmentCandidate = CatalogEquipmentPresetData;
+			CatalogEquipmentCandidate = PublishedEquipmentPresetData;
 			break;
 		}
 	}
@@ -625,12 +632,12 @@ bool FCFRuntimeApplyUiEquipmentTest::RunTest(const FString& Parameters)
 		TEXT("Equipment selection alone keeps source Fitting identity"),
 		SourceFittingBeforeApply == VehicleFittingData);
 
-	// [v1.0.5] UI Apply 전에 exact Catalog authorization 자체가 통과하는지 downstream Fitting validation과 분리해 확인합니다.
+	// [v1.2.0] UI Apply 전에 exact Production publication authorization이 통과하는지 downstream Fitting validation과 분리해 확인합니다.
 	FString CatalogValidationFailureReason;
 	TestTrue(
-		TEXT("Exact Catalog candidate passes catalog authorization"),
-		FCFRuntimeEquipApplyService::ValidateCatalogEquipmentCandidate(
-			RuntimeCatalog,
+		TEXT("Exact Production candidate passes publication authorization"),
+		FCFRuntimeEquipApplyService::ValidatePublishedEquipmentCandidate(
+			ProductionCatalog,
 			CatalogEquipmentCandidate,
 			CatalogValidationFailureReason));
 	TestTrue(
@@ -834,6 +841,70 @@ bool FCFRuntimeApplyUiLegacyEquipmentTest::RunTest(const FString& Parameters)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFRuntimeApplyProductionCatalogTest,
+	"CarFight.RuntimeApply.CF_FQ_058.ProductionCatalogDiscovery",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.2.0] cutover된 Production Publication Catalog exact8이 RuntimeApply 장비 옵션의 우선 source인지 검증합니다.
+bool FCFRuntimeApplyProductionCatalogTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	UWorld* TestWorld = FAutomationEditorCommonUtils::CreateNewMap();
+	if (!TestNotNull(TEXT("CF-FQ-058 ProductionCatalogDiscovery World"), TestWorld))
+	{
+		return false;
+	}
+
+	UCFProdEquipCatalogData* ProductionCatalog =
+		UCFProdEquipCatalogData::LoadProductionCatalog();
+	if (!TestNotNull(TEXT("CF-FQ-058 Production Catalog"), ProductionCatalog))
+	{
+		return false;
+	}
+
+	TArray<FText> ValidationErrors;
+	TestTrue(
+		TEXT("CF-FQ-058 Production Catalog valid"),
+		ProductionCatalog->ValidateProductionCatalog(ValidationErrors));
+	TestEqual(
+		TEXT("CF-FQ-058 Production Catalog published exact8"),
+		ProductionCatalog->PublishedEquipment.Num(),
+		8);
+
+	UCFRuntimeApplyWidget* RuntimeApplyWidget = CreateWidget<UCFRuntimeApplyWidget>(
+		TestWorld,
+		UCFRuntimeApplyWidget::StaticClass());
+	if (!TestNotNull(TEXT("CF-FQ-058 RuntimeApply Widget"), RuntimeApplyWidget))
+	{
+		return false;
+	}
+
+	RuntimeApplyWidget->EnsureRuntimeApplyTree();
+	RuntimeApplyWidget->LoadDefaultRuntimeCatalog();
+	TestTrue(
+		TEXT("CF-FQ-058 Widget uses exact Production Catalog object"),
+		RuntimeApplyWidget->ProductionEquipmentCatalog == ProductionCatalog);
+	TestEqual(
+		TEXT("CF-FQ-058 RuntimeApply Production equipment exact8"),
+		RuntimeApplyWidget->GetEquipmentOptionCount(),
+		8);
+
+	for (int32 EntryIndex = 0; EntryIndex < ProductionCatalog->PublishedEquipment.Num(); ++EntryIndex)
+	{
+		const FCFProdEquipCatalogEntry& Entry = ProductionCatalog->PublishedEquipment[EntryIndex];
+		TestTrue(
+			*FString::Printf(TEXT("Production option selectable: %s"), *Entry.ContentId),
+			RuntimeApplyWidget->SelectEquipmentByIndex(EntryIndex));
+		TestTrue(
+			*FString::Printf(TEXT("Production option exact identity: %s"), *Entry.ContentId),
+			RuntimeApplyWidget->GetSelectedEquipmentData() == Entry.EquipmentPresetData.Get());
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCFRuntimeApplyCatalogSyncTest,
 	"CarFight.RuntimeApply.CF_FQ_044.VRCP_P0_03.CatalogOptionSync",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -880,6 +951,8 @@ bool FCFRuntimeApplyCatalogSyncTest::RunTest(const FString& Parameters)
 	}
 
 	RuntimeApplyWidget->RuntimeCatalog = TestCatalog;
+	// isolated legacy fallback test에서는 실제 cutover된 Production Catalog를 명시적으로 제외합니다.
+	RuntimeApplyWidget->ProductionEquipmentCatalog = nullptr;
 	RuntimeApplyWidget->RebuildVehicleOptions();
 	RuntimeApplyWidget->RebuildEquipmentOptions();
 

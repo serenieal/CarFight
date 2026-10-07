@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFWeaponGuideTypes.h
-// Version: v1.2.0
+// Version: v1.3.0
 // Date: 2026-09-18
 // Description: CF-FQ-055 Weapon Equipment Authoring Guide의 Stable Step, Capability Draft, 완료 Bundle과 navigation-only handoff 계약입니다.
 // Changelog:
+// - v1.3.0: CCAS Production reviewed payload와 durable backend의 exact semantic coverage를 맞추기 위해 Turret fire-policy, Weapon reload/fire-FX, Projectile interception/flight-FX/impact-FX draft 필드를 추가.
 // - v1.2.0: WEA-P0-04 Equipment Builder navigation-only handoff struct를 추가하고 context injection을 명시적으로 false로 고정했습니다.
 // - v1.1.0: BuilderAuthoringStandard v1.0.0에 맞춰 fixed exact8 Wizard를 Stable StepId exact15 + Conditional Step 모델로 교정하고 Template, Damage/Ammo create-reuse draft, Launcher intent, Propulsion/MissileFlight/MissileGuide config를 추가.
 // - v1.0.0: exact8 Wizard 단계, child reuse/create mode, guided Turret/Weapon/Projectile draft와 deterministic completion bundle 계약 추가.
@@ -133,6 +134,12 @@ struct FCFWeaponGuideTurretDraft
 	// 초당 Pitch 회전 속도입니다.
 	float PitchTurnRateDegPerSec = 30.0f;
 
+	// 터렛 정렬 중 현재 Muzzle 방향 발사를 허용할지 여부입니다.
+	bool bAllowFireWhileAligning = true;
+
+	// 총구 앞 발사 안전 검사 거리 cm입니다.
+	float MuzzleClearanceDistanceCm = 150.0f;
+
 	// 차량 피팅 질량에 더할 TurretMount 질량입니다.
 	float TurretMountWeightKg = 0.0f;
 };
@@ -173,11 +180,26 @@ struct FCFWeaponGuideWeaponDraft
 	// 탄창 재장전 시간입니다.
 	float ReloadTimeSeconds = 0.0f;
 
+	// 재장전 정책입니다.
+	ECFWeaponReloadMode ReloadMode = ECFWeaponReloadMode::FullMagazine;
+
+	// 빈 탄창 자동 재장전 허용 여부입니다.
+	bool bAutoReloadWhenEmpty = true;
+
+	// 예비 탄약 부족 시 부분 재장전 허용 여부입니다.
+	bool bAllowPartialReload = true;
+
+	// Ripple/Salvo 요구량 부족 시 가능한 수량만으로 시작할지 여부입니다.
+	bool bAllowPartialSequence = true;
+
 	// 유한 탄약 Runtime을 명시적으로 사용할지 여부입니다.
 	bool bUseFiniteAmmo = false;
 
 	// AmmoData 없이 compatibility 경로에서 사용할 탄종 ID입니다.
 	FName AmmoTypeId = TEXT("ProtoShell");
+
+	// 기본 발사 CombatFxData exact object path입니다.
+	FSoftObjectPath DefaultFireFxDataPath;
 
 	// 고급 Launcher 발사 패턴 Page를 사용할지 결정하는 Editor-only workflow intent입니다.
 	bool bUseLauncher = false;
@@ -248,6 +270,21 @@ struct FCFWeaponGuideProjectileDraft
 
 	// 이동 Sweep 충돌을 사용할지 여부입니다.
 	bool bUseSweepCollision = true;
+
+	// 다른 차량의 유효 Projectile/Hitscan 적중으로 요격 가능한지 여부입니다.
+	bool bCanBeIntercepted = true;
+
+	// 요격 종료 시 Impact FX를 요청할지 여부입니다.
+	bool bDetonateWhenIntercepted = true;
+
+	// Trail Niagara System exact object path입니다. 비어 있으면 Trail slot은 비활성입니다.
+	FSoftObjectPath TrailFxNiagaraPath;
+
+	// Thruster Niagara System exact object path입니다. 비어 있으면 Thruster slot은 비활성입니다.
+	FSoftObjectPath ThrusterFxNiagaraPath;
+
+	// 기본 Impact CombatFxData exact object path입니다.
+	FSoftObjectPath DefaultImpactFxDataPath;
 
 	// 자체 추진 Rocket/Missile 설정입니다.
 	FCFProjectilePropulsionConfig PropulsionConfig;

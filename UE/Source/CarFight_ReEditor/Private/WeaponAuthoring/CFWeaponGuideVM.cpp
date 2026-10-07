@@ -1,9 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFWeaponGuideVM.cpp
-// Version: v1.4.1
-// Date: 2026-09-19
+// Version: v1.6.2
+// Date: 2026-10-06
 // Description: CF-FQ-055 Weapon Equipment Authoring Guide의 durable exact5 graph, completion semantic integrity와 navigation-only Equipment Builder handoff 구현입니다.
 // Changelog:
+// - v1.6.2: Production reviewed inline Damage/Ammo JSON의 source identity를 각 provider canonical StagingRoot 아래 deterministic `.json` 경로로 결속해 provider-owned path guard를 보존.
+// - v1.6.1: disabled Trail/Thruster FX slot의 비활성 하위 필드를 semantic fingerprint에서 제외해 Draft/persisted normalization 차이를 제거.
+// - v1.6.0: CCAS Production review↔typed execution semantic parity를 위해 Turret fire-policy, Weapon reload/fire-FX, Projectile interception/flight-FX/impact-FX를 durable payload/fingerprint/materialize/readback에 포함.
+// - v1.5.0: 기존 exact5 typed durable 구현을 CCAS Production Provisioning이 재사용할 수 있도록 Editor-private Create/Update/readback backend seam을 추가했습니다.
 // - v1.4.1: WEA-P0-04 Mid-review P1 교정으로 P0-03 Bundle fingerprint를 보존한 별도 CompletionSemanticFingerprint와 persisted exact5 semantic revalidation을 추가했습니다.
 // - v1.4.0: WEA-P0-04 completion Bundle integrity 재검증, USER completion summary와 context injection 없는 Equipment Builder navigation contract를 추가했습니다.
 // - v1.3.0: WEA-P0-03 Damage/Ammo existing provider durable Create, exact5 fresh preflight, session partial-durable recovery와 persisted reference graph readback을 추가했습니다.
@@ -17,8 +21,10 @@
 // - 중간 durable 성공 뒤 downstream 실패 시 자동 rollback/delete하지 않고 confirmed session path를 same-session retry에서 재검증·재사용합니다.
 
 #include "WeaponAuthoring/CFWeaponGuideVM.h"
+#include "WeaponAuthoring/CFWeaponGuideBackend.h"
 
 #include "CFAmmoData.h"
+#include "CFCombatFxData.h"
 #include "CFDamageData.h"
 #include "CFProjectileActor.h"
 #include "CFProjectileData.h"
@@ -32,6 +38,7 @@
 #include "DataAuthoring/CFDAStagingApply.h"
 
 #include "Engine/StaticMesh.h"
+#include "NiagaraSystem.h"
 #include "Misc/PackageName.h"
 #include "UObject/Package.h"
 #include "UObject/SoftObjectPath.h"
@@ -90,6 +97,12 @@ namespace
 		// Pitch 회전 속도입니다.
 		float PitchTurnRateDegPerSec = 0.0f;
 
+		// 정렬 중 발사 허용 정책입니다.
+		bool bAllowFireWhileAligning = true;
+
+		// 총구 안전 검사 거리 cm입니다.
+		float MuzzleClearanceDistanceCm = 150.0f;
+
 		// 피팅에 반영할 질량입니다.
 		float TurretMountWeightKg = 0.0f;
 	};
@@ -123,6 +136,21 @@ namespace
 
 		// Sweep collision 사용 여부입니다.
 		bool bUseSweepCollision = true;
+
+		// 요격 가능 여부입니다.
+		bool bCanBeIntercepted = true;
+
+		// 요격 종료 시 Impact FX 사용 여부입니다.
+		bool bDetonateWhenIntercepted = true;
+
+		// Trail FX 설정입니다.
+		FCFProjectileAttachedFxSettings TrailFxSettings;
+
+		// Thruster FX 설정입니다.
+		FCFProjectileAttachedFxSettings ThrusterFxSettings;
+
+		// 기본 Impact FX exact path입니다.
+		FSoftObjectPath DefaultImpactFxDataPath;
 
 		// 자체 추진 Rocket/Missile 설정입니다.
 		FCFProjectilePropulsionConfig PropulsionConfig;
@@ -176,6 +204,18 @@ namespace
 		// 재장전 시간입니다.
 		float ReloadTimeSeconds = 0.0f;
 
+		// 재장전 정책입니다.
+		ECFWeaponReloadMode ReloadMode = ECFWeaponReloadMode::FullMagazine;
+
+		// 빈 탄창 자동 재장전 여부입니다.
+		bool bAutoReloadWhenEmpty = true;
+
+		// 부분 재장전 허용 여부입니다.
+		bool bAllowPartialReload = true;
+
+		// 부분 Launcher sequence 허용 여부입니다.
+		bool bAllowPartialSequence = true;
+
 		// 유한 탄약 사용 여부입니다.
 		bool bUseFiniteAmmo = false;
 
@@ -187,6 +227,9 @@ namespace
 
 		// ProjectileData exact path입니다.
 		FSoftObjectPath ProjectileDataPath;
+
+		// 기본 발사 FX exact path입니다.
+		FSoftObjectPath DefaultFireFxDataPath;
 
 		// Launcher pattern 설정입니다.
 		FCFLauncherFirePatternConfig LauncherFirePatternConfig;
@@ -252,6 +295,8 @@ namespace
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("MaxPitch"), Payload.MaxPitchDeg);
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("YawRate"), Payload.YawTurnRateDegPerSec);
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("PitchRate"), Payload.PitchTurnRateDegPerSec);
+		CFDACommonPrimitives::AppendBoolToken(Bytes, TEXT("AllowFireWhileAligning"), Payload.bAllowFireWhileAligning);
+		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("MuzzleClearanceDistanceCm"), Payload.MuzzleClearanceDistanceCm);
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("WeightKg"), Payload.TurretMountWeightKg);
 		return CFDACommonPrimitives::HashCanonicalBytes(Bytes, OutFingerprint, OutError);
 	}
@@ -274,6 +319,8 @@ namespace
 		Asset.MaxPitchDeg = Payload.MaxPitchDeg;
 		Asset.YawTurnRateDegPerSec = Payload.YawTurnRateDegPerSec;
 		Asset.PitchTurnRateDegPerSec = Payload.PitchTurnRateDegPerSec;
+		Asset.bAllowFireWhileAligning = Payload.bAllowFireWhileAligning;
+		Asset.MuzzleClearanceDistanceCm = Payload.MuzzleClearanceDistanceCm;
 		Asset.TurretMountWeightKg = Payload.TurretMountWeightKg;
 	}
 
@@ -295,6 +342,8 @@ namespace
 		OutPayload.MaxPitchDeg = Asset.MaxPitchDeg;
 		OutPayload.YawTurnRateDegPerSec = Asset.YawTurnRateDegPerSec;
 		OutPayload.PitchTurnRateDegPerSec = Asset.PitchTurnRateDegPerSec;
+		OutPayload.bAllowFireWhileAligning = Asset.bAllowFireWhileAligning;
+		OutPayload.MuzzleClearanceDistanceCm = Asset.MuzzleClearanceDistanceCm;
 		OutPayload.TurretMountWeightKg = Asset.TurretMountWeightKg;
 		OutIssues.Reset();
 		return true;
@@ -314,11 +363,16 @@ namespace
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("GravityScale"), Payload.GravityScale);
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("CollisionRadius"), Payload.CollisionRadius);
 		CFDACommonPrimitives::AppendBoolToken(Bytes, TEXT("Sweep"), Payload.bUseSweepCollision);
+		CFDACommonPrimitives::AppendBoolToken(Bytes, TEXT("CanBeIntercepted"), Payload.bCanBeIntercepted);
+		CFDACommonPrimitives::AppendBoolToken(Bytes, TEXT("DetonateWhenIntercepted"), Payload.bDetonateWhenIntercepted);
 		CFDACommonPrimitives::AppendBoolToken(Bytes, TEXT("UsePropulsion"), Payload.PropulsionConfig.bUsePropulsion);
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("IgnitionDelay"), Payload.PropulsionConfig.IgnitionDelaySeconds);
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("BurnDuration"), Payload.PropulsionConfig.BurnDurationSeconds);
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("ThrustAcceleration"), Payload.PropulsionConfig.ThrustAccelerationCmPerSecSq);
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("MaximumPropelledSpeed"), Payload.PropulsionConfig.MaximumPropelledSpeed);
+		CFDACommonPrimitives::AppendBoolToken(Bytes, TEXT("UseLaunchAxisStabilization"), Payload.PropulsionConfig.bUseLaunchAxisStabilization);
+		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("MaximumThrustVectorAngleDeg"), Payload.PropulsionConfig.MaximumThrustVectorAngleDeg);
+		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("LaunchAxisStabilizationResponseTimeSeconds"), Payload.PropulsionConfig.LaunchAxisStabilizationResponseTimeSeconds);
 		CFDACommonPrimitives::AppendBoolToken(Bytes, TEXT("UseMissileFlight"), Payload.MissileFlightConfig.bUseMissileFlight);
 		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("AttackProfile"), LexToString(static_cast<int32>(Payload.MissileFlightConfig.AttackProfile)));
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("MinimumClearanceTime"), Payload.MissileFlightConfig.MinimumClearanceTimeSeconds);
@@ -331,10 +385,33 @@ namespace
 		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("LostTargetPolicy"), LexToString(static_cast<int32>(Payload.MissileGuideConfig.LostTargetPolicy)));
 		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("GuidanceLaw"), LexToString(static_cast<int32>(Payload.MissileGuideConfig.GuidanceLaw)));
 		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("GuidanceActivationMode"), LexToString(static_cast<int32>(Payload.MissileGuideConfig.GuidanceActivationMode)));
+		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("NavigationConstant"), Payload.MissileGuideConfig.NavigationConstant);
+		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("GuidanceActivationDelaySeconds"), Payload.MissileGuideConfig.GuidanceActivationDelaySeconds);
+		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("GuidanceActivationDistanceCm"), Payload.MissileGuideConfig.GuidanceActivationDistanceCm);
+		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("SeekerModel"), LexToString(static_cast<int32>(Payload.MissileGuideConfig.SeekerModel)));
+		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("TargetObservationMode"), LexToString(static_cast<int32>(Payload.MissileGuideConfig.TargetObservationMode)));
+		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("SeekerFieldOfViewDeg"), Payload.MissileGuideConfig.SeekerFieldOfViewDeg);
+		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("LockBreakAngleDeg"), Payload.MissileGuideConfig.LockBreakAngleDeg);
+		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("TargetLostGraceTimeSeconds"), Payload.MissileGuideConfig.TargetLostGraceTimeSeconds);
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("MaximumTurnRate"), Payload.MissileGuideConfig.MaximumTurnRateDegPerSec);
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("MaximumLateralAcceleration"), Payload.MissileGuideConfig.MaximumLateralAccelerationCmPerSecSq);
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("GuidanceResponseTime"), Payload.MissileGuideConfig.GuidanceResponseTimeSeconds);
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("MinimumGuidanceSpeed"), Payload.MissileGuideConfig.MinimumGuidanceSpeedCmPerSec);
+		CFDACommonPrimitives::AppendBoolToken(Bytes, TEXT("TrailFxEnabled"), Payload.TrailFxSettings.bEnabled);
+		if (Payload.TrailFxSettings.bEnabled)
+		{
+			CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("TrailFxSystem"), BuildObjectPath(Payload.TrailFxSettings.NiagaraSystem.Get()).ToString());
+			CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("TrailFxAttachMode"), LexToString(static_cast<int32>(Payload.TrailFxSettings.AttachMode)));
+			CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("TrailFxSocket"), CFDACommonPrimitives::CanonicalNameText(Payload.TrailFxSettings.AttachSocketName));
+		}
+		CFDACommonPrimitives::AppendBoolToken(Bytes, TEXT("ThrusterFxEnabled"), Payload.ThrusterFxSettings.bEnabled);
+		if (Payload.ThrusterFxSettings.bEnabled)
+		{
+			CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("ThrusterFxSystem"), BuildObjectPath(Payload.ThrusterFxSettings.NiagaraSystem.Get()).ToString());
+			CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("ThrusterFxAttachMode"), LexToString(static_cast<int32>(Payload.ThrusterFxSettings.AttachMode)));
+			CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("ThrusterFxSocket"), CFDACommonPrimitives::CanonicalNameText(Payload.ThrusterFxSettings.AttachSocketName));
+		}
+		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("ImpactFx"), Payload.DefaultImpactFxDataPath.ToString());
 		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("Damage"), Payload.DamageDataPath.ToString());
 		return CFDACommonPrimitives::HashCanonicalBytes(Bytes, OutFingerprint, OutError);
 	}
@@ -353,6 +430,11 @@ namespace
 		Asset.GravityScale = Payload.GravityScale;
 		Asset.CollisionRadius = Payload.CollisionRadius;
 		Asset.bUseSweepCollision = Payload.bUseSweepCollision;
+		Asset.bCanBeIntercepted = Payload.bCanBeIntercepted;
+		Asset.bDetonateWhenIntercepted = Payload.bDetonateWhenIntercepted;
+		Asset.TrailFxSettings = Payload.TrailFxSettings;
+		Asset.ThrusterFxSettings = Payload.ThrusterFxSettings;
+		Asset.DefaultImpactFxData = Cast<UCFCombatFxData>(Payload.DefaultImpactFxDataPath.TryLoad());
 		Asset.PropulsionConfig = Payload.PropulsionConfig;
 		Asset.MissileFlightConfig = Payload.MissileFlightConfig;
 		Asset.MissileGuideConfig = Payload.MissileGuideConfig;
@@ -372,6 +454,11 @@ namespace
 		OutPayload.GravityScale = Asset.GravityScale;
 		OutPayload.CollisionRadius = Asset.CollisionRadius;
 		OutPayload.bUseSweepCollision = Asset.bUseSweepCollision;
+		OutPayload.bCanBeIntercepted = Asset.bCanBeIntercepted;
+		OutPayload.bDetonateWhenIntercepted = Asset.bDetonateWhenIntercepted;
+		OutPayload.TrailFxSettings = Asset.TrailFxSettings;
+		OutPayload.ThrusterFxSettings = Asset.ThrusterFxSettings;
+		OutPayload.DefaultImpactFxDataPath = BuildObjectPath(Asset.DefaultImpactFxData.Get());
 		OutPayload.PropulsionConfig = Asset.PropulsionConfig;
 		OutPayload.MissileFlightConfig = Asset.MissileFlightConfig;
 		OutPayload.MissileGuideConfig = Asset.MissileGuideConfig;
@@ -397,17 +484,28 @@ namespace
 		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("InitialLoaded"), LexToString(Payload.InitialLoadedAmmoCount));
 		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("AmmoUnitsPerShot"), LexToString(Payload.AmmoUnitsPerShot));
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("ReloadTime"), Payload.ReloadTimeSeconds);
+		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("ReloadMode"), LexToString(static_cast<int32>(Payload.ReloadMode)));
+		CFDACommonPrimitives::AppendBoolToken(Bytes, TEXT("AutoReloadWhenEmpty"), Payload.bAutoReloadWhenEmpty);
+		CFDACommonPrimitives::AppendBoolToken(Bytes, TEXT("AllowPartialReload"), Payload.bAllowPartialReload);
+		CFDACommonPrimitives::AppendBoolToken(Bytes, TEXT("AllowPartialSequence"), Payload.bAllowPartialSequence);
 		CFDACommonPrimitives::AppendBoolToken(Bytes, TEXT("FiniteAmmo"), Payload.bUseFiniteAmmo);
 		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("AmmoData"), Payload.AmmoDataPath.ToString());
 		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("AmmoTypeId"), CFDACommonPrimitives::CanonicalNameText(Payload.AmmoTypeId));
 		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("Projectile"), Payload.ProjectileDataPath.ToString());
+		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("DefaultFireFxData"), Payload.DefaultFireFxDataPath.ToString());
 		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("LauncherPattern"), LexToString(static_cast<int32>(Payload.LauncherFirePatternConfig.FirePattern)));
 		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("LauncherCount"), LexToString(Payload.LauncherFirePatternConfig.ProjectileCountPerTrigger));
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("LauncherDelay"), Payload.LauncherFirePatternConfig.InterMuzzleDelaySeconds);
 		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("LauncherSimultaneous"), LexToString(Payload.LauncherFirePatternConfig.MaximumSimultaneousLaunchCount));
+		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("SequenceFailurePolicy"), LexToString(static_cast<int32>(Payload.LauncherFirePatternConfig.SequenceFailurePolicy)));
+		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("CooldownStartPolicy"), LexToString(static_cast<int32>(Payload.LauncherFirePatternConfig.CooldownStartPolicy)));
 		CFDACommonPrimitives::AppendStringToken(Bytes, TEXT("ReleaseMode"), LexToString(static_cast<int32>(Payload.LauncherReleaseConfig.ReleaseMode)));
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("EjectionSpeed"), Payload.LauncherReleaseConfig.EjectionSpeed);
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("CarrierVelocityRatio"), Payload.LauncherReleaseConfig.CarrierVelocityRatio);
+		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("LocalEjectionDirectionX"), Payload.LauncherReleaseConfig.LocalEjectionDirection.X);
+		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("LocalEjectionDirectionY"), Payload.LauncherReleaseConfig.LocalEjectionDirection.Y);
+		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("LocalEjectionDirectionZ"), Payload.LauncherReleaseConfig.LocalEjectionDirection.Z);
+		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("LauncherClearanceTraceDistanceCm"), Payload.LauncherReleaseConfig.LauncherClearanceTraceDistanceCm);
 		CFDACommonPrimitives::AppendBoolToken(Bytes, TEXT("UseHeat"), Payload.bUseHeat);
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("HeatPerShot"), Payload.HeatPerShot);
 		CFDACommonPrimitives::AppendFloatToken(Bytes, TEXT("MaxHeat"), Payload.MaxHeat);
@@ -436,11 +534,16 @@ namespace
 		Asset.InitialLoadedAmmoCount = Payload.InitialLoadedAmmoCount;
 		Asset.AmmoUnitsPerShot = Payload.AmmoUnitsPerShot;
 		Asset.ReloadTimeSeconds = Payload.ReloadTimeSeconds;
+		Asset.ReloadMode = Payload.ReloadMode;
+		Asset.bAutoReloadWhenEmpty = Payload.bAutoReloadWhenEmpty;
+		Asset.bAllowPartialReload = Payload.bAllowPartialReload;
+		Asset.bAllowPartialSequence = Payload.bAllowPartialSequence;
 		Asset.bUseInfiniteAmmoForDebug = !Payload.bUseFiniteAmmo;
 		Asset.DefaultAmmoData = Cast<UCFAmmoData>(Payload.AmmoDataPath.TryLoad());
 		Asset.AmmoTypeId = Payload.AmmoTypeId;
 		Asset.DefaultProjectileData = Cast<UCFProjectileData>(Payload.ProjectileDataPath.TryLoad());
 		Asset.ProjectileDataId = Asset.DefaultProjectileData ? Asset.DefaultProjectileData->ProjectileId : NAME_None;
+		Asset.DefaultFireFxData = Cast<UCFCombatFxData>(Payload.DefaultFireFxDataPath.TryLoad());
 		Asset.LauncherFirePatternConfig = Payload.LauncherFirePatternConfig;
 		Asset.LauncherReleaseConfig = Payload.LauncherReleaseConfig;
 		Asset.HeatPerShot = Payload.bUseHeat ? Payload.HeatPerShot : 0.0f;
@@ -467,10 +570,15 @@ namespace
 		OutPayload.InitialLoadedAmmoCount = Asset.InitialLoadedAmmoCount;
 		OutPayload.AmmoUnitsPerShot = Asset.AmmoUnitsPerShot;
 		OutPayload.ReloadTimeSeconds = Asset.ReloadTimeSeconds;
+		OutPayload.ReloadMode = Asset.ReloadMode;
+		OutPayload.bAutoReloadWhenEmpty = Asset.bAutoReloadWhenEmpty;
+		OutPayload.bAllowPartialReload = Asset.bAllowPartialReload;
+		OutPayload.bAllowPartialSequence = Asset.bAllowPartialSequence;
 		OutPayload.bUseFiniteAmmo = !Asset.bUseInfiniteAmmoForDebug;
 		OutPayload.AmmoDataPath = BuildObjectPath(Asset.DefaultAmmoData.Get());
 		OutPayload.AmmoTypeId = Asset.AmmoTypeId;
 		OutPayload.ProjectileDataPath = BuildObjectPath(Asset.DefaultProjectileData.Get());
+		OutPayload.DefaultFireFxDataPath = BuildObjectPath(Asset.DefaultFireFxData.Get());
 		OutPayload.LauncherFirePatternConfig = Asset.LauncherFirePatternConfig;
 		OutPayload.LauncherReleaseConfig = Asset.LauncherReleaseConfig;
 		OutPayload.bUseHeat = Asset.HeatPerShot > 0.0f || Asset.MaxHeat > 0.0f || Asset.HeatDissipationPerSecond > 0.0f;
@@ -533,6 +641,8 @@ namespace
 		Payload.MaxPitchDeg = Draft.Turret.MaxPitchDeg;
 		Payload.YawTurnRateDegPerSec = Draft.Turret.YawTurnRateDegPerSec;
 		Payload.PitchTurnRateDegPerSec = Draft.Turret.PitchTurnRateDegPerSec;
+		Payload.bAllowFireWhileAligning = Draft.Turret.bAllowFireWhileAligning;
+		Payload.MuzzleClearanceDistanceCm = Draft.Turret.MuzzleClearanceDistanceCm;
 		Payload.TurretMountWeightKg = Draft.Turret.TurretMountWeightKg;
 		return Payload;
 	}
@@ -554,6 +664,19 @@ namespace
 		Payload.GravityScale = Draft.Projectile.GravityScale;
 		Payload.CollisionRadius = Draft.Projectile.CollisionRadius;
 		Payload.bUseSweepCollision = Draft.Projectile.bUseSweepCollision;
+		Payload.bCanBeIntercepted = Draft.Projectile.bCanBeIntercepted;
+		Payload.bDetonateWhenIntercepted = Draft.Projectile.bDetonateWhenIntercepted;
+		Payload.TrailFxSettings.bEnabled = !Draft.Projectile.TrailFxNiagaraPath.IsNull();
+		Payload.TrailFxSettings.NiagaraSystem = Cast<UNiagaraSystem>(Draft.Projectile.TrailFxNiagaraPath.TryLoad());
+		Payload.TrailFxSettings.AttachMode = ECFProjectileFxAttachMode::MeshSocketWithFallback;
+		Payload.TrailFxSettings.AttachSocketName = TEXT("FX_Trail");
+		Payload.TrailFxSettings.RelativeTransform = FTransform::Identity;
+		Payload.ThrusterFxSettings.bEnabled = !Draft.Projectile.ThrusterFxNiagaraPath.IsNull();
+		Payload.ThrusterFxSettings.NiagaraSystem = Cast<UNiagaraSystem>(Draft.Projectile.ThrusterFxNiagaraPath.TryLoad());
+		Payload.ThrusterFxSettings.AttachMode = ECFProjectileFxAttachMode::MeshSocketWithFallback;
+		Payload.ThrusterFxSettings.AttachSocketName = TEXT("FX_Exhaust");
+		Payload.ThrusterFxSettings.RelativeTransform = FTransform::Identity;
+		Payload.DefaultImpactFxDataPath = Draft.Projectile.DefaultImpactFxDataPath;
 		Payload.PropulsionConfig = Draft.Projectile.PropulsionConfig;
 		Payload.MissileFlightConfig = Draft.Projectile.MissileFlightConfig;
 		Payload.MissileGuideConfig = Draft.Projectile.MissileGuideConfig;
@@ -583,10 +706,15 @@ namespace
 		Payload.InitialLoadedAmmoCount = Draft.Weapon.InitialLoadedAmmoCount;
 		Payload.AmmoUnitsPerShot = Draft.Weapon.AmmoUnitsPerShot;
 		Payload.ReloadTimeSeconds = Draft.Weapon.ReloadTimeSeconds;
+		Payload.ReloadMode = Draft.Weapon.ReloadMode;
+		Payload.bAutoReloadWhenEmpty = Draft.Weapon.bAutoReloadWhenEmpty;
+		Payload.bAllowPartialReload = Draft.Weapon.bAllowPartialReload;
+		Payload.bAllowPartialSequence = Draft.Weapon.bAllowPartialSequence;
 		Payload.bUseFiniteAmmo = Draft.Weapon.bUseFiniteAmmo;
 		Payload.AmmoDataPath = Draft.Weapon.bUseFiniteAmmo ? AmmoPath : FSoftObjectPath();
 		Payload.AmmoTypeId = ResolvedAmmoTypeId;
 		Payload.ProjectileDataPath = ProjectilePath;
+		Payload.DefaultFireFxDataPath = Draft.Weapon.DefaultFireFxDataPath;
 		Payload.LauncherFirePatternConfig = Draft.Weapon.LauncherFirePatternConfig;
 		Payload.LauncherReleaseConfig = Draft.Weapon.LauncherReleaseConfig;
 		Payload.bUseHeat = Draft.Weapon.bUseHeat;
@@ -2516,7 +2644,10 @@ bool FCFWeaponGuideVM::BuildCompletionSemanticFingerprint(
 		if (!BuildProjectileFingerprint(DesiredPayload, DesiredFingerprint, OutError)
 			|| !DesiredFingerprint.Equals(ProjectileFingerprint, ESearchCase::CaseSensitive))
 		{
-			OutError = TEXT("완료 후 ProjectileData Draft 또는 persisted semantic이 확정 상태와 달라졌습니다.");
+			OutError = FString::Printf(
+				TEXT("완료 후 ProjectileData Draft 또는 persisted semantic이 확정 상태와 달라졌습니다. Desired=%s Persisted=%s"),
+				*DesiredFingerprint,
+				*ProjectileFingerprint);
 			return false;
 		}
 	}
@@ -3256,4 +3387,789 @@ bool FCFWeaponGuideVM::HasBlockingIssue(const TArray<FCFWeaponGuideIssue>& Issue
 		}
 	}
 	return false;
+}
+
+
+// CCAS Production Provisioning이 기존 Weapon Guide durable backend를 재사용할 때 사용하는 공통 내부 helper입니다.
+namespace CFWeaponGuideBackendPrivate
+{
+	// Exact persisted typed asset의 clean semantic fingerprint를 읽습니다.
+	template <typename TAsset, typename TPayload, typename TExtractFn, typename TFingerprintFn>
+	bool ReadTypedFingerprint(
+		const FString& TargetObjectPath,
+		TExtractFn ExtractFn,
+		TFingerprintFn FingerprintFn,
+		bool& bOutExists,
+		FString& OutFingerprint,
+		FString& OutError)
+	{
+		bOutExists = false;
+		OutFingerprint.Reset();
+		OutError.Reset();
+
+		// Exact target soft object path입니다.
+		const FSoftObjectPath ObjectPath(TargetObjectPath);
+		// Exact target package long name입니다.
+		const FString PackageName =
+			FPackageName::ObjectPathToPackageName(TargetObjectPath);
+		if (!ObjectPath.IsValid()
+			|| !FPackageName::IsValidLongPackageName(PackageName))
+		{
+			OutError = TEXT("Weapon durable backend target path가 canonical object path가 아닙니다.");
+			return false;
+		}
+
+		// 현재 memory/disk target 존재 여부입니다.
+		const bool bPackageExists = FPackageName::DoesPackageExist(PackageName);
+		// 이미 load된 exact object입니다.
+		UObject* ResolvedObject = ObjectPath.ResolveObject();
+		if (!bPackageExists && ResolvedObject == nullptr)
+		{
+			return true;
+		}
+
+		// Persisted/readable exact typed target입니다.
+		TAsset* TargetAsset = Cast<TAsset>(
+			ResolvedObject != nullptr
+				? ResolvedObject
+				: LoadObject<TAsset>(nullptr, *TargetObjectPath));
+		if (TargetAsset == nullptr
+			|| TargetAsset->GetClass() != TAsset::StaticClass())
+		{
+			OutError = TEXT("Weapon durable backend target이 존재하지만 expected exact class로 읽히지 않습니다.");
+			return false;
+		}
+
+		// Persisted target package입니다.
+		UPackage* Package = TargetAsset->GetOutermost();
+		if (Package == nullptr
+			|| Package == GetTransientPackage()
+			|| Package->IsDirty())
+		{
+			OutError = TEXT("Weapon durable backend target package가 dirty/unconfirmed 상태입니다.");
+			return false;
+		}
+
+		// Existing typed backend가 추출한 persisted payload입니다.
+		TPayload PersistedPayload;
+		// Typed extraction diagnostics입니다.
+		TArray<FCFDAStagingIssue> ExtractIssues;
+		if (!ExtractFn(*TargetAsset, PersistedPayload, ExtractIssues))
+		{
+			OutError = ExtractIssues.IsEmpty()
+				? TEXT("Weapon durable backend persisted payload extraction이 실패했습니다.")
+				: ExtractIssues[0].Message;
+			return false;
+		}
+
+		if (!FingerprintFn(
+			PersistedPayload,
+			OutFingerprint,
+			OutError)
+			|| !CFDACommonPrimitives::IsCanonicalSha256Fingerprint(
+				OutFingerprint))
+		{
+			if (OutError.IsEmpty())
+			{
+				OutError = TEXT("Weapon durable backend persisted fingerprint가 canonical하지 않습니다.");
+			}
+			return false;
+		}
+
+		bOutExists = true;
+		return true;
+	}
+
+	// Existing CFDADurableCore가 소비할 Create/Update common row를 구성합니다.
+	FCFDACommonPreviewRow BuildMutationRow(
+		const FString& SchemaId,
+		const UClass* DataAssetClass,
+		const FName StableLogicalId,
+		const FString& TargetObjectPath,
+		const FString& DesiredFingerprint,
+		const bool bExists,
+		const FString& CurrentFingerprint)
+	{
+		// Exact Create/Update candidate row입니다.
+		FCFDACommonPreviewRow Row;
+		Row.Kind = bExists
+			? ECFDAStagingPreviewKind::Update
+			: ECFDAStagingPreviewKind::Create;
+		Row.Envelope.SchemaId = SchemaId;
+		Row.Envelope.SchemaRevision = 1;
+		Row.Envelope.AdapterContractRevision = 1;
+		Row.Envelope.DataAssetTypeClassPath =
+			DataAssetClass != nullptr
+				? DataAssetClass->GetPathName()
+				: FString();
+		Row.Envelope.StableLogicalId = StableLogicalId;
+		Row.Envelope.TargetObjectPath = TargetObjectPath;
+		Row.Envelope.StagingRelativePath = FString::Printf(
+			TEXT("CCASProduction://%s"),
+			*StableLogicalId.ToString());
+		Row.Envelope.bHasBaseSemanticFingerprint = bExists;
+		Row.Envelope.BaseSemanticFingerprint =
+			bExists ? CurrentFingerprint : FString();
+		Row.Envelope.CurrentSemanticFingerprint =
+			bExists ? CurrentFingerprint : FString();
+		Row.Envelope.StagingSemanticFingerprint = DesiredFingerprint;
+		Row.Envelope.PlannedOperation = Row.Kind;
+		return Row;
+	}
+
+	// Existing CFDADurableCore로 one typed payload를 Create/Update하고 exact persisted fingerprint를 재검증합니다.
+	template <
+		typename TAsset,
+		typename TPayload,
+		typename TMaterializeFn,
+		typename TExtractFn,
+		typename TFingerprintFn>
+	bool ApplyTypedPayload(
+		const FString& SchemaId,
+		const FName StableLogicalId,
+		const FString& TargetObjectPath,
+		const TPayload& Payload,
+		const FString& ExpectedDesiredFingerprint,
+		TMaterializeFn MaterializeFn,
+		TExtractFn ExtractFn,
+		TFingerprintFn FingerprintFn,
+		FString& OutPersistedFingerprint,
+		FString& OutError)
+	{
+		OutPersistedFingerprint.Reset();
+		OutError.Reset();
+
+		// Existing typed backend가 계산한 desired semantic fingerprint입니다.
+		FString DesiredFingerprint;
+		if (!FingerprintFn(Payload, DesiredFingerprint, OutError)
+			|| !DesiredFingerprint.Equals(
+				ExpectedDesiredFingerprint,
+				ESearchCase::CaseSensitive))
+		{
+			if (OutError.IsEmpty())
+			{
+				OutError = TEXT("Production target expected fingerprint가 existing typed backend desired fingerprint와 다릅니다.");
+			}
+			return false;
+		}
+
+		// Fresh persisted target existence입니다.
+		bool bExists = false;
+		// Fresh persisted current fingerprint입니다.
+		FString CurrentFingerprint;
+		if (!ReadTypedFingerprint<TAsset, TPayload>(
+			TargetObjectPath,
+			ExtractFn,
+			FingerprintFn,
+			bExists,
+			CurrentFingerprint,
+			OutError))
+		{
+			return false;
+		}
+
+		// Existing durable core가 소비할 exact Create/Update row입니다.
+		const FCFDACommonPreviewRow Row = BuildMutationRow(
+			SchemaId,
+			TAsset::StaticClass(),
+			StableLogicalId,
+			TargetObjectPath,
+			DesiredFingerprint,
+			bExists,
+			CurrentFingerprint);
+
+		// Existing durable core terminal report입니다.
+		FCFDAStagingTargetApplyReport ApplyReport;
+		CFDADurableCore::ApplyTypedTarget<TAsset, TPayload>(
+			Row,
+			Payload,
+			MaterializeFn,
+			ExtractFn,
+			FingerprintFn,
+			ApplyReport);
+		if (ApplyReport.Result
+			!= ECFDAStagingTargetApplyResult::DurableApplied)
+		{
+			OutError = ApplyReport.Diagnostic.IsEmpty()
+				? TEXT("Existing Weapon Guide durable backend가 DurableApplied에 도달하지 못했습니다.")
+				: ApplyReport.Diagnostic;
+			return false;
+		}
+
+		// Durable apply 직후 fresh persisted existence입니다.
+		bool bReadbackExists = false;
+		if (!ReadTypedFingerprint<TAsset, TPayload>(
+			TargetObjectPath,
+			ExtractFn,
+			FingerprintFn,
+			bReadbackExists,
+			OutPersistedFingerprint,
+			OutError)
+			|| !bReadbackExists
+			|| !OutPersistedFingerprint.Equals(
+				ExpectedDesiredFingerprint,
+				ESearchCase::CaseSensitive))
+		{
+			if (OutError.IsEmpty())
+			{
+				OutError = TEXT("Existing Weapon Guide durable backend post-write readback이 expected fingerprint와 다릅니다.");
+			}
+			return false;
+		}
+		return true;
+	}
+}
+
+// TurretMount Draft + logical ID의 desired semantic fingerprint를 계산합니다.
+bool CFWeaponGuideBackend::BuildTurretDesiredFingerprint(
+	const FCFWeaponGuideDraft& Draft,
+	const FName TurretMountId,
+	FString& OutFingerprint,
+	FString& OutError)
+{
+	// Existing Weapon Guide Turret typed payload입니다.
+	const FCFWeaponGuideTurretPayload Payload =
+		BuildGuideTurretPayload(Draft, TurretMountId);
+	return BuildTurretFingerprint(Payload, OutFingerprint, OutError);
+}
+
+// Damage Draft + logical ID의 desired semantic fingerprint를 계산합니다.
+bool CFWeaponGuideBackend::BuildDamageDesiredFingerprint(
+	const FCFWeaponGuideDraft& Draft,
+	const FName DamageId,
+	FString& OutFingerprint,
+	FString& OutError)
+{
+	// Existing Damage provider typed payload입니다.
+	const FCFDADamagePayload Payload =
+		BuildDamageProviderPayload(Draft, DamageId);
+	return CFDADamageProviderImpl::BuildSemanticFingerprint(
+		Payload,
+		OutFingerprint,
+		OutError);
+}
+
+// Ammo Draft + logical ID의 desired semantic fingerprint를 계산합니다.
+bool CFWeaponGuideBackend::BuildAmmoDesiredFingerprint(
+	const FCFWeaponGuideDraft& Draft,
+	const FName AmmoId,
+	FString& OutFingerprint,
+	FString& OutError)
+{
+	// Existing Ammo provider typed payload입니다.
+	const FCFDAAmmoPayload Payload =
+		BuildAmmoProviderPayload(Draft, AmmoId);
+	return CFDAAmmoProviderImpl::BuildSemanticFingerprint(
+		Payload,
+		OutFingerprint,
+		OutError);
+}
+
+// Projectile Draft + resolved Damage reference의 desired semantic fingerprint를 계산합니다.
+bool CFWeaponGuideBackend::BuildProjectileDesiredFingerprint(
+	const FCFWeaponGuideDraft& Draft,
+	const FName ProjectileId,
+	const FSoftObjectPath& DamagePath,
+	FString& OutFingerprint,
+	FString& OutError)
+{
+	// Existing Weapon Guide Projectile typed payload입니다.
+	const FCFWeaponGuideProjectilePayload Payload =
+		BuildGuideProjectilePayload(
+			Draft,
+			ProjectileId,
+			DamagePath);
+	return BuildProjectileFingerprint(
+		Payload,
+		OutFingerprint,
+		OutError);
+}
+
+// Weapon Draft + resolved child references의 desired semantic fingerprint를 계산합니다.
+bool CFWeaponGuideBackend::BuildWeaponDesiredFingerprint(
+	const FCFWeaponGuideDraft& Draft,
+	const FName WeaponId,
+	const FSoftObjectPath& ProjectilePath,
+	const FSoftObjectPath& AmmoPath,
+	const FName ResolvedAmmoTypeId,
+	FString& OutFingerprint,
+	FString& OutError)
+{
+	// Existing Weapon Guide Weapon typed payload입니다.
+	const FCFWeaponGuideWeaponPayload Payload =
+		BuildGuideWeaponPayload(
+			Draft,
+			WeaponId,
+			ProjectilePath,
+			AmmoPath,
+			ResolvedAmmoTypeId);
+	return BuildWeaponFingerprint(
+		Payload,
+		OutFingerprint,
+		OutError);
+}
+
+// Persisted TurretMountData의 exact semantic fingerprint를 읽습니다.
+bool CFWeaponGuideBackend::ReadTurretFingerprint(
+	const FString& TargetObjectPath,
+	bool& bOutExists,
+	FString& OutFingerprint,
+	FString& OutError)
+{
+	return CFWeaponGuideBackendPrivate::ReadTypedFingerprint<
+		UCFTurretMountData,
+		FCFWeaponGuideTurretPayload>(
+			TargetObjectPath,
+			&ExtractTurretPayload,
+			&BuildTurretFingerprint,
+			bOutExists,
+			OutFingerprint,
+			OutError);
+}
+
+// Persisted DamageData의 exact semantic fingerprint를 읽습니다.
+bool CFWeaponGuideBackend::ReadDamageFingerprint(
+	const FString& TargetObjectPath,
+	bool& bOutExists,
+	FString& OutFingerprint,
+	FString& OutError)
+{
+	return CFWeaponGuideBackendPrivate::ReadTypedFingerprint<
+		UCFDamageData,
+		FCFDADamagePayload>(
+			TargetObjectPath,
+			&CFDADamageProviderImpl::ExtractPayload,
+			&CFDADamageProviderImpl::BuildSemanticFingerprint,
+			bOutExists,
+			OutFingerprint,
+			OutError);
+}
+
+// Persisted AmmoData의 exact semantic fingerprint를 읽습니다.
+bool CFWeaponGuideBackend::ReadAmmoFingerprint(
+	const FString& TargetObjectPath,
+	bool& bOutExists,
+	FString& OutFingerprint,
+	FString& OutError)
+{
+	return CFWeaponGuideBackendPrivate::ReadTypedFingerprint<
+		UCFAmmoData,
+		FCFDAAmmoPayload>(
+			TargetObjectPath,
+			&CFDAAmmoProviderImpl::ExtractPayload,
+			&CFDAAmmoProviderImpl::BuildSemanticFingerprint,
+			bOutExists,
+			OutFingerprint,
+			OutError);
+}
+
+// Persisted ProjectileData의 exact semantic fingerprint를 읽습니다.
+bool CFWeaponGuideBackend::ReadProjectileFingerprint(
+	const FString& TargetObjectPath,
+	bool& bOutExists,
+	FString& OutFingerprint,
+	FString& OutError)
+{
+	return CFWeaponGuideBackendPrivate::ReadTypedFingerprint<
+		UCFProjectileData,
+		FCFWeaponGuideProjectilePayload>(
+			TargetObjectPath,
+			&ExtractProjectilePayload,
+			&BuildProjectileFingerprint,
+			bOutExists,
+			OutFingerprint,
+			OutError);
+}
+
+// Persisted WeaponData의 exact semantic fingerprint를 읽습니다.
+bool CFWeaponGuideBackend::ReadWeaponFingerprint(
+	const FString& TargetObjectPath,
+	bool& bOutExists,
+	FString& OutFingerprint,
+	FString& OutError)
+{
+	return CFWeaponGuideBackendPrivate::ReadTypedFingerprint<
+		UCFWeaponData,
+		FCFWeaponGuideWeaponPayload>(
+			TargetObjectPath,
+			&ExtractWeaponPayload,
+			&BuildWeaponFingerprint,
+			bOutExists,
+			OutFingerprint,
+			OutError);
+}
+
+// Existing Weapon Guide typed backend로 TurretMountData Create/Update를 durable 적용합니다.
+bool CFWeaponGuideBackend::ApplyTurret(
+	const FCFWeaponGuideDraft& Draft,
+	const FName TurretMountId,
+	const FString& TargetObjectPath,
+	const FString& ExpectedDesiredFingerprint,
+	FString& OutPersistedFingerprint,
+	FString& OutError)
+{
+	// Existing Weapon Guide Turret typed payload입니다.
+	const FCFWeaponGuideTurretPayload Payload =
+		BuildGuideTurretPayload(Draft, TurretMountId);
+	return CFWeaponGuideBackendPrivate::ApplyTypedPayload<
+		UCFTurretMountData,
+		FCFWeaponGuideTurretPayload>(
+			TEXT("CarFight.WeaponGuide.TurretMount"),
+			TurretMountId,
+			TargetObjectPath,
+			Payload,
+			ExpectedDesiredFingerprint,
+			&MaterializeTurretPayload,
+			&ExtractTurretPayload,
+			&BuildTurretFingerprint,
+			OutPersistedFingerprint,
+			OutError);
+}
+
+// Existing Damage provider로 DamageData Create/Update를 durable 적용합니다.
+bool CFWeaponGuideBackend::ApplyDamage(
+	const FCFWeaponGuideDraft& Draft,
+	const FName DamageId,
+	const FString& TargetObjectPath,
+	const FString& ExpectedDesiredFingerprint,
+	FString& OutPersistedFingerprint,
+	FString& OutError)
+{
+	OutPersistedFingerprint.Reset();
+	OutError.Reset();
+
+	// Existing Damage provider typed payload입니다.
+	const FCFDADamagePayload Payload =
+		BuildDamageProviderPayload(Draft, DamageId);
+	// Existing Damage provider desired fingerprint입니다.
+	FString DesiredFingerprint;
+	if (!CFDADamageProviderImpl::BuildSemanticFingerprint(
+		Payload,
+		DesiredFingerprint,
+		OutError)
+		|| !DesiredFingerprint.Equals(
+			ExpectedDesiredFingerprint,
+			ESearchCase::CaseSensitive))
+	{
+		if (OutError.IsEmpty())
+		{
+			OutError = TEXT("Damage Production expected fingerprint가 existing provider desired fingerprint와 다릅니다.");
+		}
+		return false;
+	}
+
+	// Fresh current Damage target existence입니다.
+	bool bExists = false;
+	// Fresh current Damage fingerprint입니다.
+	FString CurrentFingerprint;
+	if (!ReadDamageFingerprint(
+		TargetObjectPath,
+		bExists,
+		CurrentFingerprint,
+		OutError))
+	{
+		return false;
+	}
+
+	// Existing Damage provider reviewed JSON입니다.
+	FString ProviderJson;
+	if (!CFDADamageProviderImpl::SerializeStagingJson(
+		Payload,
+		TargetObjectPath,
+		bExists ? CurrentFingerprint : FString(),
+		ProviderJson,
+		OutError))
+	{
+		return false;
+	}
+
+	// Existing Damage provider common envelope입니다.
+	FCFDACommonEnvelope Envelope;
+	// Provider parser diagnostics입니다.
+	TArray<FCFDAStagingIssue> ParseIssues;
+	const FString ProductionDamageSourcePath = FString::Printf(
+		TEXT("Authoring/DataAssetStaging/DamageData/__CCASProduction__/%s.json"),
+		*DamageId.ToString());
+	if (!CFDADamageProviderImpl::ParseCommonCandidate(
+		ProviderJson,
+		ProductionDamageSourcePath,
+		Envelope,
+		ParseIssues))
+	{
+		OutError = ParseIssues.IsEmpty()
+			? TEXT("Damage Production provider candidate parse가 실패했습니다.")
+			: ParseIssues[0].Message;
+		return false;
+	}
+
+	// Existing Damage provider current-state projection입니다.
+	FCFDACommonCurrentState CurrentState;
+	// Provider current-state diagnostics입니다.
+	TArray<FCFDAStagingIssue> CurrentIssues;
+	if (!CFDADamageProviderImpl::ResolveCommonCurrentState(
+		Envelope,
+		CurrentState,
+		CurrentIssues))
+	{
+		OutError = CurrentIssues.IsEmpty()
+			? TEXT("Damage Production current-state resolve가 실패했습니다.")
+			: CurrentIssues[0].Message;
+		return false;
+	}
+
+	// Existing provider가 분류한 fresh Create/Update preview입니다.
+	const FCFDACommonPreviewRow FreshRow =
+		CFDATypeDispatch::BuildCommonPreview(Envelope, CurrentState);
+	if (FreshRow.Kind != (bExists
+			? ECFDAStagingPreviewKind::Update
+			: ECFDAStagingPreviewKind::Create)
+		|| !FreshRow.Envelope.StagingSemanticFingerprint.Equals(
+			ExpectedDesiredFingerprint,
+			ESearchCase::CaseSensitive))
+	{
+		OutError = TEXT("Damage Production provider fresh preview가 expected Create/Update/fingerprint와 다릅니다.");
+		return false;
+	}
+
+	// Existing Damage reviewed-mutation provider terminal report입니다.
+	FCFDAStagingTargetApplyReport ApplyReport;
+	CFDADamageProvider::GetProvider().Operations.ApplyReviewedMutation(
+		ProviderJson,
+		FreshRow,
+		ApplyReport);
+	if (ApplyReport.Result
+		!= ECFDAStagingTargetApplyResult::DurableApplied)
+	{
+		OutError = ApplyReport.Diagnostic.IsEmpty()
+			? TEXT("Damage Production provider durable apply가 실패했습니다.")
+			: ApplyReport.Diagnostic;
+		return false;
+	}
+
+	// Post-write persisted existence입니다.
+	bool bReadbackExists = false;
+	if (!ReadDamageFingerprint(
+		TargetObjectPath,
+		bReadbackExists,
+		OutPersistedFingerprint,
+		OutError)
+		|| !bReadbackExists
+		|| !OutPersistedFingerprint.Equals(
+			ExpectedDesiredFingerprint,
+			ESearchCase::CaseSensitive))
+	{
+		if (OutError.IsEmpty())
+		{
+			OutError = TEXT("Damage Production provider post-write readback이 expected fingerprint와 다릅니다.");
+		}
+		return false;
+	}
+	return true;
+}
+
+// Existing Ammo provider로 AmmoData Create/Update를 durable 적용합니다.
+bool CFWeaponGuideBackend::ApplyAmmo(
+	const FCFWeaponGuideDraft& Draft,
+	const FName AmmoId,
+	const FString& TargetObjectPath,
+	const FString& ExpectedDesiredFingerprint,
+	FString& OutPersistedFingerprint,
+	FString& OutError)
+{
+	OutPersistedFingerprint.Reset();
+	OutError.Reset();
+
+	// Existing Ammo provider typed payload입니다.
+	const FCFDAAmmoPayload Payload =
+		BuildAmmoProviderPayload(Draft, AmmoId);
+	// Existing Ammo provider desired fingerprint입니다.
+	FString DesiredFingerprint;
+	if (!CFDAAmmoProviderImpl::BuildSemanticFingerprint(
+		Payload,
+		DesiredFingerprint,
+		OutError)
+		|| !DesiredFingerprint.Equals(
+			ExpectedDesiredFingerprint,
+			ESearchCase::CaseSensitive))
+	{
+		if (OutError.IsEmpty())
+		{
+			OutError = TEXT("Ammo Production expected fingerprint가 existing provider desired fingerprint와 다릅니다.");
+		}
+		return false;
+	}
+
+	// Fresh current Ammo target existence입니다.
+	bool bExists = false;
+	// Fresh current Ammo fingerprint입니다.
+	FString CurrentFingerprint;
+	if (!ReadAmmoFingerprint(
+		TargetObjectPath,
+		bExists,
+		CurrentFingerprint,
+		OutError))
+	{
+		return false;
+	}
+
+	// Existing Ammo provider reviewed JSON입니다.
+	FString ProviderJson;
+	if (!CFDAAmmoProviderImpl::SerializeStagingJson(
+		Payload,
+		TargetObjectPath,
+		bExists ? CurrentFingerprint : FString(),
+		ProviderJson,
+		OutError))
+	{
+		return false;
+	}
+
+	// Existing Ammo provider common envelope입니다.
+	FCFDACommonEnvelope Envelope;
+	// Provider parser diagnostics입니다.
+	TArray<FCFDAStagingIssue> ParseIssues;
+	const FString ProductionAmmoSourcePath = FString::Printf(
+		TEXT("Authoring/DataAssetStaging/AmmoData/__CCASProduction__/%s.json"),
+		*AmmoId.ToString());
+	if (!CFDAAmmoProviderImpl::ParseCommonCandidate(
+		ProviderJson,
+		ProductionAmmoSourcePath,
+		Envelope,
+		ParseIssues))
+	{
+		OutError = ParseIssues.IsEmpty()
+			? TEXT("Ammo Production provider candidate parse가 실패했습니다.")
+			: ParseIssues[0].Message;
+		return false;
+	}
+
+	// Existing Ammo provider current-state projection입니다.
+	FCFDACommonCurrentState CurrentState;
+	// Provider current-state diagnostics입니다.
+	TArray<FCFDAStagingIssue> CurrentIssues;
+	if (!CFDAAmmoProviderImpl::ResolveCommonCurrentState(
+		Envelope,
+		CurrentState,
+		CurrentIssues))
+	{
+		OutError = CurrentIssues.IsEmpty()
+			? TEXT("Ammo Production current-state resolve가 실패했습니다.")
+			: CurrentIssues[0].Message;
+		return false;
+	}
+
+	// Existing provider가 분류한 fresh Create/Update preview입니다.
+	const FCFDACommonPreviewRow FreshRow =
+		CFDATypeDispatch::BuildCommonPreview(Envelope, CurrentState);
+	if (FreshRow.Kind != (bExists
+			? ECFDAStagingPreviewKind::Update
+			: ECFDAStagingPreviewKind::Create)
+		|| !FreshRow.Envelope.StagingSemanticFingerprint.Equals(
+			ExpectedDesiredFingerprint,
+			ESearchCase::CaseSensitive))
+	{
+		OutError = TEXT("Ammo Production provider fresh preview가 expected Create/Update/fingerprint와 다릅니다.");
+		return false;
+	}
+
+	// Existing Ammo reviewed-mutation provider terminal report입니다.
+	FCFDAStagingTargetApplyReport ApplyReport;
+	CFDAAmmoProvider::GetProvider().Operations.ApplyReviewedMutation(
+		ProviderJson,
+		FreshRow,
+		ApplyReport);
+	if (ApplyReport.Result
+		!= ECFDAStagingTargetApplyResult::DurableApplied)
+	{
+		OutError = ApplyReport.Diagnostic.IsEmpty()
+			? TEXT("Ammo Production provider durable apply가 실패했습니다.")
+			: ApplyReport.Diagnostic;
+		return false;
+	}
+
+	// Post-write persisted existence입니다.
+	bool bReadbackExists = false;
+	if (!ReadAmmoFingerprint(
+		TargetObjectPath,
+		bReadbackExists,
+		OutPersistedFingerprint,
+		OutError)
+		|| !bReadbackExists
+		|| !OutPersistedFingerprint.Equals(
+			ExpectedDesiredFingerprint,
+			ESearchCase::CaseSensitive))
+	{
+		if (OutError.IsEmpty())
+		{
+			OutError = TEXT("Ammo Production provider post-write readback이 expected fingerprint와 다릅니다.");
+		}
+		return false;
+	}
+	return true;
+}
+
+// Existing Weapon Guide typed backend로 ProjectileData Create/Update를 durable 적용합니다.
+bool CFWeaponGuideBackend::ApplyProjectile(
+	const FCFWeaponGuideDraft& Draft,
+	const FName ProjectileId,
+	const FSoftObjectPath& DamagePath,
+	const FString& TargetObjectPath,
+	const FString& ExpectedDesiredFingerprint,
+	FString& OutPersistedFingerprint,
+	FString& OutError)
+{
+	// Existing Weapon Guide Projectile typed payload입니다.
+	const FCFWeaponGuideProjectilePayload Payload =
+		BuildGuideProjectilePayload(
+			Draft,
+			ProjectileId,
+			DamagePath);
+	return CFWeaponGuideBackendPrivate::ApplyTypedPayload<
+		UCFProjectileData,
+		FCFWeaponGuideProjectilePayload>(
+			TEXT("CarFight.WeaponGuide.Projectile"),
+			ProjectileId,
+			TargetObjectPath,
+			Payload,
+			ExpectedDesiredFingerprint,
+			&MaterializeProjectilePayload,
+			&ExtractProjectilePayload,
+			&BuildProjectileFingerprint,
+			OutPersistedFingerprint,
+			OutError);
+}
+
+// Existing Weapon Guide typed backend로 WeaponData Create/Update를 durable 적용합니다.
+bool CFWeaponGuideBackend::ApplyWeapon(
+	const FCFWeaponGuideDraft& Draft,
+	const FName WeaponId,
+	const FSoftObjectPath& ProjectilePath,
+	const FSoftObjectPath& AmmoPath,
+	const FName ResolvedAmmoTypeId,
+	const FString& TargetObjectPath,
+	const FString& ExpectedDesiredFingerprint,
+	FString& OutPersistedFingerprint,
+	FString& OutError)
+{
+	// Existing Weapon Guide Weapon typed payload입니다.
+	const FCFWeaponGuideWeaponPayload Payload =
+		BuildGuideWeaponPayload(
+			Draft,
+			WeaponId,
+			ProjectilePath,
+			AmmoPath,
+			ResolvedAmmoTypeId);
+	return CFWeaponGuideBackendPrivate::ApplyTypedPayload<
+		UCFWeaponData,
+		FCFWeaponGuideWeaponPayload>(
+			TEXT("CarFight.WeaponGuide.Weapon"),
+			WeaponId,
+			TargetObjectPath,
+			Payload,
+			ExpectedDesiredFingerprint,
+			&MaterializeWeaponPayload,
+			&ExtractWeaponPayload,
+			&BuildWeaponFingerprint,
+			OutPersistedFingerprint,
+			OutError);
 }

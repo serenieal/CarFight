@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.3.0
-// Date: 2026-09-14
+// Version: 1.5.0
+// Date: 2026-10-06
 // Description: CF-FQ-041 Runtime Equipment Apply + CF-FQ-047 Standard Mount active identity handoff 구현
 // Scope: frontend와 분리된 transient VehicleFittingData 후보, 완전한 Mount 상태 표현, Fitting/Mass checkpoint, 장비 의존 Runtime refresh, 실패 복구와 final readback을 소유합니다.
 // Changelog:
+// - v1.5.0: CCAS Production Publication Catalog membership authorization + published DefaultSortieAmmoLoads direct apply seam을 기존 Fitting runtime에 연결.
+// - v1.4.0: CCAS Production pre-publication proof용 explicit InitialSortieAmmoLoads 후보를 기존 transient Fitting authority에 주입하는 direct apply 경로를 추가했습니다.
 // - v1.3.0: Legacy→Snapshot 첫 장비 적용에서 VehicleData의 모든 Mount를 기본 장비 또는 명시적 빈 장착으로 materialize해 다중 Mount의 정상 빈 슬롯이 MissingEquipmentPreset 오류로 오인되지 않도록 교정했습니다.
 // - v1.2.0: CF-FQ-047 mid-review correction. 기존 active weapon이 candidate에서 사라졌는데 USER target이 weapon-bearing이 아니면 Fitting Prepare 전에 ValidationFailed로 명시 거부합니다.
 // - v1.1.0: CF-FQ-047 P0 correction. 기존 Weapon active Mount가 candidate weapon-bearing Snapshot에 없고 USER target Mount가 유효한 무기 Mount이면 candidate active identity를 exact target으로 전환합니다.
@@ -20,6 +22,7 @@
 
 #include "CFEquipmentPresetData.h"
 #include "CFFieldFitCoordinator.h"
+#include "CFProdEquipCatalogData.h"
 #include "CFRuntimeTestCatalogData.h"
 #include "CFVehicleData.h"
 #include "CFVehicleDefenseComp.h"
@@ -219,6 +222,7 @@ namespace
 		ACFVehiclePawn* VehiclePawn,
 		const FName TargetMountProfileId,
 		UCFEquipmentPresetData* CandidateEquipmentPresetData,
+		const TArray<FCFAmmoSortieLoad>* CandidateInitialSortieAmmoLoads,
 		UCFVehicleFittingData*& OutTransientFittingData,
 		FCFVehicleFittingSnapshot& OutCandidateFittingSnapshot,
 		FString& OutFailureReason)
@@ -298,6 +302,12 @@ namespace
 			OutTransientFittingData,
 			TargetMountProfileId,
 			CandidateEquipmentPresetData);
+
+		// [v1.4.0] Production caller가 canonical Workbook에서 resolve한 전체 출격 탄약 후보가 있으면 기존 Fitting의 추론 없이 그대로 사용합니다.
+		if (CandidateInitialSortieAmmoLoads != nullptr)
+		{
+			OutTransientFittingData->InitialSortieAmmoLoads = *CandidateInitialSortieAmmoLoads;
+		}
 
 		OutCandidateFittingSnapshot = OutTransientFittingData->BuildFittingSnapshot();
 		if (!OutCandidateFittingSnapshot.IsValid())
@@ -452,7 +462,8 @@ namespace
 	FCFRuntimeEquipApplyResult ApplyValidatedEquipmentRuntime(
 		ACFVehiclePawn* VehiclePawn,
 		const FName TargetMountProfileId,
-		UCFEquipmentPresetData* CandidateEquipmentPresetData)
+		UCFEquipmentPresetData* CandidateEquipmentPresetData,
+		const TArray<FCFAmmoSortieLoad>* CandidateInitialSortieAmmoLoads)
 	{
 		// 호출자에게 반환할 bounded 장비 Runtime operation 결과입니다.
 		FCFRuntimeEquipApplyResult Result;
@@ -543,6 +554,7 @@ namespace
 			VehiclePawn,
 			TargetMountProfileId,
 			CandidateEquipmentPresetData,
+			CandidateInitialSortieAmmoLoads,
 			TransientFittingData,
 			CandidateFittingSnapshot,
 			CandidateValidationFailureReason))
@@ -819,7 +831,90 @@ FCFRuntimeEquipApplyResult FCFRuntimeEquipApplyService::ApplyCatalogEquipment(
 	return ApplyValidatedEquipmentRuntime(
 		VehiclePawn,
 		TargetMountProfileId,
-		CandidateEquipmentPresetData);
+		CandidateEquipmentPresetData,
+		nullptr);
+}
+
+// [v1.5.0] Candidate가 generated Production Publication Catalog에 exact UObject identity로 published됐는지 fail-closed로 검증합니다.
+bool FCFRuntimeEquipApplyService::ValidatePublishedEquipmentCandidate(
+	const UCFProdEquipCatalogData* ProductionCatalog,
+	const UCFEquipmentPresetData* CandidateEquipmentPresetData,
+	FString& OutFailureReason)
+{
+	OutFailureReason.Reset();
+
+	if (!IsValid(ProductionCatalog))
+	{
+		OutFailureReason = TEXT("Production Publication Catalog가 유효하지 않습니다.");
+		return false;
+	}
+
+	TArray<FText> CatalogValidationErrors;
+	if (!ProductionCatalog->ValidateProductionCatalog(CatalogValidationErrors))
+	{
+		OutFailureReason = FString::Printf(
+			TEXT("Production Publication Catalog 계약이 유효하지 않습니다. Issues=%d"),
+			CatalogValidationErrors.Num());
+		return false;
+	}
+
+	if (!IsValid(CandidateEquipmentPresetData))
+	{
+		OutFailureReason = TEXT("선택한 EquipmentPresetData가 유효하지 않습니다.");
+		return false;
+	}
+
+	if (ProductionCatalog->FindEntryByEquipmentPreset(CandidateEquipmentPresetData) == nullptr)
+	{
+		OutFailureReason = FString::Printf(
+			TEXT("선택한 EquipmentPresetData가 Production Publication Catalog published 목록에 없습니다: %s"),
+			*GetPathNameSafe(CandidateEquipmentPresetData));
+		return false;
+	}
+
+	return true;
+}
+
+// [v1.5.0] Published Product의 explicit sortie ammo와 기존 Fitting runtime authority를 재사용해 적용합니다.
+FCFRuntimeEquipApplyResult FCFRuntimeEquipApplyService::ApplyPublishedEquipment(
+	ACFVehiclePawn* VehiclePawn,
+	const UCFProdEquipCatalogData* ProductionCatalog,
+	const FName TargetMountProfileId,
+	UCFEquipmentPresetData* CandidateEquipmentPresetData)
+{
+	FString ValidationFailureReason;
+	if (!ValidatePublishedEquipmentCandidate(
+		ProductionCatalog,
+		CandidateEquipmentPresetData,
+		ValidationFailureReason))
+	{
+		FCFRuntimeEquipApplyResult Result;
+		Result.Status = ECFRuntimeEquipApplyStatus::ValidationFailed;
+		Result.RequestedMountProfileId = TargetMountProfileId;
+		Result.RequestedEquipmentPath = GetPathNameSafe(CandidateEquipmentPresetData);
+		Result.Message = ValidationFailureReason;
+		CaptureEquipmentRuntimeReadback(VehiclePawn, TargetMountProfileId, nullptr, Result);
+		return Result;
+	}
+
+	const FCFProdEquipCatalogEntry* PublishedEntry =
+		ProductionCatalog->FindEntryByEquipmentPreset(CandidateEquipmentPresetData);
+	if (PublishedEntry == nullptr)
+	{
+		FCFRuntimeEquipApplyResult Result;
+		Result.Status = ECFRuntimeEquipApplyStatus::ValidationFailed;
+		Result.RequestedMountProfileId = TargetMountProfileId;
+		Result.RequestedEquipmentPath = GetPathNameSafe(CandidateEquipmentPresetData);
+		Result.Message = TEXT("Production published entry readback이 사라졌습니다.");
+		CaptureEquipmentRuntimeReadback(VehiclePawn, TargetMountProfileId, nullptr, Result);
+		return Result;
+	}
+
+	return ApplyValidatedEquipmentRuntime(
+		VehiclePawn,
+		TargetMountProfileId,
+		CandidateEquipmentPresetData,
+		&PublishedEntry->DefaultSortieAmmoLoads);
 }
 
 // [v1.0.0] 호출자가 source authorization을 완료한 EquipmentPresetData를 transient Fitting + 기존 Runtime authority로 적용합니다.
@@ -831,5 +926,20 @@ FCFRuntimeEquipApplyResult FCFRuntimeEquipApplyService::ApplyEquipmentRuntime(
 	return ApplyValidatedEquipmentRuntime(
 		VehiclePawn,
 		TargetMountProfileId,
-		CandidateEquipmentPresetData);
+		CandidateEquipmentPresetData,
+		nullptr);
+}
+
+// [v1.4.0] 호출자가 resolve한 출격 탄약 후보를 기존 Fitting authority에 명시 전달해 Production pre-publication technical proof를 수행합니다.
+FCFRuntimeEquipApplyResult FCFRuntimeEquipApplyService::ApplyEquipmentRuntimeWithAmmoLoads(
+	ACFVehiclePawn* VehiclePawn,
+	const FName TargetMountProfileId,
+	UCFEquipmentPresetData* CandidateEquipmentPresetData,
+	const TArray<FCFAmmoSortieLoad>& CandidateInitialSortieAmmoLoads)
+{
+	return ApplyValidatedEquipmentRuntime(
+		VehiclePawn,
+		TargetMountProfileId,
+		CandidateEquipmentPresetData,
+		&CandidateInitialSortieAmmoLoads);
 }

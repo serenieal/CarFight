@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.0
+// Version: 1.2.0
 // Date: 2026-09-03
 // Description: CF-FQ-041 Runtime Apply UI + CF-FQ-044 Runtime Catalog change-aware option synchronization
 // Scope: Runtime Test Catalog 선택 상태, Current/Selected 분리, Explicit Vehicle/Equipment Apply와 Catalog option cache 동기화를 소유합니다.
 // Changelog:
+// - v1.2.0: Equipment discovery/authorization은 generated Production Publication Catalog를 우선 사용하고, 없거나 invalid할 때만 legacy RuntimeTestCatalog equipment 목록으로 fallback. Vehicle discovery는 기존 RuntimeTestCatalog 유지.
 // - v1.1.0: VRCP-P0-03. cached RuntimeApply Widget에서 Catalog Vehicle/Equipment exact sequence가 실제 변경된 경우에만 option을 재구성하도록 change-aware sync 계약을 추가.
 // - v1.0.0: Asset 없는 C++ WidgetTree, Vehicle/Mount/Equipment 선택, 명시 Apply와 Runtime service 위임을 최초 추가.
 // Migration:
@@ -25,6 +26,7 @@
 class ACFVehiclePawn;
 class UButton;
 class UCFEquipmentPresetData;
+class UCFProdEquipCatalogData;
 class UCFRuntimeTestCatalogData;
 class UCFVehicleData;
 class UComboBoxString;
@@ -117,10 +119,15 @@ private:
 #if WITH_DEV_AUTOMATION_TESTS
 	// VRCP-P0-03 isolated Catalog cache-sync Automation이 Product Default Catalog mutation 없이 private cache seam을 검증할 수 있게 합니다.
 	friend class FCFRuntimeApplyCatalogSyncTest;
+	// CF-FQ-058 P0-08 Production Publication Catalog 우선 discovery를 private source pointer까지 검증할 수 있게 합니다.
+	friend class FCFRuntimeApplyProductionCatalogTest;
 #endif
 
-	// [v1.0.0] Config soft reference에서 기본 Runtime Test Catalog를 로드하고 선택 옵션 캐시를 준비합니다.
+	// [v1.2.0] Vehicle용 Runtime Test Catalog와 장비용 Production Publication Catalog를 로드하고 선택 옵션 캐시를 준비합니다.
 	bool LoadDefaultRuntimeCatalog();
+
+	// [v1.2.0] generated Production Publication Catalog가 normal equipment discovery source로 사용 가능한지 검증합니다.
+	bool HasUsableProductionEquipmentCatalog() const;
 
 	// [v1.0.0] 현재 Catalog AllowedVehicleData를 Vehicle ComboBox와 내부 option 배열에 반영합니다.
 	void RebuildVehicleOptions();
@@ -179,9 +186,13 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<ACFVehiclePawn> VehiclePawnRef = nullptr;
 
-	// [v1.0.0] Config에서 로드한 명시 허용 Vehicle/Equipment Catalog입니다.
+	// [v1.0.0] Config에서 로드한 명시 허용 Vehicle Catalog이자 Production Catalog 부재 시 legacy Equipment fallback source입니다.
 	UPROPERTY(Transient)
 	TObjectPtr<UCFRuntimeTestCatalogData> RuntimeCatalog = nullptr;
+
+	// [v1.2.0] CCAS가 generated/published한 Production Equipment membership의 normal Runtime discovery source입니다.
+	UPROPERTY(Transient)
+	TObjectPtr<UCFProdEquipCatalogData> ProductionEquipmentCatalog = nullptr;
 
 	// [v1.0.0] Vehicle ComboBox index와 exact Catalog VehicleData identity를 연결하는 배열입니다.
 	UPROPERTY(Transient)

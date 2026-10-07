@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.1
+// Version: 1.2.0
 // Date: 2026-09-03
 // Description: CF-FQ-041 Runtime Apply UI + CF-FQ-044 Runtime Catalog change-aware option synchronization 구현
 // Scope: Asset 없는 최소 UI, Catalog 선택 상태, Current/Selected 분리, Runtime Apply service 위임과 Catalog cache sync를 구현합니다.
 // Changelog:
+// - v1.2.0: Production Publication Catalog를 normal Equipment discovery/authorization 우선 source로 연결하고 RuntimeTestCatalog equipment는 catalog 부재/invalid 시 fallback으로 한정. Vehicle source는 기존 RuntimeTestCatalog 유지.
 // - v1.1.1: Mid-review P1. Catalog raw array에 null/invalid entry가 있어도 rebuild가 사용하는 valid-entry filtered sequence와 cache를 비교해 매 Tick 불필요 ClearOptions 반복을 방지.
 // - v1.1.0: VRCP-P0-03. AllowedVehicleData/AllowedEquipmentPresetData exact sequence가 cached option과 실제 다를 때만 해당 options를 rebuild하고, Pawn VehicleData 변경의 Mount→Equipment rebuild를 먼저 처리해 same-refresh Equipment 중복 ClearOptions까지 방지.
 // - v1.0.2: Applied Snapshot이 없는 Legacy Runtime에서도 VehicleWeaponComp의 실제 활성 장비 readback을 Current Equipment에 표시하도록 교정.
@@ -19,6 +20,7 @@
 #include "UI/CFRuntimeApplyWidget.h"
 
 #include "CFEquipmentPresetData.h"
+#include "CFProdEquipCatalogData.h"
 #include "CFRuntimeTestCatalogData.h"
 #include "CFRuntimeTestSettings.h"
 #include "CFVehicleData.h"
@@ -199,25 +201,57 @@ namespace
 		return CachedVehicleIndex == CachedVehicleOptions.Num();
 	}
 
-	// [v1.1.1] RebuildEquipmentOptions()가 실제 cache에 넣는 valid-entry sequence와 current Catalog를 동일 규칙으로 비교합니다.
+	// [v1.2.0] generated Production Publication Catalog가 normal Equipment discovery source로 사용할 수 있는지 검증합니다.
+	bool IsProductionEquipmentCatalogUsable(
+		const UCFProdEquipCatalogData* ProductionCatalog)
+	{
+		if (!IsValid(ProductionCatalog)
+			|| ProductionCatalog->PublishedEquipment.IsEmpty())
+		{
+			return false;
+		}
+
+		TArray<FText> ValidationErrors;
+		return ProductionCatalog->ValidateProductionCatalog(ValidationErrors);
+	}
+
+	// [v1.2.0] RebuildEquipmentOptions()와 같은 source precedence로 cached Equipment exact sequence를 비교합니다.
 	bool AreEquipmentCatalogOptionsCurrent(
 		const UCFRuntimeTestCatalogData* RuntimeCatalog,
+		const UCFProdEquipCatalogData* ProductionCatalog,
 		const TArray<TObjectPtr<UCFEquipmentPresetData>>& CachedEquipmentOptions)
 	{
+		int32 CachedEquipmentIndex = 0;
+		if (IsProductionEquipmentCatalogUsable(ProductionCatalog))
+		{
+			for (const FCFProdEquipCatalogEntry& Entry : ProductionCatalog->PublishedEquipment)
+			{
+				UCFEquipmentPresetData* EquipmentPresetData = Entry.EquipmentPresetData.Get();
+				if (!IsValid(EquipmentPresetData))
+				{
+					continue;
+				}
+				if (!CachedEquipmentOptions.IsValidIndex(CachedEquipmentIndex)
+					|| CachedEquipmentOptions[CachedEquipmentIndex].Get() != EquipmentPresetData)
+				{
+					return false;
+				}
+				++CachedEquipmentIndex;
+			}
+			return CachedEquipmentIndex == CachedEquipmentOptions.Num();
+		}
+
 		if (!IsValid(RuntimeCatalog))
 		{
 			return CachedEquipmentOptions.IsEmpty();
 		}
 
-		// Raw Catalog의 null/invalid entry는 RebuildEquipmentOptions()도 cache에서 제외하므로 비교에서도 제외합니다.
-		int32 CachedEquipmentIndex = 0;
 		for (UCFEquipmentPresetData* EquipmentPresetData : RuntimeCatalog->AllowedEquipmentPresetData)
 		{
 			if (!IsValid(EquipmentPresetData))
 			{
 				continue;
 			}
-
 			if (!CachedEquipmentOptions.IsValidIndex(CachedEquipmentIndex)
 				|| CachedEquipmentOptions[CachedEquipmentIndex].Get() != EquipmentPresetData)
 			{
@@ -225,8 +259,6 @@ namespace
 			}
 			++CachedEquipmentIndex;
 		}
-
-		// Cached 쪽에 Catalog의 valid entry보다 남는 항목이 있으면 stale cache입니다.
 		return CachedEquipmentIndex == CachedEquipmentOptions.Num();
 	}
 }
@@ -332,7 +364,7 @@ void UCFRuntimeApplyWidget::RefreshRuntimeApplyState()
 
 	// [v1.1.0] Mount rebuild가 이미 Equipment cache를 current Catalog로 맞춘 뒤에도 exact sequence가 다를 때만 추가 재구성합니다.
 	// 이 순서로 Pawn VehicleData 변경과 Catalog Equipment 변경이 같은 refresh에 겹쳐도 Equipment ClearOptions가 중복 실행되지 않습니다.
-	if (!AreEquipmentCatalogOptionsCurrent(RuntimeCatalog, EquipmentOptionDataArray))
+	if (!AreEquipmentCatalogOptionsCurrent(RuntimeCatalog, ProductionEquipmentCatalog, EquipmentOptionDataArray))
 	{
 		RebuildEquipmentOptions();
 	}
@@ -655,8 +687,11 @@ ECFRuntimeVehicleApplyStatus UCFRuntimeApplyWidget::ApplySelectedVehicle()
 // [v1.0.0] Selected Equipment를 Target Mount/Profile에 명시적으로 Runtime Apply합니다.
 ECFRuntimeEquipApplyStatus UCFRuntimeApplyWidget::ApplySelectedEquipment()
 {
+	const bool bProductionEquipmentSourceUsable = HasUsableProductionEquipmentCatalog();
+	const bool bLegacyEquipmentSourceUsable =
+		IsValid(RuntimeCatalog) && RuntimeCatalog->IsRuntimeTestCatalogUsable();
 	if (!IsValid(VehiclePawnRef)
-		|| !IsValid(RuntimeCatalog)
+		|| (!bProductionEquipmentSourceUsable && !bLegacyEquipmentSourceUsable)
 		|| SelectedMountProfileId.IsNone()
 		|| !IsValid(SelectedEquipmentData))
 	{
@@ -671,12 +706,18 @@ ECFRuntimeEquipApplyStatus UCFRuntimeApplyWidget::ApplySelectedEquipment()
 		return LastEquipmentApplyResult.Status;
 	}
 
-	// [v1.0.0] UI가 Fitting/Mass mutation을 직접 구현하지 않고 P0-03 service에 위임한 Equipment 적용 결과입니다.
-	LastEquipmentApplyResult = FCFRuntimeEquipApplyService::ApplyCatalogEquipment(
-		VehiclePawnRef,
-		RuntimeCatalog,
-		SelectedMountProfileId,
-		SelectedEquipmentData);
+	// [v1.2.0] Production publication이 usable하면 그 membership/explicit sortie ammo를 우선 사용하고, 없을 때만 legacy RuntimeTestCatalog authorization을 사용합니다.
+	LastEquipmentApplyResult = bProductionEquipmentSourceUsable
+		? FCFRuntimeEquipApplyService::ApplyPublishedEquipment(
+			VehiclePawnRef,
+			ProductionEquipmentCatalog,
+			SelectedMountProfileId,
+			SelectedEquipmentData)
+		: FCFRuntimeEquipApplyService::ApplyCatalogEquipment(
+			VehiclePawnRef,
+			RuntimeCatalog,
+			SelectedMountProfileId,
+			SelectedEquipmentData);
 
 	LastResultText = FString::Printf(
 		TEXT("장비 [%s] %s"),
@@ -687,32 +728,33 @@ ECFRuntimeEquipApplyStatus UCFRuntimeApplyWidget::ApplySelectedEquipment()
 	return LastEquipmentApplyResult.Status;
 }
 
-// [v1.0.0] Config soft reference에서 기본 Runtime Test Catalog를 로드하고 선택 옵션 캐시를 준비합니다.
+// [v1.2.0] Vehicle용 Runtime Test Catalog와 장비용 Production Publication Catalog를 로드하고 선택 옵션 캐시를 준비합니다.
 bool UCFRuntimeApplyWidget::LoadDefaultRuntimeCatalog()
 {
-	// [v1.0.0] Packaged-safe soft reference loader를 제공하는 Runtime Test Settings CDO입니다.
 	const UCFRuntimeTestSettings* RuntimeTestSettings = GetDefault<UCFRuntimeTestSettings>();
-	if (!RuntimeTestSettings)
+	UCFRuntimeTestCatalogData* LoadedRuntimeCatalog =
+		RuntimeTestSettings ? RuntimeTestSettings->LoadDefaultCatalog() : nullptr;
+	UCFProdEquipCatalogData* LoadedProductionCatalog =
+		UCFProdEquipCatalogData::LoadProductionCatalog();
+
+	const bool bSourcesUnchanged =
+		RuntimeCatalog == LoadedRuntimeCatalog
+		&& ProductionEquipmentCatalog == LoadedProductionCatalog;
+	RuntimeCatalog = LoadedRuntimeCatalog;
+	ProductionEquipmentCatalog = LoadedProductionCatalog;
+
+	if (!bSourcesUnchanged)
 	{
-		RuntimeCatalog = nullptr;
 		RebuildVehicleOptions();
 		RebuildEquipmentOptions();
-		return false;
 	}
+	return IsValid(RuntimeCatalog) || HasUsableProductionEquipmentCatalog();
+}
 
-	// [v1.0.0] Config에 지정된 hard-reference Catalog Asset을 실제 runtime object로 로드한 결과입니다.
-	UCFRuntimeTestCatalogData* LoadedRuntimeCatalog =
-		RuntimeTestSettings->LoadDefaultCatalog();
-
-	if (RuntimeCatalog == LoadedRuntimeCatalog && IsValid(RuntimeCatalog))
-	{
-		return true;
-	}
-
-	RuntimeCatalog = LoadedRuntimeCatalog;
-	RebuildVehicleOptions();
-	RebuildEquipmentOptions();
-	return IsValid(RuntimeCatalog);
+// [v1.2.0] generated Production Publication Catalog가 normal Equipment source로 usable한지 반환합니다.
+bool UCFRuntimeApplyWidget::HasUsableProductionEquipmentCatalog() const
+{
+	return IsProductionEquipmentCatalogUsable(ProductionEquipmentCatalog);
 }
 
 // [v1.0.0] 현재 Catalog AllowedVehicleData를 Vehicle ComboBox와 내부 option 배열에 반영합니다.
@@ -860,36 +902,48 @@ void UCFRuntimeApplyWidget::RebuildEquipmentOptions()
 	// [v1.0.0] 각 Equipment option에 현재 Mount 기준 호환/비호환 보조 표시를 붙일 MountProfile입니다.
 	const FCFVehicleMountProfile* SelectedMountProfile = FindSelectedMountProfile();
 
-	if (IsValid(RuntimeCatalog))
+	TArray<UCFEquipmentPresetData*> SourceEquipmentData;
+	if (HasUsableProductionEquipmentCatalog())
+	{
+		for (const FCFProdEquipCatalogEntry& Entry : ProductionEquipmentCatalog->PublishedEquipment)
+		{
+			if (IsValid(Entry.EquipmentPresetData))
+			{
+				SourceEquipmentData.Add(Entry.EquipmentPresetData.Get());
+			}
+		}
+	}
+	else if (IsValid(RuntimeCatalog))
 	{
 		for (UCFEquipmentPresetData* EquipmentPresetData : RuntimeCatalog->AllowedEquipmentPresetData)
 		{
-			if (!IsValid(EquipmentPresetData))
+			if (IsValid(EquipmentPresetData))
 			{
-				continue;
+				SourceEquipmentData.Add(EquipmentPresetData);
 			}
+		}
+	}
 
-			EquipmentOptionDataArray.Add(EquipmentPresetData);
+	for (UCFEquipmentPresetData* EquipmentPresetData : SourceEquipmentData)
+	{
+		EquipmentOptionDataArray.Add(EquipmentPresetData);
 
-			// [v1.0.0] 현재 Mount 규칙과 이 Catalog 장비가 사전 호환되는지 표시할 결과입니다.
-			const bool bEquipmentCompatible =
-				SelectedMountProfile
-				&& EquipmentPresetData->CanUseOnMount(
-					SelectedMountProfile->MountType,
-					SelectedMountProfile->SizeLimit);
+		const bool bEquipmentCompatible =
+			SelectedMountProfile
+			&& EquipmentPresetData->CanUseOnMount(
+				SelectedMountProfile->MountType,
+				SelectedMountProfile->SizeLimit);
 
-			// [v1.0.0] DisplayName 계약을 유지하면서 ordinal/호환성만 보조 정보로 붙인 Equipment option label입니다.
-			const FString EquipmentOptionLabel = FString::Printf(
-				TEXT("%d. [%s] %s"),
-				EquipmentOptionDataArray.Num(),
-				bEquipmentCompatible ? TEXT("호환") : TEXT("비호환"),
-				*BuildEquipmentDisplayText(EquipmentPresetData));
-			EquipmentOptionLabelArray.Add(EquipmentOptionLabel);
+		const FString EquipmentOptionLabel = FString::Printf(
+			TEXT("%d. [%s] %s"),
+			EquipmentOptionDataArray.Num(),
+			bEquipmentCompatible ? TEXT("호환") : TEXT("비호환"),
+			*BuildEquipmentDisplayText(EquipmentPresetData));
+		EquipmentOptionLabelArray.Add(EquipmentOptionLabel);
 
-			if (EquipmentComboBox)
-			{
-				EquipmentComboBox->AddOption(EquipmentOptionLabel);
-			}
+		if (EquipmentComboBox)
+		{
+			EquipmentComboBox->AddOption(EquipmentOptionLabel);
 		}
 	}
 
@@ -1064,10 +1118,15 @@ void UCFRuntimeApplyWidget::RefreshDisplayTexts()
 {
 	if (CatalogSummaryText)
 	{
-		CatalogSummaryText->SetText(FText::FromString(
-			IsValid(RuntimeCatalog)
-				? RuntimeCatalog->BuildRuntimeTestCatalogSummary()
-				: TEXT("Catalog: 로드 실패")));
+		const FString CatalogSummary = HasUsableProductionEquipmentCatalog()
+			? FString::Printf(
+				TEXT("Catalog: Vehicle=%d (RuntimeTest) / Equipment=%d (Production Published)"),
+				IsValid(RuntimeCatalog) ? RuntimeCatalog->AllowedVehicleData.Num() : 0,
+				ProductionEquipmentCatalog->PublishedEquipment.Num())
+			: (IsValid(RuntimeCatalog)
+				? RuntimeCatalog->BuildRuntimeTestCatalogSummary() + TEXT(" / EquipmentSource=LegacyFallback")
+				: TEXT("Catalog: 로드 실패"));
+		CatalogSummaryText->SetText(FText::FromString(CatalogSummary));
 	}
 
 	// [v1.0.0] Current Vehicle 표시 기준이 되는 실제 Pawn.VehicleData입니다.
@@ -1188,15 +1247,18 @@ void UCFRuntimeApplyWidget::RefreshDisplayTexts()
 // [v1.0.0] 현재 선택과 Catalog/Pawn 유효성에 따라 Explicit Apply 버튼 활성 상태를 갱신합니다.
 void UCFRuntimeApplyWidget::RefreshApplyButtonStates()
 {
-	// [v1.0.0] Catalog 전체 runtime selection 계약이 현재 유효한지 여부입니다.
-	const bool bCatalogUsable =
+	// [v1.2.0] Vehicle source와 Equipment source는 서로 다른 authority를 가질 수 있습니다.
+	const bool bVehicleCatalogUsable =
 		IsValid(RuntimeCatalog)
 		&& RuntimeCatalog->IsRuntimeTestCatalogUsable();
+	const bool bEquipmentCatalogUsable =
+		HasUsableProductionEquipmentCatalog()
+		|| bVehicleCatalogUsable;
 
 	if (ApplyVehicleButton)
 	{
 		ApplyVehicleButton->SetIsEnabled(
-			bCatalogUsable
+			bVehicleCatalogUsable
 			&& IsValid(VehiclePawnRef)
 			&& IsValid(SelectedVehicleData));
 	}
@@ -1204,7 +1266,7 @@ void UCFRuntimeApplyWidget::RefreshApplyButtonStates()
 	if (ApplyEquipmentButton)
 	{
 		ApplyEquipmentButton->SetIsEnabled(
-			bCatalogUsable
+			bEquipmentCatalogUsable
 			&& IsValid(VehiclePawnRef)
 			&& !SelectedMountProfileId.IsNone()
 			&& IsValid(SelectedEquipmentData));

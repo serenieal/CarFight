@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.2.0
-// Date: 2026-09-04
+// Version: 1.4.0
+// Date: 2026-10-06
 // Description: CF-FQ-041 RTA-P0-03 Equipment Slot Runtime Apply + CF-FQ-047 active Mount handoff 자동화 테스트
 // Scope: Catalog exact membership, same-mass 장비 hot apply, mass-change 실패 보상 복구와 candidate active Mount 선택 정책을 검증합니다.
 // Changelog:
+// - v1.4.0: CF-FQ-058 P0-08 generated Production Publication Catalog exact8 membership authorization 회귀 추가.
+// - v1.3.0: CCAS Production direct Runtime proof용 ApplyEquipmentRuntimeWithAmmoLoads가 explicit InitialSortieAmmoLoads를 transient Fitting에 전달하는 회귀를 추가.
 // - v1.2.0: active weapon 소실 + non-weapon target + weapon-bearing 후보 0개에서도 Prepare 전 explicit Reject가 유지되는 회귀를 추가.
 // - v1.1.0: current active weapon Mount 보존 / missing-current 시 USER target handoff / non-weapon target fail-closed pure policy 회귀를 추가.
 // - v1.0.0: EquipmentValidation, EquipmentApplySuccess, ApplyFailedRecovery 3개 focused test를 최초 추가.
@@ -16,7 +18,9 @@
 #include "CFRuntimeEquipApply.h"
 #include "CFRuntimeEquipApplyPolicy.h"
 
+#include "CFAmmoData.h"
 #include "CFEquipmentPresetData.h"
+#include "CFProdEquipCatalogData.h"
 #include "CFRuntimeTestCatalogData.h"
 #include "CFVehicleData.h"
 #include "CFVehicleFittingComp.h"
@@ -334,6 +338,64 @@ bool FCFRuntimeEquipValidationTest::RunTest(const FString& Parameters)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFRuntimeEquipProductionCatalogTest,
+	"CarFight.RuntimeApply.CF_FQ_058.ProductionCatalogAuthorization",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// [v1.4.0] cutover된 generated Production Catalog exact8이 Runtime equipment authorization의 normal source인지 read-only 검증합니다.
+bool FCFRuntimeEquipProductionCatalogTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	UCFProdEquipCatalogData* ProductionCatalog =
+		UCFProdEquipCatalogData::LoadProductionCatalog();
+	if (!TestNotNull(TEXT("CF-FQ-058 Production Catalog loads"), ProductionCatalog))
+	{
+		return false;
+	}
+
+	TArray<FText> ValidationErrors;
+	TestTrue(
+		TEXT("CF-FQ-058 Production Catalog validates"),
+		ProductionCatalog->ValidateProductionCatalog(ValidationErrors));
+	TestEqual(
+		TEXT("CF-FQ-058 published Product exact8"),
+		ProductionCatalog->PublishedEquipment.Num(),
+		8);
+
+	FString ValidationError;
+	for (const FCFProdEquipCatalogEntry& Entry : ProductionCatalog->PublishedEquipment)
+	{
+		TestNotNull(
+			*FString::Printf(TEXT("Published Equipment valid: %s"), *Entry.ContentId),
+			Entry.EquipmentPresetData.Get());
+		TestTrue(
+			*FString::Printf(TEXT("Published Equipment authorized: %s"), *Entry.ContentId),
+			FCFRuntimeEquipApplyService::ValidatePublishedEquipmentCandidate(
+				ProductionCatalog,
+				Entry.EquipmentPresetData,
+				ValidationError));
+		TestTrue(
+			*FString::Printf(TEXT("Published Equipment auth error empty: %s"), *Entry.ContentId),
+			ValidationError.IsEmpty());
+	}
+
+	UCFEquipmentPresetData* UnpublishedEquipment = NewObject<UCFEquipmentPresetData>(
+		GetTransientPackage(),
+		TEXT("CF_FQ_058_UnpublishedEquipment"));
+	TestFalse(
+		TEXT("Unpublished Equipment is rejected"),
+		FCFRuntimeEquipApplyService::ValidatePublishedEquipmentCandidate(
+			ProductionCatalog,
+			UnpublishedEquipment,
+			ValidationError));
+	TestTrue(
+		TEXT("Unpublished rejection names published list"),
+		ValidationError.Contains(TEXT("published")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCFRuntimeEquipSuccessTest,
 	"CarFight.RuntimeApply.RTA_P0_03.EquipmentApplySuccess",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -437,6 +499,58 @@ bool FCFRuntimeEquipSuccessTest::RunTest(const FString& Parameters)
 			ApplyResult.PreviousConfiguredMassKg,
 			ApplyResult.CurrentConfiguredMassKg,
 			0.01f));
+
+	// [v1.3.0] Explicit Runtime proof transport만 검증할 zero-count 추가 AmmoData입니다.
+	UCFAmmoData* ExplicitTransportAmmoData = NewObject<UCFAmmoData>(
+		GetTransientPackage(),
+		MakeUniqueObjectName(
+			GetTransientPackage(),
+			UCFAmmoData::StaticClass(),
+			TEXT("CCAS_P007_ExplicitTransportAmmo")));
+	ExplicitTransportAmmoData->AmmoId = TEXT("CCAS_P007_ExplicitTransportAmmo");
+	ExplicitTransportAmmoData->MaximumLoadableAmmoCount = 10;
+
+	// [v1.3.0] 기존 current Fitting을 보존하면서 explicit transport marker를 추가한 후보 출격 탄약 목록입니다.
+	TArray<FCFAmmoSortieLoad> ExplicitAmmoLoads =
+		VehiclePawn->VehicleFittingData->InitialSortieAmmoLoads;
+	FCFAmmoSortieLoad ExplicitTransportLoad;
+	ExplicitTransportLoad.AmmoData = ExplicitTransportAmmoData;
+	ExplicitTransportLoad.InitialSortieAmmoCount = 0;
+	ExplicitAmmoLoads.Add(ExplicitTransportLoad);
+
+	// [v1.3.0] CCAS Production bridge가 사용할 explicit ammo direct Runtime apply 결과입니다.
+	const FCFRuntimeEquipApplyResult ExplicitAmmoApplyResult =
+		FCFRuntimeEquipApplyService::ApplyEquipmentRuntimeWithAmmoLoads(
+			VehiclePawn,
+			TargetMountProfileId,
+			CandidateEquipmentPresetData,
+			ExplicitAmmoLoads);
+
+	TestEqual(
+		TEXT("CCAS explicit ammo Runtime Apply 성공 상태"),
+		ExplicitAmmoApplyResult.Status,
+		ECFRuntimeEquipApplyStatus::Succeeded);
+	TestTrue(
+		TEXT("CCAS explicit ammo Runtime Apply transient Fitting active"),
+		ExplicitAmmoApplyResult.bAppliedTransientFittingActive);
+
+	// [v1.3.0] Final active transient Fitting에서 explicit transport AmmoId를 확인합니다.
+	const FCFAmmoSortieLoad* ExplicitTransportReadback =
+		VehiclePawn->VehicleFittingData->InitialSortieAmmoLoads.FindByPredicate(
+			[ExplicitTransportAmmoData](const FCFAmmoSortieLoad& CandidateLoad)
+			{
+				return CandidateLoad.AmmoData.Get() == ExplicitTransportAmmoData;
+			});
+	TestNotNull(
+		TEXT("CCAS explicit InitialSortieAmmoLoads가 active transient Fitting에 전달됨"),
+		ExplicitTransportReadback);
+	if (ExplicitTransportReadback != nullptr)
+	{
+		TestEqual(
+			TEXT("CCAS explicit transport marker count는 caller 입력 0 유지"),
+			ExplicitTransportReadback->InitialSortieAmmoCount,
+			0);
+	}
 
 	VehiclePawn->Destroy();
 	return true;

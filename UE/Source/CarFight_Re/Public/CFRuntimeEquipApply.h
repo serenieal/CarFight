@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.1.0
-// Date: 2026-09-14
+// Version: 1.3.0
+// Date: 2026-10-06
 // Description: CF-FQ-041 장비 슬롯 Runtime Apply 재사용 서비스 계약
 // Scope: 선택 frontend와 분리된 Catalog 장비 허용 검증, transient Fitting 후보 생성, 단일 Mount 교체, Runtime 적용·복구 결과와 readback을 제공합니다.
 // Changelog:
+// - v1.3.0: CCAS generated Production Publication Catalog exact membership authorization과 published DefaultSortieAmmoLoads를 기존 Fitting Runtime authority에 전달하는 Production apply seam 추가.
+// - v1.2.0: CCAS Production pre-publication proof가 resolved InitialSortieAmmoLoads를 기존 Fitting Runtime authority에 명시 전달할 direct apply overload를 추가했습니다.
 // - v1.1.0: RuntimeApply를 Debug UI 전용 구현이 아니라 Garage/Inventory 등 후속 frontend가 같은 Fitting Runtime authority를 재사용할 수 있는 application seam으로 문서 계약을 명확히 했습니다.
 // - v1.0.0: RTA-P0-03 Equipment Slot Runtime Apply의 Succeeded/ValidationFailed/ApplyFailed/RecoveryFailed 결과 계약과 Catalog/직접 적용 API를 추가.
 // Migration:
@@ -15,10 +17,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "CFAmmoTypes.h"
 #include "CFRuntimeEquipApply.generated.h"
 
 class ACFVehiclePawn;
 class UCFEquipmentPresetData;
+class UCFProdEquipCatalogData;
 class UCFRuntimeTestCatalogData;
 
 /** RTA-P0-03 단일 장비 슬롯 Runtime Apply의 최종 상태입니다. */
@@ -126,9 +130,29 @@ struct CARFIGHT_RE_API FCFRuntimeEquipApplyService
 		FName TargetMountProfileId,
 		UCFEquipmentPresetData* CandidateEquipmentPresetData);
 
+	// [v1.3.0] Generated Production Publication Catalog 전체 계약과 exact published EquipmentPreset membership을 mutation 없이 검증합니다.
+	static bool ValidatePublishedEquipmentCandidate(
+		const UCFProdEquipCatalogData* ProductionCatalog,
+		const UCFEquipmentPresetData* CandidateEquipmentPresetData,
+		FString& OutFailureReason);
+
+	// [v1.3.0] Published Product의 explicit DefaultSortieAmmoLoads와 기존 Fitting Runtime authority를 재사용해 단일 Mount에 적용합니다.
+	static FCFRuntimeEquipApplyResult ApplyPublishedEquipment(
+		ACFVehiclePawn* VehiclePawn,
+		const UCFProdEquipCatalogData* ProductionCatalog,
+		FName TargetMountProfileId,
+		UCFEquipmentPresetData* CandidateEquipmentPresetData);
+
 	// [v1.0.0] 이미 authorization이 끝난 장비를 단일 MountProfile에 Runtime 적용합니다.
 	static FCFRuntimeEquipApplyResult ApplyEquipmentRuntime(
 		ACFVehiclePawn* VehiclePawn,
 		FName TargetMountProfileId,
 		UCFEquipmentPresetData* CandidateEquipmentPresetData);
+
+	// [v1.2.0] 이미 authorization된 장비와 caller가 resolve한 출격 탄약 전체 후보를 같은 기존 Fitting Runtime authority로 적용합니다.
+	static FCFRuntimeEquipApplyResult ApplyEquipmentRuntimeWithAmmoLoads(
+		ACFVehiclePawn* VehiclePawn,
+		FName TargetMountProfileId,
+		UCFEquipmentPresetData* CandidateEquipmentPresetData,
+		const TArray<FCFAmmoSortieLoad>& CandidateInitialSortieAmmoLoads);
 };

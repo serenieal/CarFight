@@ -1,7 +1,7 @@
 # CarFight Data Asset Staging / Batch Authoring
 
-- 문서 버전: v1.6.0
-- 최근 갱신일: 2026-09-11
+- 문서 버전: v1.7.0
+- 최근 갱신일: 2026-10-07
 - 문서 상태: Current
 - 완료 Feature: `CF-FQ-049 Data Asset Staging·Batch Authoring` + `CF-FQ-050 Data Asset Contract Evolution Guard` + `CF-FQ-051 Data Asset Multi-Type Onboarding` + `CF-FQ-052 DamageData Third-Type Onboarding / Reuse Verification` + `CF-FQ-053 VehicleDefenseData Routine Onboarding / Process Benchmark`
 - Current extension checkpoint: `CF-FQ-053 VDR-P0-03 Final Acceptance + Process Benchmark PASS / P0 0 / blocking P1 0 / P2 0 / VehicleDefenseData Current promotion Accepted / Process Benchmark Faster Confirmed / prohibited shared algorithm duplication 0 / shared core algorithm semantic rewrite 0 / 4th+ Routine Onboarding Standard proven by fourth-type production use`
@@ -39,7 +39,7 @@ Exact DataAsset Package Save
 Disk Reload + Typed Semantic Readback
 ```
 
-정상 적용이 끝난 뒤 최종 Source of Truth는 계속 persisted Unreal `.uasset`이다.
+이 기존 JSON Staging workflow에서 정상 적용이 끝난 뒤 current truth는 persisted Unreal `.uasset`이다. 단, 2026-10-07 `CF-FQ-058` managed authority cutover를 통과한 CCAS-managed exact42 manifest는 별도 scoped 계약을 사용한다: canonical `Authoring/Content/CarFight_Content.xlsx`가 sole Current **authoring authority**이고 persisted `.uasset`은 deterministic generated Runtime/Product materialization이다. 이 예외는 unmanaged / ExternalReadOnly / legacy content의 기존 JSON Staging 계약을 변경하지 않는다.
 
 ---
 
@@ -567,17 +567,34 @@ Shared-core diff 감사에서 `CFDADurableCore.cpp`와 `CFDAStagingApply.cpp`는
 
 ## 3. Authority / Source of Truth
 
-### 3.1 최종 Source of Truth
+### 3.1 Scope별 Authoring Authority / Runtime Materialization
 
 ```text
+Unmanaged / ExternalReadOnly / legacy typed-provider scope
+
 Staging JSON
 = 작성 중인 의도 / 검토 가능한 Batch 입력
 
 Persisted .uasset
-= Apply 완료 후 최종 Unreal Source of Truth
+= Apply 완료 후 current Unreal content truth
+
+
+CF-FQ-058 CCAS-managed exact42 manifest scope
+
+Authoring/Content/CarFight_Content.xlsx
+= sole Current authoring authority
+
+Persisted Production .uasset exact34
+= generated Runtime / Product materialization
+
+/Game/CarFight/Weapons/Data/Production/DA_ProdEquipCatalog
+= published Product exact8 membership authority
+
+Authoring/Content/CarFight_Content.cfsnapshot.json
+= generated provenance / drift comparison evidence
 ```
 
-Cooked Game과 Runtime은 Staging JSON을 읽어 게임플레이 데이터를 구성하지 않는다.
+Cooked Game과 Runtime은 Workbook이나 Staging JSON을 직접 읽어 gameplay 데이터를 구성하지 않고 persisted generated DataAsset을 소비한다. CCAS-managed 범위에서 기존 typed provider / JSON Staging은 내부 durable transport로 재사용할 수 있지만 USER-facing 병렬 authoring authority로 사용하지 않는다. 같은 ContentKey의 Workbook과 JSON을 exact2 authoring authority로 두지 않는다.
 
 ### 3.2 Staging은 silent overwrite 권한이 아니다
 
@@ -1459,6 +1476,16 @@ CF-FQ-039 Active lifecycle: unchanged
 ---
 
 ## 19. Changelog
+
+### v1.7.0 - 2026-10-07
+
+- `CF-FQ-058` USER Cutover Acceptance + managed authority cutover 결과를 Current authoring authority에 반영했다.
+- CCAS-managed exact42 manifest는 `Authoring/Content/CarFight_Content.xlsx`를 sole Current authoring authority로 사용하고, generated Production `.uasset` exact34는 Runtime/Product materialization으로 정의했다.
+- generated `DA_ProdEquipCatalog`은 published Product exact8 membership authority, `CarFight_Content.cfsnapshot.json` exact42는 provenance/drift comparison evidence로 분리했다.
+- 기존 `CF-FQ-049~053` JSON Staging/Reviewed Apply는 폐기하지 않았다. unmanaged / ExternalReadOnly / legacy typed-provider scope에서 그대로 Current이며, CCAS-managed ContentKey에 대해서는 내부 provider transport로만 재사용하고 USER-facing 병렬 authoring authority로 사용하지 않는다.
+- Cooked Runtime은 Workbook/JSON을 직접 읽지 않고 persisted generated DataAsset을 계속 소비한다.
+
+Migration: 같은 ContentKey에 Workbook과 JSON Staging exact2 authoring authority를 만들지 않는다. CCAS-managed scope는 Workbook, 그 밖의 기존 scope는 기존 JSON/DataAsset owner 계약을 따른다.
 
 ### v1.6.0 - 2026-09-11
 
