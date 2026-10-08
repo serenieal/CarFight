@@ -1,9 +1,10 @@
-# CarFight Active Work
+# CarFight Active Work — Legacy Retained Snapshot
 
-- 문서 버전: v4.244
-- 최근 갱신일: 2026-09-15
-- 문서 상태: Current
-- 역할: CarFight 게임 프로젝트에서 현재 실제로 진행 중인 작업을 선택하고 대표 Plan으로 연결하는 **세션 복원 projection**
+- 문서 버전: v4.245
+- 최근 갱신일: 2026-09-16
+- 문서 상태: Historical Retained / UDS Authority0 / Frozen at MIG-05 Cutover
+- 역할: MIG-05 이전 세션 복원 projection의 retained snapshot. 현재 Active/Ready Work lifecycle authority는 `Document/UDS/records/**`, 사람용 복원 view는 `Document/UDS/derived/Current.md`가 담당한다.
+- mutation policy: 새 Current 상태를 이 파일에 기록하지 않는다. Work lifecycle 변경은 immutable UDS successor record로 기록한다.
 
 ---
 
@@ -113,6 +114,12 @@ ActiveWork가 다시 상세 Build/Automation/USER 로그를 누적하거나 서�
 ---
 
 ## 8. Changelog
+
+### v4.245 - 2026-09-16
+
+- UDS-08 MIG-05 cutover에서 이 문서를 `Historical Retained / UDS Authority0 / Frozen` projection으로 retirement했다.
+- Current Active/Ready Work lifecycle은 immutable `Document/UDS/records/**`가 canonical하게 소유하고, bounded 세션 복원은 authority0 `Document/UDS/derived/Current.md`를 사용한다.
+- 본문의 pre-cutover Feature/Plan/evidence snapshot은 provenance로 보존하며 이후 Current 상태를 dual-write하지 않는다.
 
 ### v4.244 - 2026-09-15
 

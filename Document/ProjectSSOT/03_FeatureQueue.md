@@ -1,7 +1,7 @@
 # CarFight — 03_FeatureQueue
 
-> 문서 버전: v1.57.139
-> 최근 갱신일(Asia/Seoul): 2026-09-17
+> 문서 버전: v1.57.146
+> 최근 갱신일(Asia/Seoul): 2026-10-07
 > 문서 상태: Current Planning Catalog / Promoted Work Lifecycle UDS Authority0
 > 역할: CarFight의 **Feature 후보 / 우선순위 / 착수 판단 / 완료 후 Current owner**를 관리한다. UDS로 승격된 Work의 current lifecycle은 `Document/UDS/records/**`가 소유한다.
 
@@ -116,6 +116,10 @@ UDS 승격 Work의 state/phase/next → Document/UDS/records/**
 | `CF-FQ-052` | DamageData Third-Type Onboarding / Reuse Verification | P2 | Done | `DDO-P0-05 Reuse Measurement / Acceptance / Current System Promotion PASS` / P0 0 / blocking P1 0 / P2 2 non-blocking / prohibited shared algorithm duplication exact0 / shared core algorithm rewrite 0 required / fourth-type onboarding readiness PASS / Historical Plan `Document/Plan/DamageDataOnboarding/DamageDataOnboardingPlan.md v0.2.14` Retained Path / G5 Deferred | `Systems/DataManagement/DataAssetAuthoring.md v1.5.14` |
 | `CF-FQ-053` | VehicleDefenseData Routine Onboarding / Process Benchmark | P2 | Done | `VDR-P0-03 Final Acceptance + Process Benchmark PASS` / Faster Confirmed / P0 0 / blocking P1 0 / P2 0 / Historical Plan `Document/Plan/VehicleDefenseOnboarding/VehicleDefenseOnboardingPlan.md v0.1.5` Retained Path / G5 Deferred | `Systems/DataManagement/DataAssetAuthoring.md v1.6.0` |
 | `CF-FQ-054` | Equipment Authoring / Guided Equipment Builder | P2 | Promoted | UDS promoted Work. Current state/phase/next는 `Document/UDS/derived/Current.md`를 탐색 힌트로 fresh canonical Work record에서 확인. Representative Plan: `Document/Plan/EquipmentAuthoring/EquipmentAuthoringPlan.md` | 완료 시 Equipment Authoring Current owner 확정 |
+| `CF-FQ-055` | Weapon Equipment Authoring Guide | P2 | Promoted | UDS promoted Work. Current state/phase/next는 `Document/UDS/derived/Current.md`를 탐색 힌트로 fresh canonical Work record에서 확인. Representative Plan: `Document/Plan/WeaponEquipmentAuthoring/WeaponEquipmentAuthoringPlan.md` | 완료 시 Weapon Equipment Authoring Current owner 확정 |
+| `CF-FQ-056` | Projectile Flight Physics / 발사체 공통 비행 물리 | P1 | Promoted | UDS Work `wrk_f0c69a42bd174efba0e4c1d2a7b39560`로 승격. Cannon·Rocket·Guided Missile의 초기 속도·중력·지속 추력·비행 제어 공통 원칙. Representative Plan: `Document/Plan/ProjectileFlightPhysics/ProjectileFlightPhysicsPlan.md` | 완료 시 `Systems/Combat/Projectile.md` 및 `MissileGuidance.md`의 실제 구현 계약 동기화 |
+| `CF-FQ-057` | Vehicle Camera Driving FX / 주행 카메라 연출 고도화 | P1 | Done | VCFX-P0-04 Current System Promotion + Closure 완료. Lateral/Overspeed/Camera Pop-Collision/Aim-Targeting USER PASS, Rear/Brake 기능 확인 후 tuning Deferred, Comfort Deferred, Combat/Aim/Airborne producer wiring debt 보존. Historical Plan: `Document/Plan/VehicleCameraFX/VehicleCameraFXPlan.md v0.3.0` Retained Path | `Systems/Vehicles/VehicleCamera.md v1.3.0` |
+| `CF-FQ-058` | CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템 | P1 | Done | `CCAS-P0-08 USER FINAL WORKFLOW ACCEPTANCE PASS / COMPLETE`. canonical `CarFight_Content.xlsx` authoring authority → generated Production DataAssets exact34 → Publication Catalog exact8 → normal RuntimeApply discovery/authorization → 기존 Fitting Runtime 적용 흐름을 최종 승인. Historical Plan: `Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.36` Retained Path / G5 Deferred | `Systems/DataManagement/DataAssetAuthoring.md v1.7.0` + `DataAssetManagement.md v1.1.0` + `Vehicles/RuntimeApply.md v1.2.0` |
 
 ---
 
@@ -153,7 +157,45 @@ Feature가 Done되면 Current System 링크와 남은 Deferred/Pending 경계 �
 
 ## 7. Changelog
 
+### v1.57.146 - 2026-10-07
+
+- CF-FQ-058 post-closure final review에서 representative Plan의 repository authority metadata를 `plan_repo`로 교정한 v0.1.36 포인터를 반영했다.
+- Feature 상태 `Done`, Current owner, USER FINAL WORKFLOW ACCEPTANCE PASS / COMPLETE와 기술 evidence는 변경하지 않았다.
+
+### v1.57.145 - 2026-10-07
+
+- `CF-FQ-058 CarFight Content Catalog & Authoring System`을 CCAS-P0-08 USER FINAL WORKFLOW ACCEPTANCE PASS 뒤 `Done`으로 전환했다.
+- Current owner는 `Systems/DataManagement/DataAssetAuthoring.md v1.7.0`, `DataAssetManagement.md v1.1.0`, `Systems/Vehicles/RuntimeApply.md v1.2.0`이며 representative Plan은 `ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.36` Historical + Retained Path다.
+- canonical Workbook → generated Production exact34 → Publication exact8 → normal RuntimeApply → 기존 Fitting Runtime 흐름과 fail-closed compatibility/GrossMass 계약을 최종 승인했다. Git stage/commit/push는 별도 승인 전 수행하지 않는다.
+
+### v1.57.144 - 2026-10-02
+
+- `CF-FQ-057 Vehicle Camera Driving FX`를 VCFX-P0-04 Current System Promotion + Closure 뒤 `Done`으로 전환했다.
+- Current owner는 `Systems/Vehicles/VehicleCamera.md v1.3.0`, representative Historical Plan은 `Document/Plan/VehicleCameraFX/VehicleCameraFXPlan.md v0.3.0` Retained Path다.
+- USER PASS 범위와 Rear/Brake tuning Deferred, Comfort Deferred, Mode attenuation producer wiring debt를 구분해 보존하며 미검수 항목을 PASS로 확대하지 않는다.
+
 > `v1.57.137` 이하의 상세 Gate/Build/Test 진행 기록은 role normalization 이전 Historical retained changelog다. 과거 evidence를 보존하기 위해 유지하지만 Current session restore 입력이나 새 FeatureQueue 작성 형식으로 사용하지 않는다.
+
+### v1.57.143 - 2026-09-29
+
+- USER 승인으로 `CF-FQ-058 CarFight Content Catalog & Authoring System / 콘텐츠 카탈로그·제작 시스템`을 P1 / `Promoted` 정식 Feature로 등록했다. canonical UDS Work는 `wrk_35b975a40034c0a6f2ff9b34d4351a82`, Representative Plan은 `Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.0`이다.
+- Excel authority, Generic Provider/Compiler, Catalog/Compare, Family/Variant/DesignIntent, Resource Catalog와 Semantic Socket Role Binding, AI Change Set을 범용 DA 관리 상위 계획으로 확정했다.
+- `CF-FQ-055` WEA Technical PASS backend는 폐기하지 않고 Weapon consumer backend로 재사용하며, `CF-FQ-054/055`의 Paused lifecycle 상세는 UDS가 소유한다.
+
+### v1.57.142 - 2026-09-27
+
+- USER 승인으로 `CF-FQ-057 Vehicle Camera Driving FX / 주행 카메라 연출 고도화`를 P1 / `Promoted` 정식 Feature로 등록했다. canonical UDS Work는 `wrk_74f4a7c1e03b4cb7b0a8134cb89d2f16`, Representative Plan은 `Document/Plan/VehicleCameraFX/VehicleCameraFXPlan.md v0.1.0`이다.
+- Fresh Source 기준 기존 `UCFVehicleCameraComp`에 speed-aware FOV/Arm이 이미 존재하고 `CFTargetCandidateSearch`가 실제 `FollowCamera` FOV를 소비함을 확인했다. 따라서 exact next는 VCFX-P0-00 Fresh Rebaseline + Pre-Implementation Review이며 Source·Product Asset·Build·Automation·PIE 변경은 아직 수행하지 않는다.
+
+### v1.57.141 - 2026-09-19
+
+- USER 승인으로 `CF-FQ-056 Projectile Flight Physics / 발사체 공통 비행 물리`를 P1 / `Promoted` 정식 Feature로 등록했다. 대표 Plan은 `Document/Plan/ProjectileFlightPhysics/ProjectileFlightPhysicsPlan.md v0.1.0`, canonical UDS Work는 `wrk_f0c69a42bd174efba0e4c1d2a7b39560`이다.
+- Cannon 초기 발사 에너지/탄도, Rocket 연소 중 중력+추력+안정화, Guided Missile 중력+추력+유도 제어의 공통 원칙을 계획으로 등록했다. Source·Product Asset 변경과 빌드/테스트는 아직 수행하지 않았고 기존 Active Work를 유지한다.
+
+### v1.57.140 - 2026-09-17
+
+- USER 요청과 fresh Source / persisted AssetDump / CF-FQ-054 HOLD rebaseline을 기준으로 `CF-FQ-055 Weapon Equipment Authoring Guide`를 P2 / `Promoted` 정식 Feature로 등록했다.
+- canonical UDS Work `wrk_1688f833905941ba8cf87a43cb5945a0`와 representative Plan `Document/Plan/WeaponEquipmentAuthoring/WeaponEquipmentAuthoringPlan.md v0.1.0`을 연결했다. WEA-P0-00 Pre-Implementation Contract Review는 `P0 0 / blocking P1 0 / PASS`이며 CF-FQ-054는 Paused 상태를 유지한다.
 
 ### v1.57.139 - 2026-09-17
 

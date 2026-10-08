@@ -1,0 +1,33 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_81624fe259a849d28c6ddf31f1b95236",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_90ec69d26bc2d5b8dcda8d43105560ae",
+  "parent_version_ids": [
+    "ver_6059f52cab81416a97557b33671ecdc1"
+  ],
+  "state": "paused",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-054",
+    "title": "Equipment Authoring / Guided Equipment Builder",
+    "phase": "EBA-P0-05",
+    "next_action": "Preserve existing Equipment Builder Technical PASS and keep standalone USER Editor UX paused. Resume only after CF-FQ-058 freezes the EquipmentPreset / Vehicle / Weapon authoring and assembly boundary, then fresh-rebaseline whether Equipment Builder remains a separate assembly/review surface.",
+    "blockers": [
+      "CF-FQ-058 content authoring architecture prerequisite"
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-054"
+    ],
+    "legacy_refs": [
+      "Document/Plan/EquipmentAuthoring/EquipmentAuthoringPlan.md v0.1.18",
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.0",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-29",
+    "resolution_basis": "USER approved a generic Excel-authoritative Content Catalog/Compiler direction spanning Vehicle, Weapon and future DataAssets. CF-FQ-054 technical evidence is preserved, but the old prerequisite 'Weapon Guide integration-ready' is superseded by CF-FQ-058 architecture freeze because EquipmentPreset assembly responsibility must be re-evaluated against the new bulk authoring authority."
+  }
+}

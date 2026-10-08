@@ -1,0 +1,33 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_1688f833905941ba8cf87a43cb5945a0",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_56daab77c5ac6a3c96db5353664eddb4",
+  "parent_version_ids": [
+    "ver_b2a6d4e17c3f4b0ba2f02df807239c1e"
+  ],
+  "state": "paused",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-055",
+    "title": "Weapon Equipment Authoring Guide",
+    "phase": "WEA-P0-05",
+    "next_action": "Preserve WEA-P0-05 Final Technical PASS; do not resume standalone USER Acceptance or further numeric-entry UX polish. Reuse typed validation/durable create/partial recovery/provider contracts as the Weapon backend consumer of CF-FQ-058, then reassess direct human Guide UX only if CCAS still needs a fallback/advanced path.",
+    "blockers": [
+      "CF-FQ-058 content authoring architecture prerequisite"
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-055"
+    ],
+    "legacy_refs": [
+      "Document/Plan/WeaponEquipmentAuthoring/WeaponEquipmentAuthoringPlan.md v0.2.7",
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.0",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-09-29",
+    "resolution_basis": "USER direction changed from one-weapon-at-a-time guided numeric authoring to AI-assisted bulk arsenal/content planning. WEA-P0-05 Final Technical PASS and its prior Build/Automation/AssetDump evidence remain accepted; only standalone USER Acceptance is paused. Existing Weapon Guide backend is retained as a lower-level deterministic authoring backend for CF-FQ-058 rather than discarded."
+  }
+}
