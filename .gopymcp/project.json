@@ -40,7 +40,16 @@
           "CarFight.CCAS.CF_FQ_058.P0_05.FilterFamilyVariant",
           "CarFight.CCAS.CF_FQ_058.P0_05.SelectedCompareSources",
           "CarFight.CCAS.CF_FQ_058.P0_05.CanonicalWorkbookPreview",
-          "CarFight.CCAS.CF_FQ_058.P0_05.ReadOnlyAuthorityGuard"
+          "CarFight.CCAS.CF_FQ_058.P0_05.ReadOnlyAuthorityGuard",
+          "CarFight.ContentAuthoring.P007.ProductionBridge.AmmoSchemaProjection",
+          "CarFight.ContentAuthoring.P007.ProductionBridge.ImpactGraph",
+          "CarFight.ContentAuthoring.P007.ProductionBridge.RecoveryResume",
+          "CarFight.ContentAuthoring.P007.ProductionBridge.AmmoDefault",
+          "CarFight.ContentAuthoring.P007.ProductionBridge.SharedClosure",
+          "CarFight.ContentAuthoring.P007.ProductionBridge.ConcreteBindings",
+          "CarFight.ContentAuthoring.P007.ProductionBridge.TransactionFileStore",
+          "CarFight.ContentAuthoring.P007.ProductionBatch.CandidatePreparation",
+          "CarFight.RuntimeApply.RTA_P0_03.EquipmentApplySuccess"
         ]
       },
       "operations": [
@@ -87,6 +96,25 @@
           "operation_id": "ue.read",
           "operation_kind": "runtime",
           "runtime_kind": "editor"
+        },
+        {
+          "operation_id": "pie.start",
+          "operation_kind": "runtime",
+          "requires_runtime": true,
+          "runtime_kind": "editor",
+          "lifecycle_action": "pie_start",
+          "ownership_scope": "server_owned",
+          "save_policy": "none",
+          "paired_stop_operation_id": "pie.stop"
+        },
+        {
+          "operation_id": "pie.stop",
+          "operation_kind": "runtime",
+          "requires_runtime": true,
+          "runtime_kind": "editor",
+          "lifecycle_action": "pie_stop",
+          "ownership_scope": "server_owned",
+          "save_policy": "none"
         }
       ]
     }
