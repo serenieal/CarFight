@@ -1,0 +1,80 @@
+v: 1
+artifact_role: final_codex_input
+codex_input: true
+k: generic_plan_compile
+g: "Dedicated Server 2클라 차량 주행 중 발생하는 차량 네트워크 물리 흔들림, 원격 차량 순간이동, 장기 위치/충돌 불일치 문제를 수치로 진단한다"
+tf:
+  - UE/Source/CarFight_Re/Public/CFVehiclePawn.h
+  - UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp
+scope:
+  in:
+    - ACFVehiclePawn에 네트워크 물리 진단 로그 옵션 추가
+    - 서버에서 주기적으로 차량 권위 상태를 샘플링해 복제
+    - 클라이언트에서 복제된 서버 샘플과 자기 로컬 차량 상태의 위치/회전/속도 오차 로그 출력
+    - bReplicateMovement=true와 false 양쪽 테스트에 사용할 수 있게 유지
+  out:
+    - bReplicateMovement 기본값 강제 변경 금지
+    - 원격 차량 보간 구현 금지
+    - 소유 차량 예측/서버 보정 구현 금지
+    - 무기/발사/대미지 서버 권한 구조 작업 금지
+    - BP_CFVehiclePawn 에셋 자동 수정 금지
+ban:
+  - do_not_expand_scope
+  - do_not_create_unrequested_files
+  - do_not_change_unlisted_public_contracts
+  - do_not_treat_review_targets_as_change_targets
+  - do_not_mark_success_with_missing_acceptance
+  - 진단 패치 외 이동 보정/보간/예측 구현 금지
+  - "SetActorLocation, SetActorRotation, TeleportTo 기반 보정 금지"
+sc:
+  acc:
+    - a1
+    - a2
+    - a3
+    - a4
+    - a5
+  verify:
+    - v1
+    - v2
+    - v3
+    - v4
+acc:
+  - Editor/Server 빌드 성공
+  - Dedicated Server에서 UI/LocalPlayer 오류 없음
+  - bReplicateMovement=true/false 양쪽에서 같은 로그 항목이 출력됨
+  - 클라이언트 로그에서 서버 샘플 대비 위치/회전/속도 오차가 수치로 확인됨
+  - "차량 Transform 보정, 보간, 예측 로직은 추가되지 않음"
+verify:
+  - Editor/Server 빌드 성공
+  - Dedicated Server에서 UI/LocalPlayer 오류 없음
+  - bReplicateMovement=true/false 양쪽에서 같은 로그 항목이 출력됨
+  - 클라이언트 로그에서 서버 샘플 대비 위치/회전/속도 오차가 수치로 확인됨
+fail:
+  - acceptance_criteria를 충족하지 못하면 성공이 아니다
+  - must_change_targets 검토 없이 수정 파일 0개로 종료하면 재검토가 필요하다
+  - 대상 파일 변경 필요성을 확인하지 않고 이미 구현됨으로 종료하면 성공이 아니다
+  - failure_reproduction 입력이 남아 있으면 원인 확인 없이 성공 처리하면 안 된다
+  - target_files 검토 없이 수정 파일 0개로 종료하면 성공이 아니다
+ask_if_missing:
+  - "목표, 범위, 검증 조건 중 하나라도 불명확하면 구현하지 말고 missing contract를 보고한다"
+ref:
+  source: "D:/Work/CarFight_git/Document/Plan/ServerUpgradePlan/CFVNetDbg_TaskSource.md"
+metadata:
+  ssot_preflight:
+    checked: true
+    profile: codex_task
+    status: ok
+    blocked: false
+    warn_only: true
+    documents:
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_SSOT_Master.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Golden_Path.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Error_Guide.md
+    guidance_codes:
+      - codex_task_slots_required
+      - check_mcp_ssot_before_generation
+      - prefer_plan_build_from_folder_request
+      - use_plan_build_from_folder_request
+      - no_manual_longform_fallback
+    warning_codes:
+      - project_document_path_ignored_for_mcp_ssot_preflight

@@ -1,0 +1,80 @@
+v: 1
+artifact_role: final_codex_input
+codex_input: true
+k: generic_plan_compile
+g: "Text_OutOfArcWarning이 바인딩된 상태에서 현재 조준이 무기 각도 밖이라는 이유만으로 FireSuccess, Cooldown, FireRejected 등 다른 일반 FireFeedback 텍스트가 가려지지 않도록 전용 OutOfArc 경고 사용 조건을 수정한다"
+tf:
+  - UE/Source/CarFight_Re/Private/UI/CFAimReticleWidget.cpp
+scope:
+  in:
+    - "UCFAimReticleWidget::RefreshTextBlocks()의 bUseDedicatedOutOfArcWarning 조건 수정"
+    - CFAimReticleWidget.cpp Version / Changelog / Migration 갱신
+    - Unreal Editor 타깃 빌드 확인
+  out:
+    - bShowOutOfArcWarning의 데이터 의미 변경
+    - OutOfArc 판정 방식 변경
+    - 발사 가능 조건 변경
+    - Reticle 색상 기본값 변경
+    - WBP 배치 변경
+    - 문서 현행화
+    - Git commit 또는 push
+ban:
+  - do_not_expand_scope
+  - do_not_create_unrequested_files
+  - do_not_change_unlisted_public_contracts
+  - do_not_treat_review_targets_as_change_targets
+  - do_not_mark_success_with_missing_acceptance
+  - 헤더 파일과 .uasset 파일은 수정하지 않는다
+  - "CFVehiclePawn.cpp, FireFeedback ViewData 생성, 쿨다운 계산, 발사 판정을 변경하지 않는다"
+  - 주 Reticle 색상 계산을 변경하지 않는다
+  - 기존 한국어 문구를 변경하지 않는다
+  - 기존 공개 함수 시그니처를 변경하지 않는다
+  - Git commit 또는 push를 수행하지 않는다
+sc:
+  acc:
+    - a_target_review
+    - a2
+    - a3
+    - a4
+    - a5
+    - a6
+  verify:
+    - v1
+acc:
+  - 수정 파일은 CFAimReticleWidget.cpp 한 개뿐이다
+  - 전용 OutOfArc 경고가 일반 피드백을 대체하려면 아래 조건이 모두 필요하다
+  - Text_OutOfArcWarning 유효
+  - bFeedbackActive == true
+  - bShowOutOfArcWarning == true
+  - FeedbackState == OutOfArcWarning
+verify:
+  - git diff --name-only에서 대상 cpp 외 이번 작업 파일 수정이 없는지 확인한다
+fail:
+  - acceptance_criteria를 충족하지 못하면 성공이 아니다
+  - must_change_targets 검토 없이 수정 파일 0개로 종료하면 재검토가 필요하다
+  - 대상 파일 변경 필요성을 확인하지 않고 이미 구현됨으로 종료하면 성공이 아니다
+  - failure_reproduction 입력이 남아 있으면 원인 확인 없이 성공 처리하면 안 된다
+  - target_files 검토 없이 수정 파일 0개로 종료하면 성공이 아니다
+ask_if_missing:
+  - "목표, 범위, 검증 조건 중 하나라도 불명확하면 구현하지 말고 missing contract를 보고한다"
+ref:
+  source: Document/Plan/ReticleFireFeedback/TaskSource_OutOfArcDedicatedCondition.md
+metadata:
+  ssot_preflight:
+    checked: true
+    profile: codex_task
+    status: ok
+    blocked: false
+    warn_only: true
+    documents:
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_SSOT_Master.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Golden_Path.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Error_Guide.md
+    guidance_codes:
+      - codex_task_slots_required
+      - check_mcp_ssot_before_generation
+      - prefer_plan_build_from_folder_request
+      - use_plan_build_from_folder_request
+      - no_manual_longform_fallback
+    warning_codes:
+      - project_document_path_ignored_for_mcp_ssot_preflight

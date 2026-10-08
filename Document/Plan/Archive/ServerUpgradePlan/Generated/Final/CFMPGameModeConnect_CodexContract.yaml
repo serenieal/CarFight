@@ -1,0 +1,99 @@
+v: 1
+artifact_role: final_codex_input
+codex_input: true
+k: generic_plan_compile
+g: Make ACFMPGameMode usable in a Dedicated Server runtime test without requiring a separate Blueprint GameMode asset
+tf:
+  - UE/Source/CarFight_Re/Public/CFMPGameMode.h
+  - UE/Source/CarFight_Re/Private/CFMPGameMode.cpp
+  - UE/Config/DefaultEngine.ini
+scope:
+  in:
+    - Keep ACFMPGameMode as the server test GameMode
+    - Add a safe default setup so VehiclePawnClass resolves to BP_CFVehiclePawn when no subclass override is provided
+    - "Use the existing vehicle Blueprint path: /Game/CarFight/Vehicles/BP_CFVehiclePawn"
+    - Keep VehiclePawnClass editable through UPROPERTY
+    - Prevent the default GameMode pawn flow from creating an unrelated default pawn during this server test path
+    - Consider setting DefaultPawnClass to null in the ACFMPGameMode constructor if needed
+    - Consider overriding HandleStartingNewPlayer_Implementation if needed to avoid duplicate or default pawn spawning
+    - Keep PostLogin logging clear
+    - Ensure the actual vehicle spawn flow still ends in SpawnVehicleForController
+    - Update DefaultEngine.ini so the project can use ACFMPGameMode for server testing
+    - Add or update GlobalDefaultGameMode if needed
+    - Add or update GlobalDefaultServerGameMode if needed
+    - Keep comments directly above new or changed functions
+    - Keep Korean DisplayName and ToolTip metadata for exposed properties
+  out:
+    - Do not edit maps
+    - Do not edit Blueprints
+    - Do not modify BP_CFVehiclePawn
+    - Do not modify CFVehiclePawn.h
+    - Do not modify CFVehiclePawn.cpp
+    - Do not add combat systems
+    - Do not add score systems
+    - Do not add respawn systems
+    - Do not add lobby systems
+    - Do not add session systems
+    - Do not tune vehicle movement replication
+ban:
+  - do_not_expand_scope
+  - do_not_create_unrequested_files
+  - do_not_change_unlisted_public_contracts
+  - do_not_treat_review_targets_as_change_targets
+  - do_not_mark_success_with_missing_acceptance
+  - Do not remove existing logging unless replacing it with clearer logging
+  - Do not hide important server flow in overly compressed helper logic
+sc:
+  acc:
+    - a1
+    - a2
+    - a3
+    - a4
+    - a5
+    - a6
+  verify:
+    - v1
+    - v2
+    - v3
+    - v4
+acc:
+  - ACFMPGameMode still compiles
+  - VehiclePawnClass has a usable default pointing to BP_CFVehiclePawn or an equivalent safe fallback mechanism
+  - ACFMPGameMode does not rely on an external Blueprint GameMode asset for the first server test
+  - Default pawn auto-spawn cannot replace or block the intended vehicle spawn flow
+  - DefaultEngine.ini points server testing to ACFMPGameMode
+  - Existing ACFVehiclePawn files are not modified
+verify:
+  - Build CarFight_ReEditor Win64 Development
+  - Build CarFight_ReServer Win64 Development
+  - Confirm DefaultEngine.ini contains the intended GameMode entries
+  - Confirm only the target files were modified
+fail:
+  - acceptance_criteria를 충족하지 못하면 성공이 아니다
+  - must_change_targets 검토 없이 수정 파일 0개로 종료하면 재검토가 필요하다
+  - 대상 파일 변경 필요성을 확인하지 않고 이미 구현됨으로 종료하면 성공이 아니다
+  - failure_reproduction 입력이 남아 있으면 원인 확인 없이 성공 처리하면 안 된다
+  - target_files 검토 없이 수정 파일 0개로 종료하면 성공이 아니다
+ask_if_missing:
+  - "목표, 범위, 검증 조건 중 하나라도 불명확하면 구현하지 말고 missing contract를 보고한다"
+ref:
+  source: Document/ProjectSSOT/Plan/ServerUpgradePlan/CodexTasks/CFMPGameModeConnect_TaskSource.md
+metadata:
+  ssot_preflight:
+    checked: true
+    profile: codex_task
+    status: ok
+    blocked: false
+    warn_only: true
+    documents:
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_SSOT_Master.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Golden_Path.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Error_Guide.md
+    guidance_codes:
+      - codex_task_slots_required
+      - check_mcp_ssot_before_generation
+      - prefer_plan_build_from_folder_request
+      - use_plan_build_from_folder_request
+      - no_manual_longform_fallback
+    warning_codes:
+      - project_document_path_ignored_for_mcp_ssot_preflight

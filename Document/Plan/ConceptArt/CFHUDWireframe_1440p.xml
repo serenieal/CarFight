@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="2560" height="1440" viewBox="0 0 2560 1440" role="img" aria-labelledby="title desc">
+  <title id="title">CarFight TPS HUD Placement — 2560×1440</title>
+  <desc id="desc">16대9 외부 3인칭 차량 TPS 기준으로 임무 좌상단, 경고 상단 중앙, 타겟 우상단, 차량 정보 좌하단, 레이더 하단 중앙, 무기 정보 우하단에 배치한 승인 Wireframe</desc>
+  <defs>
+    <style><![CDATA[
+      .bg { fill:#081018; }
+      .world { fill:#15232d; }
+      .road { fill:#1f2b32; }
+      .safe { fill:none; stroke:#577080; stroke-width:2; stroke-dasharray:14 12; opacity:.7; }
+      .protect { fill:#55C7E8; fill-opacity:.025; stroke:#55C7E8; stroke-width:2; stroke-dasharray:18 14; opacity:.62; }
+      .panel { fill:#0B1117; fill-opacity:.8; stroke:#577080; stroke-width:2; }
+      .panelPending { fill:#0B1117; fill-opacity:.72; stroke:#F1B84B; stroke-width:2; stroke-dasharray:12 8; }
+      .panelTarget { fill:#0B1117; fill-opacity:.82; stroke:#FF714D; stroke-width:2; }
+      .accent { fill:none; stroke:#55C7E8; stroke-width:3; }
+      .cyan { fill:#55C7E8; }
+      .amber { fill:#F1B84B; }
+      .danger { fill:#FF714D; }
+      .muted { fill:#61717C; }
+      .line { fill:none; stroke:#577080; stroke-width:2; }
+      .subline { fill:none; stroke:#324653; stroke-width:1; }
+      .title { font-family:'Segoe UI','Noto Sans KR',sans-serif; fill:#EAF2F7; font-size:24px; font-weight:600; }
+      .body { font-family:'Segoe UI','Noto Sans KR',sans-serif; fill:#A3B2BC; font-size:20px; }
+      .label { font-family:'Segoe UI','Noto Sans KR',sans-serif; fill:#A3B2BC; font-size:16px; font-weight:500; }
+      .caption { font-family:'Segoe UI','Noto Sans KR',sans-serif; fill:#7A8A95; font-size:14px; }
+      .slot { font-family:'Segoe UI','Noto Sans KR',sans-serif; fill:#55C7E8; font-size:17px; font-weight:600; letter-spacing:.8px; }
+      .pending { font-family:'Segoe UI','Noto Sans KR',sans-serif; fill:#F1B84B; font-size:16px; font-weight:600; }
+    ]]></style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="2560" height="1440"/>
+  <rect class="world" x="0" y="0" width="2560" height="1440"/>
+  <path class="road" d="M950 1440 L1160 650 H1400 L1610 1440 Z"/>
+  <path fill="#101b22" d="M0 0 H650 L900 760 L720 1440 H0 Z"/>
+  <path fill="#101b22" d="M2560 0 H1910 L1660 760 L1840 1440 H2560 Z"/>
+  <rect class="safe" x="64" y="64" width="2432" height="1312" rx="8"/>
+
+  <g id="tps-player-vehicle">
+    <path fill="#34444e" stroke="#7F98A8" stroke-width="3" d="M1110 1168 L1160 1060 H1400 L1450 1168 L1416 1268 H1144 Z"/>
+    <rect x="1200" y="1016" width="160" height="82" rx="18" fill="#2c3b44" stroke="#7F98A8" stroke-width="3"/>
+    <rect x="1248" y="970" width="64" height="60" rx="12" fill="#25343d" stroke="#7F98A8" stroke-width="3"/>
+    <circle cx="1160" cy="1238" r="24" fill="#0B1117"/>
+    <circle cx="1400" cy="1238" r="24" fill="#0B1117"/>
+    <text class="caption" x="1190" y="1310">외부 3인칭 TPS 기준 플레이 차량</text>
+  </g>
+
+  <rect class="protect" x="640" y="250" width="1280" height="660" rx="18"/>
+  <text class="slot" x="1040" y="284">RETICLE / TARGET MARKER PROTECTION</text>
+
+  <g id="reticle" transform="translate(1280 610)">
+    <circle class="accent" cx="0" cy="0" r="24"/>
+    <line class="accent" x1="-76" y1="0" x2="-34" y2="0"/>
+    <line class="accent" x1="34" y1="0" x2="76" y2="0"/>
+    <line class="accent" x1="0" y1="-76" x2="0" y2="-34"/>
+    <line class="accent" x1="0" y1="34" x2="0" y2="76"/>
+    <circle class="cyan" cx="0" cy="0" r="5"/>
+  </g>
+
+  <g id="mission-summary">
+    <path class="panel" d="M64 64 H528 L544 80 V192 H64 Z"/>
+    <rect class="cyan" x="64" y="64" width="8" height="128"/>
+    <text class="slot" x="92" y="98">MISSION SUMMARY</text>
+    <text class="title" x="92" y="138">현재 목표</text>
+    <text class="body" x="92" y="170">짧은 진행 정보만 표시</text>
+  </g>
+
+  <g id="alert-feed">
+    <path class="panel" d="M920 64 H1624 L1640 80 V184 H920 Z"/>
+    <rect class="amber" x="920" y="64" width="8" height="120"/>
+    <text class="slot" x="952" y="98">ALERT FEED</text>
+    <text class="body" x="952" y="138">현재 가장 중요한 경고만 제한 표시</text>
+    <text class="caption" x="1460" y="138">저밀도 유지</text>
+  </g>
+
+  <g id="target-panel">
+    <path class="panelTarget" d="M2112 64 H2480 L2496 80 V400 H2112 Z"/>
+    <text class="slot" x="2144" y="100">TARGET PANEL</text>
+    <line class="subline" x1="2144" y1="120" x2="2464" y2="120"/>
+    <text class="title" x="2144" y="162">선택 대상</text>
+    <text class="body" x="2144" y="204">거리 128 m</text>
+    <text class="body" x="2144" y="244">소속 ???</text>
+    <text class="body" x="2144" y="284">상태 스캔 중…</text>
+    <rect x="2144" y="314" width="320" height="12" rx="6" fill="#324653"/>
+    <rect x="2144" y="314" width="112" height="12" rx="6" class="cyan"/>
+    <text class="caption" x="2144" y="358">차량 이미지 없음 · 정보 점진 공개</text>
+  </g>
+
+  <g id="vehicle-panel">
+    <path class="panelPending" d="M64 960 H608 L624 976 V1376 H64 Z"/>
+    <text class="slot" x="96" y="1000">VEHICLE PANEL — BOTTOM LEFT</text>
+    <text class="title" x="96" y="1050">내 차량 정보</text>
+    <text class="body" x="96" y="1094">속도 · 기어 · Shield · 6방향 Armor · Integrity</text>
+    <line class="subline" x1="96" y1="1120" x2="592" y2="1120"/>
+    <text class="pending" x="96" y="1170">내부 정보 구조 별도 설계 Pending</text>
+    <text class="caption" x="96" y="1210">Armor를 단일 백분율로 합치지 않음</text>
+    <text class="caption" x="96" y="1240">부품 상태와 방향 도형은 후속 결정</text>
+    <rect x="96" y="1290" width="496" height="18" rx="5" fill="#324653"/>
+    <rect x="96" y="1290" width="286" height="18" rx="5" class="muted"/>
+    <text class="caption" x="96" y="1344">현재 도형은 배치 확인용 Placeholder</text>
+  </g>
+
+  <g id="radar-panel">
+    <path class="panel" d="M1070 952 H1474 L1490 968 V1376 H1070 Z"/>
+    <text class="slot" x="1174" y="990">RADAR — BOTTOM CENTER</text>
+    <circle cx="1280" cy="1166" r="156" fill="#111B24" fill-opacity=".56" stroke="#577080" stroke-width="2"/>
+    <circle cx="1280" cy="1166" r="104" class="subline"/>
+    <circle cx="1280" cy="1166" r="52" class="subline"/>
+    <line class="subline" x1="1124" y1="1166" x2="1436" y2="1166"/>
+    <line class="subline" x1="1280" y1="1010" x2="1280" y2="1322"/>
+    <path class="cyan" d="M1280 1138 L1268 1168 L1280 1160 L1292 1168 Z"/>
+    <circle class="danger" cx="1360" cy="1092" r="8"/>
+    <circle class="cyan" cx="1216" cy="1224" r="7"/>
+    <rect fill="#A7ADB3" x="1374" y="1230" width="12" height="12" transform="rotate(45 1380 1236)"/>
+    <text class="caption" x="1138" y="1350">Heading Up · 센서 Contact · 지형 미표시</text>
+  </g>
+
+  <g id="weapon-panel">
+    <path class="panelPending" d="M2032 1016 H2480 L2496 1032 V1376 H2032 Z"/>
+    <text class="slot" x="2064" y="1054">WEAPON PANEL — BOTTOM RIGHT</text>
+    <text class="title" x="2064" y="1104">내 무기 정보</text>
+    <line class="subline" x1="2064" y1="1128" x2="2464" y2="1128"/>
+    <rect x="2064" y="1154" width="400" height="72" rx="8" fill="#111B24" stroke="#55C7E8" stroke-width="3"/>
+    <text class="body" x="2090" y="1198">선택 무기 — 가장 강하게 강조</text>
+    <rect x="2064" y="1242" width="400" height="42" rx="6" fill="#111B24" stroke="#577080" stroke-width="2"/>
+    <text class="caption" x="2090" y="1269">비선택 무기 — 축약 표시</text>
+    <rect x="2064" y="1298" width="400" height="42" rx="6" fill="#111B24" stroke="#577080" stroke-width="2"/>
+    <text class="caption" x="2090" y="1325">비선택 무기 — 축약 표시</text>
+    <text class="pending" x="2064" y="1362">세부 채널 구조 별도 설계 Pending</text>
+  </g>
+
+  <text class="caption" x="64" y="1412">기본 16:9 · 외부 3인칭 차량 TPS · 배치 Accepted · Vehicle/Weapon 내부 Detail Pending</text>
+</svg>

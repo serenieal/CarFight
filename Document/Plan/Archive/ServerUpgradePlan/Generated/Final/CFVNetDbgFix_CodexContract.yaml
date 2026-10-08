@@ -1,0 +1,123 @@
+task_id: CFVNetDbgFix
+version: v0.1.0
+created_at: 2026-06-05
+project: CarFight
+uproject: UE/CarFight_Re.uproject
+base_folder: Document/Plan/ServerUpgradePlan/
+task_type: vehicle_network_physics_diagnostic_reinforcement
+status: ready_for_codex
+
+summary: >
+  Reinforce the existing CFVNetDbg diagnostic patch. This is not a final
+  movement fix. Fix unreliable negative SampleAge values, add missing network
+  role/ownership/replication diagnostics, add angular velocity diagnostics,
+  and document the same-PC gamepad input contamination condition.
+
+goal:
+  - Fix VehicleNetDebug SampleAge so it uses a shared server-time basis.
+  - Keep VehicleNetDebug logs usable for RepMove true/false comparison.
+  - Add enough metadata to distinguish autonomous/simulated proxy, ownership, local control, and replication state.
+  - Add angular velocity fields for diagnosing pitch/roll/rotation correction.
+  - Do not implement correction, interpolation, or prediction yet.
+
+context:
+  observed_logs:
+    repmove_true:
+      - "LocErr=1355.87cm RotErr=45.40deg"
+      - "LocErr=440.12cm RotErr=3.45deg VelErr=1035.48cm/s SpeedErr=37.27km/h"
+    repmove_false:
+      - "LocErr=1280.60cm RotErr=88.02deg"
+      - "LocErr=2421.02cm RotErr=135.83deg"
+  sample_age_problem: >
+    Current logs show negative SampleAge values such as -12s, -34s, and -96s
+    because server GetWorld()->GetTimeSeconds() and client GetWorld()->GetTimeSeconds()
+    are compared directly across different processes.
+  input_contamination_note: >
+    Same-PC two-client testing showed one physical gamepad input being read by both
+    client processes. Treat this as local input polling contamination, not yet as a
+    network replication defect.
+
+in_scope:
+  - Modify UE/Source/CarFight_Re/Public/CFVehiclePawn.h.
+  - Modify UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp.
+  - Add ServerAngularVelocityDeg to FCFVehicleNetDebugSample.
+  - Add bServerTimeValid or equivalent time-validity field to FCFVehicleNetDebugSample.
+  - Compute ServerWorldTimeSeconds using GameState->GetServerWorldTimeSeconds() when available.
+  - Compute client SampleAge using the same GameState server-time basis.
+  - Add angular velocity error logging.
+  - Add NetMode, HasAuthority, IsLocallyControlled, bReplicates, OwnerController, RuntimeReady, and time-validity fields to the log.
+  - Keep the existing log prefix VehicleNetDebug: unchanged.
+  - Preserve existing LocErr, RotErr, VelErr, SpeedErr, RepMove, Seq fields.
+  - Create or update Document/Plan/ServerUpgradePlan/CodexTasks/CFVNetDbgFix_Review.md after build validation.
+  - Update Document/Plan/ServerUpgradePlan/VehicleNetPhysicsJitter.md after build validation.
+
+out_of_scope:
+  - Do not implement vehicle transform correction.
+  - Do not implement remote vehicle interpolation.
+  - Do not implement owner prediction or server reconciliation.
+  - Do not change the bReplicateMovement default policy.
+  - Do not modify weapon, firing, damage, or combat server authority systems.
+  - Do not perform a large gamepad input system rewrite.
+  - Do not auto-edit BP_CFVehiclePawn assets.
+  - Do not call SetActorLocation, SetActorRotation, or TeleportTo for this diagnostic task.
+
+implementation:
+  files:
+    - path: UE/Source/CarFight_Re/Public/CFVehiclePawn.h
+      change_type: modify
+      instructions:
+        - Add ServerAngularVelocityDeg FVector to FCFVehicleNetDebugSample.
+        - Add bServerTimeValid bool or equivalent to FCFVehicleNetDebugSample.
+        - Add helper declarations if needed: ResolveVehicleNetDebugServerTimeSeconds, GetVehicleNetDebugAngularVelocityDeg, GetVehicleNetDebugNetModeName.
+        - Add one-line Korean comments above every new variable/function.
+        - Add Korean DisplayName and ToolTip metadata to all new UPROPERTY/UFUNCTION declarations.
+    - path: UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp
+      change_type: modify
+      instructions:
+        - Include GameFramework/GameStateBase.h if needed.
+        - Include Components/PrimitiveComponent.h if needed.
+        - In CaptureVehicleNetDebugSample, store server time from GameState->GetServerWorldTimeSeconds() when available.
+        - Set bServerTimeValid according to whether GameState server time was used.
+        - Capture ServerAngularVelocityDeg.
+        - In LogVehicleNetDebugClientError, compute SampleAge using current GameState server time minus sample server time only when both are valid.
+        - If server-time basis is unavailable, log SampleAge=-1.0 and mark time validity false.
+        - Add local angular velocity and angular velocity error to log output.
+        - Add NetMode, HasAuthority, IsLocallyControlled, bReplicates, OwnerController, RuntimeReady, ServerTimeValid, CurrentServerTimeValid to log output.
+        - Keep VehicleNetDebug: prefix and all previous important fields.
+
+acceptance:
+  - VehicleNetDebug: log prefix is preserved.
+  - SampleAge no longer appears as persistent large negative values in normal dedicated server two-client testing.
+  - Server time validity or equivalent diagnostic is logged.
+  - NetMode, HasAuthority, IsLocallyControlled, bReplicates, OwnerController, and RuntimeReady are logged or equivalently represented.
+  - ServerAngularVelocityDeg, LocalAngularVelocityDeg, and angular velocity error are logged or equivalently represented.
+  - LocErr, RotErr, VelErr, SpeedErr, RepMove, and Seq are still present.
+  - No vehicle correction, interpolation, or prediction logic is added.
+  - bReplicateMovement policy is not changed.
+  - CarFight_ReEditor Win64 Development build succeeds.
+  - CarFight_ReServer Win64 Development build succeeds.
+
+verification:
+  - Search modified code for SetActorLocation, SetActorRotation, and TeleportTo; confirm none were added for the diagnostic task.
+  - Build CarFight_ReEditor Win64 Development.
+  - Build CarFight_ReServer Win64 Development.
+  - Run Dedicated Server two-client test with bReplicateMovement=true.
+  - Run Dedicated Server two-client test with bReplicateMovement=false.
+  - Use keyboard input for Client 1 during retest to avoid same-PC gamepad input contamination.
+  - Extract VehicleNetDebug logs with Tools/ExtractNetLog.bat.
+  - Confirm SampleAge is usable or explicitly marked invalid rather than misleadingly negative.
+
+documentation:
+  review_output: Document/Plan/ServerUpgradePlan/CodexTasks/CFVNetDbgFix_Review.md
+  update_target: Document/Plan/ServerUpgradePlan/VehicleNetPhysicsJitter.md
+  required_review_sections:
+    - Modified files
+    - Added log fields
+    - SampleAge fix method
+    - Same-PC gamepad input contamination warning
+    - Editor and Server build results
+    - Changelog
+    - Migration notes
+
+changelog:
+  - v0.1.0: Created CFVNetDbgFix Codex contract for diagnostic reinforcement.

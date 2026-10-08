@@ -1,0 +1,84 @@
+v: 1
+artifact_role: final_codex_input
+codex_input: true
+k: generic_plan_compile
+g: — 기준선 회귀 확인
+tf:
+  - GoPyMCP/Workspace/test/compatibility/test_diag_task_router.py
+  - GoPyMCP/Workspace/test/compatibility/test_recipe_investigate_request_router.py
+scope:
+  in:
+    - — 기준선 회귀 확인
+  out:
+    - 중력 Projectile Ballistic Solver
+    - 이동 목표 Lead Indicator
+    - 자동 락온과 Aim Assist
+    - 다중 터렛 동시 Reticle
+    - 네트워크 지연 보정
+    - 기존 WeaponFire 판정 정책 변경
+    - 완성형 전투 HUD 전체 재설계
+ban:
+  - do_not_expand_scope
+  - do_not_create_unrequested_files
+  - do_not_change_unlisted_public_contracts
+  - do_not_treat_review_targets_as_change_targets
+  - do_not_mark_success_with_missing_acceptance
+  - 기존 구조와 public contract를 불필요하게 변경하지 않는다
+  - 지정된 target files 밖으로 범위를 확장하지 않는다
+sc:
+  impl:
+    - i1
+    - i2
+    - i3
+  acc:
+    - a1
+    - a2
+    - a3
+    - a4
+    - a5
+  verify:
+    - v_py_compile
+    - v_pytest
+impl:
+  - 직선 HitScan과 중력 없는 Projectile의 Weapon Preview World 위치 계산
+  - Command Reticle과 Weapon Reticle의 이중 Reticle 표시
+  - 실제 최종 발사 방향과 동일한 WeaponHit Preview 결과 공유
+acc:
+  - 직선 HitScan과 중력 없는 Projectile의 Weapon Preview World 위치 계산
+  - Command Reticle과 Weapon Reticle의 이중 Reticle 표시
+  - 실제 최종 발사 방향과 동일한 WeaponHit Preview 결과 공유
+  - 대표 프롬프트 회귀 테스트가 plan tool chain과 contract 생성 결과를 검증한다
+  - runbook이 수동 Markdown fallback 대신 plan surface 보강 경로를 안내한다
+verify:
+  - python -X utf8 -m py_compile Workspace/test/compatibility/test_diag_task_router.py Workspace/test/compatibility/test_recipe_investigate_request_router.py
+  - python -X utf8 -m pytest Workspace/test/compatibility/test_diag_task_router.py -q
+  - python -X utf8 -m pytest Workspace/test/compatibility/test_recipe_investigate_request_router.py -q
+fail:
+  - acceptance_criteria를 충족하지 못하면 성공이 아니다
+  - must_change_targets 검토 없이 수정 파일 0개로 종료하면 재검토가 필요하다
+  - 대상 파일 변경 필요성을 확인하지 않고 이미 구현됨으로 종료하면 성공이 아니다
+  - failure_reproduction 입력이 남아 있으면 원인 확인 없이 성공 처리하면 안 된다
+  - target_files 검토 없이 수정 파일 0개로 종료하면 성공이 아니다
+ask_if_missing:
+  - "목표, 범위, 검증 조건 중 하나라도 불명확하면 구현하지 말고 missing contract를 보고한다"
+ref:
+  source: Document/Plan/ReticleAimDirection/Generated/Intermediate/P1-T1_CodexTask.md
+metadata:
+  ssot_preflight:
+    checked: true
+    profile: codex_task
+    status: ok
+    blocked: false
+    warn_only: true
+    documents:
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_SSOT_Master.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Golden_Path.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Error_Guide.md
+    guidance_codes:
+      - codex_task_slots_required
+      - check_mcp_ssot_before_generation
+      - prefer_plan_build_from_folder_request
+      - use_plan_build_from_folder_request
+      - no_manual_longform_fallback
+    warning_codes:
+      - project_document_path_ignored_for_mcp_ssot_preflight

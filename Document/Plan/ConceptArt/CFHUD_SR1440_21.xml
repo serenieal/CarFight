@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="3440" height="1440" viewBox="0 0 3440 1440" role="img" aria-labelledby="title desc">
+  <title id="title">CarFight D1-07 SR-1440-21 Combat Busy Static Mockup</title>
+  <desc id="desc">3440x1440 약 21:9 정적 검토. Persistent HUD는 중앙 2560x1440 Canvas x=440~3000에 유지하고 좌우 확장 영역은 월드만 표시한다. 중앙 HUD는 CFHUD_SR1440_16.xml을 재사용한다.</desc>
+  <rect fill="#101a20" x="0" y="0" width="3440" height="1440"/>
+  <rect fill="#192a32" x="0" y="0" width="3440" height="610"/>
+  <path fill="#162126" d="M0 610 H3440 V1440 H0 Z"/>
+  <path fill="#24383f" d="M0 470 L220 390 L440 460 V720 H0 Z M3000 450 L3220 360 L3440 430 V720 H3000 Z"/>
+  <image href="CFHUD_SR1440_16.xml" x="440" y="0" width="2560" height="1440" preserveAspectRatio="none"/>
+</svg>

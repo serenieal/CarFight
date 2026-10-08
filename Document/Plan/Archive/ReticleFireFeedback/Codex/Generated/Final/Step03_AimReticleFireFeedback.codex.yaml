@@ -1,0 +1,89 @@
+v: 1
+artifact_role: final_codex_input
+codex_input: true
+k: generic_plan_compile
+g: "Extend UCFAimReticleWidget so it reads ACFVehiclePawn::BuildFireFeedbackViewData() and combines FireFeedback state with the existing Aim Reticle state"
+tf:
+  - UE/Source/CarFight_Re/Public/UI/CFAimReticleWidget.h
+  - UE/Source/CarFight_Re/Private/UI/CFAimReticleWidget.cpp
+scope:
+  in:
+    - Modify UE/Source/CarFight_Re/Public/UI/CFAimReticleWidget.h
+    - Modify UE/Source/CarFight_Re/Private/UI/CFAimReticleWidget.cpp
+    - Include CFVehicleFireFeedbackTypes.h in CFAimReticleWidget.h
+    - Add Optional TextBlock bindings for FireFeedback display text
+    - Add a cached FCFVehicleFireFeedbackViewData member
+    - Add helper functions for applying FireFeedback view data
+    - Add helper functions for FireFeedback display text and hint text
+    - Add a helper function that resolves final ECFVehicleReticleState from base Reticle state plus FireFeedback view data
+    - "Update RefreshFromPawn() so it reads VehiclePawnRef->BuildFireFeedbackViewData() after reading the base Aim state"
+    - Update RefreshTextBlocks() so it also updates FireFeedback TextBlocks and cooldown text
+  out:
+    - Do not modify ACFVehiclePawn files
+    - Do not modify UCFVehicleWeaponComp files
+    - Do not modify CFVehicleFireFeedbackTypes.h
+    - Do not modify CFVehicleAimTypes.h
+    - Do not modify any WBP or Blueprint asset
+    - Do not add animation events in this step
+    - Do not create a FireFeedback component class
+    - "Do not add server, RPC, replication, or multiplayer code"
+    - Do not modify document files
+ban:
+  - do_not_expand_scope
+  - do_not_create_unrequested_files
+  - do_not_change_unlisted_public_contracts
+  - do_not_treat_review_targets_as_change_targets
+  - do_not_mark_success_with_missing_acceptance
+  - Missing WBP widgets must not crash the C++ widget
+  - FireSuccess must not override base Reticle state
+  - OutOfArcWarning must not override base Reticle state
+  - FirePending must not mean server wait
+  - FireRejected must not mean server rejection
+sc:
+  acc:
+    - a1
+    - a2
+    - a3
+    - a4
+    - a5
+    - a6
+  verify:
+    - v1
+acc:
+  - CFAimReticleWidget.h includes CFVehicleFireFeedbackTypes.h
+  - "Text_FireFeedbackState, Text_FireFeedbackHint, and Text_Cooldown are added with BindWidgetOptional"
+  - CachedFireFeedbackViewData is added
+  - ApplyFireFeedbackViewData() is declared and implemented
+  - GetFireFeedbackStateDisplayText() is declared and implemented
+  - GetFireFeedbackHintDisplayText() is declared and implemented
+verify:
+  - Inspect git diff and confirm only CFAimReticleWidget.h and CFAimReticleWidget.cpp are changed by Step 3
+fail:
+  - acceptance_criteria를 충족하지 못하면 성공이 아니다
+  - must_change_targets 검토 없이 수정 파일 0개로 종료하면 재검토가 필요하다
+  - 대상 파일 변경 필요성을 확인하지 않고 이미 구현됨으로 종료하면 성공이 아니다
+  - failure_reproduction 입력이 남아 있으면 원인 확인 없이 성공 처리하면 안 된다
+  - target_files 검토 없이 수정 파일 0개로 종료하면 성공이 아니다
+ask_if_missing:
+  - "목표, 범위, 검증 조건 중 하나라도 불명확하면 구현하지 말고 missing contract를 보고한다"
+ref:
+  source: Document/Plan/ReticleFireFeedback/Codex/Step03_AimReticleFireFeedback_TaskSource.md
+metadata:
+  ssot_preflight:
+    checked: true
+    profile: codex_task
+    status: ok
+    blocked: false
+    warn_only: true
+    documents:
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_SSOT_Master.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Golden_Path.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Error_Guide.md
+    guidance_codes:
+      - codex_task_slots_required
+      - check_mcp_ssot_before_generation
+      - prefer_plan_build_from_folder_request
+      - use_plan_build_from_folder_request
+      - no_manual_longform_fallback
+    warning_codes:
+      - project_document_path_ignored_for_mcp_ssot_preflight

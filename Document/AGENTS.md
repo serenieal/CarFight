@@ -1,7 +1,7 @@
 # CarFight Document 작업 규칙
 
-- 문서 버전: v2.8
-- 최근 갱신일: 2026-09-17
+- 문서 버전: v2.9
+- 최근 갱신일: 2026-10-08
 - 문서 상태: Current
 - 적용 범위: `Document/` 이하의 문서 읽기, 작성, 정리, 색인 갱신과 상태 기록
 
@@ -123,8 +123,8 @@ Document/SSOT/UE_SSOT/BP_Text_Format/cases/**
 
 Generated, TaskSource, WorkOrder, Codex와 YAML 산출물은 대표 문서를 먼저 확인한 뒤 실제 필요가 있을 때만 읽는다.
 
-`Document/Plan`은 CarFight 문서의 일부이지만 별도 configured repository인 `plan_repo`다.
-상향 탐색이 `plan_repo` 루트에서 끝나므로 Plan 작업은 다음 대문을 사용한다.
+`Document/Plan`은 `main_game` 내부의 일반 디렉터리이며 별도 Git 저장소 경계가 아니다.
+Plan 작업은 CarFight 루트 `AGENTS.md`와 이 `Document/AGENTS.md`를 상속하고, 다음 대문을 가장 가까운 Plan 전용 규칙으로 사용한다.
 
 ```text
 Document/Plan/AGENTS.md
@@ -195,6 +195,12 @@ D:\Work\CarFight_git\Tools\BuildEditor.bat
 
 ## 7. Changelog
 
+### v2.9 - 2026-10-08
+
+- `Document/Plan`의 별도 `plan_repo` Git 경계를 폐지하고 `main_game` 일반 디렉터리로 편입한 현재 저장소 구조를 반영했다.
+- Plan 작업의 `AGENTS.md` 상속을 CarFight 루트 → `Document/AGENTS.md` → `Document/Plan/AGENTS.md` 순서로 정렬하고, 별도 configured repository 전제를 제거했다.
+- 과거 `plan_repo`였다는 날짜가 있는 기록과 체크포인트는 Historical evidence로 보존하며 현재 운영 규칙으로 재해석하지 않는다.
+
 ### v2.8 - 2026-09-17
 
 - FeatureQueue의 promoted Work status mirror를 완전히 제거하고 `Promoted` catalog disposition만 유지하도록 규칙을 강화했다.
@@ -254,6 +260,7 @@ D:\Work\CarFight_git\Tools\BuildEditor.bat
 
 ## 8. Migration
 
+- 2026-10-08부터 `Document/Plan`은 `main_game`이 직접 추적한다. 기존 `plan_repo` 경계와 관련된 과거 문구는 Historical evidence로만 읽고, Current Git 작업은 `main_game` 단일 저장소 기준을 사용한다.
 - v2.4부터 `종합방침에 반영` 요청은 단순 append 지시로 해석하지 않는다. 영구·범용 규칙 승격 필요성을 먼저 판정하고 기존 owner·규칙과 통합하며, 승격 대상이 없으면 문서를 변경하지 않는다.
 - 2026-08-22 문서 정상화 이후 `ActiveWork`, `FeatureQueue`, `ProjectState`, `Roadmap`에서 제거된 상세 진행 로그는 대표 Plan, Systems, Archive와 Git history가 계속 소유한다. projection 압축만을 이유로 기존 PASS를 재검증하거나 미검증 상태로 되돌리지 않는다.
 - v1.7의 Browser 작업지시서 강제 게이트는 폐기되었으며 현재 판단에 사용하지 않는다.

@@ -1,0 +1,89 @@
+v: 1
+artifact_role: final_codex_input
+codex_input: true
+k: generic_plan_compile
+g: UCFAimReticleWidget가 현재 CachedReticleState와 CachedFireFeedbackViewData를 사용해 기존 Reticle 이미지와 FireFeedback 텍스트에 의미가 분명한 상태별 색상을 적용하도록 구현한다
+tf:
+  - UE/Source/CarFight_Re/Public/UI/CFAimReticleWidget.h
+  - UE/Source/CarFight_Re/Private/UI/CFAimReticleWidget.cpp
+scope:
+  in:
+    - UCFAimReticleWidget에 UImage 전방 선언을 추가한다
+    - 위 이미지 5개를 BindWidgetOptional로 추가한다
+    - 필요 시 보조 경고용 Text_OutOfArcWarning을 BindWidgetOptional로 추가한다
+    - WBP에서 조정 가능한 상태별 FLinearColor 프로퍼티를 직관적인 이름으로 추가한다
+    - 주 Reticle 이미지 색상과 FireFeedback 텍스트 색상을 분리 계산한다
+    - RefreshVisualStyle() 같은 전용 함수에서 Optional 위젯을 안전하게 갱신한다
+    - 기존 RefreshTextBlocks() 흐름과 표시 종료 동작을 보존한다
+    - "헤더와 cpp의 Version, Changelog, Migration을 갱신한다"
+  out:
+    - CFVehiclePawn.cpp와 FireFeedback 우선순위/지속시간 수정
+    - CFVehicleFireFeedbackTypes.h 변경
+    - "발사 검증, 무기 쿨다운, Projectile, Damage 로직 변경"
+    - 네트워크/RPC/복제 코드
+    - WBP_AimReticle.uasset 자동 수정
+    - UMG 애니메이션 생성
+    - "Reticle Scale 플래시, 흔들림, Pulse"
+    - 원형 쿨다운 게이지
+    - 신규 Texture/Material/VFX/SFX 제작
+    - Git commit 또는 push
+ban:
+  - do_not_expand_scope
+  - do_not_create_unrequested_files
+  - do_not_change_unlisted_public_contracts
+  - do_not_treat_review_targets_as_change_targets
+  - do_not_mark_success_with_missing_acceptance
+  - WBP_AimReticle.uasset을 포함한 .uasset 파일은 수정하지 않는다
+  - "CFVehiclePawn, FireFeedback 타입, 발사 검증, 쿨다운 계산 및 상태 지속시간을 변경하지 않는다"
+  - 기존 공개 함수 시그니처와 현재 한국어 표시 문구를 깨지 않는다
+  - Optional 바인딩 누락을 정상 상황으로 처리하며 null 포인터 접근을 허용하지 않는다
+  - 클래스명과 파일명은 변경하지 않는다
+  - Git commit 또는 push를 수행하지 않는다
+sc:
+  acc:
+    - a1
+    - a2
+    - a3
+    - a4
+    - a5
+    - a6
+  verify:
+    - v1
+acc:
+  - 두 C++ 파일 외의 프로젝트 파일은 수정하지 않는다
+  - WBP에 이미지 5개가 정확한 이름과 Is Variable=true로 존재할 때 모두 같은 주 Reticle 색상으로 갱신된다
+  - Optional 이미지 또는 Text_OutOfArcWarning이 없어도 위젯 생성과 Tick에서 크래시가 발생하지 않는다
+  - Ready 상태의 주 Reticle은 흰색이다
+  - 정상 발사 직후 주 Reticle과 FireFeedback 텍스트에 성공 색상이 적용된다
+  - 성공 표시 종료 후 쿨다운 상태와 쿨다운 텍스트는 파란색이 된다
+verify:
+  - 수정 파일이 정확히 두 개인지 git diff --name-only로 확인한다
+fail:
+  - acceptance_criteria를 충족하지 못하면 성공이 아니다
+  - must_change_targets 검토 없이 수정 파일 0개로 종료하면 재검토가 필요하다
+  - 대상 파일 변경 필요성을 확인하지 않고 이미 구현됨으로 종료하면 성공이 아니다
+  - failure_reproduction 입력이 남아 있으면 원인 확인 없이 성공 처리하면 안 된다
+  - target_files 검토 없이 수정 파일 0개로 종료하면 성공이 아니다
+ask_if_missing:
+  - "목표, 범위, 검증 조건 중 하나라도 불명확하면 구현하지 말고 missing contract를 보고한다"
+ref:
+  source: Document/Plan/ReticleFireFeedback/TaskSource_ReticleStateColors.md
+metadata:
+  ssot_preflight:
+    checked: true
+    profile: codex_task
+    status: ok
+    blocked: false
+    warn_only: true
+    documents:
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_SSOT_Master.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Golden_Path.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Error_Guide.md
+    guidance_codes:
+      - codex_task_slots_required
+      - check_mcp_ssot_before_generation
+      - prefer_plan_build_from_folder_request
+      - use_plan_build_from_folder_request
+      - no_manual_longform_fallback
+    warning_codes:
+      - project_document_path_ignored_for_mcp_ssot_preflight

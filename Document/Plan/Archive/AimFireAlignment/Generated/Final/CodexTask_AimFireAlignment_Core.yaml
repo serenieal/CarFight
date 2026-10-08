@@ -1,0 +1,107 @@
+v: 1
+artifact_role: final_codex_input
+codex_input: true
+k: generic_plan_compile
+g: "Camera Reticle 목표점을 단일 월드 목표로 사용하고, Muzzle 기준 요구 발사 방향·터렛 추적·HitScan/Projectile 방향·발사 거부 판정을 하나의 Weapon Aim Solution으로 통합한다"
+tf:
+  - UE/Source/CarFight_Re/Public/CFVehicleCameraTypes.h
+  - UE/Source/CarFight_Re/Private/CFVehicleCameraComp.cpp
+  - UE/Source/CarFight_Re/Public/CFVehicleAimTypes.h
+  - UE/Source/CarFight_Re/Public/CFVehicleAimComp.h
+  - UE/Source/CarFight_Re/Private/CFVehicleAimComp.cpp
+  - UE/Source/CarFight_Re/Public/CFVehiclePawn.h
+  - UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp
+scope:
+  in:
+    - "Camera Aim Trace를 CFCollisionChannels::WeaponHit으로 변경한다"
+    - Camera Trace Hit은 목표 표면 선택 결과이며 그 자체를 AimBlocked로 처리하지 않는다
+    - "bAimTraceHasBlockingHit, TurretAligning, WeaponNotAligned, MuzzleBlocked, FCFVehicleWeaponAimSolution을 추가한다"
+    - AimComp가 Weapon Aim Solution을 저장하고 LocalAimState의 CanFire/Blocked/ReticleState에 반영한다
+    - Pawn이 Muzzle Socket에서 Reticle 목표점으로 향하는 DesiredLaunchDirection을 계산한다
+    - 터렛이 Muzzle 위치에서 목표점으로 향하는 방향을 추적한다
+    - Muzzle X축과 DesiredLaunchDirection의 정렬 오차를 계산한다
+    - "기존 TurretMountData의 StabilizationToleranceDeg, AimSettleTimeSeconds와 TurretState.bTurretSettled을 재사용한다"
+    - Muzzle→Target WeaponHit Trace로 총구 앞 장애물을 검출한다
+    - "BuildFireCommand, ValidateFireCommand, HitScan, Projectile이 같은 AimOrigin/AimDirection/Target을 사용한다"
+    - WeaponNotAligned는 일반 빨간 FireRejected로 덮지 않고 MuzzleBlocked는 기존 AimBlocked 피드백을 사용한다
+    - 관련 코드 파일의 Version / Changelog / Migration을 갱신한다
+    - BuildEditor.bat를 실행한다
+  out:
+    - text
+    - Reticle 색상/한국어 문구/switch 구현
+    - VehicleDebug Panel 표시 구현
+    - 문서 상태 갱신
+    - WBP 또는 .uasset 수정
+    - Projectile 터널링/Sweep/Sub-stepping
+    - 탄도 Solver/선행 조준/락온/Aim Assist
+    - 실제 Damage/HP
+    - 네트워크/복제
+    - StaticMesh/맵/Collision 자산 수정
+ban:
+  - do_not_expand_scope
+  - do_not_create_unrequested_files
+  - do_not_change_unlisted_public_contracts
+  - do_not_treat_review_targets_as_change_targets
+  - do_not_mark_success_with_missing_acceptance
+  - 기존 LocalAimTargetLocation과 FireRequest 필드는 삭제/리네이밍하지 않는다
+  - 새 정렬 허용 오차 DataAsset 필드를 만들지 않는다
+  - Muzzle이 없거나 목표/방향이 무효면 fallback 방향으로 발사하지 말고 안전하게 거부한다
+  - WeaponNotAligned는 LastFireResult에는 기록하되 BuildFireFeedbackViewData에서 FireRejected 빨간 오버라이드를 만들지 않는다
+  - 지정된 파일 외 코드/자산을 수정하지 않는다
+  - 광범위한 기존 dirty worktree를 정리하거나 되돌리지 않는다
+  - commit / push 금지
+  - 빌드 성공만 기록하고 PIE PASS를 주장하지 않는다
+sc:
+  acc:
+    - a1
+    - a2
+    - a3
+    - a_target_review
+    - a5
+    - a6
+  verify:
+    - v1
+    - v2
+    - v3
+    - v4
+acc:
+  - Camera Aim Trace가 WeaponHit을 사용한다
+  - Camera 표면 Hit만으로 AimBlocked가 되지 않는다
+  - AimComp가 최신 Weapon Aim Solution을 제공한다
+  - 터렛 요구 방향이 Muzzle→Reticle Target이다
+  - FireRequest가 Muzzle 위치와 DesiredLaunchDirection을 사용한다
+  - HitScan/Projectile 방향이 동일하다
+verify:
+  - text
+  - Camera Aim Trace에 ECC_Visibility가 남아 있지 않음
+  - FireRequest.AimDirection을 Muzzle Socket X축으로 최종 덮어쓰지 않음
+  - 신규 enum의 Core switch/feedback 처리 존재
+fail:
+  - acceptance_criteria를 충족하지 못하면 성공이 아니다
+  - must_change_targets 검토 없이 수정 파일 0개로 종료하면 재검토가 필요하다
+  - 대상 파일 변경 필요성을 확인하지 않고 이미 구현됨으로 종료하면 성공이 아니다
+  - failure_reproduction 입력이 남아 있으면 원인 확인 없이 성공 처리하면 안 된다
+  - target_files 검토 없이 수정 파일 0개로 종료하면 성공이 아니다
+ask_if_missing:
+  - "목표, 범위, 검증 조건 중 하나라도 불명확하면 구현하지 말고 missing contract를 보고한다"
+ref:
+  source: Document/Plan/AimFireAlignment/TaskSource_AimFireAlignment_Core.md
+metadata:
+  ssot_preflight:
+    checked: true
+    profile: codex_task
+    status: ok
+    blocked: false
+    warn_only: true
+    documents:
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_SSOT_Master.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Golden_Path.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Error_Guide.md
+    guidance_codes:
+      - codex_task_slots_required
+      - check_mcp_ssot_before_generation
+      - prefer_plan_build_from_folder_request
+      - use_plan_build_from_folder_request
+      - no_manual_longform_fallback
+    warning_codes:
+      - project_document_path_ignored_for_mcp_ssot_preflight

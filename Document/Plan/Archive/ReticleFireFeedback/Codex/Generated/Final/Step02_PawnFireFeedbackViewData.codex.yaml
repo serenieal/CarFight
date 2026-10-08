@@ -1,0 +1,91 @@
+v: 1
+artifact_role: final_codex_input
+codex_input: true
+k: generic_plan_compile
+g: Add Pawn-side FireFeedback ViewData generation for CarFight Reticle / FireFeedback implementation
+tf:
+  - UE/Source/CarFight_Re/Public/CFVehiclePawn.h
+  - UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp
+scope:
+  in:
+    - Modify CFVehiclePawn.h
+    - Modify CFVehiclePawn.cpp
+    - Include CFVehicleFireFeedbackTypes.h in CFVehiclePawn.h
+    - Add LastFireFeedbackStartTimeSeconds to ACFVehiclePawn
+    - Add FireSuccessFeedbackDurationSeconds to ACFVehiclePawn
+    - Add FireRejectedFeedbackDurationSeconds to ACFVehiclePawn
+    - Add BuildFireFeedbackViewData() const to ACFVehiclePawn
+    - Update ApplyFireResult() so accepted and rejected fire results refresh LastFireFeedbackStartTimeSeconds
+    - "Implement ACFVehiclePawn::BuildFireFeedbackViewData() const"
+    - Use existing GetActiveWeaponCooldownSeconds() for total cooldown
+    - Use existing GetRemainingCooldownSeconds(float CurrentTimeSeconds) for remaining cooldown
+    - "Use existing VehicleAimComp->GetLocalAimState() to determine bShowOutOfArcWarning"
+  out:
+    - Do not modify the Step 1 FireFeedback types file unless a compile error proves it is invalid
+    - Do not modify Aim Reticle widget files
+    - Do not modify Vehicle Weapon component files
+    - Do not modify any WBP or Blueprint asset
+    - Do not modify any document file
+    - Do not add a new cooldown Getter to UCFVehicleWeaponComp
+    - Do not create a FireFeedback component class
+    - "Do not add server, RPC, replication, or multiplayer code"
+ban:
+  - do_not_expand_scope
+  - do_not_create_unrequested_files
+  - do_not_change_unlisted_public_contracts
+  - do_not_treat_review_targets_as_change_targets
+  - do_not_mark_success_with_missing_acceptance
+  - BuildFireFeedbackViewData() must not mutate game state
+  - FirePending must not mean server wait
+  - FireRejected must not mean server rejection
+  - OutOfArcWarning must be a helper warning and must not be treated as a hard fire block
+  - Do not add any .cpp file for FireFeedback types
+  - Do not add any new class
+sc:
+  acc:
+    - a1
+    - a2
+    - a3
+    - a4
+    - a5
+    - a6
+  verify:
+    - v1
+acc:
+  - CFVehiclePawn.h includes CFVehicleFireFeedbackTypes.h
+  - ACFVehiclePawn has LastFireFeedbackStartTimeSeconds
+  - ACFVehiclePawn has FireSuccessFeedbackDurationSeconds
+  - ACFVehiclePawn has FireRejectedFeedbackDurationSeconds
+  - ACFVehiclePawn declares BuildFireFeedbackViewData() const as a Blueprint-callable UFUNCTION
+  - "CFVehiclePawn.cpp implements ACFVehiclePawn::BuildFireFeedbackViewData() const"
+verify:
+  - Inspect git diff and confirm only CFVehiclePawn.h and CFVehiclePawn.cpp are changed by Step 2
+fail:
+  - acceptance_criteria를 충족하지 못하면 성공이 아니다
+  - must_change_targets 검토 없이 수정 파일 0개로 종료하면 재검토가 필요하다
+  - 대상 파일 변경 필요성을 확인하지 않고 이미 구현됨으로 종료하면 성공이 아니다
+  - failure_reproduction 입력이 남아 있으면 원인 확인 없이 성공 처리하면 안 된다
+  - target_files 검토 없이 수정 파일 0개로 종료하면 성공이 아니다
+ask_if_missing:
+  - "목표, 범위, 검증 조건 중 하나라도 불명확하면 구현하지 말고 missing contract를 보고한다"
+ref:
+  source: Document/Plan/ReticleFireFeedback/Codex/Step02_PawnFireFeedbackViewData_TaskSource.md
+metadata:
+  ssot_preflight:
+    checked: true
+    profile: codex_task
+    status: ok
+    blocked: false
+    warn_only: true
+    documents:
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_SSOT_Master.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Golden_Path.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Error_Guide.md
+    guidance_codes:
+      - codex_task_slots_required
+      - check_mcp_ssot_before_generation
+      - prefer_plan_build_from_folder_request
+      - use_plan_build_from_folder_request
+      - no_manual_longform_fallback
+    warning_codes:
+      - project_document_path_ignored_for_mcp_ssot_preflight

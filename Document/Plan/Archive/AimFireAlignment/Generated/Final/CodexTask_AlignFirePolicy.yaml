@@ -1,0 +1,110 @@
+v: 1
+artifact_role: final_codex_input
+codex_input: true
+k: generic_plan_compile
+g: UCFTurretMountData에 터렛별 정렬 중 발사 허용 정책을 추가한다
+tf:
+  - UE/Source/CarFight_Re/Public/CFTurretMountData.h
+  - UE/Source/CarFight_Re/Private/CFTurretMountData.cpp
+  - UE/Source/CarFight_Re/Public/CFVehicleAimTypes.h
+  - UE/Source/CarFight_Re/Private/CFVehicleAimComp.cpp
+  - UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp
+scope:
+  in:
+    - UCFTurretMountData에 bAllowFireWhileAligning을 추가한다
+    - 기본값은 true다
+    - 한국어 DisplayName과 다음 의미가 분명한 ToolTip을 작성한다
+    - "text True: 터렛 회전 또는 총구 정렬 중에도 현재 Muzzle 방향으로 발사 False: 터렛과 총구 정렬 완료 전 발사 거부 MuzzleBlocked: 옵션과 관계없이 항상 발사 거부"
+    - BuildTurretMountSummary()에서 정책값을 확인할 수 있게 한다
+    - FCFVehicleWeaponAimSolution이 아래 의미를 구분하도록 최소 필드를 추가한다
+    - text bAllowFireWhileAligning DesiredAimDirection CurrentMuzzleDirection AimDirection = 실제 HitScan/Projectile 최종 방향
+    - 최종 발사 방향 정책은 다음과 같다
+    - "text 정렬 미완료 + 허용 true -> CurrentMuzzleDirection 정렬 완료 -> DesiredAimDirection 정렬 미완료 + 허용 false -> ValidateFireCommand에서 거부"
+    - "BuildFireCommand, HitScan, Projectile은 같은 최종 FireRequest.AimDirection을 사용한다"
+    - ValidateFireCommand()는 정책이 false일 때만 TurretAligning과 WeaponNotAligned를 거부한다
+    - MuzzleBlocked는 정책과 관계없이 계속 거부한다
+    - 정렬 중 발사 허용 시 Muzzle obstruction 검사는 Reticle 요구 경로가 아니라 실제 최종 발사 경로를 검사한다
+    - "UCFVehicleAimComp의 bLocalCanFire는 정책 true, 유효한 Aim Solution, 유효한 최종 방향, MuzzleBlocked=false이면 정렬 중 true가 될 수 있어야 한다"
+    - LocalReticleState는 발사 허용 여부와 무관하게 정렬 중 TurretAligning을 유지한다
+    - 관련 코드의 Version / Changelog / Migration을 갱신한다
+    - 관련 SSOT와 Systems 문서를 현재 구현 기준으로 갱신한다
+    - Tools\BuildEditor.bat를 실행한다
+  out:
+    - text
+    - WBP 구조 또는 바인딩 변경
+    - Reticle Recovery Hotfix 제거
+    - TurretAligning 상태 또는 amber 표시 제거
+    - 신규 BindWidget
+    - Projectile 터널링 수정
+    - Damage / HP
+    - Ballistic Solver
+    - 네트워크 / 복제
+    - DataAsset 인스턴스 생성 또는 저장
+    - .uasset / .umap / StaticMesh 수정
+    - Git add / commit / push
+ban:
+  - do_not_expand_scope
+  - do_not_create_unrequested_files
+  - do_not_change_unlisted_public_contracts
+  - do_not_treat_review_targets_as_change_targets
+  - do_not_mark_success_with_missing_acceptance
+  - "MuzzleBlocked, FireSuccess, Cooldown, WeaponNotAligned, OutOfArcWarning 의미를 회귀시키지 않는다"
+  - 활성 TurretMountData가 없을 때 새 정책이 Missing Data 검증을 우회하지 않는다
+  - "기존 dirty worktree를 정리, restore, reset, revert하지 않는다"
+  - 기존 .uasset 변경을 이번 작업 변경으로 오인하지 않는다
+  - PIE PASS는 사용자가 직접 확인하기 전까지 기록하지 않는다
+  - commit/push를 수행하지 않는다
+sc:
+  acc:
+    - a1
+    - a2
+    - a3
+    - a4
+    - a5
+    - a6
+  verify:
+    - v1
+    - v2
+    - v3
+    - v4
+acc:
+  - bAllowFireWhileAligning이 존재하고 기본값이 true다
+  - "DisplayName, ToolTip, 버전 주석이 존재한다"
+  - Turret Mount Summary에 정책값이 표시된다
+  - "Aim Solution이 요구 방향, 현재 Muzzle 방향, 최종 발사 방향을 구분한다"
+  - 정책 true이면 정렬 중 발사가 승인된다
+  - 문서는 Build Complete / PIE Pending으로 기록한다
+verify:
+  - text
+  - DA 필드 기본값 true와 ToolTip 확인
+  - Summary 정책값 확인
+  - Aim Solution 방향 3종과 정책값 확인
+fail:
+  - acceptance_criteria를 충족하지 못하면 성공이 아니다
+  - must_change_targets 검토 없이 수정 파일 0개로 종료하면 재검토가 필요하다
+  - 대상 파일 변경 필요성을 확인하지 않고 이미 구현됨으로 종료하면 성공이 아니다
+  - failure_reproduction 입력이 남아 있으면 원인 확인 없이 성공 처리하면 안 된다
+  - target_files 검토 없이 수정 파일 0개로 종료하면 성공이 아니다
+ask_if_missing:
+  - "목표, 범위, 검증 조건 중 하나라도 불명확하면 구현하지 말고 missing contract를 보고한다"
+ref:
+  source: Document/Plan/AimFireAlignment/TaskSource_AlignFireCodex.md
+metadata:
+  ssot_preflight:
+    checked: true
+    profile: codex_task
+    status: ok
+    blocked: false
+    warn_only: true
+    documents:
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_SSOT_Master.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Golden_Path.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Error_Guide.md
+    guidance_codes:
+      - codex_task_slots_required
+      - check_mcp_ssot_before_generation
+      - prefer_plan_build_from_folder_request
+      - use_plan_build_from_folder_request
+      - no_manual_longform_fallback
+    warning_codes:
+      - project_document_path_ignored_for_mcp_ssot_preflight

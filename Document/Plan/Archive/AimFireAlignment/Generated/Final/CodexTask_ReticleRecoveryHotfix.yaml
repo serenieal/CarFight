@@ -1,0 +1,106 @@
+v: 1
+artifact_role: final_codex_input
+codex_input: true
+k: generic_plan_compile
+g: "터렛/총구 정렬 중 LocalReticleState가 Hidden으로 떨어지고, Reticle 위젯 Root가 Collapsed되어 NativeTick() 복구가 끊기는 문제를 수정한다"
+tf:
+  - UE/Source/CarFight_Re/Public/CFVehicleAimTypes.h
+  - UE/Source/CarFight_Re/Public/CFVehicleAimComp.h
+  - UE/Source/CarFight_Re/Private/CFVehicleAimComp.cpp
+  - UE/Source/CarFight_Re/Private/UI/CFAimReticleWidget.cpp
+scope:
+  in:
+    - "ECFVehicleReticleState::TurretAligning을 추가한다"
+    - UCFVehicleAimComp가 유효한 Weapon Aim Solution의 정렬 중 상태를 Hidden이 아니라 TurretAligning으로 반환하게 한다
+    - Reticle 상태 우선순위를 명확히 한다
+    - UCFAimReticleWidget의 상태 기반 숨김에서 Root Collapsed 사용을 제거한다
+    - "실제 Root Visibility는 기존 ACFVehiclePawn::RefreshAimReticleWidget()이 계속 담당하게 한다"
+    - 위젯 내부의 논리적 Hidden은 RenderOpacity 또는 동등한 Tick 유지 방식으로 표현한다
+    - "TurretAligning의 상태 텍스트, Hint, 색상 switch를 추가한다"
+    - 기존 FireFeedback DisplayKey 기반 TurretAligning 표시와 충돌하지 않게 유지한다
+    - 관련 코드 파일의 Version / Changelog / Migration을 갱신한다
+    - 관련 문서를 Hotfix Build Complete / PIE Pending 상태로 갱신한다
+    - Tools\BuildEditor.bat 빌드를 실행한다
+  out:
+    - text
+    - Aim Solution 계산식 변경
+    - Muzzle obstruction 계산 변경
+    - FireRequest 방향/검증 순서 변경
+    - Projectile 터널링 수정
+    - Damage/HP 구현
+    - WBP_AimReticle 구조 변경
+    - 신규 BindWidget 추가
+    - ".uasset, 맵, StaticMesh 수정"
+    - 네트워크/복제
+    - Git commit/push
+ban:
+  - do_not_expand_scope
+  - do_not_create_unrequested_files
+  - do_not_change_unlisted_public_contracts
+  - do_not_treat_review_targets_as_change_targets
+  - do_not_mark_success_with_missing_acceptance
+  - "기존 WeaponNotAligned, MuzzleBlocked, OutOfWeaponArc, FireSuccess, Cooldown 처리 의미를 변경하지 않는다"
+  - WeaponNotAligned는 일반 빨간 FireRejected로 주 Reticle을 덮지 않는다
+  - TurretAligningReticleColor 기존 프로퍼티를 재사용한다. 새 색상 프로퍼티를 만들지 않는다
+  - "Hidden 상태 자체는 삭제하지 않는다. Runtime 미준비, 비로컬 Pawn 등 실제 숨김 용도로 유지한다"
+  - 위젯 자체의 상태 갱신 함수는 Root를 Collapsed 또는 Hidden으로 만들지 않는다
+  - "ACFVehiclePawn::RefreshAimReticleWidget()의 ShouldShowAimReticle() 기반 Root Visibility 정책은 변경하지 않는다"
+  - WBP와 .uasset을 수정하지 않는다
+  - 지정된 코드 파일 외 C++를 수정하지 않는다
+  - 기존 dirty worktree를 정리하거나 되돌리지 않는다
+  - PIE PASS를 주장하지 않는다
+  - commit/push를 수행하지 않는다
+sc:
+  acc:
+    - a1
+    - a2
+    - a3
+    - a4
+    - a5
+    - a6
+  verify:
+    - v1
+    - v2
+    - v3
+    - v4
+acc:
+  - 정렬 중 LocalReticleState가 TurretAligning이다
+  - 정렬 중 Reticle이 사라지지 않는다
+  - 정렬 완료 후 Ready로 전환된다
+  - 논리적 Hidden이 발생해도 위젯 Tick이 중단되지 않고 이후 표시 상태로 복구된다
+  - 위젯 내부 상태 함수가 Root Visibility를 Collapsed로 설정하지 않는다
+  - 문서는 Hotfix Build Complete / PIE Pending으로 기록한다
+verify:
+  - text
+  - ECFVehicleReticleState에 TurretAligning 존재
+  - BuildLocalReticleState 호출과 선언/정의가 새 정렬 인자를 일치시킴
+  - 정상 정렬 대기 경로가 Hidden으로 떨어지지 않음
+fail:
+  - acceptance_criteria를 충족하지 못하면 성공이 아니다
+  - must_change_targets 검토 없이 수정 파일 0개로 종료하면 재검토가 필요하다
+  - 대상 파일 변경 필요성을 확인하지 않고 이미 구현됨으로 종료하면 성공이 아니다
+  - failure_reproduction 입력이 남아 있으면 원인 확인 없이 성공 처리하면 안 된다
+  - target_files 검토 없이 수정 파일 0개로 종료하면 성공이 아니다
+ask_if_missing:
+  - "목표, 범위, 검증 조건 중 하나라도 불명확하면 구현하지 말고 missing contract를 보고한다"
+ref:
+  source: Document/Plan/AimFireAlignment/TaskSource_ReticleRecoveryHotfix.md
+metadata:
+  ssot_preflight:
+    checked: true
+    profile: codex_task
+    status: ok
+    blocked: false
+    warn_only: true
+    documents:
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_SSOT_Master.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Golden_Path.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Error_Guide.md
+    guidance_codes:
+      - codex_task_slots_required
+      - check_mcp_ssot_before_generation
+      - prefer_plan_build_from_folder_request
+      - use_plan_build_from_folder_request
+      - no_manual_longform_fallback
+    warning_codes:
+      - project_document_path_ignored_for_mcp_ssot_preflight

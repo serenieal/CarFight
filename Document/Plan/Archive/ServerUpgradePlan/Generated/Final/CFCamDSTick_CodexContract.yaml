@@ -1,0 +1,84 @@
+v: 1
+artifact_role: final_codex_input
+codex_input: true
+k: generic_plan_compile
+g: Clean up UCFVehicleCameraComp so camera runtime work is skipped on a Dedicated Server
+tf:
+  - UE/Source/CarFight_Re/Public/CFVehicleCameraComp.h
+  - UE/Source/CarFight_Re/Private/CFVehicleCameraComp.cpp
+scope:
+  in:
+    - Add a small helper function named ShouldSkipCameraRuntimeOnDedicatedServer or another equally clear name
+    - The helper should return true when the world exists and the net mode is NM_DedicatedServer
+    - "In BeginPlay, when the helper returns true, disable this component tick and return before camera runtime initialization"
+    - "In TickComponent, when the helper returns true, disable this component tick and return before camera update work"
+    - "In InitializeCameraRuntime, when the helper returns true, set bCameraRuntimeReady to false and return false before camera reference lookup"
+    - Keep non-Dedicated Server camera behavior unchanged
+    - Keep listen server and client camera behavior unchanged
+    - Add one-line Korean comments above new function declarations and definitions
+    - Update file header version comments if present
+  out:
+    - CFVehiclePawn.h
+    - CFVehiclePawn.cpp
+    - UI widget files
+    - Config files
+    - Map files
+    - Blueprint assets
+    - Vehicle movement replication
+    - "Combat, damage, respawn, lobby, or session work"
+ban:
+  - do_not_expand_scope
+  - do_not_create_unrequested_files
+  - do_not_change_unlisted_public_contracts
+  - do_not_treat_review_targets_as_change_targets
+  - do_not_mark_success_with_missing_acceptance
+sc:
+  acc:
+    - a1
+    - a2
+    - a_target_review
+  verify:
+    - v1
+    - v2
+    - v3
+    - v4
+acc:
+  - UCFVehicleCameraComp skips camera runtime work on Dedicated Server
+  - Component tick is disabled on Dedicated Server after the skip path is detected
+  - Editor target builds
+  - Server target builds
+  - Only the two target files are changed
+verify:
+  - Build CarFight_ReEditor Win64 Development
+  - Build CarFight_ReServer Win64 Development
+  - Confirm the helper exists in CFVehicleCameraComp
+  - Confirm no unrelated files changed
+fail:
+  - acceptance_criteria를 충족하지 못하면 성공이 아니다
+  - must_change_targets 검토 없이 수정 파일 0개로 종료하면 재검토가 필요하다
+  - 대상 파일 변경 필요성을 확인하지 않고 이미 구현됨으로 종료하면 성공이 아니다
+  - failure_reproduction 입력이 남아 있으면 원인 확인 없이 성공 처리하면 안 된다
+  - target_files 검토 없이 수정 파일 0개로 종료하면 성공이 아니다
+ask_if_missing:
+  - "목표, 범위, 검증 조건 중 하나라도 불명확하면 구현하지 말고 missing contract를 보고한다"
+ref:
+  source: Document/ProjectSSOT/Plan/ServerUpgradePlan/CodexTasks/CFCamDSTick_TaskSource.md
+metadata:
+  ssot_preflight:
+    checked: true
+    profile: codex_task
+    status: ok
+    blocked: false
+    warn_only: true
+    documents:
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_SSOT_Master.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Golden_Path.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Error_Guide.md
+    guidance_codes:
+      - codex_task_slots_required
+      - check_mcp_ssot_before_generation
+      - prefer_plan_build_from_folder_request
+      - use_plan_build_from_folder_request
+      - no_manual_longform_fallback
+    warning_codes:
+      - project_document_path_ignored_for_mcp_ssot_preflight

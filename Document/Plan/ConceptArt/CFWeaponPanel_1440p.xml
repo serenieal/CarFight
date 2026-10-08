@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="928" height="720" viewBox="0 0 464 360" role="img" aria-labelledby="title desc">
+  <title id="title">CarFight Weapon Panel — Accepted Visual Layout</title>
+  <desc id="desc">우하단 464×360 투명 슬롯 안에서 선택 무기를 강하게 강조하고 비선택 무기를 최대 3개 Compact Tile로 축약한 승인된 무기 패널 Visual Layout</desc>
+  <defs>
+    <linearGradient id="ammoFill" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#55C7E8" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#75D5EF" stop-opacity="1"/>
+    </linearGradient>
+    <linearGradient id="heatFill" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#F1B84B"/>
+      <stop offset="1" stop-color="#FF714D"/>
+    </linearGradient>
+    <style><![CDATA[
+      .previewBg { fill:#081018; }
+      .slotGuide { fill:none; stroke:#324653; stroke-width:1; stroke-dasharray:6 5; }
+      .selectedCard { fill:#111B24; fill-opacity:.90; stroke:#55C7E8; stroke-width:3; }
+      .selectedInner { fill:#0B1117; fill-opacity:.72; stroke:#324653; stroke-width:1; }
+      .compactCard { fill:#111B24; fill-opacity:.58; stroke:#577080; stroke-width:1.5; }
+      .overflowCard { fill:#0B1117; fill-opacity:.48; stroke:#577080; stroke-width:1.5; stroke-dasharray:5 4; }
+      .fireStrip { fill:#F1B84B; fill-opacity:.14; stroke:#F1B84B; stroke-width:1.5; }
+      .line { fill:none; stroke:#324653; stroke-width:1; }
+      .cyanLine { fill:none; stroke:#55C7E8; stroke-width:2; }
+      .title { font-family:'Segoe UI','Noto Sans KR',sans-serif; fill:#EAF2F7; font-size:17px; font-weight:700; }
+      .heading { font-family:'Segoe UI','Noto Sans KR',sans-serif; fill:#EAF2F7; font-size:14px; font-weight:600; }
+      .primary { font-family:'Consolas','Segoe UI',monospace; fill:#EAF2F7; font-size:38px; font-weight:700; }
+      .value { font-family:'Consolas','Segoe UI',monospace; fill:#EAF2F7; font-size:16px; font-weight:700; }
+      .compactValue { font-family:'Consolas','Segoe UI',monospace; fill:#EAF2F7; font-size:13px; font-weight:700; }
+      .label { font-family:'Segoe UI','Noto Sans KR',sans-serif; fill:#A3B2BC; font-size:11px; font-weight:600; }
+      .caption { font-family:'Segoe UI','Noto Sans KR',sans-serif; fill:#7A8A95; font-size:9px; }
+      .amber { fill:#F1B84B; }
+      .cyan { fill:#55C7E8; }
+      .muted { fill:#61717C; }
+    ]]></style>
+  </defs>
+
+  <!-- Preview background only. Runtime root remains transparent. -->
+  <rect class="previewBg" x="0" y="0" width="464" height="360"/>
+  <rect class="slotGuide" x="1" y="1" width="462" height="358" rx="6"/>
+
+  <!-- Selected weapon card: X16 Y16 W432 H224 -->
+  <g id="selected-weapon-card">
+    <path class="selectedCard" d="M16 16 H432 L448 32 V240 H16 Z"/>
+    <path class="cyanLine" d="M16 62 V16 H108"/>
+    <path class="cyan" d="M424 16 H448 V40 L440 32 H424 Z"/>
+
+    <!-- Header -->
+    <g id="selected-header">
+      <rect x="28" y="28" width="34" height="32" rx="4" fill="#55C7E8" fill-opacity=".18" stroke="#55C7E8" stroke-width="1.5"/>
+      <text class="value" x="39" y="51">1</text>
+      <path d="M74 38 H92 L100 44 V52 L92 58 H74 L68 52 V44 Z" fill="#55C7E8" fill-opacity=".16" stroke="#55C7E8" stroke-width="1.5"/>
+      <line x1="100" y1="48" x2="112" y2="48" stroke="#55C7E8" stroke-width="2"/>
+      <text class="title" x="122" y="50">중기관포</text>
+      <text class="caption" x="122" y="62">현재 선택 무기</text>
+      <rect x="352" y="31" width="84" height="26" rx="4" fill="#55C7E8" fill-opacity=".14" stroke="#55C7E8" stroke-width="1.2"/>
+      <text class="label" x="369" y="49" fill="#55C7E8">SELECTED</text>
+    </g>
+
+    <!-- Primary ammo channel -->
+    <g id="primary-channel">
+      <rect class="selectedInner" x="28" y="76" width="408" height="72" rx="5"/>
+      <text class="label" x="40" y="95">탄약 / AMMO</text>
+      <text class="primary" x="40" y="133">20 | 120</text>
+      <text class="caption" x="235" y="120">장전</text>
+      <text class="caption" x="235" y="134">사용 가능</text>
+      <rect x="340" y="90" width="82" height="8" rx="4" fill="#22313A"/>
+      <rect x="340" y="90" width="61" height="8" rx="4" fill="url(#ammoFill)"/>
+      <text class="caption" x="340" y="116">Primary 1개만 대형 표시</text>
+      <text class="caption" x="340" y="132">미지원 채널은 숨김</text>
+    </g>
+
+    <!-- Secondary channel A: Heat -->
+    <g id="secondary-heat">
+      <rect class="selectedInner" x="28" y="156" width="198" height="40" rx="4"/>
+      <text class="label" x="38" y="172">열 / HEAT</text>
+      <text class="value" x="177" y="175">38%</text>
+      <rect x="38" y="181" width="174" height="7" rx="3.5" fill="#22313A"/>
+      <rect x="38" y="181" width="66" height="7" rx="3.5" fill="url(#heatFill)"/>
+    </g>
+
+    <!-- Secondary channel B: Cooldown -->
+    <g id="secondary-cooldown">
+      <rect class="selectedInner" x="238" y="156" width="198" height="40" rx="4"/>
+      <text class="label" x="248" y="172">쿨다운</text>
+      <text class="value" x="385" y="175">0.8초</text>
+      <rect x="248" y="181" width="174" height="7" rx="3.5" fill="#22313A"/>
+      <rect x="248" y="181" width="104" height="7" rx="3.5" fill="#72C7D9"/>
+    </g>
+
+    <!-- Fire state strip -->
+    <g id="fire-state-strip">
+      <rect class="fireStrip" x="28" y="204" width="408" height="28" rx="4"/>
+      <path d="M41 211 L47 225 L53 211 Z" fill="#F1B84B"/>
+      <text class="heading" x="64" y="223" fill="#F1B84B">재사용 대기</text>
+      <text class="caption" x="331" y="222">대표 상태 한 줄</text>
+    </g>
+  </g>
+
+  <!-- Compact weapon rail: X16 Y248 W432 H96 -->
+  <g id="compact-weapon-rail">
+    <!-- Tile 1 -->
+    <g id="compact-launcher">
+      <rect class="compactCard" x="16" y="248" width="136" height="96" rx="6"/>
+      <rect x="26" y="258" width="24" height="22" rx="3" fill="#111B24" stroke="#577080" stroke-width="1"/>
+      <text class="compactValue" x="34" y="274">2</text>
+      <path d="M60 263 H78 L84 268 V274 L78 279 H60 Z" fill="#F1B84B" fill-opacity=".16" stroke="#F1B84B" stroke-width="1"/>
+      <text class="label" x="26" y="296">로켓 런처</text>
+      <text class="compactValue" x="26" y="319">RIPPLE 2/4</text>
+      <line x1="26" y1="333" x2="142" y2="333" stroke="#F1B84B" stroke-width="2"/>
+    </g>
+
+    <!-- Tile 2 -->
+    <g id="compact-laser">
+      <rect class="compactCard" x="164" y="248" width="136" height="96" rx="6"/>
+      <rect x="174" y="258" width="24" height="22" rx="3" fill="#111B24" stroke="#577080" stroke-width="1"/>
+      <text class="compactValue" x="182" y="274">3</text>
+      <circle cx="218" cy="269" r="10" fill="#55C7E8" fill-opacity=".12" stroke="#55C7E8" stroke-width="1"/>
+      <path d="M212 269 H224 M218 263 V275" stroke="#55C7E8" stroke-width="1.5"/>
+      <text class="label" x="174" y="296">펄스 레이저</text>
+      <text class="compactValue" x="174" y="319">CHG 74%</text>
+      <line x1="174" y1="333" x2="290" y2="333" stroke="#55C7E8" stroke-width="2" opacity=".62"/>
+    </g>
+
+    <!-- Overflow tile -->
+    <g id="compact-overflow">
+      <rect class="overflowCard" x="312" y="248" width="136" height="96" rx="6"/>
+      <text class="primary" x="352" y="303" font-size="30">+2</text>
+      <text class="caption" x="334" y="325">추가 무기 그룹</text>
+    </g>
+  </g>
+
+  <text class="caption" x="181" y="356">D1-WEAPON-PANEL Visual Layout Accepted · Runtime/UMG Pending</text>
+</svg>

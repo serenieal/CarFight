@@ -1,0 +1,98 @@
+v: 1
+artifact_role: final_codex_input
+codex_input: true
+k: generic_plan_compile
+g: "Core Task가 추가한 TurretAligning, WeaponNotAligned, MuzzleBlocked, FCFVehicleWeaponAimSolution을 기존 Reticle과 VehicleDebug에 연결하고 관련 문서를 Build Complete / PIE Pending 상태로 갱신한다"
+tf:
+  - UE/Source/CarFight_Re/Public/UI/CFAimReticleWidget.h
+  - UE/Source/CarFight_Re/Private/UI/CFAimReticleWidget.cpp
+  - UE/Source/CarFight_Re/Private/UI/CFVehicleDebugPanelWidget.cpp
+scope:
+  in:
+    - Reticle의 모든 enum switch에 TurretAligning을 추가한다
+    - 기존 이미지/TextBlock을 사용해 정렬 중 상태의 한국어 문구와 색상을 표시한다
+    - WeaponNotAligned가 빨간 FireRejected로 주 Reticle을 덮지 않는 Core 정책을 UI에서 유지한다
+    - MuzzleBlocked는 Blocked/AimBlocked 주황 표시를 사용한다
+    - VehicleDebug Aim 또는 Weapon 섹션에 Weapon Aim Solution 필드를 표시한다
+    - 신규 RejectReason과 ReticleState의 Debug 표시 문자열을 추가한다
+    - 관련 Plan/SSOT/Systems 문서의 Version / Changelog / Migration을 갱신한다
+    - "CF-FQ-022는 Active, CF-TC-019는 PARTIAL로 기록하고 PIE PASS는 기록하지 않는다"
+    - 최종 BuildEditor.bat를 실행한다
+  out:
+    - text
+    - Core Camera/Aim/Pawn 계산 변경
+    - 발사 방향/검증 로직 재설계
+    - WBP_AimReticle 구조 또는 .uasset 수정
+    - 신규 TextBlock/Image 바인딩
+    - Projectile 터널링 수정
+    - 실제 Damage/HP
+    - 탄도 Solver/선행 조준/락온
+    - 네트워크/복제
+    - VFX/SFX/애니메이션
+ban:
+  - do_not_expand_scope
+  - do_not_create_unrequested_files
+  - do_not_change_unlisted_public_contracts
+  - do_not_treat_review_targets_as_change_targets
+  - do_not_mark_success_with_missing_acceptance
+  - 기존 WBP Optional 바인딩 이름과 빈 BP Graph를 변경하지 않는다
+  - 신규 WBP 요소는 만들지 않는다
+  - WeaponNotAligned는 LastFireResult/Debug에는 보이지만 일반 FireRejected 텍스트와 빨간색으로 주 Reticle을 덮지 않는다
+  - 지정된 C++ 파일 외 코드/자산을 수정하지 않는다
+  - 기존 dirty worktree를 정리하거나 되돌리지 않는다
+  - commit / push 금지
+  - 빌드 성공만 기록하고 PIE PASS를 주장하지 않는다
+sc:
+  acc:
+    - a1
+    - a2
+    - a3
+    - a4
+    - a5
+    - a_docs_synced
+  verify:
+    - v1
+    - v2
+    - v3
+    - v4
+acc:
+  - TurretAligning 상태 문구와 Hint가 한국어로 표시된다
+  - TurretAligning 기본 색상이 편집 가능한 amber 값이다
+  - WeaponNotAligned가 빨간 FireRejected로 주 Reticle을 덮지 않는다
+  - MuzzleBlocked는 Blocked/AimBlocked 주황 표시다
+  - OutOfArc 전용 warning 정책이 유지된다
+  - 관련 문서 Version/Changelog/Migration이 갱신된다
+verify:
+  - text
+  - ECFVehicleReticleState switch에 TurretAligning 누락 없음
+  - RejectReason 표시 switch에 WeaponNotAligned/MuzzleBlocked 누락 없음
+  - WBP BindWidget 이름 변화 없음
+fail:
+  - acceptance_criteria를 충족하지 못하면 성공이 아니다
+  - must_change_targets 검토 없이 수정 파일 0개로 종료하면 재검토가 필요하다
+  - 대상 파일 변경 필요성을 확인하지 않고 이미 구현됨으로 종료하면 성공이 아니다
+  - failure_reproduction 입력이 남아 있으면 원인 확인 없이 성공 처리하면 안 된다
+  - target_files 검토 없이 수정 파일 0개로 종료하면 성공이 아니다
+ask_if_missing:
+  - "목표, 범위, 검증 조건 중 하나라도 불명확하면 구현하지 말고 missing contract를 보고한다"
+ref:
+  source: Document/Plan/AimFireAlignment/TaskSource_AimFireAlignment_Presentation.md
+metadata:
+  ssot_preflight:
+    checked: true
+    profile: codex_task
+    status: ok
+    blocked: false
+    warn_only: true
+    documents:
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_SSOT_Master.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Golden_Path.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Error_Guide.md
+    guidance_codes:
+      - codex_task_slots_required
+      - check_mcp_ssot_before_generation
+      - prefer_plan_build_from_folder_request
+      - use_plan_build_from_folder_request
+      - no_manual_longform_fallback
+    warning_codes:
+      - project_document_path_ignored_for_mcp_ssot_preflight

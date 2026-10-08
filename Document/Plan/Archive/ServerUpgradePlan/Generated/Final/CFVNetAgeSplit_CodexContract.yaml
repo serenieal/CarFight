@@ -1,0 +1,91 @@
+v: 1
+artifact_role: final_codex_input
+codex_input: true
+k: generic_plan_compile
+g: Separate VehicleNetDebug time diagnostics into ServerTimeDelta and ReceivedAge
+tf:
+  - UE/Source/CarFight_Re/Public/CFVehiclePawn.h
+  - UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp
+  - Document/Plan/ServerUpgradePlan/CodexTasks/CFVNetAgeSplit_Review.md
+scope:
+  in:
+    - The task is in scope for VehicleNetDebug age diagnostics
+    - Add a client-local float field to ACFVehiclePawn for the local time when VehicleNetDebugServerSample was received
+    - "Recommended name: LastVehicleNetDebugSampleReceiveLocalTimeSec"
+    - Initialize the field to -1.0f
+    - The new receive timestamp field must not be replicated
+    - Add a one-line Korean comment above the new field
+    - "If UPROPERTY is used for the field, include Korean DisplayName and ToolTip"
+    - "In OnRep_VehicleNetDebugServerSample, store GetWorld()->GetTimeSeconds() into the receive timestamp before calling LogVehicleNetDebugClientError"
+    - "In LogVehicleNetDebugClientError, calculate ServerTimeDeltaSec from CurrentServerTimeSeconds minus VehicleNetDebugServerSample.ServerWorldTimeSeconds when both server time values are valid. Otherwise use -1.0f"
+    - "In LogVehicleNetDebugClientError, calculate ReceivedAgeSec from CurrentWorldTimeSec minus LastVehicleNetDebugSampleReceiveLocalTimeSec when the receive timestamp is valid. Otherwise use -1.0f"
+    - Preserve existing VehicleNetDebug log prefix
+    - Preserve existing VehicleNetDebug fields
+    - Add ServerTimeDelta and ReceivedAge to the log line
+    - "Keep SampleAge in the log for compatibility. For this task, SampleAge may output the same value as ServerTimeDeltaSec"
+    - Update local comments/version notes around changed code to v2.24.0
+    - Bump CFVehiclePawn.h and CFVehiclePawn.cpp file header version to v2.24.0 if the file currently uses version headers
+ban:
+  - do_not_expand_scope
+  - do_not_create_unrequested_files
+  - do_not_change_unlisted_public_contracts
+  - do_not_treat_review_targets_as_change_targets
+  - do_not_mark_success_with_missing_acceptance
+  - Do not add new C++ files for this task
+  - Do not silently change existing public API semantics beyond the diagnostic log additions
+  - Do not change runtime movement behavior
+  - Do not change physics simulation behavior
+sc:
+  acc:
+    - a1
+    - a2
+    - a3
+    - a4
+    - a5
+    - a6
+  verify:
+    - v1
+    - v2
+    - v3
+    - v4
+acc:
+  - "Accept the task only when all conditions are true:"
+  - Code changes are limited to CFVehiclePawn.h and CFVehiclePawn.cpp
+  - CFVNetAgeSplit_Review.md is created
+  - VehicleNetDebug log prefix remains unchanged
+  - Existing log fields remain present
+  - New log fields ServerTimeDelta and ReceivedAge are present
+verify:
+  - Build CarFight_ReEditor Win64 Development
+  - Build CarFight_ReServer Win64 Development
+  - "Search CFVehiclePawn.cpp for SetActorLocation, SetActorRotation, and TeleportTo"
+  - Confirm no forbidden Transform correction call was introduced
+fail:
+  - acceptance_criteria를 충족하지 못하면 성공이 아니다
+  - must_change_targets 검토 없이 수정 파일 0개로 종료하면 재검토가 필요하다
+  - 대상 파일 변경 필요성을 확인하지 않고 이미 구현됨으로 종료하면 성공이 아니다
+  - failure_reproduction 입력이 남아 있으면 원인 확인 없이 성공 처리하면 안 된다
+  - target_files 검토 없이 수정 파일 0개로 종료하면 성공이 아니다
+ask_if_missing:
+  - "목표, 범위, 검증 조건 중 하나라도 불명확하면 구현하지 말고 missing contract를 보고한다"
+ref:
+  source: Document/Plan/ServerUpgradePlan/CodexTasks/CFVNetAgeSplit_TaskSource.md
+metadata:
+  ssot_preflight:
+    checked: true
+    profile: codex_task
+    status: ok
+    blocked: false
+    warn_only: true
+    documents:
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_SSOT_Master.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Golden_Path.md
+      - GoPyMCP/Workspace/docs/mcp_ssot/MCP_Error_Guide.md
+    guidance_codes:
+      - codex_task_slots_required
+      - check_mcp_ssot_before_generation
+      - prefer_plan_build_from_folder_request
+      - use_plan_build_from_folder_request
+      - no_manual_longform_fallback
+    warning_codes:
+      - project_document_path_ignored_for_mcp_ssot_preflight

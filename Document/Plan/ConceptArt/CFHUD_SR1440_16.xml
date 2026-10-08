@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="2560" height="1440" viewBox="0 0 2560 1440" role="img" aria-labelledby="title desc">
+  <title id="title">CarFight D1-07 SR-1440-16 Combat Busy Static Mockup</title>
+  <desc id="desc">D1-01~06 승인 기본 Preset을 적용한 2560x1440 16:9 외부 3인칭 TPS 정적 HUD 검토용 Mockup. Mock View Data이며 Runtime 구현 증거가 아니다.</desc>
+  <defs>
+    <style><![CDATA[
+      .worldBg{fill:#101a20}.sky{fill:#192a32}.ground{fill:#162126}.road{fill:#263238}.edge{fill:#0d161b}.panel{fill:#0B1117;fill-opacity:.80;stroke:#577080;stroke-width:2}.raised{fill:#111B24;fill-opacity:.88;stroke:#324653;stroke-width:1}.soft{fill:#111B24;fill-opacity:.56;stroke:#324653;stroke-width:1}.cyanStroke{fill:none;stroke:#55C7E8;stroke-width:3}.line{fill:none;stroke:#577080;stroke-width:2}.sub{fill:none;stroke:#324653;stroke-width:1}.ui{font-family:'Pretendard','Noto Sans KR','Segoe UI',sans-serif}.num{font-family:'IBM Plex Mono','Consolas',monospace}.h{fill:#EAF2F7;font-size:24px;font-weight:600}.body{fill:#EAF2F7;font-size:20px}.label{fill:#A3B2BC;font-size:16px;font-weight:500}.caption{fill:#7A8A95;font-size:14px}.small{fill:#A3B2BC;font-size:14px}.speed{fill:#EAF2F7;font-size:52px;font-weight:700}.primary{fill:#EAF2F7;font-size:38px;font-weight:700}.value{fill:#EAF2F7;font-size:20px;font-weight:600}.tile{fill:#EAF2F7;font-size:14px;font-weight:600}.cyan{fill:#55C7E8}.amber{fill:#F1B84B}.danger{fill:#FF714D}.critical{fill:#FF3F46}.armor{fill:#D6A448}.shield{fill:#59D5E6}.integrity{fill:#F0644F}.friendly{fill:#53A9FF}.neutral{fill:#D5C777}.hostile{fill:#FF644F}.unknown{fill:#A7ADB3}
+    ]]></style>
+  </defs>
+
+  <!-- Static review world backdrop, not gameplay capture -->
+  <rect class="worldBg" x="0" y="0" width="2560" height="1440"/>
+  <rect class="sky" x="0" y="0" width="2560" height="610"/>
+  <path class="ground" d="M0 610 H2560 V1440 H0 Z"/>
+  <path class="road" d="M790 1440 L1110 610 H1450 L1770 1440 Z"/>
+  <path class="edge" d="M0 610 H880 L1040 1440 H0 Z M1680 610 H2560 V1440 H1520 Z"/>
+  <path fill="#24383f" d="M0 500 L360 410 L650 500 V650 H0 Z"/>
+  <path fill="#24383f" d="M1910 480 L2200 370 L2560 450 V650 H1910 Z"/>
+
+  <!-- enemy vehicle and selected target marker -->
+  <g id="enemy" transform="translate(1510 505)">
+    <path fill="#3b4a50" stroke="#7F98A8" stroke-width="2" d="M-62 14 L-42 -18 H42 L62 14 L48 50 H-48 Z"/>
+    <rect x="-28" y="-36" width="56" height="24" rx="5" fill="#2b3940"/>
+    <path class="hostile" d="M0 -76 L11 -65 L0 -54 L-11 -65 Z"/>
+    <path class="cyanStroke" d="M-72 -82 H-46 M-72 -82 V-56 M72 -82 H46 M72 -82 V-56 M-72 72 H-46 M-72 72 V46 M72 72 H46 M72 72 V46"/>
+    <path fill="none" stroke="#F1B84B" stroke-width="4" stroke-linecap="round" d="M-88 -44 A98 98 0 0 1 -46 -86 M46 -86 A98 98 0 0 1 88 -44 M88 44 A98 98 0 0 1 46 86"/>
+  </g>
+
+  <!-- center reticle -->
+  <g id="reticle" transform="translate(1280 610)">
+    <circle fill="none" stroke="#55C7E8" stroke-width="2" cx="0" cy="0" r="18"/>
+    <path class="cyanStroke" d="M-64 0 H-30 M30 0 H64 M0 -64 V-30 M0 30 V64"/>
+    <circle class="cyan" cx="0" cy="0" r="4"/>
+  </g>
+
+  <!-- player vehicle -->
+  <g id="player" transform="translate(1280 1175)">
+    <path fill="#3b4a50" stroke="#7F98A8" stroke-width="3" d="M-165 15 L-120 -100 H120 L165 15 L138 105 H-138 Z"/>
+    <rect x="-76" y="-145" width="152" height="76" rx="18" fill="#2a3941" stroke="#577080" stroke-width="2"/>
+    <rect x="-27" y="-190" width="54" height="60" rx="10" fill="#22313A" stroke="#7F98A8" stroke-width="2"/>
+  </g>
+
+  <!-- mission -->
+  <g id="mission">
+    <path class="panel" d="M64 64 H548 L564 80 V180 H64 Z"/>
+    <rect class="cyan" x="64" y="64" width="6" height="116"/>
+    <text class="ui label" x="88" y="96">현재 목표</text>
+    <text class="ui h" x="88" y="132">호송 차량을 보호하십시오</text>
+    <text class="ui caption" x="88" y="160">잔여 적대 차량 3</text>
+  </g>
+
+  <!-- alert feed: two warnings -->
+  <g id="alerts">
+    <path class="panel" d="M920 64 H1640 L1656 80 V172 H920 Z"/>
+    <rect class="amber" x="920" y="64" width="6" height="108"/>
+    <path class="amber" d="M954 88 L966 112 H942 Z"/>
+    <text class="ui body" x="980" y="106">전방 장갑 주의</text>
+    <text class="ui caption" x="980" y="132">최근 정면 피격 · 장갑 30%</text>
+    <line class="sub" x1="1260" y1="84" x2="1260" y2="152"/>
+    <text class="ui body" x="1290" y="106">RIPPLE 진행 중</text>
+    <text class="ui caption" x="1290" y="132">발사 시퀀스 2 / 4</text>
+  </g>
+
+  <!-- target panel -->
+  <g id="target-panel">
+    <path class="panel" d="M2080 64 H2480 L2496 80 V374 H2080 Z"/>
+    <path class="hostile" d="M2112 90 L2124 102 L2112 114 L2100 102 Z"/>
+    <text class="ui h" x="2142" y="112">적대 차량</text>
+    <text class="ui label" x="2112" y="154">거리</text><text class="num value" x="2394" y="154">842 m</text>
+    <text class="ui label" x="2112" y="190">식별</text><text class="ui value unknown" x="2394" y="190">???</text>
+    <text class="ui label" x="2112" y="226">장갑 상태</text><text class="ui value unknown" x="2394" y="226">???</text>
+    <text class="ui label" x="2112" y="262">스캔</text><text class="num value" x="2394" y="262">35%</text>
+    <rect x="2112" y="282" width="352" height="8" rx="4" fill="#22313A"/><rect class="cyan" x="2112" y="282" width="123" height="8" rx="4"/>
+    <text class="ui caption" x="2112" y="326">HOSTILE 관계색 유지</text>
+    <path class="cyanStroke" d="M2440 92 H2464 V116 M2088 346 V322"/>
+  </g>
+
+  <!-- vehicle panel accepted landscape layout -->
+  <g id="vehicle-panel">
+    <path class="panel" d="M64 960 H944 L960 976 V1376 H64 Z"/>
+    <rect class="raised" x="84" y="976" width="320" height="272" rx="8"/>
+    <text class="ui caption" x="108" y="1006">SPEED</text>
+    <path d="M112 1190 A118 118 0 0 1 306 1048" fill="none" stroke="#22313A" stroke-width="16" stroke-linecap="round"/>
+    <path d="M112 1190 A118 118 0 0 1 270 1061" fill="none" stroke="#55C7E8" stroke-width="16" stroke-linecap="round"/>
+    <text class="num speed" x="160" y="1190">076</text><text class="ui label" x="300" y="1186">km/h</text>
+    <rect x="322" y="1045" width="58" height="54" rx="6" fill="#55C7E8" fill-opacity=".12" stroke="#55C7E8"/><text class="num h cyan" x="340" y="1082">D</text>
+    <text class="num h" x="340" y="1140" fill="#61717C">N</text><text class="num h" x="340" y="1195" fill="#61717C">R</text>
+
+    <rect class="raised" x="416" y="976" width="524" height="272" rx="8"/>
+    <path fill="#263640" stroke="#7F98A8" stroke-width="2" d="M612 1040 L564 1058 L544 1086 V1138 L564 1166 L612 1184 H758 L798 1166 L816 1138 V1086 L798 1058 L758 1040 Z"/>
+    <path fill="#D6A448" fill-opacity=".18" stroke="#F1B84B" stroke-width="2" d="M450 1062 H520 L536 1080 V1140 L520 1158 H450 L436 1140 V1080 Z"/>
+    <text class="num value" x="456" y="1118">30/100</text>
+    <path fill="#D6A448" fill-opacity=".15" stroke="#D6A448" stroke-width="2" d="M612 1022 H756 L772 1034 L756 1054 H612 L596 1034 Z"/><text class="num value" x="648" y="1047">70/100</text>
+    <path fill="#D6A448" fill-opacity=".15" stroke="#D6A448" stroke-width="2" d="M834 1062 H904 L918 1080 V1140 L904 1158 H834 L820 1140 V1080 Z"/><text class="num value" x="840" y="1118">60/80</text>
+    <path fill="#FF714D" fill-opacity=".15" stroke="#FF714D" stroke-width="2" d="M612 1178 H756 L772 1194 L756 1216 H612 L596 1194 Z"/><text class="num value" x="648" y="1208">63/100</text>
+    <path fill="#D6A448" fill-opacity=".15" stroke="#D6A448" stroke-width="2" d="M436 994 H536 L548 1006 L536 1032 H436 L426 1020 Z"/><text class="ui small" x="446" y="1013">상부</text><text class="num tile" x="486" y="1029">80/100</text>
+    <path fill="#FF714D" fill-opacity=".15" stroke="#FF714D" stroke-width="2" d="M812 1182 H912 L928 1194 L918 1226 H812 L800 1214 Z"/><text class="ui small" x="820" y="1201">하부</text><text class="num tile" x="858" y="1219">60/80</text>
+
+    <!-- shield semantic icon + row -->
+    <path fill="none" stroke="#59D5E6" stroke-width="2" d="M92 1278 L104 1270 L116 1278 V1292 L104 1300 L92 1292 Z"/>
+    <text class="ui label" x="128" y="1291">쉴드</text><rect x="198" y="1278" width="624" height="10" rx="5" fill="#22313A"/><rect class="shield" x="198" y="1278" width="487" height="10" rx="5"/><text class="num value" x="842" y="1292">78/100</text>
+    <!-- integrity chassis icon + row -->
+    <path fill="none" stroke="#F0644F" stroke-width="2" d="M90 1334 H116 L122 1342 V1354 H84 V1342 Z M92 1334 L98 1326 H108 L114 1334"/>
+    <text class="ui label" x="128" y="1350">차량 내구도</text><rect x="238" y="1334" width="584" height="16" rx="5" fill="#2A1619"/><rect class="integrity" x="238" y="1334" width="479" height="16" rx="5"/><text class="num value" x="842" y="1350">82/100</text>
+  </g>
+
+  <!-- radar -->
+  <g id="radar">
+    <path class="panel" d="M1090 1016 H1454 L1470 1032 V1376 H1090 Z"/>
+    <text class="ui label" x="1212" y="1050">RADAR</text>
+    <circle cx="1280" cy="1200" r="138" fill="#111B24" fill-opacity=".56" stroke="#577080" stroke-width="2"/>
+    <circle cx="1280" cy="1200" r="92" class="sub"/><circle cx="1280" cy="1200" r="46" class="sub"/>
+    <line class="sub" x1="1142" y1="1200" x2="1418" y2="1200"/><line class="sub" x1="1280" y1="1062" x2="1280" y2="1338"/>
+    <path class="cyan" d="M1280 1174 L1268 1204 L1280 1196 L1292 1204 Z"/>
+    <circle class="friendly" cx="1210" cy="1250" r="7"/>
+    <rect class="neutral" x="1322" y="1270" width="14" height="14"/>
+    <path class="hostile" d="M1362 1118 L1372 1128 L1362 1138 L1352 1128 Z"/>
+    <path class="cyanStroke" d="M1344 1108 H1352 M1344 1108 V1116 M1380 1108 H1372 M1380 1108 V1116 M1344 1148 H1352 M1344 1148 V1140 M1380 1148 H1372 M1380 1148 V1140"/>
+    <path fill="none" stroke="#A7ADB3" stroke-width="2" d="M1184 1134 L1193 1143 L1184 1152 L1175 1143 Z"/>
+  </g>
+
+  <!-- compact weapon panel: full 360x254 content inside 464x360 max slot -->
+  <g id="weapon-panel">
+    <path fill="#111B24" fill-opacity=".90" stroke="#55C7E8" stroke-width="3" d="M2136 1122 H2480 L2496 1138 V1300 H2136 Z"/>
+    <path class="cyanStroke" d="M2136 1164 V1122 H2218 M2472 1122 H2496 V1146"/>
+    <text class="num value" x="2150" y="1154">1</text>
+    <path fill="#55C7E8" fill-opacity=".14" stroke="#55C7E8" stroke-width="1.5" d="M2176 1138 H2196 L2203 1144 V1150 L2196 1156 H2176 L2169 1150 V1144 Z"/><line x1="2203" y1="1147" x2="2216" y2="1147" stroke="#55C7E8" stroke-width="2"/>
+    <text class="ui body" x="2228" y="1154">중기관포</text>
+    <text class="ui label" x="2150" y="1190">탄약</text><text class="num primary" x="2150" y="1232">20 | 120</text>
+    <text class="ui small" x="2360" y="1192">열</text><text class="num value" x="2436" y="1192">38%</text>
+    <rect x="2360" y="1203" width="120" height="4" rx="2" fill="#22313A"/><rect class="amber" x="2360" y="1203" width="46" height="4" rx="2"/>
+    <text class="ui small" x="2360" y="1230">쿨다운</text><text class="num value" x="2420" y="1230">0.8s</text>
+    <rect x="2360" y="1241" width="120" height="4" rx="2" fill="#22313A"/><rect class="cyan" x="2360" y="1241" width="72" height="4" rx="2"/>
+    <rect x="2148" y="1262" width="336" height="26" rx="4" fill="#F1B84B" fill-opacity=".12" stroke="#F1B84B" stroke-width="1"/>
+    <path class="amber" d="M2162 1268 L2170 1282 L2178 1268 Z"/><text class="ui tile amber" x="2188" y="1280">재사용 대기</text>
+
+    <g id="rail">
+      <rect class="soft" x="2144" y="1308" width="112" height="68" rx="6"/><text class="num tile" x="2156" y="1330">2</text><path fill="#F1B84B" fill-opacity=".16" stroke="#F1B84B" d="M2180 1320 H2202 L2208 1326 V1334 H2180 Z"/><text class="ui tile" x="2156" y="1352">로켓 런처</text><text class="num tile amber" x="2156" y="1368">2/4</text>
+      <rect class="soft" x="2264" y="1308" width="112" height="68" rx="6"/><text class="num tile" x="2276" y="1330">3</text><path fill="#55C7E8" fill-opacity=".14" stroke="#55C7E8" d="M2300 1328 H2332 M2316 1320 V1336"/><text class="ui tile" x="2276" y="1352">펄스 레이저</text><text class="num tile" x="2276" y="1368">74%</text>
+      <rect class="soft" x="2384" y="1308" width="112" height="68" rx="6"/><text class="num primary" x="2415" y="1350" font-size="28">+2</text><text class="ui caption" x="2402" y="1368">추가 그룹</text>
+    </g>
+  </g>
+</svg>
