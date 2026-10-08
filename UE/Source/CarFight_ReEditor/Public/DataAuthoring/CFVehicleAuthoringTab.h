@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringTab.h
-// Version: v1.9.0
-// Date: 2026-09-11
-// Description: DAUTH-P0-09~12 single-Vehicle Authoring Nomad Workspace Slate widget입니다.
+// Version: v1.10.0
+// Date: 2026-09-15
+// Description: DAUTH-P0-09~12 single-Vehicle Authoring Nomad Workspace Slate widget + 기본 Sensor 선택 UI입니다.
 // Changelog:
+// - v1.10.0: 정상 차량의 공통 Basic Sensor 복귀와 의도적 Sensorless 선택을 분리하는 Default intent UI handler를 추가.
 // - v1.9.0: CF-FQ-038 DEL6 closure에 맞춰 제거된 Legacy Wizard 유지 문구를 Current Workspace 소유권으로 갱신. 동작 변경 0.
 // - v1.8.0: P0-12 UA-06 USER UX remediation을 위해 Shared Profile numeric field 검색/선택/current-value UI state와 bounded Apply detail review presentation을 추가.
 // - v1.7.0: P0-12 UA-07 baseline-safe Profile 검증 복구를 위한 explicit reviewed Profile 연결 해제 UI action을 추가.
@@ -16,6 +17,7 @@
 // - v1.1.0: P0-10 Assets/Layout, Wheel Measurement, 4축 Driving Feel/preset, Reference Compare, Mount/Default, Adoption, standard Undo parity UI 추가.
 // - v1.0.0: Frozen Section 24 P0-09 Browser/Overview/Recipe/Preview/Diff/Trace/Validation/Apply/Raw DA 최소 UI 최초 구현.
 // Migration:
+// - v1.10.0 Sensor UI는 기존 Recipe semantic transaction만 사용하며 Target VehicleData 직접 mutation이나 자동 Save를 추가하지 않습니다.
 // - v1.8.0은 existing Registry descriptor를 사람용 field selector에 projection할 UI state만 추가하며 stable ColumnId authority와 B2 mutation contract를 변경하지 않습니다.
 
 // - v1.6.0은 Resolver SourceTrace authority를 변경하지 않고 right Context presentation 상태만 추가합니다.
@@ -141,6 +143,12 @@ private:
 
 	// Default Destroyed FX socket semantic intent를 Recipe-only commit합니다.
 	FReply HandleCommitDefaultIntent();
+
+	// 프로젝트 공통 Basic Sensor를 현재 차량의 기본 Sensor source로 선택합니다.
+	FReply HandleUseBasicSensor();
+
+	// 현재 차량을 의도적인 Sensorless로 설정합니다.
+	FReply HandleSetSensorless();
 
 	// Browser row를 Reference side로 선택합니다.
 	void HandleReferenceSelectionChanged(TSharedPtr<FCFVehicleListEntry> Item, ESelectInfo::Type SelectInfo);

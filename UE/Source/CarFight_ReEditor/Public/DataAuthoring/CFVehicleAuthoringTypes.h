@@ -1,17 +1,21 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringTypes.h
-// Version: v1.3.0
-// Date: 2026-08-28
-// Description: Vehicle Data Authoring의 Editor-only 공용 계약 타입과 WSA Socket Scale semantic mode입니다.
+// Version: v1.5.0
+// Date: 2026-09-28
+// Description: Vehicle Data Authoring에 VCFX 차량별 기준속도 / Camera Presentation typed intent를 additive 확장합니다.
 // Scope: Recipe intent, source/ownership, stable field path/value, import/applied 상태의 저장 계약을 제공합니다.
 // Changelog:
+// - v1.5.0: ReferenceMaxSpeedKmh + CameraPresentationDataOverride typed intent와 Camera adoption group을 append-only 추가.
+// - v1.4.0: 신규 정상 차량이 프로젝트 공통 Basic Sensor를 사용하고 의도적인 Sensorless만 명시적으로 선택하도록 SensorMode/DefaultSensorData와 Sensor adoption group을 append-only 추가.
 // - v1.3.0: WSA-P0-01 신규 정상 차량의 USER Wheel Socket Scale authority를 표현하는 SocketScaleFromChassis mode를 기존 enum 뒤 append-only 추가.
 // - v1.2.0: P0-11 External Drift exact 3-way review를 위해 AppliedTrace에 backward-compatible exact LastAppliedValue를 추가.
 // - v1.1.0: P0-10 Measurement UX에서 "검토 안 함"과 "Compatibility Default 유지 확인"을 구분하는 Editor-only adoption metadata를 추가.
 // - v1.0.0: DAUTH-P0-08A Recipe/Profile Foundation용 공용 타입을 최초 구현.
 // Migration:
 // - Runtime UCFVehicleData에는 Authoring metadata를 추가하지 않습니다.
+// - 기존 Recipe는 자동 저장/적용하지 않으며, 신규 Vehicle Builder record 생성만 UseProjectBasicSensor를 명시적으로 선택합니다.
+// - Existing Definition Import는 실제 DefaultSensorData가 None이면 ExplicitNone으로 보존해 기존 차량을 몰래 변경하지 않습니다.
 // - 이 타입들은 CarFight_ReEditor에만 존재하며 packaged runtime에서 소비하지 않습니다.
 
 #pragma once
@@ -27,8 +31,10 @@ class UCFEquipmentPresetData;
 class UCFHandlingProfile;
 class UCFPerformanceProfile;
 class UCFVehicleBaseProfile;
+class UCFVehicleCameraData;
 class UCFVehicleData;
 class UCFVehicleDefenseData;
+class UCFVehicleSensorData;
 class UStaticMesh;
 
 /** Vehicle Authoring의 5개 고정 Profile Domain입니다. */
@@ -108,7 +114,9 @@ enum class ECFVehicleAdoptGroup : uint8
 	DriveState UMETA(DisplayName="DriveState"),
 	TechnicalHandling UMETA(DisplayName="고급 핸들링"),
 	LegacyTechnical UMETA(DisplayName="레거시 기술 데이터"),
-	DerivedState UMETA(Hidden)
+	DerivedState UMETA(Hidden),
+	Sensor UMETA(DisplayName="센서"),
+	Camera UMETA(DisplayName="카메라 표현")
 };
 
 /** Profile 기본값과 Recipe 명시 수치를 구분하는 입력 방식입니다. */
@@ -126,6 +134,15 @@ enum class ECFAssetIntentMode : uint8
 	UseProfile UMETA(DisplayName="프로파일 사용"),
 	ExplicitAsset UMETA(DisplayName="명시 자산"),
 	ExplicitNone UMETA(DisplayName="명시적으로 없음")
+};
+
+/** 차량 기본 센서를 프로젝트 공통 Basic / 별도 Asset / 의도적 Sensorless로 구분합니다. */
+UENUM(BlueprintType)
+enum class ECFVehicleSensorIntentMode : uint8
+{
+	UseProjectBasicSensor UMETA(DisplayName="공통 기본 센서 사용", ToolTip="프로젝트 공통 최저성능 Basic Sensor를 사용합니다."),
+	ExplicitAsset UMETA(DisplayName="별도 센서 데이터 사용", ToolTip="이 차량만 별도의 VehicleSensorData를 사용합니다."),
+	ExplicitNone UMETA(DisplayName="센서 없음 (Sensorless)", ToolTip="의도적으로 기본 센서 없이 출고합니다. Scanner도 없으면 탐지/Active Scan 범위는 0입니다.")
 };
 
 /** 휠 시각 동작을 Raw flag 대신 표현하는 semantic mode입니다. */
@@ -447,7 +464,7 @@ struct FCFMountIntent
 	bool bExposedModule = true;
 };
 
-/** Defense/Destroyed FX의 Profile/Explicit/None 의도를 저장합니다. */
+/** Defense/Destroyed FX와 차량 기본 Sensor source 의도를 저장합니다. */
 USTRUCT(BlueprintType)
 struct FCFVehicleDefaultIntent
 {
@@ -472,6 +489,26 @@ struct FCFVehicleDefaultIntent
 	// 파괴 FX를 배치할 차체 socket semantic input입니다.
 	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Defaults", meta=(DisplayName="파괴 FX 소켓 이름"))
 	FName DestroyedFxSocketName = TEXT("FX_Destroyed");
+
+	// 차량 기본 Sensor source mode입니다. 구조체 기본값은 기존 Recipe의 pre-v1.4 None 의미를 보존하고, 신규 Vehicle Builder record 생성이 공통 Basic Sensor를 명시적으로 선택합니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Defaults", meta=(DisplayName="기본 센서 입력 방식", ToolTip="정상 신규 차량은 Vehicle Builder가 공통 Basic Sensor를 명시적으로 선택합니다. 기존 Recipe의 미설정 상태는 Sensorless로 보존합니다."))
+	ECFVehicleSensorIntentMode SensorMode = ECFVehicleSensorIntentMode::ExplicitNone;
+
+	// ExplicitAsset 모드에서만 사용하는 VehicleSensorData입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Defaults", meta=(DisplayName="명시 기본 센서 데이터", ToolTip="기본 센서 입력 방식이 별도 센서 데이터 사용일 때만 적용됩니다."))
+	TSoftObjectPtr<UCFVehicleSensorData> DefaultSensorData;
+
+	// [v1.5.0] Camera Driving FX의 차량별 authored 기준 최고속도입니다. 0은 미설정이며 물리 최고속도 제한이 아닙니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Camera", meta=(ClampMin="0.0", Units="km/h", DisplayName="기준 최고속도 km/h", ToolTip="Vehicle Builder Benchmark의 accepted PeakSpeedKmh를 근거로 작성하는 Camera Driving FX 기준속도입니다. 물리 최고속도 제한값이 아닙니다."))
+	float ReferenceMaxSpeedKmh = 0.0f;
+
+	// [v1.5.0] 차량별 Camera Presentation Data의 명시 Asset/None 입력 방식입니다. UseProfile은 기존 미설정 Recipe 호환용으로 project default(None)를 유지합니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Camera", meta=(DisplayName="카메라 표현 데이터 입력 방식"))
+	ECFAssetIntentMode CameraPresentationDataMode = ECFAssetIntentMode::ExplicitNone;
+
+	// [v1.5.0] ExplicitAsset 모드에서만 사용하는 Presentation 전용 VehicleCameraData입니다.
+	UPROPERTY(EditAnywhere, Category="CarFight|Data Authoring|Camera", meta=(DisplayName="카메라 표현 데이터", ToolTip="CameraTuningConfig만 차량별로 덮어씁니다. DefaultAimProfile은 변경하지 않습니다."))
+	TSoftObjectPtr<UCFVehicleCameraData> CameraPresentationDataOverride;
 };
 
 /** WheelVisual raw flag 대신 저장하는 semantic policy입니다. */

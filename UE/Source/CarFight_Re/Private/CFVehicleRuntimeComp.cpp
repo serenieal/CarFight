@@ -1,12 +1,16 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.0.0
-// Date: 2026-09-14
-// Description: CF-FQ-048 VPS-P0-03 차량 Runtime orchestration 내부 coordinator 구현
+// Version: 1.2.0
+// Date: 2026-09-16
+// Description: CF-FQ-048 VPS-P0-03 차량 Runtime orchestration + VehicleData 기본 Sensor wiring
 // Changelog:
+// - v1.2.0: invalid VehicleData.DefaultSensorData 적용 실패를 무시하지 않고 초기화를 fail-closed해 stale 기본 Sensor source가 남는 재초기화 경로를 차단.
+// - v1.1.0: Fitting Scanner 적용 전에 VehicleData.DefaultSensorData를 VehicleSensorComp의 차량 기본 Sensor Source로 전달.
 // - v1.0.0: Initialize/Refresh, Initial Mass prepare/verify, VehicleData 적용 순서를 Pawn 공개 표면 변경 없이 내부 coordinator로 추출.
 // Migration:
 // - ACFVehiclePawn의 lifecycle/Public/BP/Automation 진입점은 그대로 유지되며 이 컴포넌트는 내부 실행만 담당합니다.
+// - 기존 VehicleData의 DefaultSensorData=None은 기존 zero-range Fallback을 그대로 유지합니다. Scanner fitting이 있으면 Scanner SensorData가 기본 Sensor보다 우선합니다.
+// - v1.2.0부터 명시된 기본 SensorData가 invalid면 이전 Runtime source를 재사용하지 않고 InitializeVehicleRuntime 자체가 실패합니다.
 
 #include "CFVehicleRuntimeComp.h"
 
@@ -88,6 +92,23 @@ bool UCFVehicleRuntimeComp::InitializeVehicleRuntime(ACFVehiclePawn& VehiclePawn
 	const bool bHealthReady = VehiclePawn.VehicleHealthComp
 		? VehiclePawn.VehicleHealthComp->InitializeFromVehicleData(VehiclePawn.VehicleData)
 		: false;
+
+	// [v1.1.0] Fitting Scanner override가 적용되기 전에 차량 자체의 기본 Sensor Source를 먼저 구성합니다.
+	// [v1.2.0] VehicleData 기본 Sensor Source 적용 결과이며 invalid explicit SensorData를 조용히 이전 source로 유지하지 않도록 fail-closed합니다.
+	bool bVehicleBaseSensorReady = true;
+	if (VehiclePawn.VehicleSensorComp)
+	{
+		// [v1.2.0] 현재 VehicleData가 제공하는 기본 SensorData이며 VehicleData가 없거나 미설정이면 nullptr입니다.
+		UCFVehicleSensorData* VehicleBaseSensorData = VehiclePawn.VehicleData
+			? VehiclePawn.VehicleData->DefaultSensorData.Get()
+			: nullptr;
+		bVehicleBaseSensorReady = VehiclePawn.VehicleSensorComp->ApplyVehicleBaseSensorData(VehicleBaseSensorData);
+		if (!bVehicleBaseSensorReady)
+		{
+			VehiclePawn.LastVehicleRuntimeSummary = TEXT("VehicleRuntime: Failed, VehicleBaseSensorDataInvalid");
+			return false;
+		}
+	}
 
 	// [v1.0.0] 기존 활성 프로파일을 Snapshot Weapon 적용 대상으로 유지할 ID입니다.
 	const FName RequestedActiveMountProfileId = VehiclePawn.VehicleWeaponComp

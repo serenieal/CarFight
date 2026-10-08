@@ -1,11 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleFieldRegistry.h
-// Version: v1.6.0
-// Date: 2026-09-01
-// Description: UCFVehicleData 134 leaf pattern의 P0 Authoring Registry 계약입니다.
+// Version: v1.8.0
+// Date: 2026-09-28
+// Description: UCFVehicleData 137 leaf pattern의 P0 Authoring Registry 계약입니다.
 // Scope: Resolver owner/rule/adoption/override/dependency metadata와 Reflection coverage 검증을 제공합니다.
 // Changelog:
+// - v1.8.0: ReferenceMaxSpeedKmh + CameraPresentationDataOverride를 136~137번째 typed leaf로 additive 추가.
+// - v1.7.0: DefaultSensorData를 Project Basic Sensor → Recipe semantic override 계약의 135번째 leaf로 추가.
 // - v1.6.0: ESH-01 bUseEngineTorqueCurve + atomic EngineTorqueCurve 2개 leaf를 Performance owner로 추가해 coverage를 132→134로 확장.
 // - v1.5.0: WSA-P0-01 WheelAnchor RelativeScale 4개와 bUseWheelSocketScale 1개를 추가해 Registry/Reflection coverage를 127→132로 확장.
 // - v1.4.0: VB-P0-05 설계 검수 교정으로 TransmissionRatios를 atomic typed ratio-set 1개로 복원해 coverage를 128→127로 정정.
@@ -14,6 +16,7 @@
 // - v1.1.0: DAUTH-P0-08C Frozen Section 22.17 RequiredDependencies metadata를 활성화.
 // - v1.0.0: DAUTH-P0-08B 117 leaf Registry와 bidirectional coverage API 최초 구현.
 // Migration:
+// - DefaultSensorData 추가는 기존 field rename/delete 없이 additive 135-leaf schema로 확장하며 Resolver revision 6과 함께 사용합니다.
 // - WSA-P0-01 additive Runtime schema까지 Reflection으로 current source coverage를 검사하며 기존 field rename/delete 없이 leaf를 확장합니다.
 
 #pragma once
@@ -58,11 +61,11 @@ struct FCFVehicleFieldDescriptor
 	}
 };
 
-/** Current UCFVehicleData schema와 Current 134 Resolver Map을 연결하는 정적 Registry입니다. */
+/** Current UCFVehicleData schema와 Current 137 Resolver Map을 연결하는 정적 Registry입니다. */
 class FCFVehicleFieldRegistry
 {
 public:
-	// Current P0 descriptor 134개를 canonical 순서로 반환합니다.
+	// Current P0 descriptor 137개를 canonical 순서로 반환합니다.
 	static const TArray<FCFVehicleFieldDescriptor>& GetDescriptors();
 
 	// Current UCFVehicleData Reflection에서 실제 leaf pattern을 재발견합니다.
@@ -72,5 +75,5 @@ public:
 	static bool ValidateCoverage(TArray<FString>& OutErrors);
 
 	// Registry가 가져야 하는 Current P0 leaf pattern 개수입니다.
-	static constexpr int32 ExpectedLeafPatternCount = 134;
+	static constexpr int32 ExpectedLeafPatternCount = 137;
 };

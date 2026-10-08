@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleFieldRegistry.cpp
-// Version: v1.7.0
-// Date: 2026-09-01
-// Description: Current 134 VehicleData leaf pattern Registry와 ESH-01 Engine TorqueCurve atomic source/dependency metadata를 포함한 Reflection coverage 구현입니다.
+// Version: v1.9.0
+// Date: 2026-09-28
+// Description: Current 137 VehicleData leaf pattern Registry와 Camera Driving FX typed authoring coverage 구현입니다.
 // Changelog:
+// - v1.9.0: ReferenceMaxSpeedKmh / CameraPresentationDataOverride exact2를 DefaultDataIntent 기반 Camera group의 136~137 leaf로 추가.
+// - v1.8.0: DefaultSensorData를 ProjectDefaultThenRecipeSemantic Sensor group의 135번째 leaf로 추가.
 // - v1.7.0: bUseEngineTorqueCurve와 FCFVehicleEngineTorqueCurve를 PerformanceProfileDirect 2개 leaf로 추가하고 EngineTorqueCurve를 atomic struct로 등록.
 // - v1.6.0: WSA-P0-01 RelativeScale 4 leaf + bUseWheelSocketScale 1 leaf를 추가하고 SocketScale flag dependency를 Project Default + Recipe.WheelVisualIntent로 고정해 coverage를 127→132로 확장.
 // - v1.5.0: VB-P0-05 설계 검수 교정으로 FCFVehicleTransmissionRatios를 atomic leaf로 복원해 Forward/Reverse ratio provenance가 분리되지 않게 하고 coverage를 128→127로 정정.
@@ -14,6 +16,8 @@
 // - v1.1.0: DAUTH-P0-08C Section 22.17 Main Dependency를 RequiredDependencies로 확장.
 // - v1.0.0: DAUTH-P0-08B 117 descriptor, Stable-ID array pattern, bidirectional coverage를 구현.
 // Migration:
+// - ResolverContractRevision=7부터 ReferenceMaxSpeedKmh / CameraPresentationDataOverride가 Registry/Reflection exact coverage에 포함됩니다.
+// - ResolverContractRevision=6부터 DefaultSensorData가 Registry/Reflection exact coverage에 포함됩니다.
 // - UCFVehicleData field 추가/삭제/rename 시 coverage Automation이 조용히 통과하지 않습니다.
 
 #include "DataAuthoring/CFVehicleFieldRegistry.h"
@@ -438,10 +442,10 @@ namespace CFVehicleFieldRegistryPrivate
 		DiscoverStructLeaves(InnerStructProperty->Struct, Prefix, OutPatterns);
 	}
 
-	// Current exact 134 leaf descriptor를 생성합니다.
+	// Current exact 135 leaf descriptor를 생성합니다.
 	TArray<FCFVehicleFieldDescriptor> BuildDescriptors()
 	{
-		// Current 134 leaf seed입니다. 숫자값은 없고 ownership/rule metadata만 기술합니다.
+		// Current 135 leaf seed입니다. 숫자값은 없고 ownership/rule metadata만 기술합니다.
 		static const FDescriptorSeed Seeds[] =
 		{
 			{TEXT("VehicleVisualConfig.ChassisMesh"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::RecipeAssetIntent, ECFVehicleAdoptGroup::VisualAssets, false, false, false},
@@ -570,6 +574,9 @@ namespace CFVehicleFieldRegistryPrivate
 			{TEXT("VehicleDurabilityConfig.MaxHealth"), ECFVehicleProfileDomain::VehicleBase, ECFVehicleResolveRule::BaseProfileThenRecipeExplicit, ECFVehicleAdoptGroup::MassDurability, true, false, false},
 			{TEXT("DefaultDefenseData"), ECFVehicleProfileDomain::VehicleBase, ECFVehicleResolveRule::BaseProfileThenRecipeAsset, ECFVehicleAdoptGroup::DefenseFx, true, false, false},
 			{TEXT("DefaultDestroyedFxData"), ECFVehicleProfileDomain::VehicleBase, ECFVehicleResolveRule::BaseProfileThenRecipeAsset, ECFVehicleAdoptGroup::DefenseFx, true, false, false},
+			{TEXT("DefaultSensorData"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::ProjectDefaultThenRecipeSemantic, ECFVehicleAdoptGroup::Sensor, true, false, false},
+			{TEXT("ReferenceMaxSpeedKmh"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::ProjectDefaultThenRecipeSemantic, ECFVehicleAdoptGroup::Camera, true, false, false},
+			{TEXT("CameraPresentationDataOverride"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::ProjectDefaultThenRecipeSemantic, ECFVehicleAdoptGroup::Camera, true, false, false},
 			{TEXT("DestroyedFxSocketName"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::ProjectDefaultThenRecipeSemantic, ECFVehicleAdoptGroup::DefenseFx, true, false, false},
 
 			{TEXT("DriveStateConfig.bUseDriveStateOverrides"), ECFVehicleProfileDomain::None, ECFVehicleResolveRule::DerivedGate, ECFVehicleAdoptGroup::DriveState, false, false, false},
@@ -616,7 +623,7 @@ namespace CFVehicleFieldRegistryPrivate
 	}
 }
 
-// Current P0 descriptor 134개를 canonical 순서로 반환합니다.
+// Current P0 descriptor 137개를 canonical 순서로 반환합니다.
 const TArray<FCFVehicleFieldDescriptor>& FCFVehicleFieldRegistry::GetDescriptors()
 {
 	// 최초 호출 시 한 번 구성되는 immutable descriptor cache입니다.

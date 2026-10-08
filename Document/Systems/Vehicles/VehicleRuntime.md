@@ -9,7 +9,7 @@
 
 - lifecycle / observable state Authority: `ACFVehiclePawn`
 - runtime orchestration coordinator: `UCFVehicleRuntimeComp`
-- 주요 관련 컴포넌트: `UCFVehicleDriveComp`, `UCFWheelSyncComp`, `UCFVehicleFittingComp`, `UCFVehicleAimComp`, `UCFVehicleWeaponComp`, `UCFVehicleAmmoComp`, `UCFLauncherComp`, `UCFVehicleHealthComp`, `UCFVehicleDefenseComp`, `UCFTargetSelectComp`
+- 주요 관련 컴포넌트: `UCFVehicleDriveComp`, `UCFWheelSyncComp`, `UCFVehicleFittingComp`, `UCFVehicleAimComp`, `UCFVehicleWeaponComp`, `UCFVehicleAmmoComp`, `UCFLauncherComp`, `UCFVehicleHealthComp`, `UCFVehicleDefenseComp`, `UCFVehicleSensorComp`, `UCFTargetSelectComp`
 - 관련 데이터: `UCFVehicleData`, `UCFVehicleFittingData`
 - 핵심 Pawn facade / lifecycle 함수:
   - `PreRegisterAllComponents()`
@@ -373,7 +373,7 @@ InitializeVehicleRuntime() 반환값 = CoreReady
 4. Pawn facade가 `VehicleRuntimeComp`에 실행을 위임
 5. VehicleVisual/VehicleData 적용 → OwnerVisual/Layout/Turret → Drive/WheelSync/Aim/Health 준비
 6. Prepared Fitting의 실제 VehicleMesh Mass 검증 뒤 **같은 Snapshot**으로 Weapon/Defense Commit
-7. Ammo/Turret/Launcher/CombatFx/Sensor 연결 후 CoreReady와 CombatReady를 각각 판정
+7. `VehicleData.DefaultSensorData`를 차량 기본 Sensor Source로 먼저 적용하고, 이후 Fitting Scanner가 있으면 더 높은 우선순위의 Sensor override를 적용한 뒤 Ammo/Turret/Launcher/CombatFx/Sensor 연결과 CoreReady/CombatReady를 각각 판정
 8. compat `bVehicleRuntimeReady`는 CoreReady와 동일하게 유지하며 Tick의 WheelVisual gate에 계속 사용
 9. Runtime Equipment Apply처럼 이미 Commit된 Fitting이 바뀐 경로는 Pawn facade `RefreshFittingDependentRuntime()`로 장비 의존 Runtime과 CombatReady만 재구성
 
@@ -488,7 +488,9 @@ Contract state Authority
 
 CF-FQ-048 closure evidence는 P0-04 Official UE 5.8 Build `241ef0b05aa9455c94ca562fc93d81cc` PASS, final affected exact28 process `6431180d7e7d4b11ac9f8dc51a25b5c2` 28/28 PASS, USER representative regression smoke PASS다. RuntimeRead T0는 UE MCP unavailable 때문에 `Waived / Deferred Observation`으로 남아 있으며, 미관측 runtime 내부값을 PASS로 간주하지 않는다.
 
-USER smoke 중 확인된 Vehicle Builder 신규 차량의 기본 Sensor/Active Scan baseline 누락은 current scanner-less 0-range Sensor 계약과 상위 기본 센서 기획의 별도 불일치다. VPS가 새로 만든 회귀라는 evidence가 없으므로 이 Current VehicleRuntime slimming closure를 다시 열지 않으며, Sensor/Vehicle Builder correction은 별도 lifecycle에서 다룬다.
+USER smoke 중 확인됐던 Vehicle Builder 신규 차량의 기본 Sensor/Active Scan baseline 누락은 2026-09-16 correction source에서 Runtime source priority와 Vehicle Builder authoring 계약을 분리해 교정했다. `UCFVehicleRuntimeComp`는 Fitting Scanner보다 먼저 `VehicleData.DefaultSensorData`를 `UCFVehicleSensorComp`의 Vehicle Base Source로 전달하고, Sensor Runtime은 `Scanner override > Vehicle base > zero-range Fallback` 순서를 사용한다. VPS가 새로 만든 회귀는 아니므로 VehicleRuntime slimming closure는 다시 열지 않는다.
+
+Production 공통 Basic Sensor `/Game/CarFight/Vehicles/Data/Sensor/DA_VehicleSensor_Basic`은 2026-09-16 exact1 materialize됐고 fresh persisted AssetDump에서 P0 baseline 값을 확인했다. `UCFVehicleRuntimeComp`는 Vehicle base SensorData 적용 실패를 무시하지 않으며 invalid non-null base가 들어오면 `VehicleRuntime: Failed, VehicleBaseSensorDataInvalid`로 초기화를 fail-closed해 이전 base source가 stale하게 남는 재초기화 경로를 차단한다. Scanner override > Vehicle Basic > zero-range Fallback 우선순위는 correction exact6 Automation에 포함돼 PASS했다.
 
 ## 현재 문서 기준의 핵심 결론
 현재 `VehicleRuntime` 기능은,
@@ -518,7 +520,7 @@ USER smoke 중 확인된 Vehicle Builder 신규 차량의 기본 Sensor/Active S
 - `LastVehicleRuntimeSummary` 요약 포맷 변경
 
 ## 문서 버전 관리
-- 현재 문서 버전: `1.6.0`
+- 현재 문서 버전: `1.7.0`
 - 문서 상태: `Vehicle Pawn Slimming Complete + Runtime Coordinator + Fitting/Mass + Wheel Runtime Current`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
@@ -539,6 +541,13 @@ USER smoke 중 확인된 Vehicle Builder 신규 차량의 기본 Sensor/Active S
   - 본문 의미는 유지한 채 설명 정밀도만 올라갈 때
 
 ## 체인지로그
+### v1.7.0 - 2026-09-16
+- `VehicleData.DefaultSensorData`를 Fitting Scanner보다 먼저 Vehicle Base Sensor source로 적용하고 최종 우선순위를 `Scanner override > Vehicle Basic > zero-range Fallback`으로 Current Runtime 계약에 반영했다.
+- invalid non-null Vehicle base SensorData 적용 실패를 무시하지 않고 `InitializeVehicleRuntime()`을 fail-closed해 이전 base source stale 유지 가능성을 제거했다.
+- Production `DA_VehicleSensor_Basic` exact1 persisted AssetDump와 correction exact6 process `c5a21f7f44e6465db4d626bb48e58d06` 6/6 PASS를 확인했다.
+
+Migration: 기존 `DefaultSensorData=None` 차량은 기존 zero-range fallback을 유지한다. 유효한 Basic Sensor가 있는 차량은 Scanner가 없을 때 Basic을 사용하고, Scanner 장착 시 Scanner가 우선하며 제거 시 Basic으로 복귀한다. invalid non-null base SensorData는 더 이상 이전 source로 조용히 복구되지 않고 Runtime 초기화 실패로 드러난다.
+
 ### v1.6.0 - 2026-09-15
 - `CF-FQ-048 Vehicle Pawn Slimming`의 VPS-P0-00~05 완료를 Current System에 최종 승격했다.
 - Pawn의 최종 owner를 Lifecycle / Composition root / Input entry / Target identity / Compatibility facade / Contract state Authority로 고정하고 Visual/Fire/Runtime coordinator의 behavior responsibility를 명시했다.

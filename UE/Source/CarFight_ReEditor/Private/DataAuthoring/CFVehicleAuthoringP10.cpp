@@ -1,16 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringP10.cpp
-// Version: v1.4.0
-// Date: 2026-09-11
-// Description: DAUTH-P0-10~12 Existing Wizard Migration / Frozen adoption parity page 구현입니다.
+// Version: v1.5.0
+// Date: 2026-09-15
+// Description: DAUTH-P0-10~12 Existing Wizard Migration / Frozen adoption parity page + 기본 Sensor 선택 UI 구현입니다.
 // Changelog:
+// - v1.5.0: Mounts & Defaults에 공통 Basic Sensor 복귀와 explicit Sensorless 선택 UI를 추가하고 Sensorless에는 사용자 확인 경고를 요구.
 // - v1.4.0: CF-FQ-038 DEL6 closure에 맞춰 제거된 Legacy Wizard 유지 문구를 Current Vehicle Authoring Workspace 기준으로 갱신. 동작 변경 0.
 // - v1.3.0: P0-12 UA-07 Technical Readiness에서 Driving Feel의 Recipe→Preview→Target 분리 설명과 4축 저장/프리셋 실패 feedback을 보강. Core/Resolver/Preset semantic 변경 0.
 // - v1.2.0: P0-12 UA-01 사용자 피드백에 따라 Assets/Layout, Driving Feel, Mount/Compare 사용자 문구를 한국어 우선으로 정리.
 // - v1.1.0: Frozen 24.90 Existing Import completeness를 위해 Handling/Performance Adoption normal Workspace 버튼 추가.
 // - v1.0.0: Frozen Section 24 P0-10 parity UI 최초 구현.
 // Migration:
+// - Sensor UI는 기존 CommitDefaultDataIntent Recipe-only transaction을 재사용하며 Target VehicleData 직접 변경/자동 Save를 추가하지 않습니다.
 // - Authoring 동작은 FCFVehicleAuthoringVM을 통해 Common Authoring facade를 사용합니다.
 // - Driving Feel 프리셋은 기존 exact Recipe 4축 shortcut을 유지하며 Target 직접 변경이나 자동 저장을 추가하지 않습니다.
 // - Legacy Wizard retirement 이후 기존 parity 기능은 Current Vehicle Authoring Workspace가 소유하며 Batch main page는 추가하지 않습니다.
@@ -286,6 +288,28 @@ TSharedRef<SWidget> SCFVehicleAuthoringTab::BuildMountsPage()
 	Root->AddSlot().AutoHeight().Padding(4.0f)[SNew(SButton).Text(FText::FromString(TEXT("장착점 저장"))).OnClicked(this, &SCFVehicleAuthoringTab::HandleUpsertMount)];
 
 	Root->AddSlot().AutoHeight().Padding(4.0f, 12.0f, 4.0f, 4.0f)[SNew(STextBlock).Text(FText::FromString(TEXT("기본 데이터 설정")))];
+	Root->AddSlot().AutoHeight().Padding(4.0f)
+	[
+		SNew(STextBlock)
+		.Text(FText::FromString(TEXT("기본 센서 — 정상 차량은 공통 최저성능 Basic Sensor를 사용합니다. Sensorless는 센서가 없어야 하는 특수 차량에서만 명시적으로 선택하세요.")))
+		.AutoWrapText(true)
+	];
+	Root->AddSlot().AutoHeight().Padding(4.0f)
+	[
+		SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().AutoWidth().Padding(0.0f, 0.0f, 4.0f, 0.0f)
+		[
+			SNew(SButton)
+			.Text(FText::FromString(TEXT("공통 기본 센서 사용")))
+			.OnClicked(this, &SCFVehicleAuthoringTab::HandleUseBasicSensor)
+		]
+		+ SHorizontalBox::Slot().AutoWidth()
+		[
+			SNew(SButton)
+			.Text(FText::FromString(TEXT("센서 없음 (Sensorless)…")))
+			.OnClicked(this, &SCFVehicleAuthoringTab::HandleSetSensorless)
+		]
+	];
 	DestroyedFxSocketTextBox = SNew(SEditableTextBox).Text(FText::FromString(TEXT("FX_Destroyed"))).HintText(FText::FromString(TEXT("파괴 FX 차체 소켓 이름")));
 	Root->AddSlot().AutoHeight().Padding(4.0f)[DestroyedFxSocketTextBox.ToSharedRef()];
 	Root->AddSlot().AutoHeight().Padding(4.0f)[SNew(SButton).Text(FText::FromString(TEXT("기본 데이터 저장"))).OnClicked(this, &SCFVehicleAuthoringTab::HandleCommitDefaultIntent)];
@@ -303,7 +327,7 @@ TSharedRef<SWidget> SCFVehicleAuthoringTab::BuildComparePage()
 	];
 	Root->AddSlot().AutoHeight().Padding(4.0f)
 	[
-		SNew(STextBlock).Text(FText::FromString(TEXT("비교 차량 — 117개 안정 필드를 읽기 전용으로 비교합니다. 비교 차량의 값을 자동 복사하지 않습니다."))).AutoWrapText(true)
+		SNew(STextBlock).Text(FText::FromString(TEXT("비교 차량 — 현재 안정 필드를 읽기 전용으로 비교합니다. 비교 차량의 값을 자동 복사하지 않습니다."))).AutoWrapText(true)
 	];
 	Root->AddSlot().AutoHeight().Padding(4.0f)
 	[
@@ -486,6 +510,48 @@ FReply SCFVehicleAuthoringTab::HandleCommitDefaultIntent()
 	return FReply::Handled();
 }
 
+// 프로젝트 공통 Basic Sensor를 현재 차량의 기본 Sensor source로 반영합니다.
+FReply SCFVehicleAuthoringTab::HandleUseBasicSensor()
+{
+	if (!ViewModel.IsValid() || !ViewModel->HasRecipe())
+	{
+		return FReply::Handled();
+	}
+	// Existing DefaultData 의미를 유지하면서 Sensor source만 공통 Basic으로 바꿀 semantic intent입니다.
+	FCFVehicleDefaultIntent DefaultIntent = ViewModel->GetRecipe()->DefaultDataIntent;
+	DefaultIntent.SensorMode = ECFVehicleSensorIntentMode::UseProjectBasicSensor;
+	DefaultIntent.DefaultSensorData.Reset();
+	// Typed Recipe semantic result입니다.
+	FCFAuthoringOpResult CommitResult;
+	ViewModel->CommitDefaultDataIntent(DefaultIntent, CommitResult);
+	SyncEditableFieldsFromSelection();
+	return FReply::Handled();
+}
+
+// 현재 차량을 명시적인 Sensorless semantic으로 반영합니다.
+FReply SCFVehicleAuthoringTab::HandleSetSensorless()
+{
+	if (!ViewModel.IsValid() || !ViewModel->HasRecipe())
+	{
+		return FReply::Handled();
+	}
+	// Sensorless가 탐지/Active Scan baseline을 제거한다는 explicit review 문구입니다.
+	const FText ReviewText = FText::FromString(TEXT("이 차량을 Sensorless로 설정하시겠습니까?\n\n기본 SensorData가 제거되며, Scanner 장비도 없으면 탐지/Active Scan 범위는 0이 됩니다.\n정상 차량은 '공통 기본 센서 사용'을 권장합니다."));
+	if (FMessageDialog::Open(EAppMsgType::YesNo, ReviewText) != EAppReturnType::Yes)
+	{
+		return FReply::Handled();
+	}
+	// Existing DefaultData 의미를 유지하면서 Sensor source만 명시적 None으로 바꿀 semantic intent입니다.
+	FCFVehicleDefaultIntent DefaultIntent = ViewModel->GetRecipe()->DefaultDataIntent;
+	DefaultIntent.SensorMode = ECFVehicleSensorIntentMode::ExplicitNone;
+	DefaultIntent.DefaultSensorData.Reset();
+	// Typed Recipe semantic result입니다.
+	FCFAuthoringOpResult CommitResult;
+	ViewModel->CommitDefaultDataIntent(DefaultIntent, CommitResult);
+	SyncEditableFieldsFromSelection();
+	return FReply::Handled();
+}
+
 // Browser row를 Reference side로 선택합니다.
 void SCFVehicleAuthoringTab::HandleReferenceSelectionChanged(TSharedPtr<FCFVehicleListEntry> Item, ESelectInfo::Type SelectInfo)
 {
@@ -657,10 +723,14 @@ FText SCFVehicleAuthoringTab::GetMountsText() const
 	}
 	// Current persistent Recipe입니다.
 	const UCFVehicleRecipeData* Recipe = ViewModel->GetRecipe();
+	// Current Sensor semantic mode의 사용자 표시 문자열입니다.
+	const TCHAR* SensorModeText = Recipe->DefaultDataIntent.SensorMode == ECFVehicleSensorIntentMode::UseProjectBasicSensor
+		? TEXT("공통 기본 센서")
+		: (Recipe->DefaultDataIntent.SensorMode == ECFVehicleSensorIntentMode::ExplicitAsset ? TEXT("별도 SensorData") : TEXT("Sensorless"));
 	// Stable-ID current authoring state summary입니다.
 	FString Text = FString::Printf(
-		TEXT("장착 / 기본값\n하드포인트 설정: %d\n장착점 설정: %d\n파괴 FX 소켓: %s\n\n"),
-		Recipe->HardpointIntents.Num(), Recipe->MountIntents.Num(), *Recipe->DefaultDataIntent.DestroyedFxSocketName.ToString());
+		TEXT("장착 / 기본값\n하드포인트 설정: %d\n장착점 설정: %d\n기본 센서: %s\n파괴 FX 소켓: %s\n\n"),
+		Recipe->HardpointIntents.Num(), Recipe->MountIntents.Num(), SensorModeText, *Recipe->DefaultDataIntent.DestroyedFxSocketName.ToString());
 	for (const FCFHardpointIntent& Hardpoint : Recipe->HardpointIntents)
 	{
 				Text += FString::Printf(TEXT("하드포인트 %s | 위치 분류=%s | 소켓=%s\n"), *Hardpoint.LocationSlotId.ToString(), *Hardpoint.LocationCategory.ToString(), *Hardpoint.SocketName.ToString());
@@ -672,7 +742,7 @@ FText SCFVehicleAuthoringTab::GetMountsText() const
 	return FText::FromString(Text);
 }
 
-// Reference Vehicle Compare 117-field rows를 text presentation으로 만듭니다.
+// Reference Vehicle Compare current stable field rows를 text presentation으로 만듭니다.
 FText SCFVehicleAuthoringTab::GetReferenceCompareText() const
 {
 	if (!ViewModel.IsValid() || !ViewModel->HasReferenceVehicle())

@@ -1,7 +1,8 @@
 # CarFight CF-FQ-040 VB-P0-08 Technical Driving Benchmark runner.
-# Version: v1.4.1
-# Date: 2026-09-04
+# Version: v1.5.0
+# Date: 2026-09-28
 # Changelog:
+# - v1.5.0: VCFX-P0-02용 optional PreserveLegacyMass switch를 추가해 BaseVehicleMassKg=0 legacy no-fitting 차량의 fresh Chaos mass 보존 opt-in을 Automation에 전달합니다. 기본값 false로 기존 benchmark 계약을 보존합니다.
 # - v1.4.1: P0-07E 중간검수 교정. Windows path에 불필요한 quote replacement를 제거하고 Start-Process ArgumentList에 전달할 progress path 인자를 단일 quoted value로 고정합니다.
 # - v1.4.0: VBHAI-P0-07E에서 canonical progress sidecar stale 파일을 launch 전에 제거하고 exact RunId + absolute progress path를 UnrealEditor benchmark runtime까지 전달합니다. Progress sidecar는 terminal result authority가 아니며 writer 실패가 최종 benchmark PASS/FAIL을 바꾸지 않습니다.
 # - v1.3.0: VB-P0-09 Step 8 Guided Shell이 current saved Target과 결과를 exact binding하도록 optional RunId/ExpectedTargetDefinitionHash/completed UTC provenance를 result envelope에 additive 추가.
@@ -9,6 +10,7 @@
 # - v1.1.0: Start-Process -Wait의 descendant-process 대기를 제거하고 exact UnrealEditor Process 객체 WaitForExit()만 사용해 TestExit 이후 wrapper가 terminal로 회수되도록 교정.
 # - v1.0.0: saved VehicleData + optional FittingData를 fresh PIE Builder benchmark Automation에 전달하고 machine-readable JSON으로 추출.
 # Migration:
+# - v1.5.0의 PreserveLegacyMass는 명시적으로 지정한 caller에만 적용됩니다. 기존 caller는 변경 없이 BaseVehicleMassKg hard-fail 계약을 유지합니다.
 # - v1.4.1은 progress command-line quoting만 교정하며 경로·schema·terminal result 계약은 변경하지 않습니다.
 # - v1.4.0 progress sidecar는 `UE/Saved/CarFight/VehicleBuilderBenchmarkProgress.json` 한 파일만 사용합니다. 새 run 전에 stale 파일을 제거하고 runtime에 absolute path를 전달하며 final result JSON/Automation exit code 계약은 그대로 유지합니다.
 # - Product Asset/Map/Config를 저장하지 않습니다.
@@ -30,7 +32,10 @@ param(
     [string]$RunId = '',
 
     # Guided Step 8 launch 당시 current Target semantic DefinitionHash입니다. 기존 standalone P0-08 호출에서는 비어 있을 수 있습니다.
-    [string]$ExpectedTargetDefinitionHash = ''
+    [string]$ExpectedTargetDefinitionHash = '',
+
+    # BaseVehicleMassKg=0 legacy no-fitting 차량에서 fresh BeginPlay Chaos mass 보존을 허용하는 명시적 opt-in입니다.
+    [switch]$PreserveLegacyMass
 )
 
 # PowerShell 오류를 즉시 실패로 처리합니다.
@@ -99,6 +104,8 @@ $RunIdArgument = "-CFBuilderBenchmarkRunId=$($ParsedRunId.ToString('D'))"
 $ProgressPathArgument = '-CFBuilderBenchmarkProgressPath="{0}"' -f $ProgressJsonPath
 # optional Fitting command-line argument입니다.
 $FittingArgument = if ([string]::IsNullOrWhiteSpace($FittingDataPath)) { $null } else { "-CFBuilderBenchmarkFittingData=$FittingDataPath" }
+# optional legacy runtime mass 보존 command-line argument입니다.
+$LegacyMassArgument = if ($PreserveLegacyMass.IsPresent) { '-CFBuilderBenchmarkPreserveLegacyMass' } else { $null }
 
 # 공식 non-interactive Automation 실행 인자입니다.
 $EditorArguments = @(
@@ -121,6 +128,9 @@ $EditorArguments = @(
 )
 if ($null -ne $FittingArgument) {
     $EditorArguments += $FittingArgument
+}
+if ($null -ne $LegacyMassArgument) {
+    $EditorArguments += $LegacyMassArgument
 }
 
 # actual UnrealEditor benchmark exact PID를 시작하며 Process Tree 전체가 아니라 이 Editor PID만 기다립니다.

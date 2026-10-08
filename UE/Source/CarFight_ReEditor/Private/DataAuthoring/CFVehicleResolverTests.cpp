@@ -1,10 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleResolverTests.cpp
-// Version: v1.7.0
-// Date: 2026-09-03
-// Description: DAUTH-P0-08E/F Pure Resolver + CF-FQ-047 stable Mount legacy passthrough integrity Automation입니다.
+// Version: v1.10.0
+// Date: 2026-09-28
+// Description: Pure Resolver + VCFX Camera typed semantic revision 7 regression Automation입니다.
 // Changelog:
+// - v1.10.0: ReferenceMaxSpeedKmh / CameraPresentationDataOverride typed Recipe semantic과 Resolver revision 7 source trace를 검증.
+// - v1.9.0: Project Basic / ExplicitNone / ExplicitAsset Sensor intent precedence focused regression을 추가.
+// - v1.8.0: ESH revision 5 이상 호환을 보존하면서 current DefaultSensorData contract가 Resolver revision 6임을 검증.
 // - v1.7.0: CF-FQ-047 P0-06. active Standard Mount 신규 row의 hidden legacy leaf C++ default fallback과 existing same-ID current serialized passthrough source/value를 focused 검증.
 // - v1.6.0: Performance Profile EngineTorqueCurve opt-in source mapping, atomic materialization, invalid curve fail-closed와 Resolver revision 5 회귀검증 추가.
 // - v1.5.0: WSA-P0-05 Recipe SoftObject ChassisMesh → Target Object canonical reference가 R15 materialized readback hash와 일치하는 회귀검증 추가.
@@ -14,6 +17,9 @@
 // - v1.1.0: R14 FieldDiff + R16 Effective/External Drift foundation과 same-precedence fail-closed conflict 검증 추가.
 // - v1.0.0: Frozen R0~R16, proposal/adoption, PreviewContext, Advanced/Legacy/Derived precedence, fingerprint mismatch, legacy serialized 검증 최초 구현.
 // Migration:
+// - v1.10.0 Camera intent regression은 Product asset을 직접 변경하지 않고 immutable Resolve request의 typed source precedence만 검증합니다.
+// - v1.9.0 Sensor intent regression은 Product asset을 직접 변경하지 않고 immutable Resolve request의 source precedence만 검증합니다.
+// - v1.8.0은 current Resolver revision assertion만 6으로 전진하며 기존 ESH semantic 회귀는 revision 5 이상으로 보존합니다.
 // - Runtime/Content Asset mutation 없이 Snapshot value와 RF_Transient UCFVehicleData candidate만 사용합니다.
 // - Synthetic request는 실제 Chassis/Wheel Class가 없으므로 R15 이후 DefinitionValidation Blocked가 정상이며 Resolver internal Error와 구분합니다.
 
@@ -22,6 +28,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "CFVehicleData.h"
+#include "CFVehicleSensorData.h"
 #include "DataAuthoring/CFVehicleFieldCodec.h"
 #include "DataAuthoring/CFVehicleFieldRegistry.h"
 #include "DataAuthoring/CFVehicleMaterializer.h"
@@ -354,6 +361,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVehicleResolverSensorIntentTest,
+	"CarFight.DataAuthoring.DAUTH_P0_08.Resolver.SensorIntentPrecedence",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVehicleResolverCameraIntentTest,
+	"CarFight.DataAuthoring.CF_FQ_057.VCFX_P0_02.Resolver.CameraIntentPrecedence",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCFVehicleResolverDiffStaleTest,
 	"CarFight.DataAuthoring.DAUTH_P0_08.Resolver.DiffStaleFoundation",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -450,7 +467,8 @@ bool FCFVehicleResolverEngineCurveTest::RunTest(const FString& Parameters)
 		AddError(BuildError);
 		return false;
 	}
-	TestEqual(TEXT("ESH-01 uses Resolver revision 5"), FCFVehicleResolver::CurrentResolverContractRevision, 5);
+	TestTrue(TEXT("ESH-01 remains covered by Resolver revision 5 or newer"), FCFVehicleResolver::CurrentResolverContractRevision >= 5);
+	TestTrue(TEXT("DefaultSensorData contract remains valid on Resolver revision 6 or newer"), FCFVehicleResolver::CurrentResolverContractRevision >= 6);
 
 	// vehicle-specific Engine Curve opt-in complete payload입니다.
 	Request.Profiles.PerformanceData.bUseEngineTorqueCurve = true;
@@ -494,6 +512,80 @@ bool FCFVehicleResolverEngineCurveTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("ESH-01 invalid Engine Curve Resolve still returns diagnostic result"), FCFVehicleResolver::Resolve(InvalidRequest, InvalidResult));
 	TestTrue(TEXT("Invalid Engine Curve emits fail-closed blocker"), CFVehicleResolverTestsPrivate::HasIssueCode(InvalidResult.ResolverValidation, TEXT("PerformanceEngineTorqueCurveInvalid")));
 
+	return true;
+}
+
+// Project Basic / ExplicitNone / ExplicitAsset 3-way 기본 Sensor intent가 Frozen precedence대로 resolve되는지 검증합니다.
+bool FCFVehicleResolverSensorIntentTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// 공통 Project Compatibility Default와 managed source set을 포함한 baseline Resolver request입니다.
+	FCFVehicleResolveRequest BasicRequest;
+	// Baseline request 구성 실패 사유입니다.
+	FString BuildError;
+	if (!TestTrue(TEXT("Sensor intent managed Resolver request builds"), CFVehicleResolverTestsPrivate::BuildManagedRequest(BasicRequest, BuildError)))
+	{
+		AddError(BuildError);
+		return false;
+	}
+
+	// 신규 정상 Vehicle Builder가 사용하는 공통 Basic Sensor semantic입니다.
+	BasicRequest.Recipe.DefaultDataIntent.SensorMode = ECFVehicleSensorIntentMode::UseProjectBasicSensor;
+	BasicRequest.Recipe.DefaultDataIntent.DefaultSensorData.Reset();
+	// Project Basic Sensor가 effective winner가 되는 Resolve 결과입니다.
+	FCFVehicleResolveResult BasicResult;
+	TestTrue(TEXT("Project Basic Sensor Resolve executes"), FCFVehicleResolver::Resolve(BasicRequest, BasicResult));
+	// Project Default에서 resolve된 DefaultSensorData field입니다.
+	const FCFVehicleResolvedField* BasicField = CFVehicleResolverTestsPrivate::FindResolvedField(BasicResult, TEXT("DefaultSensorData"));
+	// Project Default source trace입니다.
+	const FCFVehicleSourceTrace* BasicTrace = CFVehicleResolverTestsPrivate::FindTrace(BasicResult, TEXT("DefaultSensorData"));
+	if (TestNotNull(TEXT("Project Basic Sensor resolved field exists"), BasicField))
+	{
+		TestFalse(TEXT("Project Basic Sensor is not None"), BasicField->Value.CanonicalValueText == TEXT("None"));
+		TestTrue(TEXT("Project Basic Sensor uses canonical Production asset"), BasicField->Value.CanonicalValueText.Contains(TEXT("/Game/CarFight/Vehicles/Data/Sensor/DA_VehicleSensor_Basic.DA_VehicleSensor_Basic")));
+	}
+	if (TestNotNull(TEXT("Project Basic Sensor source trace exists"), BasicTrace))
+	{
+		TestEqual(TEXT("UseProjectBasicSensor keeps Project Compatibility Default effective"), BasicTrace->Layers[BasicTrace->EffectiveLayerIndex].SourceType, ECFVehicleSourceType::ProjectCompatibilityDefault);
+	}
+
+	// 기존 차량 None과 사용자가 명시한 Sensorless를 표현하는 request입니다.
+	FCFVehicleResolveRequest SensorlessRequest = BasicRequest;
+	SensorlessRequest.Recipe.DefaultDataIntent.SensorMode = ECFVehicleSensorIntentMode::ExplicitNone;
+	SensorlessRequest.Recipe.DefaultDataIntent.DefaultSensorData.Reset();
+	// ExplicitNone이 Project Basic보다 높은 Recipe semantic candidate가 되는 결과입니다.
+	FCFVehicleResolveResult SensorlessResult;
+	TestTrue(TEXT("Explicit Sensorless Resolve executes"), FCFVehicleResolver::Resolve(SensorlessRequest, SensorlessResult));
+	// Sensorless effective field입니다.
+	const FCFVehicleResolvedField* SensorlessField = CFVehicleResolverTestsPrivate::FindResolvedField(SensorlessResult, TEXT("DefaultSensorData"));
+	// Sensorless source trace입니다.
+	const FCFVehicleSourceTrace* SensorlessTrace = CFVehicleResolverTestsPrivate::FindTrace(SensorlessResult, TEXT("DefaultSensorData"));
+	if (TestNotNull(TEXT("Explicit Sensorless resolved field exists"), SensorlessField))
+	{
+		TestEqual(TEXT("Explicit Sensorless resolves DefaultSensorData=None"), SensorlessField->Value.CanonicalValueText, FString(TEXT("None")));
+	}
+	if (TestNotNull(TEXT("Explicit Sensorless source trace exists"), SensorlessTrace))
+	{
+		TestEqual(TEXT("ExplicitNone Recipe semantic overrides Project Basic"), SensorlessTrace->Layers[SensorlessTrace->EffectiveLayerIndex].SourceType, ECFVehicleSourceType::RecipeExplicitSemanticInput);
+	}
+
+	// 같은 canonical Basic Sensor asset을 차량별 ExplicitAsset로 다시 선택해 source precedence 자체를 검증합니다.
+	FCFVehicleResolveRequest ExplicitAssetRequest = BasicRequest;
+	ExplicitAssetRequest.Recipe.DefaultDataIntent.SensorMode = ECFVehicleSensorIntentMode::ExplicitAsset;
+	// 실제 Product Basic Sensor의 stable soft object identity입니다.
+	const FSoftObjectPath BasicSensorPath(TEXT("/Game/CarFight/Vehicles/Data/Sensor/DA_VehicleSensor_Basic.DA_VehicleSensor_Basic"));
+	ExplicitAssetRequest.Recipe.DefaultDataIntent.DefaultSensorData = TSoftObjectPtr<UCFVehicleSensorData>(BasicSensorPath);
+	// ExplicitAsset Recipe semantic candidate가 Project default보다 높은 winner가 되는 결과입니다.
+	FCFVehicleResolveResult ExplicitAssetResult;
+	TestTrue(TEXT("Explicit Sensor asset Resolve executes"), FCFVehicleResolver::Resolve(ExplicitAssetRequest, ExplicitAssetResult));
+	// ExplicitAsset source trace입니다.
+	const FCFVehicleSourceTrace* ExplicitAssetTrace = CFVehicleResolverTestsPrivate::FindTrace(ExplicitAssetResult, TEXT("DefaultSensorData"));
+	if (TestNotNull(TEXT("Explicit Sensor asset source trace exists"), ExplicitAssetTrace))
+	{
+		TestEqual(TEXT("ExplicitAsset Recipe semantic overrides Project Basic even for same asset"), ExplicitAssetTrace->Layers[ExplicitAssetTrace->EffectiveLayerIndex].SourceType, ECFVehicleSourceType::RecipeExplicitSemanticInput);
+		TestTrue(TEXT("ExplicitAsset trace preserves Project Basic as shadow source"), ExplicitAssetTrace->Layers.Num() >= 2);
+	}
 	return true;
 }
 
@@ -910,6 +1002,66 @@ bool FCFVehicleResolverMountLegacyFallbackTest::RunTest(const FString& Parameter
 		TestEqual(TEXT("Existing Standard Mount preserves current serialized legacy value"), ExistingLegacyField->Value.CanonicalValueText, CurrentEntry.Value.CanonicalValueText);
 		const FCFVehicleSourceLayer& EffectiveLayer = ExistingLegacyTrace->Layers[ExistingLegacyTrace->EffectiveLayerIndex];
 		TestEqual(TEXT("Existing Standard Mount hidden legacy source id"), EffectiveLayer.SourceId, FString(TEXT("CurrentDefinition.LegacySerialized")));
+	}
+
+	return true;
+}
+
+// VCFX Camera typed fields가 Recipe semantic source로 deterministic resolve되는지 검증합니다.
+bool FCFVehicleResolverCameraIntentTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// 현재 Resolver/Registry contract를 포함한 synthetic managed request입니다.
+	FCFVehicleResolveRequest Request;
+	// Request builder 실패 사유입니다.
+	FString BuildError;
+	if (!TestTrue(TEXT("VCFX Camera managed request builds"), CFVehicleResolverTestsPrivate::BuildManagedRequest(Request, BuildError)))
+	{
+		AddError(BuildError);
+		return false;
+	}
+
+	// Wheel proposal adoption으로 unrelated geometry blocker를 제거합니다.
+	FCFVehicleResolveResult ProposalResult;
+	FCFVehicleResolver::Resolve(Request, ProposalResult);
+	CFVehicleResolverTestsPrivate::AdoptAllWheelMeasurements(Request, ProposalResult);
+
+	// 차량별 Camera performance reference typed input입니다.
+	Request.Recipe.DefaultDataIntent.ReferenceMaxSpeedKmh = 237.5f;
+	// Presentation CameraData를 명시적으로 비우는 typed semantic입니다.
+	Request.Recipe.DefaultDataIntent.CameraPresentationDataMode = ECFAssetIntentMode::ExplicitNone;
+	Request.Recipe.DefaultDataIntent.CameraPresentationDataOverride.Reset();
+	Request.Recipe.RecipeFingerprint = TEXT("vcfx-camera-intent-v1");
+
+	// Synthetic Definition validator block과 무관하게 Resolver/Materializer 계산은 정상 완료돼야 합니다.
+	FCFVehicleResolveResult Result;
+	TestTrue(TEXT("VCFX Camera Resolve executes"), FCFVehicleResolver::Resolve(Request, Result));
+	TestEqual(TEXT("VCFX Camera current Resolver revision"), FCFVehicleResolver::CurrentResolverContractRevision, 7);
+	TestEqual(TEXT("VCFX Camera R15 materializer completed"), Result.StageRecords[15].Status, ECFVehicleResolverStageStatus::Completed);
+
+	// ReferenceMaxSpeedKmh resolved value와 source trace를 검증합니다.
+	const FCFVehicleResolvedField* ReferenceSpeedField = CFVehicleResolverTestsPrivate::FindResolvedField(Result, TEXT("ReferenceMaxSpeedKmh"));
+	const FCFVehicleSourceTrace* ReferenceSpeedTrace = CFVehicleResolverTestsPrivate::FindTrace(Result, TEXT("ReferenceMaxSpeedKmh"));
+	if (TestNotNull(TEXT("ReferenceMaxSpeedKmh resolved field exists"), ReferenceSpeedField))
+	{
+		TestTrue(TEXT("ReferenceMaxSpeedKmh preserves typed value"), FMath::IsNearlyEqual(FCString::Atof(*ReferenceSpeedField->Value.CanonicalValueText), 237.5f, KINDA_SMALL_NUMBER));
+	}
+	if (TestNotNull(TEXT("ReferenceMaxSpeedKmh source trace exists"), ReferenceSpeedTrace))
+	{
+		TestEqual(TEXT("ReferenceMaxSpeedKmh effective source is Recipe semantic"), ReferenceSpeedTrace->Layers[ReferenceSpeedTrace->EffectiveLayerIndex].SourceType, ECFVehicleSourceType::RecipeExplicitSemanticInput);
+	}
+
+	// CameraPresentationDataOverride ExplicitNone도 Recipe semantic으로 명시적으로 resolve돼야 합니다.
+	const FCFVehicleResolvedField* CameraPresentationField = CFVehicleResolverTestsPrivate::FindResolvedField(Result, TEXT("CameraPresentationDataOverride"));
+	const FCFVehicleSourceTrace* CameraPresentationTrace = CFVehicleResolverTestsPrivate::FindTrace(Result, TEXT("CameraPresentationDataOverride"));
+	if (TestNotNull(TEXT("CameraPresentationDataOverride resolved field exists"), CameraPresentationField))
+	{
+		TestTrue(TEXT("CameraPresentationDataOverride ExplicitNone resolves None"), CameraPresentationField->Value.CanonicalValueText.Contains(TEXT("None"), ESearchCase::IgnoreCase));
+	}
+	if (TestNotNull(TEXT("CameraPresentationDataOverride source trace exists"), CameraPresentationTrace))
+	{
+		TestEqual(TEXT("CameraPresentationDataOverride effective source is Recipe semantic"), CameraPresentationTrace->Layers[CameraPresentationTrace->EffectiveLayerIndex].SourceType, ECFVehicleSourceType::RecipeExplicitSemanticInput);
 	}
 
 	return true;

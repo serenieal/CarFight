@@ -1,10 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthTests.cpp
-// Version: v1.17.0
-// Date: 2026-09-02
-// Description: DAUTH Foundation + CF-FQ-040 ESH-01 Engine TorqueCurve Registry/Reflection coverage Automation입니다.
+// Version: v1.20.0
+// Date: 2026-09-28
+// Description: DAUTH Foundation + VCFX Camera fields 137-leaf Registry/Reflection coverage Automation입니다.
 // Changelog:
+// - v1.20.0: ReferenceMaxSpeedKmh / CameraPresentationDataOverride descriptor와 Resolver revision 7 계약을 검증.
+// - v1.19.0: Project Compatibility Default가 canonical Production Basic Sensor를 필수 infrastructure source로 포함하는지 검증.
+// - v1.18.0: DefaultSensorData dependency와 current 135-leaf / Resolver revision 6 계약을 검증.
 // - v1.17.0: CF-FQ-043 VMG-P0-04 이후 Gameplay Guidance Hardpoint/Mount authority가 CompanionMode와 분리되므로 NewVehicle 회귀는 UseHardpoints, Existing stored-transform 회귀는 LegacyCompatible을 request에 명시.
 // - v1.16.0: Registry/Reflection 134 coverage와 Performance-owned bUseEngineTorqueCurve/atomic EngineTorqueCurve descriptor, Resolver revision 5를 검증.
 // - v1.15.0: WSA-P0-04 Gameplay Guidance의 Socket/Manual mode Legacy clamp 제외와 Socket Reference geometry conflict를 focused 검증.
@@ -24,6 +27,8 @@
 // - v1.1.0: Recipe duplicate가 원본 RecipeId를 재사용하지 않는 identity 검증을 추가.
 // - v1.0.0: Editor-only asset contract, 당시 117 coverage, stable path, float codec round-trip 검증을 추가.
 // Migration:
+// - v1.19.0부터 Project Compatibility Default 생성 성공은 canonical Basic Sensor asset 존재/계약 유효성을 포함하는 infrastructure contract입니다.
+// - v1.18.0은 기존 historical schema revision assertion을 보존하고 current contract만 Resolver revision 6으로 전진시킵니다.
 // - Runtime/Content Asset mutation 없이 CDO와 transient value만 검사합니다.
 
 #include "Misc/AutomationTest.h"
@@ -144,7 +149,7 @@ bool FCFVehicleAuthoringEditorOnlyTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// Current Registry 134개와 Current UCFVehicleData Reflection leaf 134개의 양방향 coverage 및 ESH-01 Engine Curve descriptor를 검증합니다.
+// Current Registry 137개와 Current UCFVehicleData Reflection leaf 137개의 양방향 coverage 및 VCFX Camera descriptor를 검증합니다.
 bool FCFVehicleAuthoringRegistryTest::RunTest(const FString& Parameters)
 {
 	// Coverage가 발견한 상세 오류 목록입니다.
@@ -230,8 +235,38 @@ bool FCFVehicleAuthoringRegistryTest::RunTest(const FString& Parameters)
 	// [v1.14.0] 132-leaf WSA field/hash contract는 기존 127-leaf approval과 구분되는 Resolver revision 3 이상을 사용합니다.
 	TestTrue(TEXT("WSA 132-leaf schema requires Resolver revision 3 or newer"), FCFVehicleResolver::CurrentResolverContractRevision >= 3);
 
-	// [v1.16.0] ESH-01 134-leaf Engine Curve field/hash contract는 Resolver revision 5로 이전 approval/receipt를 stale 처리합니다.
-	TestEqual(TEXT("ESH-01 134-leaf schema uses Resolver revision 5"), FCFVehicleResolver::CurrentResolverContractRevision, 5);
+	// [v1.18.0] DefaultSensorData 계약은 revision 6 이상에서 계속 유효합니다.
+	TestTrue(TEXT("DefaultSensorData schema requires Resolver revision 6 or newer"), FCFVehicleResolver::CurrentResolverContractRevision >= 6);
+	// [v1.20.0] VCFX Camera exact2 leaf가 포함된 current 137-leaf schema는 Resolver revision 7입니다.
+	TestEqual(TEXT("VCFX Camera 137-leaf schema uses Resolver revision 7"), FCFVehicleResolver::CurrentResolverContractRevision, 7);
+
+	// [v1.20.0] 차량별 기준속도는 Profile이 아닌 DefaultDataIntent typed semantic이 소유합니다.
+	const FCFVehicleFieldDescriptor* ReferenceSpeedDescriptor = FCFVehicleFieldRegistry::GetDescriptors().FindByPredicate([](const FCFVehicleFieldDescriptor& Descriptor)
+	{
+		return Descriptor.GetCanonicalPattern() == TEXT("ReferenceMaxSpeedKmh");
+	});
+	if (TestNotNull(TEXT("ReferenceMaxSpeedKmh Registry descriptor exists"), ReferenceSpeedDescriptor))
+	{
+		TestEqual(TEXT("ReferenceMaxSpeedKmh has no Profile owner"), ReferenceSpeedDescriptor->PrimaryProfileDomain, ECFVehicleProfileDomain::None);
+		TestEqual(TEXT("ReferenceMaxSpeedKmh uses ProjectDefaultThenRecipeSemantic"), ReferenceSpeedDescriptor->ResolveRule, ECFVehicleResolveRule::ProjectDefaultThenRecipeSemantic);
+		TestEqual(TEXT("ReferenceMaxSpeedKmh Camera adoption group"), ReferenceSpeedDescriptor->AdoptionGroup, ECFVehicleAdoptGroup::Camera);
+		TestTrue(TEXT("ReferenceMaxSpeedKmh depends on Project defaults"), ReferenceSpeedDescriptor->RequiredDependencies.Contains(FName(TEXT("Project.CompatibilityDefaults"))));
+		TestTrue(TEXT("ReferenceMaxSpeedKmh depends on Recipe.DefaultDataIntent"), ReferenceSpeedDescriptor->RequiredDependencies.Contains(FName(TEXT("Recipe.DefaultDataIntent"))));
+	}
+
+	// [v1.20.0] CameraPresentationDataOverride도 Presentation 전용 DefaultDataIntent semantic leaf입니다.
+	const FCFVehicleFieldDescriptor* CameraPresentationDescriptor = FCFVehicleFieldRegistry::GetDescriptors().FindByPredicate([](const FCFVehicleFieldDescriptor& Descriptor)
+	{
+		return Descriptor.GetCanonicalPattern() == TEXT("CameraPresentationDataOverride");
+	});
+	if (TestNotNull(TEXT("CameraPresentationDataOverride Registry descriptor exists"), CameraPresentationDescriptor))
+	{
+		TestEqual(TEXT("CameraPresentationDataOverride has no Profile owner"), CameraPresentationDescriptor->PrimaryProfileDomain, ECFVehicleProfileDomain::None);
+		TestEqual(TEXT("CameraPresentationDataOverride uses ProjectDefaultThenRecipeSemantic"), CameraPresentationDescriptor->ResolveRule, ECFVehicleResolveRule::ProjectDefaultThenRecipeSemantic);
+		TestEqual(TEXT("CameraPresentationDataOverride Camera adoption group"), CameraPresentationDescriptor->AdoptionGroup, ECFVehicleAdoptGroup::Camera);
+		TestTrue(TEXT("CameraPresentationDataOverride depends on Project defaults"), CameraPresentationDescriptor->RequiredDependencies.Contains(FName(TEXT("Project.CompatibilityDefaults"))));
+		TestTrue(TEXT("CameraPresentationDataOverride depends on Recipe.DefaultDataIntent"), CameraPresentationDescriptor->RequiredDependencies.Contains(FName(TEXT("Recipe.DefaultDataIntent"))));
+	}
 
 	// [v1.14.0] 기존 enum ordinal을 보존하고 SocketScaleFromChassis를 마지막 값으로 append-only 추가했는지 검증합니다.
 	TestEqual(TEXT("AutoScaleToPhysicsRadius enum ordinal preserved"), static_cast<uint8>(ECFWheelVisualIntentMode::AutoScaleToPhysicsRadius), static_cast<uint8>(2));
@@ -410,6 +445,7 @@ bool FCFVehicleAuthoringDependencyTest::RunTest(const FString& Parameters)
 	TestDescriptorDependencies(TEXT("VehicleMovementConfig.CenterOfMassOverride"), {TEXT("Project.CompatibilityDefaults"), TEXT("Recipe.AdvancedOverrides"), TEXT("Recipe.ImportState.LegacyPins")});
 	TestDescriptorDependencies(TEXT("VehicleMovementConfig.FrontWheelRadius"), {TEXT("Asset.WheelBounds")});
 	TestDescriptorDependencies(TEXT("DefaultDefenseData"), {TEXT("Profile.VehicleBase"), TEXT("Recipe.DefaultDataIntent")});
+	TestDescriptorDependencies(TEXT("DefaultSensorData"), {TEXT("Project.CompatibilityDefaults"), TEXT("Recipe.DefaultDataIntent")});
 	TestDescriptorDependencies(TEXT("DriveStateConfig.IdleEnterSpeedThresholdKmh"), {TEXT("Recipe.DriveStateMode"), TEXT("Profile.DriveState")});
 	return true;
 }
@@ -627,6 +663,15 @@ bool FCFVehicleDefinitionSnapshotTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Project Compatibility Default Snapshot builds"), bFirstDefaultBuilt);
 		TestEqual(TEXT("Project Default has exactly current Registry patterns"), FirstDefaultSnapshot.SortedFields.Num(), FCFVehicleFieldRegistry::ExpectedLeafPatternCount);
 	TestEqual(TEXT("Project Default hash length"), FirstDefaultSnapshot.DefinitionHash.Len(), 32);
+	// Project Compatibility Default가 필수 infrastructure로 소유하는 canonical Basic Sensor field입니다.
+	const FCFVehicleFieldEntry* BasicSensorDefaultEntry = FirstDefaultSnapshot.SortedFields.FindByPredicate([](const FCFVehicleFieldEntry& Entry)
+	{
+		return Entry.FieldPath.ToCanonicalString(true) == TEXT("DefaultSensorData");
+	});
+	if (TestNotNull(TEXT("Project Default contains canonical Basic Sensor field"), BasicSensorDefaultEntry))
+	{
+		TestTrue(TEXT("Project Default Basic Sensor points to canonical Production asset"), BasicSensorDefaultEntry->Value.CanonicalValueText.Contains(TEXT("/Game/CarFight/Vehicles/Data/Sensor/DA_VehicleSensor_Basic.DA_VehicleSensor_Basic")));
+	}
 	TestEqual(TEXT("Project Default builder does not mutate CDO Hardpoints"), VehicleDataCDO->HardpointSlots.Num(), OriginalDefaultHardpointCount);
 	TestEqual(TEXT("Project Default builder does not mutate CDO Mounts"), VehicleDataCDO->MountProfiles.Num(), OriginalDefaultMountCount);
 

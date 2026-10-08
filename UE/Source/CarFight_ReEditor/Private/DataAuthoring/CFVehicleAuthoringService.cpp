@@ -1,11 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringService.cpp
-// Version: v1.7.0
-// Date: 2026-09-02
-// Description: DAUTH-P0-08I~P0-12 Common Authoring Service 구현입니다.
+// Version: v1.9.0
+// Date: 2026-09-28
+// Description: Common Authoring Service + VCFX Camera typed semantic approval/dedupe hash 구현입니다.
 // Scope: R0 read facade, semantic preview/commit, bounded Mesh-only Candidate projection, R3 shared Apply lane를 제공합니다.
 // Changelog:
+// - v1.9.0: SetDefaultDataIntent approval/dedupe hash에 ReferenceMaxSpeedKmh와 Camera Presentation mode/path를 포함해 VCFX semantic 전이를 exact binding.
+// - v1.8.0: SetDefaultDataIntent approval/dedupe hash에 SensorMode와 DefaultSensorData를 포함해 Basic/Sensorless semantic 전이를 exact binding.
 // - v1.7.0: CF-FQ-043 exact stable-id RemoveMountIntent/RemoveHardpointIntent를 기존 R1 Recipe semantic lane에 append-only 추가하고 Hardpoint dependency를 prospective/persistent 양쪽에서 no-cascade fail-closed. 새 remove identity token은 해당 operation에만 hash해 기존 semantic op hash payload를 보존.
 // - v1.6.4: Definition layer에서는 validator blocker보다 Resolver R15 internal Error code를 우선 진단해 실제 Resolve=false 원인을 보존.
 // - v1.6.3: current baseline Resolve Error 진단을 Recipe/Resolver/Definition 세 validation layer 전체에서 찾아 layer+code+path+message로 보존.
@@ -19,6 +21,8 @@
 // - v1.1.0: RecipeFingerprint 비소비 semantic field도 typed desired-state equality로 NoChange를 판정하도록 교정.
 // - v1.0.0: Snapshot/Resolver/Apply Core를 재사용하는 FCFVehicleAuthoringService 최초 구현.
 // Migration:
+// - Resolver revision 7 이전 DefaultDataIntent approval은 Camera semantic hash가 없으므로 재-preview/재승인합니다.
+// - Resolver revision 6 이전 DefaultDataIntent approval은 Sensor semantic hash가 없으므로 재-preview/재승인합니다.
 // - Raw Stable Field write, direct existing Target UCFVehicleData mutation, Save/SaveAll을 구현하지 않습니다.
 // - Shared Profile/Drift/Create UX operation은 별도 CFVehicleUXOps.cpp에서 existing Core를 orchestration합니다.
 // - ApplyResolvedVehicle은 FCFVehicleApplyService::Apply를 정확히 한 번 호출하는 shared writer lane만 사용합니다.
@@ -1405,6 +1409,11 @@ namespace CFVehicleAuthoringPrivate
 		AppendToken(Payload, TEXT("DefenseData"), Change.DefaultDataIntent.DefaultDefenseData.ToSoftObjectPath().ToString());
 		AppendToken(Payload, TEXT("DestroyedFxMode"), FString::FromInt(static_cast<int32>(Change.DefaultDataIntent.DestroyedFxMode)));
 		AppendToken(Payload, TEXT("DestroyedFxData"), Change.DefaultDataIntent.DefaultDestroyedFxData.ToSoftObjectPath().ToString());
+		AppendToken(Payload, TEXT("SensorMode"), FString::FromInt(static_cast<int32>(Change.DefaultDataIntent.SensorMode)));
+		AppendToken(Payload, TEXT("SensorData"), Change.DefaultDataIntent.DefaultSensorData.ToSoftObjectPath().ToString());
+		AppendToken(Payload, TEXT("ReferenceMaxSpeedKmh"), CanonicalFloat(Change.DefaultDataIntent.ReferenceMaxSpeedKmh));
+		AppendToken(Payload, TEXT("CameraPresentationDataMode"), FString::FromInt(static_cast<int32>(Change.DefaultDataIntent.CameraPresentationDataMode)));
+		AppendToken(Payload, TEXT("CameraPresentationData"), Change.DefaultDataIntent.CameraPresentationDataOverride.ToSoftObjectPath().ToString());
 		AppendToken(Payload, TEXT("DestroyedFxSocket"), Change.DefaultDataIntent.DestroyedFxSocketName.ToString());
 		AppendToken(Payload, TEXT("WheelVisualMode"), FString::FromInt(static_cast<int32>(Change.WheelVisualIntent.Mode)));
 		AppendToken(Payload, TEXT("DriveStateMode"), FString::FromInt(static_cast<int32>(Change.DriveStateMode)));

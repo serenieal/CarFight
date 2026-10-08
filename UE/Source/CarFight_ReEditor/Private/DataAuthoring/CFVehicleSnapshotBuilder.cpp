@@ -1,21 +1,24 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleSnapshotBuilder.cpp
-// Version: v1.3.0
-// Date: 2026-08-26
-// Description: Recipe/Profile/Definition immutable Snapshot과 Builder-private ownership metadata를 포함한 deterministic fingerprint/hash 구현입니다.
+// Version: v1.4.0
+// Date: 2026-09-15
+// Description: Recipe/Profile/Definition immutable Snapshot과 Project Basic Sensor compatibility default를 포함한 deterministic fingerprint/hash 구현입니다.
 // Changelog:
+// - v1.4.0: Project Compatibility Default의 DefaultSensorData를 공통 DA_VehicleSensor_Basic으로 fail-closed materialize해 신규 정상 차량의 기본 Sensor source를 고정.
 // - v1.3.0: CF-FQ-040 VB-P0-05에서 Profile Meta.OwnerRecipeId를 snapshot source metadata에 value-copy. Profile payload fingerprint에는 포함하지 않아 owner stale precondition과 payload stale precondition을 분리.
 // - v1.2.0: DAUTH-P0-08G prospective Adoption Preview용 Recipe Snapshot fingerprint 공용 entry point 추가.
 // - v1.1.0: DAUTH-P0-08F에서 Resolver/R15 readback이 Definition Snapshot과 동일 hash authority를 사용하도록 공용 entry point 추가.
 // - v1.0.0: DAUTH-P0-08C Section 22.13/22.27 Snapshot Foundation 최초 구현.
 // Migration:
+// - 공통 Basic Sensor asset이 없거나 계약이 invalid면 authoring Project Compatibility Default 생성이 fail-closed하며 Sensorless로 조용히 저하하지 않습니다.
 // - Runtime UCFVehicleData, Content Asset, Apply 경로를 수정하지 않습니다.
 // - 기존 Recipe/Definition hash format revision과 canonical serialization은 변경하지 않습니다.
 
 #include "DataAuthoring/CFVehicleSnapshotBuilder.h"
 
 #include "CFVehicleData.h"
+#include "CFVehicleSensorData.h"
 #include "Containers/StringConv.h"
 #include "DataAuthoring/CFDriveStateProfile.h"
 #include "DataAuthoring/CFDrivetrainProfile.h"
@@ -695,19 +698,35 @@ bool FCFVehicleSnapshotBuilder::BuildDefinitionHashFromFields(
 	return true;
 }
 
-// UCFVehicleData C++ defaults와 default-constructed array element를 사용해 exact 117-pattern compatibility baseline을 만듭니다.
+// UCFVehicleData C++ defaults와 공통 Basic Sensor를 사용해 exact 135-pattern compatibility baseline을 만듭니다.
 bool FCFVehicleSnapshotBuilder::BuildProjectCompatibilityDefaultSnapshot(
 	FCFVehicleDefinitionSnapshot& OutSnapshot,
 	FString& OutError)
 {
 	OutSnapshot = FCFVehicleDefinitionSnapshot();
-	// Runtime schema를 수정하지 않고 C++ member initializer 값을 읽을 UCFVehicleData CDO입니다.
-	const UCFVehicleData* DefaultDefinition = GetDefault<UCFVehicleData>();
+	// CDO를 변경하지 않고 Project Compatibility Default를 구성할 transient Definition입니다.
+	UCFVehicleData* DefaultDefinition = NewObject<UCFVehicleData>(GetTransientPackage());
 	if (!DefaultDefinition)
 	{
-		OutError = TEXT("UCFVehicleData CDO를 가져올 수 없습니다.");
+		OutError = TEXT("Project Compatibility Default용 transient UCFVehicleData를 생성할 수 없습니다.");
 		return false;
 	}
+
+	// 모든 정상 Vehicle Builder record가 공유하는 Production Basic Sensor object path입니다.
+	static const FSoftObjectPath ProjectBasicSensorPath(TEXT("/Game/CarFight/Vehicles/Data/Sensor/DA_VehicleSensor_Basic.DA_VehicleSensor_Basic"));
+	// Project Compatibility Default에 연결할 실제 Basic Sensor asset입니다.
+	UCFVehicleSensorData* ProjectBasicSensor = Cast<UCFVehicleSensorData>(ProjectBasicSensorPath.TryLoad());
+	if (!ProjectBasicSensor)
+	{
+		OutError = FString::Printf(TEXT("프로젝트 공통 Basic Sensor를 load할 수 없습니다: %s"), *ProjectBasicSensorPath.ToString());
+		return false;
+	}
+	if (!ProjectBasicSensor->IsSensorDataContractValid())
+	{
+		OutError = FString::Printf(TEXT("프로젝트 공통 Basic Sensor 계약이 유효하지 않습니다: %s"), *ProjectBasicSensorPath.ToString());
+		return false;
+	}
+	DefaultDefinition->DefaultSensorData = ProjectBasicSensor;
 
 	for (const FCFVehicleFieldDescriptor& Descriptor : FCFVehicleFieldRegistry::GetDescriptors())
 	{

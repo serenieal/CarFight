@@ -1,17 +1,19 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleUXOps.cpp
-// Version: v1.4.0
-// Date: 2026-09-02
-// Description: DAUTH-P0-11 Frozen 24.91~24.94 normal Workspace completeness facade 구현입니다.
+// Version: v1.5.0
+// Date: 2026-09-15
+// Description: DAUTH-P0-11 Frozen 24.91~24.94 normal Workspace completeness facade + 신규 차량 Basic Sensor policy 구현입니다.
 // Scope: existing Batch B2 Profile edit, External Drift 3-way recovery, Definition+Recipe record creation을 Common Authoring facade에 얇게 연결합니다.
 // Changelog:
+// - v1.5.0: 새 Definition+Recipe 생성 시 Recipe SensorMode를 UseProjectBasicSensor로 명시하고 explicit Sensor override는 비워 공통 Basic Sensor를 정상 출고 기본값으로 고정.
 // - v1.4.0: CF-FQ-043 bRequireExplicitHardpointPlan=true만 two-record creation ProposalHash에 additive binding해 legacy false hash payload를 보존하고 Guided Recipe 생성 시 BuilderHardpointPlanMode=Unspecified를 기록. 일반 creation은 LegacyCompatible 보존.
 // - v1.3.0: two-record creation approval hash에 Guided vehicle-specific Transmission policy opt-in을 binding하고 생성 Recipe에 persistent policy를 설정. 일반 request 기본 false는 LegacyCompatible로 보존.
 // - v1.2.0: P0-12 UA-04 USER 피드백에 따라 Keep Authoring 성공 상태 문구를 사용자-facing 한국어로 현지화. Drift 계약과 mutation 의미 변경 없음.
 // - v1.1.0: Drift prospective simulation용 UObject duplicate가 PostDuplicate에서 새 RecipeId를 발급해 approval hash가 비결정적이던 문제를 원본 identity 복원으로 교정.
 // - v1.0.0: Shared Profile impact/commit, Drift review/decision, New Vehicle/Mesh-only two-record creation 최초 구현.
 // Migration:
+// - 신규 Vehicle Builder record만 Basic Sensor 정책으로 시작하며 기존 Definition/Recipe는 자동 변경하지 않습니다.
 // - v1.2.0은 성공 상태 표시 문구만 변경하며 Proposal hash, approval binding, Recipe/Target mutation 계약은 변경하지 않습니다.
 // - Profile write는 FCFBatchImportService B2만 사용하고 Target Definition Apply는 수행하지 않습니다.
 // - Drift Preserve Raw는 FCFVehicleImportService ownership primitive, Advanced는 Registry allowlist를 사용합니다.
@@ -867,7 +869,11 @@ bool FCFVehicleAuthoringService::CreateVehicleRecords(
 	}
 	Definition->Modify();
 	Recipe->Modify();
-		Recipe->TargetVehicleData = Definition;
+	Recipe->TargetVehicleData = Definition;
+	// 신규 정상 차량은 프로젝트 공통 최저성능 Basic Sensor를 기본 source로 시작합니다.
+	Recipe->DefaultDataIntent.SensorMode = ECFVehicleSensorIntentMode::UseProjectBasicSensor;
+	// 공통 Basic mode에서는 차량별 explicit Sensor asset override를 비웁니다.
+	Recipe->DefaultDataIntent.DefaultSensorData.Reset();
 	Recipe->AssetIntent.ChassisMesh = Request.ChassisMesh;
 	Recipe->ProfileBindings = Request.ProfileBindings;
 	Recipe->BuilderTransmissionPolicy = Request.bRequireVehicleSpecificTransmission

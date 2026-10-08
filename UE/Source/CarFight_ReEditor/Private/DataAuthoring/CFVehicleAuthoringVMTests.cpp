@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringVMTests.cpp
-// Version: v1.44.0
-// Date: 2026-09-11
-// Description: Vehicle Authoring Workspace + Guided Builder integration 보호 Automation입니다.
+// Version: v1.45.0
+// Date: 2026-09-16
+// Description: Vehicle Authoring Workspace + Guided Builder integration + 신규 Basic Sensor policy 보호 Automation입니다.
 // Changelog:
+// - v1.45.0: Generic Vehicle record 생성 Recipe가 UseProjectBasicSensor를 명시하고 차량별 explicit SensorData를 비운 상태로 시작하는지 검증.
 // - v1.44.0: CF-FQ-038 DEL6 compatibility retirement로 Legacy Wizard managed-guard test와 hidden-spawner 공존 기대를 제거하고 Current Builder/Authoring tab 계약만 검증.
 // - v1.43.1: ResolverContractRevision synthetic approval-scope drift fixture를 실제 int32 contract에 맞게 +1로 교정. production 로직 변경 없음.
 // - v1.43.0: P0-07H 재감사 2차 실패를 교정. Undo mutation footprint가 package dirty/save를 강제하는 production contract를 검증하고, Recipe fingerprint drift fixture를 항상 존재하는 DrivingFeelIntent.AccelerationFeel semantic으로 전환. SourceSignature/ResolverRevision approval-scope sensitivity와 durable save 성공 뒤 refresh warning direct regression도 추가.
@@ -60,6 +61,7 @@
 // - v1.1.0: P0-10 Reference Compare, typed Layout/Driving Feel+Undo, Measurement/Adoption, legacy Wizard managed-target guard parity 검증 추가.
 // - v1.0.0: ViewModel↔facade parity, preview mutation0, Initial Import mutation boundary, Apply/standard Undo, stale approval fail-closed 검증 추가.
 // Migration:
+// - v1.45.0은 신규 record creation policy만 검증하며 기존 persisted Recipe를 자동 변경하지 않습니다.
 // - v1.44.0부터 Legacy Wizard 자체/hidden spawner를 Automation fixture로 직접 참조하지 않습니다. 기존 managed-target guard PASS는 Historical evidence로 보존하고 Current 회귀는 Vehicle Authoring/Builder 경로가 소유합니다.
 // - v1.43.1 ResolverContractRevision은 int32이며 test synthetic drift도 integer revision semantics를 사용합니다.
 // - v1.43.0 fingerprint TOCTOU fixture는 구조가 비어 있을 수 있는 Hardpoint/Mount array에 의존하지 않고 Frozen RecipeFingerprint block에 항상 존재하는 DrivingFeelIntent scalar를 임시 변경 후 exact restore합니다. refresh-warning fixture도 test-only persistence callback에서 VM state를 끊을 뿐 Product disk write는 0입니다.
@@ -5319,6 +5321,8 @@ bool FCFVehicleP11MeshCreateTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("New Recipe starts managed"), CreateResult.CreatedRecipe->ImportState.ManageState == ECFVehicleManageState::Managed);
 		TestEqual(TEXT("Generic record creation preserves LegacyCompatible Transmission policy"), CreateResult.CreatedRecipe->BuilderTransmissionPolicy, ECFBuilderTransmissionPolicy::LegacyCompatible);
 		TestEqual(TEXT("Generic record creation preserves LegacyCompatible Hardpoint Plan mode"), CreateResult.CreatedRecipe->BuilderHardpointPlanMode, ECFBuilderHardpointPlanMode::LegacyCompatible);
+		TestEqual(TEXT("New Vehicle record explicitly starts with project Basic Sensor"), CreateResult.CreatedRecipe->DefaultDataIntent.SensorMode, ECFVehicleSensorIntentMode::UseProjectBasicSensor);
+		TestTrue(TEXT("Project Basic Sensor mode keeps per-vehicle explicit SensorData empty"), CreateResult.CreatedRecipe->DefaultDataIntent.DefaultSensorData.IsNull());
 		TestTrue(TEXT("VehicleBase Profile is not inferred"), CreateResult.CreatedRecipe->ProfileBindings.VehicleBaseProfile.IsNull());
 		TestTrue(TEXT("Drivetrain Profile is not inferred"), CreateResult.CreatedRecipe->ProfileBindings.DrivetrainProfile.IsNull());
 		TestTrue(TEXT("Handling Profile is not inferred"), CreateResult.CreatedRecipe->ProfileBindings.HandlingProfile.IsNull());

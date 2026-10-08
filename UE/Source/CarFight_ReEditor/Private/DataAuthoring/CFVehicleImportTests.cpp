@@ -1,12 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleImportTests.cpp
-// Version: v1.0.0
-// Date: 2026-08-17
+// Version: v1.1.0
+// Date: 2026-09-16
 // Description: DAUTH-P0-08G Existing Definition Import / Legacy Pin / Adoption Foundation Automation입니다.
 // Changelog:
+// - v1.1.0: 기존 Definition의 DefaultSensorData=None이 신규 Project Basic Sensor 정책에 의해 변질되지 않고 ExplicitNone Sensorless로 보존되는 회귀검증 추가.
 // - v1.0.0: lossless import, hidden Mount serialized partition, Legacy Pin precedence, group/field preview, stale guard와 Recipe-only commit 검증 추가.
 // Migration:
+// - v1.1.0은 기존 persisted 차량의 Sensorless 호환성만 검증하며 Product Content Asset을 변경하지 않습니다.
 // - 테스트는 메모리 UPackage와 transient UCFVehicleData만 사용하며 Content Asset을 생성/저장하지 않습니다.
 // - Movement raw 값에서 Driving Feel/Profile을 역산하는 경로를 사용하지 않습니다.
 
@@ -356,6 +358,8 @@ bool FCFVehicleExistingImportTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Mount stable identity copied"), Recipe->MountIntents[0].MountProfileId, FName(TEXT("M_Z")));
 	TestEqual(TEXT("Mount active LocationSlotRef copied"), Recipe->MountIntents[0].LocationSlotRef, FName(TEXT("Top_02")));
 	TestTrue(TEXT("Chassis hard reference became same-asset soft semantic reference"), Recipe->AssetIntent.ChassisMesh.ToSoftObjectPath().ToString().Contains(TEXT("/Engine/BasicShapes/Cube.Cube")));
+	TestEqual(TEXT("Existing DefaultSensorData=None imports as explicit Sensorless"), Recipe->DefaultDataIntent.SensorMode, ECFVehicleSensorIntentMode::ExplicitNone);
+	TestTrue(TEXT("Existing Sensorless import keeps explicit SensorData empty"), Recipe->DefaultDataIntent.DefaultSensorData.IsNull());
 
 	// Distinctive hidden legacy value가 normal semantic MountIntent가 아니라 LegacySerializedFields에 보존됐는지 확인합니다.
 	const FCFVehicleFieldOverride* HiddenYawRate = CFVehicleImportTestsPrivate::FindOverride(

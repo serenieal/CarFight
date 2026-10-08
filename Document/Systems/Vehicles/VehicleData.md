@@ -1,7 +1,7 @@
 # VehicleData
 
-- 문서 버전: v2.3.0
-- 최근 갱신일: 2026-09-11
+- 문서 버전: v2.5.0
+- 최근 갱신일: 2026-09-16
 - 문서 상태: Current Implementation
 - 적용 범위: `UCFVehicleData`, `UCFVDAValidator`, `ACFVehiclePawn::ApplyVehicleDataConfig()`와 현재 대표 VehicleData 기준
 
@@ -58,6 +58,7 @@ VehicleReferenceConfig
 VehicleDurabilityConfig
 DefaultDefenseData
 DefaultDestroyedFxData
+DefaultSensorData
 DestroyedFxSocketName
 DriveStateConfig
 ```
@@ -154,6 +155,20 @@ Front/Rear Wheel Class를 제공한다.
 ### DefaultDestroyedFxData / DestroyedFxSocketName
 
 최초 파괴 Niagara 연출의 차량별 기본값과 우선 소켓을 제공한다.
+
+### DefaultSensorData
+
+장착 Scanner와 독립된 차량 자체의 기본 Sensor Runtime Source를 제공한다.
+
+```text
+장착 Scanner SensorData
+→ VehicleData.DefaultSensorData
+→ zero-range Fallback
+```
+
+정상 신규 Vehicle Builder 차량은 공통 최저성능 `DA_VehicleSensor_Basic`을 `DefaultSensorData`로 materialize한다. Scanner를 장착하면 Scanner SensorData가 우선하고, Scanner를 제거하면 `DefaultSensorData`로 복귀한다. 둘 다 없으면 기존 zero-range 안전 Fallback을 유지한다.
+
+기존 VehicleData의 `DefaultSensorData=None`은 자동 migration하지 않는다. Existing Definition Import는 이를 명시적 Sensorless 의미로 보존하고, 기존 차량에 Basic Sensor를 부여할 때도 Vehicle Builder / Recipe / Resolver / Preview / Approval / DefinitionApply 경로를 사용한다.
 
 ### DriveStateConfig
 
@@ -504,6 +519,25 @@ USER 튜닝 결과
 
 ## 14. Changelog
 
+### v2.5.0 - 2026-09-16
+
+- 기존 `DA_TestSUV / DA_VehicleDefense_TestSUV`의 Basic Sensor migration을 기존 Authoring blocker 우회 없이 완료했다. `DriveStateConfig` 현재 값을 Recipe-private DriveState Profile로 exact-copy해 VehicleSpecific ownership을 성립시키고, stale `HP_Top_02` binding만 `SocketName=None` manual slot으로 전환해 기존 `Top_02` LocalLocation/LocalRotation을 보존했다.
+- 두 VehicleData의 persisted 최종 변경은 `DefaultSensorData=DA_VehicleSensor_Basic`과 `HardpointSlots[Top_02].SocketName=None` exact2다. 관련 Recipe/DriveState Profile sidecar exact4도 persisted AssetDump로 확인했다.
+- `DA_TestSedan`은 이전 reviewed migration 상태를 유지하고, `DA_Vehicle_Wagon`은 pre-existing `DA_Recipe_Wagon` 병렬 dirty 보호를 위해 mutation 0으로 유지한다. 테스트/Legacy VehicleData 역시 자동 migration하지 않는다.
+- 단발성 migration code/runner 제거 뒤 Official UE 5.8 Build `dbef9176e89a4f849995bc26c40ed8c1` PASS / Exit0, `CarFight.Scanner` 5/5, `CarFight.DataAuthoring.DAUTH_P0_08` 47/47, Vehicle Builder `RecordCreation` 1/1 PASS를 확인했다.
+- live PIE RuntimeRead는 제품 결함이 아니라 GoPyMCP lifecycle/tool-schema infrastructure blocker 때문에 이번 세션에서 미검증이다. managed Editor Ready와 UE MCP 연결 자체는 PASS다.
+
+Migration: 기존 `DefaultSensorData=None` VehicleData를 자동으로 Basic Sensor로 해석하지 않는다. reviewed migration이 완료된 대표 Target만 Basic Sensor를 소유하며 나머지는 별도 결정 전 기존 의미를 유지한다.
+
+### v2.4.0 - 2026-09-16
+
+- `UCFVehicleData.DefaultSensorData` additive field와 `Scanner override > Vehicle Basic > zero-range Fallback` Runtime 입력 계약을 Current VehicleData 구조에 반영했다.
+- 정상 신규 Vehicle Builder 차량의 공통 Basic Sensor와 기존 `None` 보존 migration 의미를 기록했다. 기존 값을 Raw VehicleData direct edit로 일괄 보정하지 않는다.
+- fresh existing-vehicle audit에서 `DA_TestSedan`은 canonical Basic Sensor persisted PASS, `DA_TestSUV / DA_VehicleDefense_TestSUV`는 기존 DriveState Profile 및 `HP_Top_02` Authoring blocker 때문에 `None` 유지, Wagon은 pre-existing Recipe dirty 보호로 `None` 유지임을 확인했다.
+- 단발성 migration 도구 제거 뒤 Official UE 5.8 Build `945148c284e04fdea6e9301e66ae764c` PASS / Exit0를 확인했다.
+
+Migration: pre-v2.4 VehicleData의 `DefaultSensorData=None`은 자동으로 Basic Sensor가 되지 않는다. existing vehicle migration은 current Vehicle Authoring validation을 통과하는 reviewed DefinitionApply만 허용한다.
+
 ### v2.3.0 - 2026-09-11
 
 - `CF-FQ-015 Vehicle Data Tuning` Rebaseline을 반영했다. VD-P0-00~03 Validator/Representative Compare/Runtime Apply Technical PASS는 Historical evidence로 보존하고, VD-P0-04 Raw Sedan/SUV USER Tuning은 `Superseded / Not Executed`로 종료했다.
@@ -548,6 +582,7 @@ Migration: CF-FQ-015 closure를 과거 USER Driving PASS로 해석하지 않는�
 
 ## 15. Migration
 
+- v2.4부터 `DefaultSensorData=None`인 기존 VehicleData를 자동 Basic Sensor로 해석하지 않는다. 신규 정상 Vehicle Builder record만 Project Basic Sensor를 기본 의도로 사용하며 existing migration은 reviewed Vehicle Authoring lane을 사용한다.
 - 기존 VehicleData는 `RedlineStartRPM=0` 기본값으로 기존 주행 물리를 그대로 유지한다. HUD에서 임의 Redline을 만들지 않는다.
 - 실제 Redline을 authoring할 때는 대표 차량의 Idle/Max와 설계 의도를 확인한 명시값만 사용하며 `EngineMaxRPM * 0.85` 같은 자동 산식을 사용하지 않는다.
 - P0-08 당시 117-field 문서/테스트 결과는 당시 schema의 Historical evidence다. Current Source 판단은 additive `RedlineStartRPM`을 포함한 118-field Registry를 우선한다.

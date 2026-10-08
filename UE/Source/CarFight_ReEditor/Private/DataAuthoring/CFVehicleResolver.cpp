@@ -1,11 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleResolver.cpp
-// Version: v1.7.0
-// Date: 2026-09-03
-// Description: DAUTH-P0-08E/F Frozen R0~R16 Pure Resolver + CF-FQ-047 stable Mount legacy passthrough integrity 구현입니다.
+// Version: v1.9.0
+// Date: 2026-09-28
+// Description: Pure Resolver에 VCFX ReferenceMaxSpeed / Camera Presentation typed semantic을 additive 구현합니다.
 // Scope: Snapshot-only source candidate/precedence와 R15 transient Materializer/Validator orchestration을 제공합니다.
 // Changelog:
+// - v1.9.0: ReferenceMaxSpeedKmh direct semantic candidate와 CameraPresentationDataOverride ExplicitAsset/ExplicitNone candidate를 추가.
+// - v1.8.0: DefaultSensorData에서 Project Basic Sensor를 기본 winner로 유지하고 Recipe ExplicitAsset/ExplicitNone만 더 높은 semantic candidate로 적용.
 // - v1.7.0: CF-FQ-047 P0-06. active Recipe Mount row의 hidden legacy leaf가 explicit stored override가 없을 때 current same-ID serialized value를 보존하고, 신규 row는 Project Compatibility wildcard struct default를 exact selector fallback으로 materialize해 Resolver/full Target hash 일치를 복원.
 // - v1.6.0: Performance Profile의 bUseEngineTorqueCurve/atomic EngineTorqueCurve를 R2에 연결하고 opt-in payload를 공통 Runtime validator로 fail-closed 검증.
 // - v1.5.3: SoftClass Profile → hard TSubclassOf Definition 변환에서 /Game Blueprint Generated Class를 UClass qualifier로 고정하던 오류를 교정. /Script native class는 Class, content generated class는 BlueprintGeneratedClass canonical qualifier를 사용해 R15 hash readback을 일치시킴.
@@ -18,6 +20,7 @@
 // - v1.1.0: DAUTH-P0-08F R15을 Completed stage로 구현하고 Definition Snapshot 공용 hash authority와 materialized readback consistency를 연결.
 // - v1.0.0: Section 22.22~22.39 immutable Resolver input/output과 deterministic candidate stack 최초 구현.
 // Migration:
+// - Resolver contract revision 6부터 UseProjectBasicSensor는 Recipe candidate를 만들지 않고 Project Compatibility Default의 Basic Sensor를 유지하며 ExplicitNone만 Sensorless를 명시합니다.
 // - Resolver contract revision 2부터 기존 Base/Drivetrain Profile은 opt-in bool이 false이면 새 wheel/Transmission candidate를 만들지 않습니다.
 // - ReverseGearRatios의 0/음수 값은 abs 보정하지 않고 Block합니다. setup array는 positive magnitude storage만 허용합니다.
 // - R0~R14 Source 계산은 계속 live UObject/StaticMesh/Slate를 재조회하지 않습니다.
@@ -1328,6 +1331,54 @@ namespace CFVehicleResolverPrivate
 			else
 			{
 				AddIssue(Context, Context.Result.ResolverValidation, ECFVehicleValidationSeverity::Error, TEXT("DestroyedFxNoneEncodeFailed"), EncodeError, &DestroyedFxPath);
+			}
+		}
+
+		// 기본 차량 Sensor semantic intent 처리 target path입니다.
+		const FCFVehicleFieldPath SensorPath = FindScalarPath(TEXT("DefaultSensorData"));
+		if (Context.Request.Recipe.DefaultDataIntent.SensorMode == ECFVehicleSensorIntentMode::ExplicitAsset)
+		{
+			AddStructPropertyCandidate(Context, SensorPath, *FCFVehicleDefaultIntent::StaticStruct(), &Context.Request.Recipe.DefaultDataIntent, TEXT("DefaultSensorData"), ECFVehicleSourceType::RecipeExplicitSemanticInput, RecipeSourceId, RecipeRevision, RecipeFingerprint);
+		}
+		else if (Context.Request.Recipe.DefaultDataIntent.SensorMode == ECFVehicleSensorIntentMode::ExplicitNone)
+		{
+			// Sensorless explicit None canonical target value입니다.
+			FCFVehicleFieldValue NoneValue;
+			// None encode 실패 이유입니다.
+			FString EncodeError;
+			if (EncodeTargetNone(SensorPath, NoneValue, EncodeError))
+			{
+				AddCandidate(Context, SensorPath, NoneValue, ECFVehicleSourceType::RecipeExplicitSemanticInput, RecipeSourceId, RecipeRevision, RecipeFingerprint);
+			}
+			else
+			{
+				AddIssue(Context, Context.Result.ResolverValidation, ECFVehicleValidationSeverity::Error, TEXT("SensorNoneEncodeFailed"), EncodeError, &SensorPath);
+			}
+		}
+		// UseProjectBasicSensor는 Recipe candidate를 만들지 않아 Project Compatibility Default가 effective source로 남습니다.
+
+		// [v1.9.0] 차량별 Camera Driving FX 기준속도는 typed Recipe scalar를 직접 사용합니다. 0은 미설정 semantic 그대로 보존합니다.
+		AddStructPropertyCandidate(Context, FindScalarPath(TEXT("ReferenceMaxSpeedKmh")), *FCFVehicleDefaultIntent::StaticStruct(), &Context.Request.Recipe.DefaultDataIntent, TEXT("ReferenceMaxSpeedKmh"), ECFVehicleSourceType::RecipeExplicitSemanticInput, RecipeSourceId, RecipeRevision, RecipeFingerprint);
+
+		// [v1.9.0] 차량별 Presentation CameraData semantic을 resolve할 Registry field path입니다.
+		const FCFVehicleFieldPath CameraPresentationPath = FindScalarPath(TEXT("CameraPresentationDataOverride"));
+		if (Context.Request.Recipe.DefaultDataIntent.CameraPresentationDataMode == ECFAssetIntentMode::ExplicitAsset)
+		{
+			AddStructPropertyCandidate(Context, CameraPresentationPath, *FCFVehicleDefaultIntent::StaticStruct(), &Context.Request.Recipe.DefaultDataIntent, TEXT("CameraPresentationDataOverride"), ECFVehicleSourceType::RecipeExplicitSemanticInput, RecipeSourceId, RecipeRevision, RecipeFingerprint);
+		}
+		else if (Context.Request.Recipe.DefaultDataIntent.CameraPresentationDataMode == ECFAssetIntentMode::ExplicitNone)
+		{
+			// Camera Presentation override의 명시적 None canonical target value입니다.
+			FCFVehicleFieldValue NoneValue;
+			// None canonical encode 실패 이유입니다.
+			FString EncodeError;
+			if (EncodeTargetNone(CameraPresentationPath, NoneValue, EncodeError))
+			{
+				AddCandidate(Context, CameraPresentationPath, NoneValue, ECFVehicleSourceType::RecipeExplicitSemanticInput, RecipeSourceId, RecipeRevision, RecipeFingerprint);
+			}
+			else
+			{
+				AddIssue(Context, Context.Result.ResolverValidation, ECFVehicleValidationSeverity::Error, TEXT("CameraPresentationNoneEncodeFailed"), EncodeError, &CameraPresentationPath);
 			}
 		}
 

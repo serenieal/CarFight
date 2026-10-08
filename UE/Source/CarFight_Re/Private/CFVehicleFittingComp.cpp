@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.7.0
-// Date: 2026-09-02
+// Version: 1.7.1
+// Date: 2026-09-16
 // Description: CF-FQ-033~041 출격·Field/Debug 피팅 Runtime Apply·원자 Rollback + UI-P0-06 Weapon Selection Source 구현
 // Scope: Legacy·Snapshot Prepare, Weapon·Defense·Sensor 원자 Commit과 Applied Snapshot의 실제 weapon-bearing mount 고정 순서를 Weapon Selection Runtime으로 전달합니다.
 // Changelog:
+// - v1.7.1: scanner-less Snapshot의 null Sensor 적용 의미를 Vehicle Basic 복귀 우선, 그 다음 zero-range Fallback으로 현재 Sensor source 계약과 정렬.
 // - v1.7.0: RTA-P0-03 보상 복구가 기존 실제-차량 RuntimeApplyAdapter를 재사용하도록 vehicle-facing Applied Checkpoint Restore wrapper를 추가.
 // - v1.6.0: Snapshot의 weapon-bearing ResolvedMounts 전체를 고정 순서로 WeaponComp에 전달하고 requested active mount를 SelectedWeaponIndex로 보존. 내부 MountProfileId는 UI 의미로 승격하지 않음.
 // - v1.5.0: SCAN-P0-04 Sensor Runtime participant를 Commit/Restore/Checkpoint에 추가하고 Snapshot Weapon 선택에서 Scanner-only Mount를 제외.
@@ -20,7 +21,7 @@
 // - VehicleMesh.GetMass가 Snapshot Target보다 큰 경우는 PhysicsAsset 집계 질량 증거로 허용하며, Target보다 허용 오차 이상 부족하면 전파 실패로 거부한다.
 // - SetMassOverrideInKg, Physics State 재생성과 Ammo 적용은 수행하지 않는다.
 // - v1.3.0 Field 보상 복원의 Weapon·Defense와 Applied Snapshot에 v1.5.0부터 Sensor Runtime도 포함한다. 질량 변경 후보의 적용·복원은 상위 FFIT-P0-04 ICFFieldFitMassRuntime 경계가 소유한다.
-// - Snapshot scanner-less는 ApplySensorData(nullptr)로 Fallback을 적용하고 Legacy 경로는 기존 SensorData Source를 보존한다.
+// - Snapshot scanner-less는 ApplySensorData(nullptr)로 Scanner override를 제거하며, Vehicle Basic Sensor가 있으면 Basic으로 복귀하고 없을 때만 zero-range Fallback을 사용한다. Legacy 경로는 기존 SensorData Source를 보존한다.
 // - v1.6.0 Snapshot에 실제 weapon-bearing mount가 둘 이상이면 WeaponComp Selection Runtime을 초기화한다. 기존 single weapon/legacy 경로 의미는 유지한다.
 // - v1.7.0 상위 Runtime Apply 보상은 이 컴포넌트가 이미 사용하는 실제-차량 Adapter를 통해 Weapon·Defense·Sensor와 Applied Snapshot을 함께 복원한다.
 
@@ -102,7 +103,7 @@ namespace
 			return bOutDefenseRuntimeReady && VehicleDefenseComp->GetActiveDefenseData() == DefenseInput.DefenseData;
 		}
 
-		// [v1.5.0] Snapshot SensorData 또는 scanner-less null을 P0-02 non-destructive ApplySensorData 경로에 적용합니다.
+		// [v1.5.0] Snapshot Scanner SensorData 또는 scanner-less null을 non-destructive ApplySensorData 경로에 적용합니다. null은 Vehicle Basic Sensor 복귀 후 필요 시 zero-range Fallback으로 이어집니다.
 		virtual bool ApplySensorRuntime(const FCFFittingSensorRuntimeInput& SensorInput) override
 		{
 			if (SensorInput.UsesLegacyVehicleConfiguration())

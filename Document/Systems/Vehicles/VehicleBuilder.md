@@ -1,7 +1,7 @@
 # Vehicle Builder
 
-- 문서 버전: v1.7.0
-- 최근 갱신일: 2026-09-15
+- 문서 버전: v1.9.1
+- 최근 갱신일: 2026-10-07
 - 문서 상태: Current Implementation
 - 적용 범위: `CF-FQ-015 Vehicle Data Tuning`, `CF-FQ-038 Vehicle Data Authoring`, `CF-FQ-040 Guided Vehicle Builder`, `CF-FQ-042 Vehicle Builder 신규 차량 생성 UX`, `CF-FQ-043 Vehicle Builder 장비 장착점 Guidance UX`, `CF-FQ-044 Vehicle Builder Runtime Catalog Promotion`, `CF-FQ-046 Vehicle Builder 사용자 정보 UX`, `CF-FQ-047 Vehicle Builder Hardpoint Authoring Integrity`, Guided Builder Editor Shell, Builder-private Authoring ownership, Data Authoring Backend/Advanced Workspace, Vehicle Performance Tuning Protocol
 - 완료 기반: `CF-FQ-015 Rebaseline Complete / VD-P0-00~03 Historical Technical PASS / VD-P0-04 Superseded` + `CF-FQ-038 Done / DEL1~DEL7 PASS / Legacy Wizard Retired` + `VB-P0-09 End-to-End USER Acceptance PASS` + `VB-P0-10 Current System Promotion Complete` + `VBCUX-P0-05 USER Acceptance PASS` + `VMG-P0-07 USER Acceptance PASS` + `VMG-P0-08 Current System Promotion Complete` + `VRCP-P0-05 USER Acceptance PASS` + `VRCP-P0-06 Current System Promotion Complete` + `VBIUX-P0-05B~05E Technical PASS` + `VBIUX-P0-05F USER Acceptance PASS` + `VBIUX-P0-06 Current System Promotion Complete` + `VBHAI-P0-07G USER Re-Acceptance PASS` + `VBHAI-P0-08 Current System Promotion Complete`
@@ -117,6 +117,8 @@ Blank Chassis 허용
 이미 다른 VehicleData가 사용하는 Chassis Mesh 재사용 허용
 Mesh-only Candidate Quick Start도 같은 canonical create request 사용
 모든 Guided 신규 차량 TransmissionPolicy = VehicleSpecificRequired
+Guided 신규 차량 기본 Sensor intent = UseProjectBasicSensor
+차량별 explicit SensorData는 신규 생성 시 비워 Project Compatibility Default의 공통 Basic Sensor를 사용
 선택한 Chassis는 생성 시 Recipe.AssetIntent.ChassisMesh에만 기록
 새 VehicleData.VehicleVisualConfig.ChassisMesh 자동 Apply 안 함
 실제 Chassis 반영은 Step 7 DefinitionApply가 소유
@@ -126,6 +128,12 @@ Preview → explicit approval → commit 재사용
 생성 성공 뒤 exact Definition+Recipe Browser row/highlight 동기화
 post-create adoption만 실패하면 생성 성공을 롤백하지 않고 partial success로 구분
 ```
+
+신규 정상 차량의 Sensor 기본 정책은 `SensorMode=UseProjectBasicSensor`다. Resolver는 이 모드에서 Recipe가 `DefaultSensorData`를 직접 덮지 않게 하고 Project Compatibility Default의 공통 Basic Sensor를 effective source로 유지한다. canonical Production 자산 경로는 `/Game/CarFight/Vehicles/Data/Sensor/DA_VehicleSensor_Basic`이다.
+
+기존 차량/Recipe 호환성은 별도로 보존한다. 새 필드가 추가됐다는 이유만으로 기존 Recipe에 Basic Sensor를 자동 지급하지 않으며, 기존 Definition Import에서 `DefaultSensorData=None`이면 `ExplicitNone` Sensorless로 보존한다. Advanced Workspace의 Mounts & Defaults에는 `공통 기본 센서 사용`과 `센서 없음 (Sensorless)…`을 분리해 노출하고, Sensorless 선택은 Scanner도 없을 경우 탐지/Active Scan 범위가 0이 된다는 확인을 거친다.
+
+2026-09-16 correction 기준 Registry는 `DefaultSensorData`를 포함한 exact 135 leaf, Resolver contract는 revision 6이다. Production `DA_VehicleSensor_Basic`은 canonical 경로에 exact1 materialize됐고 fresh persisted AssetDump에서 P0 baseline 값을 확인했다. 신규 정상 Vehicle Builder record는 `SensorMode=UseProjectBasicSensor`로 시작하며, 정상 Preview/Approval/DefinitionApply를 거치면 Project Compatibility Default의 Basic Sensor가 `VehicleData.DefaultSensorData`에 반영된다. Scanner Equipment를 자동 장착하는 것은 아니며, 기존 Definition의 `DefaultSensorData=None`은 Import 시 `ExplicitNone` Sensorless로 보존된다. Project Compatibility Default는 canonical Basic Sensor가 없거나 계약이 invalid면 fail-closed한다.
 
 현재 `Vehicle ID`는 중앙 Vehicle Registry의 게임 전역 ID가 아니라 **Builder가 Definition/Recipe Asset identity를 deterministic하게 만들기 위한 creation naming token**이다. 일반 경로에서는 `DA_Vehicle_<VehicleId>` / `DA_Recipe_<VehicleId>`를 제안하고, 빈값·공백·경로 구분자·비ASCII 등 invalid 입력은 silent sanitize하지 않고 fail-closed한다. package/object exact override는 접힌 Advanced 설정으로 남는다. 차량/무기 통합 데이터 Registry가 아직 없으므로 이 ID를 SaveGame/Network/Ownership의 통합 Primary Key로 해석하지 않는다.
 
@@ -655,7 +663,7 @@ BuilderVM에 Catalog state/cache/mutation authority를 추가하지 않음
 
 Catalog 등록 성공은 **메모리 authoring 성공**이며 저장 성공이 아니다. Builder는 Catalog를 dirty로 남기고 USER가 명시 저장한다. Packaged Runtime에서 해당 VehicleData를 확실히 소비하려면 explicit Save 뒤 persisted Catalog membership이 확인되어야 한다.
 
-RuntimeApply 후보/authorization owner는 계속 `CF-FQ-041`이다. RuntimeApply는 동일 `UCFRuntimeTestCatalogData::AllowedVehicleData`를 읽으며, cached Vehicle/Equipment option은 Catalog의 valid-entry exact sequence가 실제로 바뀔 때만 rebuild한다. 따라서 같은 Editor lifetime에서 Builder가 VehicleData를 promotion하면 RuntimeApply 차량 목록이 Editor 재시작이나 Catalog Save 없이 즉시 갱신된다.
+RuntimeApply 적용 owner는 계속 `CF-FQ-041`이다. Vehicle 후보는 동일 `UCFRuntimeTestCatalogData::AllowedVehicleData`를 읽으므로 Builder가 VehicleData를 promotion하면 같은 Editor lifetime에서 RuntimeApply 차량 목록이 즉시 갱신된다. 다만 CF-FQ-058 managed cutover 이후 Equipment 후보/authorization은 valid Production Publication Catalog exact8을 우선 사용하고, Production Catalog가 absent/invalid일 때만 RuntimeTestCatalog Equipment 목록으로 fallback한다. 따라서 Builder Catalog promotion은 Vehicle discovery를 소유하며 Production Equipment publication authority를 소유하지 않는다.
 
 대표 closure에서 `DA_Vehicle_Wagon`을 USER가 명시 저장한 뒤 fresh AssetDump로 persisted `AllowedVehicleData` 4개 중 Wagon exact membership 1개를 확인했다. 이 persisted Wagon은 `CF-FQ-041 / RTA-P0-06 Packaged Demo`의 Builder-produced consumer candidate로 handoff된다.
 
@@ -812,6 +820,21 @@ Document/Plan/Archive/README.md
 ---
 
 ## 13. Changelog
+
+### v1.9.1 - 2026-10-07
+
+- CF-FQ-058 managed cutover 이후 RuntimeApply Equipment discovery source가 Production Publication Catalog exact8 우선으로 전환된 경계를 동기화했다.
+- Vehicle Builder의 Runtime Catalog promotion responsibility는 계속 `AllowedVehicleData`와 Vehicle discovery에 한정한다. Production Equipment publication/membership authority를 Builder로 확장하지 않는다.
+- RuntimeTestCatalog Equipment 목록은 Production Catalog absent/invalid 시 legacy fallback으로만 해석한다.
+
+### v1.9.0 - 2026-09-16
+
+- 정상 신규 Vehicle Builder record의 Sensor 기본 정책을 `UseProjectBasicSensor`로 Current System에 확정하고 canonical `DA_VehicleSensor_Basic` exact1을 Project Compatibility Default source로 사용한다.
+- `DefaultSensorData`를 포함한 Registry exact135 / Resolver contract revision 6과 `UseProjectBasicSensor / ExplicitNone / ExplicitAsset` 3-way precedence를 current authoring contract로 고정했다.
+- 기존 Definition의 `DefaultSensorData=None`은 Import 시 `ExplicitNone`으로 보존하며 기존 차량에 Basic Sensor를 자동 지급하지 않는다.
+- Fresh persisted AssetDump로 Basic Sensor exact1과 P0 baseline 값을 확인했고, correction exact6 process `c5a21f7f44e6465db4d626bb48e58d06`은 6/6 PASS했다.
+
+Migration: 신규 정상 차량은 Builder 생성 단계에서 Scanner 장비를 자동 장착하는 것이 아니라 Basic Sensor semantic으로 시작한다. 실제 `VehicleData.DefaultSensorData` 반영은 기존 Preview/Approval/DefinitionApply 경계를 그대로 따른다. 기존 Sensorless 차량은 자동 마이그레이션하지 않는다.
 
 ### v1.7.0 - 2026-09-15
 

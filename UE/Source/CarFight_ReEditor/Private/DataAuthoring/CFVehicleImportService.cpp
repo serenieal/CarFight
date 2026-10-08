@@ -1,15 +1,18 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleImportService.cpp
-// Version: v1.2.0
-// Date: 2026-08-18
-// Description: DAUTH-P0-08G~P0-11 Existing Definition Import / Legacy Pin / Adoption / Raw Preservation Core 구현입니다.
+// Version: v1.4.0
+// Date: 2026-09-28
+// Description: Existing Definition import에 VCFX 기준속도 / Camera Presentation typed value 보존을 추가합니다.
 // Scope: Snapshot-only import analysis와 Recipe-only ownership mutation primitive를 제공하며 Target Definition은 수정하지 않습니다.
 // Changelog:
+// - v1.4.0: ReferenceMaxSpeedKmh와 CameraPresentationDataOverride를 typed DefaultDataIntent로 import해 기존 Definition 값을 보존.
+// - v1.3.0: Existing Definition의 DefaultSensorData를 typed semantic candidate로 import하고 None은 ExplicitNone Sensorless로 보존.
 // - v1.2.0: Frozen 24.59 Preserve Raw As Legacy Pin을 existing Registry ownership/ManageState 규칙으로 처리하는 공용 primitive 추가.
 // - v1.1.0: persistent Recipe mutation 없이 exact Import summary를 만드는 PreviewDefinitionImport를 추가.
 // - v1.0.0: Section 22.20~22.21 lossless import, hidden Mount serialized partition, semantic candidate copy, group/field adoption 최초 구현.
 // Migration:
+// - 기존 VehicleData의 DefaultSensorData=None은 신규 Project Basic Sensor로 자동 승격하지 않고 명시적 Sensorless로 보존합니다.
 // - Movement raw 값에서 Driving Feel/Profile을 역산하지 않습니다.
 // - Definition Apply/UI/CSV/Runtime schema mutation을 포함하지 않습니다.
 
@@ -45,7 +48,7 @@ namespace CFVehicleImportPrivate
 		// Current stable-ID Mount active semantic rows입니다.
 		TArray<FCFMountIntent> MountIntents;
 
-		// Current Default Defense/Destroyed FX와 socket semantic input입니다.
+		// Current Default Defense/Destroyed FX/Sensor와 socket semantic input입니다.
 		FCFVehicleDefaultIntent DefaultDataIntent;
 
 		// Current DriveState runtime override gate를 direct semantic mode로 보존합니다.
@@ -267,15 +270,37 @@ namespace CFVehicleImportPrivate
 		const FCFVehicleFieldEntry* DefenseEntry = RequireEntry(Definition, TEXT("DefaultDefenseData"), OutError);
 		// Current Destroyed FX object reference입니다.
 		const FCFVehicleFieldEntry* DestroyedFxEntry = RequireEntry(Definition, TEXT("DefaultDestroyedFxData"), OutError);
-		if (!DefenseEntry || !DestroyedFxEntry
+		// Current Default Sensor object reference입니다.
+		const FCFVehicleFieldEntry* SensorEntry = RequireEntry(Definition, TEXT("DefaultSensorData"), OutError);
+		if (!DefenseEntry || !DestroyedFxEntry || !SensorEntry
 			|| !ImportObjectAsSoftReference(*DefenseEntry, *FCFVehicleDefaultIntent::StaticStruct(), &InOutState.DefaultDataIntent, TEXT("DefaultDefenseData"), OutError)
-			|| !ImportObjectAsSoftReference(*DestroyedFxEntry, *FCFVehicleDefaultIntent::StaticStruct(), &InOutState.DefaultDataIntent, TEXT("DefaultDestroyedFxData"), OutError))
+			|| !ImportObjectAsSoftReference(*DestroyedFxEntry, *FCFVehicleDefaultIntent::StaticStruct(), &InOutState.DefaultDataIntent, TEXT("DefaultDestroyedFxData"), OutError)
+			|| !ImportObjectAsSoftReference(*SensorEntry, *FCFVehicleDefaultIntent::StaticStruct(), &InOutState.DefaultDataIntent, TEXT("DefaultSensorData"), OutError))
 		{
 			return false;
 		}
 		InOutState.DefaultDataIntent.DefenseMode = IsNoneObjectValue(*DefenseEntry) ? ECFAssetIntentMode::ExplicitNone : ECFAssetIntentMode::ExplicitAsset;
 		InOutState.DefaultDataIntent.DestroyedFxMode = IsNoneObjectValue(*DestroyedFxEntry) ? ECFAssetIntentMode::ExplicitNone : ECFAssetIntentMode::ExplicitAsset;
-		InOutState.CopiedFieldCount += 2;
+		// Existing Definition의 None은 자동 Basic Sensor 승격 대신 의도적 기존 상태 보존용 Sensorless로 import합니다.
+		InOutState.DefaultDataIntent.SensorMode = IsNoneObjectValue(*SensorEntry) ? ECFVehicleSensorIntentMode::ExplicitNone : ECFVehicleSensorIntentMode::ExplicitAsset;
+		InOutState.CopiedFieldCount += 3;
+
+		// [v1.4.0] Current Camera Driving FX 기준속도 typed scalar입니다.
+		const FCFVehicleFieldEntry* ReferenceSpeedEntry = RequireEntry(Definition, TEXT("ReferenceMaxSpeedKmh"), OutError);
+		if (!ReferenceSpeedEntry || !ImportSameTypeField(*ReferenceSpeedEntry, *FCFVehicleDefaultIntent::StaticStruct(), &InOutState.DefaultDataIntent, TEXT("ReferenceMaxSpeedKmh"), OutError))
+		{
+			return false;
+		}
+		++InOutState.CopiedFieldCount;
+
+		// [v1.4.0] Current Presentation CameraData optional object reference입니다.
+		const FCFVehicleFieldEntry* CameraPresentationEntry = RequireEntry(Definition, TEXT("CameraPresentationDataOverride"), OutError);
+		if (!CameraPresentationEntry || !ImportObjectAsSoftReference(*CameraPresentationEntry, *FCFVehicleDefaultIntent::StaticStruct(), &InOutState.DefaultDataIntent, TEXT("CameraPresentationDataOverride"), OutError))
+		{
+			return false;
+		}
+		InOutState.DefaultDataIntent.CameraPresentationDataMode = IsNoneObjectValue(*CameraPresentationEntry) ? ECFAssetIntentMode::ExplicitNone : ECFAssetIntentMode::ExplicitAsset;
+		++InOutState.CopiedFieldCount;
 
 		// Current Destroyed FX socket direct semantic input입니다.
 		const FCFVehicleFieldEntry* DestroyedSocketEntry = RequireEntry(Definition, TEXT("DestroyedFxSocketName"), OutError);
