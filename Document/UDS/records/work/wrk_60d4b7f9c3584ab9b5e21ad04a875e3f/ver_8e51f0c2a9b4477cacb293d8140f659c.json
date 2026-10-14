@@ -1,0 +1,31 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_60d4b7f9c3584ab9b5e21ad04a875e3f",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_8e51f0c2a9b4477cacb293d8140f659c",
+  "parent_version_ids": [
+    "ver_17cb654a613448fa93b71b540c9238d6"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-060",
+    "title": "Vehicle Builder Socket Prep UX / 차량 메시 소켓 준비 UX",
+    "phase": "VSPUX-P0-01",
+    "next_action": "VSPUX-P0-02: implement minimal Tab-local Quick Socket Prep for any selected StaticMesh. Show full existing Socket inventory across Wheel/Standard HP/Other (including unknown future naming), exact name/read-only Transform/copy/open Editor, mode-aware readback/refresh/return; dynamically populate supported Standard HP category picker from current VM category source and propose collision-free max+1 names with multiple independently placed sockets per category. Preserve current four Wheel role contract; ensure dynamic role name displayed=added/copied and legacy Step3/Recipe states unchanged. Unknown physical Socket does NOT automatically create Recipe/Runtime semantic binding; users can edit arbitrary custom sockets in existing StaticMesh Editor. No auto Save/Transform. Run focused/affected test, official UE 5.8 Source Build in P0-03. No Source/Asset/Automation was modified by the 2026-10-14 design correction.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-060"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleSocketPrepUX/VehicleSocketPrepUXPlan.md v0.1.2",
+      "Document/Systems/Vehicles/VehicleBuilder.md v1.9.1",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-14",
+    "resolution_basis": "User expanded design requirement to support varied socket physical positions and future additional types. Review confirms current StandardHardpointCategories lists seven current values and parser accepts supplied category list; actual UStaticMesh owns arbitrary SocketName/Transform. Clarified full inventory, existing/other sockets, dynamic category selection and explicit downstream semantic contract, plus prior P1 quick view return/refresh/existing editing. Previous P0-01 v0.1.1 remains historical; v0.1.2 is reviewed correction. Design only, no UE source/assets/build/test/Git stage/commit/push."
+  }
+}

@@ -1,8 +1,9 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 // File: CarFight_ReEditor.Build.cs
-// Version: v1.10.4
+// Version: v1.10.5
 // Changelog:
+// - v1.10.5: CF-FQ-060 P0-04 기존 Static Mesh Editor의 정확한 Socket Manager refresh에 IStaticMeshEditor를 사용하므로 Editor-only StaticMeshEditor 의존성을 추가.
 // - v1.10.4: CF-FQ-058 exact34 Production candidate Resource Catalog가 UNiagaraSystem class contract를 직접 사용하므로 Editor-only Niagara link 의존성을 추가.
 // - v1.10.3: P0-07 Final Technical Review에서 native ZIP/XML compile-probe 의존성이 production dependency list에 남아 있지 않음을 확인하고 OpenXLSX Editor-only 구성을 최종 정리.
 // - v1.10.2: fresh read로 확인한 실제 OpenXLSX vendor root(ThirdParty/OpenXLSX/OpenXLSX)에 include root를 정확히 재결속.
@@ -73,6 +74,7 @@ public class CarFight_ReEditor : ModuleRules
 			"PropertyEditor",
 			"Slate",
 			"SlateCore",
+			"StaticMeshEditor",
 			"ToolMenus",
 			"UMG",
 			"UMGEditor",

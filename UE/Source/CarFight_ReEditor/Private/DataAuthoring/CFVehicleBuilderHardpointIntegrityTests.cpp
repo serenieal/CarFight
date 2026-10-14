@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderHardpointIntegrityTests.cpp
-// Version: v1.4.2
-// Date: 2026-09-04
+// Version: v1.5.0
+// Date: 2026-10-14
 // Description: CF-FQ-047 Hardpoint authoring integrity + typed Physics receipt compatibility + actual Wagon PostLoad focused Automation입니다.
 // Scope: transient Socket/semantic readback, post-commit outcome, legacy receipt-refresh boundary, P0-07A Exact/Equivalent/Stale/Blocked compatibility와 actual Wagon load-only invariant를 검증합니다.
 // Changelog:
+// - v1.5.0: CF-FQ-060 Quick Socket category별 max+1/미래 category/invalid/overflow transient 테스트 추가.
 // - v1.4.2: Actual Wagon fixture를 exact1 개수 고정에서 확장 가능한 Recipe↔VehicleData semantic alignment + Top_01/Mount_Top_01 중복 금지 + legacy injection 금지 계약으로 교정. USER가 정상 추가한 2/2 이상 상태를 false failure로 취급하지 않음.
 // - v1.4.1: Step 5 승인 직후 Step 7 Apply Pending 상태(Receipt == Prospective != Target)가 Exact/Complete를 유지하는 회귀 케이스를 추가.
 // - v1.4.0: P0-07A Physics receipt compatibility의 Exact, Hardpoint-only, Mount-only, combined equivalent, provenance stale, Target drift, unrelated drift, empty/unknown blocked matrix를 추가.
@@ -12,6 +13,7 @@
 // - v1.2.0: Physics receipt-only refresh가 current Target 불변 + Hardpoint/Mount-only pending diff에서만 허용되고 unrelated drift/no-diff를 차단하는 회귀를 추가.
 // - v1.1.0: P0-06 actual DA_Vehicle_Wagon load에서 Standard Mount_Top_01이 존재할 때 legacy RoofTurret_MediumOrLarge가 PostLoad로 중복 생성되지 않는 회귀검증 추가.
 
+// Migration: v1.5.0 테스트는 메모리상의 임시 StaticMesh만 수정하며 기존 제품 Asset/Recipe 저장 경로는 변경하지 않습니다.
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -65,6 +67,57 @@ namespace CFVehicleBuilderHardpointIntegrityTestsPrivate
 		Diff.FieldPath.SelectorKeyValue = SelectorValue;
 		return Diff;
 	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVBQuickSocketNextNameTest,
+	"CarFight.DataAuthoring.CF_FQ_060.VSPUX_P0_02.QuickSocketNextName",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FCFVBQuickSocketNextNameTest::RunTest(const FString& Parameters)
+{
+	using namespace CFVehicleBuilderHardpointIntegrityTestsPrivate;
+	// 테스트에서만 사용할 메모리상 StaticMesh이며 실제 콘텐츠를 저장하지 않습니다.
+	UStaticMesh* Mesh = NewObject<UStaticMesh>(GetTransientPackage(), NAME_None, RF_Transient);
+	if (!Mesh)
+	{
+		AddError(TEXT("Quick Socket 이름 테스트용 임시 StaticMesh 생성 실패"));
+		return false;
+	}
+	// 현재 지원 category는 VM의 목록을 그대로 사용합니다.
+	const TArray<FName> Categories = StandardCategories();
+	// 다음 소켓으로 제안되는 정확한 이름입니다.
+	FName NextName;
+	// 지원되지 않는 category/번호 overflow 등의 진단 메시입니다.
+	FString Error;
+	TestTrue(TEXT("빈 Top의 시작 번호"), FCFVehicleBuilderHardpointIntegrity::TryGetNextStandardSocketName(Mesh, TEXT("Top"), Categories, NextName, Error));
+	TestEqual(TEXT("빈 Top 01"), NextName, FName(TEXT("HP_Top_01")));
+	AddSocket(*Mesh, TEXT("HP_Top_01"), FVector(1, 2, 3));
+	AddSocket(*Mesh, TEXT("HP_Top_03"), FVector(4, 5, 6));
+	AddSocket(*Mesh, TEXT("HP_Front_07"), FVector(0, 0, 0));
+	AddSocket(*Mesh, TEXT("HP_Top_1"), FVector(0, 0, 0));
+	AddSocket(*Mesh, TEXT("HP_Future_91"), FVector(0, 0, 0));
+	TestTrue(TEXT("번호 중간 결손 이후 max+1"), FCFVehicleBuilderHardpointIntegrity::TryGetNextStandardSocketName(Mesh, TEXT("Top"), Categories, NextName, Error));
+	TestEqual(TEXT("Top next 04"), NextName, FName(TEXT("HP_Top_04")));
+	TestTrue(TEXT("category별 독립 번호"), FCFVehicleBuilderHardpointIntegrity::TryGetNextStandardSocketName(Mesh, TEXT("Front"), Categories, NextName, Error));
+	TestEqual(TEXT("Front next 08"), NextName, FName(TEXT("HP_Front_08")));
+	TestFalse(TEXT("현재 미지원 분류는 생성 차단"), FCFVehicleBuilderHardpointIntegrity::TryGetNextStandardSocketName(Mesh, TEXT("Future"), Categories, NextName, Error));
+	TestFalse(TEXT("Mesh가 없으면 생성 차단"), FCFVehicleBuilderHardpointIntegrity::TryGetNextStandardSocketName(nullptr, TEXT("Top"), Categories, NextName, Error));
+
+	AddSocket(*Mesh, TEXT("HP_Top_99"), FVector(0, 0, 0));
+	TestTrue(TEXT("99 다음에는 100"), FCFVehicleBuilderHardpointIntegrity::TryGetNextStandardSocketName(Mesh, TEXT("Top"), Categories, NextName, Error));
+	TestEqual(TEXT("Top 100"), NextName, FName(TEXT("HP_Top_100")));
+
+	// 새 분류도 지원 목록에 추가하면 동일한 parser/번호 정책으로 처리할 수 있습니다.
+	TArray<FName> FutureCategories = Categories;
+	FutureCategories.Add(TEXT("RearUpper"));
+	AddSocket(*Mesh, TEXT("HP_RearUpper_01"), FVector(0, 0, 0));
+	TestTrue(TEXT("추가된 category는 같은 규칙"), FCFVehicleBuilderHardpointIntegrity::TryGetNextStandardSocketName(Mesh, TEXT("RearUpper"), FutureCategories, NextName, Error));
+	TestEqual(TEXT("미래 category next02"), NextName, FName(TEXT("HP_RearUpper_02")));
+
+	AddSocket(*Mesh, TEXT("HP_Top_2147483647"), FVector(0, 0, 0));
+	TestFalse(TEXT("최대 번호 이후 overflow 방지"), FCFVehicleBuilderHardpointIntegrity::TryGetNextStandardSocketName(Mesh, TEXT("Top"), Categories, NextName, Error));
+	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(

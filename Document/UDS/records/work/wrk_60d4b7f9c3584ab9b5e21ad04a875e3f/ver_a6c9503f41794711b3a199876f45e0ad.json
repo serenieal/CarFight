@@ -1,0 +1,31 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_60d4b7f9c3584ab9b5e21ad04a875e3f",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a6c9503f41794711b3a199876f45e0ad",
+  "parent_version_ids": [
+    "ver_c8fc29c4aae847998a4fe25b05aba937"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-060",
+    "title": "Vehicle Builder Socket Prep UX / 차량 메시 소켓 준비 UX",
+    "phase": "VSPUX-P0-04",
+    "next_action": "VSPUX-P0-04 USER Compact Editor acceptance remains pending. User reports official UE 5.8 Source Editor build succeeded for shared Base_Standard Hardpoint Preview change (build report accepted, no build log independently inspected this turn). Latest managed test runs after this change: CF_FQ_060.VSPUX_P0_04.SocketPreviewMapping independently PASS 1/1 process 65364f9c874a431abdd7a8ee78d4d7a5 (actual Base_Standard UStaticMesh load, all 7 supported canonical HP categories plus future category, transient Socket PreviewStaticMesh readback and invalid/wheel exclusions); CF_FQ_060 filter QuickSocketNextName/QuickModeBoundary/SocketPreviewMapping PASS 3/3 process bb36da429b6347a3b259187aa09f25ea; directly impacted BuilderShell PASS process f1aa313c9f5d485dabb48ca2784afa67, Step3HardpointPlanning PASS process 5a33034fbfb04061a88f5d874d89f732, InventoryClassification PASS process c309da67501748e796a588ab26b91891. Unique focused 6/6 PASS engine exit0, failures/missing/unexpected/duplicates 0. Newly generated canonical Hardpoint gets shared PreviewStaticMesh /Game/CarFight/Weapons/Turrets/_Shared/Meshes/Base_Standard.Base_Standard; Wheel per-role mappings preserved, existing sockets unchanged/no auto-save. Next USER uses Compact actual Static Mesh Editor: verify PreviewStaticMesh on newly created Hardpoint, already-open Socket Manager refresh after successive sockets, manual transforms and explicit save/reopen; adjust UI-only if needed and regression rerun. Prior user reproduction that Socket Manager showed one row despite six cached sockets remains pending user verification. Do not mark P0-04 accepted or P0-05 closed. User-owned Compact/other Dirty protected. No Git stage/commit/push.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-060"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleSocketPrepUX/VehicleSocketPrepUXPlan.md v0.1.11",
+      "Document/Systems/Vehicles/VehicleBuilder.md v1.9.1",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-14",
+    "resolution_basis": "User explicitly reported local editor build success for updated code. CarFightMCP_Admin managed official automation ran latest compiled module: Quick unique tests 3/3 PASS, previous Builder/Step3/Inventory regressions 3/3 PASS; all process jobs completed exit0 and zero failures. USER visual Compact/Socket Manager/asset save not tested. Source and assets not further edited by tests."
+  }
+}

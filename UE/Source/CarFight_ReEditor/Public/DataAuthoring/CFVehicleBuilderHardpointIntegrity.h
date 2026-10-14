@@ -1,13 +1,15 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderHardpointIntegrity.h
-// Version: v1.3.1
-// Date: 2026-09-04
+// Version: v1.4.0
+// Date: 2026-10-14
 // Description: CF-FQ-047 Builder-private Socket/semantic readback + typed Physics receipt compatibility/drift boundary contract입니다.
 // Scope: Resolver fingerprint와 분리된 Editor-only read-only Chassis Socket inventory 및 mutation0 Physics structural compatibility만 소유합니다.
 // Changelog:
+// - v1.4.0: CF-FQ-060 Quick Socket Prep용 Category 기반 다음 canonical SocketName 조회 함수를 read-only로 추가.
 // - v1.3.1: Step 5 승인 직후 Step 7 Apply 전 정상 상태를 보존하도록 ReceiptResolvedDefinitionHash == CurrentProspectiveResolvedDefinitionHash를 Exact로 명시합니다. Current Target hash 일치는 Exact의 필수조건이 아닙니다.
 // - v1.3.0: Step 5 Physics receipt를 Exact/Hardpoint-Mount-only equivalent/Stale/Blocked로 분류하는 typed compatibility와 단일 structural drift boundary owner를 추가.
 // Migration:
+// - v1.4.0 신규 헬퍼는 소켓 이름 제안만 담당하며 existing parser/inventory 계약과 호출자 변경을 강제하지 않습니다.
 // - v1.3.1부터 Step 5 Exact는 승인된 prospective Definition identity를 기준으로 합니다. Current Target과의 차이는 Step 7 Apply Pending일 수 있으므로 stale로 해석하지 않습니다.
 // - 기존 ValidatePhysicsReceiptRefreshBoundary bool API는 typed structural evaluator의 projection으로 유지합니다. Hardpoint/Mount-only equivalence는 receipt를 자동 재작성하거나 Save하지 않습니다.
 
@@ -144,6 +146,14 @@ struct FCFBuilderHardpointSemanticFacts
 class CARFIGHT_REEDITOR_API FCFVehicleBuilderHardpointIntegrity
 {
 public:
+	// 선택한 StaticMesh의 canonical HP 이름에서 category별 다음 사용 가능한 번호를 계산하며 소켓은 변경하지 않습니다.
+	static bool TryGetNextStandardSocketName(
+		const UStaticMesh* ChassisMesh,
+		FName LocationCategory,
+		const TArray<FName>& StandardCategories,
+		FName& OutSocketName,
+		FString& OutError);
+
 	// HP_<KnownCategory>_<Index>를 current Standard 생성 규칙(%02d)과 exact round-trip해 canonical identity만 반환합니다.
 	static bool TryParseCanonicalStandardSocketName(
 		FName SocketName,

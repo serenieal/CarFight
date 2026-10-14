@@ -1,9 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderTab.h
-// Version: v1.29.0
-// Date: 2026-09-15
+// Version: v1.31.1
+// Date: 2026-10-14
 // Description: CF-FQ-046 공통 Page Shell/scroll UX + CF-FQ-047 Hardpoint/Mount/Physics provenance / Step 8 Progress·Driving Apply·Explicit Recipe Save UI 계약입니다.
 // Changelog:
+// - v1.31.1: CF-FQ-060 신규 모든 canonical Hardpoint Socket에 공통 Base_Standard 프리뷰 메시 경로를 매핑하는 helper 계약을 추가.
+// - v1.31.0: CF-FQ-060 P0-04 바퀴 Socket의 정확한 프리뷰 메시 경로 조회를 추가하고 StaticMesh Editor socket 갱신을 공통 생성 경로에서 보장.
+// - v1.30.1: P0-03 Quick Wheel live 상태 getter와 기존 UI host/선택 유지 Automation 전용 friend 접근을 추가.
+// - v1.30.0: CF-FQ-060 Quick 소켓 준비 전용 화면/상태와 기존 Step 3 UI host 분리, role 기반 동적 소켓 생성 호출 계약 추가.
 // - v1.29.0: VBIUX-P0-05B/C 공통 Page Scroll owner와 Step 전환 시 scroll-to-start 계약을 추가. 기존 Step별 backend/Apply/Save authority는 변경하지 않음.
 // - v1.28.1: P0-07E Source 중간검수 교정. 7/7 결과 정리 단계가 terminal 성공 전에 100%로 오인되지 않도록 progress percent를 완료된 단계 수 기준으로 표시하는 계약을 명확화하고 header description을 실제 P0-07E 범위와 동기화.
 // - v1.28.0: VBHAI-P0-07E에서 PowerShell child lifetime에 결합된 0.5초 coarse benchmark progress cache/elapsed UI와 persistent acceptance receipt 기반 exact current Recipe explicit Save UX 계약을 추가.
@@ -37,6 +41,10 @@
 // - v1.1.0: Step 1 Mesh-only 후보에 기존 safe VehicleData+Recipe Preview→명시 승인 생성 UI를 연결.
 // - v1.0.0: 차량/메시 후보 목록, 고정 8-step navigation, current-step 단일 content, Back/Refresh/Next를 추가.
 // Migration:
+// - v1.31.1 신규 Hardpoint 소켓 프리뷰만 추가하며 기존 Socket·Recipe·VehicleData 자동 변경이나 저장은 없습니다.
+// - v1.31.0은 신규 Wheel Socket의 PreviewStaticMesh만 설정하며 기존 Socket/Recipe/VehicleData를 이전·자동 저장하지 않습니다.
+// - v1.30.1은 read-only UI getter 및 Automation 전용 테스트 접근만 추가합니다. Runtime/API/Recipe 저장 형식은 변경하지 않습니다.
+// - v1.30.0부터 Quick Socket Prep 상태와 UI host는 Tab-local이며 기존 Recipe 기반 Step 1~8 인터페이스/영구 데이터 이전이 필요하지 않습니다.
 // - v1.29.0부터 Step 1~8은 CommonPageScrollBox 하나를 공유하며 Step 직접 선택/이전/다음/차량 target 전환 시 새 페이지 상단부터 보이도록 scroll offset을 초기화합니다.
 // - v1.28.1 progress bar는 terminal success percent가 아니라 완료된 coarse 단계 비율을 표시합니다. 실제 성공은 기존 final result JSON + process exit code authority가 계속 판정합니다.
 // - v1.28.0 progress polling은 Tab-local process orchestration이며 disk read를 Slate getter에 넣지 않습니다. Recipe Save는 USER click으로 current Recipe package 1개만 저장하며 CF-FQ-046 공통 Page Shell/scroll owner는 변경하지 않습니다.
@@ -67,6 +75,7 @@ class FCFVehicleBuilderVM;
 class ITableRow;
 class STableViewBase;
 class UCFVehicleData;
+class UStaticMesh;
 template<typename ItemType> class SListView;
 class SBox;
 class SEditableTextBox;
@@ -90,6 +99,12 @@ public:
 	virtual void Tick(const FGeometry& AllottedGeometry, double InCurrentTime, float InDeltaTime) override;
 
 private:
+#if WITH_DEV_AUTOMATION_TESTS
+	// Quick/기존 Step3 분리와 USER 진입/목록 복원을 transient UI에서 검증하는 focused Automation입니다.
+	friend class FCFVSPUXP003QuickModeTest;
+	// 바퀴 4역할 프리뷰 이름과 실제 에셋 로드를 확인하는 focused Automation입니다.
+	friend class FCFVSPUXP004SocketPreviewTest;
+#endif
 	using FVehicleRowPtr = TSharedPtr<FCFVehicleListEntry>;
 
 	// Vehicle Browser cache를 fresh read하고 list row를 다시 만듭니다.
@@ -203,6 +218,91 @@ private:
 
 	// Current Recipe AssetIntent를 Step 2 pending picker 값으로 동기화합니다.
 	void SyncMeshPreparationFieldsFromRecipe();
+
+	// Quick 소켓 준비 독립 화면을 구성하며 기존 Step 3 UI host를 수정하지 않습니다.
+	TSharedRef<SWidget> BuildQuickSocketPreparationPage();
+
+	// Quick의 StaticMesh 선택과 공유 편집 경고 영역을 그립니다.
+	TSharedRef<SWidget> BuildQuickSocketMeshSection();
+
+	// Quick의 현재 Wheel 역할 및 canonical Hardpoint 목록을 그립니다.
+	TSharedRef<SWidget> BuildQuickSocketListSection();
+
+	// Quick 진입 및 기존 Builder로 복귀합니다.
+	FReply HandleEnterQuickSocketPreparation();
+	FReply HandleExitQuickSocketPreparation();
+
+	// Quick에서 선택한 StaticMesh 경로만 변경합니다.
+	void HandleQuickSocketMeshChanged(const FAssetData& AssetData);
+
+	// Quick에서 선택한 Hardpoint 위치 분류를 바꿉니다.
+	FReply HandleQuickHardpointCategorySelected(FName LocationCategory);
+
+	// 현재 선택한 메시의 Socket 목록만 갱신하고 Recipe는 읽거나 수정하지 않습니다.
+	FReply HandleRefreshQuickSockets();
+
+	// Quick에 선택된 메시를 기존 StaticMesh Editor에서 엽니다.
+	FReply HandleOpenQuickSocketMesh();
+
+	// Quick Wheel 역할의 현재 정확한 소켓 이름으로 추가를 수행합니다.
+	FReply HandleAddQuickWheelSocket(int32 WheelRoleIndex);
+
+	// 기존 Step 3의 Wheel 역할 이름을 클릭 시 fresh 해석하여 소켓을 추가합니다.
+	FReply HandleAddRequiredWheelSocket(int32 WheelRoleIndex);
+
+	// Quick의 Hardpoint 분류에서 현재 보이는 다음 번호를 다시 확인한 뒤 추가합니다.
+	FReply HandleAddQuickHardpointSocket();
+
+	// Quick에 표시된 실제 소켓 이름을 클립보드에 복사합니다.
+	FReply HandleCopyQuickSocketName(FName SocketName);
+
+	// 새로 만드는 표준 Wheel Socket 이름에 대응하는 프리뷰 StaticMesh 경로이며 다른 Socket은 비어 있습니다.
+	static FSoftObjectPath GetWheelSocketPreviewMeshPath(FName SocketName);
+
+	// 지원 분류의 canonical Hardpoint 소켓에만 동일한 Base_Standard 프리뷰 메시 경로를 돌려줍니다.
+	static FSoftObjectPath GetHardpointSocketPreviewMeshPath(FName SocketName, const TArray<FName>& StandardHardpointCategories);
+
+	// Quick Wheel 역할에 해당하는 현재 canonical 기본 이름입니다.
+	FName GetQuickWheelSocketName(int32 WheelRoleIndex) const;
+
+	// Quick Wheel의 live 소켓 존재/메시 미선택 상태를 사용자용 텍스트로 구분합니다.
+	FText GetQuickWheelSocketStatusText(int32 WheelRoleIndex) const;
+
+	// Quick/기존 Step 3의 현재 대상 메시를 반환합니다.
+	FSoftObjectPath GetSocketEditingChassisMeshPath() const;
+
+	// 현재 Quick 메시를 실제 UStaticMesh로 읽으며 없으면 null을 반환합니다.
+	UStaticMesh* GetQuickSocketMesh() const;
+
+	// 현재 Quick Category로 제안할 이름과 오류를 계산합니다.
+	bool TryGetQuickHardpointSocketName(FName& OutSocketName, FString& OutError) const;
+
+	// Quick의 현재 category와 mesh에서 새 Hardpoint를 추가할 수 있는지 판정합니다.
+	bool CanAddQuickHardpointSocket() const;
+
+	// 현재 Quick Wheel role의 정확한 이름을 복사합니다.
+	FReply HandleCopyQuickWheelSocketName(int32 WheelRoleIndex);
+
+	// 기존 Step 3 Wheel role에 현재 사용 가능한 SocketName이 있는지 판정합니다.
+	bool CanAddRequiredWheelSocket(int32 WheelRoleIndex) const;
+
+	// Quick에서 위젯을 재배치할 때 기능 상태는 보존하고 표시만 갱신합니다.
+	void RefreshQuickSocketPresentation();
+
+	// 현재 Quick 화면일 때만 콘텐츠를 표시합니다.
+	EVisibility GetQuickSocketVisibility() const;
+
+	// 기존 차량 제작 콘텐츠를 Quick 상태에서 숨깁니다.
+	EVisibility GetNormalBuilderVisibility() const;
+
+	// Quick에서 사용할 선택 메시의 Object Picker 문자열입니다.
+	FString GetQuickSocketMeshPathText() const;
+
+	// Quick에서 실제 소켓을 생성할 수 있는 메시인지 판정합니다.
+	bool CanEditQuickSocketMesh() const;
+
+	// 소켓 대상·중복 검사를 통과하면 현재 메시에 소켓 하나만 추가하고 편집기를 엽니다.
+	FReply AddChassisSocketAtOriginAndOpenForMesh(const FSoftObjectPath& MeshPath, FName SocketName, bool bRefreshRecipe);
 
 	// Step 3 Wheel/Hardpoint가 공유하는 current Chassis StaticMesh를 하나의 Socket 편집 진입으로 엽니다.
 	FReply HandleOpenChassisSocketEditor();
@@ -488,6 +588,24 @@ private:
 
 	// Step 1~8 본문/상세/진단을 공유하는 단일 세로 Page Scroll입니다.
 	TSharedPtr<SScrollBox> CommonPageScrollBox;
+
+	// 화면 재구성/저장과 독립적인 Quick 진입 상태입니다.
+	bool bQuickSocketPreparationActive = false;
+
+	// Browser가 row 선택 표시를 프로그램으로 동기화하는 동안 사용자 선택 액션을 차단합니다.
+	bool bRestoringVehicleSelection = false;
+
+	// Quick에서 편집할 물리 StaticMesh의 독립 경로입니다.
+	FSoftObjectPath QuickSocketChassisMeshPath;
+
+	// Quick에서 현재 선택된 표준 Hardpoint 위치 분류입니다.
+	FName QuickHardpointCategory = NAME_None;
+
+	// 현재 UI에 보여 준 Hardpoint 후보 이름이며 클릭 시 stale 여부를 확인합니다.
+	FName QuickDisplayedHardpointSocketName = NAME_None;
+
+	// 기존 Step 3 HardpointPlanningHost와 분리된 Quick 콘텐츠 host입니다.
+	TSharedPtr<SBox> QuickSocketPreparationHost;
 
 	// Guided 신규 차량 일반 naming의 단일 Vehicle ID 입력입니다.
 	TSharedPtr<SEditableTextBox> NewVehicleIdTextBox;

@@ -1,0 +1,31 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_60d4b7f9c3584ab9b5e21ad04a875e3f",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_e8b3ab65edb44ac3ba6b94471be46f02",
+  "parent_version_ids": [
+    "ver_a6c9503f41794711b3a199876f45e0ad"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-060",
+    "title": "Vehicle Builder Socket Prep UX / 차량 메시 소켓 준비 UX",
+    "phase": "VSPUX-P0-04",
+    "next_action": "USER DECISION: Socket Manager live-list refresh is Deferred / accepted non-blocking UI limitation, not an acceptance gate. USER completed Coupe Socket Prep and observed all added sockets in Static Mesh Editor viewport/preview but Socket Manager list stayed on Wheel_Anchor_FL until closing and reopening the Static Mesh Editor tab. Same observed with Compact earlier. Keep exact UStaticMesh::AddSocket/FindSocket, wheel-specific PreviewStaticMesh, canonical HP preview Base_Standard, no auto-save. User does not authorize UE 5.8 Engine source changes, custom engine patches, unsafe Slate casts, new Socket Manager tooling, or repeated costly investigations for this small convenience. Existing reliable workaround is manual close and reopen Static Mesh Editor after explicit USER Save decision; unsaved asset safety remains user-owned. Previously USER reported editor build PASS and managed unique focused Automation 6/6 PASS (QuickSocketNextName, QuickModeBoundary, SocketPreviewMapping; BuilderShell; Step3HardpointPlanning; InventoryClassification). No source re-build/retest this decision because C++ unchanged. Remaining P0-04 essential USER acceptance is to confirm Coupe-specific wheel/hardpoint previews, manual socket transform/explicit Save+reload and return to Builder Step 3 as needed; user's overall Coupe work completion report is recorded without fabricating per-check PASS. P0-04 overall acceptance and P0-05 closure NOT yet claimed. No Git stage/commit/push, no asset or engine edits. Scope: CF-FQ-060 only.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-060"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleSocketPrepUX/VehicleSocketPrepUXPlan.md v0.1.12",
+      "Document/Systems/Vehicles/VehicleBuilder.md v1.9.1",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-14",
+    "resolution_basis": "USER explicitly approved deferring real-time Socket Manager row refresh rather than enlarging scope. Compact and Coupe observed correct generated sockets/viewport, stale FL-only manager list repaired by reopening editor tab. Technical baseline prior USER build success and managed 6/6 Automation PASS; this update is policy/acceptance-scope only, no code/asset change."
+  }
+}

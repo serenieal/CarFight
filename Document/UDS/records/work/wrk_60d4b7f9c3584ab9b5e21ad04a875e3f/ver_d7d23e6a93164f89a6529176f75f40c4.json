@@ -1,0 +1,31 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_60d4b7f9c3584ab9b5e21ad04a875e3f",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_d7d23e6a93164f89a6529176f75f40c4",
+  "parent_version_ids": [
+    "ver_f1c0a74e3e1b4c9b9b33e66faf66c2b5"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-060",
+    "title": "Vehicle Builder Socket Prep UX / 차량 메시 소켓 준비 UX",
+    "phase": "VSPUX-P0-04",
+    "next_action": "P0-04 USER actual Compact UE 5.8 Editor validation of Quick Socket Prep, live Socket Manager visibility after Hardpoint creation on already-opened Static Mesh Editor, Wheel FL/FR/RL/RR preview meshes, manual transforms, explicit Save, restart/readback, and return to existing Step3. After user confirms, layout-only review/correction if needed with fresh build/focused regression. Current P0-04 correction TECHNICAL PASS: official UE 5.8 Source Editor Win64 Development build 6aa1d40cfbb144d181a989abe908bbe1 PASS exit0 after user manually closed locked editor; 6/6 focused Automation PASS (QuickSocketNextName, QuickModeBoundary, SocketPreviewMapping; BuilderShell; Step3HardpointPlanning; InventoryClassification), failures/missing/unexpected/duplicate all zero. Earlier live UnrealEditor DLL lock LNK1104 historical now cleared. No Compact asset edits or save made by assistant; actual Socket Manager presentation and user validation NOT RUN. Remote Editor close via current MCP carfight.editor.stop preset was blocked by missing Project runtime_instance_id despite user's authorization; user manually closed. Track remote lifecycle reliability separately, do not claim it fixed. No Git stage/commit/push. P0-05 remains not started.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-060"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleSocketPrepUX/VehicleSocketPrepUXPlan.md v0.1.9",
+      "Document/Systems/Vehicles/VehicleBuilder.md v1.9.1",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-14",
+    "resolution_basis": "Official UE 5.8 Source Editor build job 6aa1d40cfbb144d181a989abe908bbe1 exit0 successfully linked both former lock-blocked DLLs after user closed the editor. Current C++ source Wheel preview + UStaticMesh::AddSocket/editor refresh tests: Quick 3/3, affected BuilderShell 1/1, Step3HardpointPlanning 1/1, InventoryClassification 1/1, total 6/6 PASS engine exit 0. P0-04 user actual Compact Editor visual/save verification unrun. GoPyMCP managed stop could not be invoked without exact Runtime ID, user action solved current blocker, not underlying remote lifecycle gap."
+  }
+}

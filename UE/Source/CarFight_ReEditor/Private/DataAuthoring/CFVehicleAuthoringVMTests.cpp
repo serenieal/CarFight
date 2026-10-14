@@ -1,10 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringVMTests.cpp
-// Version: v1.45.0
-// Date: 2026-09-16
+// Version: v1.49.0
+// Date: 2026-10-14
 // Description: Vehicle Authoring Workspace + Guided Builder integration + 신규 Basic Sensor policy 보호 Automation입니다.
 // Changelog:
+// - v1.49.0: CF-FQ-060 신규 canonical Hardpoint 7개 위치 분류와 미래 분류의 Base_Standard 프리뷰 실제 에셋 로드/AddSocket 유지, 비표준·Wheel 제외 focused 회귀 테스트 확장.
+// - v1.48.0: CF-FQ-060 Quick Socket Editor 갱신 교정과 함께 Wheel 4종 PreviewStaticMesh 실제 에셋 로드, AddSocket readback, Hardpoint 미지정 focused Automation을 추가.
+// - v1.47.0: VSPUX-P0-03 실제 Quick Slate Tab/두 host 분리/새로고침·동일 Direct 복원/명시 차량 선택·새 차량 전환, Wheel live 상태 focused Automation 추가.
+// - v1.46.0: CF-FQ-060 Browser refresh 중 기존 managed selection·current Step·Chassis 경로가 변하지 않는 P1-01 회귀검증 보강.
 // - v1.45.0: Generic Vehicle record 생성 Recipe가 UseProjectBasicSensor를 명시하고 차량별 explicit SensorData를 비운 상태로 시작하는지 검증.
 // - v1.44.0: CF-FQ-038 DEL6 compatibility retirement로 Legacy Wizard managed-guard test와 hidden-spawner 공존 기대를 제거하고 Current Builder/Authoring tab 계약만 검증.
 // - v1.43.1: ResolverContractRevision synthetic approval-scope drift fixture를 실제 int32 contract에 맞게 +1로 교정. production 로직 변경 없음.
@@ -61,6 +65,10 @@
 // - v1.1.0: P0-10 Reference Compare, typed Layout/Driving Feel+Undo, Measurement/Adoption, legacy Wizard managed-target guard parity 검증 추가.
 // - v1.0.0: ViewModel↔facade parity, preview mutation0, Initial Import mutation boundary, Apply/standard Undo, stale approval fail-closed 검증 추가.
 // Migration:
+// - v1.49.0은 Base_Standard 프리뷰 참조를 transient Chassis에만 검사하며 제품 Asset/Recipe/VehicleData 저장은 하지 않습니다.
+// - v1.48.0은 제품 Asset에 저장하지 않고 transient Chassis에만 테스트 소켓을 추가하며 Step1~8/Recipe 계약을 변경하지 않습니다.
+// - v1.47.0 Quick focused Slate Automation은 transient StaticMesh/UI만 사용하며 실제 StaticMesh·Recipe·VehicleData Save는 0입니다.
+// - v1.46.0 managed Browser refresh 확인은 테스트 전용이며 제품 Selection/Step/Recipe serialization이나 writer를 변경하지 않습니다.
 // - v1.45.0은 신규 record creation policy만 검증하며 기존 persisted Recipe를 자동 변경하지 않습니다.
 // - v1.44.0부터 Legacy Wizard 자체/hidden spawner를 Automation fixture로 직접 참조하지 않습니다. 기존 managed-target guard PASS는 Historical evidence로 보존하고 Current 회귀는 Vehicle Authoring/Builder 경로가 소유합니다.
 // - v1.43.1 ResolverContractRevision은 int32이며 test synthetic drift도 integer revision semantics를 사용합니다.
@@ -184,6 +192,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 #include "DataAuthoring/CFVehicleBaseProfile.h"
 #include "DataAuthoring/CFVehicleAuthoringVM.h"
 #include "DataAuthoring/CFVehicleBuilderVM.h"
+#include "DataAuthoring/CFVehicleBuilderTab.h"
+#include "Widgets/Layout/SBox.h"
 #include "DataAuthoring/CFVehicleImportService.h"
 #include "DataAuthoring/CFVehicleRecipeData.h"
 #include "DataAuthoring/CFVehicleRefEvidence.h"
@@ -1215,6 +1225,105 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVSPUXP004SocketPreviewTest,
+	"CarFight.DataAuthoring.CF_FQ_060.VSPUX_P0_04.SocketPreviewMapping",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// 표준 바퀴 소켓의 프리뷰 에셋 참조와 실제 StaticMesh AddSocket API를 제품 에셋 저장 없이 검증합니다.
+bool FCFVSPUXP004SocketPreviewTest::RunTest(const FString& Parameters)
+{
+	// 프리뷰를 조회할 표준 바퀴 소켓 이름과 실제 Asset object path입니다.
+	struct FWheelPreviewCase
+	{
+		FName SocketName;
+		const TCHAR* MeshPath;
+	};
+	// FL/FR/RL/RR 각각 다른 StaticMesh 프리뷰 경로를 사용합니다.
+	const FWheelPreviewCase WheelCases[] = {
+		{FName(TEXT("Wheel_Anchor_FL")), TEXT("/Game/CarFight/Vehicles/Shared/Tire/Wheel_FL.Wheel_FL")},
+		{FName(TEXT("Wheel_Anchor_FR")), TEXT("/Game/CarFight/Vehicles/Shared/Tire/Wheel_FR.Wheel_FR")},
+		{FName(TEXT("Wheel_Anchor_RL")), TEXT("/Game/CarFight/Vehicles/Shared/Tire/Wheel_RL.Wheel_RL")},
+		{FName(TEXT("Wheel_Anchor_RR")), TEXT("/Game/CarFight/Vehicles/Shared/Tire/Wheel_RR.Wheel_RR")}
+	};
+	// Socket 생성 실험에만 사용하는 메모리상의 일회용 StaticMesh입니다.
+	TStrongObjectPtr<UStaticMesh> TestChassisMesh(NewObject<UStaticMesh>(GetTransientPackage(), NAME_None, RF_Transient));
+	if (!TestNotNull(TEXT("Transient Chassis Mesh"), TestChassisMesh.Get()))
+	{
+		return false;
+	}
+
+	for (const FWheelPreviewCase& Wheel : WheelCases)
+	{
+		// 제품 코드의 정확한 역할→프리뷰 경로 lookup 결과입니다.
+		const FSoftObjectPath ActualPreviewPath = SCFVehicleBuilderTab::GetWheelSocketPreviewMeshPath(Wheel.SocketName);
+		TestTrue(TEXT("Wheel role chooses exact preview object"), ActualPreviewPath == FSoftObjectPath(Wheel.MeshPath));
+		// 실제 프로젝트 바퀴 메시가 존재하고 UStaticMesh로 로드 가능한지 확인합니다.
+		UStaticMesh* PreviewMesh = Cast<UStaticMesh>(ActualPreviewPath.TryLoad());
+		if (!TestNotNull(TEXT("Wheel preview loads as StaticMesh"), PreviewMesh))
+		{
+			continue;
+		}
+		// Asset에 저장하지 않고 프리뷰 포인터와 실제 소켓 추가 API의 readback을 확인합니다.
+		UStaticMeshSocket* PreviewSocket = NewObject<UStaticMeshSocket>(TestChassisMesh.Get(), NAME_None, RF_Transient);
+		PreviewSocket->SocketName = Wheel.SocketName;
+		PreviewSocket->PreviewStaticMesh = PreviewMesh;
+		TestChassisMesh->AddSocket(PreviewSocket);
+		TestTrue(TEXT("Mesh AddSocket exposes the new socket via FindSocket"), TestChassisMesh->FindSocket(Wheel.SocketName) == PreviewSocket);
+		TestTrue(TEXT("New socket retains matching preview StaticMesh"), PreviewSocket->PreviewStaticMesh == PreviewMesh);
+	}
+
+	TestFalse(TEXT("Hardpoint sockets never get a wheel preview path"),
+		SCFVehicleBuilderTab::GetWheelSocketPreviewMeshPath(FName(TEXT("HP_Top_01"))).IsValid());
+	// 모든 현행 canonical Hardpoint 위치 분류가 같은 실제 StaticMesh 프리뷰 경로를 사용해야 합니다.
+	const FSoftObjectPath CommonHardpointPreviewPath(
+		TEXT("/Game/CarFight/Weapons/Turrets/_Shared/Meshes/Base_Standard.Base_Standard"));
+	// 현재 지원 분류와 동적 분류 확장까지 확인하는 read-only category 목록입니다.
+	TArray<FName> HardpointCategories = {
+		TEXT("Top"), TEXT("Front"), TEXT("Back"), TEXT("LeftSide"),
+		TEXT("RightSide"), TEXT("Bottom"), TEXT("Internal")
+	};
+	// 사용자 지정 프리뷰는 다른 테스트와 공유하지 않고 실제 프로젝트 Asset으로 확인합니다.
+	UStaticMesh* HardpointPreviewMesh = Cast<UStaticMesh>(CommonHardpointPreviewPath.TryLoad());
+	if (!TestNotNull(TEXT("Common Base_Standard Hardpoint preview loads as StaticMesh"), HardpointPreviewMesh))
+	{
+		return false;
+	}
+
+	for (const FName LocationCategory : HardpointCategories)
+	{
+		// canonical 분류 이름을 가진 새 소켓은 종류에 관계없이 하나의 프리뷰를 공유합니다.
+		const FName SocketName(*FString::Printf(TEXT("HP_%s_01"), *LocationCategory.ToString()));
+		const FSoftObjectPath MappedPath = SCFVehicleBuilderTab::GetHardpointSocketPreviewMeshPath(SocketName, HardpointCategories);
+		TestTrue(TEXT("Every supported Hardpoint category uses Base_Standard preview"), MappedPath == CommonHardpointPreviewPath);
+		// 실제 제품 코드와 동일하게 임시 메시의 신규 Socket PreviewStaticMesh만 지정합니다.
+		UStaticMeshSocket* PreviewSocket = NewObject<UStaticMeshSocket>(TestChassisMesh.Get(), NAME_None, RF_Transient);
+		PreviewSocket->SocketName = SocketName;
+		PreviewSocket->PreviewStaticMesh = Cast<UStaticMesh>(MappedPath.ResolveObject());
+		TestChassisMesh->AddSocket(PreviewSocket);
+		TestTrue(TEXT("New Hardpoint Socket is discoverable by FindSocket"), TestChassisMesh->FindSocket(SocketName) == PreviewSocket);
+		TestTrue(TEXT("New Hardpoint Socket retains Base_Standard preview"), PreviewSocket->PreviewStaticMesh == HardpointPreviewMesh);
+	}
+	// 카테고리를 고정하지 않고 새로운 정식 분류를 추가해도 같은 메시가 적용되어야 합니다.
+	HardpointCategories.Add(TEXT("RoofRear"));
+	TestTrue(TEXT("Future supported canonical Hardpoint category gets shared preview"),
+		SCFVehicleBuilderTab::GetHardpointSocketPreviewMeshPath(TEXT("HP_RoofRear_02"), HardpointCategories) == CommonHardpointPreviewPath);
+	TestFalse(TEXT("Unknown Hardpoint category does not get a preview without naming contract"),
+		SCFVehicleBuilderTab::GetHardpointSocketPreviewMeshPath(TEXT("HP_Unknown_01"), HardpointCategories).IsValid());
+	TestFalse(TEXT("Noncanonical Hardpoint name does not get a preview"),
+		SCFVehicleBuilderTab::GetHardpointSocketPreviewMeshPath(TEXT("HP_Top_1"), HardpointCategories).IsValid());
+	TestFalse(TEXT("Wheel socket must not receive Hardpoint preview"),
+		SCFVehicleBuilderTab::GetHardpointSocketPreviewMeshPath(TEXT("Wheel_Anchor_FL"), HardpointCategories).IsValid());
+	TestFalse(TEXT("Unrelated socket must not receive Hardpoint preview"),
+		SCFVehicleBuilderTab::GetHardpointSocketPreviewMeshPath(TEXT("Other_Socket"), HardpointCategories).IsValid());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCFVSPUXP003QuickModeTest,
+	"CarFight.DataAuthoring.CF_FQ_060.VSPUX_P0_03.QuickModeBoundary",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCFVehicleBuilderShellTest,
 	"CarFight.DataAuthoring.CF_FQ_040.VB_P0_09.BuilderShell",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -1594,6 +1703,100 @@ bool FCFVehicleWorkspaceTabTest::RunTest(const FString& Parameters)
 }
 
 // Guided Vehicle Builder의 별도 tab registration과 stable StepId 기반 current baseline contract를 검증합니다.
+// Quick의 실제 Slate widget과 독립 Tab state를 생성하여 Step3/Browser 복원 경계를 직접 확인합니다.
+bool FCFVSPUXP003QuickModeTest::RunTest(const FString& Parameters)
+{
+	// 실제 Builder Tab Construct를 거친 transient UI이며 제품 Asset을 저장하지 않습니다.
+	TSharedRef<SCFVehicleBuilderTab> Tab = SNew(SCFVehicleBuilderTab);
+	if (!TestTrue(TEXT("Quick test builds the real Builder Slate UI"), Tab->ViewModel.IsValid()))
+	{
+		return false;
+	}
+
+	// 기존 Step3 하드포인트 표시 영역은 Quick과 별도 소유여야 합니다.
+	TSharedPtr<SBox> ExistingStep3Host = Tab->HardpointPlanningHost;
+	TestTrue(TEXT("Existing Step3 host exists"), ExistingStep3Host.IsValid());
+	TestTrue(TEXT("Independent Quick host exists"), Tab->QuickSocketPreparationHost.IsValid());
+	TestTrue(TEXT("Quick and Step3 host are not the same widget"), Tab->QuickSocketPreparationHost != ExistingStep3Host);
+	TestTrue(TEXT("Initially normal Builder is visible"), Tab->GetNormalBuilderVisibility() == EVisibility::Visible);
+	TestTrue(TEXT("Initially Quick is hidden"), Tab->GetQuickSocketVisibility() == EVisibility::Collapsed);
+
+	// 테스트에서만 쓰는 메모리상의 StaticMesh이며 제품 StaticMesh나 Recipe에는 손대지 않습니다.
+	TStrongObjectPtr<UStaticMesh> TestMesh(NewObject<UStaticMesh>(GetTransientPackage(), NAME_None, RF_Transient));
+	if (!TestTrue(TEXT("Transient Quick chassis exists"), TestMesh.IsValid()))
+	{
+		return false;
+	}
+	const FSoftObjectPath TestMeshPath(TestMesh.Get());
+	// 신규 Quick 진입 전 실제 Builder Step입니다.
+	const ECFVehicleBuilderStepId InitialStep = Tab->ViewModel->GetCurrentStep().StepId;
+	Tab->HandleEnterQuickSocketPreparation();
+	TestTrue(TEXT("Quick entry activates mode"), Tab->bQuickSocketPreparationActive);
+	TestTrue(TEXT("Quick page visible and normal page hidden"), Tab->GetQuickSocketVisibility() == EVisibility::Visible
+		&& Tab->GetNormalBuilderVisibility() == EVisibility::Collapsed);
+	TestTrue(TEXT("Quick entry leaves original Step unchanged"), Tab->ViewModel->GetCurrentStep().StepId == InitialStep);
+
+	// 실제 Picker가 바꾸는 Tab-local 값만 임시 Fixture 경로로 지정합니다.
+	Tab->QuickSocketChassisMeshPath = TestMeshPath;
+	Tab->RefreshQuickSocketPresentation();
+	TestTrue(TEXT("Quick supports independent Mesh path"), Tab->GetSocketEditingChassisMeshPath() == TestMeshPath);
+	TestTrue(TEXT("Missing wheel socket only reported after actual mesh is available"),
+		Tab->GetQuickWheelSocketStatusText(0).ToString().Contains(TEXT("없음")));
+	// 기존 Mesh에서 다른 사용자가 바퀴 소켓을 만든 시나리오를 transient fixture로 재현합니다.
+	CFVehicleAuthoringVMTestsPrivate::AddSocket(*TestMesh.Get(), TEXT("Wheel_Anchor_FL"), FVector(101, -61, 27));
+	TestTrue(TEXT("Quick Wheel status reads live Socket truth without stale widget name"),
+		Tab->GetQuickWheelSocketStatusText(0).ToString().Contains(TEXT("있음")));
+	// 선택 메시가 없으면 소켓 누락이라고 단정하지 않습니다.
+	Tab->QuickSocketChassisMeshPath.Reset();
+	TestTrue(TEXT("No selected mesh is status unknown, not missing"),
+		Tab->GetQuickWheelSocketStatusText(0).ToString().Contains(TEXT("확인 불가"))
+		&& !Tab->GetQuickWheelSocketStatusText(0).ToString().Contains(TEXT("없음")));
+	Tab->QuickSocketChassisMeshPath = TestMeshPath;
+	Tab->HandleQuickHardpointCategorySelected(TEXT("LeftSide"));
+	TestTrue(TEXT("Quick category can be selected independent from Recipe"), Tab->QuickHardpointCategory == FName(TEXT("LeftSide")));
+
+	// 목록 새로고침은 Quick/선택 메시/category와 기존 VM Step을 건드리지 않아야 합니다.
+	Tab->HandleRefreshVehicles();
+	TestTrue(TEXT("Browser refresh preserves Quick mode"), Tab->bQuickSocketPreparationActive);
+	TestTrue(TEXT("Browser refresh preserves independent Mesh"), Tab->QuickSocketChassisMeshPath == TestMeshPath);
+	TestTrue(TEXT("Browser refresh preserves chosen Category"), Tab->QuickHardpointCategory == FName(TEXT("LeftSide")));
+	TestTrue(TEXT("Browser refresh does not reselect a vehicle"), !Tab->ViewModel->HasSelection());
+	TestTrue(TEXT("Browser refresh preserves VM Step"), Tab->ViewModel->GetCurrentStep().StepId == InitialStep);
+	TestTrue(TEXT("Quick redraw keeps Step3 host identity"), Tab->HardpointPlanningHost == ExistingStep3Host);
+
+	// 돌아가기만으로 기존 VM 선택/Step을 변경하면 안 됩니다.
+	Tab->HandleExitQuickSocketPreparation();
+	TestTrue(TEXT("Return restores normal display"), !Tab->bQuickSocketPreparationActive
+		&& Tab->GetNormalBuilderVisibility() == EVisibility::Visible);
+	TestTrue(TEXT("Return preserves VM Step"), Tab->ViewModel->GetCurrentStep().StepId == InitialStep);
+
+	// 명시적 USER row 선택은 정상 Builder selection으로 들어가면서 Quick을 종료합니다.
+	TSharedPtr<FCFVehicleListEntry> MeshCandidate = MakeShared<FCFVehicleListEntry>();
+	MeshCandidate->bMeshOnlyCandidate = true;
+	MeshCandidate->ChassisMeshPath = TestMeshPath;
+	Tab->HandleEnterQuickSocketPreparation();
+	Tab->HandleVehicleSelectionChanged(MeshCandidate, ESelectInfo::OnMouseClick);
+	TestTrue(TEXT("Explicit row selection exits Quick mode"), !Tab->bQuickSocketPreparationActive);
+	TestTrue(TEXT("Explicit row selection actually selects target"), Tab->ViewModel->HasSelection());
+	TestTrue(TEXT("Explicit row selection keeps exact candidate Mesh"), Tab->ViewModel->GetCurrentChassisMeshPath() == TestMeshPath);
+
+	// 같은 target의 프로그램 Direct highlight는 Quick 모드를 종료하거나 선택을 재생성하지 않습니다.
+	Tab->HandleEnterQuickSocketPreparation();
+	Tab->HandleQuickHardpointCategorySelected(TEXT("Top"));
+	const ECFVehicleBuilderStepId BeforeDirectStep = Tab->ViewModel->GetCurrentStep().StepId;
+	Tab->HandleVehicleSelectionChanged(MeshCandidate, ESelectInfo::Direct);
+	TestTrue(TEXT("Same-target programmatic highlight does not exit Quick"), Tab->bQuickSocketPreparationActive);
+	TestTrue(TEXT("Same-target programmatic highlight retains current step"), Tab->ViewModel->GetCurrentStep().StepId == BeforeDirectStep);
+	TestTrue(TEXT("Same-target programmatic highlight retains Quick category"), Tab->QuickHardpointCategory == FName(TEXT("Top")));
+
+	// 사용자 신규 차량 진입은 Quick만 종료하고 기존 Builder 신규 제작 기능을 수행합니다.
+	Tab->HandleBeginNewVehicleEntry();
+	TestTrue(TEXT("Explicit New Vehicle exits Quick mode"), !Tab->bQuickSocketPreparationActive);
+	TestTrue(TEXT("Explicit New Vehicle still enters New Vehicle workflow"), Tab->ViewModel->IsNewVehicleEntryActive());
+	TestTrue(TEXT("No persistent vehicle object was created by the Quick smoke"), Tab->ViewModel->GetStepViews().Num() == 8);
+	return true;
+}
+
 bool FCFVehicleBuilderShellTest::RunTest(const FString& Parameters)
 {
 	// 신규 Guided Builder Nomad Tab identity입니다.
@@ -1758,6 +1961,22 @@ bool FCFVehicleBuilderShellTest::RunTest(const FString& Parameters)
 		AddError(Error);
 		return false;
 	}
+
+	// 브라우저가 목록만 다시 읽더라도 보호해야 하는 현재 managed 차량의 정확한 identity입니다.
+	const FSoftObjectPath ManagedSelectionBeforeRefresh = ManagedBuilderViewModel.GetSelectedEntry().DefinitionPath;
+	// 현재 Step의 stable identifier는 목록 갱신으로 되감겨서는 안 됩니다.
+	const ECFVehicleBuilderStepId ManagedStepBeforeRefresh = ManagedBuilderViewModel.GetCurrentStep().StepId;
+	// 현재 차량의 사용 중인 Chassis Mesh 경로도 목록 갱신과 독립적이어야 합니다.
+	const FSoftObjectPath ManagedChassisBeforeRefresh = ManagedBuilderViewModel.GetCurrentChassisMeshPath();
+	if (!TestTrue(TEXT("Managed Browser refresh succeeds without implicit selection reset"), ManagedBuilderViewModel.RefreshVehicles(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestTrue(TEXT("Managed Browser refresh keeps selected vehicle"), ManagedBuilderViewModel.HasSelection());
+	TestTrue(TEXT("Managed Browser refresh retains exact definition identity"), ManagedBuilderViewModel.GetSelectedEntry().DefinitionPath == ManagedSelectionBeforeRefresh);
+	TestEqual(TEXT("Managed Browser refresh retains stable current Step"), ManagedBuilderViewModel.GetCurrentStep().StepId, ManagedStepBeforeRefresh);
+	TestTrue(TEXT("Managed Browser refresh preserves selected Chassis"), ManagedBuilderViewModel.GetCurrentChassisMeshPath() == ManagedChassisBeforeRefresh);
 
 	// Baseline current AssetSnapshot에서 stable StepId로 찾은 evaluator projection입니다.
 	const FCFVehicleBuilderStepView* BaselineMeshStep = ManagedBuilderViewModel.FindStepView(ECFVehicleBuilderStepId::MeshPrep);

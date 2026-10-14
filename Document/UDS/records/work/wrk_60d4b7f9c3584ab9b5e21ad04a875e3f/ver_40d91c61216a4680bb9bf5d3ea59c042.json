@@ -1,0 +1,31 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_60d4b7f9c3584ab9b5e21ad04a875e3f",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_40d91c61216a4680bb9bf5d3ea59c042",
+  "parent_version_ids": [
+    "ver_f9b126c4283c4d6ca7d91e4bf083b5a2"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-060",
+    "title": "Vehicle Builder Socket Prep UX / 차량 메시 소켓 준비 UX",
+    "phase": "VSPUX-P0-02",
+    "next_action": "VSPUX-P0-03 final technical readback/diff/integration review based on Plan v0.1.6 §4.10. P0-02 Quick Socket Prep C++ prototype, separate Quick/Step3 Slate UI host, dynamic category naming/max+1/overflow, existing socket transaction/no auto-save, browser programmatic selection protection, and Wheel role current-name click correction have been implemented. Official UE 5.8 Source Editor development build PASSED exit0 (build_job_id aa6d8272c05e4dc499b8aa0780ba41d8), focused Automation passed 3/3 (CF_FQ_060.VSPUX_P0_02.QuickSocketNextName, CF_FQ_040.VB_P0_09.BuilderShell including managed Browser selection/Step/Chassis preservation, CF_FQ_047.VBHAI_P0_04.InventoryClassification). P0-04 USER must inspect actual Editor Quick layout and verify button and explicit manual socket edit/save/return interactions; perform layout-only changes and rerun regression as needed. Current UE asset/Recipe/VehicleData content was not changed by this implementation. Git stage/commit/push NOT RUN.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-060"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleSocketPrepUX/VehicleSocketPrepUXPlan.md v0.1.6",
+      "Document/Systems/Vehicles/VehicleBuilder.md v1.9.1",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-14",
+    "resolution_basis": "C++ source writes applied only to exact CF-FQ-060 implementation and directly affected tests; official UE 5.8 Source Editor compiled exit0 after initial missing-header correction; three focused Automation test terminal markers each PASS 1/1 and exit0. Source tests/build verified, actual Editor USER layout/Asset edit/save is not yet tested; no Git commit/push. Full evidence and migration in representative Plan v0.1.6 §4.10."
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_60d4b7f9c3584ab9b5e21ad04a875e3f",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_f1c0a74e3e1b4c9b9b33e66faf66c2b5",
+  "parent_version_ids": [
+    "ver_18e023bf96ea452ab59a0603cdf8a147"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-060",
+    "title": "Vehicle Builder Socket Prep UX / 차량 메시 소켓 준비 UX",
+    "phase": "VSPUX-P0-04",
+    "next_action": "First: preserve all unsaved user-owned Unreal Editor / Compact asset changes; user must safely close running UE 5.8 Source Editor after deciding how to handle unsaved changes. Do not force close or save on user's behalf. Then re-run official managed UE 5.8 Source Editor Build for CarFight_ReEditor in main_game/ SwitchSourceEngine. Existing build job 6c8e81af4a624fb09b35b7a31c065061 failed exit6 from live UnrealEditor.exe file locks on UnrealEditor-NetCore.dll and UnrealEditor-CarFight_ReEditor.dll, even though CFVehicleBuilderTab.cpp and CFVehicleAuthoringVMTests.cpp compiled without observed C++ errors. Source corrections applied: use UStaticMesh::AddSocket, verify FindSocket exact pointer, refresh already open matching IStaticMeshEditor with RefreshTool and SetSelectedSocket; set role-specific PreviewStaticMesh only for newly created Wheel_Anchor_FL/FR/RL/RR using Wheel_FL/FR/RL/RR object paths, without touching existing sockets/Hardpoints or automatically saving. Focused CF_FQ_060.VSPUX_P0_04.SocketPreviewMapping created but NOT RUN. After official Build PASS run new SocketPreviewMapping + existing QuickSocketNextName, QuickModeBoundary, BuilderShell, Step3HardpointPlanning, InventoryClassification; afterward USER Compact manual Editor Socket Manager visibility, preview, transform edit, explicit save/readback and layout acceptance. Current P0-04 USER acceptance/technical acceptance NOT PASS; P0-05 not started. User Dirty protected. No Git stage/commit/push.",
+    "blockers": [
+      "Running user-owned UnrealEditor.exe locks NetCore and CarFight_ReEditor DLLs (LNK1104), preventing official Editor Build final linkage and new Automation. Safe user-managed Editor close is required first."
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-060"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleSocketPrepUX/VehicleSocketPrepUXPlan.md v0.1.8",
+      "Document/Systems/Vehicles/VehicleBuilder.md v1.9.1",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-14",
+    "resolution_basis": "Fresh live Git/source/read-only investigation; confirmed prior Sockets.Add bypassed engine AddSocket, Quick Sockets direct inventory could differ from existing editor Socket Manager. Implemented AddSocket plus matching opened IStaticMeshEditor RefreshTool/SetSelectedSocket, WheelPreview exact4 lookup, and transient focused test. Official managed Build UHT completed, source compile succeeded, but linked DLLs locked by live UnrealEditor; exit6. No newer tests or user UI smoke claimed. Compact .uasset and unrelated dirty protected."
+  }
+}

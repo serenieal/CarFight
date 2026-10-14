@@ -1,0 +1,31 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_60d4b7f9c3584ab9b5e21ad04a875e3f",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_7c41e2d980fa4b138e6025a37d9fc164",
+  "parent_version_ids": [
+    "ver_3b8e412ac97442e39bd650c0a8f2d715"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-060",
+    "title": "Vehicle Builder Socket Prep UX / 차량 메시 소켓 준비 UX",
+    "phase": "VSPUX-P0-01",
+    "next_action": "VSPUX-P0-02: implement Recipe-free Quick Socket Prep in existing SCFVehicleBuilderTab as minimal working UI prototype, NOT a final USER-accepted layout. Keep UI-only Slate section builders (mesh picker, wheel roles, dynamic Hardpoint location category) separate from stable Tab-local mode/mesh/category state, live socket-name and collision validation, and existing transaction-based physical socket create/open handlers; no widget slot-index/address or construct-time socket-name capture as action authority. Current category Top/Front/LeftSide etc. are extensible (not 3D coordinates); source via GetStandardHardpointCategories, and keep HP_<Category>_<NN> parser/consumer contract. Preserve Quick refresh/return, existing Step 1-8/Recipe state, current role-name display/copy/add equivalence, existing asset/socket, Save0. VSPUX-P0-03 focused/source-build validation; VSPUX-P0-04 USER reviews actual Editor layout, then make surgical UI-only layout adjustments and revalidate with focused regression + editor smoke. Do not claim UI Acceptance before visual USER review. Source/Asset/Build/Automation/PIE all Not Run.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-060"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleSocketPrepUX/VehicleSocketPrepUXPlan.md v0.1.4",
+      "Document/Systems/Vehicles/VehicleBuilder.md v1.9.1",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-14",
+    "resolution_basis": "USER explicitly defers final Slate layout until viewing actual implemented UI, and requires subsequent layout adjustments to be safe. Existing SCFVehicleBuilderTab uses CommonPageScrollBox, HardpointPlanningHost->SetContent and named handlers, but BuildRequiredWheelSocketRow captures potentially stale SocketName at construction. v0.1.4 adds UI builder vs stable handler separation, live click validation, Tab-local UI-independent state, layout-only diff/testing constraints, P0-04 USER layout review and focused regression. This was a docs-only correction; source/build/Automation/PIE not executed."
+  }
+}

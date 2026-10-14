@@ -1,0 +1,31 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_60d4b7f9c3584ab9b5e21ad04a875e3f",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_b6b2a7a167ad461695ef15a34b4c1707",
+  "parent_version_ids": [
+    "ver_e8b3ab65edb44ac3ba6b94471be46f02"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-060",
+    "title": "Vehicle Builder Socket Prep UX / 차량 메시 소켓 준비 UX",
+    "phase": "VSPUX-P0-04",
+    "next_action": "USER directly verified after reloading Coupe Static Mesh that all worked-on sockets remain correctly attached. Accept USER Coupe save/reload persistence PASS; this is USER evidence, not independent disk asset inspection by MCP. Previous USER Coupe sockets creation/viewport visual PASS, user-reported UE 5.8 Editor Build PASS, managed focused Automation six unique tests PASS (CF_FQ_060 QuickSocketNextName/QuickModeBoundary/SocketPreviewMapping, BuilderShell, Step3HardpointPlanning, InventoryClassification). Static Mesh Editor Socket Manager live-list stale FL-only issue remains explicitly Deferred / USER-accepted nonblocking; reopening editor tab remains operational workaround. No UE engine source modifications, unsafe widget casts, new socket manager, or re-investigation of this convenience issue. Previous P0-04 agreement separately lists user testing of return from Quick Socket Prep to existing Builder Step 3; user has not reported that exact manual UX step this turn (QuickModeBoundary automation PASS is retained). Do not claim full P0-04 USER acceptance or P0-05 Closure until remaining UX expectation is confirmed or explicitly waived. No new C++/asset/engine changes, no new build/tests required just for recording USER UAT. Preserve user Coupe and other vehicle dirty assets, no Git stage/commit/push.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-060"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleSocketPrepUX/VehicleSocketPrepUXPlan.md v0.1.13",
+      "Document/Systems/Vehicles/VehicleBuilder.md v1.9.1",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-15",
+    "resolution_basis": "User confirmed they reloaded Coupe and all attached sockets were properly retained; previous final audit identified Save/Reload as untested and managed unique focused Automation PASS 6/6. This update records USER persistence acceptance without adding functionality. Socket Manager real-time list refresh remains agreed Deferred."
+  }
+}

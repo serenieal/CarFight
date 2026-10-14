@@ -1,0 +1,31 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_60d4b7f9c3584ab9b5e21ad04a875e3f",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_f9b126c4283c4d6ca7d91e4bf083b5a2",
+  "parent_version_ids": [
+    "ver_7c41e2d980fa4b138e6025a37d9fc164"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-060",
+    "title": "Vehicle Builder Socket Prep UX / 차량 메시 소켓 준비 UX",
+    "phase": "VSPUX-P0-01",
+    "next_action": "VSPUX-P0-02 minimal C++ implementation from VehicleSocketPrepUXPlan.md v0.1.5 §4.9 (authoritative required scope), §4.7 (Hardpoint Category), §4.8 (layout resilience). P1-01: isolate programmatic Browser refresh Direct selection/highlight from user selection; prevent implicit ViewModel->SelectVehicle re-selection; inspect ViewModel->RefreshVehicles/AuthoringViewModel->RefreshBrowser and test preservation of Quick mode/mesh/category and legacy selection/Step/draft across refresh. Explicit user row selection and +new vehicle exit Quick and perform normal action once. P1-02: separate Quick presentation host from existing recipe-owned Step3 HardpointPlanningHost, mutually exclusive visibility; reuse socket validation/naming/transaction functions, not Recipe writers or shared UI host. Quick socket refresh live mesh only, Step3 existing refresh retained. P2-01: user UX layout unfinalized until P0-04 actual editor review; do not build historical coordinate panels/filter/search or new frameworks. Wheel role exact4, category dynamic 7 currently supported extensible, HP_<Category>_<NN> max+1 from live mesh, no automatic Save/Recipe/VehicleData mutation. P0-03 UE 5.8 Source Editor Build + focused tests and UI smoke; P0-04 USER layout review and local presentation-only edits with revalidation. No Source/UE Asset/Build/Automation/PIE/USER Acceptance occurred for this design correction.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-060"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleSocketPrepUX/VehicleSocketPrepUXPlan.md v0.1.5",
+      "Document/Systems/Vehicles/VehicleBuilder.md v1.9.1",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-14",
+    "resolution_basis": "Read-only design audit found P1-01 implicit re-select due to HandleRefreshVehicles SetSelection Direct -> HandleVehicleSelectionChanged -> ViewModel SelectVehicle and potential RefreshBrowser/RebuildStepStates side effects; P1-02 risk of reusing existing Step3 recipe HardpointPlanningHost for Quick. P2-01 historical coordinate-centric section could be misread as active implementation. Plan v0.1.5 §4.9 now is sole required scope and verification contract; no C++/UE asset/test/build changes; all unrelated dirty preserved."
+  }
+}

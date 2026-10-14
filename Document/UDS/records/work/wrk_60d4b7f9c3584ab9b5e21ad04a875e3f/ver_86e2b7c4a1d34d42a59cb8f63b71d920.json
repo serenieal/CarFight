@@ -1,0 +1,29 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_60d4b7f9c3584ab9b5e21ad04a875e3f",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_86e2b7c4a1d34d42a59cb8f63b71d920",
+  "parent_version_ids": [],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-060",
+    "title": "Vehicle Builder Socket Prep UX / 차량 메시 소켓 준비 UX",
+    "phase": "VSPUX-P0-00",
+    "next_action": "VSPUX-P0-01 Pre-Implementation Contract Review: 기존 Vehicle Builder 안의 별도 Quick Socket Prep 진입과 임의 StaticMesh Picker, Recipe 없는 Wheel exact4/HP_* live 소켓 생성·표시, USER 수동 Editor Transform/Save를 기존 8-step/Recipe intent와 분리한 최소 변경 집합 및 focused regression 확정. CF-FQ-059/CCAS 및 UE Asset 건드리지 않음. Source/Build/Automation/PIE 모두 Not Run.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-060"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleSocketPrepUX/VehicleSocketPrepUXPlan.md v0.1.0",
+      "Document/Systems/Vehicles/VehicleBuilder.md v1.9.1",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-13",
+    "resolution_basis": "USER explicitly requested formal promotion after read-only fresh Source review and A-vs-B decision. Selected reuse of existing Vehicle Builder Step3 socket UI/add/open/live functions via independent Quick mode, without Recipe/VehicleData creation or legacy state machine relaxation. This promotion records documents/lifecycle only; no Source, UE Asset, Build, Automation, PIE, Git commit or push."
+  }
+}

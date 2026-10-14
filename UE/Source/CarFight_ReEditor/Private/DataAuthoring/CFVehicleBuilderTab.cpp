@@ -1,9 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderTab.cpp
-// Version: v1.39.0
-// Date: 2026-09-15
+// Version: v1.41.1
+// Date: 2026-10-14
 // Description: CF-FQ-046 공통 Page Shell/scroll UX + CF-FQ-047 Step 7 durable final commit / Step 8 Progress·Driving Apply·Explicit Recipe Save UI입니다.
 // Changelog:
+// - v1.41.1: CF-FQ-060 지원 canonical Hardpoint 소켓 생성 시 Base_Standard 프리뷰를 자동 지정하며 기존 Wheel 매핑·소켓 생성/갱신 경로 보존.
+// - v1.41.0: CF-FQ-060 P0-04 Socket 배열 직접 추가를 UStaticMesh::AddSocket로 교체하고 이미 열린 Static Mesh Editor 갱신, 신규 Wheel Socket 4역할 프리뷰 메시 연결.
+// - v1.40.2: Quick Wheel 표시를 live getter로 통일하여 메시/소켓 상태가 바뀐 뒤 오래된 Construct-time '없음'이 남지 않도록 함.
+// - v1.40.1: VSPUX-P0-03 최종 재검수에서 Quick의 Mesh 미선택/로드 실패를 '소켓 없음'이 아닌 '확인 불가'로 표시하도록 교정.
+// - v1.40.0: CF-FQ-060 Quick Socket Prep 독립 화면/상태, Socket transaction 공유, Browser programmatic 선택 보호 추가.
 // - v1.39.0: VBIUX-P0-05B/C rebaseline 결과를 반영해 Step 1~8 본문을 하나의 FillHeight 세로 Scroll 계약으로 통합하고 Step 3/6 로컬 Scroll과 Step 7/8 430/380 고정 높이 Scroll을 제거. Step 전환/차량 target 전환 시 공통 Scroll을 상단으로 복귀시키고 긴 Step 1/Global action 행을 작은 폭에 덜 민감한 배치로 교정. 기존 Step별 callback/enable/save/apply authority는 변경하지 않음.
 // - v1.38.0: CF-FQ-047 최종 재감사 교정. guarded Undo도 reverted VehicleData→Recipe exact pair durable 저장까지 완료하는 P0-07H 계약으로 USER 확인/성공/partial-failure 문구를 교정하고 Save All/자동 retry 금지를 명시.
 // - v1.37.0: VBHAI-P0-07H에서 Step 7 primary action을 `최종 적용 및 저장`으로 전환하고, fresh durable action에 따라 VehicleData Apply/AppliedState repair/exact Target→Recipe 저장 범위를 USER 확인창에 명확히 표시. 공통 Page Shell/scroll 구조는 변경하지 않음.
@@ -54,6 +59,11 @@
 // - v1.1.0: Step 1 Mesh-only 후보에 기존 two-record Preview→explicit USER approval→commit UI를 연결. Profile/차급/물리 추론과 Save는 계속 0.
 // - v1.0.0: 별도 Guided Shell에서 차량 선택 → 8 Step 상태 확인 → Back/Refresh/Next를 제공하고 Advanced Workspace는 보존.
 // Migration:
+// - v1.41.1 새 Hardpoint 소켓 프리뷰만 설정합니다. 기존 소켓과 Transform, Recipe, VehicleData를 변경하거나 자동 저장하지 않습니다.
+// - v1.41.0 기존 Socket/Transform 변경·자동 Asset Save 없이 신규 Socket에만 PreviewStaticMesh를 설정하며 이전/재저장은 사용자 선택입니다.
+// - v1.40.2는 Wheel read-only 텍스트 바인딩만 바꾸고 소켓 mutation 및 Step3 계약은 유지합니다.
+// - v1.40.1은 Quick 상태 표시 문구만 교정하며 Socket 생성·Step3·Recipe·Save 경계는 변경하지 않습니다.
+// - v1.40.0 Quick Socket Prep은 기존 Step 3/Recipe/VehicleData 구조를 이전하거나 수정하지 않습니다. 소켓 생성 후 Quick만 다시 그리며 저장은 USER가 직접 합니다.
 // - v1.39.0부터 Step 1~8의 page body/detail/diagnostic은 오른쪽 Page Shell의 단일 세로 Scroll을 공유하며 Step/차량 target 전환 시 새 화면 상단으로 복귀합니다. Step 3/6/7/8의 과거 로컬 Scroll/고정 높이는 폐기하고 Step 5/7/8 핵심 action과 Global Navigation은 Scroll 밖에 유지하며 기존 VM/Recipe/Save/RuntimeApply 의미는 그대로 유지합니다.
 // - v1.38.0부터 Step 7 guarded Undo 확인은 되돌린 VehicleData와 Recipe의 exact pair 저장까지 포함합니다. 저장 partial failure는 이미 성공한 Undo를 숨기거나 자동 rollback/retry하지 않고 USER에게 현재 상태 확인/후속 복구를 안내합니다.
 // - v1.37.0 Step 7 버튼은 exact current VehicleData/Recipe 두 package의 durable commit을 명시적으로 승인하며 Save All/다른 Asset Save/자동 retry를 추가하지 않습니다. CF-FQ-046 common Page Shell/scroll owner와 레이아웃은 그대로 유지합니다.
@@ -91,6 +101,7 @@
 #include "Editor.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshSocket.h"
+#include "IStaticMeshEditor.h"
 #include "Framework/Docking/TabManager.h"
 #include "HAL/PlatformApplicationMisc.h"
 #include "HAL/PlatformTime.h"
@@ -346,6 +357,13 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 							.OnClicked(this, &SCFVehicleBuilderTab::HandleBeginNewVehicleEntry)
 					]
 
+					+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 6.0f, 8.0f)
+					[
+						SNew(SButton)
+							.Text(LOCTEXT("EnterQuickSocketPreparation", "소켓 미리 준비"))
+							.OnClicked(this, &SCFVehicleBuilderTab::HandleEnterQuickSocketPreparation)
+					]
+
 					+ SVerticalBox::Slot()
 					.FillHeight(0.45f)
 					.Padding(0.0f, 0.0f, 6.0f, 10.0f)
@@ -372,6 +390,7 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 					[
 						SNew(STextBlock)
 							.Text(LOCTEXT("StepHeader", "2. 제작 단계"))
+							.Visibility(this, &SCFVehicleBuilderTab::GetNormalBuilderVisibility)
 							.Font(FCoreStyle::GetDefaultFontStyle("Bold", 11))
 					]
 
@@ -379,7 +398,11 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 					.FillHeight(0.55f)
 					.Padding(0.0f, 0.0f, 6.0f, 0.0f)
 					[
-						BuildStepNavigation()
+						SNew(SBox)
+						.Visibility(this, &SCFVehicleBuilderTab::GetNormalBuilderVisibility)
+						[
+							BuildStepNavigation()
+						]
 					]
 				]
 
@@ -474,6 +497,7 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 							+ SScrollBox::Slot()
 							[
 								SNew(SVerticalBox)
+								.Visibility(this, &SCFVehicleBuilderTab::GetNormalBuilderVisibility)
 
 								+ SVerticalBox::Slot()
 								.AutoHeight()
@@ -1318,6 +1342,15 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 										.AutoWrapText(true)
 								]
 							]
+
+							+ SScrollBox::Slot()
+							[
+								SAssignNew(QuickSocketPreparationHost, SBox)
+								.Visibility(this, &SCFVehicleBuilderTab::GetQuickSocketVisibility)
+								[
+									BuildQuickSocketPreparationPage()
+								]
+							]
 						]
 
 						// Step 5/7/8의 핵심 작업 버튼은 긴 detail Scroll과 독립된 고정 영역에 둡니다.
@@ -1510,6 +1543,7 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 						.AutoHeight()
 						[
 							SNew(SVerticalBox)
+							.Visibility(this, &SCFVehicleBuilderTab::GetNormalBuilderVisibility)
 
 							+ SVerticalBox::Slot().AutoHeight()
 							[
@@ -1560,6 +1594,472 @@ void SCFVehicleBuilderTab::Construct(const FArguments& InArgs)
 	HandleRefreshVehicles();
 }
 
+// Quick 모드를 진입하며 기존 Recipe/Step/NewVehicle draft를 변경하지 않습니다.
+FReply SCFVehicleBuilderTab::HandleEnterQuickSocketPreparation()
+{
+	if (!bQuickSocketPreparationActive)
+	{
+		QuickSocketChassisMeshPath = ViewModel.IsValid() ? ViewModel->GetCurrentChassisMeshPath() : FSoftObjectPath();
+	}
+	bQuickSocketPreparationActive = true;
+	// Quick에서 현재 지원할 수 있는 category 기본 선택입니다.
+	const TArray<FName> SupportedCategories = ViewModel.IsValid() ? ViewModel->GetStandardHardpointCategories() : TArray<FName>();
+	if (!SupportedCategories.Contains(QuickHardpointCategory))
+	{
+		QuickHardpointCategory = SupportedCategories.IsEmpty() ? NAME_None : SupportedCategories[0];
+	}
+	RefreshQuickSocketPresentation();
+	ResetCommonPageScrollToStart();
+	LastStatusText = LOCTEXT("QuickSocketEntered", "소켓 준비 화면입니다. 차량 데이터는 변경하지 않고 StaticMesh 소켓만 직접 편집합니다.");
+	return FReply::Handled();
+}
+
+// 기존 차량 제작 화면으로 돌아가되 Builder ViewModel selection/Step은 그대로 유지합니다.
+FReply SCFVehicleBuilderTab::HandleExitQuickSocketPreparation()
+{
+	bQuickSocketPreparationActive = false;
+	ResetCommonPageScrollToStart();
+	LastStatusText = LOCTEXT("QuickSocketExited", "기존 차량 제작 화면으로 돌아왔습니다.");
+	return FReply::Handled();
+}
+
+// Quick 편집 대상 메시만 갱신하고 Step2 pending/Recipe에는 반영하지 않습니다.
+void SCFVehicleBuilderTab::HandleQuickSocketMeshChanged(const FAssetData& AssetData)
+{
+	QuickSocketChassisMeshPath = AssetData.IsValid() ? AssetData.GetSoftObjectPath() : FSoftObjectPath();
+	RefreshQuickSocketPresentation();
+}
+
+// 사용자가 선택한 지원 Hardpoint 분류만 상태에 보관합니다.
+FReply SCFVehicleBuilderTab::HandleQuickHardpointCategorySelected(const FName LocationCategory)
+{
+	if (ViewModel.IsValid() && ViewModel->GetStandardHardpointCategories().Contains(LocationCategory))
+	{
+		QuickHardpointCategory = LocationCategory;
+		RefreshQuickSocketPresentation();
+	}
+	return FReply::Handled();
+}
+
+// Quick의 live StaticMesh Socket 목록만 갱신하고 VM Resolver/Recipe refresh는 호출하지 않습니다.
+FReply SCFVehicleBuilderTab::HandleRefreshQuickSockets()
+{
+	RefreshQuickSocketPresentation();
+	LastStatusText = LOCTEXT("QuickSocketRefreshed", "선택한 메시의 실제 소켓 목록을 다시 확인했습니다. 자동 저장하지 않았습니다.");
+	return FReply::Handled();
+}
+
+// Quick의 현재 메시를 공통 StaticMesh Editor 진입 기능으로 엽니다.
+FReply SCFVehicleBuilderTab::HandleOpenQuickSocketMesh()
+{
+	return OpenCurrentChassisMeshForSocketEditing();
+}
+
+// 표준 바퀴 소켓만 역할에 맞는 별도 프리뷰 StaticMesh로 연결하며 Hardpoint에는 아무것도 지정하지 않습니다.
+FSoftObjectPath SCFVehicleBuilderTab::GetWheelSocketPreviewMeshPath(const FName SocketName)
+{
+	if (SocketName == FName(TEXT("Wheel_Anchor_FL")))
+	{
+		return FSoftObjectPath(TEXT("/Game/CarFight/Vehicles/Shared/Tire/Wheel_FL.Wheel_FL"));
+	}
+	if (SocketName == FName(TEXT("Wheel_Anchor_FR")))
+	{
+		return FSoftObjectPath(TEXT("/Game/CarFight/Vehicles/Shared/Tire/Wheel_FR.Wheel_FR"));
+	}
+	if (SocketName == FName(TEXT("Wheel_Anchor_RL")))
+	{
+		return FSoftObjectPath(TEXT("/Game/CarFight/Vehicles/Shared/Tire/Wheel_RL.Wheel_RL"));
+	}
+	if (SocketName == FName(TEXT("Wheel_Anchor_RR")))
+	{
+		return FSoftObjectPath(TEXT("/Game/CarFight/Vehicles/Shared/Tire/Wheel_RR.Wheel_RR"));
+	}
+	return FSoftObjectPath();
+}
+
+// 모든 현재 지원 Hardpoint 위치 분류에 같은 기본 터렛 프리뷰를 적용하며 미래 분류도 목록 추가만으로 지원합니다.
+FSoftObjectPath SCFVehicleBuilderTab::GetHardpointSocketPreviewMeshPath(
+	const FName SocketName, const TArray<FName>& StandardHardpointCategories)
+{
+	// Canonical HP_<Category>_<NN> 여부와 지원 분류를 기존 Hardpoint 규칙으로 판정합니다.
+	FName LocationCategory;
+	FName LocationSlotId;
+	int32 SocketIndex = 0;
+	if (FCFVehicleBuilderHardpointIntegrity::TryParseCanonicalStandardSocketName(
+		SocketName, StandardHardpointCategories, LocationCategory, LocationSlotId, SocketIndex))
+	{
+		return FSoftObjectPath(TEXT("/Game/CarFight/Weapons/Turrets/_Shared/Meshes/Base_Standard.Base_Standard"));
+	}
+	return FSoftObjectPath();
+}
+
+// Quick Wheel 역할의 현재 canonical 이름을 반환합니다.
+FName SCFVehicleBuilderTab::GetQuickWheelSocketName(const int32 WheelRoleIndex) const
+{
+	// 기본 차량 바퀴 소켓과 exact 일치해야 하는 현재 4역할 이름입니다.
+	static const FName WheelSocketNames[] = {
+		TEXT("Wheel_Anchor_FL"), TEXT("Wheel_Anchor_FR"), TEXT("Wheel_Anchor_RL"), TEXT("Wheel_Anchor_RR")
+	};
+	return WheelRoleIndex >= 0 && WheelRoleIndex < UE_ARRAY_COUNT(WheelSocketNames) ? WheelSocketNames[WheelRoleIndex] : NAME_None;
+}
+
+// Quick Wheel의 메시 선택 불가능과 실제 소켓 누락을 구분하며 실시간 상태를 읽습니다.
+FText SCFVehicleBuilderTab::GetQuickWheelSocketStatusText(const int32 WheelRoleIndex) const
+{
+	// Quick Wheel role에서 현재 표시할 canonical 소켓 이름입니다.
+	const FName SocketName = GetQuickWheelSocketName(WheelRoleIndex);
+	if (SocketName.IsNone())
+	{
+		return FText::FromString(TEXT("확인 불가"));
+	}
+	// 선택된 메시가 없거나 로드할 수 없는 경우 소켓이 없다고 잘못 확정하지 않습니다.
+	const UStaticMesh* ChassisMesh = GetQuickSocketMesh();
+	const TCHAR* SocketState = !ChassisMesh
+		? TEXT("확인 불가 (메시 선택 필요)")
+		: (ChassisMesh->FindSocket(SocketName) ? TEXT("있음") : TEXT("없음"));
+	return FText::FromString(FString::Printf(TEXT("%s  | %s"), *SocketName.ToString(), SocketState));
+}
+
+// Quick Wheel 역할을 클릭 시점에 다시 조회해 정확한 메시의 Socket에 반영합니다.
+FReply SCFVehicleBuilderTab::HandleAddQuickWheelSocket(const int32 WheelRoleIndex)
+{
+	const FName SocketName = GetQuickWheelSocketName(WheelRoleIndex);
+	if (!CanEditQuickSocketMesh() || SocketName.IsNone())
+	{
+		LastStatusText = LOCTEXT("QuickWheelInvalid", "유효한 StaticMesh를 선택한 뒤 소켓을 추가하세요.");
+		return FReply::Handled();
+	}
+	return AddChassisSocketAtOriginAndOpenForMesh(QuickSocketChassisMeshPath, SocketName, false);
+}
+
+// Quick Wheel 이름을 클릭 시점의 role로 다시 조회해 클립보드에 복사합니다.
+FReply SCFVehicleBuilderTab::HandleCopyQuickWheelSocketName(const int32 WheelRoleIndex)
+{
+	return HandleCopyQuickSocketName(GetQuickWheelSocketName(WheelRoleIndex));
+}
+
+// 기존 Step 3 Wheel도 클릭 시점의 Recipe custom-binding 이름을 사용합니다.
+FReply SCFVehicleBuilderTab::HandleAddRequiredWheelSocket(const int32 WheelRoleIndex)
+{
+	if (!ViewModel.IsValid())
+	{
+		return FReply::Handled();
+	}
+	const TArray<FName> RequiredNames = ViewModel->GetRequiredWheelSocketNames();
+	if (!RequiredNames.IsValidIndex(WheelRoleIndex) || RequiredNames[WheelRoleIndex].IsNone())
+	{
+		return FReply::Handled();
+	}
+	return AddChassisSocketAtOriginAndOpenForMesh(ViewModel->GetCurrentChassisMeshPath(), RequiredNames[WheelRoleIndex], true);
+}
+
+// 기존 Step 3 바퀴 버튼은 현재 Recipe에 표시된 이름을 기준으로 활성화합니다.
+bool SCFVehicleBuilderTab::CanAddRequiredWheelSocket(const int32 WheelRoleIndex) const
+{
+	if (!ViewModel.IsValid())
+	{
+		return false;
+	}
+	const TArray<FName> RequiredNames = ViewModel->GetRequiredWheelSocketNames();
+	return RequiredNames.IsValidIndex(WheelRoleIndex)
+		&& !RequiredNames[WheelRoleIndex].IsNone()
+		&& CanAddCurrentChassisSocket(RequiredNames[WheelRoleIndex]);
+}
+
+// Quick의 전체 기존 Socket 이름을 그대로 복사합니다.
+FReply SCFVehicleBuilderTab::HandleCopyQuickSocketName(const FName SocketName)
+{
+	if (!SocketName.IsNone())
+	{
+		const FString SocketText = SocketName.ToString();
+		FPlatformApplicationMisc::ClipboardCopy(*SocketText);
+		LastStatusText = FText::FromString(FString::Printf(TEXT("소켓 이름을 복사했습니다: %s"), *SocketText));
+	}
+	return FReply::Handled();
+}
+
+// Quick/기존 Step 3의 실제 소켓 편집 대상을 Tab 상태에 따라 결정합니다.
+FSoftObjectPath SCFVehicleBuilderTab::GetSocketEditingChassisMeshPath() const
+{
+	return bQuickSocketPreparationActive
+		? QuickSocketChassisMeshPath
+		: (ViewModel.IsValid() ? ViewModel->GetCurrentChassisMeshPath() : FSoftObjectPath());
+}
+
+// Quick 메시를 현재 Editor 메모리에서 확인하며 필요 시 선택한 Asset만 로드합니다.
+UStaticMesh* SCFVehicleBuilderTab::GetQuickSocketMesh() const
+{
+	if (!QuickSocketChassisMeshPath.IsValid())
+	{
+		return nullptr;
+	}
+	UObject* MeshObject = QuickSocketChassisMeshPath.ResolveObject();
+	if (!MeshObject)
+	{
+		MeshObject = QuickSocketChassisMeshPath.TryLoad();
+	}
+	return Cast<UStaticMesh>(MeshObject);
+}
+
+// Quick 선택 메시가 실제로 존재할 때만 편집 버튼을 활성화합니다.
+bool SCFVehicleBuilderTab::CanEditQuickSocketMesh() const
+{
+	return GetQuickSocketMesh() != nullptr;
+}
+
+// Quick에서 선택한 category에 대해 기존 소켓 목록의 max+1 이름을 read-only 제안합니다.
+bool SCFVehicleBuilderTab::TryGetQuickHardpointSocketName(FName& OutSocketName, FString& OutError) const
+{
+	return FCFVehicleBuilderHardpointIntegrity::TryGetNextStandardSocketName(
+		GetQuickSocketMesh(), QuickHardpointCategory,
+		ViewModel.IsValid() ? ViewModel->GetStandardHardpointCategories() : TArray<FName>(),
+		OutSocketName, OutError);
+}
+
+// Quick Hardpoint 추가 가능 여부를 지원 분류와 유효한 물리 Mesh에서 판정합니다.
+bool SCFVehicleBuilderTab::CanAddQuickHardpointSocket() const
+{
+	FName SocketName;
+	FString Error;
+	return TryGetQuickHardpointSocketName(SocketName, Error);
+}
+
+// 화면에 표시했던 다음 후보와 클릭 순간의 후보가 같을 때만 정확히 하나를 생성합니다.
+FReply SCFVehicleBuilderTab::HandleAddQuickHardpointSocket()
+{
+	FName CurrentCandidate;
+	FString Error;
+	if (!TryGetQuickHardpointSocketName(CurrentCandidate, Error))
+	{
+		LastStatusText = FText::FromString(Error);
+		RefreshQuickSocketPresentation();
+		return FReply::Handled();
+	}
+	if (CurrentCandidate != QuickDisplayedHardpointSocketName)
+	{
+		RefreshQuickSocketPresentation();
+		LastStatusText = LOCTEXT("QuickSocketStale", "소켓 목록이 변경되어 다음 번호를 다시 계산했습니다. 표시된 이름을 확인한 뒤 다시 추가하세요.");
+		return FReply::Handled();
+	}
+	return AddChassisSocketAtOriginAndOpenForMesh(QuickSocketChassisMeshPath, CurrentCandidate, false);
+}
+
+// Quick 전용 Object Picker에 표시할 정확한 Mesh Asset 경로입니다.
+FString SCFVehicleBuilderTab::GetQuickSocketMeshPathText() const
+{
+	return QuickSocketChassisMeshPath.ToString();
+}
+
+// 일반 제작 화면과 Quick 화면의 소유권을 상호 배타적으로 유지합니다.
+EVisibility SCFVehicleBuilderTab::GetQuickSocketVisibility() const
+{
+	return bQuickSocketPreparationActive ? EVisibility::Visible : EVisibility::Collapsed;
+}
+
+// 일반 Step1~8 내용은 Quick 화면일 때 그리지 않습니다.
+EVisibility SCFVehicleBuilderTab::GetNormalBuilderVisibility() const
+{
+	return bQuickSocketPreparationActive ? EVisibility::Collapsed : EVisibility::Visible;
+}
+
+// Quick 화면은 기존 Step 3의 HardpointPlanningHost를 재구성하지 않고 자기 내용만 갱신합니다.
+void SCFVehicleBuilderTab::RefreshQuickSocketPresentation()
+{
+	// 지원 Category 목록이 확장·교체된 경우 더 이상 존재하지 않는 선택은 제거합니다.
+	const TArray<FName> SupportedCategories = ViewModel.IsValid() ? ViewModel->GetStandardHardpointCategories() : TArray<FName>();
+	if (!SupportedCategories.Contains(QuickHardpointCategory))
+	{
+		QuickHardpointCategory = SupportedCategories.IsEmpty() ? NAME_None : SupportedCategories[0];
+		if (bQuickSocketPreparationActive)
+		{
+			LastStatusText = LOCTEXT("QuickCategoryChanged", "지원 위치 분류가 변경되어 현재 사용할 수 있는 분류를 다시 선택했습니다.");
+		}
+	}
+	if (QuickSocketPreparationHost.IsValid())
+	{
+		QuickSocketPreparationHost->SetContent(BuildQuickSocketPreparationPage());
+	}
+}
+
+// Quick의 StaticMesh Picker와 Editor 열기 동선을 독립 section으로 만듭니다.
+TSharedRef<SWidget> SCFVehicleBuilderTab::BuildQuickSocketMeshSection()
+{
+	return SNew(SVerticalBox)
+		+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 8.0f)
+		[
+			SNew(SObjectPropertyEntryBox)
+			.AllowedClass(UStaticMesh::StaticClass())
+			.ObjectPath(this, &SCFVehicleBuilderTab::GetQuickSocketMeshPathText)
+			.OnObjectChanged(this, &SCFVehicleBuilderTab::HandleQuickSocketMeshChanged)
+			.AllowClear(true)
+		]
+		+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 8.0f)
+		[
+			SNew(SButton)
+			.Text(LOCTEXT("QuickOpenMesh", "선택 메시의 Socket 편집기 열기"))
+			.IsEnabled(this, &SCFVehicleBuilderTab::CanEditQuickSocketMesh)
+			.OnClicked(this, &SCFVehicleBuilderTab::HandleOpenQuickSocketMesh)
+		]
+		+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 8.0f)
+		[
+			SNew(STextBlock)
+			.Text(LOCTEXT("QuickSharedMeshWarning", "주의: StaticMesh 소켓은 자산 자체에 저장되며 같은 메시를 사용하는 모든 차량에 영향을 줍니다. 소켓 위치·회전은 메시 편집기에서 직접 조정하고 직접 저장하세요."))
+			.AutoWrapText(true)
+		];
+}
+
+// Quick의 현재 Wheel·Hardpoint 및 기존 소켓 목록을 레이아웃-only section으로 만듭니다.
+TSharedRef<SWidget> SCFVehicleBuilderTab::BuildQuickSocketListSection()
+{
+	// 현행 화면에서 Wheel/Category/Socket 목록을 독립적으로 재배치할 수 있는 부모입니다.
+	TSharedRef<SVerticalBox> Panel = SNew(SVerticalBox);
+	Panel->AddSlot().AutoHeight().Padding(0.0f, 8.0f)[SNew(STextBlock).Text(LOCTEXT("QuickWheels", "바퀴 소켓 (기본 4개)"))];
+	// 사용자가 선택한 실제 Chassis Mesh의 현재 소켓 상태입니다.
+	UStaticMesh* Mesh = GetQuickSocketMesh();
+	for (int32 RoleIndex = 0; RoleIndex < 4; ++RoleIndex)
+	{
+		// 상태를 저장하지 않고 현재 role/live Mesh에서 즉시 해석합니다.
+		Panel->AddSlot().AutoHeight().Padding(0.0f, 2.0f)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().FillWidth(1.0f)
+			[SNew(STextBlock).Text(this, &SCFVehicleBuilderTab::GetQuickWheelSocketStatusText, RoleIndex)]
+			+ SHorizontalBox::Slot().AutoWidth().Padding(3.0f, 0.0f)
+			[
+				SNew(SButton)
+				.Text(LOCTEXT("QuickWheelCopy", "복사"))
+				.OnClicked(this, &SCFVehicleBuilderTab::HandleCopyQuickWheelSocketName, RoleIndex)
+			]
+			+ SHorizontalBox::Slot().AutoWidth()
+			[
+				SNew(SButton)
+				.Text(LOCTEXT("QuickWheelCreate", "누락 소켓 추가"))
+				.IsEnabled_Lambda([this, RoleIndex]()
+				{
+					// 화면 생성 뒤 변경될 수 있는 현재 실제 메시 상태입니다.
+					UStaticMesh* LiveMesh = GetQuickSocketMesh();
+					return LiveMesh && !LiveMesh->FindSocket(GetQuickWheelSocketName(RoleIndex));
+				})
+				.OnClicked(this, &SCFVehicleBuilderTab::HandleAddQuickWheelSocket, RoleIndex)
+			]
+		];
+	}
+	Panel->AddSlot().AutoHeight().Padding(0.0f, 12.0f, 0.0f, 6.0f)
+	[SNew(STextBlock).Text(LOCTEXT("QuickHardpointTitle", "Hardpoint 위치 분류 선택"))];
+	// 지원 위치 분류는 향후 확장되는 기존 ViewModel 목록에서만 조회합니다.
+	const TArray<FName> Categories = ViewModel.IsValid() ? ViewModel->GetStandardHardpointCategories() : TArray<FName>();
+	TSharedRef<SVerticalBox> CategoryButtons = SNew(SVerticalBox);
+	for (const FName Category : Categories)
+	{
+		CategoryButtons->AddSlot().AutoHeight().Padding(0.0f, 0.0f, 4.0f, 4.0f)
+		[
+			SNew(SButton)
+			.Text(FText::FromString(FString::Printf(TEXT("%s%s"), Category == QuickHardpointCategory ? TEXT("● ") : TEXT(""), *Category.ToString())))
+			.OnClicked(this, &SCFVehicleBuilderTab::HandleQuickHardpointCategorySelected, Category)
+		];
+	}
+	Panel->AddSlot().AutoHeight()[CategoryButtons];
+
+	// 클릭 전 사용자에게 표시하는 다음 canonical Hardpoint 소켓 이름입니다.
+	FName SuggestedSocket;
+	FString SuggestError;
+	if (TryGetQuickHardpointSocketName(SuggestedSocket, SuggestError))
+	{
+		QuickDisplayedHardpointSocketName = SuggestedSocket;
+		Panel->AddSlot().AutoHeight().Padding(0.0f, 4.0f, 0.0f, 7.0f)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().FillWidth(1.0f)
+			[SNew(STextBlock).Text(FText::FromString(FString::Printf(TEXT("다음 소켓: %s"), *SuggestedSocket.ToString())))]
+			+ SHorizontalBox::Slot().AutoWidth()
+			[
+				SNew(SButton)
+				.Text(LOCTEXT("QuickHardpointCreate", "추가 후 편집"))
+				.IsEnabled(this, &SCFVehicleBuilderTab::CanAddQuickHardpointSocket)
+				.OnClicked(this, &SCFVehicleBuilderTab::HandleAddQuickHardpointSocket)
+			]
+		];
+	}
+	else
+	{
+		QuickDisplayedHardpointSocketName = NAME_None;
+		Panel->AddSlot().AutoHeight()
+		[SNew(STextBlock).Text(FText::FromString(SuggestError))];
+	}
+
+	Panel->AddSlot().AutoHeight().Padding(0.0f, 12.0f, 0.0f, 5.0f)
+	[SNew(STextBlock).Text(LOCTEXT("QuickExistingSockets", "현재 메시의 기존 소켓 (이름 그대로 보존)"))];
+	if (!Mesh)
+	{
+		Panel->AddSlot().AutoHeight()
+		[SNew(STextBlock).Text(LOCTEXT("QuickNoMesh", "먼저 차체 StaticMesh를 선택하세요."))];
+	}
+	else if (Mesh->Sockets.IsEmpty())
+	{
+		Panel->AddSlot().AutoHeight()
+		[SNew(STextBlock).Text(LOCTEXT("QuickNoSockets", "현재 메시에는 소켓이 없습니다."))];
+	}
+	else
+	{
+		for (const TObjectPtr<UStaticMeshSocket>& Socket : Mesh->Sockets)
+		{
+			if (!Socket || Socket->SocketName.IsNone())
+			{
+				continue;
+			}
+			// 지원하지 않는 미래 이름도 그대로 보존해 보여줄 실제 소켓 이름입니다.
+			const FName ExistingName = Socket->SocketName;
+			Panel->AddSlot().AutoHeight().Padding(0.0f, 2.0f)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().FillWidth(1.0f)
+				[SNew(STextBlock).Text(FText::FromName(ExistingName))]
+				+ SHorizontalBox::Slot().AutoWidth()
+				[
+					SNew(SButton)
+					.Text(LOCTEXT("QuickExistingCopy", "이름 복사"))
+					.OnClicked(this, &SCFVehicleBuilderTab::HandleCopyQuickSocketName, ExistingName)
+				]
+			];
+		}
+	}
+	return Panel;
+}
+
+// Quick 화면은 초기 사용자 검수용 기본 배치이며 기능 callback은 UI slot에 결합하지 않습니다.
+TSharedRef<SWidget> SCFVehicleBuilderTab::BuildQuickSocketPreparationPage()
+{
+	return SNew(SVerticalBox)
+		+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 8.0f)
+		[
+			SNew(STextBlock)
+			.Text(LOCTEXT("QuickSocketHeader", "소켓 미리 준비 (차량 제작 불필요)"))
+			.Font(FCoreStyle::GetDefaultFontStyle("Bold", 14))
+		]
+		+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 8.0f)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().FillWidth(1.0f)
+			[
+				SNew(SButton)
+				.Text(LOCTEXT("QuickSocketRefresh", "현재 소켓 다시 확인"))
+				.OnClicked(this, &SCFVehicleBuilderTab::HandleRefreshQuickSockets)
+			]
+			+ SHorizontalBox::Slot().FillWidth(1.0f).Padding(8.0f, 0.0f, 0.0f, 0.0f)
+			[
+				SNew(SButton)
+				.Text(LOCTEXT("QuickSocketReturn", "차량 제작 화면으로 돌아가기"))
+				.OnClicked(this, &SCFVehicleBuilderTab::HandleExitQuickSocketPreparation)
+			]
+		]
+		+ SVerticalBox::Slot().AutoHeight()[BuildQuickSocketMeshSection()]
+		+ SVerticalBox::Slot().AutoHeight()[BuildQuickSocketListSection()]
+		+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 8.0f)
+		[
+			SNew(STextBlock).Text_Lambda([this]() { return LastStatusText; }).AutoWrapText(true)
+		];
+}
+
 // Vehicle Browser cache를 fresh read하고 list row를 다시 만듭니다.
 FReply SCFVehicleBuilderTab::HandleRefreshVehicles()
 {
@@ -1600,6 +2100,8 @@ FReply SCFVehicleBuilderTab::HandleRefreshVehicles()
 
 	if (VehicleListView.IsValid())
 	{
+		// Browser highlight 프로그램 복원 중에는 사용자 선택 callback을 실행하지 않습니다.
+		TGuardValue<bool> RestoreSelectionGuard(bRestoringVehicleSelection, true);
 		VehicleListView->RequestListRefresh();
 
 		// ViewModel current selection과 같은 fresh Browser row를 다시 찾아 좌측 highlight도 exact identity로 맞춥니다.
@@ -1654,6 +2156,7 @@ FReply SCFVehicleBuilderTab::HandleBeginNewVehicleEntry()
 		return FReply::Handled();
 	}
 
+	bQuickSocketPreparationActive = false;
 	ViewModel->BeginNewVehicleEntry();
 	ViewModel->SetNewVehicleBlankStart();
 	SyncCreationFieldsFromSelection();
@@ -1672,11 +2175,25 @@ FReply SCFVehicleBuilderTab::HandleBeginNewVehicleEntry()
 // 선택 row를 current Builder target으로 전환합니다.
 void SCFVehicleBuilderTab::HandleVehicleSelectionChanged(FVehicleRowPtr SelectedItem, const ESelectInfo::Type SelectInfo)
 {
-	if (!SelectedItem.IsValid() || !ViewModel.IsValid())
+	if (!SelectedItem.IsValid() || !ViewModel.IsValid() || bRestoringVehicleSelection)
 	{
 		return;
 	}
-
+	// 지연된 Direct highlight 복원이 이미 선택된 exact 대상이면 기존 작업 상태를 다시 초기화하지 않습니다.
+	if (SelectInfo == ESelectInfo::Direct && ViewModel->HasSelection())
+	{
+		const FCFVehicleListEntry& CurrentEntry = ViewModel->GetSelectedEntry();
+		const bool bSameManaged = CurrentEntry.DefinitionPath.IsValid()
+			&& CurrentEntry.DefinitionPath == SelectedItem->DefinitionPath
+			&& CurrentEntry.RecipePath == SelectedItem->RecipePath;
+		const bool bSameCandidate = CurrentEntry.bMeshOnlyCandidate && SelectedItem->bMeshOnlyCandidate
+			&& CurrentEntry.ChassisMeshPath == SelectedItem->ChassisMeshPath;
+		if (bSameManaged || bSameCandidate)
+		{
+			return;
+		}
+	}
+	bQuickSocketPreparationActive = false;
 	ResetCommonPageScrollToStart();
 
 	FString Error;
@@ -2498,7 +3015,7 @@ FReply SCFVehicleBuilderTab::OpenCurrentChassisMeshForSocketEditing()
 	}
 
 	return OpenStaticMeshAssetPath(
-		ViewModel->GetCurrentChassisMeshPath(),
+		GetSocketEditingChassisMeshPath(),
 		TEXT("Chassis Socket"),
 		TEXT("바퀴와 장비 장착 위치는 같은 Chassis StaticMesh의 Socket을 사용합니다. 같은 Chassis Mesh를 쓰는 다른 차량과 Socket 위치를 공유할 수 있으므로 편집 전에 확인하세요. Builder는 자동 배치하거나 저장하지 않습니다."));
 }
@@ -2506,14 +3023,20 @@ FReply SCFVehicleBuilderTab::OpenCurrentChassisMeshForSocketEditing()
 // Exact missing Socket을 current Chassis에 transaction으로 추가하고 편집기를 여는 공통 backend입니다.
 FReply SCFVehicleBuilderTab::AddChassisSocketAtOriginAndOpen(const FName SocketName)
 {
-	if (!ViewModel.IsValid() || SocketName.IsNone())
+	return AddChassisSocketAtOriginAndOpenForMesh(GetSocketEditingChassisMeshPath(), SocketName, !bQuickSocketPreparationActive);
+}
+
+// Quick과 기존 Step 3에서 공유하는 StaticMesh Socket 생성 Transaction이며 Refresh 대상만 구분합니다.
+FReply SCFVehicleBuilderTab::AddChassisSocketAtOriginAndOpenForMesh(
+	const FSoftObjectPath& MeshPath, const FName SocketName, const bool bRefreshRecipe)
+{
+	if (SocketName.IsNone() || !MeshPath.IsValid())
 	{
 		LastDiagnosticText.Reset();
 		LastStatusText = LOCTEXT("AddChassisSocketInvalidName", "추가할 Socket 이름이 없습니다. 장착 위치 설정을 다시 확인하세요.");
 		return FReply::Handled();
 	}
 
-	const FSoftObjectPath MeshPath = ViewModel->GetCurrentChassisMeshPath();
 	UObject* MeshObject = MeshPath.ResolveObject();
 	if (!MeshObject)
 	{
@@ -2551,22 +3074,83 @@ FReply SCFVehicleBuilderTab::AddChassisSocketAtOriginAndOpen(const FName SocketN
 	NewSocket->RelativeLocation = FVector::ZeroVector;
 	NewSocket->RelativeRotation = FRotator::ZeroRotator;
 	NewSocket->RelativeScale = FVector::OneVector;
-	StaticMesh->Sockets.Add(NewSocket);
+
+	// 새로운 Wheel은 역할별 메시, 지원 canonical Hardpoint는 공통 Base_Standard를 프리뷰로 사용합니다.
+	FSoftObjectPath SocketPreviewMeshPath = GetWheelSocketPreviewMeshPath(SocketName);
+	if (!SocketPreviewMeshPath.IsValid())
+	{
+		SocketPreviewMeshPath = GetHardpointSocketPreviewMeshPath(
+			SocketName, ViewModel.IsValid() ? ViewModel->GetStandardHardpointCategories() : TArray<FName>());
+	}
+	// 프리뷰 로드가 실패하더라도 실제 소켓 생성과 수동 저장은 독립적으로 처리합니다.
+	bool bSocketPreviewMissing = false;
+	if (SocketPreviewMeshPath.IsValid())
+	{
+		UStaticMesh* SocketPreviewMesh = Cast<UStaticMesh>(SocketPreviewMeshPath.TryLoad());
+		if (SocketPreviewMesh)
+		{
+			NewSocket->PreviewStaticMesh = SocketPreviewMesh;
+		}
+		else
+		{
+			bSocketPreviewMissing = true;
+			LastDiagnosticText = FString::Printf(TEXT("Socket preview mesh unavailable: %s"), *SocketPreviewMeshPath.ToString());
+		}
+	}
+
+	// UStaticMesh 정식 Socket API를 이용해 에디터의 메시 변경 알림을 보존합니다.
+	StaticMesh->AddSocket(NewSocket);
+	// 실제 메시가 새 소켓을 등록했는지 확인한 후에만 성공 안내/Editor 갱신을 수행합니다.
+	if (StaticMesh->FindSocket(SocketName) != NewSocket)
+	{
+		LastDiagnosticText = FString::Printf(TEXT("StaticMesh AddSocket readback failed: %s"), *SocketName.ToString());
+		LastStatusText = LOCTEXT("AddChassisSocketReadbackFailed", "소켓 추가 후 메시에서 소켓을 확인하지 못했습니다. 편집 상태를 점검하세요.");
+		return FReply::Handled();
+	}
 	StaticMesh->MarkPackageDirty();
 	StaticMesh->PostEditChange();
 
-	// Socket 생성 뒤 current Builder state를 다시 읽되 refresh 오류는 Socket 생성 자체를 rollback하지 않습니다.
-	FString RefreshError;
-	ViewModel->RefreshCurrentState(RefreshError);
-	RefreshHardpointPlanningPresentation();
-	LastDiagnosticText = RefreshError;
+	// 같은 메시의 Static Mesh Editor가 이미 열려 있다면 Socket Manager와 뷰포트를 갱신합니다.
+	UAssetEditorSubsystem* AssetEditorSubsystem = GEditor ? GEditor->GetEditorSubsystem<UAssetEditorSubsystem>() : nullptr;
+	if (AssetEditorSubsystem)
+	{
+		IAssetEditorInstance* ExistingEditor = AssetEditorSubsystem->FindEditorForAsset(StaticMesh, false);
+		if (ExistingEditor && ExistingEditor->GetEditorName() == FName(TEXT("StaticMeshEditor")))
+		{
+			IStaticMeshEditor* StaticMeshEditor = static_cast<IStaticMeshEditor*>(ExistingEditor);
+			StaticMeshEditor->RefreshTool();
+			StaticMeshEditor->SetSelectedSocket(NewSocket);
+		}
+	}
+
+	// Quick은 Recipe refresh를 피하고 자신의 Socket 목록만 갱신합니다.
+	if (bRefreshRecipe && ViewModel.IsValid())
+	{
+		FString RefreshError;
+		ViewModel->RefreshCurrentState(RefreshError);
+		RefreshHardpointPlanningPresentation();
+		LastDiagnosticText = RefreshError;
+		if (bSocketPreviewMissing)
+		{
+			LastDiagnosticText += FString::Printf(TEXT("\nSocket preview mesh unavailable: %s"), *SocketPreviewMeshPath.ToString());
+		}
+	}
+	else
+	{
+		RefreshQuickSocketPresentation();
+		if (!bSocketPreviewMissing)
+		{
+			LastDiagnosticText.Reset();
+		}
+	}
 
 	return OpenStaticMeshAssetPath(
 		MeshPath,
 		TEXT("Chassis Socket"),
 		FString::Printf(
-			TEXT("Socket %s를 원점에 추가했습니다. 이름은 그대로 유지하고 위치·회전·스케일을 직접 맞춘 뒤 StaticMesh를 저장하세요. 자동 저장하지 않았습니다."),
-			*SocketName.ToString()));
+			TEXT("Socket %s를 원점에 추가했습니다. 이름은 그대로 유지하고 위치·회전·스케일을 직접 맞춘 뒤 StaticMesh를 저장하세요. 자동 저장하지 않았습니다.%s"),
+			*SocketName.ToString(),
+			bSocketPreviewMissing ? TEXT(" 소켓 프리뷰 메시를 로드하지 못했으므로 소켓만 생성했습니다. 진단 정보를 확인하세요.") : TEXT("")));
 }
 
 // Current committed Chassis StaticMesh object의 live FindSocket truth를 반환합니다.
@@ -2577,7 +3161,7 @@ bool SCFVehicleBuilderTab::IsCurrentChassisSocketPresentLive(const FName SocketN
 		return false;
 	}
 
-	const FSoftObjectPath MeshPath = ViewModel->GetCurrentChassisMeshPath();
+	const FSoftObjectPath MeshPath = GetSocketEditingChassisMeshPath();
 	if (!MeshPath.IsValid())
 	{
 		return false;
@@ -2595,7 +3179,10 @@ bool SCFVehicleBuilderTab::IsCurrentChassisSocketPresentLive(const FName SocketN
 // Exact Socket이 current Chassis에 없을 때만 `추가 후 편집` 버튼을 활성화합니다.
 bool SCFVehicleBuilderTab::CanAddCurrentChassisSocket(const FName SocketName) const
 {
-	return !SocketName.IsNone() && !IsCurrentChassisSocketPresentLive(SocketName);
+	return !SocketName.IsNone()
+		&& GetSocketEditingChassisMeshPath().IsValid()
+		&& (bQuickSocketPreparationActive ? CanEditQuickSocketMesh() : ViewModel.IsValid())
+		&& !IsCurrentChassisSocketPresentLive(SocketName);
 }
 
 // Step 2/3에서 exact StaticMesh path를 공통 Asset Editor backend로 엽니다.
@@ -3182,9 +3769,7 @@ FReply SCFVehicleBuilderTab::HandleCopyOptionalSocketNames()
 // Step 3 required Wheel Socket 한 행의 역할/이름/현재 상태/추가/복사 UI를 만듭니다.
 TSharedRef<SWidget> SCFVehicleBuilderTab::BuildRequiredWheelSocketRow(const int32 WheelRoleIndex, const FText& RoleLabel)
 {
-	const TArray<FName> RequiredSocketNames = ViewModel.IsValid() ? ViewModel->GetRequiredWheelSocketNames() : TArray<FName>();
-	const FName SocketName = RequiredSocketNames.IsValidIndex(WheelRoleIndex) ? RequiredSocketNames[WheelRoleIndex] : NAME_None;
-
+	// 이름/Enable/클릭은 버튼 렌더 당시 snapshot을 캡처하지 않고 현재 WheelRoleIndex로 조회합니다.
 	return SNew(SHorizontalBox)
 
 		+ SHorizontalBox::Slot()
@@ -3227,8 +3812,8 @@ TSharedRef<SWidget> SCFVehicleBuilderTab::BuildRequiredWheelSocketRow(const int3
 			SNew(SButton)
 				.Text(LOCTEXT("AddWheelSocketAndEdit", "추가 후 편집"))
 				.ToolTipText(LOCTEXT("AddWheelSocketAndEditTooltip", "현재 Chassis에 이 이름의 Wheel Socket이 없으면 원점에 만들고 Static Mesh Editor를 엽니다. 이름은 그대로 유지하고 위치·회전·스케일은 직접 맞춘 뒤 저장하세요."))
-				.IsEnabled_Lambda([this, SocketName]() { return CanAddCurrentChassisSocket(SocketName); })
-				.OnClicked(this, &SCFVehicleBuilderTab::HandleAddChassisSocket, SocketName)
+				.IsEnabled(this, &SCFVehicleBuilderTab::CanAddRequiredWheelSocket, WheelRoleIndex)
+				.OnClicked(this, &SCFVehicleBuilderTab::HandleAddRequiredWheelSocket, WheelRoleIndex)
 		]
 
 		+ SHorizontalBox::Slot()
@@ -4631,6 +5216,10 @@ FText SCFVehicleBuilderTab::GetCurrentStepDiagnosticText() const
 // Step 5 Physics Proposal 전용 UI 표시 조건입니다.
 EVisibility SCFVehicleBuilderTab::GetPhysicsProposalVisibility() const
 {
+	if (bQuickSocketPreparationActive)
+	{
+		return EVisibility::Collapsed;
+	}
 	return ViewModel.IsValid()
 		&& ViewModel->HasSelection()
 		&& !ViewModel->IsMeshOnlyCandidate()
@@ -5254,6 +5843,10 @@ FText SCFVehicleBuilderTab::GetGameplayMountSemanticSummaryText() const
 // Step 7 Final Review 전용 R0 review/apply/undo UI 표시 조건입니다.
 EVisibility SCFVehicleBuilderTab::GetFinalReviewVisibility() const
 {
+	if (bQuickSocketPreparationActive)
+	{
+		return EVisibility::Collapsed;
+	}
 	return ViewModel.IsValid()
 		&& ViewModel->HasSelection()
 		&& !ViewModel->IsMeshOnlyCandidate()
@@ -5314,6 +5907,10 @@ bool SCFVehicleBuilderTab::CanUndoFinalReview() const
 // Step 8 Technical Driving / USER Driving 전용 UI 표시 조건입니다.
 EVisibility SCFVehicleBuilderTab::GetDrivingTestVisibility() const
 {
+	if (bQuickSocketPreparationActive)
+	{
+		return EVisibility::Collapsed;
+	}
 	return ViewModel.IsValid()
 		&& ViewModel->HasSelection()
 		&& !ViewModel->IsMeshOnlyCandidate()
@@ -5504,6 +6101,10 @@ FReply SCFVehicleBuilderTab::HandleOpenAdvancedWorkspace()
 // 현재 선택을 USER-facing 한 줄로 표시합니다.
 FText SCFVehicleBuilderTab::GetSelectionText() const
 {
+	if (bQuickSocketPreparationActive)
+	{
+		return LOCTEXT("QuickSelectionLabel", "작업 대상: 선택한 StaticMesh");
+	}
 	if (ViewModel.IsValid() && ViewModel->IsNewVehicleEntryActive())
 	{
 		return LOCTEXT("NewVehicleSelection", "대상: 새 차량 만들기 (신규 제작 시작)");
@@ -5522,6 +6123,10 @@ FText SCFVehicleBuilderTab::GetSelectionText() const
 // 현재 Step 제목을 초보자용 화면 명칭으로 표시합니다.
 FText SCFVehicleBuilderTab::GetCurrentStepTitle() const
 {
+	if (bQuickSocketPreparationActive)
+	{
+		return LOCTEXT("QuickStepTitle", "소켓 미리 준비");
+	}
 	if (!ViewModel.IsValid() || ViewModel->GetStepViews().IsEmpty())
 	{
 		return LOCTEXT("NoStep", "단계 없음");
@@ -5537,6 +6142,10 @@ FText SCFVehicleBuilderTab::GetCurrentStepTitle() const
 // 현재 Step 상태에서 내부 Provider 표기를 숨기고 사용자가 필요한 진행 상태만 표시합니다.
 FText SCFVehicleBuilderTab::GetCurrentStepStateText() const
 {
+	if (bQuickSocketPreparationActive)
+	{
+		return LOCTEXT("QuickStepState", "차량 제작과 독립된 메시 편집");
+	}
 	if (!ViewModel.IsValid() || ViewModel->GetStepViews().IsEmpty())
 	{
 		return FText::GetEmpty();
@@ -5552,6 +6161,10 @@ FText SCFVehicleBuilderTab::GetCurrentStepStateText() const
 // 현재 Step 설명을 기본 화면에서 이해하기 쉬운 목적 설명으로 표시합니다.
 FText SCFVehicleBuilderTab::GetCurrentStepSummaryText() const
 {
+	if (bQuickSocketPreparationActive)
+	{
+		return LOCTEXT("QuickStepSummary", "바퀴 및 장착 위치 소켓 이름을 확인하고 필요할 때만 추가합니다. 소켓 위치는 Static Mesh Editor에서 직접 배치하세요.");
+	}
 	if (!ViewModel.IsValid() || ViewModel->GetStepViews().IsEmpty())
 	{
 		return FText::GetEmpty();
@@ -5580,6 +6193,10 @@ FText SCFVehicleBuilderTab::GetCurrentStepSummaryText() const
 // 현재 Step 해결/다음 행동을 사용자용 구체 행동으로 표시합니다.
 FText SCFVehicleBuilderTab::GetCurrentStepResolutionText() const
 {
+	if (bQuickSocketPreparationActive)
+	{
+		return LOCTEXT("QuickStepResolution", "차체 메시를 선택하고 필요한 소켓을 추가한 뒤 StaticMesh Editor에서 위치를 맞춰 수동 저장하세요.");
+	}
 	if (!ViewModel.IsValid() || ViewModel->GetStepViews().IsEmpty())
 	{
 		return FText::GetEmpty();

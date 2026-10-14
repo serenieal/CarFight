@@ -1,0 +1,31 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_60d4b7f9c3584ab9b5e21ad04a875e3f",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_c8fc29c4aae847998a4fe25b05aba937",
+  "parent_version_ids": [
+    "ver_d7d23e6a93164f89a6529176f75f40c4"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-060",
+    "title": "Vehicle Builder Socket Prep UX / 차량 메시 소켓 준비 UX",
+    "phase": "VSPUX-P0-04",
+    "next_action": "CF-FQ-060 VSPUX-P0-04 User-requested Hardpoint shared preview SOURCE APPLIED, latest build/tests NOT RUN because user Unreal Editor currently connected/open and previous live build encountered DLL LNK1104. New canonical HP_<SupportedCategory>_<NN> Socket PreviewStaticMesh path is /Game/CarFight/Weapons/Turrets/_Shared/Meshes/Base_Standard.Base_Standard (git tracked asset exists), applied through existing common AddChassisSocketAtOriginAndOpenForMesh; all current 7 standard categories plus newly supported dynamic categories, exact canonical parser. Existing Wheel FL/FR/RL/RR mappings preserved, existing sockets/Transforms/Recipe/VehicleData unmodified and no auto Save. CF_FQ_060.VSPUX_P0_04.SocketPreviewMapping enhanced with 7+1 categories, real asset UStaticMesh load, transient AddSocket readback, invalid/noncanonical/wheel exclusions. Next after user intentionally closes current editor: official UE 5.8 Source Build, QuickSocketNextName/QuickModeBoundary/SocketPreviewMapping + BuilderShell/Step3HardpointPlanning/InventoryClassification regression tests; then USER Compact actual Editor view/live Socket Manager/preview/transform/manual Save/reopen. Prior §4.13 official Build and 6/6 Automation PASS are historical before this change, not current pass. Do not close user Editor automatically. No git stage/commit/push. P0-05 not started.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-060"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleSocketPrepUX/VehicleSocketPrepUXPlan.md v0.1.10",
+      "Document/Systems/Vehicles/VehicleBuilder.md v1.9.1",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-14",
+    "resolution_basis": "User asked to give all Hardpoint sockets Base_Standard preview. Inspected existing canonical parser/GetStandardHardpointCategories and AddChassisSocketAtOriginAndOpenForMesh. Added narrow canonical helper + shared preview assignment path + focused transient tests. Verified Base_Standard.uasset tracked via managed Git and diff/readback. Official Build/Automation NOT RUN while live user UE Editor holds DLLs; no claim of current technical pass, no products/assets edited."
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_60d4b7f9c3584ab9b5e21ad04a875e3f",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_18e023bf96ea452ab59a0603cdf8a147",
+  "parent_version_ids": [
+    "ver_40d91c61216a4680bb9bf5d3ea59c042"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-060",
+    "title": "Vehicle Builder Socket Prep UX / 차량 메시 소켓 준비 UX",
+    "phase": "VSPUX-P0-03",
+    "next_action": "VSPUX-P0-04 USER acceptance on actual UE 5.8 Source Editor Quick Socket Prep prototype. Inspect Quick/normal layout and selected StaticMesh, create missing wheel and HP sockets by UI, open StaticMesh Editor, manually place transforms and Save, re-open/readback, verify return to original Builder Step3 and shared mesh warning, refine layout-only Slate sections when necessary followed by official build/focused rerun. VSPUX-P0-03 final technical review PASS: P1 unknown-vs-missing Wheel status corrected via live getter, P1 Quick Slate mode/host/browser refresh/Direct/explicit row selection regression Automation added. Official UE 5.8 Source Build PASS exit0 build_job ad88787677da413aba23034cbd0c507b; focused automation 5/5 PASS (QuickSocketNextName, QuickModeBoundary, BuilderShell, Step3HardpointPlanning, InventoryClassification). Product UE Assets/Recipe/VehicleData not written/saved by this session; any user existing Dirty protected. No Git stage/commit/push. Do not claim P0-04 or P0-05 complete.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-060"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleSocketPrepUX/VehicleSocketPrepUXPlan.md v0.1.7",
+      "Document/Systems/Vehicles/VehicleBuilder.md v1.9.1",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-14",
+    "resolution_basis": "Fresh Source/Plan/Git state reviewed. Focused automatic Slate QuickModeBoundary test exercises real SCFVehicleBuilderTab construction and handler/mode/Quick/Step3 host/Browser protection with transient test mesh, not USER mouse or real asset save. Official UE 5.8 Source build exit0 and 5 focused Automation tests PASS no failures. Exact source diff 6 files bounded, no new auto-save/Recipe commit/VehicleData writer; Next USER visual/physical Socket edit/Save acceptance. Git commit/push not run."
+  }
+}

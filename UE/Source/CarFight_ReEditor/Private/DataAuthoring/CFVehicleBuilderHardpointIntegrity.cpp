@@ -1,12 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderHardpointIntegrity.cpp
-// Version: v1.3.1
-// Date: 2026-09-04
+// Version: v1.4.0
+// Date: 2026-10-14
 // Description: CF-FQ-047 Socket/Hardpoint/Mount integrity + typed Physics receipt compatibility/drift boundary 구현입니다.
 // Changelog:
+// - v1.4.0: Quick Socket Prep의 category별 최대 canonical 번호+1 계산과 overflow/collision guard를 추가. 기존 Recipe inventory API 불변.
 // - v1.3.1: Step 5 승인 직후 Step 7 Apply 대기 상태를 정상 Exact로 유지하도록 ReceiptResolvedDefinitionHash == CurrentProspectiveResolvedDefinitionHash를 Exact 기준으로 사용합니다.
 // - v1.3.0: Hardpoint/Mount-only structural drift를 single typed evaluator로 분류하고 Step 5 Physics receipt compatibility를 Exact/Equivalent/Stale/Blocked로 projection.
 // Migration:
+// - v1.4.0은 Editor-only SocketName 제안 함수의 additive 확장이며 기존 Recipe/Target/Runtime 저장 형식은 그대로 유지합니다.
 // - v1.3.1부터 Current Target hash 차이는 Step 7 Apply Pending일 수 있으므로 Exact 판정에서 요구하지 않습니다. Receipt != current prospective일 때만 structural drift를 평가합니다.
 // - 기존 ValidatePhysicsReceiptRefreshBoundary 호출자는 그대로 유지되며 내부에서 typed structural boundary의 Equivalent만 true로 projection합니다.
 
@@ -39,6 +41,67 @@ const FCFBuilderChassisSocketInventoryEntry* FCFBuilderChassisSocketInventory::F
 	{
 		return Entry.SocketName == SocketName;
 	});
+}
+
+// Quick Socket Prep에서 supported Category 하나의 다음 canonical HP SocketName을 mesh live 소켓 목록에서 계산합니다.
+bool FCFVehicleBuilderHardpointIntegrity::TryGetNextStandardSocketName(
+	const UStaticMesh* ChassisMesh,
+	const FName LocationCategory,
+	const TArray<FName>& StandardCategories,
+	FName& OutSocketName,
+	FString& OutError)
+{
+	OutSocketName = NAME_None;
+	OutError.Reset();
+	if (!ChassisMesh || LocationCategory.IsNone() || !StandardCategories.Contains(LocationCategory))
+	{
+		OutError = TEXT("유효한 StaticMesh와 현재 지원되는 Hardpoint 위치 분류가 필요합니다.");
+		return false;
+	}
+
+	// 해당 category에서 확인한 canonical 최대 번호입니다.
+	int32 LargestExistingIndex = 0;
+	for (const TObjectPtr<UStaticMeshSocket>& Socket : ChassisMesh->Sockets)
+	{
+		if (!Socket)
+		{
+			continue;
+		}
+		// 기존 parser와 같은 이름·분류 규칙으로 확인한 소켓 정보입니다.
+		FName ParsedCategory;
+		FName ParsedLocationSlotId;
+		int32 ParsedIndex = 0;
+		if (TryParseCanonicalStandardSocketName(Socket->SocketName, StandardCategories, ParsedCategory, ParsedLocationSlotId, ParsedIndex)
+			&& ParsedCategory == LocationCategory)
+		{
+			LargestExistingIndex = FMath::Max(LargestExistingIndex, ParsedIndex);
+		}
+	}
+	if (LargestExistingIndex == MAX_int32)
+	{
+		OutError = TEXT("Hardpoint Socket 번호가 정수 최대 범위를 초과합니다.");
+		return false;
+	}
+
+	// 이미 있는 다른 이름과 충돌하면 canonical 번호를 한 번씩 올려 안전하게 건너뜁니다.
+	int32 NextIndex = LargestExistingIndex + 1;
+	while (NextIndex > 0)
+	{
+		// 최소 두 자리이며 세 자리 이상도 유지하는 canonical SocketName입니다.
+		const FName Candidate(*FString::Printf(TEXT("HP_%s_%02d"), *LocationCategory.ToString(), NextIndex));
+		if (!ChassisMesh->FindSocket(Candidate))
+		{
+			OutSocketName = Candidate;
+			return true;
+		}
+		if (NextIndex == MAX_int32)
+		{
+			break;
+		}
+		++NextIndex;
+	}
+	OutError = TEXT("사용 가능한 Hardpoint Socket 번호를 찾을 수 없습니다.");
+	return false;
 }
 
 bool FCFVehicleBuilderHardpointIntegrity::TryParseCanonicalStandardSocketName(
@@ -85,8 +148,8 @@ bool FCFVehicleBuilderHardpointIntegrity::TryParseCanonicalStandardSocketName(
 			return false;
 		}
 
-		const int32 ParsedIndex = FCString::Atoi(*IndexText);
-		if (ParsedIndex <= 0)
+		int32 ParsedIndex = 0;
+		if (!LexTryParseString(ParsedIndex, *IndexText) || ParsedIndex <= 0)
 		{
 			return false;
 		}

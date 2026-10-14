@@ -1,0 +1,31 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_60d4b7f9c3584ab9b5e21ad04a875e3f",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_3b8e412ac97442e39bd650c0a8f2d715",
+  "parent_version_ids": [
+    "ver_8e51f0c2a9b4477cacb293d8140f659c"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-060",
+    "title": "Vehicle Builder Socket Prep UX / 차량 메시 소켓 준비 UX",
+    "phase": "VSPUX-P0-01",
+    "next_action": "VSPUX-P0-02: implement independent Recipe-free Quick Socket Prep in existing Builder Tab. Here 'location' specifically refers to Hardpoint LOCATION CATEGORY such as Top/Front/LeftSide, NOT 3D socket coordinate. Current supported categories count seven but are extensible. Populate category selection dynamically from existing FCFVehicleBuilderVM::GetStandardHardpointCategories/StandardHardpointCategories; apply same category-agnostic HP_<Category>_<NN> naming/max+1/parser and downstream Recipe/consumer contract. No per-category fixed UI branch or fixed count assumption. Do not enable arbitrary new category in runtime by Quick UI alone: future formal categories require same semantic unit integration review. Retain current Wheel role/Step1-8/Recipe, existing Socket inventory/reopen and Quick refresh/return, no automatic save or transform changes; focused validation and UE 5.8 Source Build follow in P0-03. All implementation and tests remain Not Run.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-060"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleSocketPrepUX/VehicleSocketPrepUXPlan.md v0.1.3",
+      "Document/Systems/Vehicles/VehicleBuilder.md v1.9.1",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-14",
+    "resolution_basis": "User explicitly corrected that position means Hardpoint semantic category Top/Front/LeftSide, not relative coordinate, and emphasized category extensibility. Source shows current seven categories in StandardHardpointCategories() and parser accepts caller category array. Plan v0.1.3 states latest authoritative interpretation and removes coordinate-view UX from required scope; previous 2026-10-14 coordinate-centric review is historical. Design/document only; no source, UE asset, build, tests, git stage/commit/push."
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_60d4b7f9c3584ab9b5e21ad04a875e3f",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_17cb654a613448fa93b71b540c9238d6",
+  "parent_version_ids": [
+    "ver_86e2b7c4a1d34d42a59cb8f63b71d920"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-060",
+    "title": "Vehicle Builder Socket Prep UX / 차량 메시 소켓 준비 UX",
+    "phase": "VSPUX-P0-01",
+    "next_action": "VSPUX-P0-02 Minimal Implementation: 기존 Vehicle Builder Tab 안의 별도 Recipe-free Quick Socket Prep, StaticMesh picker 및 single mesh target resolver, Step 1~8 UI 격리, wheel exact4와 custom binding의 display/click/copy/status 일치, 기존 backend Socket creation/Edit 수동 Save0, 기존 HardpointIntegrity parser 기반 Mesh-only HP max+1 충돌 회피 helper 및 focused/affected tests를 구현한다. 기존 CF-FQ-059/CCAS/UE Asset 변경 금지. 공식 UE 5.8 Source Build + focused Automation은 P0-03에서 요구; 기술/USER PASS는 미획득.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-060"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleSocketPrepUX/VehicleSocketPrepUXPlan.md v0.1.1",
+      "Document/Systems/Vehicles/VehicleBuilder.md v1.9.1",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-13",
+    "resolution_basis": "Read-only exact CarFight source review found Recipe-locked Step 3 and Recipe-writing StandardHardpoint path; existing socket transaction/editor and SObjectPropertyEntryBox can be reused without new tool. Construct-time captured Wheel SocketName differs from dynamic text/status/copy after managed target change; P0-02 must address direct affected caller. Verified parser %02d minimum width, no fixed 99 upper cap; candidate live mesh path and invalid button state need adjustment. P0-01 specification v0.1.1 passed and no production Source, UE Asset, Build, Automation, PIE mutation performed."
+  }
+}
