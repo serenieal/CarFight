@@ -1,10 +1,11 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringVMTests.cpp
-// Version: v1.49.0
-// Date: 2026-10-14
+// Version: v1.49.1
+// Date: 2026-10-15
 // Description: Vehicle Authoring Workspace + Guided Builder integration + 신규 Basic Sensor policy 보호 Automation입니다.
 // Changelog:
+// - v1.49.1: 기존 VehicleData의 Chassis 재사용 후보·참조 표시·중복 후보 1건, 차량에 Chassis가 없어도 Wheel이 후보에서 제외되는 Browser 정책을 검증. 기존 MeshCreate/Guided RecordCreation 수락 조건 보존.
 // - v1.49.0: CF-FQ-060 신규 canonical Hardpoint 7개 위치 분류와 미래 분류의 Base_Standard 프리뷰 실제 에셋 로드/AddSocket 유지, 비표준·Wheel 제외 focused 회귀 테스트 확장.
 // - v1.48.0: CF-FQ-060 Quick Socket Editor 갱신 교정과 함께 Wheel 4종 PreviewStaticMesh 실제 에셋 로드, AddSocket readback, Hardpoint 미지정 focused Automation을 추가.
 // - v1.47.0: VSPUX-P0-03 실제 Quick Slate Tab/두 host 분리/새로고침·동일 Direct 복원/명시 차량 선택·새 차량 전환, Wheel live 상태 focused Automation 추가.
@@ -5466,14 +5467,26 @@ bool FCFVehicleP11MeshCreateTest::RunTest(const FString& Parameters)
 	{
 		return Entry.bMeshOnlyCandidate && Entry.ChassisMeshPath.ToString() == CandidatePath;
 	});
-		TestNotNull(TEXT("Unused StaticMesh in sibling vehicle directory is projected as Mesh-only Candidate"), CandidateEntry);
-	// Used mesh가 candidate로 잘못 노출되는지 검사합니다.
+	TestNotNull(TEXT("Unused StaticMesh in sibling vehicle directory is projected as Mesh-only Candidate"), CandidateEntry);
+	if (CandidateEntry)
+	{
+		TestFalse(TEXT("Unused Chassis candidate has no existing VehicleData reference"), CandidateEntry->bReferencedByExistingVehicleData);
+	}
+	// 기존 차량이 참조 중인 차체도 별도 Mesh 후보 한 건으로 노출해야 합니다.
 	const FString UsedMeshPath = FSoftObjectPath(UsedMesh).ToString();
-	const bool bUsedMeshProjectedAsCandidate = ListResult.Vehicles.ContainsByPredicate([&UsedMeshPath](const FCFVehicleListEntry& Entry)
+	const FCFVehicleListEntry* UsedMeshCandidateEntry = ListResult.Vehicles.FindByPredicate([&UsedMeshPath](const FCFVehicleListEntry& Entry)
 	{
 		return Entry.bMeshOnlyCandidate && Entry.ChassisMeshPath.ToString() == UsedMeshPath;
 	});
-		TestFalse(TEXT("Already-used Chassis mesh is not a Mesh-only Candidate"), bUsedMeshProjectedAsCandidate);
+	if (TestNotNull(TEXT("Existing VehicleData Chassis is still a reusable Mesh candidate"), UsedMeshCandidateEntry))
+	{
+		TestTrue(TEXT("Reused Chassis candidate carries existing VehicleData reference flag"), UsedMeshCandidateEntry->bReferencedByExistingVehicleData);
+	}
+	const int32 UsedMeshCandidateCount = ListResult.Vehicles.FilterByPredicate([&UsedMeshPath](const FCFVehicleListEntry& Entry)
+	{
+		return Entry.bMeshOnlyCandidate && Entry.ChassisMeshPath.ToString() == UsedMeshPath;
+	}).Num();
+	TestEqual(TEXT("Used Chassis candidate is projected only once"), UsedMeshCandidateCount, 1);
 	// Known wheel mesh가 chassis candidate로 잘못 노출되는지 검사합니다.
 	const FString KnownWheelMeshPath = FSoftObjectPath(KnownWheelMesh).ToString();
 	const bool bKnownWheelProjectedAsCandidate = ListResult.Vehicles.ContainsByPredicate([&KnownWheelMeshPath](const FCFVehicleListEntry& Entry)
@@ -5481,6 +5494,32 @@ bool FCFVehicleP11MeshCreateTest::RunTest(const FString& Parameters)
 		return Entry.bMeshOnlyCandidate && Entry.ChassisMeshPath.ToString() == KnownWheelMeshPath;
 	});
 	TestFalse(TEXT("WheelMesh referenced by VehicleData is not a Mesh-only Chassis Candidate"), bKnownWheelProjectedAsCandidate);
+
+	// 차체가 없는 VehicleData가 바퀴만 참조해도 그 Wheel Mesh는 차체 후보에서 제외해야 합니다.
+	const FString WheelOnlyDefinitionPackageName = TEXT("/Game/CarFight/Tests/DataAuthoringP11/DA_WheelOnly_") + UniqueToken;
+	UPackage* WheelOnlyDefinitionPackage = CreatePackage(*WheelOnlyDefinitionPackageName);
+	UCFVehicleData* WheelOnlyDefinition = NewObject<UCFVehicleData>(
+		WheelOnlyDefinitionPackage,
+		*FString(TEXT("DA_WheelOnly_") + UniqueToken),
+		RF_Public | RF_Standalone | RF_Transactional);
+	if (TestNotNull(TEXT("Wheel-only Definition fixture exists"), WheelOnlyDefinition))
+	{
+		WheelOnlyDefinition->VehicleVisualConfig.WheelMeshFL = CandidateMesh;
+		FAssetRegistryModule::AssetCreated(WheelOnlyDefinition);
+		WheelOnlyDefinitionPackage->SetDirtyFlag(false);
+
+		// 기존 차체를 참조한 다른 DA가 bounded collection root를 계속 제공하는 상태의 fresh 후보 목록입니다.
+		FCFVehicleListResult WheelOnlyListResult;
+		if (TestTrue(TEXT("Wheel-only Definition Browser query succeeds"), FCFVehicleAuthoringService::ListVehicles(ListRequest, WheelOnlyListResult)))
+		{
+			const bool bWheelOnlyMeshCandidatePresent = WheelOnlyListResult.Vehicles.ContainsByPredicate([&CandidatePath](const FCFVehicleListEntry& Entry)
+			{
+				return Entry.bMeshOnlyCandidate && Entry.ChassisMeshPath.ToString() == CandidatePath;
+			});
+			TestFalse(TEXT("Wheel-only Definition without Chassis still excludes its WheelMesh from Chassis candidates"), bWheelOnlyMeshCandidatePresent);
+		}
+		CFVehicleAuthoringVMTestsPrivate::CleanupRegisteredAsset(WheelOnlyDefinition);
+	}
 
 	// 새 Definition package name입니다.
 	const FString NewDefinitionPackageName = TEXT("/Game/CarFight/Tests/DataAuthoringP11/DA_Vehicle_") + UniqueToken;

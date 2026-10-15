@@ -1,8 +1,8 @@
 # Vehicle Builder
 
-- 문서 버전: v1.9.1
-- 최근 갱신일: 2026-10-07
-- 문서 상태: Current Implementation
+- 문서 버전: v1.9.5
+- 최근 갱신일: 2026-10-15
+- 문서 상태: Current Implementation / Vehicle Browser 메시 재사용 후보 후속 교정 Technical PASS + 후보 표시 USER PASS
 - 적용 범위: `CF-FQ-015 Vehicle Data Tuning`, `CF-FQ-038 Vehicle Data Authoring`, `CF-FQ-040 Guided Vehicle Builder`, `CF-FQ-042 Vehicle Builder 신규 차량 생성 UX`, `CF-FQ-043 Vehicle Builder 장비 장착점 Guidance UX`, `CF-FQ-044 Vehicle Builder Runtime Catalog Promotion`, `CF-FQ-046 Vehicle Builder 사용자 정보 UX`, `CF-FQ-047 Vehicle Builder Hardpoint Authoring Integrity`, Guided Builder Editor Shell, Builder-private Authoring ownership, Data Authoring Backend/Advanced Workspace, Vehicle Performance Tuning Protocol
 - 완료 기반: `CF-FQ-015 Rebaseline Complete / VD-P0-00~03 Historical Technical PASS / VD-P0-04 Superseded` + `CF-FQ-038 Done / DEL1~DEL7 PASS / Legacy Wizard Retired` + `VB-P0-09 End-to-End USER Acceptance PASS` + `VB-P0-10 Current System Promotion Complete` + `VBCUX-P0-05 USER Acceptance PASS` + `VMG-P0-07 USER Acceptance PASS` + `VMG-P0-08 Current System Promotion Complete` + `VRCP-P0-05 USER Acceptance PASS` + `VRCP-P0-06 Current System Promotion Complete` + `VBIUX-P0-05B~05E Technical PASS` + `VBIUX-P0-05F USER Acceptance PASS` + `VBIUX-P0-06 Current System Promotion Complete` + `VBHAI-P0-07G USER Re-Acceptance PASS` + `VBHAI-P0-08 Current System Promotion Complete`
 
@@ -116,6 +116,9 @@ Blank Chassis 허용
 임의 StaticMesh 허용
 이미 다른 VehicleData가 사용하는 Chassis Mesh 재사용 허용
 Mesh-only Candidate Quick Start도 같은 canonical create request 사용
+메시 후보 Browser는 기존 VehicleData에서 차체로 사용하는 Mesh도 포함하며 `bReferencedByExistingVehicleData`는 조회 시점의 read-only 표시 필드
+메시 후보 row는 해당 Mesh를 이미 다른 DA가 사용하는 경우에도 Definition/Recipe row와 별도 정체성을 유지
+기존 WheelMesh 전용 참조는 차체 후보에서 제외하고, Chassis 미지정 VehicleData의 WheelMesh도 제외
 모든 Guided 신규 차량 TransmissionPolicy = VehicleSpecificRequired
 Guided 신규 차량 기본 Sensor intent = UseProjectBasicSensor
 차량별 explicit SensorData는 신규 생성 시 비워 Project Compatibility Default의 공통 Basic Sensor를 사용
@@ -820,6 +823,29 @@ Document/Plan/Archive/README.md
 ---
 
 ## 13. Changelog
+
+### v1.9.5 - 2026-10-15
+
+- 차량 메시 재사용 후보 최종 Slop 검수의 P2 두 건을 C++ 동작 변경 없이 교정했다. `CFVehicleAuthoringTab.cpp v1.11.2`에서 후보 Header의 긴 `FString::Printf`를 여러 줄로 정리하고, `CFVehicleAuthoringService.cpp v1.9.2`에서 후보 집계 주석과 관련 들여쓰기를 정돈했다. UI 문구, 메시 재사용 조건, 조회 계약, Save/Apply 경계는 바꾸지 않았다.
+- 공식 관리형 CarFight Editor 증분 Build `d3f703e8146149d0990a8185c311ed37`는 Exit Code 0, 7/7 action PASS. 이후 집중 `DAUTH_P0_11.FrozenUX.MeshCreate` Automation `d22c07add66641edb78df99054ed4a1b`는 Script/Editor Exit Code 0, success_count=1, failure_count=0으로 PASS했다. 앞선 5/5 regression 및 메시 후보 표시 USER PASS 근거는 유지하며 이번 P2 수정 후 광범위 Automation 재실행은 하지 않았다.
+- 다른 작업 Dirty/CF-FQ-059/060/AssetDump는 변경하지 않고 Git commit/push는 수행하지 않았다.
+
+### v1.9.4 - 2026-10-15
+
+- 사용자로부터 수정 후 차량 메시 후보가 에디터 목록에 표시됨을 직접 확인했다는 피드백을 받아 **후보 표시 USER PASS**로 기록한다. 기존 CarFight Editor Build PASS와 관련 UE Automation 5/5 Success를 합쳐 이번 메시 후보 재사용 정책 후속 교정의 수락을 완료했다.
+- 이 USER 확인은 메시 후보 표시 항목에 한정한다. 실제 신규 차량 생성/저장 조작을 사용자가 별도로 수행했다는 증거로 확대하지 않는다. CF-FQ-059/060과 다른 작업의 lifecycle을 변경하지 않으며 Git commit/push도 수행하지 않는다.
+
+### v1.9.3 - 2026-10-15
+
+- CarFight 전용 관리형 프리셋 `carfight.editor.development` (`repository_id=main_game`)으로 `CarFight_ReEditor Win64 Development`를 빌드해 `650cf434921f49a3bb34fde23450a850`, Exit Code 0, `Result: Succeeded`를 확인했다. 기존 UE 5.8 Engine 소스/설정 변경은 없다.
+- UE Automation `BuilderShell`, `RecordCreation`, `FocusedRegression`, `QuickModeBoundary`, `MeshCreate` 5개에서 각각 `Result={Success}`, Test Queue Empty 5, Editor Exit Code 0을 확인했다(`f75a8fea77bb4e0d9861ad3b5aefe787`). 첫 실행의 wrapper Exit Code 1은 지원하지 않는 `-TestFilter` 복합 `+` 호출을 결과 parser가 단일 literal filter로 해석해 success_count=0으로 집계한 caller 오류다. Product 테스트 실패가 아니다.
+- 실제 `MeshCreate`를 정식 단일 `-TestFilter`로 재실행해 process `ee260dc3662240eca98563e698dd2f8a`, Script/Editor Exit Code 0, success_count=1, failure_count=0으로 wrapper까지 PASS했다. 새 사용/재사용 후보 정책 기술 회귀는 검증됐으며 Sedan/SUV 실제 에디터 목록의 USER 육안 확인은 별도 대기한다. Git commit/push는 수행하지 않는다.
+
+### v1.9.2 - 2026-10-15
+
+- Vehicle Builder 후속 교정으로 기존 VehicleData에서 사용하는 차체 StaticMesh도 bounded 메시 후보에서 배제하지 않는 C++ 구현을 적용했다. `Mesh-only Candidate`는 차량 DA가 아닌 StaticMesh row라는 의미를 유지하고, read-only `bReferencedByExistingVehicleData`로 이미 다른 DA에서 참조하는지를 보여준다.
+- Chassis가 없는 VehicleData의 WheelMesh도 후보 제외 inventory에 포함하고, Guided Builder/Advanced Data Authoring의 기존 사용 여부·선택 항목 문구를 일치시켰다. 기존 Preview/Approval/RecordCreate/Recipe/DefinitionApply/Save 경계 및 공유 Socket 경고는 유지한다.
+- `DAUTH_P0_11.FrozenUX.MeshCreate`에 사용 중인 차체 포함·참조 표시·후보 중복 방지·Chassis 없는 DA의 Wheel 제외를 보강했다. 해당 시점에는 공식 빌드·Automation이 미실행이었으며, 후속 v1.9.3에서 기술 검증 결과를 기록했다. 다른 작업 Dirty 및 차량 에셋은 변경하지 않는다.
 
 ### v1.9.1 - 2026-10-07
 

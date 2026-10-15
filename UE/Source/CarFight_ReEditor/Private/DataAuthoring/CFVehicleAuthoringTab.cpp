@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringTab.cpp
-// Version: v1.11.0
-// Date: 2026-09-11
+// Version: v1.11.2
+// Date: 2026-10-15
 // Description: DAUTH-P0-09~12 Frozen Section 24 single-Vehicle Authoring Workspace Slate 구현입니다.
 // Changelog:
+// - v1.11.2: 차체 메시 후보 Header 안내의 긴 Printf 호출을 여러 줄로 정돈하고 분기 들여쓰기를 통일. 표시 문구와 선택 동작은 동일.
+// - v1.11.1: 차체 Mesh 후보의 기존 VehicleData 참조 상태를 표시하고 메시 선택 항목의 record 미연결과 프로젝트 전체 DA 존재를 혼동하는 안내를 교정.
 // - v1.11.0: CF-FQ-038 DEL6 closure에 맞춰 제거된 Legacy Wizard 유지 문구를 Current Workspace 소유권으로 갱신. 동작 변경 0.
 // - v1.10.0: P0-12 UA-06 USER UX remediation으로 final Apply review에 bounded field/current/apply-after 상세를 추가하고 Shared Profile numeric selector 상태를 selection refresh와 동기화.
 // - v1.9.0: P0-12 UA-05 USER 피드백에 따라 값 출처 탭을 검색 + 실제 적용 우선 + 비적용 후보 선택 표시 UX로 교정.
@@ -442,7 +444,7 @@ TSharedRef<ITableRow> SCFVehicleAuthoringTab::GenerateVehicleRow(TSharedPtr<FCFV
 		: TEXT("<Invalid>");
 	// Row management state입니다.
 		const FString ManageState = Item.IsValid() && Item->bMeshOnlyCandidate
-		? TEXT("차체 메시 후보")
+		? (Item->bReferencedByExistingVehicleData ? TEXT("차체 메시 후보 · 기존 DA 사용 중") : TEXT("차체 메시 후보"))
 		: (Item.IsValid() && Item->RecipePath.IsValid() ? TEXT("관리됨") : TEXT("미관리"));
 	return SNew(STableRow<TSharedPtr<FCFVehicleListEntry>>, OwnerTable)
 	[
@@ -727,15 +729,20 @@ FText SCFVehicleAuthoringTab::GetHeaderText() const
 {
 	if (!ViewModel.IsValid() || !ViewModel->HasSelection())
 	{
-				return FText::FromString(TEXT("차량 데이터 제작 — 왼쪽 차량 목록에서 작업할 차량을 선택하세요."));
+		return FText::FromString(TEXT("차량 데이터 제작 — 왼쪽 차량 목록에서 작업할 차량을 선택하세요."));
 	}
-		if (ViewModel->IsMeshOnlyCandidate())
+	if (ViewModel->IsMeshOnlyCandidate())
 	{
-				return FText::FromString(FString::Printf(TEXT("차량 데이터 제작 — 차체 메시 후보\n메시: %s\n차량 데이터: 아직 생성되지 않음\n레시피: 아직 생성되지 않음"), *ViewModel->GetSelectedEntry().ChassisMeshPath.ToString()));
+		return FText::FromString(FString::Printf(
+			TEXT("차량 데이터 제작 — 차체 메시 후보\n메시: %s\n이 후보 항목에 연결된 차량 데이터/레시피: 없음\n%s"),
+			*ViewModel->GetSelectedEntry().ChassisMeshPath.ToString(),
+			ViewModel->GetSelectedEntry().bReferencedByExistingVehicleData
+				? TEXT("다른 차량 DA가 이 메시를 사용 중입니다. 새 차량으로 재사용할 수 있습니다.")
+				: TEXT("기존 차량 DA의 차체 참조가 발견되지 않았습니다.")));
 	}
 	// Selected Definition path입니다.
 	const FString DefinitionPath = ViewModel->GetSelectedEntry().DefinitionPath.ToString();
-		// Selected Recipe path입니다.
+	// Selected Recipe path입니다.
 	const FString RecipePath = ViewModel->HasRecipe() ? ViewModel->GetSelectedEntry().RecipePath.ToString() : TEXT("<none>");
 	if (ViewModel->HasRecipe() && !ViewModel->IsPreviewFresh())
 	{
@@ -767,7 +774,7 @@ FText SCFVehicleAuthoringTab::GetOverviewText() const
 	}
 		if (ViewModel->IsMeshOnlyCandidate())
 	{
-				return FText::FromString(TEXT("이 항목은 아직 차량 데이터가 없는 차체 메시 후보입니다. '레시피 / 프로필'에서 차량 데이터 + 레시피 생성을 검토할 수 있습니다."));
+				return FText::FromString(TEXT("이 항목은 차량 데이터가 아닌 차체 메시 선택 항목입니다. 다른 차량이 같은 메시를 사용하더라도 '레시피 / 프로필'에서 별도 차량 데이터 + 레시피 생성을 검토할 수 있습니다."));
 	}
 				if (!ViewModel->HasRecipe())
 	{
@@ -998,7 +1005,7 @@ FText SCFVehicleAuthoringTab::GetSyncContextText() const
 	}
 	if (ViewModel->IsMeshOnlyCandidate())
 	{
-		return FText::FromString(TEXT("차체 메시 후보 / 차량 데이터 없음\n'메시에서 차량 만들기' 전에는 적용 기준값, 검증, 외부 변경 감지, 적용 대상이 없습니다."));
+		return FText::FromString(TEXT("차체 메시 후보 / 선택된 차량 데이터 없음\n이 메시 후보 항목에는 적용 기준값, 검증, 외부 변경 감지, 적용 대상이 없습니다. 기존 DA가 공유하는 메시일 수 있습니다."));
 	}
 		if (!ViewModel->HasRecipe())
 	{
@@ -1052,7 +1059,7 @@ FText SCFVehicleAuthoringTab::GetBottomStatusText() const
 	}
 				if (ViewModel->IsMeshOnlyCandidate())
 	{
-				return FText::FromString(FString::Printf(TEXT("차체 메시 후보 | %s | 차량 데이터/레시피 아직 생성되지 않음"), *ViewModel->GetSelectedEntry().ChassisMeshPath.GetAssetName()));
+				return FText::FromString(FString::Printf(TEXT("차체 메시 후보 | %s | 선택된 차량 데이터/레시피 없음%s"), *ViewModel->GetSelectedEntry().ChassisMeshPath.GetAssetName(), ViewModel->GetSelectedEntry().bReferencedByExistingVehicleData ? TEXT(" | 기존 DA에서 차체로 사용 중") : TEXT("")));
 	}
 	if (ViewModel->HasRecipe() && !ViewModel->IsPreviewFresh())
 	{
@@ -1111,7 +1118,7 @@ FText SCFVehicleAuthoringTab::GetRawDAWarningText() const
 	}
 	if (ViewModel->IsMeshOnlyCandidate())
 	{
-		return FText::FromString(TEXT("차체 메시 후보에는 아직 차량 데이터가 없습니다. '메시에서 차량 만들기' 전에는 원본 데이터 에디터를 열 수 없습니다."));
+		return FText::FromString(TEXT("현재 선택은 StaticMesh 후보 항목이므로 연결된 차량 데이터 원본을 열 수 없습니다. 기존 차량을 편집하려면 해당 차량 DA 항목을 선택하세요."));
 	}
 	if (!ViewModel->HasRecipe())
 	{

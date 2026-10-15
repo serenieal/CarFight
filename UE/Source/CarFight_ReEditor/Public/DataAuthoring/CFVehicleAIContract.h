@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAIContract.h
-// Version: v1.21.0
-// Date: 2026-09-05
+// Version: v1.21.1
+// Date: 2026-10-15
 // Description: DAUTH Common Authoring Service + CF-FQ-040/047 Builder transaction diagnostic contract입니다.
 // Scope: Section 25 R0~R3 risk, approval, read/query와 normal Workspace Mesh-only candidate projection을 제공합니다.
 // Changelog:
+// - v1.21.1: Mesh-only Browser row에 기존 VehicleData 차체 참조 여부만 표시하는 transient R0 flag를 추가. 동일 Mesh 재사용은 허용하며 VehicleData/Recipe identity는 유지.
 // - v1.21.0: CF-FQ-047 P0-07H guarded Undo orchestration이 backend mutation 성공 뒤 exact reverted Target/Recipe package persistence를 수행할 수 있으므로 MutationFootprint.bSavePerformed 주석을 service-only false에서 higher-level explicit durable orchestration 포함 의미로 교정. Service R0~R3 자체의 no-auto-save 계약은 유지.
 // - v1.20.0: CF-FQ-043 VMG-P0-04 Gameplay Guidance R0 request에 persistent Recipe HardpointPlanMode의 transient projection을 추가. Resolver RecipeSnapshot/fingerprint에는 넣지 않고 Step 6 Mode authority만 전달.
 // - v1.19.0: CF-FQ-043 stable identity 삭제를 위해 append-only RemoveMountIntent/RemoveHardpointIntent semantic op와 exact deletion identity payload를 추가. 기존 enum ordinal은 유지.
@@ -561,7 +562,7 @@ struct FCFVehicleListRequest
 	UPROPERTY()
 	bool bIncludeUnmanagedDefinitions = true;
 
-	// Existing VehicleData가 실제 사용하는 ChassisMesh sibling directory에서 아직 Definition에 연결되지 않은 Mesh Candidate를 포함할지 여부입니다.
+	// 기존 차량 ChassisMesh의 공통 컬렉션 폴더에서 미사용/재사용 가능한 StaticMesh 후보를 포함할지 여부입니다.
 	UPROPERTY()
 	bool bIncludeMeshCandidates = true;
 };
@@ -592,13 +593,17 @@ struct FCFVehicleListEntry
 	UPROPERTY()
 	int32 AdvancedOverrideCount = 0;
 
-	// 이 row가 Definition이 아니라 아직 Vehicle record로 생성되지 않은 StaticMesh candidate인지 여부입니다.
+	// 이 row 자체가 Definition/Recipe가 아닌 StaticMesh 선택 항목인지 여부입니다. 같은 Mesh를 다른 차량이 참조해도 true입니다.
 	UPROPERTY()
 	bool bMeshOnlyCandidate = false;
 
 	// Mesh-only Candidate일 때 explicit Create Vehicle From Mesh 입력으로 사용할 StaticMesh path입니다.
 	UPROPERTY()
 	FSoftObjectPath ChassisMeshPath;
+
+	// 이 차체 Mesh를 기존 VehicleData.VehicleVisualConfig.ChassisMesh가 참조하는지 나타내는 R0 조회 결과입니다. 후보 선택/생성을 차단하지 않습니다.
+	UPROPERTY()
+	bool bReferencedByExistingVehicleData = false;
 };
 
 /** ListVehicles R0 결과입니다. */

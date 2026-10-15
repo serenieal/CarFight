@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderVM.h
-// Version: v1.35.0
-// Date: 2026-09-05
+// Version: v1.35.1
+// Date: 2026-10-15
 // Description: Guided Vehicle Builder Shell + CF-FQ-047 Step 7 durable final commit / Step 8 fresh Target preflight seam입니다.
 // Changelog:
+// - v1.35.1: IsMeshOnlyCandidate 주석의 미사용 Mesh 전제를 제거하고 VehicleData row와 별개인 StaticMesh 선택 항목으로 정확하게 정의.
 // - v1.35.0: CF-FQ-047 최종 재감사 교정. guarded Undo 성공도 P0-07H durable handoff의 일부로 취급해 reverted Target/Recipe exact pair persistence를 요구하며 partial save failure는 dirty state를 보존한 채 fail-closed하는 계약으로 갱신.
 // - v1.34.0: CF-FQ-047 최종감사 교정. P0-07H durable writer를 Product Save 없이 직접 회귀검증할 Automation-only package persistence seam을 추가하고 SavePackage true 뒤 clean/persisted 확인 실패를 SaveStateUnconfirmed로 구분할 exact save-state 결과를 추가.
 // - v1.33.1: VBHAI-P0-07H fresh restart에서 Step 7이 Step 8 benchmark cache 복원보다 먼저 평가되어 post-driving receipt pending을 놓치는 순환을 막기 위해 benchmark-independent downstream receipt candidate helper를 추가.
@@ -403,7 +404,7 @@ public:
 	// 마지막 successful Builder mutation 뒤 상태 재조회만 실패한 경우의 non-fatal warning을 반환합니다.
 	const FString& GetLastPostCommitRefreshWarning() const { return LastPostCommitRefreshWarning; }
 
-	// 현재 선택이 아직 VehicleData가 없는 Mesh-only 후보인지 반환합니다.
+	// 현재 선택된 Browser row가 기존 VehicleData 참조 여부와 관계없이 StaticMesh 선택 후보인지 반환합니다.
 	bool IsMeshOnlyCandidate() const;
 
 private:

@@ -1,11 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringService.cpp
-// Version: v1.9.0
-// Date: 2026-09-28
+// Version: v1.9.2
+// Date: 2026-10-15
 // Description: Common Authoring Service + VCFX Camera typed semantic approval/dedupe hash 구현입니다.
 // Scope: R0 read facade, semantic preview/commit, bounded Mesh-only Candidate projection, R3 shared Apply lane를 제공합니다.
 // Changelog:
+// - v1.9.2: Mesh 후보 검사 부분의 불규칙한 들여쓰기와 중복 설명 주석 정리. 메시 검색·제외·사용 상태 로직은 동일.
+// - v1.9.1: 기존 VehicleData가 참조 중인 Chassis도 bounded Mesh-only Candidate에 포함하고 참조 여부를 read-only 표시. 차체가 없는 Definition에서도 Wheel Mesh 제외 inventory를 수집.
 // - v1.9.0: SetDefaultDataIntent approval/dedupe hash에 ReferenceMaxSpeedKmh와 Camera Presentation mode/path를 포함해 VCFX semantic 전이를 exact binding.
 // - v1.8.0: SetDefaultDataIntent approval/dedupe hash에 SensorMode와 DefaultSensorData를 포함해 Basic/Sensorless semantic 전이를 exact binding.
 // - v1.7.0: CF-FQ-043 exact stable-id RemoveMountIntent/RemoveHardpointIntent를 기존 R1 Recipe semantic lane에 append-only 추가하고 Hardpoint dependency를 prospective/persistent 양쪽에서 no-cascade fail-closed. 새 remove identity token은 해당 operation에만 hash해 기존 semantic op hash payload를 보존.
@@ -1705,30 +1707,27 @@ bool FCFVehicleAuthoringService::ListVehicles(const FCFVehicleListRequest& Reque
 	OutResult = FCFVehicleListResult();
 	CFVehicleAuthoringPrivate::InitializeResult(OutResult.Operation, TEXT("ListVehicles"), ECFAuthoringRiskClass::R0_ReadOnly);
 
-		// Recipe가 연결한 Definition path 집합입니다.
+	// Recipe가 연결한 Definition path 집합입니다.
 	TSet<FString> DefinitionPathsWithRecipe;
 	// Project Asset Registry의 모든 canonical UCFVehicleData assets입니다.
 	TArray<FAssetData> DefinitionAssets;
 	CFVehicleAuthoringPrivate::GetAssetsByClass(*UCFVehicleData::StaticClass(), DefinitionAssets);
-		// Existing Definition이 실제 사용하는 Chassis StaticMesh path 집합입니다.
+	// Existing Definition이 실제 사용하는 Chassis StaticMesh path 집합입니다.
 	TSet<FString> UsedChassisMeshPaths;
 	// Existing Definition이 wheel visual로 사용하는 StaticMesh path 집합이며 차체 후보에서 제외합니다.
 	TSet<FString> KnownWheelMeshPaths;
-		// Mesh-only Candidate를 bounded query할 common vehicle mesh collection roots입니다.
+	// Mesh-only Candidate를 bounded query할 common vehicle mesh collection roots입니다.
 	TSet<FString> ChassisMeshCollectionRoots;
 	for (const FAssetData& DefinitionAssetData : DefinitionAssets)
 	{
-		// Chassis reference inventory를 읽기 위해 load한 canonical Definition입니다.
+		// Chassis/Wheel 참조를 읽기 위해 load한 canonical Definition입니다.
 		const UCFVehicleData* Definition = Cast<UCFVehicleData>(DefinitionAssetData.GetAsset());
-		if (!Definition || !Definition->VehicleVisualConfig.ChassisMesh)
+		if (!Definition)
 		{
 			continue;
 		}
-				// Existing canonical Chassis mesh identity입니다.
-		const FString MeshObjectPath = FSoftObjectPath(Definition->VehicleVisualConfig.ChassisMesh).ToString();
-		UsedChassisMeshPaths.Add(MeshObjectPath);
 
-		// VehicleData가 명시적으로 wheel visual로 참조하는 mesh를 차체 후보에서 제외하는 helper입니다.
+		// 차체 Mesh 지정 여부와 무관하게 VehicleData가 참조하는 Wheel Mesh를 후보 제외 집합에 수집합니다.
 		auto AddKnownWheelMesh = [&KnownWheelMeshPaths](const TObjectPtr<UStaticMesh>& WheelMesh)
 		{
 			if (WheelMesh)
@@ -1741,7 +1740,16 @@ bool FCFVehicleAuthoringService::ListVehicles(const FCFVehicleListRequest& Reque
 		AddKnownWheelMesh(Definition->VehicleVisualConfig.WheelMeshRL);
 		AddKnownWheelMesh(Definition->VehicleVisualConfig.WheelMeshRR);
 
-				// Current chassis asset이 속한 exact vehicle subdirectory입니다.
+		if (!Definition->VehicleVisualConfig.ChassisMesh)
+		{
+			continue;
+		}
+
+		// Existing canonical Chassis mesh identity입니다.
+		const FString MeshObjectPath = FSoftObjectPath(Definition->VehicleVisualConfig.ChassisMesh).ToString();
+		UsedChassisMeshPaths.Add(MeshObjectPath);
+
+		// Current chassis asset이 속한 exact vehicle subdirectory입니다.
 		const FString MeshPackagePath = FPackageName::GetLongPackagePath(Definition->VehicleVisualConfig.ChassisMesh->GetOutermost()->GetName());
 		// SUV/Sedan처럼 각 차량 폴더의 한 단계 위 common mesh collection root입니다.
 		const FString MeshCollectionRoot = FPackageName::GetLongPackagePath(MeshPackagePath);
@@ -1810,15 +1818,15 @@ bool FCFVehicleAuthoringService::ListVehicles(const FCFVehicleListRequest& Reque
 		}
 		}
 
-		if (Request.bIncludeMeshCandidates && !ChassisMeshCollectionRoots.IsEmpty())
+	if (Request.bIncludeMeshCandidates && !ChassisMeshCollectionRoots.IsEmpty())
 	{
 		// Bounded StaticMesh query를 수행할 Asset Registry입니다.
 		IAssetRegistry& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get();
-				// Existing Chassis와 같은 bounded vehicle mesh collection root 아래 StaticMesh만 조회하는 filter입니다.
+		// Existing Chassis와 같은 bounded vehicle mesh collection root 아래 StaticMesh만 조회하는 filter입니다.
 		FARFilter MeshFilter;
 		MeshFilter.ClassPaths.Add(UStaticMesh::StaticClass()->GetClassPathName());
 		MeshFilter.bRecursivePaths = true;
-				for (const FString& CollectionRoot : ChassisMeshCollectionRoots)
+		for (const FString& CollectionRoot : ChassisMeshCollectionRoots)
 		{
 			MeshFilter.PackagePaths.Add(*CollectionRoot);
 		}
@@ -1829,7 +1837,7 @@ bool FCFVehicleAuthoringService::ListVehicles(const FCFVehicleListRequest& Reque
 		{
 			// Exact StaticMesh object identity입니다.
 			const FSoftObjectPath MeshPath = MeshAssetData.GetSoftObjectPath();
-						if (UsedChassisMeshPaths.Contains(MeshPath.ToString()) || KnownWheelMeshPaths.Contains(MeshPath.ToString()))
+			if (KnownWheelMeshPaths.Contains(MeshPath.ToString()))
 			{
 				continue;
 			}
@@ -1842,6 +1850,7 @@ bool FCFVehicleAuthoringService::ListVehicles(const FCFVehicleListRequest& Reque
 			Entry.ManageState = ECFVehicleManageState::Unmanaged;
 			Entry.bMeshOnlyCandidate = true;
 			Entry.ChassisMeshPath = MeshPath;
+			Entry.bReferencedByExistingVehicleData = UsedChassisMeshPaths.Contains(MeshPath.ToString());
 		}
 	}
 

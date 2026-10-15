@@ -1,11 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleP11UI.cpp
-// Version: v1.7.0
-// Date: 2026-08-21
+// Version: v1.7.1
+// Date: 2026-10-15
 // Description: DAUTH-P0-11~12 Frozen 24.91~24.94 normal Workspace Slate UI입니다.
 // Scope: 5-domain Profile binding/open, Shared Profile B2 nested editor/impact navigation, External Drift 3-way recovery, Mesh-only Candidate two-record creation을 제공합니다.
 // Changelog:
+// - v1.7.1: 기존 DA가 참조하는 메시도 후보로 제공되는 계약에 맞춰 Mesh create 안내를 선택 항목의 신규 Definition/Recipe 미연결로 명확화.
 // - v1.7.0: P0-12 UA-06 USER UX remediation으로 Shared Profile 숫자 편집을 raw ColumnId 직접입력에서 Registry 기반 검색/선택 + 표시명/현재값/단위 UI로 전환하고 review에도 current/new 값을 표시.
 // - v1.6.0: P0-12 UA-07 baseline-safe Profile 검증 복구를 위해 reviewed Profile 연결 해제 UX와 Bind/Unbind 실패 feedback을 추가.
 // - v1.5.0: P0-12 UA-04 USER 피드백에 따라 사용자-facing Authoring/VehicleData/3-way 용어를 제작 기준값/차량 데이터/상세 비교로 현지화.
@@ -903,8 +904,11 @@ FText SCFVehicleAuthoringTab::GetMeshCandidateText() const
 		return FText::GetEmpty();
 	}
 	return FText::FromString(FString::Printf(
-		TEXT("차체 메시 후보\n메시: %s\n\n이 항목은 아직 차량 데이터가 없는 차체 메시입니다. '메시에서 차량 만들기'는 차량 데이터 + 레시피만 생성하며 프로필/차급/물리/밸런스 값을 자동 추론하지 않습니다."),
-		*ViewModel->GetSelectedEntry().ChassisMeshPath.ToString()));
+		TEXT("차체 메시 후보\n메시: %s\n%s\n\n이 선택 항목에는 차량 데이터/레시피가 연결되지 않았습니다. '메시에서 차량 만들기'는 별도 차량 데이터 + 레시피만 생성하며 기존 DA나 원본 메시를 수정하지 않습니다. 프로필/차급/물리/밸런스 값을 자동 추론하지 않습니다."),
+		*ViewModel->GetSelectedEntry().ChassisMeshPath.ToString(),
+		ViewModel->GetSelectedEntry().bReferencedByExistingVehicleData
+			? TEXT("기존 차량 DA가 이 StaticMesh를 차체로 참조 중입니다. 메시와 Socket 변경은 공유됩니다.")
+			: TEXT("기존 차량 DA의 차체 참조가 발견되지 않았습니다.")));
 }
 
 // Definition이 아닌 Mesh-only Candidate creation section visibility입니다.

@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderVM.cpp
-// Version: v1.39.1
-// Date: 2026-09-05
+// Version: v1.39.2
+// Date: 2026-10-15
 // Description: Guided Vehicle Builder Shell + CF-FQ-047 Step 7 durable final commit / Step 8 fresh saved-handoff orchestration입니다.
 // Changelog:
+// - v1.39.2: Mesh-only 선택 항목이 실제로 기존 VehicleData가 사용하는 메시일 수도 있음을 Step 1 안내에 반영. Definition/Recipe create/selection 계약은 변경 없음.
 // - v1.39.1: guarded Undo backend mutation이 UObject state를 실제 변경해도 package dirty flag가 자동 보장되지 않는 경로를 교정. Mutation footprint가 Target/Recipe 변경을 보고하면 해당 exact package를 명시 dirty로 전환한 뒤 durable save를 수행해 clean-but-stale disk false-complete를 차단.
 // - v1.39.0: CF-FQ-047 최종 재감사 교정. guarded Undo 성공 뒤 reverted Target/Recipe exact pair를 Target→Recipe dirty-needed 순서로 durable 저장하고, invalid package/save partial failure는 Undo mutation을 rollback/retry하지 않은 채 current dirty/partial state로 fail-closed하도록 P0-07H mandatory contract를 구현.
 // - v1.38.0: CF-FQ-047 최종감사 교정. P0-07H durable package persistence를 Automation-only override로 직접 검증할 seam을 추가하고 SavePackage success 뒤 clean/persisted 확인 실패를 SaveStateUnconfirmed typed outcome으로 분리.
@@ -732,7 +733,7 @@ bool FCFVehicleBuilderVM::PrepareSelectedMeshRecordCreate(
 {
 	if (!AuthoringViewModel.IsValid() || !AuthoringViewModel->IsMeshOnlyCandidate())
 	{
-		OutError = TEXT("VehicleData가 없는 Mesh 후보를 먼저 선택해야 합니다.");
+		OutError = TEXT("차체 StaticMesh 후보를 먼저 선택해야 합니다.");
 		return false;
 	}
 
@@ -3697,7 +3698,7 @@ bool FCFVehicleBuilderVM::AdoptExistingStandardHardpointSocket(
 		LastPostCommitRefreshWarning);
 }
 
-// 현재 선택이 아직 VehicleData가 없는 Mesh-only 후보인지 반환합니다.
+// 현재 선택한 Browser row가 VehicleData가 아닌 StaticMesh 전용 후보인지 반환합니다.
 bool FCFVehicleBuilderVM::IsMeshOnlyCandidate() const
 {
 	return AuthoringViewModel.IsValid() && AuthoringViewModel->IsMeshOnlyCandidate();
@@ -3861,7 +3862,7 @@ void FCFVehicleBuilderVM::EvaluateIdentityReferenceStep()
 	if (IsMeshOnlyCandidate())
 	{
 		SetStep(ECFVehicleBuilderStepId::IdentityReference, ECFVehicleBuilderStepState::Ready,
-			TEXT("선택한 항목은 아직 VehicleData가 없는 차체 메시 후보입니다."),
+			TEXT("선택한 항목은 차체 StaticMesh 후보입니다. 기존 차량이 이 메시를 사용 중이어도 별도의 새 차량을 만들 수 있습니다."),
 			TEXT("현재 Step의 '생성 내용 검토'에서 기존 safe two-record Preview를 확인한 뒤 명시적으로 승인하면 VehicleData+Recipe만 생성합니다. 자동 저장하지 않습니다."),
 			true);
 		return;

@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderTab.cpp
-// Version: v1.41.1
-// Date: 2026-10-14
+// Version: v1.41.2
+// Date: 2026-10-15
 // Description: CF-FQ-046 공통 Page Shell/scroll UX + CF-FQ-047 Step 7 durable final commit / Step 8 Progress·Driving Apply·Explicit Recipe Save UI입니다.
 // Changelog:
+// - v1.41.2: 기존 DA 차체 참조 여부를 Mesh-only 후보 행에 표시하고 같은 StaticMesh의 새 차량 재사용/공유 Socket 범위를 안내. 후보/기존 DA 선택 계약은 유지.
 // - v1.41.1: CF-FQ-060 지원 canonical Hardpoint 소켓 생성 시 Base_Standard 프리뷰를 자동 지정하며 기존 Wheel 매핑·소켓 생성/갱신 경로 보존.
 // - v1.41.0: CF-FQ-060 P0-04 Socket 배열 직접 추가를 UStaticMesh::AddSocket로 교체하고 이미 열린 Static Mesh Editor 갱신, 신규 Wheel Socket 4역할 프리뷰 메시 연결.
 // - v1.40.2: Quick Wheel 표시를 live getter로 통일하여 메시/소켓 상태가 바뀐 뒤 오래된 Construct-time '없음'이 남지 않도록 함.
@@ -130,7 +131,7 @@ namespace
 	{
 		if (Entry.bMeshOnlyCandidate)
 		{
-			return TEXT("메시 후보");
+			return Entry.bReferencedByExistingVehicleData ? TEXT("메시 후보 · 기존 DA 사용 중") : TEXT("메시 후보");
 		}
 
 		switch (Entry.ManageState)
@@ -148,7 +149,7 @@ namespace
 	{
 		if (Entry.bMeshOnlyCandidate)
 		{
-			return FLinearColor(0.32f, 0.72f, 1.00f, 1.0f); // 파랑: 아직 VehicleData가 없는 Mesh 후보
+			return FLinearColor(0.32f, 0.72f, 1.00f, 1.0f); // 파랑: VehicleData row와 별개인 StaticMesh 선택 후보
 		}
 
 		switch (Entry.ManageState)
@@ -202,7 +203,9 @@ namespace
 	{
 		if (Entry.bMeshOnlyCandidate)
 		{
-			return Entry.ChassisMeshPath.ToString();
+			return Entry.bReferencedByExistingVehicleData
+				? FString::Printf(TEXT("기존 차량과 차체/Socket 공유 · 새 차량으로 재사용 가능 | %s"), *Entry.ChassisMeshPath.ToString())
+				: Entry.ChassisMeshPath.ToString();
 		}
 
 		return Entry.RecipePath.IsValid()
