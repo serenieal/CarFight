@@ -1,0 +1,45 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261013d3c5600000000010",
+  "parent_version_ids": [
+    "ver_a059b00120261013d3c5600000000009"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-02",
+    "next_action": "CF-FQ-059 USER placeholder-mesh deferral preserved. P0-02 SOURCE REVIEW for six working manufacturer real-car references completed: six sets of four L/W/H/Wheelbase dimensions exact24 field-level citations checked against direct Kia KR, Suzuki NEXA five-door Alpha AT India, Toyota Oman GR86 MT + separately sourced Toyota KR wheelbase, Toyota AU HiLux SR5 4x4 AT, Hyundai Venue 17-inch KR, Hyundai STARIA Hybrid Cargo5 KR. Actual UCFVehicleRefEvidence Payload source map/Unknown/FACT Claim and typed boundaries documented in Document/Plan/VehicleContentAuthoring/VehicleReferenceSourceReview.md v0.1.0 and VehicleReferenceEvidenceDraft.md v0.1.1. Source-level dimension claims PASS but selected identity/trim acceptance, per-car Canonical FACT and durable Evidence save are not yet complete: P0-02 Full Acceptance HOLD. P0-03 Source Pre-Implementation Review completed, VehicleProviderPreReview.md v0.1.0: actual C++ ECFContentFieldOwnership options differ from Plan conceptual names ExternalReadOnly/GeneratedProjection; existing FCFVehicleAuthoringService::PreviewVehicleRecords permits only SlateUI/Automation and AI must NEVER spoof these, requiring reviewed capability-bound trusted R2 adapter. No ICFContentProvider Vehicle Production writer exists yet. NEXT implement bounded P0-03A typed read-only Vehicle schema/ownership with focused tests against actual C++ enum, preserving lowercase vehicle and post-R2 generated RecipeId and no mesh preconditions, then P0-03B/C authorization once reviewed capability exists; meanwhile P0-02 identity/trim decisions remain explicit blockers for final accepted Evidence. No UE Asset, Code, Workbook, Build, Automation mutation in this review session, Git stage/commit/push none.",
+    "blockers": [
+      "P0-02 complete final Evidence acceptance: exact six selected identity/trim resolutions + actual per-car canonical FACT/Unknown payload validation/persisted review not yet performed; source facts only reviewed",
+      "P0-03 implementation precondition: actual ECFContentFieldOwnership type mapping and capability-backed AI R2 trusted reviewed adapter must be implemented/tested; do not spoof Automation"
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.12",
+      "Document/Plan/VehicleContentAuthoring/VehicleMeshInventory.md v0.1.7",
+      "Document/Plan/VehicleContentAuthoring/VehicleMeshPreparationChecklist.md v0.1.3",
+      "Document/Plan/VehicleContentAuthoring/VehicleRepresentativeSpecRoster.md v0.1.1",
+      "Document/Plan/VehicleContentAuthoring/VehicleReferenceEvidenceDraft.md v0.1.1",
+      "Document/Plan/VehicleContentAuthoring/VehicleReferenceSourceReview.md v0.1.0",
+      "Document/Plan/VehicleContentAuthoring/VehicleProviderPreReview.md v0.1.0",
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.37",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/Systems/Vehicles/VehicleData.md",
+      "Document/Systems/Vehicles/VehicleRuntime.md",
+      "Document/Systems/Vehicles/RuntimeApply.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-13",
+    "resolution_basis": "Approved CarFight read-only C++ source fresh audit: CFContentProvider.h existing interface, CFContentTypes.h exact field ownership enum not containing ExternalReadOnly or GeneratedProjection, CFVehicleUXOps.cpp PreviewVehicleRecords SlateUI/Automation-only CallerKind and explicit OwnershipWrite proposal, CFVehicleRefEvidence.cpp ValidateInitialResearchPayload exactly one Primary and FACT citations. Public Kia/Suzuki/Toyota Oman+KR/Toyota AU/Hyundai source cross-review six sets of real-car exterior dimensions exact24. Documented P0-02 source review and P0-03 preimplementation review, version-aligned Plan and index, no source/binary/writer mutation."
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261015d3c5600000000019",
+  "parent_version_ids": [
+    "ver_a059b00120261015d3c5600000000018"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-03B",
+    "next_action": "P0-03A final UE5.8 Automation exact5 5/5 PASS remains accepted baseline (Provider v1.0.5/Tests v1.0.4), not re-run. On 2026-10-15 implemented P0-03B read-only Vehicle Provider: CFVehicleCCASProvider.h/.cpp v1.1.0 supports schema revision2, RecipeId-based vehicle key, bound Recipe/Target/Evidence path, OEM Canonical FACT/DERIVED claim source/citations/Unknown (no invented facts), existing Pilot-compatible vehicle.<lowercaseRecipeId>.chassis ResourceId with separate ChassisAssetPath, AssetRegistry persisted read-only ImportExisting, fresh current BuildCurrentSnapshot/ReadbackFingerprint, CCAS SHA256 BuildDiff field/collection detection, no false dependencies; fail closed for duplicate/invalid Recipe/Evidence, stale fingerprints, unsaved source, wrong owner/target and unresolved blocking conflicts. Product mutation plan/Apply remain FAIL-CLOSED; no Workbook, UE Asset or Production writer change. New separate CarFight.CCAS.CF_FQ_059.P0_03B.VehicleReadDiff synthetic test in CFVehicleCCASProviderTests.cpp v1.1.0; existing VehicleSchema schema rev2 expected. Source managed writes/readbacks performed, but new Provider v1.1.0 source has NOT been compiled; new tests NOT RUN and no persisted Recipe live readback performed. NEXT: official UE5.8 Source Editor Build of current P0-03B source, exact9 focused regressions (VehicleSchema, VehicleReadDiff, CF_FQ_058 ProviderRegistry, ProviderValidation, DiffDrift, FailClosed, FingerprintGuard, SchemaCompatibility, SnapshotConsistency), then persisted nonmutating Product readback and final impact/slop review. Do not claim TECHNICAL PASS yet; no stage/commit/push. P0-02 exact trim/accepted durable Evidence HOLD; P0-03C trusted AI R2 and P0-04 six VehicleData/Workbook production NOT STARTED. Preserve unrelated Builder and six chassis mesh Dirty.",
+    "blockers": [
+      "P0-03B latest v1.1.0 Provider/Header/Tests not yet compiled in official UE5.8 Editor; exact9 Automation and persisted Product smoke test NOT RUN; technical acceptance pending.",
+      "P0-02 final representative exact trim/year and durable Evidence acceptance HOLD.",
+      "P0-03C AI trusted entry and P0-04 durable first-wave VehicleData/Workbook/Runtime publication not started."
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.23",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFVehicleCCASProvider.h v1.1.0",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProvider.cpp v1.1.0",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProviderTests.cpp v1.1.0",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFContentPilot.cpp (existing vehicle.<RecipeId>.chassis namespace)",
+      "UE/Saved/CarFight/DataAuthoringAutomationResult.json (historical P0-03A exact5/5 PASS)"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-15",
+    "resolution_basis": "Exact managed CarFightMCP_Admin source reads of Provider/Core, VehicleRecipeData/RefEvidence/ContentPilot/Compiler contracts and P0-03A JSON baseline; source patches applied to existing Provider/Header/Test only, P0-03B build and tests still NOT RUN."
+  }
+}

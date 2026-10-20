@@ -1,0 +1,38 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261015d3c5600000000020",
+  "parent_version_ids": [
+    "ver_a059b00120261015d3c5600000000019"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-03B",
+    "next_action": "2026-10-15 USER reports official UE5.8 Source Editor BUILD PASS for current CFVehicleCCASProvider.h/.cpp/Tests v1.1.0 P0-03B source. Independently read CarFight_ReEditor.target Win64 Development Editor receipt mtime 15:55:34 KST, later than current Provider source 15:43:39 and Tests 15:43:29 KST; corroborates successful build report. Direct UBT exit summary not read, so USER BUILD PASS + target receipt verified, without claiming independent final exit code. Do NOT repeat same build. NEW P0-03B VehicleReadDiff plus VehicleSchema + seven related CF_FQ_058 CCAS focused regressions exact9 NOT RUN; current DataAuthoringAutomationResult.json is unrelated DAUTH_P0_11 FrozenUX MeshCreate result. Next execute existing Tools/RunDataAuthoringTests.ps1 with exact9 names in one Editor process, accept only success_count9/failure_count0/missing_count0/unexpected_count0/duplicate_terminal_count0/engine_exit_code0; then persisted Recipe/Evidence source readback smoke and code/slop final review. P0-03A exact5 PASS preserved. P0-03B TECHNICAL ACCEPTANCE PENDING; Production mutation/AI R2 remain fail-closed, P0-02 exact OEM trim and accepted Evidence HOLD, six new VehicleData/Workbook not authored; unrelated dirty preserved, stage/commit/push not performed.",
+    "blockers": [
+      "P0-03B new focused exact9 and persisted read-only Product smoke NOT RUN, Technical Acceptance pending; build USER PASS corroborated.",
+      "P0-02 final exact reference trim and durable Evidence acceptance HOLD.",
+      "P0-03C trusted AI R2 and P0-04 six Production VehicleData/Workbook not started."
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.24",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFVehicleCCASProvider.h v1.1.0",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProvider.cpp v1.1.0",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProviderTests.cpp v1.1.0",
+      "UE/Binaries/Win64/CarFight_ReEditor.target (mtime 2026-10-15 15:55:34 KST)",
+      "UE/Saved/CarFight/DataAuthoringAutomationResult.json (unrelated DAUTH MeshCreate result)"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-15",
+    "resolution_basis": "USER direct UE5.8 build-success report; CarFightMCP_Admin readback of source and current Editor target receipt timestamps, direct exact test names and script param contract; no direct UBT final exit log, no P0-03B automation yet."
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261013d3c5600000000006",
+  "parent_version_ids": [
+    "ver_a059b00120261013d3c5600000000005"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-01",
+    "next_action": "VCCAS-P0-01 resume at existing UE read-only runtime connection restore; then load current AssetRegistry, body and wheel bounds, exact Socket inventory, and Core9 silhouette/semantic category comparison. Completed in this checkpoint: Wagon-first stored AssetDump Socket4 and SUV Socket6 readback, Wagon DA_Recipe_Wagon + DA_Vehicle_Wagon + DA_Ref_Wagon + persisted Builder Driving receipt analysis; managed Git tracked Core9 exact9 and shared/dedicated wheel package inventory reread; historical Builder Wagon E2E shows Wagon/Van/SubCompact/Pickup/Coupe/Compact/CityCar socket0 at initial time, Sedan socket7, SUV socket6, but stored Wagon currently Socket4, so do not infer current Core6 absence. USER Core8 per-vehicle preparation guide Document/Plan/VehicleContentAuthoring/VehicleMeshPreparationChecklist.md v0.1.0 is PREPARED, not current MeshReady acceptance. UE ReadOnly ue_status timeout ERR_UE_MCP_TIMEOUT and no fresh body or wheel bounds. Await live readback before issue only actual missing Socket/Scale/Wheel tasks to USER; USER edits/saves mesh, GPT verifies fresh results and later typed authoring; Core9 only, P0-01 I-01..I-03 GATE HOLD and P0-02 NOT OPENED. Preserve v0.1.3 P0-00 DESIGN PASS; no Product/Source/Workbook/Map mutations.",
+    "blockers": [
+      "I-01 fresh current Unreal AssetRegistry/AssetDump StaticMesh class coverage not available",
+      "I-02 actual body bounds/wheel extents/Socket readiness not measured for all candidates",
+      "I-03 real vehicle shape/category dedupe and final representative exactN pending"
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.8",
+      "Document/Plan/VehicleContentAuthoring/VehicleMeshInventory.md v0.1.4",
+      "Document/Plan/VehicleContentAuthoring/VehicleMeshPreparationChecklist.md v0.1.0",
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.37",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/Systems/Vehicles/VehicleData.md",
+      "Document/Systems/Vehicles/VehicleRuntime.md",
+      "Document/Systems/Vehicles/RuntimeApply.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-13",
+    "resolution_basis": "CF-FQ-059 Wagon-first follow-up: managed Git read-only tracks Core9 body packages exact9 and wheel deps, persisted AssetDump index fingerprint 7abf97d379deb846cf317eebcebe061c9bfeffb38a87afe4e08b2d905cc3c48b re-read Wagon Body sockets4 and SUV6. Persisted Wagon Recipe/VehicleData/ReferenceEvidence/DrivingAcceptance verified: FL shared wheel plus fallback, SocketScaleFromChassis, Volvo V60CC 2026 KR identity and unknown/secondary reference provenance. Old Builder E2E report observed other six initial car Socket0 and Sedan7/SUV6, but cannot assert current status because Wagon changed from 0 to 4 in stored snapshot. Current Unreal Editor read-only ue_status returned ERR_UE_MCP_TIMEOUT, no fresh class/bounds/socket completeness or current MeshReady. Created exact per-vehicle historical/current USER mesh-preparation handoff checklist. Original P0-01 I-01~I-03 evidence blockers all retained; P0-02 unopened, P0-00 frozen design pass preserved. Only Plan/Inventory/UDS docs changed; no UE assets, source, workbook, builds or Git mutating operations."
+  }
+}

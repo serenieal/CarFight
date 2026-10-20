@@ -1,0 +1,41 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261013d3c5600000000007",
+  "parent_version_ids": [
+    "ver_a059b00120261013d3c5600000000006"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-01",
+    "next_action": "VCCAS-P0-01 after LIVE UE recovery: I-01 Core9 Body StaticMesh actual class coverage PASS 9/9, fresh managed CarFight core StaticMesh dataset 21/21 PASS (Core9 Bodies9, dedicated Wheels12). Direct approved UE StaticMeshTools local Body Bounds captured all 9, and dataset Socket inventory all 9: CityCar/Compact/Coupe/Pickup/SubCompact/Van actual Socket0 -> confirmed USER MeshPreparationRequired exact6, SUV Wheel4+HP2 total6, Sedan Wheel4+HP2+FX1 total7, Wagon Wheel4+HP3 total7 (old stored Wagon HP0 superseded). Six small Body candidates have longest local axis ~100cm and Coupe longer Y rather than X: USER verify import dimensions/pivot/orientation before socket edits, do not auto rescale/rotate. USER physical mesh authoring on exact six and saving, GPT fresh readback, Wheel runtime visual size and geometry category dedupe; I-02 physical mesh and wheel readiness HOLD, I-03 actual shape/category dedupe HOLD. P0-01 overall HOLD, P0-02 NOT OPENED, P0-00 v0.1.3 Design PASS preserved. In-scope body root /Game/CarFight/Vehicles/Meshes Core9 only, no Police or external. No UE Product/Workbook/Source mutation.",
+    "blockers": [
+      "I-02: USER Core6 current Mesh Socket0 and local scale/orientation review plus wheel bounds/binding/visual readiness and saved re-verification pending",
+      "I-03: actual 9 category mesh silhouette/geometry dedupe and final representative selection pending"
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.9",
+      "Document/Plan/VehicleContentAuthoring/VehicleMeshInventory.md v0.1.5",
+      "Document/Plan/VehicleContentAuthoring/VehicleMeshPreparationChecklist.md v0.1.1",
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.37",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/Systems/Vehicles/VehicleData.md",
+      "Document/Systems/Vehicles/VehicleRuntime.md",
+      "Document/Systems/Vehicles/RuntimeApply.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-13",
+    "resolution_basis": "USER UE connection report verified: approved UE bridge connected/initialized and live toolsets working. Actual AssetTools.get_asset_class for Core9 9/9 StaticMesh, StaticMeshTools.get_bounds 9/9 local-space, fresh managed AssetDump 21/21 with details Socket count Body SUV6 Sedan7 Wagon7, CityCar/Compact/Coupe/Pickup/SubCompact/Van0; Wagon old HP0 historical stale. Representative FL Wheel dimensions shared100x25x100/SUV79.36x35.48x79.36/Sedan68.25x30.51x68.25/Wagon100x25x100 measured live. Six likely incorrectly scaled/axis-aligned mesh candidates require USER physical review before actual Socket4 authoring; no automatic alteration. Exact core class I-01 resolved; two evidence blockers I-02/I-03 remain. v0.1.3 design baseline preserved, P0-02 not opened, no Unreal assets/Workbook/source mutated."
+  }
+}

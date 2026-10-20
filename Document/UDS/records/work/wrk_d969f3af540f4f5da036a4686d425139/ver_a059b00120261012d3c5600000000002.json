@@ -1,0 +1,41 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261012d3c5600000000002",
+  "parent_version_ids": [
+    "ver_a059b00020261012d351600000000001"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-01",
+    "next_action": "VCCAS-P0-01 Fresh Unreal Asset Class / Bounds / Socket Rebaseline + Final Category Roster Review. Inventory partial: managed Git tracked core body-named exact9, Legacy Police exact1, template Offroad/SportsCar exact2, stored AssetDump verified vehicle bodies exact3. Current UE MCP unavailable, managed dataset prepare failed. Resolve I-01 fresh loaded StaticMesh class/full asset registry coverage; I-02 body/wheel bounds plus wheel/HP sockets/reuse; I-03 semantic/visual category dedupe and exact1 representative per actual category before P0-01 PASS. Preserve v0.1.3 P0-00 Design PASS; no Source/UE Product/Workbook mutation, no P0-02 activation.",
+    "blockers": [
+      "I-01 fresh current Unreal AssetRegistry/AssetDump StaticMesh class coverage not available",
+      "I-02 actual body bounds/wheel extents/Socket readiness not measured for all candidates",
+      "I-03 real vehicle shape/category dedupe and final representative exactN pending"
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.4",
+      "Document/Plan/VehicleContentAuthoring/VehicleMeshInventory.md v0.1.0",
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.37",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/Systems/Vehicles/VehicleData.md",
+      "Document/Systems/Vehicles/VehicleRuntime.md",
+      "Document/Systems/Vehicles/RuntimeApply.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-12",
+    "resolution_basis": "USER authorized read-only Vehicle Mesh Inventory/Category Roster. Managed Git verified core category-labelled body package exact9, Legacy Police Body exact1 and template Offroad/SportsCar body candidates exact2. Current stored AssetDump indexed 37 StaticMeshes but verified only SUV/Wagon/Police bodies exact3, so stored index is incomplete; Wagon wheel Shared/Tire reference and Sedan tracked body provide cross-source proof of missing index coverage. SUV/Wagon persisted socket-derived 258/152cm and 280/168cm measured only at anchors; full body/wheel bounds and class validation for 9 other body candidates absent. UE Editor MCP unavailable and managed AssetDump refresh failed closed; prevent false First Wave exact category claim. VCCAS-P0-01 remains Ready / partial inventory evidence HOLD with I-01~I-03. VCCAS-P0-00 v0.1.3 Design PASS preserved; no Product/Workbook/Source/Asset mutation."
+  }
+}

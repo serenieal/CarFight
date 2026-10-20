@@ -1,0 +1,40 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261016d3c5600000000023",
+  "parent_version_ids": [
+    "ver_a059b00120261016d3c5600000000022"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-03B",
+    "next_action": "USER clarified 2026-10-16: among currently persisted vehicles Wagon alone is the real-world OEM reference / acceptance baseline; DA_Recipe_TestSedan, DA_Recipe_TestSUV, DA_Recipe_DefenseSUV are legacy TEST-ONLY vehicles with arbitrary numeric tuning, not representative production vehicles. They must not be judged on OEM source/spec accuracy or forced into Reference Evidence authoring/Production promotion; do not modify or remove their assets. Verify only their identity uniqueness, saved Target paths, no-fabrication behavior and read-only compatibility so they do not block Wagon. Current FCFVehicleCCASProvider::ImportExisting enumerates ALL saved UCFVehicleRecipeData assets and fails entire Import when any invalid; test Recipes are therefore not removable from reader scope by declaration alone. Do not hardcode Wagon-only content filter; investigate any actual interference and preserve generic provider. Wagon exact saved Recipe/DA_Ref_Wagon/DA_Vehicle_Wagon, OEM Dimensions.* FactKey mapping, source/citation/unknown and fresh fingerprint, live ImportExisting/BuildCurrentSnapshot/ReadbackFingerprint/BuildDiff are the P0-03B live real-spec acceptance. Previous latest USER UE5.8 Editor build PASS, exact9 focused automation PASS, fresh AssetDump Recipe4/4 Evidence1/1 VehicleData12/12 PASS preserved; Wagon dimension mapping gap and UE MCP live Provider invocation BLOCKED remain P0-03B HOLD. Future P0-04 Core6 PRODUCTION newly authored vehicles require their own representative OEM model/year/trim Evidence; Wagon or TEST recipe fake numeric values must not be copied. Documentation/UDS scope update only; source and UE Assets untouched, Git stage/commit/push not performed.",
+    "blockers": [
+      "Wagon only existing real-spec acceptance: saved Wagon Facts Dimensions.* vs Main projection Exterior*Mm/WheelbaseMm mismatch; resolve mapping semantics for Wagon, including Width vs BodyWidth.",
+      "P0-03B real compiled Provider ImportExisting/BuildCurrentSnapshot/ReadbackFingerprint live smoke NOT RUN due to UE read-only connector internal error; fresh AssetDump saved asset readback PASS is not equivalent to live provider call.",
+      "P0-02 six Core representative exact model/trim and approved new durable Evidence final HOLD.",
+      "P0-03C trusted AI R2 and P0-04 first six VehicleData/Workbook/Production publication not started."
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProvider.cpp v1.1.0 AddPrimaryDimensions",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProviderTests.cpp v1.1.0 VehicleReadDiff",
+      "UE/Saved/CarFight/DataAuthoringAutomationResult.json (P0-03B exact9 PASS 9/9)",
+      "Fresh dataset Recipe adset_v1_4bf2142a2f4022e0574189deb953f79f.b4d70b730877d3f842ec4c06",
+      "Fresh dataset Evidence adset_v1_debf91509270f6f8099f5db1577e1d7f.d2bc377d23c264345a18be23",
+      "Fresh dataset VehicleData adset_v1_61838d7304299ed6e833a41b8b7f43a3.cee4962fa4a8f158fa510d36",
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.27"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-16",
+    "resolution_basis": "USER explicit correction that Wagon alone is baseline, TestSedan/TestSUV/DefenseSUV are test vehicles with approximate values; inspected ImportExisting implementation enumerating all Recipe assets and failing batch on any invalid; prior verified fresh stored asset readback and focused exact9. Scope-only Plan/UDS edit."
+  }
+}

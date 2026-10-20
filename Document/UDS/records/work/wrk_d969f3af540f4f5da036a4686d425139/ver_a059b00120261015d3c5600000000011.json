@@ -1,0 +1,40 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261015d3c5600000000011",
+  "parent_version_ids": [
+    "ver_a059b00120261013d3c5600000000010"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-03A",
+    "next_action": "Core9 static mesh Socket readback PASS for required 4 Wheel Anchors per vehicle, existing optional hardpoints inventoried; six user modified placeholder Body assets protected. P0-03A Vehicle CCAS schema-only adapter + focused tests written (CFVehicleCCASProvider.h/.cpp and CFVehicleCCASProviderTests.cpp); correct enum ownership/read-only source provenance/unknown explicit, FACT citation guards and Product/AI R2 fail-closed. HOWEVER code has NOT passed official UE 5.8 Build or Automation: CarFightMCP_Admin build.run project capability 'build' absent (capability_not_available); attempted legacy preset failed to resolve repository_id (build_preset_invalid). The next required gate is to resolve a supported managed canonical BuildEditor.bat path without guessing/unauthorized shell, then build and run CarFight.CCAS.CF_FQ_059.P0_03A.VehicleSchema plus affected CCAS/Vehicle regressions; fix any compile or test issues. P0-02 full per-car identity/trim and Evidence creation acceptance remains HOLD. P0-03B typed import/diff, P0-03C capability-trusted AI R2, P0-04 durable six VehicleData/Workbook materialization NOT STARTED. No vehicle runtime-ready claim and no commit/push.",
+    "blockers": [
+      "Official UE 5.8 Build + focused P0-03A Automation NOT RUN due absent authorized build capability/preset repository identity; code currently unverified.",
+      "P0-02 selected exact six reference identities/trim + accepted per-car Evidence payloads not yet persisted; source dimensions 24/24 research-review only.",
+      "P0-03C reviewed trusted UI-less AI R2 adapter and P0-04 durable Product/Workbook materialization not available; no Automation CallerKind spoof or direct Product mutation."
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.13",
+      "Document/Plan/VehicleContentAuthoring/VehicleReferenceEvidenceDraft.md v0.1.1",
+      "Document/Plan/VehicleContentAuthoring/VehicleReferenceSourceReview.md v0.1.0",
+      "Document/Plan/VehicleContentAuthoring/VehicleProviderPreReview.md v0.1.0",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProvider.cpp v1.0.2",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProviderTests.cpp v1.0.1",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-15",
+    "resolution_basis": "CarFightMCP_Admin managed Git status and official code edits/readback; managed AssetDump Core9 socket evidence verified previous user step; Product writer not invoked. Official build attempts failed before starting (capability_not_available/build_preset_invalid). Versioned code and review remain NOT TESTED."
+  }
+}

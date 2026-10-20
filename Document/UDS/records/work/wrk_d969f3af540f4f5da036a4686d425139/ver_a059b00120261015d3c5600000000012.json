@@ -1,0 +1,41 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261015d3c5600000000012",
+  "parent_version_ids": [
+    "ver_a059b00120261015d3c5600000000011"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-03A",
+    "next_action": "USER reported successful direct official UE 5.8 Source Editor build including P0-03A Vehicle CCAS Provider and focused-test code on 2026-10-15; classify as USER-REPORTED BUILD PASS, not AI independently verified log. Prior managed build errors are historical execution-route blockers and do NOT require another build. Current P0-03A Vehicle schema/ownership Provider and single focused test were written; run CarFight.CCAS.CF_FQ_059.P0_03A.VehicleSchema via an authorized existing test execution route, then affected CCAS/Vehicle regressions. Attempts in this turn: UE MCP status timed out ERR_UE_MCP_TIMEOUT; Admin generic process.run legacy repository carfight_repo not configured (process_repository_not_found), so Automation NOT RUN. No new MCP tool, GoPyMCP modification, raw shell, or unsafe bypass performed. Preserve modified Core6 mesh/socket user assets. P0-02 six OEM real vehicle reference facts source review 24/24 but exact final Evidence/identity acceptance HOLD. P0-03B import/diff, P0-03C trusted capability-gated AI R2, P0-04 six VehicleData/Product/Workbook durable creation NOT STARTED. No stage/commit/push.",
+    "blockers": [
+      "P0-03A focused Automation NOT RUN: only attempted managed generic process repository ID unconfigured and UE MCP status timeout; specific existing authorized test execution route required (do not repeat already user-passed build).",
+      "P0-02 per-car exact reference identity/trim/Unknown acceptance and durable UCFVehicleRefEvidence not completed.",
+      "P0-03B provider Product import/diff and P0-03C trusted AI R2, P0-04 durable six VehicleData/Product/Workbook authoring not completed."
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.14",
+      "Document/Plan/VehicleContentAuthoring/VehicleReferenceEvidenceDraft.md v0.1.1",
+      "Document/Plan/VehicleContentAuthoring/VehicleReferenceSourceReview.md v0.1.0",
+      "Document/Plan/VehicleContentAuthoring/VehicleProviderPreReview.md v0.1.0",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFVehicleCCASProvider.h v1.0.0",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProvider.cpp v1.0.2",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProviderTests.cpp v1.0.1",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-15",
+    "resolution_basis": "USER explicit successful official UE 5.8 Editor build testimony. Admin managed git_status branch/dirty readback, current P0-03A C++/tests source, UE MCP status ERR_UE_MCP_TIMEOUT, Admin generic process_run process_repository_not_found. Automation not started, no independent build log readback."
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261013d3c5600000000009",
+  "parent_version_ids": [
+    "ver_a059b00120261013d3c5600000000008"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-02",
+    "next_action": "USER explicitly declared current Core6 CarFight meshes temporary, scheduled future replacements and physical dimensions/pivots/Wheel_Anchor sockets are USER-owned. Stop using current meshes or their Source-art geometry/socket state as blocker for reference-spec research, representative category, or typed schema work. P0-01 Core9 body class 9/9 and USER category roster provide scope for P0-02; old I-02/I-03 physical evidence is preserved HISTORICAL/DEFERRED for final replacement asset integration/production/runtime acceptance only, NOT cleared or declared MeshReady. GPT has now begun VCCAS-P0-02 six category independent real-vehicle research using working model candidates Kia Morning MY2027 KR, Suzuki Jimny 5-door Alpha AT India June2024, Toyota GR86 2026 MT Oman, Toyota HiLux SR5 4x4 AT AU current, Hyundai Venue 17in IVT KR, and Hyundai STARIA Hybrid Cargo5 KR. Authoritative new Document/Plan/VehicleContentAuthoring/VehicleReferenceEvidenceDraft.md v0.1.0 records exact source URLs, published size/power/torque/mass/tire facts and Unknown/cross-market guardrails; VehicleRepresentativeSpecRoster v0.1.1 states physical resemblance irrelevant. NEXT: validate reference research per field/citation/market, then VCCAS-P0-03 canonical typed provider/schema, UI-less approved writer boundary. DO NOT mutate Production DA, actual UE StaticMeshes/sockets, Workbook, source without authorized review/implementation; cannot falsely claim Reference Evidence UObject persisted or R2 writer now works. At later P0-04 actual materialization P0-06 runtime acceptance, final USER replacement physical asset is still required and must be fresh validated. P0-00 v0.1.3 frozen DESIGN PASS retained.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.11",
+      "Document/Plan/VehicleContentAuthoring/VehicleMeshInventory.md v0.1.7",
+      "Document/Plan/VehicleContentAuthoring/VehicleMeshPreparationChecklist.md v0.1.3",
+      "Document/Plan/VehicleContentAuthoring/VehicleRepresentativeSpecRoster.md v0.1.1",
+      "Document/Plan/VehicleContentAuthoring/VehicleReferenceEvidenceDraft.md v0.1.0",
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.37",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/Systems/Vehicles/VehicleData.md",
+      "Document/Systems/Vehicles/VehicleRuntime.md",
+      "Document/Systems/Vehicles/RuntimeApply.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-13",
+    "resolution_basis": "USER explicitly rejected current source mesh as production identity constraint: temporary picked meshes will all be changed later, user owns mesh size/sockets, so leave all mesh work until future and proceed to next. Read existing Vehicle Builder source contract supports Blank Chassis, and existing CF-FQ-059 frozen Vehicle CCAS C1-C6 separates Real Reference UCFVehicleRefEvidence from MeshMeasured, typed provider and UE assets. Core9 class roster exists, physical I-02 and temporary shape I-03 deferred only for P0-02/P0-03, must reverify actual final replacement mesh for Production/Runtime. Collected and documented six manufacturer-sourced field-level draft with unknown/market/trim restrictions; no data asset/provider/workbook source/UE asset mutation and no stage/commit/push."
+  }
+}

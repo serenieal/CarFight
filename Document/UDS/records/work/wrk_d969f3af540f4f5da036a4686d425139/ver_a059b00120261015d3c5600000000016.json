@@ -1,0 +1,39 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261015d3c5600000000016",
+  "parent_version_ids": [
+    "ver_a059b00120261015d3c5600000000015"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-03A",
+    "next_action": "2026-10-15 USER reran Tools/RunDataAuthoringTests.ps1 -ExactTestNames CarFight.CCAS.CF_FQ_059.P0_03A.VehicleSchema on latest case-sensitive correction (Provider v1.0.4, Tests v1.0.3). Exact stored result UE/Saved/CarFight/DataAuthoringAutomationResult.json independently read via CarFightMCP_Admin: status success, exact_list_same_process, requested 1, engine_exit_code 0, SUCCESS_COUNT 1, FAILURE_COUNT 0, MISSING_COUNT 0, UNEXPECTED_COUNT 0, DUPLICATE_TERMINAL_COUNT 0. P0-03A focused VehicleSchema test PASS; earlier 0/1 failure of v1.0.3/v1.0.2 is historical and corrected. Do not repeat successful test or needless build. Remaining same-stage gate: focused directly affected CCAS Registry/canonical-key identity regressions and post-implementation final source/diff review, then enter P0-03B typed Recipe/Evidence/Product readback and diff. P0-02 accepted exact reference model/trim and persisted reference Evidence HOLD; P0-03C capability-backed trusted R2 and P0-04 durable six VehicleData/Workbook authoring NOT STARTED. No UE Assets or existing Product/Workbook modified and independent dirty protected; no stage/commit/push.",
+    "blockers": [
+      "Adjacent CCAS Provider Registry/canonical identity regression and post-implementation final review pending, although P0-03A focused VehicleSchema now PASS 1/1.",
+      "P0-02 exact reference model/trim and durable Evidence acceptance unfinished.",
+      "P0-03B/C typed import/diff, trusted AI R2, P0-04 durable six VehicleData/Workbook authoring not completed."
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.20",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProvider.cpp v1.0.4",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProviderTests.cpp v1.0.3",
+      "UE/Saved/CarFight/DataAuthoringAutomationResult.json (VehicleSchema success 1/1)",
+      "Document/Plan/VehicleContentAuthoring/VehicleReferenceSourceReview.md v0.1.0",
+      "Document/Plan/VehicleContentAuthoring/VehicleProviderPreReview.md v0.1.0",
+      "Document/Systems/Vehicles/VehicleBuilder.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-15",
+    "resolution_basis": "User provided actual runner stdout for exact VehicleSchema filter. CarFightMCP_Admin independently read stored automation result success 1/1 exit0 and exact absent failure/missing/unexpected/duplicate, inspected git dirty, governing docs; applied only CF059 Plan/UDS status update."
+  }
+}

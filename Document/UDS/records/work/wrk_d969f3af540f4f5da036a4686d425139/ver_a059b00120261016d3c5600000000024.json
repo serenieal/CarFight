@@ -1,0 +1,39 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261016d3c5600000000024",
+  "parent_version_ids": [
+    "ver_a059b00120261016d3c5600000000023"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-03B",
+    "next_action": "2026-10-16 CF-FQ-059 Wagon-only existing real-spec baseline P0-03B continued. Current Provider .cpp v1.1.1 explicitly maps actual saved Wagon OEM FactKeys Dimensions.Length/BodyWidth/Height/Wheelbase onto existing Main ExteriorLengthMm/ExteriorWidthMm/ExteriorHeightMm/WheelbaseMm fields; preserves legacy Exterior*Mm; Dimensions.Width remains source-only distinct from BodyWidth; exact case-sensitive keys/mm, duplicate destination alias fails closed. No DataAsset/Evidence/Workbook/VehicleBuilder writer changes. CFVehicleCCASProviderTests.cpp v1.1.1 includes synthetic Wagon-shaped mapping, body-width-vs-width, wrong unit and duplicate alias negative regressions inside VehicleReadDiff, plus new CarFight.CCAS.CF_FQ_059.P0_03B.WagonPersistedReadback registered automation test. New real-Wagon test read-only LoadObject of existing DA_Recipe_Wagon/DA_Ref_Wagon, validates source and Canonical 4 dimensions, then actual Provider ImportExisting (all stored Recipes structural only), BuildCurrentSnapshot, ReadbackFingerprint and no-op BuildDiff plus dirty0. Tests for TestSedan/TestSUV/DefenseSUV DO NOT evaluate actual OEM numerical values, only minimal generic structural read compatibility; no Wagon hardcode in Production. Repo patches/readback passed; latest code NOT BUILT or AUTOMATION TESTED. Project managed build operation carfight/unreal/build_editor not available; legacy repository_id carfight_repo/preset carfight.editor.development invalid; both started=false; UE read-only status internally failed. User official UE5.8 build necessary for latest v1.1.1, then exact3 targeted CarFight.CCAS.CF_FQ_059.P0_03A.VehicleSchema, CarFight.CCAS.CF_FQ_059.P0_03B.VehicleReadDiff, CarFight.CCAS.CF_FQ_059.P0_03B.WagonPersistedReadback in same Editor process, require success3/failure0/missing0/unexpected0/duplicate0/engineexit0, inspect real logs and final source/diff impact review. Previous Provider v1.1.0 Build USER PASS and exact9/9 Automation PASS, fresh AssetDump persisted Recipe4/Evidence1/VehicleData12 PASS remain historical baseline, NOT current v1.1.1 results. P0-03B TECHNICAL ACCEPTANCE HOLD until new build/exact3 Wagon live smoke PASS. P0-02 Core6 final accepted OEM Evidence HOLD, P0-03C and P0-04 future Production authoring unopened. No commit/push, user and other-session dirty protected.",
+    "blockers": [
+      "Latest Wagon FactKey v1.1.1 Provider/Tests C++ BUILT NOT RUN. Focused exact3 including new persisted Wagon ImportExisting/Current/Fingerprint test NOT RUN, so P0-03B Technical Acceptance HOLD.",
+      "Company CarFight Admin Project semantic build operation_id build_editor is not declared; legacy carfight_repo/preset mismatches configured repo; UE ReadOnly connector internally errors. Do not invent a passing build or rerun old tests.",
+      "P0-02 later Core6 real source exact market/trim and durable Evidence accepted output HOLD; P0-03C trusted AI R2 and P0-04 six production authoring not started."
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "UE/Saved/CarFight/DataAuthoringAutomationResult.json (P0-03B exact9 PASS 9/9)",
+      "Fresh dataset Recipe adset_v1_4bf2142a2f4022e0574189deb953f79f.b4d70b730877d3f842ec4c06",
+      "Fresh dataset Evidence adset_v1_debf91509270f6f8099f5db1577e1d7f.d2bc377d23c264345a18be23",
+      "Fresh dataset VehicleData adset_v1_61838d7304299ed6e833a41b8b7f43a3.cee4962fa4a8f158fa510d36",
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.28",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProvider.cpp v1.1.1",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProviderTests.cpp v1.1.1"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-16",
+    "resolution_basis": "User proceed from Wagon-only scope; CarFightMCP_Admin read repo statuses, governing docs, existing Provider and Tests, actual persisted Wagon saved FactKey evidence and Core6 contract; managed patch v1.1.1 readback; registered integration test read-only; build operation availability checked and denied before launch."
+  }
+}

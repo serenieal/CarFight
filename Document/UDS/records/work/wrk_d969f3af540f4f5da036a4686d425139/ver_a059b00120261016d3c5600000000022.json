@@ -1,0 +1,40 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261016d3c5600000000022",
+  "parent_version_ids": [
+    "ver_a059b00120261016d3c5600000000021"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-03B",
+    "next_action": "2026-10-16 actual persisted vehicle source readback investigated using fresh managed AssetDump (changed_only=false, rebuild_index=true, managed_dataset=true), not old stale index: official CarFight Project fresh Recipe dataset adset_v1_4bf2142a2f4022e0574189deb953f79f.b4d70b730877d3f842ec4c06 succeeded 4/4: DA_Recipe_DefenseSUV GUID 02493A1546EE2400458647BEE7FB8886, DA_Recipe_TestSUV B5BFD0DC426517FDB5465EB662EFF9C3, DA_Recipe_TestSedan 111E93394D0BA63B689A399C26295867, DA_Recipe_Wagon 05F69DD34990A868DEFFD29C1AF5B2F9. Separate fresh Reference Evidence dataset adset_v1_debf91509270f6f8099f5db1577e1d7f.d2bc377d23c264345a18be23 succeeded 1/1 DA_Ref_Wagon; separate fresh VehicleData dataset adset_v1_61838d7304299ed6e833a41b8b7f43a3.cee4962fa4a8f158fa510d36 succeeded 12/12. All four Recipe TargetVehicleData paths have real stored matching UCFVehicleData; SUV and DefenseSUV share a chassis but have independent RecipeIds; three recipes have no Evidence, no fact fabrication. Wagon Evidence TargetRecipeId/TargetRecipePath/TargetDefinitionPath match Recipe; EvidenceId 743FE516484A39E65DAC0E9D18EA8DAB and stored fingerprint b6204acf1d6722009075865204f33b693c96ed002b4c6ba6eed21751b40b535f match BuilderCommitReceipt. Fresh Evidence reports references3, sources5, claims20, unknown5, conflicts0; AssetDump nested preview only eight claims and saved hash comparison not same as live recomputation. Discovered P0-03B actual data semantic mismatch: saved Wagon FactKeys Dimensions.Length/Width/BodyWidth/Height/Wheelbase, while FCFVehicleCCASProviderPrivate::AddPrimaryDimensions recognizes only ExteriorLengthMm/ExteriorWidthMm/ExteriorHeightMm/WheelbaseMm. Therefore actual saved Main dimension projection may stay absent despite valid Source Claim. DO NOT choose Width vs BodyWidth automatically; review precise body vs mirror semantics and canonical unit/duplicate guards, implement scoped mapping with tests in follow-up. CarFight UE Editor read-only connector ue_status internal failure; actual compiled Provider ImportExisting/BuildCurrentSnapshot/ReadbackFingerprint invocation on live persisted assets NOT RUN/BLOCKED. P0-03B USER BUILD PASS and exact9 Automation 9/9 PASS remain evidence but P0-03B overall TECHNICAL ACCEPTANCE HOLD until mapping correction plus live Provider smoke. This request was read-only validation: no C++/Asset/Workbook or Git mutation, only Plan/UDS sync. Other session dirty protected. Next precise step: review/propose minimal dimension claim mapping aligned actual Evidence, correct under coding gate with adjacent tests and rebuild; use approved UE runtime when Ready for actual Provider end-to-end source smoke. Keep P0-02 OEM final trim/Evidence acceptance independent HOLD, P0-03C R2 and P0-04 six production authoring not started.",
+    "blockers": [
+      "P0-03B saved Wagon canonical FactKey Dimensions.* differs from Provider Main scalar mapper Exterior*Mm/WheelbaseMm. Source Claim remains in typed children, but scalar dimension projection may be missing; exact mapping semantics and regression correction required before Technical Acceptance.",
+      "P0-03B real compiled Provider ImportExisting/BuildCurrentSnapshot/ReadbackFingerprint live smoke NOT RUN due to UE read-only connector internal error; fresh AssetDump saved asset readback PASS is not equivalent to live provider call.",
+      "P0-02 six Core representative exact model/trim and approved new durable Evidence final HOLD.",
+      "P0-03C trusted AI R2 and P0-04 first six VehicleData/Workbook/Production publication not started."
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.26",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProvider.cpp v1.1.0 AddPrimaryDimensions",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProviderTests.cpp v1.1.0 VehicleReadDiff",
+      "UE/Saved/CarFight/DataAuthoringAutomationResult.json (P0-03B exact9 PASS 9/9)",
+      "Fresh dataset Recipe adset_v1_4bf2142a2f4022e0574189deb953f79f.b4d70b730877d3f842ec4c06",
+      "Fresh dataset Evidence adset_v1_debf91509270f6f8099f5db1577e1d7f.d2bc377d23c264345a18be23",
+      "Fresh dataset VehicleData adset_v1_61838d7304299ed6e833a41b8b7f43a3.cee4962fa4a8f158fa510d36"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-16",
+    "resolution_basis": "CarFightMCP_Admin ue_batchdump_safe fresh return_code0 for 4 Recipe, 1 Evidence, 12 VehicleData and ue_assetdump_evidence_safe exact asset_sections readback; direct actual Provider AddPrimaryDimensions CPP comparison; previous exact9 Automation JSON. Editor read-only status internally failed. No C++ or Unreal asset mutation."
+  }
+}

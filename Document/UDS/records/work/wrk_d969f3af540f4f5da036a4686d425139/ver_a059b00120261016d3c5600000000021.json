@@ -1,0 +1,37 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261016d3c5600000000021",
+  "parent_version_ids": [
+    "ver_a059b00120261015d3c5600000000020"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-03B",
+    "next_action": "On 2026-10-16 USER executed official UE 5.8 same-process targeted exact9 P0-03B regression. CarFightMCP_Admin independently read persisted UE/Saved/CarFight/DataAuthoringAutomationResult.json schema v2: status success, exact_list_same_process, requested_count9, EngineExitCode0, success_count9, failure/missing/unexpected/duplicate 0. Passed VehicleSchema, VehicleReadDiff, ProviderRegistry, ProviderValidation, DiffDrift, FailClosed, FingerprintGuard, SchemaCompatibility, SnapshotConsistency. User official UE5.8 Build PASS and post-source target receipt previously corroborated. Current v1.1.0 Provider/Header/Tests readback same. Post-implementation static review confirms ImportExisting reads saved Recipe/Evidence via AssetRegistry, validates duplicates/bindings/Evidence fingerprint/dirty, fresh BuildCurrentSnapshot & readback, canonical BuildDiff, reviewed plan/apply fail-closed; no C++ change needed. P0-03B FOCUSED AUTOMATION + STATIC REVIEW PASS, but persisted live Recipe/Evidence smoke NOT RUN/BLOCKED because UE Editor ReadOnly ue_status and ue_list_toolsets returned internal errors; cannot assert source instances/actual bindings pass. Next when authorized UE runtime read-only connection is Ready, inspect current persisted Recipe/Evidence, try nonmutating projection/current fingerprint/readback if available, explicitly distinguish missing P0-02 Core6 Evidence from failed source. Then finalize P0-03B Technical Acceptance. P0-03A exact5 PASS remains baseline, no repeat build or prior tests. P0-02 final exact trim and saved reference Evidence HOLD. P0-03C trusted AI admission and P0-04 six Production VehicleData/Workbook/Runtime not started. Existing VehicleBuilder and mesh dirty protected, no stage/commit/push.",
+    "blockers": [
+      "P0-03B live persisted Recipe/Evidence read-only smoke BLOCKED due to UE read-only runtime connector internal error; 9/9 synthetic+CCAS tests PASS but overall Technical Acceptance pending.",
+      "P0-02 Core6 final exact model/trim and accepted durable Reference Evidence HOLD.",
+      "P0-03C trusted AI R2, P0-04 durable first wave VehicleData/Workbook and later runtime verification not started."
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.25",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFVehicleCCASProvider.h v1.1.0",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProvider.cpp v1.1.0",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProviderTests.cpp v1.1.0",
+      "UE/Saved/CarFight/DataAuthoringAutomationResult.json (P0-03B exact9 PASS)"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-16",
+    "resolution_basis": "User-supplied exact9 PowerShell test execution and independently re-read repository JSON with exact nine passing tests; Editor API read-only connector attempted twice but failed internally; source review and git status performed via CarFightMCP_Admin, no code or assets changed."
+  }
+}

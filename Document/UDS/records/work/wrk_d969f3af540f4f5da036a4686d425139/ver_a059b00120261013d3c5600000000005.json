@@ -1,0 +1,41 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261013d3c5600000000005",
+  "parent_version_ids": [
+    "ver_a059b00120261013d3c5600000000004"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-01",
+    "next_action": "VCCAS-P0-01 Wagon-first Core9 Mesh Readiness Handoff. Preserve Core9 ONLY /Game/CarFight/Vehicles/Meshes candidate chassis paths exact9; no Police/Offroad/SportsCar outside chassis. Reuse existing Wagon production authoring experience (DA_Recipe_Wagon, DA_Vehicle_Wagon, Wagon Reference Evidence and Builder Driving receipt) as PROCESS/reference, not copied values or unconditional proof of complete mesh readiness. GPT: read-only fresh AssetClass/Bounds/Sockets and individual Core8 gap/handoff guidance, after USER saves meshes fresh readback and MeshReady/PreparationRequired/Unverified classification; then phased typed real-spec/CCAS authoring in later gates. USER: actual physical StaticMesh/wheel/socket/scale/hardpoint editing and saving on other 8 Core vehicles; USER Driving/Feel acceptance. Some SUV sockets already persisted, so don't assume all Core8 need identical edits. Existing I-01 fresh class coverage Core9, I-02 body/wheel bounds and Socket/HP dependencies, I-03 Core9 shape dedupe remain HOLD. Do not mutate Production UE assets, Workbook or Source in this stage.",
+    "blockers": [
+      "I-01 fresh current Unreal AssetRegistry/AssetDump StaticMesh class coverage not available",
+      "I-02 actual body bounds/wheel extents/Socket readiness not measured for all candidates",
+      "I-03 real vehicle shape/category dedupe and final representative exactN pending"
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.7",
+      "Document/Plan/VehicleContentAuthoring/VehicleMeshInventory.md v0.1.3",
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.37",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/Systems/Vehicles/VehicleData.md",
+      "Document/Systems/Vehicles/VehicleRuntime.md",
+      "Document/Systems/Vehicles/RuntimeApply.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-13",
+    "resolution_basis": "USER clarified that Wagon is the previously completed example and should be the central reference for the other in-scope CarFight Core9 bodies. USER is responsible for physical UE mesh authoring/adjustments on the other eight cars because little such mesh editing has been completed. Current VehicleBuilder/VehicleData Systems confirm Wheel_Anchor Socket transform/scale and per-mesh ownership; existing Wagon Recipe, Target VehicleData and Builder acceptance receipts provide a real workflow precedent but not blindly transferable dimensions or proof of current mesh readiness. Freeze explicit GPT read-only inventory/readback/per-vehicle USER handoff and later typed data responsibilities. Preserve Core9-only scope, I-01..I-03 HOLD, P0-00 Design PASS, and no source/Unreal assets/Workbook mutations."
+  }
+}

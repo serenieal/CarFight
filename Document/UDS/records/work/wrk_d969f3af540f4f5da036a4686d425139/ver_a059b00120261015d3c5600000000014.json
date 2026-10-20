@@ -1,0 +1,40 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261015d3c5600000000014",
+  "parent_version_ids": [
+    "ver_a059b00120261015d3c5600000000013"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-03A",
+    "next_action": "USER reported official UE 5.8 Editor BUILD PASS performed by another session after the latest CFVehicleCCASProvider.cpp v1.0.3 (source mtime 2026-10-15 10:19:20 KST) and CFVehicleCCASProviderTests.cpp v1.0.2 (mtime 10:19:33). Official CarFight_ReEditor.target Win64/Development/Editor receipt updated 11:09:36, and UE 5.8 Editor successfully executed a subsequent unrelated Automation at 11:12 (CarFight.DataAuthoring.DAUTH_P0_11.FrozenUX.MeshCreate 1/1 PASS, exit code 0). This corroborates the reported latest build success, although the direct BuildEditor.bat exit code or UBT compile summary is not independently read back. Do NOT repeat the same build. CarFight.CCAS.CF_FQ_059.P0_03A.VehicleSchema focused Automation is NOT RUN / no successful result evidence; run it via an existing authorized test path, then direct CCAS registry/Vehicle regressions, then proceed to P0-03B typed readback/diff. P0-02 OEM source dimensions 24/24 review done, final Evidence identity/trim acceptance HOLD. P0-03B/C, trusted R2, P0-04 six durable VehicleData/Workbook production not started. Protect independently dirty Builder/Vehicle Authoring files and user StaticMesh six, no stage/commit/push. Repeat-add/shared-mesh/future resource rebind quality criteria in Plan §13.13 v0.1.18.",
+    "blockers": [
+      "P0-03A focused VehicleSchema Automation NOT RUN; only separate DAUTH MeshCreate test 1/1 PASS observed. Existing authorized execution route required, without another redundant build.",
+      "P0-02 precise reference model/trim, accepted persisted Evidence not completed.",
+      "P0-03B/C typed vehicle provider and capability-backed R2; P0-04 durable six VehicleData/Workbook production still incomplete."
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.18",
+      "Document/Plan/VehicleContentAuthoring/VehicleReferenceSourceReview.md v0.1.0",
+      "Document/Plan/VehicleContentAuthoring/VehicleProviderPreReview.md v0.1.0",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProvider.cpp v1.0.3",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProviderTests.cpp v1.0.2",
+      "UE/Binaries/Win64/CarFight_ReEditor.target (11:09:36 KST receipt)",
+      "UE/Saved/CarFight/DataAuthoringAutomationResult.json (DAUTH MeshCreate success, NOT CF059)",
+      "Document/Systems/Vehicles/VehicleBuilder.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-15",
+    "resolution_basis": "USER explicit successful build report plus direct CarFightMCP_Admin readback source mtimes 10:19:20/10:19:33, CarFight_ReEditor.target receipt mtime 11:09:36, later UE Editor Automation result 11:12:49 KST exit0. Direct BuildEditor.bat command exit code not recovered; VehicleSchema NOT RUN. Source and UDS status verified; user assets unchanged."
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261020d3c5600000000026",
+  "parent_version_ids": [
+    "ver_a059b00120261016d3c5600000000025"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-03C",
+    "next_action": "2026-10-20 Company P0-03C single-pair managed authenticated AI R2 Toolset Create + user-saved Recipe/Definition exact persisted binding TECHNICAL PASS; CarFight G1/AI Preview/MeshCreate/RecordCreation affected Automation 4/4 PASS, official UE5.8 CarFightReEditor.cpp actual Compile+DLL link exit0 with no former OnPostEngineInit C4996. P0-03C Work remains Ready/PARTIAL: generic G3 persistent idempotent write receipt and cross-host OAuth are not verified. Separate work: Core6 real 6-vehicle Production Create0/6, P0-02 OEM Evidence approval HOLD and P0-04 authoring Save/Workbook/Catalog/Publish not accepted. Continue by scoped G3 evidence/decision and specific approved Core6 production workflow; do not redo tested single-pair R2, impersonate Automation, retry uncertain writes or modify existing product Assets by default. User-saved smoke assets are not Core6 production.",
+    "blockers": [
+      "G3 durable idempotent execution receipt/unknown outcome recovery not fully verified; keep no-auto-retry and exact asset readback.",
+      "Core6 six real production vehicles Create0/6; P0-02 OEM Evidence and exact trim approval HOLD.",
+      "P0-04 production authoring Save/Workbook/Catalog/Publish/Runtime acceptance NOT STARTED; not implied by smoke Save.",
+      "Other Host/Client ue.write entitlement not verified; no portability acceptance claim."
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.55 §13.15",
+      "Document/Systems/Vehicles/VehicleR2Proof.md v0.1.6",
+      "Document/Plan/VehicleContentAuthoring/VehicleAIAdmissionDesign.md v0.1.14",
+      "CarFight UE5.8 Editor job bf13fa6ad4884b628bfb0b53e4af7644 C4996 0",
+      "CarFight Automation focused job fe98968e9c04400b96c09bff08d5ff60 2/2; MeshCreate 6b54dea8624649668d47e7f7b045ced4 1/1; RecordCreation 88c88054a59b497e94a04c23fd7fea88 1/1",
+      "Persisted CarFight DA_Recipe_G2R2Smoke20261020A / DA_Vehicle_G2R2Smoke20261020A disk-backed AssetDump PASS"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-20",
+    "resolution_basis": "Company live authenticated one-use G2 R2 writer single-pair success, two user-saved new .uasset persisted class/reference readback, focused 4/4 CarFight Automation; UE5.8 build TU compile+DLL link exit0 no C4996. Canonical continuation corrects stale P0-03C NOT STARTED without promoting G3/Core6/P0-04 to PASS."
+  }
+}

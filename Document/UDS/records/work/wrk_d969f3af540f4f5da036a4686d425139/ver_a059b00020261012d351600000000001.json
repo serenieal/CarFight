@@ -1,0 +1,36 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00020261012d351600000000001",
+  "parent_version_ids": [
+    "ver_bc12a4a25a804674842f377cffcf93cd"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-01",
+    "next_action": "VCCAS-P0-01 Vehicle Mesh Inventory + Category Roster (NOT OPENED): fresh persisted AssetDump inventory across Project/Legacy/Test paths, group actual chassis StaticMeshes by observed vehicle category, select at least one representative mesh per category, capture exact chassis/wheel/socket/bounds/resource readiness evidence, and produce a reviewable roster. Preserve VCCAS-P0-00 v0.1.3 Design PASS / C1-C6 frozen. No UE Product/DataAsset/Workbook mutation, real-spec authoring or runtime validation in this gate.",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.3",
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.37",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/Systems/Vehicles/VehicleData.md",
+      "Document/Systems/Vehicles/VehicleRuntime.md",
+      "Document/Systems/Vehicles/RuntimeApply.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-12",
+    "resolution_basis": "VCCAS-P0-00 Fresh Rebaseline and Pre-Implementation Design Review: six blocking P1 design gaps found at Plan v0.1.1, corrected as C1-C6 with v0.1.3 re-review of existing CF-FQ-058/Vehicle Builder/Vehicle Runtime source. Preserved sole FCFVehicleApplyService Target writer, typed R0-R3 approvals, approved R2 provisional Definition+Recipe identity before final CCAS ContentKey review, durable per-package save/recovery ordering, existing Reference Evidence/AssetReader provenance split, one RuntimeTestCatalog Vehicle membership authority and canonical CarFight_Content.xlsx. Design PASS P0 0, blocking P1 0, P2 2 non-blocking. This successor advances only Ready next phase; no implementation, Asset, Workbook, Build, Automation or PIE mutation."
+  }
+}

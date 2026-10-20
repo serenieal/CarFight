@@ -1,0 +1,41 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261013d3c5600000000004",
+  "parent_version_ids": [
+    "ver_a059b00120261012d3c5600000000003"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-01",
+    "next_action": "VCCAS-P0-01 Fresh AssetRegistry/AssetDump StaticMesh class, chassis/wheel bounds and socket verification plus visual category dedupe. USER has fixed the ONLY eligible first-wave chassis root as /Game/CarFight/Vehicles/Meshes (Git-tracked Core9: CityCar, Compact, Coupe, Pickup, SUV, Sedan, SubCompact, Van, Wagon). No outside chassis, no Legacy Police Car, no /Game/Vehicles Offroad or SportsCar, no external template alternatives. Only SUV and Wagon exact2 have stored AssetDump-verified chassis class; exact7 core candidate body packages remain unverified. Wheel dependencies may be inspected only to serve in-scope core chassis; do not expand body selection. I-01..I-03 remain open until Editor read-only measurement is restored, then freeze distinct in-core-category representatives. Preserve P0-00 DESIGN PASS and no Production or Workbook mutations.",
+    "blockers": [
+      "I-01 fresh current Unreal AssetRegistry/AssetDump StaticMesh class coverage not available",
+      "I-02 actual body bounds/wheel extents/Socket readiness not measured for all candidates",
+      "I-03 real vehicle shape/category dedupe and final representative exactN pending"
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.6",
+      "Document/Plan/VehicleContentAuthoring/VehicleMeshInventory.md v0.1.2",
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.37",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/Systems/Vehicles/VehicleData.md",
+      "Document/Systems/Vehicles/VehicleRuntime.md",
+      "Document/Systems/Vehicles/RuntimeApply.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-13",
+    "resolution_basis": "USER correction: only CarFight's nine existing primary body-named vehicle candidates under /Game/CarFight/Vehicles/Meshes shall be selected and authored in CF-FQ-059. Previous temporary intermediate scope Core9 plus optional external template Offroad/SportsCar2=11 was superseded; Police remains excluded. Git-tracked core body candidates exact9 (SUV/Wagon stored StaticMesh verified exact2, seven other core body paths not currently class/geometry verified). Out-of-scope historical AssetDump observations are preserved but never accepted as new candidates; no deleted/modified non-document asset. Same VCCAS-P0-01 Ready/HOLD I-01~I-03, P0-00 design PASS preserved; no C++/Blueprint/Production/Workbook/build changes."
+  }
+}

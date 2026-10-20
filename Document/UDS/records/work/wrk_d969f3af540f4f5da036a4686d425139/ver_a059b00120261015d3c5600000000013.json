@@ -1,0 +1,39 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261015d3c5600000000013",
+  "parent_version_ids": [
+    "ver_a059b00120261015d3c5600000000012"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-03A",
+    "next_action": "Provider source review found a concrete provenance integrity defect: a FACT/DERIVED Claim could omit ReferenceVehicleId or FactKey while satisfying ClaimId/citation validation. Corrected in CFVehicleCCASProvider.cpp v1.0.3; added valid fixture and negative tests in CFVehicleCCASProviderTests.cpp v1.0.2, same P0-03A focused automation CarFight.CCAS.CF_FQ_059.P0_03A.VehicleSchema. Exact managed repository writes/readback PASS; full code build and Automation not run against latest correction because UE MCP currently ERR_UE_MCP_UNAVAILABLE, previous project/legacy managed process runner unavailable. USER's reported successful 2026-10-15 official UE 5.8 build applied to PRE-correction source only. Next verify current corrected official source build, run focused test and directly affected CCAS Registry/Vehicle evidence regressions using an existing authorized test path; only then P0-03B readback/diff implementation. P0-02 OEM manufacturer dimension source review 24/24 but reference identity/trim and durable Evidence final acceptance HOLD. No new VehicleData/Recipe/Workbook/catalog, no UE Asset or Product mutation, no raw shell/new external tool, no stage/commit/push. Continuous vehicle extensibility, shared same-mesh use and future rebind quality requirements are in Plan §13.13 v0.1.16.",
+    "blockers": [
+      "Current corrected P0-03A v1.0.3/v1.0.2 has not undergone official UE 5.8 build or focused Automation. UE MCP currently unavailable, managed test process repository route not available.",
+      "P0-02 precise vehicle/trim and accepted saved reference Evidence unfinished.",
+      "P0-03B/C typed provider integration and trusted AI R2, P0-04 six durable Production VehicleData/Workbook authoring unfinished."
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.16",
+      "Document/Plan/VehicleContentAuthoring/VehicleReferenceSourceReview.md v0.1.0",
+      "Document/Plan/VehicleContentAuthoring/VehicleProviderPreReview.md v0.1.0",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProvider.cpp v1.0.3",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProviderTests.cpp v1.0.2",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-15",
+    "resolution_basis": "Official CarFightMCP_Admin Git status; AGENTS/CodeWorkGate/DocumentEntry/UDS/Plan/Systems/actual C++/tests read, reviewed minimal source validation correction with exact repo.patch_text readback. UE MCP unavailable, Automation not executed; USER pre-correction build historical."
+  }
+}

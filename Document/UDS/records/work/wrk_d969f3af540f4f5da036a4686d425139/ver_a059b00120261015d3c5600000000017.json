@@ -1,0 +1,40 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261015d3c5600000000017",
+  "parent_version_ids": [
+    "ver_a059b00120261015d3c5600000000016"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-03A",
+    "next_action": "2026-10-15 P0-03A post-implementation adjacent source review completed: existing ProviderRegistry and CCAS Core/Compiler contracts inspected; vehicle key vehicle_<lowercase 32 hex RecipeId>, exact ContentType/RowId, schema external VehicleBuilder owner, canonical read-only source/citation/Unknown and mutation fail-closed confirmed. No Production auto-registration/writer created. Found direct-scope omission: Claim Provenance (Enum) previously relied on case-insensitive FString == for FACT/DERIVED; invalid mixed-case fact/derived could be accepted. Corrected provider CFVehicleCCASProvider.cpp v1.0.5 using Equals(CaseSensitive) for both enum tokens and tests CFVehicleCCASProviderTests.cpp v1.0.4 for canonical DERIVED PASS and lowercase fact/derived + GAME_BIAS rejection. Managed code write/readback PASS; old v1.0.4/v1.0.3 VehicleSchema 1/1 PASS preserved as historical evidence, but CURRENT new v1.0.5/v1.0.4 build/Automation NOT RUN. Specific adjacent regression exact5 via existing Tools/RunDataAuthoringTests.ps1 -ExactTestNames in one Editor process: CarFight.CCAS.CF_FQ_059.P0_03A.VehicleSchema, CarFight.CCAS.CF_FQ_058.P0_01.ProviderRegistry, CarFight.CCAS.CF_FQ_058.P0_02.ProviderValidation, CarFight.CCAS.CF_FQ_058.P0_02.SchemaCompatibility, CarFight.CCAS.CF_FQ_058.P0_02.SnapshotConsistency. Require success5/failure0/missing0/unexpected0/duplicate0/engineexit0 and latest UE5.8 build before TECHNICAL ACCEPTANCE. Admin Project managed process route not configured, UE MCP unavailable; do not invent test PASS or spin up new runner. P0-03B typed import/diff not opened. Preserve existing Builder/Vehicle UI and six body meshes dirty. P0-02 exact trim and durable Evidence still HOLD. No stage/commit/push.",
+    "blockers": [
+      "P0-03A latest Provider v1.0.5/Tests v1.0.4 official UE5.8 Build NOT RUN; exact5 adjacent regressions NOT RUN due to no managed execution route. Static source review PASS; Technical Acceptance HOLD.",
+      "P0-02 representative exact trim/model durable reference Evidence acceptance HOLD.",
+      "P0-03B/C typed import/diff, capability-backed AI R2, P0-04 six durable VehicleData/Workbook production not started."
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.21",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProvider.cpp v1.0.5",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProviderTests.cpp v1.0.4",
+      "UE/Source/CarFight_ReEditor/Public/DataAuthoring/CFVehicleCCASProvider.h v1.0.0",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFContentProvider.cpp v1.2.0",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFContentCoreTests.cpp (ProviderRegistry)",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFContentCompilerTests.cpp (ProviderValidation/SchemaCompatibility/SnapshotConsistency)",
+      "UE/Saved/CarFight/DataAuthoringAutomationResult.json (historical VehicleSchema 1/1 PASS pre-current correction)"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-15",
+    "resolution_basis": "Actual CarFightMCP_Admin source readback and focused test definitions, previous VehicleSchema 1/1 JSON, current git status; exact semantic source correction and readback, no official build or adjacent test execution, no Product mutation."
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261013d3c5600000000008",
+  "parent_version_ids": [
+    "ver_a059b00120261013d3c5600000000007"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-01",
+    "next_action": "USER-directed reference-first Core6 size decision inside VCCAS-P0-01. BEFORE physical edits to six live StaticMesh Socket0 candidates CityCar/Compact/Coupe/Pickup/SubCompact/Van, GPT researched and source-verified six exact manufacturer L/W/H/Wheelbase reference cars and trim/market qualifiers (Kia MY2027 Morning KR, Jimny 5-door Alpha AT India catalogue Jun2024, GR86 2026 Oman MT with wheelbase corroborated Toyota AU, HiLux SR5 4x4 AT current AU, Hyundai Venue 1.6 IVT 17 KR, STARIA Hybrid Cargo5 17 KR). Full authoritative facts and local AABB comparison in Document/Plan/VehicleContentAuthoring/VehicleRepresentativeSpecRoster.md v0.1.0. Their OEM dimensional facts are SOURCE VERIFIED; association of each fantasy Body asset to representative visual category/identity is AWAIT USER ACCEPTANCE, so do not mark vehicle dimensions user-final or edit meshes. Physical BODIES remain original; no R2/Workbook/Production. Next ask USER approve/adjust six choices, THEN USER inspect real mesh imported scale+axis+geometry and physically edit wheel anchors, GPT fresh validate. I-01 PASS, I-02/I-03 HOLD, P0-01 overall HOLD, P0-02 NOT OPENED and P0-00 DESIGN PASS unchanged.",
+    "blockers": [
+      "I-02: USER Core6 current Mesh Socket0 and local scale/orientation review plus wheel bounds/binding/visual readiness and saved re-verification pending",
+      "I-03: actual 9 category mesh silhouette/geometry dedupe and final representative selection pending"
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.10",
+      "Document/Plan/VehicleContentAuthoring/VehicleMeshInventory.md v0.1.6",
+      "Document/Plan/VehicleContentAuthoring/VehicleMeshPreparationChecklist.md v0.1.2",
+      "Document/Plan/VehicleContentAuthoring/VehicleRepresentativeSpecRoster.md v0.1.0",
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.37",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/Systems/Vehicles/VehicleData.md",
+      "Document/Systems/Vehicles/VehicleRuntime.md",
+      "Document/Systems/Vehicles/RuntimeApply.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-13",
+    "resolution_basis": "USER explicitly reordered Core6 Physical StaticMesh resizing/socket authoring after first selecting one real representative model and confirming its specifications per category. Current approved live UE measurements 9 Body class and bounds and Core6 Socket0 unchanged. Official public OEM specification sources directly checked for six distinct cars with year/market/grade qualifiers and six numeric L/W/H/WB 4-tuples, additional powertrain/weights wherever source-qualified, and special distinction GR86 wheelbase via Toyota AU OEM not Oman sheet, Hilux SR5 current 1885mm wide not historical 1855, Staria Cargo 2000mm vs Tourer1990. Selection proposed for USER mesh match acceptance and deliberately NOT asserted accepted. Plan docs updated; no Unreal Asset/Production/Workbook/Source mutation, no Git commit."
+  }
+}

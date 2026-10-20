@@ -1,0 +1,41 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261012d3c5600000000003",
+  "parent_version_ids": [
+    "ver_a059b00120261012d3c5600000000002"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-01",
+    "next_action": "VCCAS-P0-01 Fresh Unreal Asset Class / Bounds / Socket Rebaseline + Final Category Roster Review. USER current selection scope EXCLUDES Legacy Police Car (/Game/CarFight/_Legacy/police_car) from CF-FQ-059 representative, Production, reuse and repair. In-scope tracked body-named candidates exact11: CarFight core9 plus optional Offroad/SportsCar templates2; stored AssetDump verified in-scope StaticMesh body exact2 (SUV/Wagon), in-scope class-unverified exact9. Historical AssetDump indexed count37/vehicle-body3 includes excluded Police body1; preserve it as observation only. Resolve I-01 fresh class coverage for 11, I-02 body/wheel bounds and socket readiness excluding Police, I-03 visual category dedupe excluding Police; no P0-02 until P0-01 PASS. Existing police assets unchanged; do not restore police candidacy without new USER instruction.",
+    "blockers": [
+      "I-01 fresh current Unreal AssetRegistry/AssetDump StaticMesh class coverage not available",
+      "I-02 actual body bounds/wheel extents/Socket readiness not measured for all candidates",
+      "I-03 real vehicle shape/category dedupe and final representative exactN pending"
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.5",
+      "Document/Plan/VehicleContentAuthoring/VehicleMeshInventory.md v0.1.1",
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.37",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/Systems/Vehicles/VehicleData.md",
+      "Document/Systems/Vehicles/VehicleRuntime.md",
+      "Document/Systems/Vehicles/RuntimeApply.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-12",
+    "resolution_basis": "USER explicitly excluded Legacy Police Car from CF-FQ-059 current candidate selection. Preserve raw prior AssetDump evidence and other Project assets, do not delete police or change it. Adjust current candidate scope from core9+legacy1+optional templates2=12 to core9+optional templates2=11, with only SUV/Wagon exact2 StaticMesh body class verified within current scope; 9 in-scope body candidates await fresh verification. Existing Ready VCCAS-P0-01 evidence blockers I-01~I-03 unchanged and v0.1.3 P0-00 Design PASS preserved. Only Plan, Inventory and UDS metadata updated; no Unreal Product, Workbook, Source, Build or PIE work."
+  }
+}

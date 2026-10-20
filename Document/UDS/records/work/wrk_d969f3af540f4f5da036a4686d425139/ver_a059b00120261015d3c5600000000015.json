@@ -1,0 +1,39 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_a059b00120261015d3c5600000000015",
+  "parent_version_ids": [
+    "ver_a059b00120261015d3c5600000000014"
+  ],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-03A",
+    "next_action": "USER ran focused Automation CarFight.CCAS.CF_FQ_059.P0_03A.VehicleSchema using Tools/RunDataAuthoringTests.ps1 on 2026-10-15. Actual result_json corroborates ENGINE_EXIT_CODE=0 but Automation FAILED: success=0, failure=1, missing/unexpected/duplicate=0. Exact test failure log CFVehicleCCASProviderTests.cpp:159 'Mixed case Vehicle is rejected' expected false but actual true. Root cause in CFVehicleCCASProvider::ValidateRecord was non-explicit case-sensitive FString == comparison to literal 'vehicle'; same case-only RowId weakness via !=. Corrected in CFVehicleCCASProvider.cpp v1.0.4: .Equals(TEXT(\"vehicle\"), ESearchCase::CaseSensitive) and RowId.Equals(..., CaseSensitive). CFVehicleCCASProviderTests.cpp v1.0.3 now includes exact diagnostic for uppercase type and case-only RowId negative regression. Both code files written/read back through CarFightMCP_Admin. Post-correction OFFICIAL UE5.8 BUILD and same focused Automation NOT RUN. Next perform a new build of corrected source, run exact VehicleSchema test and affected registry identity regressions; accept P0-03A only when success 1/failure0 and no missing/unexpected/duplicate, then P0-03B typed readback/diff. Protect separate Builder UI dirty, Core6 mesh assets, CCAS workbook; no stage/commit/push. P0-02 exact trim and durable Evidence acceptance HOLD; P0-04 six VehicleData authoring not started.",
+    "blockers": [
+      "Latest corrected Provider v1.0.4 / Tests v1.0.3 still require official UE 5.8 Editor BUILD and VehicleSchema focused Automation. Prior v1.0.3/v1.0.2 focused test FAIL 0/1 is verified; EngineExitCode0 is NOT test PASS.",
+      "P0-02 exact representative model/trim and accepted saved reference Evidence not completed.",
+      "P0-03B/C typed provider, trusted AI R2, P0-04 six durable Production VehicleData/Workbook authoring not completed."
+    ],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.19",
+      "Document/Plan/VehicleContentAuthoring/VehicleReferenceSourceReview.md v0.1.0",
+      "Document/Plan/VehicleContentAuthoring/VehicleProviderPreReview.md v0.1.0",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProvider.cpp v1.0.4",
+      "UE/Source/CarFight_ReEditor/Private/DataAuthoring/CFVehicleCCASProviderTests.cpp v1.0.3",
+      "UE/Saved/CarFight/DataAuthoringAutomationResult.json (VehicleSchema FAIL 0/1 pre-correction)",
+      "Document/Systems/Vehicles/VehicleBuilder.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-15",
+    "resolution_basis": "User-provided complete PowerShell runner terminal output and UE Automation Test Completed Fail event with exact source location; Admin repo.read_batch of actual DataAuthoringAutomationResult.json and original/current CPP/Test code; managed patch+readback success. New tests NOT RUN."
+  }
+}

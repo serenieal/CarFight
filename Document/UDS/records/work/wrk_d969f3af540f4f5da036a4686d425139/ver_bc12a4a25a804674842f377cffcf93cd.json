@@ -1,0 +1,33 @@
+{
+  "schema_version": "uds-record/v1",
+  "object_id": "wrk_d969f3af540f4f5da036a4686d425139",
+  "object_type": "work",
+  "project_id": "prj_98f38d9f2dbb41268e4c3f6f15fa09da",
+  "version_id": "ver_bc12a4a25a804674842f377cffcf93cd",
+  "parent_version_ids": [],
+  "state": "ready",
+  "relations": [],
+  "payload": {
+    "consumer_alias": "CF-FQ-059",
+    "title": "Vehicle CCAS Domain Onboarding / 차량 콘텐츠 생산 저작 체계",
+    "phase": "VCCAS-P0-00",
+    "next_action": "Fresh rebaseline current Vehicle Builder/Recipe/Profile/VehicleData/Defense/Sensor/Camera/Fitting/discovery and CF-FQ-058 CCAS contracts, then freeze Vehicle Domain ownership, Project Mesh inventory/representative-category roster workflow, real-reference vehicle provenance model, GPT UI-less authoring path, and Production Vehicle discovery boundary before implementation",
+    "blockers": [],
+    "owner_scope": [
+      "carfight:feature:CF-FQ-059"
+    ],
+    "legacy_refs": [
+      "Document/Plan/VehicleContentAuthoring/VehicleContentAuthoringPlan.md v0.1.0",
+      "Document/Plan/ContentAuthoringSystem/ContentAuthoringSystemPlan.md v0.1.37",
+      "Document/Systems/DataManagement/DataAssetAuthoring.md",
+      "Document/Systems/Vehicles/VehicleBuilder.md",
+      "Document/Systems/Vehicles/VehicleData.md",
+      "Document/Systems/Vehicles/VehicleRuntime.md",
+      "Document/ProjectSSOT/03_FeatureQueue.md"
+    ]
+  },
+  "provenance": {
+    "decision_date": "2026-10-12",
+    "resolution_basis": "USER approved formal promotion after defining the next CCAS vehicle goal: inventory existing project vehicle meshes by vehicle category, select at least one representative mesh per discovered category, bind each to one real representative vehicle/year/trim, apply sourced real-world specifications as far as practical, distinguish ReferenceSpec/MeshMeasured/Derived/CarFightTuned provenance, and materialize game-loadable Production Vehicles. GPT is the primary author; manual Excel editing and mandatory Vehicle Builder wizard operation are not the normal workflow. CF-FQ-058 remains closed and is reused as the generic content-authoring baseline."
+  }
+}
