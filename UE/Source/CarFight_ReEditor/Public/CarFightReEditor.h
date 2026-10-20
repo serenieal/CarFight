@@ -1,10 +1,12 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.9.0
+// Version: 1.10.1
 // Date: 2026-09-29
 // Description: CarFight Editor 전용 도구 모듈 진입점입니다.
 // Scope: Content Manager, Guided Vehicle Builder, Guided Equipment Builder, Weapon Equipment Authoring Guide, Vehicle Authoring과 Data Asset Manager 탭/메뉴를 담당합니다.
 // Changelog:
+// - v1.10.1: Engine 초기화 이후 등록을 위한 단일 callback·delegate identity와 등록 readback 상태를 보존.
+// - v1.10.0: Engine/Editor 초기화 전 등록 실패를 방지하는 OnPostEngineInit Toolset 등록 callback·delegate 수명 관리 추가.
 // - v1.9.0: CF-FQ-058 CCAS-P0-05 CarFight Content Manager read-only Catalog / Compare Nomad Tab과 Window 메뉴 진입점을 추가.
 // - v1.8.0: CF-FQ-055 WEA-P0-02 Weapon Equipment Authoring Guide Native Slate Nomad Tab/Window 메뉴 진입점을 추가. CF-FQ-054 Equipment Builder 상태/책임은 변경하지 않습니다.
 // - v1.7.0: CF-FQ-054 EBA-P0-01 Guided Equipment Builder Nomad Tab/Window 메뉴 진입점을 추가.
@@ -16,6 +18,7 @@
 // - v1.1.0: DAUTH-P0-09 Vehicle Authoring Workspace Nomad Tab/Window 메뉴 진입점을 추가하고 기존 Wizard를 병행 유지.
 // - v1.0.0: Vehicle DA Wizard Nomad Tab과 Window 메뉴 진입점을 추가.
 // Migration:
+// - v1.10.0: Toolset은 Editor 초기화가 완료된 뒤 등록하며 모듈 종료 시 등록 및 남은 콜백을 해제한다.
 // - v1.8.0부터 Weapon Equipment Authoring Guide는 Editor-only 독립 Nomad Tab으로 등록되며 Equipment Builder business state를 공유하거나 자동 재개하지 않습니다.
 // - v1.7.0부터 Guided Equipment Builder는 Editor-only 독립 Nomad Tab으로 등록되며 Vehicle Builder business state를 공유하지 않습니다.
 // - v1.6.0부터 Legacy Vehicle DA Wizard는 제거됐습니다. 정상 제작은 Guided Builder, 전문 수동 편집/복구는 Vehicle Authoring Workspace를 사용합니다.
@@ -25,6 +28,7 @@
 #pragma once
 
 #include "Modules/ModuleManager.h"
+#include "Delegates/Delegate.h"
 
 class FSpawnTabArgs;
 class SDockTab;
@@ -39,6 +43,15 @@ public:
 	virtual void ShutdownModule() override;
 
 private:
+	// Engine 초기화 이후에 Registry가 준비되면 CarFight Toolset 한 종류만 등록합니다.
+	void RegisterVehicleAuthoringToolset();
+
+	// Editor 초기화가 늦어 등록을 유예했을 때만 사용하는 일회성 Engine delegate입니다.
+	FDelegateHandle VehicleToolsetPostEngineInitHandle;
+
+	// 등록에 실제 성공한 경우에만 모듈 종료 시 Unregister를 호출합니다.
+	bool bVehicleToolsetRegistered = false;
+
 	// CarFight Content Manager 탭 인스턴스를 생성합니다.
 	TSharedRef<SDockTab> HandleSpawnContentCatalogTab(const FSpawnTabArgs& InSpawnTabArgs);
 

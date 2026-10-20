@@ -1,8 +1,10 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 // File: CarFight_ReEditor.Build.cs
-// Version: v1.10.5
+// Version: v1.10.7
 // Changelog:
+// - v1.10.7: Reuse Unreal Engine HTTP module for loopback one-use Bridge execution proof claim in the Editor-only R2 Toolset.
+// - v1.10.6: CF-FQ-059 G1 기존 UE5.8 ToolsetRegistry 기반 Editor-only 읽기 Toolset 의존성 추가.
 // - v1.10.5: CF-FQ-060 P0-04 기존 Static Mesh Editor의 정확한 Socket Manager refresh에 IStaticMeshEditor를 사용하므로 Editor-only StaticMeshEditor 의존성을 추가.
 // - v1.10.4: CF-FQ-058 exact34 Production candidate Resource Catalog가 UNiagaraSystem class contract를 직접 사용하므로 Editor-only Niagara link 의존성을 추가.
 // - v1.10.3: P0-07 Final Technical Review에서 native ZIP/XML compile-probe 의존성이 production dependency list에 남아 있지 않음을 확인하고 OpenXLSX Editor-only 구성을 최종 정리.
@@ -23,6 +25,7 @@
 // - v1.1.0: Data Authoring Profile의 ChaosVehicle enum/class reflection 링크를 위해 ChaosVehicles 의존성을 추가.
 // - v1.0.0: Vehicle DA Wizard 에디터 탭을 위한 Editor 전용 모듈을 추가.
 // Migration:
+// - v1.10.6: 신규 Toolset은 Editor 모듈 전용, 기존 ToolsetRegistry 자동 발견 사용. R2/Host 권한 정책 변경 없음.
 // - 게임 런타임 모듈(CarFight_Re)은 그대로 유지한다.
 // - 에디터 전용 UI와 메뉴 의존성은 CarFight_ReEditor 모듈에만 둔다.
 // Purpose: CarFight 에디터 도구 모듈의 Unreal Editor/Slate 의존성을 명시한다.
@@ -65,6 +68,7 @@ public class CarFight_ReEditor : ModuleRules
 			"AssetTools",
 			"ContentBrowser",
 			"ChaosVehicles",
+			"HTTP",
 			"InputCore",
 			"ImageWrapper",
 			"Json",
@@ -76,6 +80,7 @@ public class CarFight_ReEditor : ModuleRules
 			"SlateCore",
 			"StaticMeshEditor",
 			"ToolMenus",
+			"ToolsetRegistry",
 			"UMG",
 			"UMGEditor",
 			"UnrealEd"

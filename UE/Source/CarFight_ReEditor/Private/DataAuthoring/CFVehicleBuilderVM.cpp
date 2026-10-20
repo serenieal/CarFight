@@ -1,9 +1,10 @@
 // Copyright (c) CarFight. All Rights Reserved.
 // File: CFVehicleBuilderVM.cpp
-// Version: v1.39.2
-// Date: 2026-10-15
+// Version: v1.39.3
+// Date: 2026-10-16
 // Description: Guided Vehicle Builder Shell + CF-FQ-047 Step 7 durable final commit / Step 8 fresh saved-handoff orchestration입니다.
 // Changelog:
+// - v1.39.3: CF-FQ-059 C-1 VehicleId/default identity 검증을 공용 순수 helper에 위임. Builder public signature, UI Advanced overwrite와 오류 의미 보존.
 // - v1.39.2: Mesh-only 선택 항목이 실제로 기존 VehicleData가 사용하는 메시일 수도 있음을 Step 1 안내에 반영. Definition/Recipe create/selection 계약은 변경 없음.
 // - v1.39.1: guarded Undo backend mutation이 UObject state를 실제 변경해도 package dirty flag가 자동 보장되지 않는 경로를 교정. Mutation footprint가 Target/Recipe 변경을 보고하면 해당 exact package를 명시 dirty로 전환한 뒤 durable save를 수행해 clean-but-stale disk false-complete를 차단.
 // - v1.39.0: CF-FQ-047 최종 재감사 교정. guarded Undo 성공 뒤 reverted Target/Recipe exact pair를 Target→Recipe dirty-needed 순서로 durable 저장하고, invalid package/save partial failure는 Undo mutation을 rollback/retry하지 않은 채 current dirty/partial state로 fail-closed하도록 P0-07H mandatory contract를 구현.
@@ -85,6 +86,7 @@
 #include "DataAuthoring/CFPerformanceProfile.h"
 #include "DataAuthoring/CFVehicleBaseProfile.h"
 #include "DataAuthoring/CFVehicleRecipeData.h"
+#include "DataAuthoring/CFVehicleRecordIdentity.h"
 #include "DataAuthoring/CFVehicleRefEvidence.h"
 #include "DataAuthoring/CFVehicleResolver.h"
 #include "DataAuthoring/CFVehicleSnapshotBuilder.h"
@@ -641,26 +643,13 @@ bool FCFVehicleBuilderVM::BuildDefaultVehicleRecordIdentity(
 	FString& OutRecipeAssetName,
 	FString& OutError) const
 {
-	OutDefinitionPackageName.Reset();
-	OutDefinitionAssetName.Reset();
-	OutRecipePackageName.Reset();
-	OutRecipeAssetName.Reset();
-
-	if (!ValidateVehicleCreationId(VehicleId, OutError))
-	{
-		return false;
-	}
-
-	// 일반 Guided 신규 차량 identity가 위치하는 canonical Authoring package root입니다.
-	const FString AuthoringPackageRoot = TEXT("/Game/CarFight/Data/Authoring/");
-	// VehicleData object/package에 사용할 deterministic 이름입니다.
-	OutDefinitionAssetName = TEXT("DA_Vehicle_") + VehicleId;
-	// Recipe object/package에 사용할 deterministic 이름입니다.
-	OutRecipeAssetName = TEXT("DA_Recipe_") + VehicleId;
-	OutDefinitionPackageName = AuthoringPackageRoot + OutDefinitionAssetName;
-	OutRecipePackageName = AuthoringPackageRoot + OutRecipeAssetName;
-	OutError.Reset();
-	return true;
+	return FCFVehicleRecordIdentity::BuildDefaultIdentity(
+		VehicleId,
+		OutDefinitionPackageName,
+		OutDefinitionAssetName,
+		OutRecipePackageName,
+		OutRecipeAssetName,
+		OutError);
 }
 
 // 명시적 신규 차량이 현재 사용할 optional Chassis StaticMesh exact object path를 반환합니다.
@@ -3707,36 +3696,7 @@ bool FCFVehicleBuilderVM::IsMeshOnlyCandidate() const
 // Vehicle ID가 기본 naming에 사용할 영문자/숫자/_ 전용 Unreal Asset-safe identifier인지 검사합니다.
 bool FCFVehicleBuilderVM::ValidateVehicleCreationId(const FString& VehicleId, FString& OutError) const
 {
-	if (VehicleId.IsEmpty())
-	{
-		OutError = TEXT("Vehicle ID를 입력하세요. 영문자, 숫자, _만 사용할 수 있습니다.");
-		return false;
-	}
-
-	if (VehicleId != VehicleId.TrimStartAndEnd())
-	{
-		OutError = TEXT("Vehicle ID 앞뒤에는 공백을 사용할 수 없습니다. 영문자, 숫자, _만 사용하세요.");
-		return false;
-	}
-
-	for (const TCHAR Character : VehicleId)
-	{
-		// Vehicle ID 기본 naming에서 허용하는 ASCII 영문자입니다.
-		const bool bIsAsciiLetter = (Character >= TEXT('A') && Character <= TEXT('Z'))
-			|| (Character >= TEXT('a') && Character <= TEXT('z'));
-		// Vehicle ID 기본 naming에서 허용하는 ASCII 숫자입니다.
-		const bool bIsAsciiDigit = Character >= TEXT('0') && Character <= TEXT('9');
-		if (!bIsAsciiLetter && !bIsAsciiDigit && Character != TEXT('_'))
-		{
-			OutError = FString::Printf(
-				TEXT("Vehicle ID에 사용할 수 없는 문자가 있습니다: '%c'. 영문자, 숫자, _만 사용하세요."),
-				Character);
-			return false;
-		}
-	}
-
-	OutError.Reset();
-	return true;
+	return FCFVehicleRecordIdentity::ValidateVehicleId(VehicleId, OutError);
 }
 
 // 신규 차량 제작 transient state를 기본 비활성 상태로 되돌립니다.

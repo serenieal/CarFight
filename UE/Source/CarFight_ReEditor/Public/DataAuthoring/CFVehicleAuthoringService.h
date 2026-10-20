@@ -1,11 +1,13 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleAuthoringService.h
-// Version: v1.10.0
-// Date: 2026-09-04
+// Version: v1.12.0
+// Date: 2026-10-16
 // Description: DAUTH Common Authoring facade + CF-FQ-047 Physics receipt 및 durable AppliedState finalize seam입니다.
 // Scope: Existing Snapshot/Resolver/Import/Adoption/Batch B2/Apply core orchestration과 Frozen 24.90~24.94 Workspace completeness를 제공합니다.
 // Changelog:
+// - v1.12.0: Reuse the exact two-record writer from a private verified-AI entry without widening SlateUI/Automation access.
+// - v1.11.0: CF-FQ-059 P0-03C AI 전용 mutation0 차량 생성 Preview facade를 추가하고 실제 R2 Create는 기존 caller guard에 보존.
 // - v1.10.0: VBHAI-P0-07H에서 Final Review semantic no-diff를 fresh 재검사하고 exact DefinitionApply approval로 Recipe AppliedState만 finalize하는 service facade/scope를 추가.
 // - v1.9.0: generic Builder Profile full-exact transaction 의미를 유지하면서 resolved DefinitionHash를 제외한 Physics provenance exactness를 read-only로 조회하는 facade를 추가.
 // - v1.8.0: Builder Final Review가 one fresh Resolve를 Validation/Drift/Gameplay projection에 재사용하고 provenance receipt/post-state Undo hardening을 지원.
@@ -18,6 +20,7 @@
 // - v1.1.0: P0-09 Initial Import reviewed R2 proposal/commit facade를 추가해 Slate가 Import Core를 직접 호출하지 않게 함.
 // - v1.0.0: Section 25 Common Authoring Service Foundation 최초 구현.
 // Migration:
+// - v1.11.0 AI Preview는 승인 증표를 발급하거나 Definition/Recipe를 생성하지 않습니다. AI Create는 후속 trusted admission 전까지 거부됩니다.
 // - v1.10.0 AppliedState finalize는 Target field를 수정하거나 Save하지 않으며, 기존 ApplyBuilderFinalReview의 actual Diff Apply 의미를 변경하지 않습니다.
 // - v1.9.0 Physics provenance read는 persistent receipt를 수정/저장하지 않으며 PreviewBuilderProfiles/CommitBuilderProfiles의 full resolved DefinitionHash exact comparator는 그대로 유지합니다.
 // - Builder companion creation은 기존 CreateVehicleRecords의 Definition+Recipe core 계약을 변경하지 않고 후속 R2 operation으로 Evidence + private 4 Profile만 생성합니다.
@@ -188,6 +191,11 @@ public:
 		const FCFVehicleRecordCreateRequest& Request,
 		FCFVehicleRecordCreatePreview& OutPreview);
 
+	// AI가 UI 없이 exact R2 생성안을 read-only 검사합니다. 이 경로는 생성 권한이 아니며 R2 commit은 계속 차단합니다.
+	static bool PreviewAIVehicleRecords(
+		const FCFVehicleRecordCreateRequest& Request,
+		FCFVehicleRecordCreatePreview& OutPreview);
+
 	// Fresh R2 proposal을 재검사한 뒤 Definition+Recipe만 한 transaction으로 생성하며 Apply/Save/Profile inference는 하지 않습니다.
 	static bool CreateVehicleRecords(
 		const FCFVehicleRecordCreateRequest& Request,
@@ -232,6 +240,14 @@ public:
 	static FString BuildDiffHash(const TArray<FCFVehicleFieldDiff>& FieldDiff);
 
 private:
+	friend class UCFVehicleAuthoringToolset;
+
+	// 검증된 실행 증명을 소비한 Editor Toolset만 호출하는 AI R2 진입점입니다.
+	static bool CreateTrustedAIVehicleRecords(const FCFVehicleRecordCreateRequest& Request, FCFVehicleRecordCreateResult& OutResult);
+
+	// 기존 UI/Automation과 검증된 AI가 공유하는 two-record 생성 코어입니다.
+	static bool CreateVehicleRecordsImpl(const FCFVehicleRecordCreateRequest& Request, FCFVehicleRecordCreateResult& OutResult, bool bVerifiedAI);
+
 	// 이미 계산한 one fresh Resolve result를 재사용해 Builder Gameplay Guidance projection만 구성합니다.
 	static bool BuildBuilderGameplayGuidanceFromResolve(
 		const FCFBuilderGameplayGuidanceRequest& Request,

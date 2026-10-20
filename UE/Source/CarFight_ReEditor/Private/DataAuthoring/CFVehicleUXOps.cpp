@@ -1,11 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
 // File: CFVehicleUXOps.cpp
-// Version: v1.5.0
-// Date: 2026-09-15
+// Version: v1.8.0
+// Date: 2026-10-16
 // Description: DAUTH-P0-11 Frozen 24.91~24.94 normal Workspace completeness facade + 신규 차량 Basic Sensor policy 구현입니다.
 // Scope: existing Batch B2 Profile edit, External Drift 3-way recovery, Definition+Recipe record creation을 Common Authoring facade에 얇게 연결합니다.
 // Changelog:
+// - v1.8.0: Verified AI Toolset uses the existing fresh-preview two-record writer through a private proof-consumer-only entry; legacy caller guard remains unchanged.
+// - v1.7.0: CF-FQ-059 C-1 AI R0 Preview의 신규 차량 identity를 공통 canonical Builder 명명 규칙으로 제한. SlateUI/Automation Legacy Preview/Create 유지.
+// - v1.6.0: CF-FQ-059 P0-03C AI mutation0 Preview를 공통 path/type/collision/hash 로직에 연결. UI/Automation create guard, R2 approval, Save0 유지.
 // - v1.5.0: 새 Definition+Recipe 생성 시 Recipe SensorMode를 UseProjectBasicSensor로 명시하고 explicit Sensor override는 비워 공통 Basic Sensor를 정상 출고 기본값으로 고정.
 // - v1.4.0: CF-FQ-043 bRequireExplicitHardpointPlan=true만 two-record creation ProposalHash에 additive binding해 legacy false hash payload를 보존하고 Guided Recipe 생성 시 BuilderHardpointPlanMode=Unspecified를 기록. 일반 creation은 LegacyCompatible 보존.
 // - v1.3.0: two-record creation approval hash에 Guided vehicle-specific Transmission policy opt-in을 binding하고 생성 Recipe에 persistent policy를 설정. 일반 request 기본 false는 LegacyCompatible로 보존.
@@ -13,6 +16,8 @@
 // - v1.1.0: Drift prospective simulation용 UObject duplicate가 PostDuplicate에서 새 RecipeId를 발급해 approval hash가 비결정적이던 문제를 원본 identity 복원으로 교정.
 // - v1.0.0: Shared Profile impact/commit, Drift review/decision, New Vehicle/Mesh-only two-record creation 최초 구현.
 // Migration:
+// - v1.7.0: AI Preview는 /Game/CarFight/Data/Authoring/DA_Vehicle_<Id>, DA_Recipe_<Id> exact 경로만 허용. 이전 테스트 격리 경로의 AI Preview는 거부됨. R2 권한/Save 변화 없음.
+// - v1.6.0: AI caller는 PreviewAIVehicleRecords만 사용할 수 있고 CreateVehicleRecords에는 여전히 진입할 수 없습니다. Trusted R2 admission 별도 필요.
 // - 신규 Vehicle Builder record만 Basic Sensor 정책으로 시작하며 기존 Definition/Recipe는 자동 변경하지 않습니다.
 // - v1.2.0은 성공 상태 표시 문구만 변경하며 Proposal hash, approval binding, Recipe/Target mutation 계약은 변경하지 않습니다.
 // - Profile write는 FCFBatchImportService B2만 사용하고 Target Definition Apply는 수행하지 않습니다.
@@ -30,6 +35,7 @@
 #include "DataAuthoring/CFVehicleFieldCodec.h"
 #include "DataAuthoring/CFVehicleFieldRegistry.h"
 #include "DataAuthoring/CFVehicleImportService.h"
+#include "DataAuthoring/CFVehicleRecordIdentity.h"
 #include "DataAuthoring/CFVehicleRecipeData.h"
 #include "DataAuthoring/CFVehicleResolver.h"
 #include "Engine/StaticMesh.h"
@@ -308,7 +314,8 @@ namespace CFVehicleUXOpsPrivate
 	// New asset package/object pair가 현재 memory/disk에 존재하지 않는지 fail-closed 검사합니다.
 	bool ValidateNewAssetIdentity(const FString& PackageName, const FName AssetName, FSoftObjectPath& OutObjectPath, FString& OutError)
 	{
-		if (!FPackageName::IsValidLongPackageName(PackageName) || AssetName.IsNone())
+		if (!PackageName.StartsWith(TEXT("/Game/"), ESearchCase::CaseSensitive)
+			|| !FPackageName::IsValidLongPackageName(PackageName) || AssetName.IsNone())
 		{
 			OutError = TEXT("새 Vehicle record에는 유효한 /Game long package name과 asset name이 필요합니다.");
 			return false;
@@ -327,6 +334,44 @@ namespace CFVehicleUXOpsPrivate
 			return false;
 		}
 		OutError.Reset();
+		return true;
+	}
+
+	// UI와 AI의 two-record preview가 동일한 path/type/collision/hash 검사를 공유합니다. 이 함수는 자산을 생성하지 않습니다.
+	bool BuildVehicleRecordPreview(const FCFVehicleRecordCreateRequest& Request, FCFVehicleRecordCreatePreview& OutPreview)
+	{
+		// Definition/Recipe의 새 패키지 검증 진단입니다.
+		FString Error;
+		if (!ValidateNewAssetIdentity(Request.DefinitionPackageName, Request.DefinitionAssetName, OutPreview.ProspectiveDefinitionPath, Error)
+			|| !ValidateNewAssetIdentity(Request.RecipePackageName, Request.RecipeAssetName, OutPreview.ProspectiveRecipePath, Error))
+		{
+			SetBlocked(OutPreview.Operation, ECFAuthoringErrorCode::StateChanged, Error);
+			return false;
+		}
+		if (OutPreview.ProspectiveDefinitionPath == OutPreview.ProspectiveRecipePath || Request.DefinitionPackageName == Request.RecipePackageName)
+		{
+			SetBlocked(OutPreview.Operation, ECFAuthoringErrorCode::InvalidSemanticInput, TEXT("Definition과 Recipe는 서로 다른 package/object identity가 필요합니다."));
+			return false;
+		}
+		if (!Request.ChassisMesh.IsNull())
+		{
+			// 실제로 로드된 명시적 Chassis의 타입입니다.
+			UStaticMesh* ChassisMesh = Request.ChassisMesh.LoadSynchronous();
+			if (!ChassisMesh)
+			{
+				SetBlocked(OutPreview.Operation, ECFAuthoringErrorCode::WrongAssetType, TEXT("Create Vehicle From Mesh의 Chassis asset을 StaticMesh로 load할 수 없습니다."));
+				return false;
+			}
+		}
+
+		OutPreview.Proposal.OperationName = TEXT("CreateVehicleRecords");
+		OutPreview.Proposal.RiskClass = ECFAuthoringRiskClass::R2_OwnershipExceptionalWrite;
+		OutPreview.Proposal.RequiredApprovalClass = ECFAuthoringApprovalClass::OwnershipWrite;
+		OutPreview.Proposal.ResolverContractRevision = FCFVehicleResolver::CurrentResolverContractRevision;
+		OutPreview.Proposal.bTargetMutation = true;
+		OutPreview.Proposal.bSavePerformed = false;
+		OutPreview.Proposal.ProposalHash = BuildRecordCreateHash(Request, OutPreview.ProspectiveDefinitionPath, OutPreview.ProspectiveRecipePath);
+		SetSucceeded(OutPreview.Operation, TEXT("Definition+Recipe two-record creation을 mutation 없이 preview했습니다."));
 		return true;
 	}
 }
@@ -784,51 +829,65 @@ bool FCFVehicleAuthoringService::PreviewVehicleRecords(
 		CFVehicleUXOpsPrivate::SetBlocked(OutPreview.Operation, ECFAuthoringErrorCode::UnsupportedOperation, TEXT("New Vehicle/Mesh-only record creation은 SlateUI/Automation route만 허용합니다."));
 		return false;
 	}
-	// Definition identity validation diagnostic입니다.
-	FString Error;
-	if (!CFVehicleUXOpsPrivate::ValidateNewAssetIdentity(Request.DefinitionPackageName, Request.DefinitionAssetName, OutPreview.ProspectiveDefinitionPath, Error)
-		|| !CFVehicleUXOpsPrivate::ValidateNewAssetIdentity(Request.RecipePackageName, Request.RecipeAssetName, OutPreview.ProspectiveRecipePath, Error))
-	{
-		CFVehicleUXOpsPrivate::SetBlocked(OutPreview.Operation, ECFAuthoringErrorCode::StateChanged, Error);
-		return false;
-	}
-	if (OutPreview.ProspectiveDefinitionPath == OutPreview.ProspectiveRecipePath || Request.DefinitionPackageName == Request.RecipePackageName)
-	{
-		CFVehicleUXOpsPrivate::SetBlocked(OutPreview.Operation, ECFAuthoringErrorCode::InvalidSemanticInput, TEXT("Definition과 Recipe는 서로 다른 package/object identity가 필요합니다."));
-		return false;
-	}
-	if (!Request.ChassisMesh.IsNull())
-	{
-		// Explicit Mesh candidate의 actual type입니다.
-		UStaticMesh* ChassisMesh = Request.ChassisMesh.LoadSynchronous();
-		if (!ChassisMesh)
-		{
-			CFVehicleUXOpsPrivate::SetBlocked(OutPreview.Operation, ECFAuthoringErrorCode::WrongAssetType, TEXT("Create Vehicle From Mesh의 Chassis asset을 StaticMesh로 load할 수 없습니다."));
-			return false;
-		}
-	}
-
-	OutPreview.Proposal.OperationName = TEXT("CreateVehicleRecords");
-	OutPreview.Proposal.RiskClass = ECFAuthoringRiskClass::R2_OwnershipExceptionalWrite;
-	OutPreview.Proposal.RequiredApprovalClass = ECFAuthoringApprovalClass::OwnershipWrite;
-	OutPreview.Proposal.ResolverContractRevision = FCFVehicleResolver::CurrentResolverContractRevision;
-	OutPreview.Proposal.bTargetMutation = true;
-	OutPreview.Proposal.bSavePerformed = false;
-	OutPreview.Proposal.ProposalHash = CFVehicleUXOpsPrivate::BuildRecordCreateHash(Request, OutPreview.ProspectiveDefinitionPath, OutPreview.ProspectiveRecipePath);
-	CFVehicleUXOpsPrivate::SetSucceeded(OutPreview.Operation, TEXT("Definition+Recipe two-record creation을 mutation 없이 preview했습니다."));
-	return true;
+	return CFVehicleUXOpsPrivate::BuildVehicleRecordPreview(Request, OutPreview);
 }
 
-// Fresh R2 proposal을 재검사한 뒤 Definition+Recipe만 한 transaction으로 생성합니다.
+// AI에게 동일한 R2 생성안을 mutation0로 보여주되 실제 생성 권한은 부여하지 않습니다.
+bool FCFVehicleAuthoringService::PreviewAIVehicleRecords(
+	const FCFVehicleRecordCreateRequest& Request,
+	FCFVehicleRecordCreatePreview& OutPreview)
+{
+	OutPreview = FCFVehicleRecordCreatePreview();
+	CFVehicleUXOpsPrivate::InitializeResult(OutPreview.Operation, TEXT("PreviewAIVehicleRecords"), ECFAuthoringRiskClass::R0_ReadOnly);
+	if (Request.CallerKind != ECFAuthoringCallerKind::AI)
+	{
+		CFVehicleUXOpsPrivate::SetBlocked(OutPreview.Operation, ECFAuthoringErrorCode::UnsupportedOperation, TEXT("AI 전용 생성안 Preview에는 AI caller identity가 필요합니다."));
+		return false;
+	}
+	// AI R2 후보는 별도의 사용자 작성 경로가 아닌 기존 Builder canonical identity여야 합니다.
+	FString IdentityError;
+	if (!FCFVehicleRecordIdentity::ValidateCanonicalRequest(Request, IdentityError))
+	{
+		CFVehicleUXOpsPrivate::SetBlocked(OutPreview.Operation, ECFAuthoringErrorCode::InvalidSemanticInput, IdentityError);
+		return false;
+	}
+	return CFVehicleUXOpsPrivate::BuildVehicleRecordPreview(Request, OutPreview);
+}
+
+// Legacy UI/Automation 계약을 변경하지 않고 동일 two-record 생성 코어를 호출합니다.
 bool FCFVehicleAuthoringService::CreateVehicleRecords(
 	const FCFVehicleRecordCreateRequest& Request,
 	FCFVehicleRecordCreateResult& OutResult)
+{
+	return CreateVehicleRecordsImpl(Request, OutResult, false);
+}
+
+// 1회용 Bridge 실행 증명을 검증한 Toolset만 사용하는 비공개 AI R2 진입점입니다.
+bool FCFVehicleAuthoringService::CreateTrustedAIVehicleRecords(
+	const FCFVehicleRecordCreateRequest& Request,
+	FCFVehicleRecordCreateResult& OutResult)
+{
+	if (Request.CallerKind != ECFAuthoringCallerKind::AI)
+	{
+		OutResult = FCFVehicleRecordCreateResult();
+		CFVehicleUXOpsPrivate::InitializeResult(OutResult.Operation, TEXT("CreateVehicleRecords"), ECFAuthoringRiskClass::R2_OwnershipExceptionalWrite);
+		CFVehicleUXOpsPrivate::SetBlocked(OutResult.Operation, ECFAuthoringErrorCode::UnsupportedOperation, TEXT("검증된 AI R2 경로에는 AI caller가 필요합니다."));
+		return false;
+	}
+	return CreateVehicleRecordsImpl(Request, OutResult, true);
+}
+
+// Legacy와 검증된 AI가 생성·fresh scope hash·Undo·Save0 정책을 공유합니다.
+bool FCFVehicleAuthoringService::CreateVehicleRecordsImpl(
+	const FCFVehicleRecordCreateRequest& Request,
+	FCFVehicleRecordCreateResult& OutResult,
+	bool bVerifiedAI)
 {
 	OutResult = FCFVehicleRecordCreateResult();
 	CFVehicleUXOpsPrivate::InitializeResult(OutResult.Operation, TEXT("CreateVehicleRecords"), ECFAuthoringRiskClass::R2_OwnershipExceptionalWrite);
 	// Commit 직전 fresh collision/type proposal입니다.
 	FCFVehicleRecordCreatePreview FreshPreview;
-	if (!PreviewVehicleRecords(Request, FreshPreview))
+	if (!(bVerifiedAI ? PreviewAIVehicleRecords(Request, FreshPreview) : PreviewVehicleRecords(Request, FreshPreview)))
 	{
 		OutResult.Operation = FreshPreview.Operation;
 		OutResult.Operation.OperationName = TEXT("CreateVehicleRecords");

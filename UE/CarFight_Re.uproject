@@ -57,6 +57,10 @@
 			"Enabled": false
 		},
 		{
+			"Name": "ToolsetRegistry",
+			"Enabled": true
+		},
+		{
 			"Name": "MCPClientToolset",
 			"Enabled": true
 		},

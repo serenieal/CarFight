@@ -1,10 +1,14 @@
 // Copyright (c) CarFight. All Rights Reserved.
 //
-// Version: 1.9.0
+// Version: 1.10.3
 // Date: 2026-09-29
 // Description: CarFight Editor 전용 도구 모듈 구현입니다.
 // Scope: Content Manager, Guided Vehicle Builder, Guided Equipment Builder, Weapon Equipment Authoring Guide, Vehicle Authoring과 Data Asset Manager 탭/메뉴 등록을 담당합니다.
 // Changelog:
+// - v1.10.3: UE5.8 GetOnPostEngineInit() 경고 교정본의 실제 재컴파일 검증 지점을 표시합니다. 런타임 동작 변경 없음.
+// - v1.10.2: UE5.8의 GetOnPostEngineInit() delegate getter를 사용하여 deprecated 이벤트 필드 접근을 제거.
+// - v1.10.1: 로그에서 증명된 EditorSubsystem 초기화 전 등록 실패를 OnPostEngineInit 지연 등록으로 교정하고 명시적 등록 수명을 보존.
+// - v1.10.0: G1/G2 CarFight UE5.8 VehicleAuthoring Toolset을 Editor 모듈 시작/종료에 명시적으로 등록/해제해 MCP 탐색 누락을 교정.
 // - v1.9.0: CF-FQ-058 CCAS-P0-05 CarFight.ContentManager read-only Catalog / Compare Nomad Tab과 Window 메뉴 진입을 추가.
 // - v1.8.0: CF-FQ-055 WEA-P0-02 CarFight.WeaponGuide Native Slate Nomad Tab과 Window 메뉴 진입을 추가. CF-FQ-054 Equipment Builder lifecycle은 변경하지 않습니다.
 // - v1.7.0: CF-FQ-054 EBA-P0-01 CarFight.EquipmentBuilder Native Slate Nomad Tab과 Window 메뉴 진입을 추가.
@@ -16,6 +20,9 @@
 // - v1.1.0: DAUTH-P0-09 Vehicle Authoring Workspace Nomad Tab과 메뉴를 추가하고 기존 Wizard tab/menu를 유지.
 // - v1.0.0: Window 메뉴에서 열 수 있는 Vehicle DA Wizard 탭을 추가.
 // Migration:
+// - v1.10.3: Editor 모듈 재컴파일 후 해당 소스의 C4996 경고가 없는지 실제 빌드 로그로 판정합니다. 기존 Toolset 등록 시점은 유지합니다.
+// - v1.10.1: Editor 빌드 후 재시작 시 CarFight Toolset은 GEditor/Registry 준비 이후에만 등록한다. 동작 시점 변경 외 공용 GUI/Writer 경로는 보존.
+// - v1.10.0: CarFight_ReEditor 신규 빌드와 Editor 재시작 뒤 UToolsetRegistry의 CarFight Toolset을 실제 목록/Schema로 다시 확인한다. 기존 탭/게임 런타임은 변경하지 않는다.
 // - v1.8.0부터 Weapon Guide는 Equipment Builder와 분리된 Editor-only Nomad Tab이며 CF-FQ-054의 Paused lifecycle을 자동 변경하지 않습니다.
 // - v1.7.0부터 Equipment Builder는 독립 Editor-only Nomad Tab으로 등록되며 Vehicle Builder business state를 공유하지 않습니다.
 // - v1.6.0부터 Legacy Vehicle DA Wizard tab identity는 더 이상 등록되지 않습니다. 차량 제작은 Guided Builder, 전문 수동 편집/복구는 Vehicle Authoring Workspace를 사용합니다.
@@ -25,13 +32,17 @@
 
 #include "DataAuthoring/CFContentCatalogTab.h"
 #include "DataAuthoring/CFVehicleAuthoringTab.h"
+#include "DataAuthoring/CFVehicleAuthoringToolset.h"
 #include "DataAuthoring/CFVehicleBuilderTab.h"
 #include "DataManagement/CFDAManagementTab.h"
 #include "EquipmentAuthoring/CFEquipmentBuilderTab.h"
 #include "WeaponAuthoring/CFWeaponGuideTab.h"
 
+#include "Editor.h"
 #include "Framework/Docking/TabManager.h"
+#include "Misc/CoreDelegates.h"
 #include "ToolMenus.h"
+#include "ToolsetRegistry/UToolsetRegistry.h"
 #include "Widgets/Docking/SDockTab.h"
 
 #define LOCTEXT_NAMESPACE "FCarFightReEditorModule"
@@ -100,11 +111,35 @@ void FCarFightReEditorModule::StartupModule()
 
 	UToolMenus::RegisterStartupCallback(
 		FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FCarFightReEditorModule::RegisterMenus));
+
+	// Editor 초기화 전에 Registry가 열리지 않으므로 현재 준비 상태 또는 PostEngineInit callback으로 등록합니다.
+	if (GEditor != nullptr && UToolsetRegistry::IsAvailable())
+	{
+		RegisterVehicleAuthoringToolset();
+	}
+	else
+	{
+		VehicleToolsetPostEngineInitHandle = FCoreDelegates::GetOnPostEngineInit().AddRaw(
+			this, &FCarFightReEditorModule::RegisterVehicleAuthoringToolset);
+	}
 }
 
 // Editor 모듈 언로드 시 등록한 탭과 메뉴 소유권을 정리합니다.
 void FCarFightReEditorModule::ShutdownModule()
 {
+	// Editor 모듈 종료 후 지연 등록 callback이 남지 않도록 delegate를 먼저 해제합니다.
+	if (VehicleToolsetPostEngineInitHandle.IsValid())
+	{
+		FCoreDelegates::GetOnPostEngineInit().Remove(VehicleToolsetPostEngineInitHandle);
+		VehicleToolsetPostEngineInitHandle.Reset();
+	}
+	// 이번 모듈 수명에서 실제 등록한 Toolset만 해제합니다.
+	if (bVehicleToolsetRegistered && UToolsetRegistry::IsAvailable())
+	{
+		UToolsetRegistry::UnregisterToolsetClass(UCFVehicleAuthoringToolset::StaticClass());
+		bVehicleToolsetRegistered = false;
+	}
+
 	if (UToolMenus::TryGet())
 	{
 		UToolMenus::UnRegisterStartupCallback(this);
@@ -117,6 +152,17 @@ void FCarFightReEditorModule::ShutdownModule()
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(WeaponGuideTabName);
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(VehicleAuthoringTabName);
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(DataAssetManagerTabName);
+}
+
+// 준비된 Editor AI ToolsetRegistry에 CarFight Authoring Toolset을 한 번만 등록합니다.
+void FCarFightReEditorModule::RegisterVehicleAuthoringToolset()
+{
+	if (bVehicleToolsetRegistered || !UToolsetRegistry::IsAvailable())
+	{
+		return;
+	}
+	UToolsetRegistry::RegisterToolsetClass(UCFVehicleAuthoringToolset::StaticClass());
+	bVehicleToolsetRegistered = UToolsetRegistry::IsToolsetClassRegistered(UCFVehicleAuthoringToolset::StaticClass());
 }
 
 // CarFight Content Manager 탭 인스턴스를 생성합니다.

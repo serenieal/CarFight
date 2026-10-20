@@ -1,8 +1,9 @@
 # CarFight Data Authoring targeted Automation runner.
-# Version: v1.3.1
-# Date: 2026-09-05
+# Version: v1.3.2
+# Date: 2026-10-16
 # Description: DAUTH-P0-08 이후 Data Authoring Automation filter 또는 exact-name 배열을 공식 UE 5.8 Editor 한 프로세스에서 무인 실행하고 JSON 결과를 기록합니다.
 # Changelog:
+# - v1.3.2: opt-in EvidenceId에 분리된 결과 JSON·로그를 사용하고 동일 이름의 기존 증거가 있으면 실행 전에 차단. 기본 경로와 output schema 보존.
 # - v1.3.1: 기존 filter mode의 result schema v1 envelope를 byte-shape 호환으로 복원하고 exact-list mode만 v2 envelope를 사용. Exact name에서 UE command expression 분리 문자(+ ; ")를 fail-closed해 unintended command/test expansion을 차단.
 # - v1.3.0: UFP-02 최소 운영 채택을 위해 opt-in ExactTestNames 배열을 추가. '+' multi-test command로 한 Editor process에서 exact set을 실행하고 missing/unexpected/duplicate까지 fail-closed 검증하며 기존 TestFilter 호출은 그대로 보존.
 # - v1.2.1: MCP log suppression 사용 여부를 `MODEL_CONTEXT_PROTOCOL_LOG_SUPPRESSED=True/False` marker로 명시해 focused evidence의 실행 조건을 추적 가능하게 함.
@@ -10,9 +11,10 @@
 # - v1.1.0: Start-Process -Wait의 descendant-process 대기를 제거하고 exact UnrealEditor Process 객체 WaitForExit()만 사용해 TestExit 이후 wrapper가 terminal로 회수되도록 교정.
 # - v1.0.0: CarFight.DataAuthoring 전용 재실행 가능한 Automation 진입점을 추가.
 # Migration:
+# - 기본 호출은 기존 경로 및 삭제/재생성 동작을 유지합니다. 다른 작업의 기록을 보존해야 할 때만 새 -EvidenceId를 전달하세요.
 # - 기존 -TestFilter 호출은 동작 변경 없이 유지됩니다. Same-process exact batching이 필요한 Consumer만 -ExactTestNames를 opt-in합니다.
 # - Product Source/Config/Content Asset을 저장하지 않습니다.
-# - 결과는 UE/Saved/CarFight/DataAuthoringAutomationResult.json과 전용 로그에만 기록합니다.
+# - 기본 결과는 UE/Saved/CarFight/DataAuthoringAutomationResult.json과 기존 로그 경로에 기록합니다. -EvidenceId 사용 시 별도 접미사 결과/로그를 사용합니다.
 
 [CmdletBinding()]
 param(
@@ -23,7 +25,10 @@ param(
     [string[]]$ExactTestNames = @(),
 
     # Experimental ModelContextProtocol의 비동기 로그가 무관한 Automation을 Fail시키는 환경에서 해당 category만 실행 중 숨깁니다.
-    [switch]$SuppressModelContextProtocolLog
+    [switch]$SuppressModelContextProtocolLog,
+
+    # 기존 결과 JSON/로그를 건드리지 않는 격리된 실행 기록의 고유 식별자입니다.
+    [string]$EvidenceId = ''
 )
 
 # PowerShell 오류를 즉시 실패로 처리하는 실행 정책입니다.
@@ -35,10 +40,23 @@ $RepositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Pat
 $ProjectFile = Join-Path $RepositoryRoot 'UE\CarFight_Re.uproject'
 # CarFight 공식 UE 5.8 Source Build Editor 실행 파일입니다.
 $EditorExecutable = 'D:\UnrealEngine_Source\Engine\Binaries\Win64\UnrealEditor.exe'
+# 분리 실행 결과와 기본 경로를 구분할지 여부입니다.
+$HasIsolatedEvidence = -not [string]::IsNullOrEmpty($EvidenceId)
+if ($HasIsolatedEvidence -and $EvidenceId -cnotmatch '^[A-Za-z0-9_-]{1,64}$') {
+    throw 'EvidenceId는 1~64자의 ASCII 영문/숫자/_/-만 허용합니다.'
+}
 # 이번 Data Authoring targeted Automation의 전용 Unreal 로그입니다.
-$AutomationLogPath = Join-Path $RepositoryRoot 'UE\Saved\Logs\CFDataAuthoringAutomation.log'
+$AutomationLogPath = if ($HasIsolatedEvidence) {
+    Join-Path $RepositoryRoot "UE\Saved\Logs\CFDataAuthoringAutomation_$EvidenceId.log"
+} else {
+    Join-Path $RepositoryRoot 'UE\Saved\Logs\CFDataAuthoringAutomation.log'
+}
 # Browser가 bounded evidence로 회수할 machine-readable 결과 파일입니다.
-$ResultJsonPath = Join-Path $RepositoryRoot 'UE\Saved\CarFight\DataAuthoringAutomationResult.json'
+$ResultJsonPath = if ($HasIsolatedEvidence) {
+    Join-Path $RepositoryRoot "UE\Saved\CarFight\DataAuthoringAutomationResult_$EvidenceId.json"
+} else {
+    Join-Path $RepositoryRoot 'UE\Saved\CarFight\DataAuthoringAutomationResult.json'
+}
 # 결과 JSON의 상위 디렉터리입니다.
 $ResultDirectory = Split-Path -Parent $ResultJsonPath
 
@@ -50,11 +68,19 @@ if (-not (Test-Path -LiteralPath $EditorExecutable -PathType Leaf)) {
 }
 
 [System.IO.Directory]::CreateDirectory($ResultDirectory) | Out-Null
-if (Test-Path -LiteralPath $AutomationLogPath -PathType Leaf) {
-    Remove-Item -LiteralPath $AutomationLogPath -Force
-}
-if (Test-Path -LiteralPath $ResultJsonPath -PathType Leaf) {
-    Remove-Item -LiteralPath $ResultJsonPath -Force
+if ($HasIsolatedEvidence) {
+    # 다른 세션이 만든 같은 ID 증거 파일을 절대 삭제하거나 덮어쓰지 않습니다.
+    if ((Test-Path -LiteralPath $AutomationLogPath) -or (Test-Path -LiteralPath $ResultJsonPath)) {
+        throw "이미 같은 EvidenceId의 Automation 증거가 존재합니다: $EvidenceId"
+    }
+} else {
+    # Legacy 호출은 예전 결과 경로/overwrite 동작을 변경하지 않습니다.
+    if (Test-Path -LiteralPath $AutomationLogPath -PathType Leaf) {
+        Remove-Item -LiteralPath $AutomationLogPath -Force
+    }
+    if (Test-Path -LiteralPath $ResultJsonPath -PathType Leaf) {
+        Remove-Item -LiteralPath $ResultJsonPath -Force
+    }
 }
 
 # exact-list mode에서 null을 빈 값으로 정규화하고 공백을 제거한 full Automation test name 배열입니다.
