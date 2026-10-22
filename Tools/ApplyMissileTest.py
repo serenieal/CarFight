@@ -1,13 +1,15 @@
 # Copyright (c) CarFight. All Rights Reserved.
 #
-# Version: 1.0.1
+# Version: 1.0.2
 # Date: 2026-08-02
 # Description: CF-FQ-030 Direct 미사일 전용 PIE 테스트 자산·맵 생성 도구
 # Scope: 신규 MissileTest 자산과 MissileDirectTest 복제 맵만 생성·갱신하고 기존 Rocket·Launcher·SUV·TestMap 원본은 읽기 전용으로 보호합니다.
 # Changelog:
+# - v1.0.2: 관리형 Dry Run의 실행별 JSON을 배타 생성하여 기존 Apply 결과 파일을 보존하고 단독 실행 호환성을 유지합니다.
 # - v1.0.1: 맵 .umap 보호 해시, 파괴 시나리오 거리·시간과 생성 블록 들여쓰기 검증을 보강.
 # - v1.0.0: Direct Missile Projectile·Weapon·Preset·VehicleData와 5종 테스트 타겟 복제 맵 생성, 원본 SHA-256 보호 검증 추가.
 # Migration:
+# - 관리형 RunMissileTest.ps1은 CARFIGHT_MISSILE_TEST_REPORT_ID(32자리 hex)를 전달하며 Saved/MissileTestApply/report_<id>.json을 새로 만듭니다. 일반 직접 호출과 Apply의 기존 report.json은 그대로 둡니다.
 # - 기존 DA_Rocket_PropTest, DA_RocketLauncher, RocketLauncher, DA_TestSUV와 TestMap은 저장하지 않습니다.
 
 from __future__ import annotations
@@ -35,8 +37,15 @@ PROJECT_DIR = Path(unreal.Paths.project_dir()).resolve()
 # [v1.0.0] 구조화 실행 결과를 저장할 Saved 디렉터리입니다.
 REPORT_DIR = PROJECT_DIR / "Saved" / "MissileTestApply"
 
-# [v1.0.0] Admin process.status가 읽을 UTF-8 JSON 보고서 경로입니다.
-REPORT_PATH = REPORT_DIR / "report.json"
+# [v1.0.2] 관리형 Dry Run만 제공하는 실행별 JSON 보고서 식별자입니다.
+REPORT_ID = os.environ.get("CARFIGHT_MISSILE_TEST_REPORT_ID", "")
+
+# [v1.0.2] 관리형 보고서 식별자는 파일명에 사용할 수 있는 고정 32자리 소문자 16진수로 제한합니다.
+if REPORT_ID and re.fullmatch(r"[0-9a-f]{32}", REPORT_ID) is None:
+    raise RuntimeError("Invalid managed missile test report id.")
+
+# [v1.0.2] 기존 직접 호출의 report.json을 보존하며 관리형 실행은 새 파일만 기록합니다.
+REPORT_PATH = REPORT_DIR / (f"report_{REPORT_ID}.json" if REPORT_ID else "report.json")
 
 # [v1.0.0] 테스트 자산을 격리할 Unreal 패키지 폴더입니다.
 TEST_ASSET_FOLDER = "/Game/CarFight/Tests/Missile"
@@ -611,10 +620,10 @@ except Exception as error:
     )
     unreal.log_error(f"[CarFight][MissileTest] {error}")
 finally:
-    REPORT_PATH.write_text(
-        json.dumps(REPORT, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    # [v1.0.2] 관리형 보고서는 x 모드로만 생성하여 기존 Apply 또는 다른 Job의 결과를 덮지 않습니다.
+    report_write_mode = "x" if REPORT_ID else "w"
+    with REPORT_PATH.open(report_write_mode, encoding="utf-8") as report_file:
+        json.dump(REPORT, report_file, ensure_ascii=False, indent=2)
     log(f"REPORT_JSON_PATH={REPORT_PATH}")
 
 if not REPORT["success"]:

@@ -93,6 +93,16 @@
           "save_policy": "none"
         },
         {
+          "operation_id": "headless.missile_dryrun",
+          "operation_kind": "process",
+          "path": "Tools/RunMissileTest.ps1",
+          "arguments": [],
+          "freshness": [
+            "static"
+          ],
+          "requires_runtime": false
+        },
+        {
           "operation_id": "ue.read",
           "operation_kind": "runtime",
           "runtime_kind": "editor"
