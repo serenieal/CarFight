@@ -25,7 +25,7 @@
 현재 `IMC_Vehicle_Default`는 키보드/마우스, 게임패드, 그리고 일부 XR 계열 입력까지 하나의 기본 매핑 컨텍스트로 묶는다.
 
 현재 확인된 내용:
-- `IMC_Vehicle_Default`의 `Default Key Mappings`에는 **40개 매핑**이 존재한다.
+- `IMC_Vehicle_Default`의 현재 저장 `Default Key Mappings`에는 **59개 매핑 / 고유 InputAction 18종**이 존재한다 (2026-10-29 fresh AssetDump). 과거 40개는 2026-05 기준 Historical 수치다.
 - 같은 액션에 대해 장치별 키가 여러 개 연결돼 있다.
 - 현재 매핑은 단순 PC 키보드만이 아니라, 게임패드 및 VR/XR 입력까지 포함한다.
 
@@ -231,10 +231,18 @@
 - `InputAction_Brake`
 - `InputAction_Look`
 - `InputAction_Handbrake`
+- `InputAction_Fire` — `IA_Fire`, Started
+- `InputAction_SelectTarget` — `IA_SelectTarget`, Started
+- `InputAction_TargetLock` — `IA_TargetLock`, Started
+- `InputAction_ClearTarget` — `IA_ClearTarget`, Started
+- `InputAction_SelectWeapon` — `IA_SelectWeapon`, Started
+- `InputAction_RadarZoom` — `IA_RadarZoom`, Started
+- `InputAction_StartActiveScan` / `InputAction_StopActiveScan` — 스캔 명령 Start/Stop, Started
 
 바인딩 방식:
 - `VehicleMove / Throttle / Steering / Brake / Look`는 Triggered + Completed 기반
 - `Handbrake`는 Started + Completed 기반
+- 발사·타겟/락·무기 선택·레이더 Zoom·스캔 명령은 별도 Started 기반 Gameplay 핸들러로 연결된다. 액션 자산 자체의 존재만으로 모든 입력의 PIE 동작을 보증하지 않는다.
 
 즉 현재 핸드브레이크는 **누르는 동안 On, 떼면 Off**인 디지털성 입력으로 처리된다.
 
@@ -267,7 +275,7 @@
 ### `IMC_Vehicle_Default`
 - 종류: `InputMappingContext`
 - 현재 역할: 차량 기본 입력 매핑의 중심 컨텍스트
-- 현재 특징: 40개 매핑을 보유하며, 키보드/게임패드/XR 계열 입력을 함께 묶는다.
+- 현재 특징: 59개 매핑 / 18종 InputAction을 보유하며, 키보드/게임패드/XR 계열 입력을 함께 묶는다 (2026-10-29 fresh AssetDump).
 
 ### `IA_VehicleMove`
 - 종류: `InputAction`
@@ -380,7 +388,7 @@
 - 입력 최종 전달 대상이 바뀌는 경우
 
 ## 문서 버전 관리
-- 현재 문서 버전: `1.1.0`
+- 현재 문서 버전: `1.2.0`
 - 문서 상태: `Current`
 
 - 관리 원칙:
@@ -402,6 +410,11 @@
   - 본문 의미는 유지한 채 설명 정밀도만 올라갈 때
 
 ## 체인지로그
+### v1.2.0 - 2026-10-29
+- 새 관리형 `IMC_Vehicle_Default` AssetDump에서 Mapping exact59 / 고유 InputAction exact18을 확인하고 2026-05 Historical 40개 수치를 최신화했다.
+- 실제 `ACFVehiclePawn::SetupPlayerInputComponent()`의 발사·타겟 선택/락/해제·무기 선택·RadarZoom·ActiveScan Started 바인딩을 현재 입력 책임에 추가했다.
+- 입력 Source/Asset mutation, PIE·엔진 빌드 실행 없이 문서만 정정했다. 증거 `adset_v1_eb954fcda9e9e886e00adda8d2f32106.0a94ed8c6e7c348be4dceeae`.
+
 ### v1.1.0 - 2026-05-11
 - VehicleMove 2D 입력의 조향 해석 변경 반영.
 - 입력 벡터 크기는 가속/브레이크 강도에, 입력 벡터 방향은 목표 조향값에 사용한다는 현재 구현 상태를 반영.
@@ -415,7 +428,8 @@
 - 현재 사용 중인 입력과 현재 `CFVehiclePawn` 바인딩 범위에서 직접 사용 확인되지 않은 입력을 구분해 기록
 
 ## 마지막 확인 기준
-- 확인 일시: 2026-05-11
+- 현재 AssetDump·Pawn Source 정적 대조: 2026-10-29 (59 mappings / 18 actions, PIE NOT RUN)
+- 기존 최초 확인: 2026-05-11
 - 확인 근거:
   - `UE/Content/CarFight/Input/*`
   - `/Game/CarFight/Input/IMC_Vehicle_Default`

@@ -1,5 +1,9 @@
 # VehiclePawnLegacy
 
+- 문서 버전: v1.1.0
+- 갱신일: 2026-10-29
+- 상태: Current Legacy Classification / 현역 Pawn 경로·싱글플레이 권한 교정
+
 ## 문서 목적
 이 문서는 현재 프로젝트에 남아 있는 `CFModVehiclePawn / BP_ModularVehicle` 계열의 레거시 상태를 정리한다.
 이 문서는 기존 레거시 코드를 즉시 삭제하기 위한 문서가 아니라, **현재 주력 차량 Pawn 계열과 레거시 차량 Pawn 계열을 혼동하지 않기 위한 SSOT 정리 문서**다.
@@ -10,7 +14,7 @@
 - 레거시 C++ 클래스: `ACFModVehiclePawn`
 - 레거시 의도 대상: `BP_ModularVehicle`
 - 현재 주력 C++ 클래스: `ACFVehiclePawn`
-- 현재 주력 BP 자산: `/Game/CarFight/Vehicles/BP_CFVehiclePawn`
+- 현재 주력 BP 자산: `/Game/CarFight/Vehicles/Blueprints/BP_CFVehiclePawn`
 - 관련 컴포넌트: `UCFWheelSyncComp`
 
 이 문서는 `ACFVehiclePawn / BP_CFVehiclePawn`의 상세 기능 문서가 아니다.
@@ -39,10 +43,10 @@ ACFModVehiclePawn
 현재 주력 Pawn 계열은 `ACFVehiclePawn / BP_CFVehiclePawn`이다.
 
 현재 확인 근거:
-- `/Game/CarFight/Vehicles/BP_CFVehiclePawn.uasset` 자산이 존재한다.
+- `UE/Content/CarFight/Vehicles/Blueprints/BP_CFVehiclePawn.uasset` 자산이 Git에 존재한다.
 - `ACFVehiclePawn`은 `VehicleDriveComp`, `WheelSyncComp`, `VehicleCameraComp`, `VehicleAimComp`를 보유하는 기준 클래스다.
 - `BP_CFVehiclePawn`에는 `VehicleData`, 입력 액션, Aim Reticle, VehicleDebug 관련 기본값이 들어가 있다.
-- Dedicated Server 테스트용 `ACFMPGameMode`도 기본 차량 BP fallback 경로로 `/Game/CarFight/Vehicles/BP_CFVehiclePawn`을 사용한다.
+- 현재 `UE/Config/DefaultEngine.ini`의 기본 GameMode는 `/Script/CarFight_Re.CFSingleGameMode`다. `UE/Config/DefaultGame.ini`의 `ConfiguredDefaultVehiclePawnClass`가 위 BP 클래스를 지정하고, 클래스 로드 실패 시 `ACFVehiclePawn`으로 fallback한다. 구형 `ACFMPGameMode` 서버 스폰은 현재 게임 진입 경로가 아니다.
 
 따라서 현재 개발 기준에서 차량 기능을 추가하거나 문서화할 때는 특별한 이유가 없는 한 `ACFVehiclePawn / BP_CFVehiclePawn`을 기준으로 한다.
 
@@ -78,7 +82,7 @@ ACFModVehiclePawn
 현재 클래스의 실질적 책임은 `WheelSyncComp` 캐시 정도다.
 
 ### 2. 현재 주력 기능은 `ACFVehiclePawn`에 집중되어 있다
-현재 실제 주행/카메라/조준/Reticle/서버 발사 요청 흐름은 `ACFVehiclePawn` 계열에 들어가 있다.
+현재 실제 주행/카메라/조준/Reticle/로컬 발사 흐름은 `ACFVehiclePawn` 계열을 사용한다. `ACFVehiclePawn`은 compatibility facade이며 세부 발사 검증·실행은 `UCFVehicleFireComp`에 위임한다.
 
 현재 `ACFVehiclePawn` 계열에서 확인되는 주요 기능:
 - VehicleData 연결
@@ -88,14 +92,14 @@ ACFModVehiclePawn
 - VehicleCameraComp
 - VehicleAimComp
 - Aim Reticle 위젯 생성
-- ServerRequestFire / FireResult 처리
+- 로컬 Fire Request / FireResult 상태와 `UCFVehicleFireComp` 호출 경계
 - VehicleDebug HUD/Panel
 
 따라서 새 기능의 기준 부모 클래스로 `ACFModVehiclePawn`을 쓰면 현재 주력 시스템과 분리될 위험이 있다.
 
 ### 3. `BP_ModularVehicle` 명칭은 현재 소스 검색상 레거시 주석에서만 확인된다
 현재 텍스트 검색 기준으로 `BP_ModularVehicle` 명칭은 `CFModVehiclePawn.h/.cpp`의 주석에서만 확인된다.
-반면 `/Game/CarFight/Vehicles/BP_CFVehiclePawn.uasset`은 실제 Content 자산으로 존재한다.
+반면 `UE/Content/CarFight/Vehicles/Blueprints/BP_CFVehiclePawn.uasset`은 실제 Content 자산으로 존재한다.
 
 따라서 현재 문서 기준으로는 `BP_ModularVehicle`을 현역 기준 BP로 단정하지 않는다.
 
@@ -113,7 +117,7 @@ ACFVehiclePawn / BP_CFVehiclePawn
 - 무기 장착
 - 터렛/하드포인트
 - 에너지/열 관리
-- 서버 권한 발사 처리
+- 로컬 발사 처리(서버 권한 발사·복제는 현재 Deferred)
 - 차량 HUD
 - CameraData 연결
 - VehicleData 확장
@@ -165,7 +169,7 @@ BeginPlay
 - VehicleCamera 계산
 - VehicleAim 계산
 - Aim Reticle 생성
-- ServerRequestFire 처리
+- 로컬 Fire Request 실행과 결과 기록(현행 `UCFVehicleFireComp` 측 책임)
 - Dedicated Server 스폰 기준 Pawn 역할
 - VehicleDebug HUD/Panel 기준 데이터 제공
 
@@ -241,8 +245,8 @@ BeginPlay
 - `CFModVehiclePawn.h/.cpp`에 새 기능이 추가될 때
 
 ## 문서 버전 관리
-- 현재 문서 버전: `1.0.0`
-- 문서 상태: `Initial`
+- 현재 문서 버전: `1.1.0`
+- 문서 상태: `Current Legacy Classification`
 - 관리 원칙:
   - 이 문서는 레거시 계열을 혼동하지 않기 위한 기준 문서다.
   - 레거시 유지/폐기 결정이 바뀌면 반드시 갱신한다.
@@ -262,6 +266,11 @@ BeginPlay
   - 본문 의미는 유지한 채 설명 정밀도만 올라갈 때
 
 ## 체인지로그
+### v1.1.0 - 2026-10-29
+- 실제 BP 자산 경로와 현재 `CFSingleGameMode`/`DefaultGame.ini`의 차량 Pawn 클래스 해석 계약으로 교정했다.
+- 구형 서버 스폰/ServerRequestFire를 현역 로컬 발사 책임과 혼용하던 설명을 현재 `UCFVehicleFireComp` 경계로 정리했다.
+- 레거시 `ACFModVehiclePawn`의 실제 BP 사용자·맵 참조 여부는 이 읽기 전용 코드/파일 검수에서 단정하지 않았고, 코드·에셋 변경도 없다.
+
 ### v1.0.0 - 2026-06-02
 - `CFModVehiclePawn / BP_ModularVehicle` 레거시 상태 정리 문서 최초 작성
 - 현재 주력 계열을 `ACFVehiclePawn / BP_CFVehiclePawn`으로 명시
@@ -269,11 +278,12 @@ BeginPlay
 - 새 기능은 `ACFVehiclePawn / BP_CFVehiclePawn` 기준으로 추가한다는 원칙 기록
 
 ## 마지막 확인 기준
-- 확인 일시: 2026-06-02
+- 기존 레거시 분류 확인: 2026-06-02
+- 경로·현행 GameMode·Fire owner 소스 재확인: 2026-10-29 (문서/코드 정적 검수, 새로운 PIE 검증 아님)
 - 확인 근거:
   - `UE/Source/CarFight_Re/Public/CFModVehiclePawn.h`
   - `UE/Source/CarFight_Re/Private/CFModVehiclePawn.cpp`
   - `UE/Source/CarFight_Re/Public/CFVehiclePawn.h`
   - `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp`
-  - `/Game/CarFight/Vehicles/BP_CFVehiclePawn`
-  - `UE/Content/CarFight/Vehicles/BP_CFVehiclePawn.uasset`
+  - `/Game/CarFight/Vehicles/Blueprints/BP_CFVehiclePawn`
+  - `UE/Content/CarFight/Vehicles/Blueprints/BP_CFVehiclePawn.uasset`

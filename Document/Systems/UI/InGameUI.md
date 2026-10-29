@@ -1,7 +1,7 @@
 # InGameUI
 
-- Version: 1.1.11
-- Date: 2026-08-31
+- Version: 1.2.0
+- Date: 2026-10-29
 - Status: Current / CF-FQ-032 Done / CF-FQ-039 Armor Modular Runtime/WBP + Common Plate·Direction 2-Icon Production Assetization PASS / Vehicle-specific Silhouette Source + Production Texture·VehicleData Catalog Persisted Binding PASS
 - Scope: CarFight 싱글플레이 LocalPlayer 인게임 UI Root, Production HUD, AimReticle, Target Marker, Pause, HUD ViewData/Presenter와 Visual Context의 현재 구현 계약
 
@@ -178,7 +178,9 @@ Provider는 현재 Gameplay 소유자가 이미 계산한 값을 읽고 HUD용 �
   - AlertKey 기반 Notice/Warning/Critical lifecycle
   - Root에서 주입되는 Style/Density/Layout Visual Context
 
-`VehicleBattery`처럼 실제 Gameplay Provider가 없는 future shared-power 채널을 다른 값에서 추정해 표시하지 않는다. player-facing WeaponGroup도 실제 Runtime owner가 생기기 전까지 내부 Mount/Profile ID로 대체하지 않는다.
+`VehicleBattery`처럼 실제 Gameplay Provider가 없는 future shared-power 채널을 다른 값에서 추정해 표시하지 않는다.
+
+2026-10-29 현재 Player-facing Weapon Selection Runtime은 **이미 구현되어 있다**. `UCFVehicleWeaponComp`의 Applied Fitting 고정 선택 순서·`SelectedWeaponIndex`를 `UCFHUDDataProvider`가 `FCFWeaponSelectionHUDItem` 목록으로 투영하고, `UCFHUDPresenter`의 Weapon Rail이 소비한다. 명칭은 `EquipmentPresetData.DisplayName`을 사용하며 내부 `MountProfileId`·`WeaponId`를 사용자 표시 문자열로 대체하지 않는다. 실제 표시 이름을 사용할 수 없으면 임의 ID 대신 `WEAPON` 기본 문구를 사용한다. 현재 사용자 조작은 `IA_SelectWeapon` 숫자키 Started → `ACFVehiclePawn::HandleSelectWeaponStarted()`의 Gameplay Selection 경로로 연결되어 있다. 다만 모든 차량/장비 조합의 USER 체감 승인까지 의미하지 않는다.
 
 ---
 
@@ -259,6 +261,23 @@ Range preset 수치나 생산용 tuning을 UI 코드에 임의 하드코딩하�
 
 ---
 
+## 8.1 Target Lock / Target Scan의 독립 HUD 채널
+
+2026-09-18 Phase 6 이후 TargetPanel은 Selection/Knowledge와 별개로 **두 독립 상태 채널**을 소비한다.
+
+```text
+FCFTargetingSnapshot → UCFHUDDataProvider::FillTargetLockViewData()
+→ FCFTargetLockHUDData → UCFHUDPresenter::ApplyTargetLockViewData()
+→ WBP_CFTargetPanel: Text_TargetLock / ProgressBar_TargetLock
+
+FCFSensorSnapshot.ScanAttempt → FillTargetScanViewData()
+→ FCFTargetScanHUDData → TargetPanel 독립 Scan Progress/Completion
+```
+
+`Acquiring`은 락 진행률, `Locked`는 락 품질을 표시하고 `BreakTransitionRevision`은 같은 Lock Break의 중복 화면 소비를 방지하는 기준이다. Selection이 변경돼도 Lock/Scan 상태를 Selection 일치 여부만으로 숨기지 않는다. Target Lock은 `IA_TargetLock`의 `T` 입력으로 요청·토글·재타겟할 수 있다. 이는 실제 Source·과거 Automation의 Technical 구현 사실이며 신규 USER Visual/Feel 수락을 의미하지 않는다. 상세 Current owner는 `Targeting/VehicleTargeting.md`, Sensor/Scan owner는 `Targeting/SensorContact.md`다.
+
+---
+
 ## 9. Pause와 입력 경계
 
 싱글플레이 Pause 수명은 `ACFPlayerController`와 `UCFUISubsystem`이 분담한다.
@@ -302,7 +321,7 @@ Continue / Pause Toggle / Back
 
 World Pause 중 별도 `bTickEvenWhenPaused`를 허용하지 않는 Gameplay 진행은 멈춘다. P0-10에서는 Launcher/Projectile/Timer뿐 아니라 Weapon Heat 냉각, WeaponCharge 회복, TargetUse 주기 재평가가 Pause 중 진행되지 않는 계약을 자동 검증했다.
 
-Current Product에는 실제 AI Controller/BehaviorTree Runtime과 Lock-on Gameplay Runtime이 없으므로 Pause의 AI/Lock 항목을 구현된 기능처럼 기록하지 않는다.
+Current Product에는 실제 AI Controller/BehaviorTree 대전 Runtime은 아직 없으므로 Pause의 AI 행동 중단을 별도 구현·검증된 기능으로 주장하지 않는다. **반면 Vehicle Target Lock Gameplay Runtime은 현재 구현되어 있다.** Pause 시 락 진행·품질·타이머가 실제로 중단되는지는 일반 World Pause 계약과 구분해 별도 검증 전까지 독립 USER/자동화 PASS로 확대하지 않는다.
 
 ---
 
@@ -572,6 +591,13 @@ CF-FQ-039 VehiclePanel Production Presentation 추가 검증:
 ---
 
 ## 15. Changelog
+
+### v1.2.0 - 2026-10-29
+
+- 2026-09/10 구현 완료인 Vehicle Target Lock/Scan 독립 HUD 채널, Production T Lock 입력과 TargetPanel의 Lock/Scan 소유권을 Source 기준으로 현재화했다.
+- 실제 선택형 Weapon Runtime/Weapon Rail이 이미 존재함에도 미구현처럼 서술된 Player-facing WeaponGroup 경계를 `GetSelectedWeaponIndex`/`EquipmentPresetData.DisplayName` 기준으로 정정했다.
+- Pause의 'Lock-on Runtime 없음' 구형 설명을 교정하되 AI 대전 미구현, Lock Pause 개별 검증 미실행, USER Visual/Feel 비수락 경계를 유지했다.
+- 게임 Source/UMG/Asset/PIE/Build 변경 없이 Systems 문서만 수정했다.
 
 ### v1.1.10 - 2026-08-25
 

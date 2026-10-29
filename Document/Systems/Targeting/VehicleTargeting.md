@@ -1,7 +1,7 @@
 # Vehicle Targeting Current System
 
-- Version: 1.5.0
-- Date: 2026-10-06
+- Version: 1.6.0
+- Date: 2026-10-29
 - Status: Current / Phase 5 Gameplay Command + Phase 6 HUD Presentation + Phase 7 Guided Weapon Source + Production Lock Input/Retarget Technical PASS
 - Design Baseline: `Document/ProjectSSOT/CombatPlan/09A_TargetingSensorArch.md v0.1.16`
 
@@ -375,14 +375,18 @@ Blueprint에는 다음 getter가 공개된다.
 
 Phase 4의 기본 Component ownership 위에 Phase 5 command facade, Phase 6 HUD Presentation, Phase 7 Guided Weapon source consumption이 순차적으로 연결됐다.
 
-현재 아직 없는 연결:
+현재 실제 입력 연결:
 
 ```text
-- 플레이어 전용 새 Lock Input Action / 물리 key
-- 고급 조준/거리/기동 기반 Lock Acquisition Policy
+IA_TargetLock (Boolean) → IMC_Vehicle_Default: T
+→ ACFVehiclePawn::HandleTargetLockStarted()
+→ 현재 Selected Target에 RequestLockSelectedTarget() 우선
+→ 동일 대상 AlreadyAcquiring/AlreadyLocked일 때만 Lock-only Clear
+→ 다른 유효 대상 Accepted 시 새 대상 Acquiring 전환
+→ 새 요청이 ContactNotLive 등으로 거부되면 기존 Lock 보존
 ```
 
-따라서 Component가 존재한다는 사실을 완성형 플레이어 Lock UX 구현으로 확대 해석하면 안 된다.
+이는 Phase 5/6/7 이후 2026-10-02 Production 입력 도입과 2026-10-06 Retarget 교정의 현재 계약이다. Advanced CrosshairHold·TargetCone·LOS·거리/기동 기반 Lock Acquisition Policy와 최종 USER UX 승인까지 완료됐다는 의미는 아니다.
 
 ---
 
@@ -430,7 +434,6 @@ Ripple/Salvo는 첫 승인 발사에서 캡처한 GuidanceTargetActor를 Volley 
 - Phase 3B-2 Dynamic Knowledge Domain
 - Knowledge Freshness / TTL
 - Rescan / Refresh API
-- 새 Lock Input Action / 물리 key mapping
 - CrosshairHold / TargetCone / LOS / 거리 / 목표 기동 기반 실제 Lock Acquisition Policy
 - 엄폐/횡이동/연막을 반영한 고급 Lock Quality
 - 차량/센서/장비별 Targeting DataAsset/Profile
@@ -627,6 +630,12 @@ Phase 7 Guided Weapon source migration까지 Technical PASS로 완료됐다. Tar
 ---
 
 ## 15. Changelog
+
+### v1.6.0 - 2026-10-29
+
+- v1.5.0 앞부분/Changelog에서 이미 구현 완료한 `IA_TargetLock`/T 매핑·Pawn Started Gameplay 입력과 중간 §10·§12의 구형 'Lock Input 미구현' 문구 충돌을 교정했다.
+- `T` 재타겟과 동일 대상 토글, 실패 시 기존 Lock 유지의 2026-10-06 Current 계약을 유지하고, 미완료 고급 Lock Acquisition/USER Feel과 분리했다.
+- Source·Input asset·PIE·Build 변경 또는 새 검증 재실행 없이 문서만 갱신했다. §13 이전 단계의 당시 Pending은 Historical evidence다.
 
 ### v1.5.0 - 2026-10-06
 

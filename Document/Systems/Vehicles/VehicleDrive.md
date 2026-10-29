@@ -263,9 +263,9 @@
 즉 현재 차량별 DriveState 튜닝은,
 **VehicleData가 오버라이드 사용을 명시한 차량에만 반영되는 옵트인 구조**다.
 
-현재 `DA_PoliceCar`에서 확인된 대표 DriveState 값은 아래와 같다.
+현재 `UCFVehicleDriveComp` 생성자와 `FCFVehicleDriveStateConfig`에서 확인 가능한 **컴포넌트 기본 DriveState 값**은 아래와 같다. 아래 수치는 특정 차량의 저장 DataAsset을 읽어 확인한 값이 아니다. 차량별 `bUseDriveStateOverrides=true`이면 저장된 VehicleData 설정이 이 값들을 덮어쓸 수 있다.
 
-- `bUseDriveStateOverrides = true`
+- `bEnableDriveStateUpdates = true` (컴포넌트 기본)
 - `bEnableDriveStateHysteresis = true`
 - `bUsePerStateHoldTimes = true`
 - `DriveStateMinimumHoldTimeSeconds = 0.12`
@@ -281,7 +281,22 @@
 - `ActiveInputThreshold = 0.05`
 - `bTreatOppositeThrottleAsBrake = true`
 
-즉 현재 기본 차량은 **상태 튐 방지와 반대 스로틀 브레이크 해석을 적극 사용하는 DriveState 정책**으로 운영된다.
+즉 **공통 컴포넌트 기본 설정은** 상태 튐 방지와 반대 스로틀 브레이크 해석을 사용한다. 구형 `DA_PoliceCar` 대표값은 2026-04-23 Historical evidence로만 취급한다.
+
+### 2026-10-29 실제 저장 DriveState override 확인
+
+새 managed AssetDump에서 다음 VehicleData의 `DriveStateConfig.bUseDriveStateOverrides`를 확인했다.
+
+| VehicleData | 저장 Override | 현재 의미 |
+| --- | --- | --- |
+| `DA_TestSedan` | `true` | 저장된 차량별 DriveStateConfig가 Component 기본 설정을 덮어씀 |
+| `DA_TestSUV` | `true` | 저장된 차량별 DriveStateConfig가 Component 기본 설정을 덮어씀 |
+| `DA_Vehicle_Wagon` | `false` | 저장된 DriveState 임계값을 Runtime에 덮어쓰지 않음 |
+| `DA_Vehicle_Morning27_KR` | `false` | 저장된 DriveState 임계값을 Runtime에 덮어쓰지 않음 |
+
+이 결과는 저장된 opt-in flag의 사실이며, 각 차량을 PIE에서 실제 구동·상태 전이 검수했다는 의미는 아니다. Sedan/SUV의 나머지 임계값과 최근 Dirty의 지속 변경 가능성은 정확한 fresh AssetDump와 해당 차량별 설정에서 확인한다.
+
+증거: `adset_v1_8c486c20dd23792aab6231410ec0167f.bc23c5b1efad2a71595e5aca`, `adset_v1_6d5f9934d52607ce373f43380824cdf8.99dd1fc73d6d38b890323561`.
 
 ## 현재 자산 / 클래스 역할
 ### `UCFVehicleDriveComp`
@@ -378,11 +393,11 @@
 - `CanApplyStateTransition()` 전이 승인 규칙 변경
 - `FCFVehicleDriveStateConfig` 구조 변경
 - `ApplyDriveStateConfig()` 적용 항목 변경
-- `DA_PoliceCar` 대표 DriveState 튜닝값 변경
+- 현재 대표 차량의 실제 DriveState override 및 기본 컴포넌트 설정 변경
 
 ## 문서 버전 관리
-- 현재 문서 버전: `1.0.0`
-- 문서 상태: `Initial`
+- 현재 문서 버전: `1.2.0`
+- 문서 상태: `Current / 2026-10-29 Source-backed baseline (개별 VehicleData 저장 수치 미재검증)`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
   - 기능 설명 본문이 바뀌면 체인지로그도 같이 갱신한다.
@@ -402,6 +417,15 @@
   - 본문 의미는 유지한 채 설명 정밀도만 올라갈 때
 
 ## 체인지로그
+### v1.2.0 - 2026-10-29
+- Fresh managed VehicleData AssetDump 5/5에서 Sedan/SUV의 override true, Wagon/Morning의 override false를 확인해 현재 저장 정책으로 분리했다.
+- 컴포넌트 공통 기본값 및 2026-04 `DA_PoliceCar` Historical 설명은 보존하며 Source/Asset/PIE 변경 없이 문서만 최신화했다.
+
+### v1.1.0 - 2026-10-29
+- 2026-04 `DA_PoliceCar` 값을 현행 대표 차량으로 잘못 사용한 문구를 교정했다. 현재 기준은 `CFVehicleDriveComp.cpp`의 공통 기본값과 차량별 opt-in DriveState override다.
+- `DA_TestSedan`/`DA_TestSUV`의 persisted 수치 확인은 이번 Source 문서 검수 범위 밖이며 임의로 기본값과 동일하다고 주장하지 않는다.
+- Source·에셋·런타임·원래 v1.0.0 Historical 기록은 변경하지 않았다.
+
 ### v1.0.0 - 2026-04-23
 - `VehicleDrive` 문서 최초 작성
 - `UCFVehicleDriveComp`와 `FCFVehicleDriveStateConfig` 기준으로 현재 기능 정리
@@ -409,7 +433,9 @@
 - 현재 대표 차량 데이터 `DA_PoliceCar`의 DriveState 튜닝값 반영
 
 ## 마지막 확인 기준
-- 확인 일시: 2026-04-23
+- 최초 차량별 수치 기록: 2026-04-23 (`DA_PoliceCar`, Historical)
+- 컴포넌트 기본값·override 경계 정적 재확인: 2026-10-29 (`CFVehicleDriveComp.cpp`)
+- 차량별 저장 override flag 4종 fresh AssetDump: 2026-10-29 (PIE 상태 전이는 NOT RUN)
 - 확인 근거:
   - `UE/Source/CarFight_Re/Public/CFVehicleDriveComp.h`
   - `UE/Source/CarFight_Re/Public/CFVehicleDriveStateConfig.h`

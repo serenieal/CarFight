@@ -1,7 +1,7 @@
 # RuntimeApply
 
-- 문서 버전: v1.2.0
-- 최근 갱신일: 2026-10-07
+- 문서 버전: v1.3.0
+- 최근 갱신일: 2026-10-29
 - 문서 상태: Current
 - 기능 소유: `CF-FQ-041 런타임 콘텐츠 적용 메뉴`
 - 대표 구현: `FCFRuntimeVehicleApplyService`, `FCFRuntimeEquipApplyService`, `CFRuntimeApplyWidget`
@@ -138,13 +138,15 @@ final readback
 
 Vehicle Builder가 만든 차량은 여러 Mount를 가질 수 있고, 일부 Mount가 비어 있는 것이 정상이다.
 
-예:
+최초 Builder 생성 또는 과거 Empty-Mount 테스트의 예:
 
 ```text
-DA_Vehicle_Wagon
+DA_Vehicle_Wagon (과거 두 Mount가 모두 비었던 예시)
 ├─ Mount_Top_01   : 장비 없음
 └─ Mount_Front_01 : 장비 없음
 ```
+
+**2026-10-29 fresh persisted readback:** 현재 저장된 `DA_Vehicle_Wagon`의 `Mount_Top_01`은 Legacy `HeavyCannon`을 `DefaultEquipmentPresetData`로 참조한다. `Mount_Front_01`만 기본 장비 없음이다. 위 도식은 Empty Mount 정책 설명용 Historical 예시이지 오늘의 저장값이 아니다. 두 Mount ID는 각각 `Top_01`/`Front_01` Slot을 참조하며 `RoofTurret_MediumOrLarge`라는 ID는 Wagon에 없다.
 
 `Mount 존재 + 장비 없음`은 데이터 누락 오류가 아니라 **정상적인 Empty Mount 상태**다.
 
@@ -363,6 +365,12 @@ Historical RuntimeApply regression과 현재 validation을 구분한다. Multi-M
 ---
 
 ## 12. Changelog
+
+### v1.3.0 - 2026-10-29
+
+- Fresh `DA_Vehicle_Wagon` read-only AssetDump에서 Top Mount 기본 Legacy HeavyCannon, Front Mount Default None임을 재확인했다.
+- 과거 두 Mount 모두 Empty였던 사례와 지금 저장된 default selection을 구분하여 기존 Complete Mount State 알고리즘과 September/October Historical 검증 수치는 보존했다.
+- 소스·장비·차량 에셋·UI 변경 및 새 RuntimeApply PIE 실행 없이 문서만 교정했다. 증거 `adset_v1_6d5f9934d52607ce373f43380824cdf8.99dd1fc73d6d38b890323561`.
 
 ### v1.2.0 - 2026-10-07
 

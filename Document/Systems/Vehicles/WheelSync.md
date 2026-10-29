@@ -403,8 +403,8 @@ absolute/debug spin은 `BaseWheelMeshRotationQuat × LocalPitchSpinQuat`으로 �
 - Anchor/Mesh 이름 배열 변경
 
 ## 문서 버전 관리
-- 현재 문서 버전: `1.1.0`
-- 문서 상태: `Right Fallback Handedness Current`
+- 현재 문서 버전: `1.1.1`
+- 문서 상태: `Right Fallback Handedness Current / BP 경로 최신화`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
   - 기능 설명 본문이 바뀌면 체인지로그도 같이 갱신한다.
@@ -424,6 +424,10 @@ absolute/debug spin은 `BaseWheelMeshRotationQuat × LocalPitchSpinQuat`으로 �
   - 본문 의미는 유지한 채 설명 정밀도만 올라갈 때
 
 ## 체인지로그
+### v1.1.1 - 2026-10-29
+- 실제 Git 저장 경로에 맞춰 현역 `BP_CFVehiclePawn` 참고 경로를 `/Game/CarFight/Vehicles/Blueprints/BP_CFVehiclePawn`으로 정정했다.
+- 과거 `DA_PoliceCar`는 현재 차량 기준이 아닌 2026-04~09 Historical 참고임을 명시했다. 런타임 WheelSync 동작·검증 상태는 변경하지 않았다.
+
 ### v1.1.0 - 2026-09-01
 - WSA-P0-07 USER PASS 결과를 Current WheelSync 계약으로 승격했다.
 - persistent 설정이 아닌 runtime per-wheel `WheelSpinHandednessSigns`를 기록하고 Right FL fallback만 `-1`, Left/explicit Right는 `+1`을 사용하는 source-aware 계약을 추가했다.
@@ -441,6 +445,6 @@ absolute/debug spin은 `BaseWheelMeshRotationQuat × LocalPitchSpinQuat`으로 �
 - 확인 근거:
   - `UE/Source/CarFight_Re/Public/CFWheelSyncComp.h`
   - `UE/Source/CarFight_Re/Private/CFWheelSyncComp.cpp`
-  - `/Game/CarFight/Vehicles/BP_CFVehiclePawn`
+  - `/Game/CarFight/Vehicles/Blueprints/BP_CFVehiclePawn` (2026-10-29 저장 경로 재확인)
   - `UE/Source/CarFight_Re/Private/CFVehiclePawn.cpp`
-  - `/Game/CarFight/Vehicles/Data/Cars/DA_PoliceCar`
+  - `/Game/CarFight/Vehicles/Data/Cars/DA_PoliceCar` (당시 Historical 자산 경로; 현재 대표 차량 아님)

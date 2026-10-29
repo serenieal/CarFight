@@ -1,5 +1,9 @@
 # ProjectRuntimeConfig
 
+- 문서 버전: v1.1.0
+- 최근 정적 재검수: 2026-10-29
+- 상태: Current / 프로젝트 INI·현재 싱글플레이 기본 GameMode 연결 확인
+
 ## 문서 목적
 이 문서는 현재 프로젝트에서 `ProjectRuntimeConfig` 기능이 실제로 어떤 일을 하는지, 그리고 그 기능이 어떤 설정 파일 구성으로 동작하는지를 기록한다.
 이 문서는 미래 설계나 개선 계획이 아니라, **현재 확인된 설정 상태**를 기준으로 작성한다.
@@ -43,6 +47,31 @@
 
 다만 현재 `TestMap` 자체는 특별한 기능 검증 환경이 아니라, 사실상 기본 평지 맵에 가깝다.
 따라서 이 설정은 현재 **임시 검증 진입점 설정**의 성격이 강하다.
+
+#### 현재 기본 GameMode / Pawn / Controller 연결
+
+현재 설정과 실제 C++ 시작 경로는 다음과 같다.
+
+```text
+UE/Config/DefaultEngine.ini
+  GlobalDefaultGameMode=/Script/CarFight_Re.CFSingleGameMode
+        ↓
+UE/Source/CarFight_Re/Private/CFSingleGameMode.cpp
+  ACFSingleGameMode::InitGame()
+  → ResolveDefaultVehiclePawnClass()
+        ↓
+UE/Config/DefaultGame.ini
+  ConfiguredDefaultVehiclePawnClass=
+  /Game/CarFight/Vehicles/Blueprints/BP_CFVehiclePawn.BP_CFVehiclePawn_C
+        ↓
+  로드 성공 → BP_CFVehiclePawn
+  로드 실패/미지정 → ACFVehiclePawn (C++ fallback)
+
+ACFSingleGameMode 생성자
+  → PlayerControllerClass = ACFPlayerController
+```
+
+이는 실제 소스·INI의 현재 기본 진입 계약이며, 과거 Dedicated Server용 `ACFMPGameMode` 경로가 아니다. 기본 Map과 GameMode 설정이 같다고 특정 PIE 세션의 World Override까지 검증됐다는 의미는 아니다.
 
 ### 2. 프로젝트의 기본 렌더링 파이프라인을 결정한다
 현재 `DefaultEngine.ini`의 `[/Script/Engine.RendererSettings]` 기준, 프로젝트는 아래 렌더링 성향을 사용한다.
@@ -179,6 +208,11 @@
 - `ProjectID=...`
 
 이건 동작 기능보다는 프로젝트 식별 정보에 가깝다.
+
+#### Production 장비 카탈로그 등록
+- `[/Script/Engine.AssetManagerSettings]`에서 `CFProdEquipCatalog`의 `CFProdEquipCatalogData` PrimaryAsset 스캔이 등록되어 있다.
+- 등록된 디렉터리는 `/Game/CarFight/Weapons/Data/Production`, CookRule은 `AlwaysCook`이다.
+- 실제 발행된 장비 목록의 authority와 Runtime 검증은 `DataManagement/ContentCatalog.md` 및 `Vehicles/RuntimeApply.md`가 소유한다. **등록 자체가 장비별 적용 성공이나 패키징 실측을 증명하지는 않는다.**
 
 ## 현재 기준 기능의 성격 정리
 현재 구현을 종합하면 `ProjectRuntimeConfig`는 아래 역할을 가진다.
@@ -341,8 +375,8 @@
 - CommonUI 기본 처리 방식 변경
 
 ## 문서 버전 관리
-- 현재 문서 버전: `1.0.0`
-- 문서 상태: `Initial`
+- 현재 문서 버전: `1.1.0`
+- 문서 상태: `Current / 2026-10-29 INI·Source 정적 대조 PASS`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
   - 기능 설명 본문이 바뀌면 체인지로그도 같이 갱신한다.
@@ -362,6 +396,11 @@
   - 본문 의미는 유지한 채 설명 정밀도만 올라갈 때
 
 ## 체인지로그
+### v1.1.0 - 2026-10-29
+- 실제 `DefaultEngine.ini`/`DefaultGame.ini`와 `CFSingleGameMode` Source를 대조해 싱글플레이 기본 GameMode, 설정 기반 BP Pawn·C++ fallback, 기본 PlayerController를 추가했다.
+- Production 장비 카탈로그 PrimaryAsset 등록 위치를 설명했다. 기존 Lumen/DX12/입력 값은 정적 대조에서 기존 설명과 일치한다.
+- 새로운 Editor/PIE/Packaging 검증을 수행하지 않았고 설정·코드·에셋 변경도 하지 않았다.
+
 ### v1.0.0 - 2026-04-23
 - `ProjectRuntimeConfig` 문서 최초 작성
 - `DefaultEngine.ini`, `DefaultInput.ini`, `DefaultGame.ini` 기준으로 현재 런타임 환경 설정 정리
@@ -369,7 +408,8 @@
 - `DefaultEditor.ini`는 현재 런타임 핵심보다 에디터 보조 설정 성격이 강함을 구분해 기록
 
 ## 마지막 확인 기준
-- 확인 일시: 2026-04-23
+- 현재 정적 대조: 2026-10-29 (실제 INI·Source readback, Editor/PIE 실행은 별개)
+- 최초 문서 확인: 2026-04-23
 - 확인 근거:
   - `UE/Config/DefaultEngine.ini`
   - `UE/Config/DefaultInput.ini`

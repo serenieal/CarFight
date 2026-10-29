@@ -1,7 +1,7 @@
 # VehicleData
 
-- 문서 버전: v2.5.0
-- 최근 갱신일: 2026-09-16
+- 문서 버전: v2.6.0
+- 최근 갱신일: 2026-10-29
 - 문서 상태: Current Implementation
 - 적용 범위: `UCFVehicleData`, `UCFVDAValidator`, `ACFVehiclePawn::ApplyVehicleDataConfig()`와 현재 대표 VehicleData 기준
 
@@ -122,7 +122,27 @@ RedlineStartRPM
 = 명시값은 EngineIdleRPM < RedlineStartRPM < EngineMaxRPM
 ```
 
-`ChangeUpRPM`이라는 별도 CarFight VehicleData 필드는 현재 Source에 존재하지 않으며 Redline source로 가정하지 않는다.
+현재 Source에는 `FCFVehicleMovementConfig.ChangeUpRPM`이 **실제로 존재한다**. 이는 Chaos 자동 변속에 전달하는 엔진 상향 변속 RPM이며 `RedlineStartRPM`과 다른 필드다. 2026-08-18 이전 문서의 'ChangeUpRPM 필드 부재' 설명은 폐기한다. `ChangeUpRPM`을 HUD Redline 값으로 자동 사용하지 않는다는 정책은 그대로 유지한다.
+
+현재 VehicleMovementConfig가 소유하는 추가된 변속기·출력 설정:
+
+```text
+bUseEngineTorqueCurve / EngineTorqueCurve.Points
+  = True일 때 RPM별 0..1 normalized torque multiplier를 Chaos EngineSetup.TorqueCurve에 적용
+  = False면 기존 Blueprint/Chaos authored torque curve 유지·복원
+TransmissionRatios.ForwardGearRatios / ReverseGearRatios
+  = 순서대로 저장된 양수 기어비, 0개 불허
+FinalRatio
+  = 양수 최종 감속비
+bUseAutomaticGears / bUseAutoReverse
+  = Chaos 자동 변속·자동 후진 모드
+ChangeUpRPM / ChangeDownRPM
+  = 0 이상 정수 RPM, 자동 변속일 때 Down <= Up
+GearChangeTime / TransmissionEfficiency
+  = 전환 시간 0 이상 / 효율 0~1
+```
+
+실제 `ACFVehiclePawn::ApplyVehicleMovementConfig()`는 완전한 설정을 먼저 검증하고 UE 5.8 `TransmissionSetup`과 `EngineSetup`에 값을 적용한다. Curve·차체·Differential·Transmission의 setup-time 변경에서 Live PhysicsState가 유효하면 재생성과 선·각속도 복원 경로를 사용한다. 현재 C++ Source 구현을 말하는 것이며 모든 저장 차량의 USER 주행 성능 승인이나 실제 질량 일치를 의미하지 않는다.
 
 ### WheelVisualConfig
 
@@ -406,6 +426,36 @@ MountProfile = RoofTurret_MediumOrLarge → Top_01
 
 AssetDump 결과가 노출하지 않은 WheelWidth 등은 추정하지 않는다.
 
+### 2026-10-29 Fresh persisted AssetDump 정적 대조 — 대표·제작 차량
+
+새 읽기 전용 managed AssetDump에서 `DA_TestSedan`/`DA_TestSUV` 2/2, `DA_Vehicle_Wagon`/`DA_Vehicle_Morning27_KR` 및 별도 G2R2Smoke 차량 3/3의 저장 구조를 재조회했다. 아래 숫자는 **이번 덤프 시점의 저장 .uasset 설정**이며, 물리 실제 차체 총질량/PIE/장착 성공을 별도 증명하지 않는다.
+
+| 차량 | Base / MaxGross (kg) | Differential | MountProfileId → Slot | 기본 Sensor |
+| --- | --- | --- | --- | --- |
+| `DA_TestSedan` | `0 / 0` (Legacy unset) | `RearWheelDrive` | `RoofTurret_MediumOrLarge → Top_01` | `DA_VehicleSensor_Basic` |
+| `DA_TestSUV` | `0 / 0` (Legacy unset) | `RearWheelDrive` | `RoofTurret_MediumOrLarge → Top_01` | `DA_VehicleSensor_Basic` |
+| `DA_Vehicle_Wagon` | `1886 / 2350` | `AllWheelDrive` | `Mount_Top_01 → Top_01`, `Mount_Front_01 → Front_01` | None (Sensorless) |
+| `DA_Vehicle_Morning27_KR` | `975 / 1300` | `FrontWheelDrive` | `Mount_Front_01 → Front_01`, `Mount_Top_01 → Top_01` | `DA_VehicleSensor_Basic` |
+
+- Sedan은 `Top_01`에서 Legacy `HeavyCannon` EquipmentPreset을 기본 참조한다. SUV는 현재 별도 LauncherRegression의 `RocketLauncher_DRRipple` 테스트용 Preset을 참조한다. **이것을 Production exact8 발행 장비로 오인하지 않는다.**
+- Wagon은 `Mount_Top_01`에 Legacy `HeavyCannon` 기본 참조가 있고 `Mount_Front_01`은 기본 장비가 비어 있다. Wagon Mount ID는 Sedan/SUV의 `RoofTurret_MediumOrLarge`와 **같지 않다**.
+- Morning의 두 Mount 기본 장비는 모두 None이다. `Mount_Top_01`은 `Launcher`, `Mount_Front_01`은 `Turret` 유형으로 저장돼 있다.
+- Morning의 저장 EngineMaxTorque는 `100 Nm`, `bUseEngineTorqueCurve=false`, ChangeUpRPM `4500`, 전진 4단·FinalRatio 약 `3.08`이다. 실차 76PS 보정 후보의 **최종 영속 적용 완료로 해석할 수 없다**. CF-FQ-059 별도 승인·저장·실측이 책임진다.
+- Wagon은 EngineMaxTorque `350 Nm`, `bUseEngineTorqueCurve=true` (6 points), ChangeUpRPM `5500`, 전진 8단·FinalRatio 약 `3.2`가 저장돼 있다. 실차 공식값으로 검증했다는 의미가 아니다.
+- 기존 `DA_TestSUV`의 `Top_02`는 현재 `SocketName=None` 수동 위치 슬롯이며 MountProfile을 별도로 갖지 않는다. 이것은 이전 센서 Authoring 검수에서 승인한 소켓 의존 제거 상태다.
+
+차체 StaticMesh의 별도 Fresh Socket Dump는 CityCar/Sedan/SUV/Wagon 4종 포함 21/21 PASS였다. `HP_Top_01`과 `HP_Front_01`은 네 차체에서 확인됐다. `HP_Top_02`는 Wagon에만 존재하고 SUV에는 없다. `SocketName=None`은 물리 소켓 부재와 구분해 LocalTransform fallback으로 해석한다. Socket 존재만으로 장착·발사 USER PASS를 주장하지 않는다.
+
+**추가 데이터 불일치 — Sedan fallback 좌표:** fresh `DA_TestSedan.HardpointSlots`는 `Front_01.LocalLocation=(-23,0,119)`, `Top_01.LocalLocation=(169,0,75)`로 저장되어 있다. 실제 Sedan StaticMesh 소켓은 반대로 `HP_Front_01=(169,0,75)`, `HP_Top_01=(-23,0,119)`이다. 즉 **소켓명은 유효하지만 LocalLocation 좌표가 서로 바뀐 상태**다. 현재 `CFVehicleVisualComp`는 유효한 차체 소켓을 우선 부착 원점으로 사용하므로, 이 정적 불일치 자체로 현재 정상 소켓 경로의 장착 실패를 단정하지 않는다. 그러나 소켓 미해결·fallback으로 전환될 때 위치가 달라질 수 있다. 제품 DA 직접 변경은 하지 않았으며 별도 담당 작업에서 저장값 정렬과 재읽기가 필요하다.
+
+데이터셋 증거:
+
+```text
+Sedan/SUV: adset_v1_8c486c20dd23792aab6231410ec0167f.bc23c5b1efad2a71595e5aca
+Wagon/Morning/Smoke: adset_v1_6d5f9934d52607ce373f43380824cdf8.99dd1fc73d6d38b890323561
+StaticMeshes: adset_v1_2af16b76bf1ef07957c3f5af71907111.e7fb89494769c2c1c7b56b09
+```
+
 `DA_PoliceCar`는 현재 대표 VehicleData 기준이 아니다. 과거 문서의 DA_PoliceCar 값은 Historical 참고로만 본다.
 
 ---
@@ -518,6 +568,14 @@ USER 튜닝 결과
 ---
 
 ## 14. Changelog
+
+### v2.6.0 - 2026-10-29
+
+- Fresh read-only VehicleData 5/5 및 Chassis StaticMesh 21/21 AssetDump와 현재 `CFVehicleData.h`·`CFVehiclePawn.cpp`를 대조했다.
+- `ChangeUpRPM`이 존재하지 않는다는 오래된 설명을 수정하고 실제 변속기 complete payload·차량별 엔진 TorqueCurve opt-in 및 PhysicsState 재생성 책임을 기록했다.
+- Sedan/SUV/Wagon/Morning의 현재 저장 MountProfileId·Slot·질량·Sensor·Engine 특징을 분리했으며, Legacy/Test 장비를 Production으로 오인하지 않게 명시했다.
+- Sedan `Front_01`/`Top_01` 저장 LocalLocation이 실제 차체 소켓 좌표와 서로 뒤바뀐 사실을 기록했다. 소켓 우선 Runtime은 유지되지만 fallback 시 좌표 차이가 발생할 수 있는 미교정 데이터 항목으로 남긴다.
+- 타 Work의 DA/Blueprint/Source 변경 없이 문서 내용만 갱신했다. PIE·주행 검증은 재실행하지 않았다.
 
 ### v2.5.0 - 2026-09-16
 

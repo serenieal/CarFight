@@ -1,5 +1,9 @@
 # VehicleRuntime
 
+- 문서 버전: v1.8.0
+- 최근 갱신일: 2026-10-29
+- 상태: Current / Vehicle Pawn Slimming + 2026-10-29 Movement·Wheel Runtime Source 검수
+
 ## 문서 목적
 이 문서는 현재 프로젝트에서 `VehicleRuntime` 기능이 실제로 어떤 일을 하는지, 그리고 그 기능이 어떤 자산/클래스/설정 구성으로 동작하는지를 기록한다.
 이 문서는 미래 설계나 개선 계획이 아니라, **현재 확인된 구현 상태**를 기준으로 작성한다.
@@ -87,13 +91,18 @@
 - `EngineSetup.EngineBrakeEffect`
 - `EngineSetup.EngineRevUpMOI`
 - `EngineSetup.EngineRevDownRate`
+- `EngineSetup.TorqueCurve` — `bUseEngineTorqueCurve=true`일 때 VehicleData RPM/normalized multiplier 적용, false일 때 BP/Chaos authored Curve 복원
+- `TransmissionSetup.bUseAutomaticGears / bUseAutoReverse`
+- `TransmissionSetup.ForwardGearRatios / ReverseGearRatios / FinalRatio`
+- `TransmissionSetup.ChangeUpRPM / ChangeDownRPM / GearChangeTime / TransmissionEfficiency`
+- `ChassisWidth / ChassisHeight` (Physics setup geometry)
 - `DifferentialSetup.DifferentialType`
 - `DifferentialSetup.FrontRearSplit`
 - `SteeringSetup.SteeringType`
 - `SteeringSetup.AngleRatio`
 - `bLegacyWheelFrictionPosition`
 
-즉 현재 `VehicleRuntime`은 **차량이 어떤 주행 성격을 가지는지**를 실제 VehicleMovementComponent에 적용하는 역할을 한다.
+즉 현재 `VehicleRuntime`은 **차량이 어떤 주행 성격을 가지는지**를 실제 VehicleMovementComponent에 적용하는 역할을 한다. 현재 `ACFVehiclePawn::ApplyVehicleMovementConfig()`는 먼저 Chassis/Transmission/Curve 전체 계약을 검증하고, 실패하면 Movement의 부분 적용 없이 요약 오류를 남긴다. Setup-time Curve·Transmission·Differential·차체 치수 변경은 유효한 Live PhysicsState가 있으면 재생성하고 기존 선·각속도를 복원한다. `RedlineStartRPM`은 HUD 표현 데이터로 유지하며 `ChangeUpRPM`과 같다고 가정하지 않는다.
 
 현재 이 단계가 끝나면 `LastVehicleRuntimeSummary`에는 대략 아래 의미의 문자열이 기록된다.
 
@@ -127,7 +136,9 @@
 - 본 이름 기준으로 앞바퀴/뒷바퀴를 구분한다.
 - 앞/뒤 각각에 맞는 WheelClass를 할당한다.
 - 앞/뒤 AdditionalOffset을 적용한다.
-- `bUseMovementOverrides`가 켜져 있으면 WheelClass CDO에 런타임 휠 튜닝을 반영했다가 복원하는 흐름을 수행한다.
+- `bUseMovementOverrides`가 켜져 있으면 현재 `UChaosWheeledVehicleMovementComponent`의 **개별 실제 Wheel 인스턴스**에 UE Runtime setter로 반경·마찰·브레이크·조향·핸드브레이크·서스펜션 값을 적용한다. 기존 `WheelClass`의 공유 CDO(클래스 기본 객체)를 일시 변경했다가 되돌리는 방식은 2026-10-28 교정으로 제거됐다.
+- 명시적 `AxleType=Front/Rear`인 Wheel의 구동축은 DifferentialType이 결정한다. `bFront/RearWheelAffectedByEngine` 플래그를 정확한 물리 구동축 증거로 쓰는 것은 `AxleType=Undefined`인 경우에만 유효하다.
+- UE 5.8의 개별 Runtime setter가 없는 WheelWidth·CorneringStiffness·WheelLoadRatio·SweepShape 등은 Wheel Class authored 기본값과 별도로 현재 적용 범위를 검증해야 하며, 차량별 값을 모두 적용한다고 단정하지 않는다.
 
 즉 현재 `VehicleRuntime`은 **차량 휠 물리 구성을 WheelSetup 레벨까지 실제 런타임 상태로 맞춰주는 기능**을 가진다.
 
@@ -520,7 +531,7 @@ Production 공통 Basic Sensor `/Game/CarFight/Vehicles/Data/Sensor/DA_VehicleSe
 - `LastVehicleRuntimeSummary` 요약 포맷 변경
 
 ## 문서 버전 관리
-- 현재 문서 버전: `1.7.0`
+- 현재 문서 버전: `1.8.0`
 - 문서 상태: `Vehicle Pawn Slimming Complete + Runtime Coordinator + Fitting/Mass + Wheel Runtime Current`
 - 관리 원칙:
   - 이 문서는 한 번 작성하고 끝내는 문서가 아니라, 기능의 현재 상태가 바뀌면 함께 갱신한다.
@@ -541,6 +552,11 @@ Production 공통 Basic Sensor `/Game/CarFight/Vehicles/Data/Sensor/DA_VehicleSe
   - 본문 의미는 유지한 채 설명 정밀도만 올라갈 때
 
 ## 체인지로그
+### v1.8.0 - 2026-10-29
+- 실제 Pawn Movement/Wheel Source와 3차 Fresh AssetDump 결과에 맞춰 Engine Curve·Transmission·PhysicsState recreate의 현재 적용 경계를 추가했다.
+- Wheel Class 공유 CDO 변경은 이전 구현/이력으로 내리고 현재 개별 Wheel Runtime setter 경로와 `AxleType`/Differential 구동 권한을 명시했다.
+- Runtime setter 부재 필드의 차량별 적용 완료는 주장하지 않으며 Build/PIE·차량별 실주행 재실행 없이 정적 문서만 최신화했다.
+
 ### v1.7.0 - 2026-09-16
 - `VehicleData.DefaultSensorData`를 Fitting Scanner보다 먼저 Vehicle Base Sensor source로 적용하고 최종 우선순위를 `Scanner override > Vehicle Basic > zero-range Fallback`으로 Current Runtime 계약에 반영했다.
 - invalid non-null Vehicle base SensorData 적용 실패를 무시하지 않고 `InitializeVehicleRuntime()`을 fail-closed해 이전 base source stale 유지 가능성을 제거했다.

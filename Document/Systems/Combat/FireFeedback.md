@@ -1,7 +1,7 @@
 # FireFeedback
 
-- Version: 1.4.0
-- Date: 2026-07-24
+- Version: 1.5.0
+- Date: 2026-10-29
 - Status: Current / P0 FireFeedback User PIE Verified
 - Scope: 싱글플레이 로컬 발사 결과와 AimFireAlignment 거부 사유를 FireFeedback ViewData로 변환하고 WBP Reticle의 텍스트와 색상으로 표시하는 현재 기준 문서
 
@@ -240,7 +240,7 @@ CFAimReticleWidget.cpp   v1.6.0
 | `VehicleDisabled` | `FireRejected` | `FireRejected` | 차량 또는 Aim 런타임 준비 안 됨 |
 | `NoWeapon` | `NoWeapon` | `NoWeapon` | 무기 없음 또는 무기 데이터 비호환 |
 | `WeaponCooldown` | `Cooldown` | `Cooldown` | 연사 제한 / 쿨다운 |
-| `NoAmmo` | `FireRejected` | `FireRejected` | 현재 탄약/재장전 시스템 미구현이므로 일반 거부로 처리 |
+| `NoAmmo` | `FireRejected` | `FireRejected` | `CF-FQ-031`의 finite Ammo·Reload Runtime에서 실제 거부되며, FireFeedback의 전용 NoAmmo 주 상태가 없으므로 **로컬 Reticle 일반 거부로만 매핑**한다. Production HUD의 `NO AMMO` 리소스 상태 표시는 별도 담당 |
 | `OutOfWeaponArc` | `OutOfArcWarning` | BaseReticleState 유지 + 전용 보조 경고 | 주 상태/색상 덮어쓰기 없음 |
 | `AimBlocked` | `AimBlocked` | `Blocked` | 조준선 막힘 |
 | `TurretAligning` | `OutOfArcWarning` + `FeedbackDisplayKey=TurretAligning` | BaseReticleState 유지 + `정렬 중` 보조 경고 | 주 상태/색상 덮어쓰기 없음 |
@@ -596,6 +596,12 @@ P0에서는 텍스트를 너무 많이 보여주기보다, Debug Panel에서 상
 
 ## 21. Changelog
 
+### v1.5.0 - 2026-10-29
+
+- 완료된 `CF-FQ-031` Ammo·Reload Runtime을 미구현으로 표현하던 Current `NoAmmo` 설명을 수정했다.
+- 현재 `CFVehicleFireComp`는 `NoAmmo`와 `Reloading`을 실제 거부 사유로 기록하고, `ACFVehiclePawn::BuildFireFeedbackViewData()`는 `NoAmmo` 전용 branch 없이 일반 `FireRejected`를 표시함을 Source로 재확인했다. HUD Resource Channel의 `NO AMMO` 문구는 `FireFeedback` Reticle 매핑과 별도다.
+- 이 문서 수정은 로컬 표시 정책 설명만 최신화한다. Source/Asset/PIE/Build mutation 0이며 기존 사용자 수락 증거를 새로 실행하지 않았다.
+
 ### v1.4.0 - 2026-07-24
 
 ```text
@@ -654,7 +660,8 @@ P0에서는 텍스트를 너무 많이 보여주기보다, Debug Panel에서 상
 
 ## 22. 마지막 확인 기준
 
-- 확인 일시: `2026-07-15`
+- 현재 `NoAmmo` 매핑 Source 정적 재확인: `2026-10-29` (PIE NOT RUN)
+- 최초 FireFeedback USER PIE 확인: `2026-07-15`
 - 확인 근거:
   - `Document/Systems/Combat/WeaponFire.md`
   - `Document/Systems/UI/AimReticle.md`

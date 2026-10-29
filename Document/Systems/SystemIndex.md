@@ -1,7 +1,7 @@
 # SystemIndex
 
-- Version: 1.55.0
-- Date: 2026-10-07
+- Version: 1.59.0
+- Date: 2026-10-29
 
 - Status: Active
 - Scope: `Document/Systems/` 하위 문서 위치 안내 색인
@@ -37,9 +37,9 @@
 | `Document/Systems/Combat/WeaponFire.md` | 싱글플레이 로컬 차량 Pawn에서 Fire 입력을 발사 명령으로 만들고, Weapon Aim Solution을 기준으로 Projectile Actor 또는 Dummy HitScan 경로로 넘기며, TargetActor Guided Projectile에 한해 Vehicle Locked Target을 발사 전 Guidance source로 fail-closed admission하는 현재 발사 기능 문서다. Ammo 수량·Reload 상태는 `UCFVehicleAmmoComp`가 소유한다. |
 | `Document/Systems/Combat/Launcher.md` | `CF-FQ-029`에서 완료한 모듈형 Launcher Current System이다. Launch Context, 가변 Muzzle, SingleCycle/Ripple/Salvo, Direct/Angled/Vertical Release, Carrier Velocity, 실제 사출 방향 MuzzleBlocked, Sequence 실패/취소와 Projectile Pool 인계 경계를 기록하며 Phase 7부터 첫 승인 발사의 GuidanceTargetActor snapshot을 Volley 전체에 보존한다. |
 | `Document/Systems/Combat/Ammo.md` | `CF-FQ-031`에서 완료한 차량 finite Ammo Current System이다. WeaponInstanceId별 Loaded, AmmoId별 Reserve, SingleCycle Commit·Rollback, Ripple·Salvo 전체 예약, FullMagazine Reload, WeaponPanel `Loaded / MagazineCapacity + Reserve`와 출격 Ammo 질량 계약을 기록한다. Heavy·Ripple USER PIE를 완료했다. |
-| `Document/Systems/Combat/FireFeedback.md` | `WeaponFire`가 남긴 로컬 발사 성공·실패·쿨다운·NoWeapon·AimBlocked·TurretAligning·MuzzleBlocked 결과를 Reticle 텍스트와 색상으로 표시한다. P0 상태 전환과 피드백 만료를 사용자 PIE로 확인했다. |
-| `Document/Systems/Combat/Projectile.md` | `ProjectileData`, 공통 `CFProjectileActor`, `ProjectileMotorComp`와 `ProjectilePoolComp`를 통한 비추진 포탄·비유도 Rocket 이동, Missile Flight/Guidance 컴포넌트 통합 경계, 지속형 Trail·Thruster, 충돌·Impact·Pool 생명주기를 기록한다. Guidance 세부 Current 계약은 `MissileGuidance.md`가 소유한다. |
-| `Document/Systems/Combat/MissileGuidance.md` | `CF-FQ-030`에서 완료한 Direct TargetActor 물리 제한형 Missile Flight/Guidance Current System이다. Phase 7부터 VehicleFireComp가 Vehicle Locked Target에서 확정한 Launch Target Snapshot을 소비하며, Released/Clearance/GuidedFlight, PurePursuit·LeadPursuit·PN, Independent Activation, Stateful Seeker, Sampled Observation, Target Lost/Reacquisition, Pool Reset, passive Guidance Preset과 `CF-TC-027` Technical + USER Feel PASS를 기록한다. |
+| `Document/Systems/Combat/FireFeedback.md` | `WeaponFire`의 성공·거부·쿨다운·NoWeapon·AimBlocked·TurretAligning·MuzzleBlocked를 Reticle에 표시한다. 현재 `NoAmmo`는 구현된 탄약 Runtime의 거부 사유지만 Reticle에는 일반 `FireRejected`로 매핑하며 HUD의 `NO AMMO` 표시와 분리한다. 과거 P0 사용자 PIE 수락은 유지한다. |
+| `Document/Systems/Combat/Projectile.md` | 비추진 포탄·비유도 Rocket·Guided Missile의 공통 Projectile Actor, 실제 중력과 단일 Dynamics 비중력 가속도 합성, 추진·TVC·유도 제어, Trail·Thruster, 연속 충돌·Impact·Pool 생명주기를 기록한다. `CF-FQ-056`은 2026-10-06 USER ACCEPTED / COMPLETE이며 Rocket 개별 궤적 관찰은 면제되었지 관찰 PASS가 아니다. Guidance 세부 Current 계약은 `MissileGuidance.md`가 소유한다. |
+| `Document/Systems/Combat/MissileGuidance.md` | `CF-FQ-030` Direct TargetActor Missile Flight/Guidance의 현재 구현이다. Vehicle Locked Target Launch Snapshot, 비행·Seeker·관측·Guidance Law, Dynamics의 단일 제한형 횡제어 예산과 Pool Reset을 설명한다. `CF-TC-027` Technical+USER Feel PASS 및 `CF-FQ-056` PFP-P0-03 USER ACCEPTED / COMPLETE를 구분해 기록한다. |
 | `Document/Systems/Combat/DamageHitContext.md` | Dummy HitScan과 Projectile의 시각 차체 Hit 결과, `HitComponentName`, 위치/노멀/입사 방향을 같은 `FCFDamageHitContext` 형식으로 기록한다. 이 Context는 현재 `HitDamage`의 공용 피해 적용 입력으로 사용된다. |
 | `Document/Systems/Combat/HitDamage.md` | HitScan·Projectile의 `FCFDamageHitContext`를 정식 `VehicleDefenseComp` 진입점으로 연결하고, Shield·Armor 이후 Vehicle Integrity 적용, Legacy Fallback, 최초 파괴와 기존 `FCFDamageApplyResult` 호환을 기록한다. |
 | `Document/Systems/Combat/VehicleDefense.md` | `VehicleDefenseData`와 `VehicleDefenseComp`가 소유하는 Shield, 재생, Front·Left·Right·Rear·Top·Bottom 독립 Armor, 방향 배율, ArmorPenetration, Armor Overflow, Vehicle Integrity 전달과 Fitting Defense Commit을 기록한다. |
@@ -51,7 +51,7 @@
 
 | 경로 | 문서 내용 |
 | --- | --- |
-| `Document/Systems/Config/ProjectRuntimeConfig.md` | 프로젝트 시작 맵, 렌더링 기술, 하드웨어 타깃, 입력 백엔드, 축 기본값 같은 런타임 환경 설정을 설명하는 문서다. |
+| `Document/Systems/Config/ProjectRuntimeConfig.md` | 프로젝트 기본 맵, 현재 싱글플레이 GameMode→설정 기반 BP Pawn/C++ fallback·PlayerController, Production 장비 카탈로그 AssetManager 등록, 렌더링·하드웨어·입력 백엔드의 INI 기준을 설명한다. |
 
 ---
 
@@ -59,6 +59,7 @@
 
 | 경로 | 문서 내용 |
 | --- | --- |
+| `Document/Systems/DataManagement/ContentCatalog.md` | `CF-FQ-058` 완료 기준 저작→생성→발행→Runtime 소비 흐름을 설명한다. Production 34개 generated DataAsset과 Catalog 1개, published Product 8개를 2026-10-29 fresh 저장 AssetDump 35/35로 재확인했다. managed manifest 42개와 Legacy 예외를 구분한다. |
 | `Document/Systems/DataManagement/DataAssetManagement.md` | `CF-FQ-045` Data Asset Manager read-first 관리 경계와 `CF-FQ-058` scoped authority cutover를 함께 기록한다. unmanaged/legacy content는 persisted `.uasset` current truth를 유지하고, CCAS-managed exact42는 canonical Workbook authoring authority → generated Production `.uasset` → Production Publication Catalog / provenance 구조를 사용한다. Manager 자체는 no-auto-mutation/save를 유지한다. |
 | `Document/Systems/DataManagement/DataAssetAuthoring.md` | `CF-FQ-049~053` JSON Staging/Reviewed Apply current path와 `CF-FQ-058` CCAS-managed Workbook authority를 scope별로 함께 기록한다. unmanaged/legacy typed-provider scope는 기존 JSON→typed Apply→persisted `.uasset` 계약을 유지하고, managed exact42는 `CarFight_Content.xlsx`를 sole authoring authority로 사용하며 generated Production `.uasset` exact34와 Publication Catalog exact8을 Runtime/Product materialization으로 소비한다. |
 | `Document/Systems/DataManagement/BuilderAuthoringStandard.md` | CarFight의 Builder/Authoring Guide 공통 규약이다. Vehicle Builder의 Common Page Shell과 USER 정보 계층을 기준으로 사용자 업무 단위 Builder, Builder Chaining 금지, Stable StepId/Conditional Step, 한 Page 하나의 작업 의도, 신규/기존 Asset 패턴, Naming/Identity, 기존 writer authority 재사용, explicit Preview/Apply/Save, Multi-Asset partial recovery, Final Review/Handoff와 Advanced 경계를 정의한다. |
@@ -69,7 +70,7 @@
 
 | 경로 | 문서 내용 |
 | --- | --- |
-| `Document/Systems/Input/Input.md` | 차량 입력 자산, 입력 매핑 컨텍스트, 장치 모드, 2D 입력, Legacy 입력 충돌 제어, 최종 차량 주행/카메라 입력 전달 흐름을 설명하는 문서다. |
+| `Document/Systems/Input/Input.md` | `IMC_Vehicle_Default`의 fresh 저장 매핑 exact59/고유 InputAction exact18, 차량 이동·조향·카메라·장치 모드/소유권, Fire·Target Select/Lock/Clear·Weapon Select·RadarZoom·Target Scan의 실제 Pawn 입력 연결 경계를 설명한다. |
 
 ---
 
@@ -101,7 +102,7 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 | --- | --- |
 | `Document/Systems/Targeting/TargetSelect.md` | `CF-FQ-026`에서 구현된 Target Candidate/Selected Actor authority Current System이다. Targetable/TargetPoint, TargetRegistry 후보 공급, 선택 수명·입력, Sensor/Scanner와 Aim/Fire 소비 경계, UISubsystem Target Marker/Production TargetPanel 경계와 Deferred USER tuning debt를 기록한다. |
 | `Document/Systems/Targeting/SensorContact.md` | `CF-FQ-036/037` 기반 Sensor Runtime Current System이다. bounded Detection, Contact/Knowledge/Persistent Store, actor-free Snapshot, Target Scan과 Phase 5 `CancelTargetScan()` scan-only cancel, broad Sensor Operation cancel 분리, Phase 6 `Snapshot.ScanAttempt → FCFTargetScanHUDData` Selection-independent HUD 경계를 기록한다. |
-| `Document/Systems/Targeting/VehicleTargeting.md` | Phase 4 Vehicle Target Lock Runtime + Phase 5 Gameplay Command Boundary + Phase 6 HUD Presentation + Phase 7 Guided Weapon source migration의 Current System이다. `Idle / Acquiring / Locked`, Live Contact-only Lock, actor-free Snapshot, 독립 command 의미, `FCFTargetingSnapshot → FCFTargetLockHUDData` HUD 경계와 TargetActor Guided Projectile의 `Vehicle Locked Target → GuidanceTargetActor` fail-closed 발사 전 bridge를 기록한다. 새 Lock 물리 Input은 후속이다. |
+| `Document/Systems/Targeting/VehicleTargeting.md` | Phase 4 Lock Runtime + Phase 5 Gameplay Command + Phase 6 HUD + Phase 7 Guided Source의 Current System이다. Live Contact-only Lock, `IA_TargetLock` T 입력의 동일 대상 토글/다른 대상 재타겟, Lock/Scan/Selection 분리, 독립 HUD 채널과 TargetActor Guided Projectile의 `Locked Target → GuidanceTargetActor` fail-closed admission을 기록한다. 고급 Acquisition과 UX 최종 승인만 별도 후속이다. |
 
 
 ---
@@ -110,7 +111,7 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 
 | 경로 | 문서 내용 |
 | --- | --- |
-| `Document/Systems/UI/InGameUI.md` | `CF-FQ-032` 인게임 UI Current System이다. LocalPlayer `UCFUISubsystem → UCFUIRootWidget` 8 Layer 수명, Production `UCFHUDDataProvider → FCFInGameUIViewData → UCFHUDPresenter` 데이터 경계, HUD·AimReticle·Target Marker·Pause·Radar·Weapon과 VehiclePanel persisted editable 구조의 현재 구현, USER Visual/Feel Deferred 경계를 기록한다. |
+| `Document/Systems/UI/InGameUI.md` | `CF-FQ-032` UI Root 8 Layer와 Provider→ViewData→Presenter, AimReticle/Target Marker/Pause·Radar/Armor를 기록한다. 현재 구현된 Target Lock/Scan 독립 HUD와 선택형 Weapon Runtime/Rail·Player-facing DisplayName을 포함하고, AI 전투·USER Visual/Feel 미완료와 명확히 분리한다. |
 | `Document/Systems/UI/AimReticle.md` | `UCFUISubsystem`이 HUD Layer Z10에서 `WBP_AimReticle` singleton 수명과 Current Pawn Rebind를 소유하고, Widget은 Weak Pawn 참조로 `Image_CenterDot` 조준 레티클·`CurrentMuzzleDirection` 기반 `Image_WeaponReticle` 터렛 레티클과 로컬 Aim/FireFeedback 상태를 표시한다. 기존 Aim/FireFeedback USER PIE 의미 계약을 보존한다. |
 | `Document/Systems/UI/DisplayTextPolicy.md` | 내부 식별자는 영문으로 유지하고, 화면에 보이는 UI/Debug UI 텍스트는 한국어로 표시한다는 표시 텍스트 정책 문서다. |
 | `Document/Systems/UI/VehicleDebugPanel.md` | `VehicleDebug Panel`의 Navigation + Selected Section 구조, TopLevel Section, Camera Debug 편입 상태, 표시 언어 정책을 설명하는 문서다. |
@@ -123,16 +124,16 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 | --- | --- |
 | `Document/Systems/Vehicles/VehicleAim.md` | `VehicleCamera`가 만든 조준 결과와 Weapon Aim Solution을 Local 표시·검증 상태로 관리하고, 사용자 조준점과 `CurrentMuzzleDirection` 기반 터렛 레티클 월드 지점을 분리해 제공한다. 정렬 정책, `MuzzleBlocked`와 CF-FQ-025 터렛 레티클을 사용자 PIE로 확인했다. |
 | `Document/Systems/Vehicles/VehicleCamera.md` | 차량 기준 자유 조준과 AimTrace를 유지하면서 normalized Driving FX, Gameplay/Presentation View 분리, Speed FOV/Arm·Accel/Brake Kick·body-motion Lateral Roll·충돌 복귀를 계산/적용하는 차량 카메라 Current owner다. Combat/Aim/Airborne 감쇠 producer wiring과 일부 feel tuning은 명시적 후속 debt로 분리한다. |
-| `Document/Systems/Vehicles/VehicleCoreDecisions.md` | 현재 차량 코어의 유지 결정, 교체 결정, 임시 운영 판단을 기록하는 결정 로그 문서다. 차량 코어 변경 전 확인해야 하는 기준 문서다. |
+| `Document/Systems/Vehicles/VehicleCoreDecisions.md` | 차량 코어의 유지·교체·운영 판단과 당시 결정 근거를 보존한다. 2026-10-29 Current 해석에서는 `DA_PoliceCar`를 Historical로 분리하고 현재 대표 VehicleData를 `DA_TestSedan`/`DA_TestSUV`로 정정했다. 당시 결정은 현행 Source/Current System을 덮어쓰지 않는다. |
 | `Document/Systems/Vehicles/VehicleBuilder.md` | `CF-FQ-015` + `CF-FQ-038` + `CF-FQ-040` + `CF-FQ-042` + `CF-FQ-043` + `CF-FQ-044` + `CF-FQ-046` + `CF-FQ-047` 완료 기준 Vehicle Builder·Data Authoring·Performance Tuning Current System이다. 8-Step Guided Shell, User-Facing Information Architecture, 단일 Common Page Shell/scroll/overflow 계약, Data Authoring Backend, 전문가용 Advanced Workspace, Controlled Axis Tuning, Technical Benchmark + USER Feel Pair, Vehicle Character / Reference Baseline, Measurement Gap ownership, Legacy Vehicle DA Wizard retirement, 신규 차량 Creation Entry, Hardpoint/Mount/Socket authoring integrity, durable final commit와 persistent USER Driving receipt, Runtime Catalog promotion 경계를 기록한다. |
-| `Document/Systems/Vehicles/VehicleData.md` | `UCFVehicleData`의 외형·Layout·Hardpoint·MountProfile·Fitting Mass·Movement·WheelVisual·Reference·Defense/Fx·DriveState 구성과 실제 Pawn 적용 순서를 기록한다. CF-FQ-015 Historical Validator/Representative Compare/Runtime Apply 기반을 보존하며, 실제 성능 튜닝 workflow는 VehicleBuilder가 소유한다. WSA 완료 기준 USER-authored Wheel Socket Scale → visual/physics size authority도 포함한다. |
-| `Document/Systems/Vehicles/VehicleDrive.md` | 차량 입력을 Chaos Vehicle Movement에 적용하고, 속도/방향/접지/입력 상태를 바탕으로 DriveState를 계산/유지하는 주행 상태 기능 문서다. |
-| `Document/Systems/Vehicles/VehiclePawnLegacy.md` | `CFModVehiclePawn / BP_ModularVehicle` 계열을 현재 주력 차량 Pawn이 아닌 레거시 계열로 정리하는 문서다. |
-| `Document/Systems/Vehicles/VehicleRuntime.md` | `CF-FQ-048 Vehicle Pawn Slimming` 완료 기준 Current owner다. Pawn은 lifecycle·composition root·input entry·target identity·Public/BP/Automation/RuntimeApply compatibility facade·observable state Authority를 유지하고, Visual/Fire/Runtime behavior는 `CFVehicleVisualComp`·`CFVehicleFireComp`·`CFVehicleRuntimeComp` coordinator로 분리한다. VehicleData/Prepared Fitting Snapshot/Initial Sortie·Field Mass/Ready 판정, WSA Wheel Visual deterministic reapply와 Input/Debug reflected type owner 분리 경계도 함께 기록한다. |
+| `Document/Systems/Vehicles/VehicleData.md` | `UCFVehicleData`의 외형·Hardpoint·MountProfile·질량·Movement·Wheel/Defense/Sensor·DriveState와 Pawn 소비를 기록한다. 차량별 Engine TorqueCurve·변속기(기어비·ChangeUp/DownRPM) 구현과 Sedan/SUV/Wagon/Morning fresh 저장값·소켓 검수 경계를 포함한다. 실제 주행감/성능 튜닝 owner는 VehicleBuilder다. |
+| `Document/Systems/Vehicles/VehicleDrive.md` | Chaos Movement 입력 적용과 DriveState 판정을 기록한다. 공통 Component 기본값과 실제 Sedan/SUV Override On, Wagon/Morning Override Off fresh 저장 상태를 구분하며 Legacy `DA_PoliceCar` 수치를 현역 대표값으로 사용하지 않는다. |
+| `Document/Systems/Vehicles/VehiclePawnLegacy.md` | `CFModVehiclePawn / BP_ModularVehicle`을 레거시 계열로 분류하고 현역 `BP_CFVehiclePawn`의 실제 Blueprint 경로, `CFSingleGameMode`의 기본 Pawn 선택과 로컬 `CFVehicleFireComp` 책임을 구별한다. |
+| `Document/Systems/Vehicles/VehicleRuntime.md` | `CF-FQ-048` Pawn Slimming 이후 Runtime coordinator, Fitting/Mass·Ready 경계, Wheel Visual reapply를 기록한다. 현재 Engine TorqueCurve/Transmission 완전 적용과 PhysicsState 재생성, Wheel Class 공유 CDO 대신 per-Wheel Runtime setter, `AxleType`/Differential 구동 권한 및 미지원 setter의 한계도 설명한다. |
 | `Document/Systems/Vehicles/VehicleInventory.md` | `CF-FQ-035`에서 구현된 실제 ItemInstance 소유권, VehicleCargo/MountedEquipment, 접근·Capacity, Reservation, Atomic Transfer/Rollback, read-only ViewData, Inventory→Fitting Adapter와 Field Fit completion 경계를 기록한다. Formal ownership-aware USER frontend는 Deferred이며 RuntimeApply 비소유권 경로와 구분한다. |
-| `Document/Systems/Vehicles/RuntimeApply.md` | `CF-FQ-041` RuntimeApply의 Current System이다. Vehicle 후보는 RuntimeTestCatalog, Equipment 후보/authorization은 CF-FQ-058 Production Publication Catalog exact8 우선(부재/invalid 시 legacy fallback)으로 분리하며, Complete Mount State, Legacy→Snapshot, Empty Mount, Fitting Snapshot/GrossMass, Prepare/Commit/Recovery와 향후 Garage/Inventory 재사용 경계를 기록한다. Current Wagon은 Production Cannon_Standard/Rocket_Standard와 구조 호환이지만 gross-mass 계약에서 fail-closed한다. |
+| `Document/Systems/Vehicles/RuntimeApply.md` | `CF-FQ-041`의 Production Published Equipment exact8 우선 선택, Legacy fallback, Complete Mount State, Prepare/Commit/Recovery와 GrossMass 검증을 기록한다. Wagon의 fresh 저장 Top Mount에는 Legacy HeavyCannon 기본 참조가 있고 Front Mount는 비어 있으며, 과거 양쪽 Empty 예시는 Historical로 분리한다. |
 | `Document/Systems/Vehicles/VehicleSteering.md` | 게임패드 VehicleMove 2D 입력 방향을 목표 조향으로 해석하고, 제한 속도와 차량 속도 기반 중립 복귀 규칙을 거쳐 실제 조향값을 적용하는 문서다. |
-| `Document/Systems/Vehicles/WheelSync.md` | 실제 Movement와 휠 회전 상태를 읽어 각 휠의 조향, 서스펜션, 스핀 시각 입력을 만들고 Anchor/Mesh에 적용한다. WSA 완료 기준 FL-only Right fallback의 per-wheel spin handedness와 absolute/delta local-axis spin 계약을 포함한다. |
+| `Document/Systems/Vehicles/WheelSync.md` | 실제 Movement와 휠 회전에서 조향·서스펜션·스핀 입력을 만들어 Anchor/Mesh에 적용한다. FL-only Right fallback의 per-wheel spin handedness·absolute/delta local-axis spin과 실제 `BP_CFVehiclePawn` 저장 경로를 기록한다. |
 
 ---
 
@@ -146,7 +147,7 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 | 차량 finite Ammo, 무기별 장전량·탄종별 Reserve, Launcher 예약, FullMagazine Reload, WeaponPanel 탄약 표시와 출격 탄약 질량 | `Combat/Ammo.md` |
 | 발사 성공/실패/쿨다운/무기 없음 상태를 Reticle, HUD와 시각 VFX로 표시하는 기준 | `Combat/FireFeedback.md` |
 | 프로젝트 전역 게임 사운드 비지원 결정과 오디오 도입 금지 기준 | `Document/ProjectSSOT/04_ProjectDecisions.md` |
-| Projectile Actor 활성화, 비유도 Rocket 추진 상태, Missile 컴포넌트 통합 경계, Trail·Thruster 지속형 FX, 일반·고속 충돌, 첫 Impact 피해와 Pool Reset 기준 | `Combat/Projectile.md` |
+| Cannon/Rocket/Guided Missile의 실제 중력과 비중력 Dynamics 합성, Rocket TVC, 연소·Guidance, Trail·Thruster, 충돌·Impact·Pool Reset, CF-FQ-056 USER 완료/관찰 면제 기준 | `Combat/Projectile.md` |
 | Direct TargetActor 미사일의 Vehicle Locked Target 기반 Launch Snapshot, 비행 상태, Guidance Law, 물리 제한, Guidance Activation, Seeker/Observation/Reacquisition, Guidance Preset과 USER Feel 기준 | `Combat/MissileGuidance.md` |
 | Dummy HitScan / Projectile 시각 차체 HitContext와 HitComponent 기록 | `Combat/DamageHitContext.md` |
 | HitScan·Projectile 공용 피해 진입점, Vehicle Integrity 적용, Legacy Fallback과 최초 파괴 상태 | `Combat/HitDamage.md` |
@@ -154,11 +155,12 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 | Muzzle·Impact·Destroyed Niagara의 데이터 연결, 발생 위치, 1회성, 중복 방지와 잔류 안전 계약 | `Combat/CombatFx.md` |
 | Reticle 목표점, 터렛 추적, Muzzle 방향을 하나의 Aim Solution으로 통합한 완료 설계·검증 기록 | `Document/Plan/Archive/AimFireAlignment/ImplementationDesign.md` |
 | Sweep/Sub-stepping/보조 Sphere Sweep을 통한 고속 Projectile 연속 충돌 완료 설계·검증 기록 | `Document/Plan/Archive/ProjectileContinuousCollision/ImplementationDesign.md` |
-| 프로젝트 시작 맵, 렌더링, 입력 백엔드 설정 | `Config/ProjectRuntimeConfig.md` |
+| 프로젝트 기본 맵·GameMode·BP Pawn 설정/PlayerController, 렌더링·입력 백엔드와 Production 장비 카탈로그 등록 | `Config/ProjectRuntimeConfig.md` |
+| 완료된 CF-FQ-058 전체 Content Catalog/Authoring 생산 흐름과 Workbook → 생성 DA → Production Publication Catalog → RuntimeApply 연결 | `DataManagement/ContentCatalog.md` |
 | CarFight DataAsset 종류·용도·관리 상태 탐색, 고유 ID/중복 검사, 참조 관계 조회, Refresh 후 재검사 필요 상태와 no-auto-save 관리 경계 | `DataManagement/DataAssetManagement.md` |
-| Editor가 꺼진 동안 DataAsset JSON 의도를 작성하고 exact Preview/Review 뒤 명시적으로 typed DataAsset을 Batch 적용하는 절차, MissileGuidePreset+AmmoData mixed Explicit Paths, stale/conflict/dirty 보호와 shared durable save/readback, Staging 지원 DA의 C++ contract drift·revision·migration·accepted snapshot 및 provider-centric 새 타입 확장 기준 | `DataManagement/DataAssetAuthoring.md` |
+| Editor가 꺼진 동안 JSON Staging 의도를 작성해 Preview/Review 뒤 명시적으로 typed DataAsset을 적용하는 경로, MissileGuidePreset·AmmoData·DamageData·VehicleDefenseData exact4 provider/mixed admission, stale/conflict/dirty 보호, shared durable save/readback, C++ contract drift·revision·migration·accepted snapshot 및 신규 타입 확장 기준 | `DataManagement/DataAssetAuthoring.md` |
 | 신규 Builder/제작 가이드의 공통 레이아웃, Step 분할, Builder 연쇄 금지, 신규/재사용 자산 UX, 저장·검증·복구·Advanced 경계와 착수 체크리스트 | `DataManagement/BuilderAuthoringStandard.md` |
-| 입력 액션, 매핑 컨텍스트, 키보드/게임패드 입력 처리 | `Input/Input.md` |
+| Input Mapping 59개/Action 18종, 차량·카메라 및 Fire/Target Lock/Scan/Weapon Select/RadarZoom Pawn 입력 | `Input/Input.md` |
 | 과거 Dedicated Server 접속 후 차량 Pawn 생성과 Possess 기록 | `Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md` |
 | Target Candidate/Selected Actor authority, Targetable/TargetPoint, TargetRegistry 후보 공급, 선택/해제 입력과 Sensor·Aim·Fire·HUD 경계 | `Targeting/TargetSelect.md` |
 | 차량 Sensor 탐지, ContactId, Live/LastKnown/Lost/DestroyedHold, Knowledge/Persistent Store, Target Scan, Scan-only cancel, broad Sensor Operation cancel과 Selection-independent Scan HUD 경계 | `Targeting/SensorContact.md` |
@@ -197,6 +199,47 @@ Document/ProjectSSOT/Archive/Systems/Network/ServerSpawn.md
 ---
 
 ## 13. Changelog
+
+### v1.59.0 - 2026-10-29
+
+- 4차 Combat/Targeting/UI/DataManagement/Input 중심 Current 문서와 실제 Source·Gameplay 책임을 검수해 오래된 구현 상태를 최신화했다.
+- `Combat/FireFeedback.md v1.5.0`: `NoAmmo`는 `CF-FQ-031` 구현 완료 Runtime 거부이며 Reticle 일반 거부/UI `NO AMMO` 자원 표시와 구분했다.
+- `Input/Input.md v1.2.0`: fresh 관리형 Input AssetDump exact19 PASS, `IMC_Vehicle_Default` 59 mapping/18 unique actions와 Fire/Target/Weapon/Scan/RadarZoom의 실제 바인딩을 반영했다.
+- `Targeting/VehicleTargeting.md v1.6.0`: `IA_TargetLock` T 입력은 이미 구현·검증된 현재 기능이며 내부 §10/§12의 구형 '미구현' 표시를 교정했다.
+- `UI/InGameUI.md v1.2.0`: 실제 Target Lock/Scan HUD·Weapon Selection/Rail·DisplayName 구현과 Pause 문서의 구형 'Lock-on 없음' 설명을 정정했다. 고급 Lock Acquisition·AI 대전 및 USER Visual/Feel은 완료로 승격하지 않는다.
+- Source/Blueprint/DataAsset/Plan/UDS 수정, 새로운 Build·PIE 수행 없이 문서와 공식 색인만 보강했다. 다른 Work의 Dirty 보존.
+
+Migration: 새로운 입력이나 UI 에셋을 생성하지 않는다. 문서의 구형 40매핑/Lock 미구현 문구 대신 현재 저장 매핑과 `ACFVehiclePawn` 바인딩·UI Provider를 기준으로 읽으며 기존 Historical 완료 증거는 보존한다.
+
+### v1.58.0 - 2026-10-29
+
+- 3차 fresh read-only AssetDump: 대표 Sedan/SUV VehicleData 2/2, Wagon/Morning/Smoke VehicleData 3/3, 차량 Blueprint 3/3, Production DataAsset/Catalog 35/35, 차체 StaticMesh 21/21 — 총 64/64 저장 에셋 추출 PASS. 본 결과는 PIE/런타임·전체 참조 무결성 PASS가 아니다.
+- `Vehicles/VehicleData.md v2.6.0`에 최신 Engine TorqueCurve/Transmission, 4차량별 저장 MountProfileId·질량·구동·Sensor, 실제 StaticMesh Socket 존재와 Morning calibration 미영속 구분을 반영했다. Sedan `Front_01`/`Top_01` LocalLocation이 실제 Mesh Socket 좌표와 서로 바뀐 fallback 데이터 불일치를 확인·기록했으며 `.uasset` 직접 교정은 하지 않았다.
+- `Vehicles/VehicleRuntime.md v1.8.0`에 현재 per-Wheel Runtime setter, `AxleType` Differential 권한 및 Engine/Transmission setup-time 적용을 기록했다.
+- `Vehicles/VehicleDrive.md v1.2.0`, `Vehicles/RuntimeApply.md v1.3.0`에 차량별 저장 override와 Wagon Legacy 기본 장비/빈 Mount 상태를 정정했다.
+- `DataManagement/ContentCatalog.md v1.1.0`에 Production exact34 + Publication Catalog exact1, published exact8의 실제 저장값 검증을 추가했다.
+- 타 작업 중 차량·무기·카메라 Source/Asset/UDS/Plan을 변경하지 않았고 Editor Build·PIE/게임플레이는 재실행하지 않았다.
+
+Migration: 실제 저장 `.uasset` 값을 근거로 문서 현황만 갱신한다. 과거 검수 사례의 저장 상태와 오늘의 기본 장착·튜닝 데이터가 다를 수 있으므로, 저장 에셋과 사용자 승인된 적용 경로를 최종 판단 기준으로 유지한다.
+
+### v1.57.0 - 2026-10-29
+
+- 2차 Source/INI/현재 기술 문서 대조에서 확인된 `DA_PoliceCar` 구형 대표값, 현역 Pawn Blueprint 이동 경로, 과거 Dedicated Server GameMode·발사 설명을 교정했다.
+- `Vehicles/VehicleCoreDecisions.md v1.4.3`(결정 이력 보존 + Current 해석), `VehicleDrive.md v1.1.0`(컴포넌트 기본값·DataAsset override 분리), `VehiclePawnLegacy.md v1.1.0`(실제 BP 경로/현역 싱글플레이 책임), `WheelSync.md v1.1.1`(BP 경로)로 동기화했다.
+- `Config/ProjectRuntimeConfig.md v1.1.0`에 INI·실제 Source 기반 기본 GameMode/Pawn/Controller 및 Production 장비 카탈로그 AssetManager 등록을 문서화했다.
+- 다른 Work의 미커밋 `VehicleBuilder.md`·`VehicleCamera.md`·`VehicleR2Proof.md`와 Source/Asset/UDS 상태를 보호했다. 문서 외 수정·Editor/PIE/Build 재실행은 없다.
+
+Migration: `DA_PoliceCar`와 이전 BP 위치는 Historical evidence로만 읽고 Current 차량 테스트/진입은 `VehicleData.md`와 위 최신 문서·실제 저장 경로를 따른다. 런타임·에셋 자동 마이그레이션은 발생하지 않는다.
+
+### v1.56.0 - 2026-10-29
+
+- 실제 Git·Source·현재 Systems 및 대표 완료 Plan을 대조해 문서 갱신 대상과 현재 진행 중 Work를 분리했다.
+- `CF-FQ-056` 2026-10-06 USER ACCEPTED / COMPLETE를 Projectile v1.11.0·MissileGuidance v1.3.0의 현재 상태로 동기화했다. Rocket 개별 PIE 관찰은 USER WAIVED이며 관찰 PASS로 과장하지 않았다.
+- 종료된 `CF-FQ-058`의 전체 콘텐츠 저작·생성·발행·런타임 사용 흐름을 `DataManagement/ContentCatalog.md v1.0.0` 진입 문서로 추가했다. 타입별 저작·관리·RuntimeApply 상세 owner는 유지한다.
+- 진행 중인 `CF-FQ-059`, `CF-FQ-060`, `CF-FQ-061`을 완료로 승격하지 않고 다른 세션의 변경 중인 Systems 문서는 보호했다.
+- Source/Asset/UDS/Plan mutation 및 빌드·PIE 재실행 없이 Current 기술 문서와 색인만 갱신했다.
+
+Migration: 기존 `.uasset`과 Source 경로·런타임 동작은 변경하지 않는다. `CF-FQ-058` 구조를 찾을 때는 `ContentCatalog.md`를 진입점으로 사용하고, 구현 판단은 각 기존 owner 문서와 실제 Source를 우선한다.
 
 ### v1.55.0 - 2026-10-07
 

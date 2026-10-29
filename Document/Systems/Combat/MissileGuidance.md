@@ -1,10 +1,10 @@
 # Missile Guidance
 
-- Version: 1.2.0
-- Date: 2026-09-27
-- Status: Current System / CF-FQ-030 P0 Complete / CF-TC-027 PASS / CF-FQ-056 PFP-P0-02 TECHNICAL IMPLEMENTATION PASS / Phase 7 Locked Guidance Source Integration PASS
+- Version: 1.3.0
+- Date: 2026-10-29
+- Status: Current System / CF-FQ-030 P0 Complete / CF-TC-027 PASS / CF-FQ-056 PFP-P0-03 USER ACCEPTED / COMPLETE / Phase 7 Locked Guidance Source Integration PASS
 - Feature: `CF-FQ-030 물리 제한형 미사일 비행·유도`, `CF-FQ-056 발사체 공통 비행 물리`
-- Validation: 기존 USER Guidance Feel ACCEPTED + PFP gravity-on Technical PASS / PFP-P0-03 trajectory·reticle USER review pending
+- Validation: 기존 USER Guidance Feel ACCEPTED + PFP gravity-on Technical PASS + Guided Missile/BurnedOut USER PASS, Rocket 개별 USER 궤적 관찰 WAIVED
 - Scope: Direct Release TargetActor 미사일의 목표 Snapshot·Flight·Seeker/관측/Guidance Law와 authoritative lateral request 생산, ProjectileDynamics의 gravity-aware shared lateral-control handoff, Pool 재사용 안전성의 현재 구현 기준
 
 ---
@@ -390,7 +390,10 @@ Low/Normal/High 신규 seed가 필요한 시험 저작은 `CarFight_ReEditor` au
 CF-FQ-030 Technical Validation = PASS
 CF-FQ-030 USER Guidance Feel = ACCEPTED
 CF-FQ-056 PFP-P0-02 Technical Implementation = PASS
-CF-FQ-056 PFP-P0-03 trajectory / reticle USER review = PENDING
+CF-FQ-056 PFP-P0-03 USER ACCEPTED / COMPLETE (2026-10-06)
+Guided Missile Locked Target + BurnedOut = USER PASS
+Reticle 의미 문제 = RESOLVED
+Rocket 개별 실제 궤적 USER 관찰 = WAIVED (관찰 PASS 아님)
 ```
 
 최신 완료 evidence:
@@ -526,6 +529,12 @@ Missile Guidance 관련 Source/Asset 변경 시 최소 보호 기준:
 ---
 
 ## 17. Changelog
+
+### v1.3.0 - 2026-10-29
+
+- `CF-FQ-056`의 2026-10-06 PFP-P0-03 사용자 수락 및 Feature 완료 판정을 Current 문서에 반영했다.
+- Guided Missile/BurnedOut USER PASS와 Rocket 별도 관찰 면제를 구분하고, 오래된 trajectory/reticle Pending 표현을 Current 상태에서 제거했다.
+- 기존 CF-FQ-030 Guidance 및 CF-FQ-056 Dynamics 구현과 이전 검증 증거는 변경하지 않았다. Source·Asset mutation/검증 재실행 0.
 
 ### v1.2.0 - 2026-09-27
 

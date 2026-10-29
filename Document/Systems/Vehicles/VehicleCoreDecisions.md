@@ -2,8 +2,8 @@
 
 > 역할: CarFight 현재 기준 차량 코어의 **유지 결정 / 교체 결정 / 임시 운영 판단**을 기록한다.
 > 상위 방향 문서: `00_Vision.md`
-> 문서 버전: v1.4.2
-> 마지막 정리(Asia/Seoul): 2026-08-28
+> 문서 버전: v1.4.3
+> 마지막 정리(Asia/Seoul): 2026-10-29
 
 
 ---
@@ -14,7 +14,12 @@
 - 현재 기준 주행 코어: `UCFVehicleDriveComp`
 - 현재 기준 휠 시각 동기화 코어: `UCFWheelSyncComp`
 - 현재 기준 데이터 축: `UCFVehicleData`
-- 현재 기준 테스트 자산: `DA_PoliceCar`
+- 현재 대표 VehicleData 검증 자산: `DA_TestSedan` / `DA_TestSUV` (`UE/Content/CarFight/Vehicles/Data/Definitions/`)
+- `DA_PoliceCar`를 현행 대표 자산으로 설명한 과거 결정은 당시 Historical 기준이다. 현재 적용·검증은 `VehicleData.md`와 실제 저장 에셋을 우선한다.
+- 아래 결정 번호와 당시 확인 숫자는 과거 의사결정 증거로 보존한다. 뒤에 구현이 완료된 사실과 충돌하는 '현재/후속' 표현은 최신 Source와 기능별 Current Systems가 우선한다.
+
+### 문서 갱신 기록
+- v1.4.3 (2026-10-29): 기존 결정을 소급 변경하지 않고 `DA_PoliceCar` 현역 오인을 교정하고 현재 대표 자산·문서 우선순위를 명시했다. 코드·에셋 수정 없음.
 
 ---
 
@@ -115,7 +120,8 @@
 ### CF-DL-0040 — 테스트 차량은 기준선이지 종착점이 아니다
 - 판정: 확정
 - 결정:
-  - `DA_PoliceCar`는 현재 첫 기준 차량이며, 최종 목표 차량처럼 취급하지 않는다.
+  - `DA_PoliceCar`는 당시 첫 기준 차량이며, 최종 목표 차량처럼 취급하지 않는다.
+- 현재 해석(2026-10-29): 당시 의도는 Historical로 보존한다. 현행 대표 검증 자산은 `DA_TestSedan` / `DA_TestSUV`이며 `DA_PoliceCar`를 현역 대상으로 적용하지 않는다.
 - 이유:
   - 공통 코어가 특정 차량만을 위한 구조로 굳는 것을 막아야 한다.
 

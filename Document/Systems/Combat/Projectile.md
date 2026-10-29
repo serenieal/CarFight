@@ -1,8 +1,8 @@
 # Projectile
 
-- Version: 1.10.0
-- Date: 2026-09-27
-- Status: Current System / CF-FQ-056 PFP-P0-02 TECHNICAL IMPLEMENTATION PASS / PFP-P0-03 USER trajectory·reticle review pending / Same-Source Salvo Isolation User PIE PASS / Different-Source Interception Deferred
+- Version: 1.11.0
+- Date: 2026-10-29
+- Status: Current System / CF-FQ-056 PFP-P0-03 USER ACCEPTED / FEATURE COMPLETE (Cannon·Guided Missile·BurnedOut USER PASS, Rocket individual trajectory observation WAIVED) / Same-Source Salvo Isolation User PIE PASS / Different-Source Interception Deferred
 - Features: `CF-FQ-023 고속 Projectile 연속 충돌`, `CF-FQ-027 투사체 비행 FX`, `CF-FQ-028 발사체 추진 시스템`, `CF-FQ-030 물리 제한형 미사일 비행·유도`, `CF-FQ-056 발사체 공통 비행 물리`
 - Tests: `CF-TC-020 PASS`, `CF-TC-023 PASS`, `CF-TC-024 PASS`, `CF-TC-027 PASS`, `PFP-P0-02 gravity-on exact12 PASS`
 - Scope: ProjectileData 기반 공통 발사체 Actor, ProjectileMovement full-gravity 적분, 단일 ProjectileDynamics 비중력 가속도 합성, Rocket bounded TVC, Missile Dynamics handoff, 지속형 Trail·Thruster FX, 연속 충돌, 첫 Impact 피해와 Pool 생명주기의 현재 구현 기준
@@ -57,10 +57,13 @@
 - Trail-only, Thruster-only, 두 FX 동시, 소켓·Fallback, 종료 Reset, Pool 재사용, Ribbon History와 30 FPS 고속 Bounds 검증 PASS
 
 발사체 공통 비행 물리
-- Feature: CF-FQ-056 PFP-P0-02 Technical Implementation PASS
+- Feature: CF-FQ-056 PFP-P0-03 USER ACCEPTED / COMPLETE (2026-10-06)
 - Official UE 5.8 Build: `d18d4a6ee4574192bb87acf7b4819ff3` PASS / Exit 0
 - gravity-on Focused: `047aa290d0cb4cbcbd2e60aa5cf9b1c9` exact12 / 12 PASS
-- USER trajectory / reticle review: PFP-P0-03 Pending
+- USER 확인: Cannon gravity-on 궤적 PASS, Guided Missile Locked Target 궤적 PASS, BurnedOut 전환 PASS
+- Reticle(조준표식) 의미 문제: PFP-P0-03 종료 시 RESOLVED
+- Rocket 개별 실제 궤적 USER 관찰: WAIVED BY USER (미관측; USER PASS로 기록하지 않음)
+- 현재 Current System의 물리·데이터 계약은 본 문서 3~21절을 유지한다. 검증 상세는 `Document/Plan/ProjectileFlightPhysics/ProjectileFlightPhysicsPlan.md v0.1.7`에 보존한다.
 ```
 
 `CF-FQ-028` 완료 Historical Plan:
@@ -1191,10 +1194,16 @@ Document/Systems/UI/VehicleDebugPanel.md
 
 ## 22. 문서 버전 관리
 
-- 현재 문서 버전: `1.10.0`
-- 문서 상태: `Current System / CF-FQ-056 PFP-P0-02 TECHNICAL IMPLEMENTATION PASS / PFP-P0-03 USER trajectory·reticle review pending / Same-Source Salvo Isolation User PIE PASS / Different-Source Interception Deferred`
+- 현재 문서 버전: `1.11.0`
+- 문서 상태: `Current System / CF-FQ-056 PFP-P0-03 USER ACCEPTED / FEATURE COMPLETE (Rocket 개별 USER 관찰 면제) / Same-Source Salvo Isolation User PIE PASS / Different-Source Interception Deferred`
 
 ### Changelog
+
+#### v1.11.0 - 2026-10-29
+
+- 2026-10-06 `CF-FQ-056` 종료 판정을 canonical UDS/대표 Plan과 대조해 Current 상태를 `PFP-P0-03 USER ACCEPTED / COMPLETE`로 최신화했다.
+- Cannon·Guided Missile·BurnedOut 실제 USER PASS, Reticle RESOLVED와 Rocket 개별 관찰 `WAIVED`를 명시적으로 분리했다.
+- Source·DataAsset·물리 구현 변경이나 빌드/시험 재실행 없이 문서의 오래된 Pending 상태만 교정했다.
 
 #### v1.10.0 - 2026-09-27
 
